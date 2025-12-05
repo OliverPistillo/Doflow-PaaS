@@ -27,7 +27,10 @@ import { ProjectsEventsService } from './realtime/projects-events.service';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      ignoreEnvFile: true,
+    }),
     MailModule,
   ],
   controllers: [
