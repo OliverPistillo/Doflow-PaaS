@@ -1,0 +1,11 @@
+{
+  "name": "doflow",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/**\" run dev"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
