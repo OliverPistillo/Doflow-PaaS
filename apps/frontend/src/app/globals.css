@@ -1,10 +1,22 @@
 @import "tailwindcss";
 
+/* ===========================
+   Tema base + variabili Doflow
+   =========================== */
+
 :root {
+  /* colori shadcn base */
   --background: #ffffff;
   --foreground: #171717;
+
+  /* 4 colori personalizzabili Doflow (default) */
+  --doflow-primary: #2563eb;   /* blu */
+  --doflow-secondary: #22c55e; /* verde */
+  --doflow-accent: #eab308;    /* giallo */
+  --doflow-muted: #6b7280;     /* grigio */
 }
 
+/* Tailwind inline theme mapping */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -12,15 +24,38 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* DARK THEME (data-theme='dark') */
+[data-theme='dark'] {
+  --background: #020617; /* quasi nero */
+  --foreground: #e5e5e5;
+
+  --doflow-primary: #3b82f6;
+  --doflow-secondary: #22c55e;
+  --doflow-accent: #eab308;
+  --doflow-muted: #9ca3af;
 }
+
+/* LIGHT THEME (data-theme='light') */
+[data-theme='light'] {
+  --background: #ffffff;
+  --foreground: #111827;
+
+  --doflow-primary: #1d4ed8;
+  --doflow-secondary: #16a34a;
+  --doflow-accent: #ca8a04;
+  --doflow-muted: #4b5563;
+}
+
+/* CUSTOM: verrà sovrascritto runtime via JS */
+[data-theme='custom'] {
+  /* i valori vengono impostati via document.documentElement.style.setProperty */
+}
+
+/* ===========================
+   Base body
+   =========================== */
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }
