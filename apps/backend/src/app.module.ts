@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { RedisService } from './redis/redis.service';
 import { TenancyMiddleware } from './tenancy/tenancy.middleware';
-import { TenantController } from './tenant.controller';
+import { TenantModule } from './tenant/tenant.module';
 import { BloomController } from './bloom.controller';
 import { TelemetryController } from './telemetry/telemetry.controller';
 import { TelemetryService } from './telemetry/telemetry.service';
@@ -32,10 +32,10 @@ import { ProjectsEventsService } from './realtime/projects-events.service';
       ignoreEnvFile: true,
     }),
     MailModule,
+    TenantModule,
   ],
   controllers: [
     AppController,
-    TenantController,
     BloomController,
     TelemetryController,
     TenantUsersController,
