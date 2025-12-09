@@ -2,31 +2,53 @@ import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { DataSource } from 'typeorm';
 
+function resolveTenantId(raw: string): string {
+  if (!raw) return 'public';
+
+  // es: "app.doflow.it", "api.doflow.it", "cliente1.doflow.it"
+  const host = raw.toLowerCase().split(':')[0].trim();
+
+  // domini "core" della piattaforma: UI + API → sempre schema public
+  if (host === 'app.doflow.it' || host === 'api.doflow.it') {
+    return 'public';
+  }
+
+  const firstLabel = host.split('.')[0];
+
+  // www/app/api come primo label → comunque public
+  if (['www', 'app', 'api'].includes(firstLabel)) {
+    return 'public';
+  }
+
+  // es: cliente1.doflow.it → "cliente1"
+  const cleaned = firstLabel.replace(/[^a-z0-9_]/g, '_');
+  return cleaned || 'public';
+}
+
 @Injectable()
 export class TenancyMiddleware implements NestMiddleware {
   private static connectionMap = new Map<string, DataSource>();
 
   async use(req: Request, _res: Response, next: NextFunction) {
-    // 1) prova da header custom passato da Nginx
-    // 2) fallback su header Host
-    // 3) default app.doflow.it
-    const rawHost =
-      (req.headers['x-doflow-tenant-id'] as string) ||
-      (req.headers['host'] as string) ||
-      'app.doflow.it';
+    // 1) header usato dal frontend (nuovo)
+    const headerTenant =
+      (req.headers['x-tenant'] as string | undefined) ||
+      (req.headers['x-doflow-tenant-id'] as string | undefined);
 
-    // rimuove eventuale :80
-    const hostHeader = rawHost.split(':')[0];
+    // 2) fallback su Host
+    const hostHeader = (req.headers['host'] as string | undefined) || 'app.doflow.it';
 
-    const firstLabel = hostHeader.split('.')[0];
+    const raw = headerTenant && headerTenant.trim().length > 0
+      ? headerTenant.trim()
+      : hostHeader;
 
-    const tenantId =
-      firstLabel === 'app'
-        ? 'public'
-        : firstLabel.replace(/[^a-zA-Z0-9_]/g, '_');
+    const tenantId = resolveTenantId(raw);
 
-    // DEBUG (puoi toglierlo dopo che vedi che funziona)
-    console.log('[TENANCY]', { rawHost, hostHeader, firstLabel, tenantId });
+    console.log('[TENANCY]', {
+      rawHost: raw,
+      hostHeader,
+      tenantId,
+    });
 
     if (!TenancyMiddleware.connectionMap.has(tenantId)) {
       const ds = new DataSource({
@@ -35,6 +57,7 @@ export class TenancyMiddleware implements NestMiddleware {
         schema: tenantId,
         synchronize: false,
       });
+
       await ds.initialize();
       TenancyMiddleware.connectionMap.set(tenantId, ds);
       console.log(`✅ Init tenant connection for schema: ${tenantId}`);
@@ -42,6 +65,7 @@ export class TenancyMiddleware implements NestMiddleware {
 
     (req as any).tenantConnection = TenancyMiddleware.connectionMap.get(tenantId);
     (req as any).tenantId = tenantId;
+
     next();
   }
 }
