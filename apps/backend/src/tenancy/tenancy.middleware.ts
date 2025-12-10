@@ -31,7 +31,7 @@ export class TenancyMiddleware implements NestMiddleware {
         type: 'postgres',
         url: process.env.DATABASE_URL,
         schema: tenantId,
-        synchronize: false,
+        synchronize: process.env.DB_SYNC_ON_BOOT === 'true',
       });
       await ds.initialize();
       TenancyMiddleware.connectionMap.set(tenantId, ds);
