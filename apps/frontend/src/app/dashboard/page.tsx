@@ -5,11 +5,7 @@ import { useRouter } from 'next/navigation';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
 
-type MeResponse = {
-  email: string;
-  role: 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'USER';
-  tenantId: string;
-};
+type MeResponse = unknown; // <-- per ora lasciamo unknown, così non litiga con TS
 
 type State =
   | { status: 'loading' }
@@ -75,6 +71,7 @@ export default function DashboardPage() {
         }
 
         if (!cancelled) {
+          console.log('ME RESPONSE RAW:', data);
           setState({ status: 'ok', me: data });
         }
       } catch (e) {
@@ -128,23 +125,23 @@ export default function DashboardPage() {
     );
   }
 
-  // stato OK
+  // stato OK → mostriamo il JSON grezzo
   const { me } = state;
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-black text-zinc-100">
-      <div className="space-y-2 text-center">
+      <div className="space-y-3 text-center max-w-lg">
         <h1 className="text-2xl font-semibold">DoFlow Dashboard (autenticata)</h1>
-        <p className="text-sm text-zinc-400">
-          Utente: <span className="font-mono">{me.email}</span>
-        </p>
-        <p className="text-sm text-zinc-400">
-          Ruolo: <span className="font-mono">{me.role}</span> | Tenant:{' '}
-          <span className="font-mono">{me.tenantId}</span>
-        </p>
+
+        <div className="text-left text-xs bg-zinc-900/60 rounded-md p-3 font-mono whitespace-pre-wrap break-all">
+          <div className="text-zinc-500 mb-1">Raw JSON /auth/me:</div>
+          {JSON.stringify(me, null, 2)}
+        </div>
+
         <p className="text-xs text-zinc-500 mt-2">
-          Questa versione non usa ancora il layout, serve solo per confermare che
-          la chiamata a <code>/auth/me</code> funziona senza rompere il client.
+          Sopra vedi ESATTAMENTE il JSON che arriva da <code>/auth/me</code>.
+          Copialo e incollalo qui in chat, così ti preparo il tipo giusto e
+          reintroduciamo il layout.
         </p>
       </div>
     </main>
