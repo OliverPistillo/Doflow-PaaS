@@ -1,3 +1,4 @@
+// C:\Doflow\apps\backend\src\app.module.ts
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
@@ -23,7 +24,6 @@ import { MailModule } from './mail/mail.module';
 import { AuthPasswordController } from './auth-password.controller';
 import { SuperadminTenantsController } from './superadmin/superadmin-tenants.controller';
 import { ProjectsEventsService } from './realtime/projects-events.service';
-
 
 @Module({
   imports: [
@@ -60,6 +60,7 @@ import { ProjectsEventsService } from './realtime/projects-events.service';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    // Tenancy prima (per schema), Auth dopo (per JWT)
     consumer.apply(TenancyMiddleware, AuthMiddleware).forRoutes('*');
   }
 }

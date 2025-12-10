@@ -1,4 +1,12 @@
-import { Body, Controller, Post, Req, Get, UnauthorizedException } from '@nestjs/common';
+// C:\Doflow\apps\backend\src\auth.controller.ts
+import {
+  Body,
+  Controller,
+  Post,
+  Req,
+  Get,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { AuditService } from './audit.service';
@@ -125,7 +133,7 @@ export class AuthController {
     }
   }
 
-    @Get('me')
+  @Get('me')
   getMe(@Req() req: Request) {
     const user = (req as any).user;
 
@@ -133,7 +141,6 @@ export class AuthController {
       throw new UnauthorizedException('Not authenticated');
     }
 
-    // versione “safe” senza password ecc.
     const safeUser = {
       id: user.id,
       email: user.email,
