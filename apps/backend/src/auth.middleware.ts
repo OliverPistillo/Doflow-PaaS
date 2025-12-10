@@ -18,13 +18,18 @@ export class AuthMiddleware implements NestMiddleware {
 
           // payload creato in AuthService.login:
           // { sub, email, tenantId, role, iat, exp }
-          (req as any).authUser = {
+          const authUser = {
             id: payload.sub,
             email: payload.email,
             role: payload.role,
             tenantId: payload.tenantId,
             ...payload,
           };
+
+          // Metti l’utente su entrambe le proprietà, per compatibilità
+          (req as any).user = authUser;
+          (req as any).authUser = authUser;
+
         }
       } catch {
         // Token invalido / scaduto: NON blocchiamo qui,
