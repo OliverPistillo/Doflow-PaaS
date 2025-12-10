@@ -1,303 +1,330 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
 
-type TenantRow = {
+type Tenant = {
   id: string;
-  slug: string;
   name: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
+  slug?: string | null;
+  schema?: string | null;
+  isActive?: boolean | null;
+  createdAt?: string | null;
 };
 
-type ListResponse = {
-  tenants: TenantRow[];
-};
+type State =
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ok'; tenants: Tenant[] };
 
 export default function SuperadminTenantsPage() {
-  const [tenants, setTenants] = useState<TenantRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
-
-  const [newSlug, setNewSlug] = useState('');
-  const [newName, setNewName] = useState('');
+  const router = useRouter();
+  const [state, setState] = useState<State>({ status: 'loading' });
   const [creating, setCreating] = useState(false);
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [errorCreate, setErrorCreate] = useState<string | null>(null);
 
-  const [token, setToken] = useState<string | null>(null);
-
+  // Carica lista tenants
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setToken(window.localStorage.getItem('doflow_token'));
-    }
-  }, []);
+    let cancelled = false;
 
-  useEffect(() => {
-    if (!token) return;
-    void loadTenants();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+    const loadTenants = async () => {
+      try {
+        const token = window.localStorage.getItem('doflow_token');
+        if (!token) {
+          router.push('/login');
+          return;
+        }
 
-  const loadTenants = async () => {
-    if (!token) {
-      setError('Token mancante. Effettua il login come SUPER_ADMIN.');
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    setInfo(null);
+        const res = await fetch(`${API_BASE}/superadmin/tenants`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          cache: 'no-store',
+        });
 
-    try {
-      const res = await fetch(`${API_BASE}/superadmin/tenants`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+        const text = await res.text();
 
-      const text = await res.text();
-      if (!res.ok) {
-        setError(text || 'Errore caricamento tenants');
-        return;
+        if (!res.ok) {
+          console.error('Errore GET /superadmin/tenants:', res.status, text);
+          if (res.status === 401 || res.status === 403) {
+            router.push('/login');
+            return;
+          }
+          if (!cancelled) {
+            setState({
+              status: 'error',
+              message: text || 'Errore caricamento tenants',
+            });
+          }
+          return;
+        }
+
+        let data: Tenant[];
+        try {
+          data = JSON.parse(text) as Tenant[];
+        } catch (e) {
+          console.error('Errore parse JSON tenants:', e, text);
+          if (!cancelled) {
+            setState({
+              status: 'error',
+              message: 'Risposta non valida dal server',
+            });
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setState({ status: 'ok', tenants: data });
+        }
+      } catch (e) {
+        console.error('Errore rete /superadmin/tenants:', e);
+        if (!cancelled) {
+          setState({
+            status: 'error',
+            message: 'Errore di rete caricando i tenants',
+          });
+        }
       }
+    };
 
-      const data = JSON.parse(text) as ListResponse;
-      setTenants(data.tenants);
-    } catch {
-      setError('Errore di rete caricando i tenants');
-    } finally {
-      setLoading(false);
-    }
-  };
+    void loadTenants();
 
-  const handleCreate = async (e: React.FormEvent) => {
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  const handleCreateTenant = async (e: FormEvent) => {
     e.preventDefault();
-    if (!token) {
-      setError('Token mancante. Effettua il login come SUPER_ADMIN.');
-      return;
-    }
-    if (!newSlug || !newName) {
-      setError('Slug e nome sono obbligatori.');
+    setErrorCreate(null);
+
+    if (!name.trim()) {
+      setErrorCreate('Il nome del tenant è obbligatorio.');
       return;
     }
 
     setCreating(true);
-    setError(null);
-    setInfo(null);
 
     try {
+      const token = window.localStorage.getItem('doflow_token');
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
       const res = await fetch(`${API_BASE}/superadmin/tenants`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          slug: newSlug,
-          name: newName,
-          isActive: true,
+          name: name.trim(),
+          slug: slug.trim() || undefined,
         }),
       });
 
       const text = await res.text();
-      const data = text ? JSON.parse(text) : null;
 
-      if (!res.ok || data?.error) {
-        setError(data?.error ?? text ?? 'Errore creazione tenant');
+      if (!res.ok) {
+        console.error('Errore POST /superadmin/tenants:', res.status, text);
+        if (res.status === 401 || res.status === 403) {
+          router.push('/login');
+          return;
+        }
+        setErrorCreate(text || 'Errore creazione tenant');
         return;
       }
 
-      setInfo(`Tenant creato: ${data.tenant.slug}`);
-      setNewSlug('');
-      setNewName('');
-      await loadTenants();
-    } catch {
-      setError('Errore di rete creando il tenant');
+      // Ricarica lista tenants
+      setName('');
+      setSlug('');
+
+      // Ricarico in maniera semplice
+      setState({ status: 'loading' });
+      const reloadRes = await fetch(`${API_BASE}/superadmin/tenants`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store',
+      });
+
+      const reloadText = await reloadRes.text();
+      if (reloadRes.ok) {
+        const reloadData = JSON.parse(reloadText) as Tenant[];
+        setState({ status: 'ok', tenants: reloadData });
+      } else {
+        setState({
+          status: 'error',
+          message: reloadText || 'Errore ricaricando i tenants',
+        });
+      }
+    } catch (e) {
+      console.error('Errore rete creazione tenant:', e);
+      setErrorCreate('Errore di rete durante la creazione del tenant');
     } finally {
       setCreating(false);
     }
   };
 
-  const handleToggle = async (tenantId: string) => {
-    if (!token) {
-      setError('Token mancante. Effettua il login come SUPER_ADMIN.');
-      return;
-    }
-    setError(null);
-    setInfo(null);
+  // RENDER
 
-    try {
-      const res = await fetch(
-        `${API_BASE}/superadmin/tenants/${encodeURIComponent(
-          tenantId,
-        )}/toggle-active`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+  if (state.status === 'loading') {
+    return (
+      <main className="p-6 text-sm text-zinc-300">
+        Caricamento tenants...
+      </main>
+    );
+  }
 
-      const text = await res.text();
-      const data = text ? JSON.parse(text) : null;
+  if (state.status === 'error') {
+    return (
+      <main className="p-6 space-y-3 text-sm text-zinc-300">
+        <h1 className="text-xl font-semibold mb-2">Tenants</h1>
+        <p className="text-red-400">
+          Errore caricando i tenants: {state.message}
+        </p>
+      </main>
+    );
+  }
 
-      if (!res.ok || data?.error) {
-        setError(data?.error ?? text ?? 'Errore aggiornamento stato tenant');
-        return;
-      }
-
-      setInfo(
-        `Tenant ${
-          data.tenant.slug
-        } ora è ${data.tenant.is_active ? 'ATTIVO' : 'DISATTIVATO'}`,
-      );
-      await loadTenants();
-    } catch {
-      setError('Errore di rete aggiornando lo stato del tenant');
-    }
-  };
+  const { tenants } = state;
 
   return (
-    <main className="min-h-screen flex flex-col items-center p-6">
-      <div className="w-full max-w-5xl flex flex-col gap-6">
-        <header className="flex items-center justify-between border-b border-zinc-800 pb-4">
-          <div>
-            <h1 className="text-2xl font-bold">
-              Superadmin – Gestione Tenant
-            </h1>
-            <p className="text-sm text-zinc-400">
-              Solo utenti con ruolo <span className="font-mono">SUPER_ADMIN</span>.
+    <main className="p-6 space-y-6 text-sm text-zinc-200">
+      <div className="space-y-1">
+        <h1 className="text-xl font-semibold">Tenants</h1>
+        <p className="text-xs text-zinc-400">
+          Gestisci i tenants globali: creazione, stato, e overview multi-tenant.
+        </p>
+      </div>
+
+      {/* Form creazione tenant */}
+      <section className="border border-zinc-800 rounded-lg p-4 bg-zinc-950/70 space-y-3">
+        <h2 className="text-sm font-semibold">Crea nuovo tenant</h2>
+        <form
+          className="flex flex-col gap-3 sm:flex-row sm:items-end"
+          onSubmit={handleCreateTenant}
+        >
+          <div className="flex-1 space-y-1">
+            <label className="block text-[11px] uppercase text-zinc-500">
+              Nome tenant
+            </label>
+            <input
+              className="w-full bg-black border border-zinc-800 rounded px-2 py-1 text-sm outline-none focus:border-blue-500"
+              placeholder="Es. Acme Corp"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+
+          <div className="flex-1 space-y-1">
+            <label className="block text-[11px] uppercase text-zinc-500">
+              Slug / subdominio (opzionale)
+            </label>
+            <input
+              className="w-full bg-black border border-zinc-800 rounded px-2 py-1 text-sm outline-none focus:border-blue-500"
+              placeholder="Es. acme"
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+            />
+            <p className="text-[10px] text-zinc-500">
+              Usato per URL come <span className="font-mono">acme.doflow.it</span>{' '}
+              o schema DB <span className="font-mono">acme</span>, a seconda della
+              configurazione.
             </p>
           </div>
-        </header>
 
-        {error && (
-          <div className="text-sm text-red-400 border border-red-500/40 rounded px-3 py-2">
-            {error}
-          </div>
-        )}
-        {info && (
-          <div className="text-sm text-green-400 border border-green-500/40 rounded px-3 py-2">
-            {info}
-          </div>
-        )}
-
-        <section className="border border-zinc-800 rounded-lg p-4 flex flex-col gap-3">
-          <h2 className="text-lg font-semibold">Crea nuovo tenant</h2>
-          <form onSubmit={handleCreate} className="flex flex-col gap-3">
-            <div className="flex flex-col md:flex-row gap-3">
-              <div className="flex-1 flex flex-col gap-1">
-                <label className="text-xs text-zinc-400">
-                  Slug (es. cliente1)
-                </label>
-                <input
-                  className="px-3 py-2 rounded bg-black border border-zinc-700 text-sm"
-                  value={newSlug}
-                  onChange={(e) =>
-                    setNewSlug(e.target.value.toLowerCase())
-                  }
-                  placeholder="slug-tenant"
-                />
-              </div>
-              <div className="flex-1 flex flex-col gap-1">
-                <label className="text-xs text-zinc-400">
-                  Nome visualizzato
-                </label>
-                <input
-                  className="px-3 py-2 rounded bg-black border border-zinc-700 text-sm"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="Nome Tenant"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={creating}
-                className="px-4 py-2 rounded bg-white text-black text-sm font-medium disabled:opacity-50"
-              >
-                {creating ? 'Creazione...' : 'Crea tenant'}
-              </button>
-            </div>
-          </form>
-          <p className="text-[11px] text-zinc-500">
-            Il tenant verrà inserito in <span className="font-mono">public.tenants</span>.
-            La logica di provisioning schema rimane centralizzata nel backend.
-          </p>
-        </section>
-
-        <section className="border border-zinc-800 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold">Tenant esistenti</h2>
+          <div className="space-y-1">
             <button
-              onClick={() => void loadTenants()}
-              disabled={loading}
-              className="text-xs px-3 py-1 border border-zinc-700 rounded disabled:opacity-50"
+              type="submit"
+              disabled={creating}
+              className="px-3 py-1.5 rounded bg-blue-600 text-xs font-semibold hover:bg-blue-500 disabled:opacity-50"
             >
-              {loading ? 'Aggiornamento...' : 'Ricarica'}
+              {creating ? 'Creazione...' : 'Crea tenant'}
             </button>
           </div>
+        </form>
+        {errorCreate && (
+          <p className="text-xs text-red-400 mt-1">{errorCreate}</p>
+        )}
+      </section>
 
-          {tenants.length === 0 ? (
-            <p className="text-sm text-zinc-500">
-              Nessun tenant registrato in public.tenants.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="border-b border-zinc-800 text-xs text-zinc-400">
-                    <th className="text-left py-2 pr-2">Slug</th>
-                    <th className="text-left py-2 pr-2">Nome</th>
-                    <th className="text-left py-2 pr-2">Stato</th>
-                    <th className="text-left py-2 pr-2">Creato il</th>
-                    <th className="text-left py-2 pr-2">Azioni</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tenants.map((t) => (
-                    <tr
-                      key={t.id}
-                      className="border-b border-zinc-900 last:border-0"
+      {/* Tabella tenants */}
+      <section className="border border-zinc-800 rounded-lg overflow-hidden bg-zinc-950/70">
+        <table className="w-full text-xs">
+          <thead className="bg-zinc-900/80 border-b border-zinc-800">
+            <tr>
+              <th className="text-left px-3 py-2 font-medium text-zinc-400">
+                Nome
+              </th>
+              <th className="text-left px-3 py-2 font-medium text-zinc-400">
+                Slug
+              </th>
+              <th className="text-left px-3 py-2 font-medium text-zinc-400">
+                Schema
+              </th>
+              <th className="text-left px-3 py-2 font-medium text-zinc-400">
+                Stato
+              </th>
+              <th className="text-left px-3 py-2 font-medium text-zinc-400">
+                Creato il
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {tenants.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={5}
+                  className="px-3 py-4 text-center text-zinc-500"
+                >
+                  Nessun tenant creato.
+                </td>
+              </tr>
+            ) : (
+              tenants.map((t) => (
+                <tr
+                  key={t.id}
+                  className="border-t border-zinc-900 hover:bg-zinc-900/60"
+                >
+                  <td className="px-3 py-2 font-medium text-zinc-100">
+                    {t.name}
+                  </td>
+                  <td className="px-3 py-2 font-mono text-zinc-300">
+                    {t.slug || '—'}
+                  </td>
+                  <td className="px-3 py-2 font-mono text-zinc-300">
+                    {t.schema || '—'}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                        t.isActive ?? true
+                          ? 'bg-emerald-900/60 text-emerald-300'
+                          : 'bg-zinc-800 text-zinc-400'
+                      }`}
                     >
-                      <td className="py-2 pr-2 font-mono text-xs">
-                        {t.slug}
-                      </td>
-                      <td className="py-2 pr-2">{t.name}</td>
-                      <td className="py-2 pr-2">
-                        <span
-                          className={
-                            t.is_active
-                              ? 'text-green-400 text-xs'
-                              : 'text-red-400 text-xs'
-                          }
-                        >
-                          {t.is_active ? 'ATTIVO' : 'DISATTIVATO'}
-                        </span>
-                      </td>
-                      <td className="py-2 pr-2 text-xs text-zinc-400">
-                        {new Date(t.created_at).toLocaleString()}
-                      </td>
-                      <td className="py-2 pr-2">
-                        <button
-                          onClick={() => void handleToggle(t.id)}
-                          className="text-xs px-3 py-1 border border-zinc-700 rounded hover:bg-zinc-900"
-                        >
-                          Toggle stato
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      </div>
+                      {t.isActive ?? true ? 'ATTIVO' : 'DISABILITATO'}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-zinc-400">
+                    {t.createdAt
+                      ? new Date(t.createdAt).toLocaleString()
+                      : '—'}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </section>
     </main>
   );
 }
