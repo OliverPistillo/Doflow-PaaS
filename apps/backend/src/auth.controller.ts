@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Req } from '@nestjs/common';
+import { Body, Controller, Post, Req, Get, UnauthorizedException } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { AuditService } from './audit.service';
@@ -123,5 +123,25 @@ export class AuthController {
       }
       return { error: 'Unknown error' };
     }
+  }
+
+    @Get('me')
+  getMe(@Req() req: Request) {
+    const user = (req as any).user;
+
+    if (!user) {
+      throw new UnauthorizedException('Not authenticated');
+    }
+
+    // versione “safe” senza password ecc.
+    const safeUser = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      tenantId: user.tenantId ?? user.tenant_id ?? 'public',
+      created_at: user.created_at,
+    };
+
+    return { user: safeUser };
   }
 }
