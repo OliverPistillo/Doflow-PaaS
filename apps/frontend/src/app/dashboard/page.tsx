@@ -1,17 +1,48 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { DashboardLayout } from '@/components/dashboard/layout';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
 
-type MeResponse = unknown; // <-- per ora lasciamo unknown, così non litiga con TS
+type LayoutRole = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'USER';
+
+type MeResponse = {
+  user: {
+    id: string;
+    email: string;
+    role: string; // es. "owner"
+    tenantId: string;
+  };
+};
 
 type State =
   | { status: 'loading' }
   | { status: 'no-token' }
   | { status: 'error'; message: string }
   | { status: 'ok'; me: MeResponse };
+
+// Mappa i ruoli backend (es. "owner") ai ruoli accettati dal layout
+function mapRoleToLayoutRole(role: string): LayoutRole {
+  const r = role.toLowerCase();
+
+  if (r === 'owner' || r === 'super_admin' || r === 'superadmin') {
+    return 'SUPER_ADMIN';
+  }
+
+  if (r === 'admin') {
+    return 'ADMIN';
+  }
+
+  if (r === 'manager') {
+    return 'MANAGER';
+  }
+
+  // fallback per qualsiasi altro ruolo
+  return 'USER';
+}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -71,7 +102,6 @@ export default function DashboardPage() {
         }
 
         if (!cancelled) {
-          console.log('ME RESPONSE RAW:', data);
           setState({ status: 'ok', me: data });
         }
       } catch (e) {
@@ -125,25 +155,35 @@ export default function DashboardPage() {
     );
   }
 
-  // stato OK → mostriamo il JSON grezzo
+  // stato OK
   const { me } = state;
+  const { user } = me;
+  const layoutRole = mapRoleToLayoutRole(user.role);
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-black text-zinc-100">
-      <div className="space-y-3 text-center max-w-lg">
-        <h1 className="text-2xl font-semibold">DoFlow Dashboard (autenticata)</h1>
+    <DashboardLayout role={layoutRole} userEmail={user.email}>
+      <div className="space-y-4">
+        <h1 className="text-xl font-semibold">DoFlow Dashboard</h1>
 
-        <div className="text-left text-xs bg-zinc-900/60 rounded-md p-3 font-mono whitespace-pre-wrap break-all">
-          <div className="text-zinc-500 mb-1">Raw JSON /auth/me:</div>
-          {JSON.stringify(me, null, 2)}
-        </div>
-
-        <p className="text-xs text-zinc-500 mt-2">
-          Sopra vedi ESATTAMENTE il JSON che arriva da <code>/auth/me</code>.
-          Copialo e incollalo qui in chat, così ti preparo il tipo giusto e
-          reintroduciamo il layout.
+        <p className="text-sm text-zinc-400">
+          Utente: <span className="font-mono">{user.email}</span>
         </p>
+        <p className="text-sm text-zinc-400">
+          Ruolo backend:{' '}
+          <span className="font-mono">{user.role}</span> → ruolo UI:{' '}
+          <span className="font-mono">{layoutRole}</span>
+        </p>
+        <p className="text-sm text-zinc-400">
+          Tenant: <span className="font-mono">{user.tenantId}</span>
+        </p>
+
+        <div className="mt-4 text-xs text-zinc-500">
+          <p>
+            Questa è la dashboard base. Da qui possiamo aggiungere le sezioni per
+            SUPER_ADMIN / ADMIN / MANAGER / USER (tenants, utenti, progetti, ecc.).
+          </p>
+        </div>
       </div>
-    </main>
+    </DashboardLayout>
   );
 }
