@@ -18,7 +18,7 @@ export class AuthMiddleware implements NestMiddleware {
 
           // payload creato in AuthService.login:
           // { sub, email, tenantId, role, iat, exp }
-          (req as any).user = {
+          (req as any).authUser = {
             id: payload.sub,
             email: payload.email,
             role: payload.role,

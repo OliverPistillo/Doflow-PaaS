@@ -19,7 +19,7 @@ type AuthUser = {
 };
 
 function getAuthUser(req: Request): AuthUser | undefined {
-  return (req as any).authUser as AuthUser | undefined;
+  return (req as any).authUser ?? (req as any).user;
 }
 
 // Normalizzazione robusta del ruolo
