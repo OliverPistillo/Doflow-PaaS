@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { DashboardLayout } from '@/components/dashboard/layout';
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL && process.env.NEXT_PUBLIC_API_URL.length > 0
@@ -40,7 +39,7 @@ export default function DashboardPage() {
           cache: 'no-store',
         });
 
-        const text = await res.text();
+          const text = await res.text();
 
         if (!res.ok) {
           console.error('Errore /auth/me:', res.status, text);
@@ -100,64 +99,19 @@ export default function DashboardPage() {
     );
   }
 
+  // NIENTE DashboardLayout qui.
   return (
-    <DashboardLayout role={me.role} userEmail={me.email}>
-      {me.role === 'SUPER_ADMIN' && (
-        <SuperAdminDashboard tenantId={me.tenantId} />
-      )}
-      {me.role === 'ADMIN' && <AdminDashboard tenantId={me.tenantId} />}
-      {me.role === 'MANAGER' && <ManagerDashboard tenantId={me.tenantId} />}
-      {me.role === 'USER' && <UserDashboard tenantId={me.tenantId} />}
-    </DashboardLayout>
-  );
-}
-
-function SuperAdminDashboard({ tenantId }: { tenantId: string }) {
-  return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Dashboard Super Admin</h1>
-      <p className="text-sm text-zinc-400">
-        Gestisci tenant, utenti globali, ruoli e configurazioni di sistema.
-      </p>
-      <p className="text-xs text-zinc-500">
-        Tenant corrente (schema): <span className="font-mono">{tenantId}</span>
-      </p>
-    </div>
-  );
-}
-
-function AdminDashboard({ tenantId }: { tenantId: string }) {
-  return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Dashboard Admin Tenant</h1>
-      <p className="text-sm text-zinc-400">
-        Gestisci utenti, ruoli e configurazioni per il tenant{' '}
-        <span className="font-mono">{tenantId}</span>.
-      </p>
-    </div>
-  );
-}
-
-function ManagerDashboard({ tenantId }: { tenantId: string }) {
-  return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Dashboard Manager</h1>
-      <p className="text-sm text-zinc-400">
-        Vista progetti, team e carico di lavoro per il tuo tenant{' '}
-        <span className="font-mono">{tenantId}</span>.
-      </p>
-    </div>
-  );
-}
-
-function UserDashboard({ tenantId }: { tenantId: string }) {
-  return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold">La mia Dashboard</h1>
-      <p className="text-sm text-zinc-400">
-        I tuoi task, attività recenti e notifiche per il tenant{' '}
-        <span className="font-mono">{tenantId}</span>.
-      </p>
-    </div>
+    <main className="min-h-screen flex items-center justify-center bg-black text-zinc-100">
+      <div className="space-y-2 text-center">
+        <h1 className="text-2xl font-semibold">Doflow Dashboard (bare)</h1>
+        <p className="text-sm text-zinc-400">
+          Utente: <span className="font-mono">{me.email}</span>
+        </p>
+        <p className="text-sm text-zinc-400">
+          Ruolo: <span className="font-mono">{me.role}</span> | Tenant:{' '}
+          <span className="font-mono">{me.tenantId}</span>
+        </p>
+      </div>
+    </main>
   );
 }
