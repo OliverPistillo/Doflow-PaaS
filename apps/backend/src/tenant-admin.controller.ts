@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, Res, Param } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Post, Req, Res, Param } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { DataSource } from 'typeorm';
 import * as crypto from 'crypto';
@@ -41,6 +41,7 @@ export class TenantAdminController {
       res.status(401).json({ error: 'Not authenticated' });
       return null;
     }
+    // Grazie alla modifica su roles.ts, 'superadmin' passerà questo controllo
     if (!hasRoleAtLeast(authUser.role, 'admin')) {
       res.status(403).json({ error: 'Admin only' });
       return null;
@@ -137,7 +138,7 @@ export class TenantAdminController {
 
     await this.mailService.sendInviteEmail({
       to: invite.email,
-      tenantName: tenantId, // se hai un nome tenant, sostituisci qui
+      tenantName: tenantId,
       inviteLink: acceptUrl,
     });
 
@@ -212,6 +213,45 @@ export class TenantAdminController {
       status: 'ok',
       user: updated,
     });
+  }
+
+  // --- NUOVO METODO: ELIMINA UTENTE ---
+  @Delete('users/:id')
+  async deleteUser(
+    @Param('id') id: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    // Usa ensureAdmin per permettere solo Admin e Superadmin
+    const authUser = this.ensureAdmin(req, res);
+    if (!authUser) return;
+
+    const userId = Number(id);
+    if (Number.isNaN(userId)) {
+      return res.status(400).json({ error: 'Invalid user id' });
+    }
+
+    const conn = this.getConn(req);
+    const tenantId = this.getTenantId(req);
+
+    // Eseguiamo la cancellazione
+    const result = await conn.query(
+      `delete from ${tenantId}.users where id = $1 returning id`,
+      [userId],
+    );
+
+    if ((result as any[]).length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Log dell'azione
+    await this.auditService.log(req, {
+      action: 'admin_delete_user',
+      targetEmail: `ID:${userId}`,
+      metadata: { deletedId: userId },
+    });
+
+    return res.json({ status: 'ok', deletedId: userId });
   }
 
   @Get('audit')
