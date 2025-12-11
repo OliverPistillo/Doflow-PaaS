@@ -3,7 +3,7 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
-// MODIFICA 1: Rimuoviamo il default '/api'
+// Usa la variabile d'ambiente o fallback vuoto (chiamata relativa)
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 type Tenant = {
@@ -40,7 +40,6 @@ export default function SuperadminTenantsPage() {
           return;
         }
 
-        // MODIFICA 2: Aggiunto /api
         const res = await fetch(`${API_BASE}/api/superadmin/tenants`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -66,8 +65,8 @@ export default function SuperadminTenantsPage() {
           return;
         }
 
-        // --- FIX CRITICO PER IL CRASH ---
-        // Il backend restituisce { tenants: [...] }
+        // --- CORREZIONE CRASH ---
+        // Il backend restituisce un oggetto { tenants: [...] }
         let data: { tenants: Tenant[] };
         try {
           data = JSON.parse(text);
@@ -83,7 +82,7 @@ export default function SuperadminTenantsPage() {
         }
 
         if (!cancelled) {
-          // Usiamo data.tenants invece di data diretto
+          // Estraiamo l'array .tenants
           setState({ status: 'ok', tenants: data.tenants || [] });
         }
       } catch (e) {
@@ -122,7 +121,6 @@ export default function SuperadminTenantsPage() {
         return;
       }
 
-      // MODIFICA 3: Aggiunto /api
       const res = await fetch(`${API_BASE}/api/superadmin/tenants`, {
         method: 'POST',
         headers: {
@@ -147,14 +145,13 @@ export default function SuperadminTenantsPage() {
         return;
       }
 
-      // Ricarica lista tenants
+      // Reset form
       setName('');
       setSlug('');
 
-      // Ricarico in maniera semplice
+      // Ricarico lista
       setState({ status: 'loading' });
       
-      // MODIFICA 4: Aggiunto /api
       const reloadRes = await fetch(`${API_BASE}/api/superadmin/tenants`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -165,7 +162,7 @@ export default function SuperadminTenantsPage() {
 
       const reloadText = await reloadRes.text();
       if (reloadRes.ok) {
-        // --- FIX CRITICO ANCHE QUI ---
+        // --- CORREZIONE CRASH ANCHE QUI ---
         const reloadData = JSON.parse(reloadText) as { tenants: Tenant[] };
         setState({ status: 'ok', tenants: reloadData.tenants || [] });
       } else {
