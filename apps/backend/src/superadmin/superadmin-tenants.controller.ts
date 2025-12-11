@@ -40,15 +40,20 @@ function assertSuperAdmin(req: Request): AuthUser {
   return user;
 }
 
+function getTenantConn(req: Request): DataSource {
+  const conn = (req as any).tenantConnection as DataSource | undefined;
+  if (!conn) {
+    throw new Error('No tenant connection on request');
+  }
+  return conn;
+}
+
 @Controller('superadmin/tenants')
 export class SuperadminTenantsController {
-  // 👉 usiamo SEMPRE la connessione principale (schema public)
-  constructor(private readonly dataSource: DataSource) {}
-
   @Get()
   async list(@Req() req: Request) {
     assertSuperAdmin(req);
-    const conn = this.dataSource;
+    const conn = getTenantConn(req);
 
     const rows = await conn.query(
       `
@@ -78,7 +83,7 @@ export class SuperadminTenantsController {
     },
   ) {
     assertSuperAdmin(req);
-    const conn = this.dataSource;
+    const conn = getTenantConn(req);
 
     const slug = (body.slug ?? '').trim().toLowerCase();
     const name = (body.name ?? '').trim();
@@ -122,7 +127,7 @@ export class SuperadminTenantsController {
   @Post(':id/toggle-active')
   async toggleActive(@Req() req: Request, @Param('id') id: string) {
     assertSuperAdmin(req);
-    const conn = this.dataSource;
+    const conn = getTenantConn(req);
 
     const rows = await conn.query(
       `
