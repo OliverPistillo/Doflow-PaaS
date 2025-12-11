@@ -12,7 +12,6 @@ type ClientMeta = {
 
 type ClientWithMeta = WebSocket & { __meta?: ClientMeta };
 
-// Dev-helper per decodificare il JWT senza verificare la firma (solo per test WS)
 function decodeJwt(token: string): any {
   const parts = token.split('.');
   if (parts.length < 2) {
@@ -25,6 +24,9 @@ function decodeJwt(token: string): any {
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // 🔥 QUESTA È LA RIGA MANCANTE CHE RISOLVE IL 404
+  app.setGlobalPrefix('api'); 
 
   app.enableCors({
     origin: true,
@@ -61,7 +63,6 @@ async function bootstrap() {
     try {
       const fullUrl = new URL(url, 'http://localhost');
       if (fullUrl.pathname !== wsPath) {
-        // Non è il nostro path /ws → lasciamo perdere
         return;
       }
 
@@ -105,7 +106,6 @@ async function bootstrap() {
       // eslint-disable-next-line no-console
       console.log('[WS RAW] client connected', meta);
 
-      // Messaggio iniziale "hello"
       const hello = {
         type: 'hello' as const,
         payload: {
