@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Post, Req, Res, Param } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Post, Req, Res, Param, Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { DataSource } from 'typeorm';
 import * as crypto from 'crypto';
@@ -8,7 +8,7 @@ import { MailService } from './mail/mail.service';
 
 type InviteBody = {
   email: string;
-  role?: Role; // default gestito sotto
+  role?: Role;
 };
 
 type ChangeRoleBody = {
@@ -17,6 +17,8 @@ type ChangeRoleBody = {
 
 @Controller('tenant/admin')
 export class TenantAdminController {
+  private readonly logger = new Logger(TenantAdminController.name);
+
   constructor(
     private readonly auditService: AuditService,
     private readonly mailService: MailService,
@@ -41,7 +43,6 @@ export class TenantAdminController {
       res.status(401).json({ error: 'Not authenticated' });
       return null;
     }
-    // Grazie alla modifica su roles.ts, 'superadmin' passerà questo controllo
     if (!hasRoleAtLeast(authUser.role, 'admin')) {
       res.status(403).json({ error: 'Admin only' });
       return null;
@@ -56,9 +57,7 @@ export class TenantAdminController {
       return res.status(401).json({ error: 'Not authenticated' });
     }
     if (!hasRoleAtLeast(authUser.role, 'manager')) {
-      return res
-        .status(403)
-        .json({ error: 'Manager or admin only' });
+      return res.status(403).json({ error: 'Manager or admin only' });
     }
 
     const conn = this.getConn(req);
@@ -89,14 +88,12 @@ export class TenantAdminController {
       return res.status(400).json({ error: 'email required' });
     }
 
-    // normalizza ruolo
     const rawRole = body.role ?? 'viewer';
     const allowedRoles: Role[] = ['admin', 'manager', 'editor', 'viewer', 'user'];
     const role = allowedRoles.includes(rawRole) ? rawRole : 'viewer';
 
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
-
     const token = crypto.randomBytes(32).toString('hex');
 
     const rows = await conn.query(
@@ -116,31 +113,34 @@ export class TenantAdminController {
       metadata: { role: invite.role },
     });
 
-    // =========================
-    // Hook: invio email invito
-    // =========================
-
+    // Costruzione URL
     const host =
       (req.headers['x-forwarded-host'] as string) ??
       (req.headers.host as string) ??
       process.env.APP_BASE_URL ??
       'app.doflow.it';
 
-    const proto =
-      (req.headers['x-forwarded-proto'] as string) ?? 'https';
-
-    const baseUrl =
-      host.startsWith('http://') || host.startsWith('https://')
-        ? host
-        : `${proto}://${host}`;
-
+    const proto = (req.headers['x-forwarded-proto'] as string) ?? 'https';
+    
+    // Se l'host non include il protocollo, aggiungiamolo
+    const baseUrl = host.startsWith('http') ? host : `${proto}://${host}`;
     const acceptUrl = `${baseUrl}/auth/accept-invite?token=${invite.token}`;
 
-    await this.mailService.sendInviteEmail({
-      to: invite.email,
-      tenantName: tenantId,
-      inviteLink: acceptUrl,
-    });
+    // --- BLOCCO DI SICUREZZA PER EMAIL ---
+    try {
+      this.logger.log(`Tentativo invio email a ${invite.email} tramite SMTP...`);
+      await this.mailService.sendInviteEmail({
+        to: invite.email,
+        tenantName: tenantId,
+        inviteLink: acceptUrl,
+      });
+      this.logger.log(`Email inviata con successo.`);
+    } catch (e) {
+      // Logghiamo l'errore ma NON blocchiamo la risposta al client
+      this.logger.error(`ERRORE CRITICO INVIO MAIL: ${e instanceof Error ? e.message : e}`);
+      // L'esecuzione continua...
+    }
+    // -------------------------------------
 
     return res.json({
       status: 'ok',
@@ -172,29 +172,19 @@ export class TenantAdminController {
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
 
-    // prendo il ruolo precedente
     const existingRows = await conn.query(
-      `select id, email, role 
-       from ${tenantId}.users
-       where id = $1
-       limit 1`,
+      `select id, email, role from ${tenantId}.users where id = $1 limit 1`,
       [userId],
     );
 
-    const existing = existingRows[0];
-    if (!existing) {
+    if (!existingRows[0]) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const oldRole = existing.role;
+    const oldRole = existingRows[0].role;
 
     const updatedRows = await conn.query(
-      `
-      update ${tenantId}.users
-      set role = $1
-      where id = $2
-      returning id, email, role, created_at
-      `,
+      `update ${tenantId}.users set role = $1 where id = $2 returning id, email, role, created_at`,
       [body.role, userId],
     );
 
@@ -203,26 +193,18 @@ export class TenantAdminController {
     await this.auditService.log(req, {
       action: 'admin_change_role',
       targetEmail: updated.email,
-      metadata: {
-        oldRole,
-        newRole: updated.role,
-      },
+      metadata: { oldRole, newRole: updated.role },
     });
 
-    return res.json({
-      status: 'ok',
-      user: updated,
-    });
+    return res.json({ status: 'ok', user: updated });
   }
 
-  // --- NUOVO METODO: ELIMINA UTENTE ---
   @Delete('users/:id')
   async deleteUser(
     @Param('id') id: string,
     @Req() req: Request,
     @Res() res: Response,
   ) {
-    // Usa ensureAdmin per permettere solo Admin e Superadmin
     const authUser = this.ensureAdmin(req, res);
     if (!authUser) return;
 
@@ -234,7 +216,6 @@ export class TenantAdminController {
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
 
-    // Eseguiamo la cancellazione
     const result = await conn.query(
       `delete from ${tenantId}.users where id = $1 returning id`,
       [userId],
@@ -244,7 +225,6 @@ export class TenantAdminController {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Log dell'azione
     await this.auditService.log(req, {
       action: 'admin_delete_user',
       targetEmail: `ID:${userId}`,
@@ -257,26 +237,20 @@ export class TenantAdminController {
   @Get('audit')
   async listAudit(@Req() req: Request, @Res() res: Response) {
     const authUser = (req as any).authUser;
-    if (!authUser) {
-      return res.status(401).json({ error: 'Not authenticated' });
-    }
-    // audit visibile da manager+ e admin
+    if (!authUser) return res.status(401).json({ error: 'Not authenticated' });
+
     if (!hasRoleAtLeast(authUser.role, 'manager')) {
-      return res
-        .status(403)
-        .json({ error: 'Manager or admin only' });
+      return res.status(403).json({ error: 'Manager or admin only' });
     }
 
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
 
     const rows = await conn.query(
-      `
-      select id, action, actor_email, actor_role, target_email, metadata, ip, created_at
-      from ${tenantId}.audit_log
-      order by id desc
-      limit 100
-      `,
+      `select id, action, actor_email, actor_role, target_email, metadata, ip, created_at
+       from ${tenantId}.audit_log
+       order by id desc
+       limit 100`,
     );
 
     return res.json({ entries: rows });
