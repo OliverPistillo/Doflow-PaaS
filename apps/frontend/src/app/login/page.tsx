@@ -21,7 +21,7 @@ export default function LoginPage() {
   const router = useRouter();
 
   // Puoi rimettere l'email vuota se preferisci, qui lascio quella che avevi
-  const [email, setEmail] = useState('logi@app.doflow.it'); 
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

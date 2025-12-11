@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/dashboard/layout';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
+// MODIFICA 1: Rimuoviamo il default '/api' qui per aggiungerlo esplicitamente sotto
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 type LayoutRole = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'USER';
 
@@ -12,7 +13,7 @@ type MeResponse = {
   user: {
     id: string;
     email: string;
-    role: string; // es. "owner"
+    role: string;
     tenantId: string;
   };
 };
@@ -23,23 +24,18 @@ type State =
   | { status: 'error'; message: string }
   | { status: 'ok'; me: MeResponse };
 
-// Mappa i ruoli backend (es. "owner") ai ruoli accettati dal layout
 function mapRoleToLayoutRole(role: string): LayoutRole {
   const r = role.toLowerCase();
 
   if (r === 'owner' || r === 'super_admin' || r === 'superadmin') {
     return 'SUPER_ADMIN';
   }
-
   if (r === 'admin') {
     return 'ADMIN';
   }
-
   if (r === 'manager') {
     return 'MANAGER';
   }
-
-  // fallback per qualsiasi altro ruolo
   return 'USER';
 }
 
@@ -62,7 +58,8 @@ export default function DashboardPage() {
           return;
         }
 
-        const res = await fetch(`${API_BASE}/auth/me`, {
+        // MODIFICA 2: Aggiunto '/api' nell'URL della chiamata
+        const res = await fetch(`${API_BASE}/api/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
           cache: 'no-store',
         });
