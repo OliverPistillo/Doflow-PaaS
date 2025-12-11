@@ -66,9 +66,11 @@ export default function SuperadminTenantsPage() {
           return;
         }
 
-        let data: Tenant[];
+        // --- FIX CRITICO PER IL CRASH ---
+        // Il backend restituisce { tenants: [...] }
+        let data: { tenants: Tenant[] };
         try {
-          data = JSON.parse(text) as Tenant[];
+          data = JSON.parse(text);
         } catch (e) {
           console.error('Errore parse JSON tenants:', e, text);
           if (!cancelled) {
@@ -81,7 +83,8 @@ export default function SuperadminTenantsPage() {
         }
 
         if (!cancelled) {
-          setState({ status: 'ok', tenants: data });
+          // Usiamo data.tenants invece di data diretto
+          setState({ status: 'ok', tenants: data.tenants || [] });
         }
       } catch (e) {
         console.error('Errore rete /superadmin/tenants:', e);
@@ -162,8 +165,9 @@ export default function SuperadminTenantsPage() {
 
       const reloadText = await reloadRes.text();
       if (reloadRes.ok) {
-        const reloadData = JSON.parse(reloadText) as Tenant[];
-        setState({ status: 'ok', tenants: reloadData });
+        // --- FIX CRITICO ANCHE QUI ---
+        const reloadData = JSON.parse(reloadText) as { tenants: Tenant[] };
+        setState({ status: 'ok', tenants: reloadData.tenants || [] });
       } else {
         setState({
           status: 'error',
