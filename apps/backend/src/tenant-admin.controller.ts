@@ -121,7 +121,7 @@ export class TenantAdminController {
       'app.doflow.it';
 
     const proto = (req.headers['x-forwarded-proto'] as string) ?? 'https';
-    const baseUrl = host.startsWith('http') ? host : `${proto}://${host}`;
+    const baseUrl = 'https://app.doflow.it';
     const acceptUrl = `${baseUrl}/auth/accept-invite?token=${invite.token}`;
 
     // --- BLOCCO TRY-CATCH PER EVITARE CRASH SE EMAIL FALLISCE ---
