@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { DataSource } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm'; // Import fondamentale
 
 type AuthUser = {
   id: string;
@@ -19,11 +20,9 @@ type AuthUser = {
 };
 
 function getAuthUser(req: Request): AuthUser | undefined {
-  // compatibilità: sia authUser sia user
   return (req as any).authUser ?? (req as any).user;
 }
 
-// Normalizzazione robusta del ruolo
 function assertSuperAdmin(req: Request): AuthUser {
   const user = getAuthUser(req);
   if (!user) {
@@ -32,7 +31,7 @@ function assertSuperAdmin(req: Request): AuthUser {
 
   const rawRole = String(user.role ?? '');
   const normalized = rawRole.toUpperCase().replace(/[^A-Z]/g, '');
-  // superadmin / SUPER_ADMIN / Super-Admin -> SUPERADMIN
+  
   if (normalized !== 'SUPERADMIN') {
     throw new ForbiddenException('Forbidden (SUPER_ADMIN only)');
   }
@@ -40,22 +39,17 @@ function assertSuperAdmin(req: Request): AuthUser {
   return user;
 }
 
-function getTenantConn(req: Request): DataSource {
-  const conn = (req as any).tenantConnection as DataSource | undefined;
-  if (!conn) {
-    throw new Error('No tenant connection on request');
-  }
-  return conn;
-}
-
 @Controller('superadmin/tenants')
 export class SuperadminTenantsController {
+  // Iniettiamo la connessione principale (public schema)
+  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+
   @Get()
   async list(@Req() req: Request) {
     assertSuperAdmin(req);
-    const conn = getTenantConn(req);
-
-    const rows = await conn.query(
+    
+    // Usiamo this.dataSource invece di cercare la tenantConnection
+    const rows = await this.dataSource.query(
       `
       select
         id,
@@ -83,8 +77,7 @@ export class SuperadminTenantsController {
     },
   ) {
     assertSuperAdmin(req);
-    const conn = getTenantConn(req);
-
+    
     const slug = (body.slug ?? '').trim().toLowerCase();
     const name = (body.name ?? '').trim();
     const isActive = body.isActive ?? true;
@@ -99,7 +92,7 @@ export class SuperadminTenantsController {
       );
     }
 
-    const existing = await conn.query(
+    const existing = await this.dataSource.query(
       `select id from public.tenants where slug = $1 limit 1`,
       [slug],
     );
@@ -107,7 +100,7 @@ export class SuperadminTenantsController {
       throw new BadRequestException('slug already exists');
     }
 
-    const rows = await conn.query(
+    const rows = await this.dataSource.query(
       `
       insert into public.tenants (slug, name, is_active, created_at, updated_at)
       values ($1, $2, $3, now(), now())
@@ -117,19 +110,14 @@ export class SuperadminTenantsController {
     );
 
     const tenant = rows[0];
-
-    // Qui potresti agganciare il provisioning dello schema:
-    // await conn.query('select doflow_provision_tenant($1)', [tenant.id]);
-
     return { tenant };
   }
 
   @Post(':id/toggle-active')
   async toggleActive(@Req() req: Request, @Param('id') id: string) {
     assertSuperAdmin(req);
-    const conn = getTenantConn(req);
 
-    const rows = await conn.query(
+    const rows = await this.dataSource.query(
       `
       update public.tenants
       set

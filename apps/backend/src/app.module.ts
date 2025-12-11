@@ -1,6 +1,6 @@
-// C:\Doflow\apps\backend\src\app.module.ts
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config'; // Aggiungi ConfigService
+import { TypeOrmModule } from '@nestjs/typeorm'; // <--- Aggiungi questo import
 import { AppController } from './app.controller';
 import { RedisService } from './redis/redis.service';
 import { TenancyMiddleware } from './tenancy/tenancy.middleware';
@@ -31,6 +31,19 @@ import { ProjectsEventsService } from './realtime/projects-events.service';
       isGlobal: true,
       ignoreEnvFile: true,
     }),
+    // AGGIUNGI QUESTA PARTE PER CONNETTERE IL DB PRINCIPALE
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        type: 'postgres',
+        url: configService.get<string>('DATABASE_URL'), // Assicurati di avere questa var nell'env
+        autoLoadEntities: false, // O true se usi le Entity
+        synchronize: false, // Meglio false in produzione
+        // Opzionale: se hai problemi con SSL su Supabase/Neon/Cloud
+        // ssl: { rejectUnauthorized: false }, 
+      }),
+    }),
     MailModule,
     TenantModule,
   ],
@@ -38,7 +51,7 @@ import { ProjectsEventsService } from './realtime/projects-events.service';
     AppController,
     BloomController,
     TelemetryController,
-    TenantUsersController,
+    TenantUsersController, // È registrato correttamente qui
     AuthController,
     TenantAdminController,
     ProjectsController,
