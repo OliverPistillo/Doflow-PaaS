@@ -3,16 +3,16 @@
 import { useEffect, useState, FormEvent } from 'react';
 import Link from 'next/link';
 
-// URL Backend
+// URL Backend fisso
 const API_BASE = 'https://api.doflow.it';
 
-// Aggiunto 'superadmin' e 'owner' ai tipi
+// Tipi di ruolo supportati
 type Role = 'superadmin' | 'owner' | 'admin' | 'manager' | 'editor' | 'viewer' | 'user';
 
 type User = {
   id: number;
   email: string;
-  role: Role;
+  role: string; // Usiamo string per essere flessibili
   created_at: string;
 };
 
@@ -21,7 +21,7 @@ type UsersResponse = {
     sub: number;
     email: string;
     tenantId: string;
-    role: Role;
+    role: string; // Il backend potrebbe mandarlo maiuscolo o minuscolo
   };
   users: User[];
 };
@@ -31,13 +31,13 @@ type InviteResponse = {
   error?: string;
 };
 
-const ALL_ROLES: Role[] = ['admin', 'manager', 'editor', 'viewer', 'user'];
+const ALL_ROLES: string[] = ['admin', 'manager', 'editor', 'viewer', 'user'];
 
 export default function AdminUsersPage() {
   const [tenantHost, setTenantHost] = useState('');
   const [token, setToken] = useState<string | null>(null);
 
-  const [currentUserRole, setCurrentUserRole] = useState<Role | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
 
   const [users, setUsers] = useState<User[]>([]);
@@ -46,7 +46,7 @@ export default function AdminUsersPage() {
   const [info, setInfo] = useState<string | null>(null);
 
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<Role>('viewer');
+  const [inviteRole, setInviteRole] = useState<string>('viewer');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -109,7 +109,7 @@ export default function AdminUsersPage() {
     }
   };
 
-  const handleChangeRole = async (userId: number, newRole: Role) => {
+  const handleChangeRole = async (userId: number, newRole: string) => {
     if (!ensureToken()) return;
     setError(null);
     setInfo(null);
@@ -135,7 +135,6 @@ export default function AdminUsersPage() {
     }
   };
 
-  // --- NUOVA FUNZIONE: ELIMINA UTENTE ---
   const handleDeleteUser = async (userId: number) => {
     if (!ensureToken()) return;
     if (!confirm('Sei sicuro di voler eliminare questo utente?')) return;
@@ -200,13 +199,14 @@ export default function AdminUsersPage() {
     }
   };
 
-  // --- LOGICA PERMESSI AGGIORNATA ---
-  // Ora includiamo superadmin e owner
+  // --- LOGICA PERMESSI ROBUSTA (Case Insensitive) ---
+  const normalizedRole = (currentUserRole || '').toLowerCase();
+  
   const canManageUsers =
-    currentUserRole === 'superadmin' ||
-    currentUserRole === 'owner' ||
-    currentUserRole === 'admin' ||
-    currentUserRole === 'manager';
+    normalizedRole === 'superadmin' ||
+    normalizedRole === 'owner' ||
+    normalizedRole === 'admin' ||
+    normalizedRole === 'manager';
 
   return (
     <main className="min-h-screen flex flex-col items-center gap-6 p-6">
@@ -245,7 +245,7 @@ export default function AdminUsersPage() {
               <select
                 className="border rounded px-3 py-2 text-black"
                 value={inviteRole}
-                onChange={(e) => setInviteRole(e.target.value as Role)}
+                onChange={(e) => setInviteRole(e.target.value)}
               >
                 {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
@@ -285,7 +285,7 @@ export default function AdminUsersPage() {
                       <select
                         className="border rounded px-2 py-1 text-xs text-black"
                         value={u.role}
-                        onChange={(e) => handleChangeRole(u.id, e.target.value as Role)}
+                        onChange={(e) => handleChangeRole(u.id, e.target.value)}
                         disabled={!canManageUsers || loading}
                       >
                         {ALL_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
