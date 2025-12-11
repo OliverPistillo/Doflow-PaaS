@@ -14,12 +14,14 @@ type LoginErrorResponse = {
 
 type LoginResponse = LoginOkResponse | LoginErrorResponse;
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api';
+// MODIFICA 1: Rimuoviamo il fallback '/api' qui, perché lo aggiungeremo esplicitamente nella fetch
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 export default function LoginPage() {
   const router = useRouter();
 
-  const [email, setEmail] = useState('login@app.doflow.it');
+  // Puoi rimettere l'email vuota se preferisci, qui lascio quella che avevi
+  const [email, setEmail] = useState('logi@app.doflow.it'); 
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +39,8 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/auth/login`, {
+      // MODIFICA 2: Aggiunto '/api' nell'URL
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -58,7 +61,7 @@ export default function LoginPage() {
             msg = json.error;
           }
         } catch {
-          // ignore parse error, keep default msg
+          // ignore parse error
         }
         throw new Error(msg);
       }
@@ -111,7 +114,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Card login con gradiente blu a rilievo */}
+        {/* Card login */}
         <div className="relative rounded-2xl border border-blue-500/40 bg-gradient-to-br from-blue-500/80 via-indigo-500 to-blue-700 shadow-[0_0_60px_rgba(37,99,235,0.7)] overflow-hidden">
           <div className="absolute inset-0 pointer-events-none opacity-40 mix-blend-soft-light bg-[radial-gradient(circle_at_0_0,rgba(255,255,255,0.3),transparent_60%),radial-gradient(circle_at_100%_0,rgba(255,255,255,0.25),transparent_55%)]" />
           <div className="relative z-10 px-5 pt-5 pb-4 border-b border-white/20">
