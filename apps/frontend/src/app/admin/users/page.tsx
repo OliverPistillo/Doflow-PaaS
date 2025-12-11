@@ -29,8 +29,8 @@ type InviteResponse = {
 
 const ALL_ROLES: Role[] = ['admin', 'manager', 'editor', 'viewer', 'user'];
 
-// 👉 forziamo l'uso di nginx come proxy
-const API_BASE = '/api';
+// --- MODIFICA 1: URL Hardcoded del Backend ---
+const API_BASE = 'https://api.doflow.it';
 
 export default function AdminUsersPage() {
   const [tenantHost, setTenantHost] = useState('');
@@ -77,7 +77,8 @@ export default function AdminUsersPage() {
     setInfo(null);
 
     try {
-      const res = await fetch(`${API_BASE}/tenant/admin/users`, {
+      // --- MODIFICA 2: Aggiunto /api nel percorso ---
+      const res = await fetch(`${API_BASE}/api/tenant/admin/users`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -118,7 +119,8 @@ export default function AdminUsersPage() {
     setInfo(null);
 
     try {
-      const res = await fetch(`${API_BASE}/tenant/admin/users/${userId}/role`, {
+      // --- MODIFICA 3: Aggiunto /api nel percorso ---
+      const res = await fetch(`${API_BASE}/api/tenant/admin/users/${userId}/role`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -166,7 +168,8 @@ export default function AdminUsersPage() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/tenant/admin/invite`, {
+      // --- MODIFICA 4: Aggiunto /api nel percorso ---
+      const res = await fetch(`${API_BASE}/api/tenant/admin/invite`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
