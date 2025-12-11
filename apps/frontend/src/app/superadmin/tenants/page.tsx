@@ -3,7 +3,8 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
+// MODIFICA 1: Rimuoviamo il default '/api'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 type Tenant = {
   id: string;
@@ -39,7 +40,8 @@ export default function SuperadminTenantsPage() {
           return;
         }
 
-        const res = await fetch(`${API_BASE}/superadmin/tenants`, {
+        // MODIFICA 2: Aggiunto /api
+        const res = await fetch(`${API_BASE}/api/superadmin/tenants`, {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -117,7 +119,8 @@ export default function SuperadminTenantsPage() {
         return;
       }
 
-      const res = await fetch(`${API_BASE}/superadmin/tenants`, {
+      // MODIFICA 3: Aggiunto /api
+      const res = await fetch(`${API_BASE}/api/superadmin/tenants`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -147,7 +150,9 @@ export default function SuperadminTenantsPage() {
 
       // Ricarico in maniera semplice
       setState({ status: 'loading' });
-      const reloadRes = await fetch(`${API_BASE}/superadmin/tenants`, {
+      
+      // MODIFICA 4: Aggiunto /api
+      const reloadRes = await fetch(`${API_BASE}/api/superadmin/tenants`, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',

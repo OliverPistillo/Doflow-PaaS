@@ -142,7 +142,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
-                  placeholder="tu@azienda.it"
+                  placeholder="Inserisci la tua email"
                 />
               </div>
 

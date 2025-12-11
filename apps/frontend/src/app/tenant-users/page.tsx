@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api';
+// MODIFICA 1: Rimuoviamo il default '/api'
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 type User = {
   id: number;
@@ -32,7 +33,8 @@ export default function TenantUsersPage() {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/tenant/users`, {
+      // MODIFICA 2: Aggiunto /api
+      const res = await fetch(`${API_BASE}/api/tenant/users`, {
         cache: 'no-store',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -71,7 +73,8 @@ export default function TenantUsersPage() {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/tenant/users`, {
+      // MODIFICA 3: Aggiunto /api
+      const res = await fetch(`${API_BASE}/api/tenant/users`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api';
+// MODIFICA 1
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -44,7 +45,8 @@ export default function ResetPasswordPage() {
     setSubmitting(true);
 
     try {
-      const res = await fetch(`${API_BASE}/auth/reset-password`, {
+      // MODIFICA 2: Aggiunto /api
+      const res = await fetch(`${API_BASE}/api/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, password }),
