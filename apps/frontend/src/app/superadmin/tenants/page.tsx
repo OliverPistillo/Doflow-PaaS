@@ -4,7 +4,7 @@ import { useEffect, useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
 // Usa la variabile d'ambiente o fallback vuoto (chiamata relativa)
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
+const API_BASE = 'https://api.doflow.it';
 
 type Tenant = {
   id: string;

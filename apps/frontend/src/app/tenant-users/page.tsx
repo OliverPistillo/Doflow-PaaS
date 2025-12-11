@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 
 // MODIFICA 1: Rimuoviamo il default '/api'
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
+const API_BASE = 'https://api.doflow.it';
 
 type User = {
   id: number;
