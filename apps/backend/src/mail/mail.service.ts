@@ -13,18 +13,28 @@ export class MailService {
   private fromAddress: string;
 
   constructor(private readonly config: ConfigService) {
-    const host = this.config.get<string>('SMTP_HOST');
-    const port = Number(this.config.get<string>('SMTP_PORT') ?? '587');
-    const secure =
-      (this.config.get<string>('SMTP_SECURE') ?? 'false').toLowerCase() ===
-      'true';
-    const user = this.config.get<string>('SMTP_USER');
-    const pass = this.config.get<string>('SMTP_PASS');
-    const fromName = this.config.get<string>('MAIL_FROM_NAME') ?? 'Doflow';
-    const fromAddr =
-      this.config.get<string>('MAIL_FROM_ADDRESS') ?? 'no-reply@doflow.it';
+    // --- MODIFICA: Ora leggiamo le variabili MAIL_... che hai su Coolify ---
+    const host = this.config.get<string>('MAIL_HOST');
+    const port = Number(this.config.get<string>('MAIL_PORT') ?? '587');
+    
+    // Gestione robusta del secure: true se 'true' o porta 465
+    const secureRaw = this.config.get<string>('MAIL_SECURE');
+    const secure = secureRaw 
+      ? secureRaw.toLowerCase() === 'true' 
+      : port === 465;
 
-    this.fromAddress = `"${fromName}" <${fromAddr}>`;
+    const user = this.config.get<string>('MAIL_USER');
+    const pass = this.config.get<string>('MAIL_PASSWORD');
+
+    // Gestione Mittente: supportiamo sia MAIL_FROM completo che spezzato
+    const mailFrom = this.config.get<string>('MAIL_FROM');
+    const fromName = this.config.get<string>('MAIL_FROM_NAME') ?? 'Doflow';
+    const fromAddr = this.config.get<string>('MAIL_FROM_ADDRESS') ?? 'noreply@doflow.it';
+
+    // Se c'è MAIL_FROM completo (es. "Doflow <no-reply@...>") usiamo quello, altrimenti costruiamo
+    this.fromAddress = mailFrom || `"${fromName}" <${fromAddr}>`;
+
+    this.logger.log(`Configuring MailService with host: ${host}, port: ${port}, user: ${user}, secure: ${secure}`);
 
     this.transporter = nodemailer.createTransport({
       host,
@@ -46,9 +56,10 @@ export class MailService {
         subject: params.subject,
         html: params.html,
       });
+      this.logger.log(`Email inviata correttamente a ${params.to}`);
     } catch (e) {
       this.logger.error(`Errore invio email a ${params.to}`, e as any);
-      // Non rilanciamo per non bloccare il flow business
+      // Non rilanciamo l'errore per evitare che il crash della mail blocchi la creazione utente
     }
   }
 
