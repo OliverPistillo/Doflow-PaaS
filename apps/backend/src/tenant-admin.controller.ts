@@ -121,14 +121,12 @@ export class TenantAdminController {
       'app.doflow.it';
 
     const proto = (req.headers['x-forwarded-proto'] as string) ?? 'https';
-    
-    // Se l'host non include il protocollo, aggiungiamolo
     const baseUrl = host.startsWith('http') ? host : `${proto}://${host}`;
     const acceptUrl = `${baseUrl}/auth/accept-invite?token=${invite.token}`;
 
-    // --- BLOCCO DI SICUREZZA PER EMAIL ---
+    // --- BLOCCO TRY-CATCH PER EVITARE CRASH SE EMAIL FALLISCE ---
     try {
-      this.logger.log(`Tentativo invio email a ${invite.email} tramite SMTP...`);
+      this.logger.log(`Tentativo invio email a ${invite.email}...`);
       await this.mailService.sendInviteEmail({
         to: invite.email,
         tenantName: tenantId,
@@ -136,11 +134,10 @@ export class TenantAdminController {
       });
       this.logger.log(`Email inviata con successo.`);
     } catch (e) {
-      // Logghiamo l'errore ma NON blocchiamo la risposta al client
-      this.logger.error(`ERRORE CRITICO INVIO MAIL: ${e instanceof Error ? e.message : e}`);
-      // L'esecuzione continua...
+      // Logghiamo l'errore ma procediamo senza bloccare la risposta
+      this.logger.error(`ERRORE INVIO MAIL (ma l'utente è stato creato): ${e instanceof Error ? e.message : e}`);
     }
-    // -------------------------------------
+    // -------------------------------------------------------------
 
     return res.json({
       status: 'ok',

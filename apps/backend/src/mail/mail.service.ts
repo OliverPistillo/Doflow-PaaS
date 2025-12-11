@@ -13,34 +13,41 @@ export class MailService {
   private fromAddress: string;
 
   constructor(private readonly config: ConfigService) {
-    // --- MODIFICA: Ora leggiamo le variabili MAIL_... che hai su Coolify ---
+    // --- DEBUG: STAMPIAMO LE VARIABILI (Password oscurata) ---
     const host = this.config.get<string>('MAIL_HOST');
-    const port = Number(this.config.get<string>('MAIL_PORT') ?? '587');
-    
-    // Gestione robusta del secure: true se 'true' o porta 465
-    const secureRaw = this.config.get<string>('MAIL_SECURE');
-    const secure = secureRaw 
-      ? secureRaw.toLowerCase() === 'true' 
-      : port === 465;
-
+    const port = this.config.get<string>('MAIL_PORT');
     const user = this.config.get<string>('MAIL_USER');
-    const pass = this.config.get<string>('MAIL_PASSWORD');
+    const secure = this.config.get<string>('MAIL_SECURE');
+    
+    // Solo in dev/debug, utile per verificare che Coolify passi i dati
+    console.log('============= MAIL DEBUG START =============');
+    console.log(`MAIL_HOST: ${host}`);
+    console.log(`MAIL_PORT: ${port}`);
+    console.log(`MAIL_USER: ${user}`);
+    console.log(`MAIL_SECURE: ${secure}`);
+    console.log('============================================');
 
-    // Gestione Mittente: supportiamo sia MAIL_FROM completo che spezzato
+    const portNumber = Number(port ?? '587');
+    
+    // Logica SiteGround: se porta 465, secure DEVE essere true
+    const isSecure = secure === 'true' || portNumber === 465;
+
+    const pass = this.config.get<string>('MAIL_PASSWORD');
     const mailFrom = this.config.get<string>('MAIL_FROM');
     const fromName = this.config.get<string>('MAIL_FROM_NAME') ?? 'Doflow';
     const fromAddr = this.config.get<string>('MAIL_FROM_ADDRESS') ?? 'noreply@doflow.it';
 
-    // Se c'è MAIL_FROM completo (es. "Doflow <no-reply@...>") usiamo quello, altrimenti costruiamo
     this.fromAddress = mailFrom || `"${fromName}" <${fromAddr}>`;
 
-    this.logger.log(`Configuring MailService with host: ${host}, port: ${port}, user: ${user}, secure: ${secure}`);
-
     this.transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure,
+      host: host, // Se undefined, Nodemailer potrebbe fallire o usare localhost
+      port: portNumber,
+      secure: isSecure,
       auth: user && pass ? { user, pass } : undefined,
+      // Timeout aggressivi per evitare il freeze del frontend
+      connectionTimeout: 5000, // 5 secondi
+      greetingTimeout: 5000,
+      socketTimeout: 5000,
     });
   }
 
@@ -50,16 +57,23 @@ export class MailService {
     html: string;
   }) {
     try {
+      // CORREZIONE TS: castiamo options ad any per leggere .host senza errore
+      const options = this.transporter.options as any;
+      this.logger.log(`Tentativo invio a: ${params.to} tramite ${options.host || 'unknown host'}`);
+      
       await this.transporter.sendMail({
         from: this.fromAddress,
         to: params.to,
         subject: params.subject,
         html: params.html,
       });
-      this.logger.log(`Email inviata correttamente a ${params.to}`);
+      
+      this.logger.log(`✅ Email inviata a ${params.to}`);
     } catch (e) {
-      this.logger.error(`Errore invio email a ${params.to}`, e as any);
-      // Non rilanciamo l'errore per evitare che il crash della mail blocchi la creazione utente
+      this.logger.error(`❌ ERRORE INVIO EMAIL a ${params.to}`);
+      console.error(e); 
+      // Rilanciamo l'errore per farlo gestire al controller
+      throw e;
     }
   }
 
