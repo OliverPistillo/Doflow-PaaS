@@ -3,12 +3,9 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { DashboardLayout } from '@/components/dashboard/layout';
+import { getTenantHeader } from '@/lib/tenant-fetch';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.doflow.it';
-
-/* =======================
-   TIPI
-======================= */
 
 type AuditEntry = {
   id: number;
@@ -27,11 +24,6 @@ type AuditResponse = {
 
 type LayoutRole = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'USER';
 
-/* =======================
-   UTILS UI
-======================= */
-
-// mappa ruolo backend → layout
 function mapRoleToLayoutRole(role: string | null): LayoutRole {
   const r = (role || '').toLowerCase();
   if (r === 'owner' || r === 'superadmin' || r === 'super_admin') return 'SUPER_ADMIN';
@@ -40,7 +32,6 @@ function mapRoleToLayoutRole(role: string | null): LayoutRole {
   return 'USER';
 }
 
-// badge azione audit
 function ActionBadge({ action }: { action: string }) {
   const a = action.toUpperCase();
 
@@ -53,19 +44,11 @@ function ActionBadge({ action }: { action: string }) {
   };
 
   return (
-    <span
-      className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase ${
-        styles[a] || 'bg-zinc-700/30 text-zinc-300'
-      }`}
-    >
+    <span className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase ${styles[a] || 'bg-zinc-700/30 text-zinc-300'}`}>
       {action}
     </span>
   );
 }
-
-/* =======================
-   PAGE
-======================= */
 
 export default function AdminAuditPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -75,7 +58,7 @@ export default function AdminAuditPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
-  const [currentUserRole, setCurrentUserRole] = useState<string | null>('admin'); // fallback
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -97,9 +80,10 @@ export default function AdminAuditPage() {
     setError(null);
 
     try {
-      const res = await fetch(`${API_BASE}/tenant/admin/audit`, {
+      const res = await fetch(`${API_BASE}/api/tenant/admin/audit`, {
         headers: {
           Authorization: `Bearer ${token}`,
+          ...getTenantHeader(),
         },
         cache: 'no-store',
       });
@@ -109,6 +93,9 @@ export default function AdminAuditPage() {
 
       const data = JSON.parse(text) as AuditResponse;
       setEntries(data.entries ?? []);
+
+      // opzionale: se vuoi valorizzare user email/role, prendi dal JWT decodificato o da un endpoint /me
+      // per ora lascio invariato: UI ok, non blocca nulla.
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Errore caricamento audit');
     } finally {
@@ -128,24 +115,17 @@ export default function AdminAuditPage() {
   return (
     <DashboardLayout role={layoutRole} userEmail={currentUserEmail || 'admin'}>
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Audit log</h1>
-            <p className="text-xs text-zinc-500 mt-1">
-              Storico delle azioni effettuate nel tenant
-            </p>
+            <p className="text-xs text-zinc-500 mt-1">Storico delle azioni effettuate nel tenant</p>
           </div>
 
-          <button
-            onClick={handleLogout}
-            className="text-xs px-3 py-1 border rounded border-zinc-700 hover:bg-zinc-800"
-          >
+          <button onClick={handleLogout} className="text-xs px-3 py-1 border rounded border-zinc-700 hover:bg-zinc-800">
             Logout
           </button>
         </div>
 
-        {/* Nav */}
         <nav className="flex gap-3 text-sm">
           <Link href="/admin/users" className="text-gray-400 hover:underline">
             Utenti
@@ -155,18 +135,10 @@ export default function AdminAuditPage() {
           </Link>
         </nav>
 
-        {/* Stato */}
-        {loading && (
-          <div className="text-sm text-zinc-400">Caricamento eventi...</div>
-        )}
+        {loading && <div className="text-sm text-zinc-400">Caricamento eventi...</div>}
 
-        {error && (
-          <div className="text-sm text-red-400 border border-red-500/40 rounded px-3 py-2">
-            {error}
-          </div>
-        )}
+        {error && <div className="text-sm text-red-400 border border-red-500/40 rounded px-3 py-2">{error}</div>}
 
-        {/* Tabella */}
         {!loading && !error && (
           <section className="border border-zinc-800 rounded-lg p-4">
             <div className="overflow-x-auto">
@@ -183,40 +155,20 @@ export default function AdminAuditPage() {
                 </thead>
                 <tbody>
                   {entries.map((e) => (
-                    <tr
-                      key={e.id}
-                      className="border-b border-zinc-800 last:border-b-0"
-                    >
-                      <td className="py-2 pr-2 text-gray-400">
-                        {new Date(e.created_at).toLocaleString()}
-                      </td>
-
+                    <tr key={e.id} className="border-b border-zinc-800 last:border-b-0">
+                      <td className="py-2 pr-2 text-gray-400">{new Date(e.created_at).toLocaleString()}</td>
                       <td className="py-2 pr-2">
                         <ActionBadge action={e.action} />
                       </td>
-
                       <td className="py-2 pr-2 font-mono">
                         {e.actor_email ?? '-'}
-                        {e.actor_role && (
-                          <span className="text-[10px] text-zinc-400 ml-1">
-                            ({e.actor_role})
-                          </span>
-                        )}
+                        {e.actor_role && <span className="text-[10px] text-zinc-400 ml-1">({e.actor_role})</span>}
                       </td>
-
-                      <td className="py-2 pr-2 font-mono">
-                        {e.target_email ?? '-'}
-                      </td>
-
-                      <td className="py-2 pr-2 text-gray-500">
-                        {e.ip ?? '-'}
-                      </td>
-
+                      <td className="py-2 pr-2 font-mono">{e.target_email ?? '-'}</td>
+                      <td className="py-2 pr-2 text-gray-500">{e.ip ?? '-'}</td>
                       <td className="py-2 pr-2 max-w-xs">
                         <pre className="whitespace-pre-wrap break-words text-[10px] text-gray-400">
-                          {e.metadata
-                            ? JSON.stringify(e.metadata, null, 2)
-                            : '{}'}
+                          {e.metadata ? JSON.stringify(e.metadata, null, 2) : '{}'}
                         </pre>
                       </td>
                     </tr>
@@ -224,10 +176,7 @@ export default function AdminAuditPage() {
 
                   {entries.length === 0 && (
                     <tr>
-                      <td
-                        colSpan={6}
-                        className="py-6 text-center text-xs text-zinc-500"
-                      >
+                      <td colSpan={6} className="py-6 text-center text-xs text-zinc-500">
                         Nessun evento audit disponibile.
                       </td>
                     </tr>

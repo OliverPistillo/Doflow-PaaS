@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getTenantHeader } from '@/lib/tenant-fetch';
 
-// MODIFICA 1: Rimuoviamo il default '/api'
-const API_BASE = 'https://api.doflow.it';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.doflow.it';
 
 type User = {
   id: number;
@@ -18,14 +18,13 @@ export default function TenantUsersPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const getToken = () =>
+    typeof window !== 'undefined' ? window.localStorage.getItem('doflow_token') : null;
+
   const loadUsers = async () => {
     setError(null);
 
-    const token =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem('doflow_token')
-        : null;
-
+    const token = getToken();
     if (!token) {
       setError('Non autenticato: fai login prima.');
       setUsers([]);
@@ -33,27 +32,28 @@ export default function TenantUsersPage() {
     }
 
     try {
-      // MODIFICA 2: Aggiunto /api
       const res = await fetch(`${API_BASE}/api/tenant/users`, {
         cache: 'no-store',
         headers: {
           Authorization: `Bearer ${token}`,
+          ...getTenantHeader(),
         },
       });
-      if (!res.ok) throw new Error('Errore caricamento utenti');
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || 'Errore caricamento utenti');
+      }
+
       const data = await res.json();
       setUsers(data.users ?? []);
     } catch (e) {
-      if (e instanceof Error) {
-        setError(e.message);
-      } else {
-        setError('Errore sconosciuto');
-      }
+      setError(e instanceof Error ? e.message : 'Errore sconosciuto');
     }
   };
 
   useEffect(() => {
-    loadUsers();
+    void loadUsers();
   }, []);
 
   const handleCreate = async () => {
@@ -61,11 +61,7 @@ export default function TenantUsersPage() {
     setLoading(true);
     setError(null);
 
-    const token =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem('doflow_token')
-        : null;
-
+    const token = getToken();
     if (!token) {
       setError('Non autenticato: fai login prima.');
       setLoading(false);
@@ -73,24 +69,25 @@ export default function TenantUsersPage() {
     }
 
     try {
-      // MODIFICA 3: Aggiunto /api
       const res = await fetch(`${API_BASE}/api/tenant/users`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
+          ...getTenantHeader(),
         },
         body: JSON.stringify({ email }),
       });
-      if (!res.ok) throw new Error('Errore creazione utente');
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || 'Errore creazione utente');
+      }
+
       setEmail('');
       await loadUsers();
     } catch (e) {
-      if (e instanceof Error) {
-        setError(e.message);
-      } else {
-        setError('Errore sconosciuto');
-      }
+      setError(e instanceof Error ? e.message : 'Errore sconosciuto');
     } finally {
       setLoading(false);
     }
@@ -116,17 +113,11 @@ export default function TenantUsersPage() {
         </button>
       </div>
 
-      {error && (
-        <div className="text-red-600 text-sm">
-          {error}
-        </div>
-      )}
+      {error && <div className="text-red-600 text-sm">{error}</div>}
 
       <div className="border rounded p-4 max-w-xl">
         <h2 className="font-semibold mb-2">Utenti del tenant corrente</h2>
-        {users.length === 0 && !error && (
-          <p className="text-sm text-gray-500">Nessun utente.</p>
-        )}
+        {users.length === 0 && !error && <p className="text-sm text-gray-500">Nessun utente.</p>}
         <ul className="space-y-1 text-sm">
           {users.map((u) => (
             <li key={u.id} className="flex justify-between gap-4">

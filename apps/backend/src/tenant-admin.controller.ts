@@ -36,15 +36,25 @@ export class TenantAdminController {
     const tenantId = (req as any).tenantId as string | undefined;
     const tid = tenantId ?? 'public';
 
-    // FIX 1: Protezione SQL Injection estrema
-    // Accettiamo solo caratteri safe per nomi schema Postgres (lowercase, numeri, underscore)
+    // Protezione SQL Injection estrema
     if (!/^[a-z0-9_]+$/.test(tid)) {
-       // Questo errore verrà catturato da NestJS e ritornerà 500 (o gestito da filter globali)
-       // È una misura di sicurezza critica: non dovremmo mai avere un tenantId sporco qui.
        throw new Error('Invalid tenant ID detected (potential SQL injection attempt)');
     }
     
     return tid;
+  }
+
+  // ✅ HELPER: Blocca chiamate su contesto 'public' (Control Plane)
+  private ensureTenantContext(req: Request, res: Response): string | null {
+    const tenantId = this.getTenantId(req);
+    if (tenantId === 'public') {
+      res.status(422).json({
+        error: 'Invalid tenant context. Operation not allowed in public scope.',
+        hint: 'Use https://{tenant}.doflow.it/admin/users',
+      });
+      return null;
+    }
+    return tenantId;
   }
 
   private ensureAdmin(req: Request, res: Response) {
@@ -62,6 +72,10 @@ export class TenantAdminController {
 
   @Get('users')
   async listAll(@Req() req: Request, @Res() res: Response) {
+    // 🛡️ Guard: Tenant Context
+    const tenantId = this.ensureTenantContext(req, res);
+    if (!tenantId) return;
+
     const authUser = (req as any).authUser;
     if (!authUser) {
       return res.status(401).json({ error: 'Not authenticated' });
@@ -71,7 +85,6 @@ export class TenantAdminController {
     }
 
     const conn = this.getConn(req);
-    const tenantId = this.getTenantId(req);
 
     // Unione di Users (attivi) e Invites (pending)
     const rows = await conn.query(
@@ -112,6 +125,10 @@ export class TenantAdminController {
     @Req() req: Request,
     @Res() res: Response,
   ) {
+    // 🛡️ Guard: Tenant Context
+    const tenantId = this.ensureTenantContext(req, res);
+    if (!tenantId) return;
+
     const authUser = this.ensureAdmin(req, res);
     if (!authUser) return;
 
@@ -125,7 +142,6 @@ export class TenantAdminController {
     const role = allowedRoles.includes(rawRole) ? rawRole : 'viewer';
 
     const conn = this.getConn(req);
-    const tenantId = this.getTenantId(req);
 
     // Controllo se l'utente esiste già
     const existingUser = await conn.query(
@@ -200,6 +216,10 @@ export class TenantAdminController {
 
   @Post('invite/resend')
   async resendInvite(@Body() body: { email: string }, @Req() req: Request, @Res() res: Response) {
+    // 🛡️ Guard: Tenant Context
+    const tenantId = this.ensureTenantContext(req, res);
+    if (!tenantId) return;
+
     const authUser = this.ensureAdmin(req, res);
     if (!authUser) return;
 
@@ -209,7 +229,6 @@ export class TenantAdminController {
     const email = body.email.trim();
 
     const conn = this.getConn(req);
-    const tenantId = this.getTenantId(req);
 
     const rows = await conn.query(
       `
@@ -265,6 +284,10 @@ export class TenantAdminController {
     @Req() req: Request,
     @Res() res: Response,
   ) {
+    // 🛡️ Guard: Tenant Context
+    const tenantId = this.ensureTenantContext(req, res);
+    if (!tenantId) return;
+
     const authUser = this.ensureAdmin(req, res);
     if (!authUser) return;
 
@@ -279,7 +302,6 @@ export class TenantAdminController {
     }
 
     const conn = this.getConn(req);
-    const tenantId = this.getTenantId(req);
 
     const existingRows = await conn.query(
       `select id, email, role from ${tenantId}.users where id = $1 limit 1`,
@@ -314,6 +336,10 @@ export class TenantAdminController {
     @Req() req: Request,
     @Res() res: Response,
   ) {
+    // 🛡️ Guard: Tenant Context
+    const tenantId = this.ensureTenantContext(req, res);
+    if (!tenantId) return;
+
     const authUser = this.ensureAdmin(req, res);
     if (!authUser) return;
 
@@ -326,15 +352,16 @@ export class TenantAdminController {
     const realId = Math.abs(userId);
 
     const conn = this.getConn(req);
-    const tenantId = this.getTenantId(req);
 
     let result;
     if (isInvite) {
+      // Cancellazione Invito
       result = await conn.query(
         `delete from ${tenantId}.invites where id = $1 returning id, email`,
         [realId],
       );
     } else {
+      // Cancellazione Utente reale
       result = await conn.query(
         `delete from ${tenantId}.users where id = $1 returning id, email`,
         [realId],
@@ -358,6 +385,10 @@ export class TenantAdminController {
 
   @Get('audit')
   async listAudit(@Req() req: Request, @Res() res: Response) {
+    // 🛡️ Guard: Tenant Context
+    const tenantId = this.ensureTenantContext(req, res);
+    if (!tenantId) return;
+
     const authUser = (req as any).authUser;
     if (!authUser) return res.status(401).json({ error: 'Not authenticated' });
 
@@ -366,7 +397,6 @@ export class TenantAdminController {
     }
 
     const conn = this.getConn(req);
-    const tenantId = this.getTenantId(req);
 
     const rows = await conn.query(
       `select id, action, actor_email, actor_role, target_email, metadata, ip, created_at
