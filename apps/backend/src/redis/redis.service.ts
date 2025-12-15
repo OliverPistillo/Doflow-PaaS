@@ -1,34 +1,51 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
 import * as fs from 'fs';
 import * as path from 'path';
 
 @Injectable()
-export class RedisService implements OnModuleInit {
+export class RedisService implements OnModuleInit, OnModuleDestroy {
   private client: Redis;
   private dualProbeScriptSha!: string;
 
-    getClient(): Redis {
-    return this.client;
-    }
-
   constructor() {
     this.client = new Redis({
-      host: process.env.REDIS_HOST!,
-      port: parseInt(process.env.REDIS_PORT!),
-      password: process.env.REDIS_PASSWORD!,
+      host: process.env.REDIS_HOST,
+      port: parseInt(process.env.REDIS_PORT || '6379'),
+      password: process.env.REDIS_PASSWORD,
       db: parseInt(process.env.REDIS_DB || '0'),
     });
   }
 
+  // --- LIFECYCLE METHODS ---
+
   async onModuleInit() {
+    // Caricamento script Lua esistente
     const scriptPath = path.join(__dirname, 'scripts', 'dual_probe.lua');
-    const script = fs.readFileSync(scriptPath, 'utf8');
-    this.dualProbeScriptSha = (await this.client.script('LOAD', script)) as string;
-    console.log(`✅ Lua Script Loaded: ${this.dualProbeScriptSha}`);
+    // Check se il file esiste per evitare crash se non lo hai ancora creato
+    if (fs.existsSync(scriptPath)) {
+      const script = fs.readFileSync(scriptPath, 'utf8');
+      this.dualProbeScriptSha = (await this.client.script('LOAD', script)) as string;
+      console.log(`✅ Lua Script Loaded: ${this.dualProbeScriptSha}`);
+    } else {
+      console.warn(`⚠️ Lua script not found at ${scriptPath}`);
+    }
+  }
+
+  onModuleDestroy() {
+    this.client.disconnect();
+  }
+
+  // --- EXISTING METHODS ---
+
+  getClient(): Redis {
+    return this.client;
   }
 
   async checkAndAdd(key: string, item: string, ttlSeconds: number): Promise<boolean> {
+    if (!this.dualProbeScriptSha) {
+       throw new Error('Lua script not loaded');
+    }
     const currentKey = `doflow:bf:${key}:current`;
     const prevKey = `doflow:bf:${key}:prev`;
 
@@ -42,5 +59,22 @@ export class RedisService implements OnModuleInit {
     );
 
     return result === 1;
+  }
+
+  // --- NUOVI METODI RICHIESTI DAL MIDDLEWARE ---
+
+  async get(key: string): Promise<string | null> {
+    return await this.client.get(key);
+  }
+
+  async set(key: string, value: string, ttlSeconds?: number) {
+    if (ttlSeconds) {
+      return await this.client.set(key, value, 'EX', ttlSeconds);
+    }
+    return await this.client.set(key, value);
+  }
+
+  async del(key: string) {
+    return await this.client.del(key);
   }
 }

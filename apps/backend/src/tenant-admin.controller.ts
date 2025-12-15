@@ -34,7 +34,17 @@ export class TenantAdminController {
 
   private getTenantId(req: Request): string {
     const tenantId = (req as any).tenantId as string | undefined;
-    return tenantId ?? 'public';
+    const tid = tenantId ?? 'public';
+
+    // FIX 1: Protezione SQL Injection estrema
+    // Accettiamo solo caratteri safe per nomi schema Postgres (lowercase, numeri, underscore)
+    if (!/^[a-z0-9_]+$/.test(tid)) {
+       // Questo errore verrà catturato da NestJS e ritornerà 500 (o gestito da filter globali)
+       // È una misura di sicurezza critica: non dovremmo mai avere un tenantId sporco qui.
+       throw new Error('Invalid tenant ID detected (potential SQL injection attempt)');
+    }
+    
+    return tid;
   }
 
   private ensureAdmin(req: Request, res: Response) {
@@ -63,10 +73,31 @@ export class TenantAdminController {
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
 
+    // Unione di Users (attivi) e Invites (pending)
     const rows = await conn.query(
-      `select id, email, role, created_at 
-       from ${tenantId}.users
-       order by id`,
+      `
+      select
+        id,
+        email,
+        role,
+        created_at,
+        'active' as status
+      from ${tenantId}.users
+      
+      union all
+      
+      select
+        -id as id,
+        email,
+        role,
+        created_at,
+        'invited' as status
+      from ${tenantId}.invites
+      where accepted_at is null
+        and (expires_at is null or expires_at > now())
+      
+      order by created_at desc
+      `,
     );
 
     return res.json({
@@ -84,9 +115,10 @@ export class TenantAdminController {
     const authUser = this.ensureAdmin(req, res);
     if (!authUser) return;
 
-    if (!body.email) {
+    if (!body?.email || !body.email.trim()) {
       return res.status(400).json({ error: 'email required' });
     }
+    const email = body.email.trim();
 
     const rawRole = body.role ?? 'viewer';
     const allowedRoles: Role[] = ['admin', 'manager', 'editor', 'viewer', 'user'];
@@ -94,15 +126,39 @@ export class TenantAdminController {
 
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
-    const token = crypto.randomBytes(32).toString('hex');
 
+    // Controllo se l'utente esiste già
+    const existingUser = await conn.query(
+      `select id from ${tenantId}.users where email = $1 limit 1`,
+      [email],
+    );
+
+    if (existingUser.length > 0) {
+      return res.status(409).json({ error: 'User already exists' });
+    }
+
+    // Check esistenza invito duplicato (pending)
+    const existingInvite = await conn.query(
+      `select id from ${tenantId}.invites
+       where email = $1 and accepted_at is null
+       and (expires_at is null or expires_at > now())
+       limit 1`,
+      [email],
+    );
+
+    if (existingInvite.length > 0) {
+      return res.status(409).json({ error: 'Invite already pending for this email' });
+    }
+
+    // Creazione nuovo invito
+    const token = crypto.randomBytes(32).toString('hex');
     const rows = await conn.query(
       `
       insert into ${tenantId}.invites (email, role, token)
       values ($1, $2, $3)
       returning id, email, role, token, created_at, expires_at
       `,
-      [body.email, role, token],
+      [email, role, token],
     );
 
     const invite = rows[0];
@@ -113,18 +169,9 @@ export class TenantAdminController {
       metadata: { role: invite.role },
     });
 
-    // Costruzione URL
-    const host =
-      (req.headers['x-forwarded-host'] as string) ??
-      (req.headers.host as string) ??
-      process.env.APP_BASE_URL ??
-      'app.doflow.it';
-
-    const proto = (req.headers['x-forwarded-proto'] as string) ?? 'https';
-    const baseUrl = 'https://app.doflow.it';
+    const baseUrl = process.env.APP_BASE_URL ?? 'https://app.doflow.it';
     const acceptUrl = `${baseUrl}/auth/accept-invite?token=${invite.token}`;
 
-    // --- BLOCCO TRY-CATCH PER EVITARE CRASH SE EMAIL FALLISCE ---
     try {
       this.logger.log(`Tentativo invio email a ${invite.email}...`);
       await this.mailService.sendInviteEmail({
@@ -134,16 +181,81 @@ export class TenantAdminController {
       });
       this.logger.log(`Email inviata con successo.`);
     } catch (e) {
-      // Logghiamo l'errore ma procediamo senza bloccare la risposta
-      this.logger.error(`ERRORE INVIO MAIL (ma l'utente è stato creato): ${e instanceof Error ? e.message : e}`);
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      this.logger.error(`ERRORE INVIO MAIL (ma l'invito è stato creato): ${errorMsg}`);
+      
+      await this.auditService.log(req, {
+        action: 'admin_invite_email_failed',
+        targetEmail: invite.email,
+        metadata: { error: errorMsg },
+      });
     }
-    // -------------------------------------------------------------
 
     return res.json({
       status: 'ok',
       invite,
       exampleAcceptUrl: acceptUrl,
     });
+  }
+
+  @Post('invite/resend')
+  async resendInvite(@Body() body: { email: string }, @Req() req: Request, @Res() res: Response) {
+    const authUser = this.ensureAdmin(req, res);
+    if (!authUser) return;
+
+    if (!body?.email || !body.email.trim()) {
+      return res.status(400).json({ error: 'email required' });
+    }
+    const email = body.email.trim();
+
+    const conn = this.getConn(req);
+    const tenantId = this.getTenantId(req);
+
+    const rows = await conn.query(
+      `
+      select id, email, role, token
+      from ${tenantId}.invites
+      where email = $1
+        and accepted_at is null
+        and (expires_at is null or expires_at > now())
+      limit 1
+      `,
+      [email],
+    );
+
+    const invite = rows[0];
+    if (!invite) {
+      return res.status(404).json({ error: 'Invite not found or already used' });
+    }
+
+    const baseUrl = process.env.APP_BASE_URL ?? 'https://app.doflow.it';
+    const acceptUrl = `${baseUrl}/auth/accept-invite?token=${invite.token}`;
+
+    try {
+      await this.mailService.sendInviteEmail({
+        to: invite.email,
+        tenantName: tenantId,
+        inviteLink: acceptUrl,
+      });
+
+      await this.auditService.log(req, {
+        action: 'admin_invite_resent',
+        targetEmail: invite.email,
+      });
+
+      return res.json({ status: 'ok' });
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      this.logger.error(`ERRORE RINVIO MAIL: ${errorMsg}`);
+
+      await this.auditService.log(req, {
+        action: 'admin_resend_email_failed',
+        targetEmail: invite.email,
+        metadata: { error: errorMsg },
+      });
+
+      return res.status(500).json({ error: 'Failed to send email' });
+    }
   }
 
   @Post('users/:id/role')
@@ -210,22 +322,35 @@ export class TenantAdminController {
       return res.status(400).json({ error: 'Invalid user id' });
     }
 
+    const isInvite = userId < 0;
+    const realId = Math.abs(userId);
+
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
 
-    const result = await conn.query(
-      `delete from ${tenantId}.users where id = $1 returning id`,
-      [userId],
-    );
-
-    if ((result as any[]).length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+    let result;
+    if (isInvite) {
+      result = await conn.query(
+        `delete from ${tenantId}.invites where id = $1 returning id, email`,
+        [realId],
+      );
+    } else {
+      result = await conn.query(
+        `delete from ${tenantId}.users where id = $1 returning id, email`,
+        [realId],
+      );
     }
 
+    if ((result as any[]).length === 0) {
+      return res.status(404).json({ error: isInvite ? 'Invite not found' : 'User not found' });
+    }
+
+    const deletedEmail = result[0]?.email || `ID:${realId}`;
+
     await this.auditService.log(req, {
-      action: 'admin_delete_user',
-      targetEmail: `ID:${userId}`,
-      metadata: { deletedId: userId },
+      action: isInvite ? 'admin_delete_invite' : 'admin_delete_user',
+      targetEmail: deletedEmail,
+      metadata: { deletedId: userId, type: isInvite ? 'invite' : 'user' },
     });
 
     return res.json({ status: 'ok', deletedId: userId });

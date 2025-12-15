@@ -27,9 +27,26 @@ export class AuthService {
     return tenantId ?? 'public';
   }
 
+  // ✅ HELPER: Blocca operazioni se il tenant è disattivato
+  private async assertTenantActive(conn: DataSource, tenantId: string) {
+    if (tenantId === 'public') return; // public = control plane (sempre attivo)
+
+    const rows = await conn.query(
+      `select is_active from public.tenants where schema_name = $1 limit 1`,
+      [tenantId],
+    );
+
+    if (!rows[0] || rows[0].is_active !== true) {
+      throw new Error('Tenant disabled');
+    }
+  }
+
   async register(req: Request, email: string, password: string) {
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
+
+    // Check tenant active
+    await this.assertTenantActive(conn, tenantId);
 
     const existing = await conn.query(
       `select id from ${tenantId}.users where email = $1 limit 1`,
@@ -71,6 +88,9 @@ export class AuthService {
   async login(req: Request, email: string, password: string) {
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
+
+    // Check tenant active
+    await this.assertTenantActive(conn, tenantId);
 
     const rows = await conn.query(
       `
@@ -114,6 +134,9 @@ export class AuthService {
   async acceptInvite(req: Request, token: string, password: string) {
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
+
+    // Check tenant active
+    await this.assertTenantActive(conn, tenantId);
 
     const invites = await conn.query(
       `

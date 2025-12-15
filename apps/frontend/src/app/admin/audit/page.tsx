@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { DashboardLayout } from '@/components/dashboard/layout';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.doflow.it';
 
-type Role = 'admin' | 'manager' | 'editor' | 'viewer' | 'user';
+/* =======================
+   TIPI
+======================= */
 
 type AuditEntry = {
   id: number;
@@ -22,20 +25,60 @@ type AuditResponse = {
   entries: AuditEntry[];
 };
 
-export default function AuditPage() {
-  const [tenantHost, setTenantHost] = useState('');
-  const [token, setToken] = useState<string | null>(null);
+type LayoutRole = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'USER';
 
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
-  const [currentUserRole, setCurrentUserRole] = useState<Role | null>(null);
+/* =======================
+   UTILS UI
+======================= */
+
+// mappa ruolo backend → layout
+function mapRoleToLayoutRole(role: string | null): LayoutRole {
+  const r = (role || '').toLowerCase();
+  if (r === 'owner' || r === 'superadmin' || r === 'super_admin') return 'SUPER_ADMIN';
+  if (r === 'admin') return 'ADMIN';
+  if (r === 'manager') return 'MANAGER';
+  return 'USER';
+}
+
+// badge azione audit
+function ActionBadge({ action }: { action: string }) {
+  const a = action.toUpperCase();
+
+  const styles: Record<string, string> = {
+    USER_INVITED: 'bg-blue-600/20 text-blue-300',
+    USER_ROLE_CHANGED: 'bg-yellow-600/20 text-yellow-300',
+    USER_DISABLED: 'bg-red-600/20 text-red-300',
+    LOGIN_SUCCESS: 'bg-green-600/20 text-green-300',
+    LOGIN_FAILED: 'bg-red-600/20 text-red-300',
+  };
+
+  return (
+    <span
+      className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase ${
+        styles[a] || 'bg-zinc-700/30 text-zinc-300'
+      }`}
+    >
+      {action}
+    </span>
+  );
+}
+
+/* =======================
+   PAGE
+======================= */
+
+export default function AdminAuditPage() {
+  const [token, setToken] = useState<string | null>(null);
 
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>('admin'); // fallback
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setTenantHost(window.location.host);
       const storedToken = window.localStorage.getItem('doflow_token');
       setToken(storedToken);
     }
@@ -48,10 +91,7 @@ export default function AuditPage() {
   }, [token]);
 
   const loadAudit = async () => {
-    if (!token) {
-      setError('Token mancante, esegui il login.');
-      return;
-    }
+    if (!token) return;
 
     setLoading(true);
     setError(null);
@@ -65,25 +105,12 @@ export default function AuditPage() {
       });
 
       const text = await res.text();
-      if (!res.ok) {
-        setError(`Errore caricamento audit: ${text}`);
-        return;
-      }
+      if (!res.ok) throw new Error(text || `Errore audit`);
 
       const data = JSON.parse(text) as AuditResponse;
-      setEntries(data.entries);
-
-      // hack veloce: prendo info utente corrente dalla prima entry se c'è
-      // (in futuro meglio un endpoint dedicato)
-      if (!currentUserEmail && entries.length > 0) {
-        // nulla, teniamo semplice; la topbar mostra solo tenant
-      }
+      setEntries(data.entries ?? []);
     } catch (e) {
-      if (e instanceof Error) {
-        setError(e.message);
-      } else {
-        setError('Errore sconosciuto durante il caricamento audit');
-      }
+      setError(e instanceof Error ? e.message : 'Errore caricamento audit');
     } finally {
       setLoading(false);
     }
@@ -96,60 +123,42 @@ export default function AuditPage() {
     }
   };
 
+  const layoutRole: LayoutRole = mapRoleToLayoutRole(currentUserRole);
+
   return (
-    <main className="min-h-screen flex flex-col items-center gap-6 p-6">
-      <div className="w-full max-w-5xl flex flex-col gap-4">
-        {/* HEADER */}
-        <header className="flex flex-col gap-2 border-b border-zinc-800 pb-3 mb-2">
-          <div className="flex justify-between items-center text-xs text-gray-400">
-            <span>
-              Tenant: <span className="font-mono">{tenantHost}</span>
-            </span>
-            {currentUserEmail && (
-              <span>
-                Utente:{' '}
-                <span className="font-mono">{currentUserEmail}</span>{' '}
-                ({currentUserRole})
-              </span>
-            )}
-          </div>
-          <div className="flex justify-between items-center">
+    <DashboardLayout role={layoutRole} userEmail={currentUserEmail || 'admin'}>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
             <h1 className="text-2xl font-bold">Audit log</h1>
-            <button
-              onClick={handleLogout}
-              className="text-xs px-3 py-1 border rounded border-zinc-700 hover:bg-zinc-800"
-            >
-              Logout
-            </button>
+            <p className="text-xs text-zinc-500 mt-1">
+              Storico delle azioni effettuate nel tenant
+            </p>
           </div>
-          <nav className="flex gap-3 text-sm mt-1">
-            <Link href="/admin/users" className="text-gray-400 hover:underline">
-              Utenti
-            </Link>
-            <Link href="/admin/audit" className="underline">
-              Audit log
-            </Link>
-          </nav>
-        </header>
 
-        {!token && (
-          <p className="text-xs text-red-400">
-            Nessun token trovato: effettua il login dalla pagina /login.
-          </p>
-        )}
-
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-lg font-semibold">
-            Ultime azioni (max 100 per tenant)
-          </h2>
           <button
-            onClick={() => void loadAudit()}
-            disabled={loading}
-            className="text-xs px-3 py-1 border rounded disabled:opacity-50"
+            onClick={handleLogout}
+            className="text-xs px-3 py-1 border rounded border-zinc-700 hover:bg-zinc-800"
           >
-            {loading ? 'Aggiornamento...' : 'Ricarica'}
+            Logout
           </button>
         </div>
+
+        {/* Nav */}
+        <nav className="flex gap-3 text-sm">
+          <Link href="/admin/users" className="text-gray-400 hover:underline">
+            Utenti
+          </Link>
+          <Link href="/admin/audit" className="underline">
+            Audit log
+          </Link>
+        </nav>
+
+        {/* Stato */}
+        {loading && (
+          <div className="text-sm text-zinc-400">Caricamento eventi...</div>
+        )}
 
         {error && (
           <div className="text-sm text-red-400 border border-red-500/40 rounded px-3 py-2">
@@ -157,56 +166,78 @@ export default function AuditPage() {
           </div>
         )}
 
-        {entries.length === 0 ? (
-          <p className="text-sm text-gray-400">
-            Nessuna voce di audit trovata per questo tenant.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2 pr-2">ID</th>
-                  <th className="text-left py-2 pr-2">Azione</th>
-                  <th className="text-left py-2 pr-2">Attore</th>
-                  <th className="text-left py-2 pr-2">Target</th>
-                  <th className="text-left py-2 pr-2">IP</th>
-                  <th className="text-left py-2 pr-2">Metadata</th>
-                  <th className="text-left py-2 pr-2">Data</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map((e) => (
-                  <tr key={e.id} className="border-b last:border-b-0">
-                    <td className="py-2 pr-2">{e.id}</td>
-                    <td className="py-2 pr-2 font-mono">{e.action}</td>
-                    <td className="py-2 pr-2">
-                      {e.actor_email ?? '-'}{' '}
-                      {e.actor_role ? `(${e.actor_role})` : ''}
-                    </td>
-                    <td className="py-2 pr-2">
-                      {e.target_email ?? '-'}
-                    </td>
-                    <td className="py-2 pr-2 text-gray-500">
-                      {e.ip ?? '-'}
-                    </td>
-                    <td className="py-2 pr-2 max-w-xs">
-                      <pre className="whitespace-pre-wrap break-words text-[10px] text-gray-400">
-                        {e.metadata
-                          ? JSON.stringify(e.metadata)
-                          : '{}'}
-                      </pre>
-                    </td>
-                    <td className="py-2 pr-2 text-gray-400">
-                      {new Date(e.created_at).toLocaleString()}
-                    </td>
+        {/* Tabella */}
+        {!loading && !error && (
+          <section className="border border-zinc-800 rounded-lg p-4">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-zinc-800">
+                    <th className="text-left py-2 pr-2">Data</th>
+                    <th className="text-left py-2 pr-2">Azione</th>
+                    <th className="text-left py-2 pr-2">Attore</th>
+                    <th className="text-left py-2 pr-2">Target</th>
+                    <th className="text-left py-2 pr-2">IP</th>
+                    <th className="text-left py-2 pr-2">Metadata</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {entries.map((e) => (
+                    <tr
+                      key={e.id}
+                      className="border-b border-zinc-800 last:border-b-0"
+                    >
+                      <td className="py-2 pr-2 text-gray-400">
+                        {new Date(e.created_at).toLocaleString()}
+                      </td>
+
+                      <td className="py-2 pr-2">
+                        <ActionBadge action={e.action} />
+                      </td>
+
+                      <td className="py-2 pr-2 font-mono">
+                        {e.actor_email ?? '-'}
+                        {e.actor_role && (
+                          <span className="text-[10px] text-zinc-400 ml-1">
+                            ({e.actor_role})
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="py-2 pr-2 font-mono">
+                        {e.target_email ?? '-'}
+                      </td>
+
+                      <td className="py-2 pr-2 text-gray-500">
+                        {e.ip ?? '-'}
+                      </td>
+
+                      <td className="py-2 pr-2 max-w-xs">
+                        <pre className="whitespace-pre-wrap break-words text-[10px] text-gray-400">
+                          {e.metadata
+                            ? JSON.stringify(e.metadata, null, 2)
+                            : '{}'}
+                        </pre>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {entries.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="py-6 text-center text-xs text-zinc-500"
+                      >
+                        Nessun evento audit disponibile.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
         )}
       </div>
-    </main>
+    </DashboardLayout>
   );
 }

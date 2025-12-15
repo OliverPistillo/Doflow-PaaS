@@ -1,4 +1,4 @@
-export type Role = 'superadmin' | 'admin' | 'manager' | 'editor' | 'viewer' | 'user';
+export type Role = 'superadmin' | 'owner' | 'admin' | 'manager' | 'editor' | 'viewer' | 'user';
 
 // Definiamo i livelli di potere
 const ROLE_LEVELS: Record<string, number> = {

@@ -135,7 +135,8 @@ export class AuthController {
 
   @Get('me')
   getMe(@Req() req: Request) {
-    const user = (req as any).user;
+    // ✅ compatibilità: alcune parti usano req.authUser, altre req.user
+    const user = (req as any).authUser ?? (req as any).user;
 
     if (!user) {
       throw new UnauthorizedException('Not authenticated');

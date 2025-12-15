@@ -3,11 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/dashboard/layout';
+import { mapBackendRoleToLayout } from '@/lib/roles';
 
-// MODIFICA 1: Rimuoviamo il default '/api' qui per aggiungerlo esplicitamente sotto
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
-
-type LayoutRole = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'USER';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://api.doflow.it';
 
 type MeResponse = {
   user: {
@@ -24,21 +22,6 @@ type State =
   | { status: 'error'; message: string }
   | { status: 'ok'; me: MeResponse };
 
-function mapRoleToLayoutRole(role: string): LayoutRole {
-  const r = role.toLowerCase();
-
-  if (r === 'owner' || r === 'super_admin' || r === 'superadmin') {
-    return 'SUPER_ADMIN';
-  }
-  if (r === 'admin') {
-    return 'ADMIN';
-  }
-  if (r === 'manager') {
-    return 'MANAGER';
-  }
-  return 'USER';
-}
-
 export default function DashboardPage() {
   const router = useRouter();
   const [state, setState] = useState<State>({ status: 'loading' });
@@ -51,14 +34,11 @@ export default function DashboardPage() {
         const token = window.localStorage.getItem('doflow_token');
 
         if (!token) {
-          if (!cancelled) {
-            setState({ status: 'no-token' });
-          }
+          if (!cancelled) setState({ status: 'no-token' });
           router.push('/login');
           return;
         }
 
-        // MODIFICA 2: Aggiunto '/api' nell'URL della chiamata
         const res = await fetch(`${API_BASE}/api/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
           cache: 'no-store',
@@ -67,41 +47,24 @@ export default function DashboardPage() {
         const text = await res.text();
 
         if (!res.ok) {
-          console.error('Errore /auth/me:', res.status, text);
-
           if (!cancelled) {
             setState({
               status: 'error',
               message: text || 'Errore caricamento profilo',
             });
           }
-
           if (res.status === 401 || res.status === 403) {
             router.push('/login');
           }
-
           return;
         }
 
-        let data: MeResponse;
-        try {
-          data = JSON.parse(text) as MeResponse;
-        } catch (e) {
-          console.error('Errore parse JSON /auth/me:', e, text);
-          if (!cancelled) {
-            setState({
-              status: 'error',
-              message: 'Risposta non valida dal server',
-            });
-          }
-          return;
-        }
+        const data = JSON.parse(text) as MeResponse;
 
         if (!cancelled) {
           setState({ status: 'ok', me: data });
         }
-      } catch (e) {
-        console.error('Errore di rete /auth/me:', e);
+      } catch {
         if (!cancelled) {
           setState({ status: 'error', message: 'Errore di rete' });
         }
@@ -109,52 +72,34 @@ export default function DashboardPage() {
     };
 
     void loadMe();
-
     return () => {
       cancelled = true;
     };
   }, [router]);
 
-  // RENDER
+  // RENDER STATES
 
   if (state.status === 'loading') {
-    return (
-      <main className="min-h-screen flex items-center justify-center bg-black text-zinc-100">
-        <p className="text-sm text-zinc-400">Caricamento dashboard...</p>
-      </main>
-    );
+    return <Centered text="Caricamento dashboard..." />;
   }
 
   if (state.status === 'no-token') {
-    return (
-      <main className="min-h-screen flex items-center justify-center bg-black text-zinc-100">
-        <p className="text-sm text-zinc-400">
-          Nessun token trovato, reindirizzamento al login...
-        </p>
-      </main>
-    );
+    return <Centered text="Nessun token trovato, reindirizzamento..." />;
   }
 
   if (state.status === 'error') {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-black text-zinc-100">
-        <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-semibold">Errore Dashboard</h1>
-          <p className="text-sm text-red-400">
-            Impossibile caricare i dati utente:
-          </p>
-          <p className="text-xs text-zinc-500 whitespace-pre-wrap">
-            {state.message}
-          </p>
-        </div>
-      </main>
+      <Centered
+        title="Errore Dashboard"
+        text={state.message}
+        error
+      />
     );
   }
 
-  // stato OK
-  const { me } = state;
-  const { user } = me;
-  const layoutRole = mapRoleToLayoutRole(user.role);
+  // OK
+  const { user } = state.me;
+  const layoutRole = mapBackendRoleToLayout(user.role);
 
   return (
     <DashboardLayout role={layoutRole} userEmail={user.email}>
@@ -164,22 +109,39 @@ export default function DashboardPage() {
         <p className="text-sm text-zinc-400">
           Utente: <span className="font-mono">{user.email}</span>
         </p>
+
         <p className="text-sm text-zinc-400">
           Ruolo backend:{' '}
-          <span className="font-mono">{user.role}</span> → ruolo UI:{' '}
+          <span className="font-mono">{user.role}</span> → UI:{' '}
           <span className="font-mono">{layoutRole}</span>
         </p>
+
         <p className="text-sm text-zinc-400">
           Tenant: <span className="font-mono">{user.tenantId}</span>
         </p>
-
-        <div className="mt-4 text-xs text-zinc-500">
-          <p>
-            Questa è la dashboard base. Da qui possiamo aggiungere le sezioni per
-            SUPER_ADMIN / ADMIN / MANAGER / USER (tenants, utenti, progetti, ecc.).
-          </p>
-        </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+// helper minimale
+function Centered({
+  text,
+  title,
+  error,
+}: {
+  text: string;
+  title?: string;
+  error?: boolean;
+}) {
+  return (
+    <main className="min-h-screen flex items-center justify-center bg-black text-zinc-100">
+      <div className="text-center space-y-2">
+        {title && <h1 className="text-xl font-semibold">{title}</h1>}
+        <p className={`text-sm ${error ? 'text-red-400' : 'text-zinc-400'}`}>
+          {text}
+        </p>
+      </div>
+    </main>
   );
 }

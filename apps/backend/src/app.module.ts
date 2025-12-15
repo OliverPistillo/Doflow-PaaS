@@ -24,6 +24,7 @@ import { MailModule } from './mail/mail.module';
 import { AuthPasswordController } from './auth-password.controller';
 import { SuperadminTenantsController } from './superadmin/superadmin-tenants.controller';
 import { ProjectsEventsService } from './realtime/projects-events.service';
+import { TenantBootstrapService } from './tenancy/tenant-bootstrap.service';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { ProjectsEventsService } from './realtime/projects-events.service';
     FileStorageService,
     NotificationsService,
     ProjectsEventsService,
+    TenantBootstrapService,
   ],
 })
 export class AppModule implements NestModule {
