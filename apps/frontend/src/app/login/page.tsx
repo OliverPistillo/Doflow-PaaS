@@ -67,162 +67,143 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#6b6b6b] px-4 py-10 flex items-center justify-center">
-      <div className="w-full max-w-5xl">
-        {/* CARD PRINCIPALE */}
-        <div className="relative overflow-hidden rounded-2xl bg-white shadow-2xl">
-          {/* layout: mobile stack / desktop split */}
-          <div className="grid grid-cols-1 md:grid-cols-2">
-            {/* PANNELLO BLU (sinistra su desktop / top su mobile) */}
-            <div className="relative min-h-[240px] md:min-h-[560px] bg-gradient-to-b from-sky-400 to-sky-600 text-white">
-              {/* onde morbide */}
-              <div className="absolute inset-0 opacity-30 pointer-events-none">
-                <div className="absolute -left-24 top-24 h-80 w-80 rounded-full bg-white/20 blur-2xl" />
-                <div className="absolute left-10 top-40 h-96 w-96 rounded-full bg-white/10 blur-3xl" />
-                <div className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-white/20 blur-2xl" />
-              </div>
-
-              {/* curva bianca che “mangia” il pannello (come nel mock) */}
-              <div
-                className="hidden md:block absolute right-[-120px] top-[-80px] h-[720px] w-[520px] rounded-[999px] bg-white"
-                aria-hidden
+    <main className="min-h-screen w-full bg-gray-600 flex items-center justify-center p-4 md:p-8">
+      {/* CARD CONTAINER */}
+      <div className="w-full max-w-[1000px] bg-white rounded-[30px] shadow-2xl overflow-hidden flex flex-col md:flex-row min-h-[600px]">
+        
+        {/* --- LEFT SIDE (Blue Gradient & Branding) --- */}
+        {/* Mobile: Top section / Desktop: Left section */}
+        <div className="relative w-full md:w-1/2 bg-gradient-to-br from-[#4facfe] to-[#00f2fe] text-white flex flex-col items-center justify-center p-10 z-10">
+          
+          {/* Content */}
+          <div className="relative z-20 flex flex-col items-center text-center space-y-4">
+            <p className="text-xs font-bold tracking-[0.2em] uppercase opacity-80">Welcome to</p>
+            
+            <div className="relative w-24 h-24 md:w-32 md:h-32 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/30 mb-2">
+               <Image
+                src="/logo-transparent-svg.svg"
+                alt="Doflow Logo"
+                width={80}
+                height={80}
+                className="object-contain p-2"
+                priority
               />
-              <div
-                className="md:hidden absolute right-[-140px] bottom-[-220px] h-[520px] w-[520px] rounded-[999px] bg-white"
-                aria-hidden
-              />
-
-              <div className="relative z-10 h-full p-8 md:p-10 flex flex-col justify-between">
-                <div className="space-y-3">
-                  <p className="text-xs tracking-[0.25em] opacity-90">WELCOME TO</p>
-
-                  <div className="flex items-center gap-3">
-                    <Image
-                      src="/logo-transparent-svg.svg"
-                      alt="Doflow"
-                      width={64}
-                      height={64}
-                      priority
-                    />
-                    <div className="leading-tight">
-                      <div className="text-lg font-semibold">DOFLOW</div>
-                      <div className="text-xs opacity-90">Workspace multi-tenant</div>
-                    </div>
-                  </div>
-
-                  <p className="text-xs leading-relaxed opacity-90 max-w-sm">
-                    Accedi al tuo spazio di lavoro. Se sei su un tenant specifico, verrà usato
-                    automaticamente dal dominio.
-                  </p>
-                </div>
-
-                <div className="flex items-end justify-between text-[10px] opacity-90">
-                  <div>
-                    Tenant: <span className="font-mono">{tenantLabel}</span>
-                  </div>
-                  <div className="hidden md:block">doflow.it</div>
-                </div>
-              </div>
             </div>
-
-            {/* FORM (destra su desktop / bottom su mobile) */}
-            <div className="relative p-8 md:p-10">
-              {/* mini onda azzurra in alto a destra (come nel mock) */}
-              <div className="absolute -right-24 -top-24 h-64 w-64 rounded-full bg-sky-400/20 blur-2xl" aria-hidden />
-              <div className="absolute right-[-140px] top-[-160px] h-[320px] w-[320px] rounded-[999px] bg-sky-400/35" aria-hidden />
-              <div className="absolute right-[-170px] top-[-180px] h-[340px] w-[340px] rounded-[999px] bg-sky-500/20" aria-hidden />
-
-              <div className="relative z-10">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <Image src="/logo-svg.svg" alt="Doflow" width={34} height={34} />
-                    <div>
-                      <div className="text-lg font-semibold text-zinc-900">Accedi</div>
-                      <div className="text-xs text-zinc-500">Entra nel tuo account</div>
-                    </div>
-                  </div>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold tracking-wide text-zinc-700">
-                      E-MAIL ADDRESS
-                    </label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      autoComplete="email"
-                      placeholder="Inserisci la tua email"
-                      className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-sky-300"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold tracking-wide text-zinc-700">
-                      PASSWORD
-                    </label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      autoComplete="current-password"
-                      placeholder="Inserisci la tua password"
-                      className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-sky-300"
-                    />
-                  </div>
-
-                  {error && (
-                    <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                      {error}
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => router.push('/forgot-password')}
-                      className="text-xs text-sky-700 hover:underline"
-                    >
-                      Password dimenticata?
-                    </button>
-
-                    <div className="text-[10px] text-zinc-400 font-mono">
-                      {tenantLabel}
-                    </div>
-                  </div>
-
-                  <div className="pt-1 flex items-center gap-3">
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="inline-flex items-center justify-center rounded-full bg-sky-500 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-sky-600 disabled:opacity-60"
-                    >
-                      {loading ? 'Accesso...' : 'Sign In'}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => router.push('/auth/accept-invite')}
-                      className="inline-flex items-center justify-center rounded-full border border-sky-400 px-6 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50"
-                      title="Se hai ricevuto un invito"
-                    >
-                      Accept Invite
-                    </button>
-                  </div>
-
-                  <p className="pt-4 text-[11px] text-zinc-400">
-                    Se stai entrando in un tenant specifico, usa <span className="font-mono">https://slug.doflow.it</span>.
-                  </p>
-                </form>
-              </div>
-            </div>
+            
+            <h1 className="text-2xl md:text-3xl font-bold tracking-wide">DOFLOW</h1>
+            <p className="text-sm opacity-90 max-w-[250px] font-light">
+              Piattaforma di gestione multi-tenant intelligente e scalabile.
+            </p>
           </div>
+
+          {/* DECORATIVE CURVES (WAVES) */}
+          
+          {/* Desktop Curve (Vertical wave on the right edge) */}
+          <div className="hidden md:block absolute top-0 right-0 bottom-0 w-24 h-full pointer-events-none translate-x-[1px]">
+             <svg className="h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <path d="M100 0v100C60 100 0 70 0 50S60 0 100 0z" fill="white" />
+             </svg>
+          </div>
+
+          {/* Mobile Curve (Horizontal wave on the bottom edge) */}
+          <div className="block md:hidden absolute bottom-0 left-0 right-0 h-16 w-full pointer-events-none translate-y-[1px]">
+             <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <path d="M0 100h100V0C100 60 70 100 50 100S0 60 0 0v100z" fill="white" />
+             </svg>
+          </div>
+
+          {/* Background circles for texture */}
+          <div className="absolute top-[-50px] left-[-50px] w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute bottom-10 right-10 w-60 h-60 bg-white/10 rounded-full blur-3xl pointer-events-none" />
         </div>
 
-        {/* footer piccolo */}
-        <div className="mt-4 text-center text-[11px] text-white/70">
-          © {new Date().getFullYear()} Doflow
+        {/* --- RIGHT SIDE (Form) --- */}
+        <div className="w-full md:w-1/2 bg-white p-8 md:p-12 flex flex-col justify-center relative z-0">
+          
+          <div className="mb-8 mt-4 md:mt-0 text-center md:text-left">
+            <h2 className="text-2xl font-bold text-gray-800">Accedi</h2>
+            <p className="text-sm text-gray-400 mt-1">Inserisci le tue credenziali per continuare</p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6 w-full max-w-sm mx-auto md:mx-0">
+            
+            {/* EMAIL INPUT STYLE: Underline only */}
+            <div className="group">
+              <label className="block text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1">
+                E-MAIL ADDRESS
+              </label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="nome@azienda.it"
+                className="w-full py-2 border-b border-gray-300 text-gray-700 placeholder-gray-300 focus:outline-none focus:border-sky-500 transition-colors bg-transparent"
+              />
+            </div>
+
+            {/* PASSWORD INPUT STYLE: Underline only */}
+            <div className="group">
+              <label className="block text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1">
+                PASSWORD
+              </label>
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full py-2 border-b border-gray-300 text-gray-700 placeholder-gray-300 focus:outline-none focus:border-sky-500 transition-colors bg-transparent"
+              />
+            </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="p-3 rounded-lg bg-red-50 border border-red-100 text-red-600 text-xs animate-pulse">
+                {error}
+              </div>
+            )}
+
+            {/* Tenant Info & Forgot Password */}
+            <div className="flex items-center justify-between text-xs mt-2">
+               <span className="text-gray-400 font-mono" title={`Host corrente: ${tenantHost}`}>
+                 Tenant: {tenantLabel}
+               </span>
+               <button 
+                 type="button"
+                 onClick={() => router.push('/forgot-password')}
+                 className="text-sky-500 hover:text-sky-700 font-semibold"
+               >
+                 Recupera password
+               </button>
+            </div>
+
+            {/* Buttons Area */}
+            <div className="pt-6 flex flex-col sm:flex-row gap-4">
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 bg-sky-500 text-white font-bold py-3 px-6 rounded-full shadow-lg shadow-sky-500/30 hover:bg-sky-600 hover:shadow-sky-500/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm uppercase tracking-wide"
+              >
+                {loading ? 'Accesso...' : 'Sign In'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push('/auth/accept-invite')}
+                className="flex-1 bg-white text-sky-500 font-bold py-3 px-6 rounded-full border border-sky-500 hover:bg-sky-50 transition-colors text-sm uppercase tracking-wide"
+              >
+                Accept Invite
+              </button>
+            </div>
+
+            <div className="mt-6 text-center">
+               <p className="text-[10px] text-gray-400">
+                 Facendo login accetti i <a href="#" className="text-sky-500 underline">Termini & Condizioni</a> di Doflow.
+               </p>
+            </div>
+
+          </form>
         </div>
       </div>
     </main>
