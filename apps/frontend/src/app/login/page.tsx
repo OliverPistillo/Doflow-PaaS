@@ -66,53 +66,54 @@ export default function LoginPage() {
     }
   };
 
+  // Colore blu molto scuro tendente al nero per background e testo input
+  const darkBlueBlack = '#0B1120';
+
   return (
-    <main className="min-h-screen w-full bg-gray-600 flex items-center justify-center p-4 md:p-8">
+    // MODIFICA: Sfondo esterno cambiato nel blu scuro/nero richiesto
+    <main className={`min-h-screen w-full bg-[${darkBlueBlack}] flex items-center justify-center p-4 md:p-8`}>
       {/* CARD CONTAINER */}
       <div className="w-full max-w-[1000px] bg-white rounded-[30px] shadow-2xl overflow-hidden flex flex-col md:flex-row min-h-[600px]">
         
         {/* --- LEFT SIDE (Blue Gradient & Branding) --- */}
-        {/* Mobile: Top section / Desktop: Left section */}
         <div className="relative w-full md:w-1/2 bg-gradient-to-br from-[#4facfe] to-[#00f2fe] text-white flex flex-col items-center justify-center p-10 z-10">
           
           {/* Content */}
-          <div className="relative z-20 flex flex-col items-center text-center space-y-4">
+          <div className="relative z-20 flex flex-col items-center text-center space-y-6">
             <p className="text-xs font-bold tracking-[0.2em] uppercase opacity-80">Welcome to</p>
             
-            <div className="relative w-24 h-24 md:w-32 md:h-32 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/30 mb-2">
+            {/* MODIFICA: Rimossi il cerchio contenitore e la scritta DOFLOW. Logo ingrandito. */}
+            <div className="mb-4">
                <Image
                 src="/logo-transparent-svg.svg"
                 alt="Doflow Logo"
-                width={80}
-                height={80}
-                className="object-contain p-2"
+                width={180} // Dimensione aumentata significativamente
+                height={180} // Dimensione aumentata significativamente
+                className="object-contain"
                 priority
               />
             </div>
             
-            <h1 className="text-2xl md:text-3xl font-bold tracking-wide">DOFLOW</h1>
+            {/* Scritta DOFLOW rimossa qui */}
+
             <p className="text-sm opacity-90 max-w-[250px] font-light">
               Piattaforma di gestione multi-tenant intelligente e scalabile.
             </p>
           </div>
 
-          {/* DECORATIVE CURVES (WAVES) */}
-          
-          {/* Desktop Curve (Vertical wave on the right edge) */}
+          {/* DECORATIVE CURVES (WAVES) - Invariate */}
           <div className="hidden md:block absolute top-0 right-0 bottom-0 w-24 h-full pointer-events-none translate-x-[1px]">
              <svg className="h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
                 <path d="M100 0v100C60 100 0 70 0 50S60 0 100 0z" fill="white" />
              </svg>
           </div>
-
-          {/* Mobile Curve (Horizontal wave on the bottom edge) */}
           <div className="block md:hidden absolute bottom-0 left-0 right-0 h-16 w-full pointer-events-none translate-y-[1px]">
              <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
                 <path d="M0 100h100V0C100 60 70 100 50 100S0 60 0 0v100z" fill="white" />
              </svg>
           </div>
 
-          {/* Background circles for texture */}
+          {/* Background circles - Invariati */}
           <div className="absolute top-[-50px] left-[-50px] w-40 h-40 bg-white/10 rounded-full blur-2xl pointer-events-none" />
           <div className="absolute bottom-10 right-10 w-60 h-60 bg-white/10 rounded-full blur-3xl pointer-events-none" />
         </div>
@@ -127,7 +128,7 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-6 w-full max-w-sm mx-auto md:mx-0">
             
-            {/* EMAIL INPUT STYLE: Underline only */}
+            {/* EMAIL INPUT */}
             <div className="group">
               <label className="block text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1">
                 E-MAIL ADDRESS
@@ -138,11 +139,12 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="nome@azienda.it"
-                className="w-full py-2 border-b border-gray-300 text-gray-700 placeholder-gray-300 focus:outline-none focus:border-sky-500 transition-colors bg-transparent"
+                // MODIFICA: text-gray-700 cambiato nel colore scuro personalizzato. Placeholder reso leggermente più scuro per contrasto.
+                className={`w-full py-2 border-b border-gray-300 text-[${darkBlueBlack}] placeholder-gray-400 focus:outline-none focus:border-sky-500 transition-colors bg-transparent`}
               />
             </div>
 
-            {/* PASSWORD INPUT STYLE: Underline only */}
+            {/* PASSWORD INPUT */}
             <div className="group">
               <label className="block text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1">
                 PASSWORD
@@ -153,7 +155,8 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full py-2 border-b border-gray-300 text-gray-700 placeholder-gray-300 focus:outline-none focus:border-sky-500 transition-colors bg-transparent"
+                // MODIFICA: text-gray-700 cambiato nel colore scuro personalizzato.
+                className={`w-full py-2 border-b border-gray-300 text-[${darkBlueBlack}] placeholder-gray-400 focus:outline-none focus:border-sky-500 transition-colors bg-transparent`}
               />
             </div>
 
