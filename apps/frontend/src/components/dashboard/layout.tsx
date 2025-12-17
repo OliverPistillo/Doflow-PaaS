@@ -8,11 +8,10 @@ import {
   Building2,
   FolderKanban,
   LogOut,
-  Moon,
-  Sun,
 } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/theme/theme-toggle';
 
 type DashboardLayoutProps = {
   children: ReactNode;
@@ -55,22 +54,13 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
     },
   ];
 
-  const visibleItems = menuItems.filter((item) =>
-    item.visibleFor.includes(role),
-  );
+  const visibleItems = menuItems.filter((item) => item.visibleFor.includes(role));
 
   const handleLogout = () => {
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem('doflow_token');
       router.push('/login');
     }
-  };
-
-  const switchTheme = () => {
-    if (typeof document === 'undefined') return;
-    const current = document.documentElement.dataset.theme ?? 'dark';
-    const next = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.dataset.theme = next;
   };
 
   return (
@@ -81,7 +71,7 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
           collapsed ? 'w-16' : 'w-60'
         }`}
       >
-        {/* Top: logo + toggle */}
+        {/* Top: logo + collapse */}
         <div className="flex items-center justify-between px-3 py-3 border-b border-zinc-800">
           <div className="flex items-center gap-2 overflow-hidden">
             <Image
@@ -95,11 +85,13 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
               <span className="font-semibold text-sm truncate">Doflow</span>
             )}
           </div>
+
           <Button
             variant="ghost"
             size="icon"
             className="h-7 w-7 text-zinc-400 hover:text-zinc-100"
             onClick={() => setCollapsed((c) => !c)}
+            aria-label="Toggle sidebar"
           >
             <span className="text-xs">{collapsed ? '»' : '«'}</span>
           </Button>
@@ -124,21 +116,17 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
 
         {/* Bottom: theme + user + logout */}
         <div className="border-t border-zinc-800 px-2 py-2 flex flex-col gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start text-xs text-zinc-300 hover:bg-zinc-900"
-            onClick={switchTheme}
-          >
-            <Moon className="h-4 w-4 mr-2 hidden dark:inline-block" />
-            <Sun className="h-4 w-4 mr-2 inline-block dark:hidden" />
-            {!collapsed && <span>Cambia tema</span>}
-          </Button>
+          {/* Theme toggle (next-themes) */}
+          <div className={collapsed ? 'flex justify-center' : ''}>
+            <ThemeToggle />
+          </div>
+
           <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-400">
             <div className="flex items-center gap-1 overflow-hidden">
               <div className="h-6 w-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-[10px] font-semibold">
                 {userEmail?.[0]?.toUpperCase() ?? '?'}
               </div>
+
               {!collapsed && (
                 <div className="flex flex-col">
                   <span className="truncate">{userEmail}</span>
@@ -148,11 +136,13 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
                 </div>
               )}
             </div>
+
             <Button
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-zinc-400 hover:text-red-400"
               onClick={handleLogout}
+              aria-label="Logout"
             >
               <LogOut className="h-4 w-4" />
             </Button>

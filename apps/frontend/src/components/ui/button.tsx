@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-type Variant = 'default' | 'ghost';
+type Variant = 'default' | 'ghost' | 'outline';
 type Size = 'default' | 'sm' | 'icon';
 
 export interface ButtonProps
@@ -15,6 +15,7 @@ const base =
 const variants: Record<Variant, string> = {
   default: 'bg-white text-black hover:bg-zinc-100',
   ghost: 'bg-transparent text-zinc-300 hover:bg-zinc-900',
+  outline: 'border border-zinc-800 bg-transparent text-zinc-100 hover:bg-zinc-900',
 };
 
 const sizes: Record<Size, string> = {
