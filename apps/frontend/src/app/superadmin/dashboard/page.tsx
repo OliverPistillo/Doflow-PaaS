@@ -3,9 +3,15 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { apiFetch } from '@/lib/api';
+import { cn } from '@/lib/utils';
+
+/* =======================
+   Types
+======================= */
 
 type TenantRow = {
   id: string;
@@ -14,27 +20,38 @@ type TenantRow = {
   schema_name: string;
   is_active: boolean;
   created_at?: string;
-  updated_at?: string;
 };
 
 type ListTenantsResponse = {
   tenants: TenantRow[];
 };
 
-function cx(...classes: Array<string | false | undefined | null>) {
-  return classes.filter(Boolean).join(' ');
-}
+/* =======================
+   Small UI helpers
+======================= */
 
-function StatusPill({ ok, label }: { ok: boolean; label: string }) {
+function StatusPill({
+  active,
+  label,
+}: {
+  active: boolean;
+  label: string;
+}) {
   return (
     <span
-      className={cx(
+      className={cn(
         'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
-        ok ? 'border-border bg-accent text-foreground' : 'border-border bg-muted text-muted-foreground'
+        active
+          ? 'border-border bg-accent text-foreground'
+          : 'border-border bg-muted text-muted-foreground',
       )}
-      title={ok ? 'OK' : 'Degraded'}
     >
-      <span className={cx('mr-1 inline-block h-2 w-2 rounded-full', ok ? 'bg-foreground' : 'bg-muted-foreground')} />
+      <span
+        className={cn(
+          'mr-1 inline-block h-2 w-2 rounded-full',
+          active ? 'bg-foreground' : 'bg-muted-foreground',
+        )}
+      />
       {label}
     </span>
   );
@@ -52,8 +69,8 @@ function MetricCard({
   return (
     <Card className="p-4">
       <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-2xl font-semibold mt-1">{value}</div>
-      {hint ? <div className="text-xs text-muted-foreground mt-2">{hint}</div> : null}
+      <div className="mt-1 text-2xl font-semibold">{value}</div>
+      {hint && <div className="mt-2 text-xs text-muted-foreground">{hint}</div>}
     </Card>
   );
 }
@@ -62,6 +79,10 @@ function getToken(): string | null {
   if (typeof window === 'undefined') return null;
   return window.localStorage.getItem('doflow_token');
 }
+
+/* =======================
+   Page
+======================= */
 
 export default function SuperadminDashboardPage() {
   const router = useRouter();
@@ -81,16 +102,13 @@ export default function SuperadminDashboardPage() {
 
     try {
       const data = await apiFetch<ListTenantsResponse>('/api/superadmin/tenants', {
-        // lato backend sei già in public quando domini = app/api/localhost,
-        // ma lasciamo il header per chiarezza operativa
         headers: { 'x-doflow-tenant-id': 'public' },
         cache: 'no-store',
       });
 
       setTenants(Array.isArray(data?.tenants) ? data.tenants : []);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Errore caricamento dashboard';
-      setError(msg);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Errore caricamento dashboard');
     } finally {
       setLoading(false);
     }
@@ -108,7 +126,6 @@ export default function SuperadminDashboardPage() {
   }, [tenants]);
 
   const recentTenants = React.useMemo(() => {
-    // se created_at manca, fallback su id (non perfetto ma ok)
     return [...tenants]
       .sort((a, b) => {
         const da = a.created_at ? Date.parse(a.created_at) : 0;
@@ -119,141 +136,86 @@ export default function SuperadminDashboardPage() {
   }, [tenants]);
 
   function openTenant(slug: string) {
-    window.location.href = `https://${slug}.doflow.it/admin/users`;
+    window.location.assign(`https://${slug}.doflow.it/admin/users`);
   }
 
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold">Super Admin</h1>
-            <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium">
-              Control Plane
-            </span>
-          </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            Vista operativa globale — tenants, stato e accesso rapido.
+          <h1 className="text-xl font-semibold">Super Admin</h1>
+          <p className="text-sm text-muted-foreground">
+            Control Plane — panoramica globale dei tenant
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
             {loading ? 'Aggiorno…' : 'Aggiorna'}
           </Button>
           <Link href="/superadmin/tenants">
-            <Button variant="default" size="sm">Gestisci tenants</Button>
+            <Button size="sm">Gestisci tenants</Button>
           </Link>
         </div>
       </div>
 
       {/* Error */}
-      {error ? (
+      {error && (
         <Card className="p-3">
           <div className="text-sm font-medium">Errore</div>
-          <div className="text-sm text-muted-foreground mt-1 break-words">{error}</div>
+          <div className="mt-1 text-sm text-muted-foreground">{error}</div>
         </Card>
-      ) : null}
+      )}
 
       {/* KPI */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <MetricCard label="Tenants totali" value={loading ? '—' : kpi.total} />
         <MetricCard label="Tenants attivi" value={loading ? '—' : kpi.active} />
         <MetricCard label="Tenants disabilitati" value={loading ? '—' : kpi.disabled} />
       </div>
 
-      {/* System status (placeholder “onesto”) */}
+      {/* System status (placeholder) */}
       <Card className="p-4">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold">System status</div>
-            <div className="text-xs text-muted-foreground mt-1">
-              (Step successivo: collegare Telemetry/Health reali. Per ora è un pannello “visivo”.)
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <StatusPill ok label="API" />
-            <StatusPill ok label="DB" />
-            <StatusPill ok label="Redis" />
-            <StatusPill ok label="Realtime" />
-            <StatusPill ok label="Storage" />
-          </div>
+        <div className="text-sm font-semibold">System status</div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <StatusPill active={false} label="API" />
+          <StatusPill active={false} label="DB" />
+          <StatusPill active={false} label="Redis" />
+          <StatusPill active={false} label="Realtime" />
+        </div>
+        <div className="mt-2 text-xs text-muted-foreground">
+          Placeholder — collegheremo health reali negli step successivi.
         </div>
       </Card>
 
-      {/* Quick actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <Card className="p-4 lg:col-span-2">
-          <div className="flex items-center justify-between">
-            <div className="text-sm font-semibold">Quick actions</div>
-          </div>
-
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Link href="/superadmin/tenants">
-              <Button variant="default" size="sm">+ Crea / gestisci tenant</Button>
-            </Link>
-            <Link href="/superadmin/tenants">
-              <Button variant="outline" size="sm">Vai alla lista tenants</Button>
-            </Link>
-            <Link href="/admin/audit">
-              <Button variant="outline" size="sm">Audit (tenant corrente)</Button>
-            </Link>
-            <Link href="/notifications-test">
-              <Button variant="outline" size="sm">Test notifiche</Button>
-            </Link>
-          </div>
-
-          <div className="text-xs text-muted-foreground mt-3">
-            Nota: “Audit tenant corrente” qui è utile solo per debug. Il vero Audit globale è Step futuro.
-          </div>
-        </Card>
-
-        <Card className="p-4">
-          <div className="text-sm font-semibold">Contesto</div>
-          <div className="mt-2 text-sm">
-            Dominio: <span className="text-muted-foreground">app.doflow.it</span>
-          </div>
-          <div className="mt-1 text-sm">
-            Tenant: <span className="text-muted-foreground">public</span>
-          </div>
-          <div className="mt-3 text-xs text-muted-foreground">
-            Regola d’oro: qui non sei “un tenant”, sei l’amministratore del condominio.
-          </div>
-        </Card>
-      </div>
-
       {/* Recent tenants */}
       <Card className="overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-          <div className="text-sm font-semibold">Ultimi tenants</div>
-          <div className="text-xs text-muted-foreground">
-            {loading ? '…' : `${recentTenants.length} mostrati`}
-          </div>
+        <div className="border-b border-border px-4 py-3">
+          <div className="text-sm font-semibold">Ultimi tenant</div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-xs text-muted-foreground">
               <tr className="border-b border-border">
-                <th className="text-left font-medium px-4 py-3">Slug</th>
-                <th className="text-left font-medium px-4 py-3">Nome</th>
-                <th className="text-left font-medium px-4 py-3">Stato</th>
-                <th className="text-right font-medium px-4 py-3">Azioni</th>
+                <th className="px-4 py-3 text-left font-medium">Slug</th>
+                <th className="px-4 py-3 text-left font-medium">Nome</th>
+                <th className="px-4 py-3 text-left font-medium">Stato</th>
+                <th className="px-4 py-3 text-right font-medium">Azioni</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="px-4 py-6 text-muted-foreground" colSpan={4}>
+                  <td colSpan={4} className="px-4 py-6 text-muted-foreground">
                     Caricamento…
                   </td>
                 </tr>
               ) : recentTenants.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-6 text-muted-foreground" colSpan={4}>
-                    Nessun tenant disponibile.
+                  <td colSpan={4} className="px-4 py-6 text-muted-foreground">
+                    Nessun tenant.
                   </td>
                 </tr>
               ) : (
@@ -262,26 +224,12 @@ export default function SuperadminDashboardPage() {
                     <td className="px-4 py-3 font-medium">{t.slug}</td>
                     <td className="px-4 py-3">{t.name}</td>
                     <td className="px-4 py-3">
-                      <span
-                        className={cx(
-                          'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                          t.is_active
-                            ? 'border-border bg-accent text-foreground'
-                            : 'border-border bg-muted text-muted-foreground'
-                        )}
-                      >
-                        {t.is_active ? 'active' : 'disabled'}
-                      </span>
+                      <StatusPill active={t.is_active} label={t.is_active ? 'active' : 'disabled'} />
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" onClick={() => openTenant(t.slug)}>
-                          Entra
-                        </Button>
-                        <Link href="/superadmin/tenants">
-                          <Button variant="ghost" size="sm">Gestisci</Button>
-                        </Link>
-                      </div>
+                    <td className="px-4 py-3 text-right">
+                      <Button size="sm" variant="outline" onClick={() => openTenant(t.slug)}>
+                        Entra
+                      </Button>
                     </td>
                   </tr>
                 ))
