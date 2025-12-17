@@ -5,9 +5,9 @@ import * as SheetPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export const Sheet = SheetPrimitive.Root;
-export const SheetTrigger = SheetPrimitive.Trigger;
-export const SheetClose = SheetPrimitive.Close;
+export const Sheet: typeof SheetPrimitive.Root = SheetPrimitive.Root;
+export const SheetTrigger: typeof SheetPrimitive.Trigger = SheetPrimitive.Trigger;
+export const SheetClose: typeof SheetPrimitive.Close = SheetPrimitive.Close;
 
 export const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,

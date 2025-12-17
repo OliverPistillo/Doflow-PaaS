@@ -5,9 +5,9 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export const Dialog = DialogPrimitive.Root;
-export const DialogTrigger = DialogPrimitive.Trigger;
-export const DialogClose = DialogPrimitive.Close;
+export const Dialog: typeof DialogPrimitive.Root = DialogPrimitive.Root;
+export const DialogTrigger: typeof DialogPrimitive.Trigger = DialogPrimitive.Trigger;
+export const DialogClose: typeof DialogPrimitive.Close = DialogPrimitive.Close;
 
 export const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,

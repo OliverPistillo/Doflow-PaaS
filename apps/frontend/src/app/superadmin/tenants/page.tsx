@@ -2,15 +2,15 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-// Importa la fetch canonica globale
 import { apiFetch } from '@/lib/api';
+import { cn } from '@/lib/utils';
 
-// Shadcn Components
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -46,15 +46,14 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 
-// Icons
-import { 
-  MoreHorizontal, 
-  ExternalLink, 
-  Copy, 
-  Check, // Aggiunto per feedback visivo
-  Power, 
-  Info, 
-  AlertTriangle 
+import {
+  MoreHorizontal,
+  ExternalLink,
+  Copy,
+  Check,
+  Power,
+  Info,
+  AlertTriangle,
 } from 'lucide-react';
 
 type TenantRow = {
@@ -76,14 +75,10 @@ type ListTenantsResponse = {
   tenants: TenantRow[];
 };
 
-function cx(...classes: Array<string | false | undefined | null>) {
-  return classes.filter(Boolean).join(' ');
-}
-
 function Badge({ active }: { active: boolean }) {
   return (
     <span
-      className={cx(
+      className={cn(
         'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
         active
           ? 'border-border bg-accent text-foreground'
@@ -103,9 +98,9 @@ function parseJwtPayload(token: string): JwtPayload | null {
     const parsed: unknown = JSON.parse(json);
     if (typeof parsed !== 'object' || parsed === null) return null;
     const p = parsed as Record<string, unknown>;
-    return { 
+    return {
       email: typeof p.email === 'string' ? p.email : undefined,
-      role: typeof p.role === 'string' ? p.role : undefined 
+      role: typeof p.role === 'string' ? p.role : undefined,
     };
   } catch {
     return null;
@@ -116,6 +111,22 @@ function errorMessage(e: unknown, fallback: string) {
   if (e instanceof Error) return e.message || fallback;
   if (typeof e === 'string') return e || fallback;
   return fallback;
+}
+
+function formatDateTime(v?: string) {
+  if (!v) return '-';
+  const ms = Date.parse(v);
+  if (Number.isNaN(ms)) return v;
+  try {
+    return new Date(ms).toLocaleString();
+  } catch {
+    return v;
+  }
+}
+
+function sanitizeSlug(input: string) {
+  // solo lettere/numeri/trattini, lowercase
+  return input.replace(/[^a-z0-9-]/gi, '').toLowerCase();
 }
 
 export default function SuperadminTenantsPage() {
@@ -131,14 +142,14 @@ export default function SuperadminTenantsPage() {
   // UI States
   const [createOpen, setCreateOpen] = React.useState(false);
   const [creating, setCreating] = React.useState(false);
-  
+
   const [detailsOpen, setDetailsOpen] = React.useState(false);
   const [selectedTenant, setSelectedTenant] = React.useState<TenantRow | null>(null);
 
   const [confirm, setConfirm] = React.useState<null | { tenant: TenantRow }>(null);
   const [busyId, setBusyId] = React.useState<string | null>(null);
-  
-  // UX: Stato per feedback "Copiato" (contiene l'ID del tenant copiato)
+
+  // UX: feedback "Copiato" (tenant id)
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
 
   // Form States
@@ -148,12 +159,16 @@ export default function SuperadminTenantsPage() {
   const [adminEmail, setAdminEmail] = React.useState('');
   const [adminPassword, setAdminPassword] = React.useState('');
 
+  // Auth guard basic
   React.useEffect(() => {
-    const token = typeof window !== 'undefined' ? window.localStorage.getItem('doflow_token') : null;
+    const token =
+      typeof window !== 'undefined' ? window.localStorage.getItem('doflow_token') : null;
+
     if (!token) {
       router.push('/login');
       return;
     }
+
     const payload = parseJwtPayload(token);
     if (!payload) {
       window.localStorage.removeItem('doflow_token');
@@ -166,7 +181,6 @@ export default function SuperadminTenantsPage() {
     setError(null);
 
     try {
-      // Usa apiFetch globale
       const data = await apiFetch<ListTenantsResponse>('/api/superadmin/tenants', {
         headers: { 'x-doflow-tenant-id': 'public' },
       });
@@ -210,13 +224,33 @@ export default function SuperadminTenantsPage() {
     window.location.href = `https://${slugValue}.doflow.it/admin/users`;
   }
 
-  // UX Improvement: Feedback visivo copia
-  function copyUrl(t: TenantRow) {
+  async function copyUrl(t: TenantRow) {
     const url = `https://${t.slug}.doflow.it`;
-    navigator.clipboard?.writeText(url).then(() => {
+
+    try {
+      await navigator.clipboard.writeText(url);
       setCopiedId(t.id);
-      setTimeout(() => setCopiedId(null), 2000);
-    }).catch(() => {});
+      window.setTimeout(() => setCopiedId(null), 2000);
+      return;
+    } catch {
+      // fallback best effort
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+
+        setCopiedId(t.id);
+        window.setTimeout(() => setCopiedId(null), 2000);
+      } catch {
+        // silenzioso: niente crash, solo niente feedback
+      }
+    }
   }
 
   function openDetails(t: TenantRow) {
@@ -230,14 +264,13 @@ export default function SuperadminTenantsPage() {
 
     try {
       await apiFetch(`/api/superadmin/tenants/${tenant.id}/toggle-active`, { method: 'POST' });
-      
+
       const freshList = await loadTenants();
-      
+
+      // Se lo Sheet è aperto sullo stesso tenant, aggiorna i dettagli
       if (selectedTenant && selectedTenant.id === tenant.id) {
-        const freshTenant = freshList.find((t) => t.id === tenant.id);
-        if (freshTenant) {
-          setSelectedTenant(freshTenant);
-        }
+        const freshTenant = freshList.find((x) => x.id === tenant.id);
+        if (freshTenant) setSelectedTenant(freshTenant);
       }
     } catch (e: unknown) {
       setError(errorMessage(e, 'Errore aggiornamento tenant'));
@@ -247,19 +280,31 @@ export default function SuperadminTenantsPage() {
     }
   }
 
+  const createValid = React.useMemo(() => {
+    const s = sanitizeSlug(slug.trim());
+    const n = name.trim();
+    const ae = adminEmail.trim();
+    const ap = adminPassword;
+    return s.length >= 2 && n.length >= 2 && ae.length >= 5 && ap.length >= 8;
+  }, [slug, name, adminEmail, adminPassword]);
+
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (!createValid) return;
+
     setError(null);
     setCreating(true);
 
     try {
+      const s = sanitizeSlug(slug.trim());
+      const n = name.trim();
       const sn = schemaName.trim().toLowerCase();
 
       await apiFetch('/api/superadmin/tenants', {
         method: 'POST',
         body: JSON.stringify({
-          slug: slug.trim().toLowerCase(),
-          name: name.trim(),
+          slug: s,
+          name: n,
           schema_name: sn ? sn : undefined,
           admin_email: adminEmail.trim().toLowerCase(),
           admin_password: adminPassword,
@@ -272,7 +317,7 @@ export default function SuperadminTenantsPage() {
       setSchemaName('');
       setAdminEmail('');
       setAdminPassword('');
-      
+
       await loadTenants();
     } catch (e: unknown) {
       setError(errorMessage(e, 'Errore creazione tenant'));
@@ -393,8 +438,7 @@ export default function SuperadminTenantsPage() {
                 filtered.map((t) => (
                   <tr key={t.id} className="border-b border-border last:border-b-0">
                     <td className="px-4 py-3 font-medium">
-                      {/* UX Fix: Clickable Slug */}
-                      <button 
+                      <button
                         className="hover:underline focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 rounded"
                         onClick={() => openDetails(t)}
                       >
@@ -420,8 +464,7 @@ export default function SuperadminTenantsPage() {
                               <ExternalLink className="mr-2 h-4 w-4" />
                               Entra
                             </DropdownMenuItem>
-                            
-                            {/* UX Fix: Copy feedback */}
+
                             <DropdownMenuItem onClick={() => copyUrl(t)}>
                               {copiedId === t.id ? (
                                 <Check className="mr-2 h-4 w-4 text-green-500" />
@@ -435,15 +478,16 @@ export default function SuperadminTenantsPage() {
                               <Info className="mr-2 h-4 w-4" />
                               Dettagli
                             </DropdownMenuItem>
+
                             <DropdownMenuSeparator />
-                            
-                            <DropdownMenuItem 
-                              onClick={() => setConfirm({ tenant: t })} 
+
+                            <DropdownMenuItem
+                              onClick={() => setConfirm({ tenant: t })}
                               disabled={busyId === t.id}
-                              className={t.is_active ? 'text-destructive focus:text-destructive focus:bg-destructive/10' : ''}
+                              className={t.is_active ? 'text-destructive focus:text-destructive' : ''}
                             >
                               <Power className="mr-2 h-4 w-4" />
-                              {busyId === t.id ? 'Applico...' : (t.is_active ? 'Disabilita' : 'Attiva')}
+                              {busyId === t.id ? 'Applico…' : t.is_active ? 'Disabilita' : 'Attiva'}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -458,7 +502,7 @@ export default function SuperadminTenantsPage() {
       </Card>
 
       {/* Create Dialog */}
-      <Dialog open={createOpen} onOpenChange={(v) => !creating && setCreateOpen(v)}>
+      <Dialog open={createOpen} onOpenChange={(v: boolean) => !creating && setCreateOpen(v)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Crea tenant</DialogTitle>
@@ -474,14 +518,15 @@ export default function SuperadminTenantsPage() {
                 <Input
                   id="slug"
                   value={slug}
-                  onChange={(e) => setSlug(e.target.value)}
+                  onChange={(e) => setSlug(sanitizeSlug(e.target.value))}
                   placeholder="es. acme"
                   required
                 />
                 <div className="text-[11px] text-muted-foreground mt-1">
-                  URL: https://{slug || '...'}.doflow.it
+                  URL: https://{sanitizeSlug(slug) || '...'}.doflow.it
                 </div>
               </div>
+
               <div>
                 <Label htmlFor="name">Nome</Label>
                 <Input
@@ -493,7 +538,7 @@ export default function SuperadminTenantsPage() {
                 />
               </div>
             </div>
-            
+
             <div>
               <Label htmlFor="schema_name">Schema name</Label>
               <Input
@@ -506,7 +551,7 @@ export default function SuperadminTenantsPage() {
                 Opzionale: se vuoto, verrà usato lo slug come nome schema.
               </div>
             </div>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="admin_email">Admin email</Label>
@@ -519,6 +564,7 @@ export default function SuperadminTenantsPage() {
                   required
                 />
               </div>
+
               <div>
                 <Label htmlFor="admin_password">Admin password</Label>
                 <Input
@@ -529,6 +575,11 @@ export default function SuperadminTenantsPage() {
                   placeholder="min 8 caratteri"
                   required
                 />
+                {adminPassword && adminPassword.length < 8 ? (
+                  <div className="text-[11px] text-muted-foreground mt-1">
+                    Password troppo corta (min 8).
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -541,7 +592,8 @@ export default function SuperadminTenantsPage() {
               >
                 Annulla
               </Button>
-              <Button variant="default" type="submit" disabled={creating}>
+
+              <Button variant="default" type="submit" disabled={creating || !createValid}>
                 {creating ? 'Creo…' : 'Crea tenant'}
               </Button>
             </div>
@@ -550,12 +602,7 @@ export default function SuperadminTenantsPage() {
       </Dialog>
 
       {/* Confirm Toggle Alert Dialog */}
-      <AlertDialog 
-        open={!!confirm} 
-        onOpenChange={(v) => {
-          if (!v && !busyId) setConfirm(null);
-        }}
-      >
+      <AlertDialog open={!!confirm} onOpenChange={(v: boolean) => { if (!v && !busyId) setConfirm(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
@@ -577,7 +624,7 @@ export default function SuperadminTenantsPage() {
             <AlertDialogAction
               onClick={() => confirm && toggleActive(confirm.tenant)}
               disabled={!!busyId}
-              className={confirm?.tenant.is_active ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+              className={confirm?.tenant.is_active ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
             >
               {busyId ? 'Applico…' : 'Conferma'}
             </AlertDialogAction>
@@ -586,13 +633,7 @@ export default function SuperadminTenantsPage() {
       </AlertDialog>
 
       {/* Tenant Details Sheet */}
-      <Sheet 
-        open={detailsOpen} 
-        onOpenChange={(v) => {
-          setDetailsOpen(v);
-          if (!v) setSelectedTenant(null);
-        }}
-      >
+      <Sheet open={detailsOpen} onOpenChange={(v: boolean) => { setDetailsOpen(v); if (!v) setSelectedTenant(null); }}>
         <SheetContent>
           <SheetHeader>
             <SheetTitle>Dettagli tenant</SheetTitle>
@@ -603,10 +644,10 @@ export default function SuperadminTenantsPage() {
             <div className="flex flex-col h-full">
               <div className="mt-6 space-y-4 text-sm flex-1">
                 <div className="flex justify-between items-center pb-2 border-b border-border">
-                   <span className="text-muted-foreground">ID</span>
-                   <span className="font-mono text-xs">
-                     {selectedTenant.id?.slice(0, 8) ?? selectedTenant.id ?? '...'}
-                   </span>
+                  <span className="text-muted-foreground">ID</span>
+                  <span className="font-mono text-xs">
+                    {selectedTenant.id?.slice(0, 8) ?? selectedTenant.id ?? '...'}
+                  </span>
                 </div>
 
                 <div className="flex justify-between items-center">
@@ -621,7 +662,9 @@ export default function SuperadminTenantsPage() {
 
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Schema</span>
-                  <span className="font-medium font-mono text-xs">{selectedTenant.schema_name || '-'}</span>
+                  <span className="font-medium font-mono text-xs">
+                    {selectedTenant.schema_name || '-'}
+                  </span>
                 </div>
 
                 <div className="flex justify-between items-center">
@@ -629,13 +672,25 @@ export default function SuperadminTenantsPage() {
                   <Badge active={selectedTenant.is_active} />
                 </div>
 
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Creato</span>
+                  <span className="font-medium">{formatDateTime(selectedTenant.created_at)}</span>
+                </div>
+
                 <div className="pt-4 flex flex-col gap-2">
-                  <Button variant="outline" className="w-full justify-start" onClick={() => openTenant(selectedTenant.slug)}>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => openTenant(selectedTenant.slug)}
+                  >
                     <ExternalLink className="mr-2 h-4 w-4" /> Entra nel tenant
                   </Button>
-                  
-                  {/* UX Fix: Copy feedback in Sheet */}
-                  <Button variant="outline" className="w-full justify-start" onClick={() => copyUrl(selectedTenant)}>
+
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => copyUrl(selectedTenant)}
+                  >
                     {copiedId === selectedTenant.id ? (
                       <Check className="mr-2 h-4 w-4 text-green-500" />
                     ) : (
@@ -651,21 +706,28 @@ export default function SuperadminTenantsPage() {
                 <div className="bg-destructive/10 p-4 rounded-md border border-destructive/20">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertTriangle className="h-4 w-4 text-destructive" />
-                    <span className="font-semibold text-xs text-destructive uppercase">Zona Pericolo</span>
+                    <span className="font-semibold text-xs text-destructive uppercase">
+                      Zona Pericolo
+                    </span>
                   </div>
+
                   <p className="text-xs text-muted-foreground mb-3">
-                    {selectedTenant.is_active 
-                      ? "Disabilitando il tenant, nessun utente potrà più accedere." 
-                      : "Attivando il tenant, gli utenti potranno accedere nuovamente."}
+                    {selectedTenant.is_active
+                      ? 'Disabilitando il tenant, nessun utente potrà più accedere.'
+                      : 'Attivando il tenant, gli utenti potranno accedere nuovamente.'}
                   </p>
-                  
-                  <Button 
+
+                  <Button
                     variant="default"
-                    className={selectedTenant.is_active ? "w-full bg-destructive text-destructive-foreground hover:bg-destructive/90" : "w-full"}
+                    className={
+                      selectedTenant.is_active
+                        ? 'w-full bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                        : 'w-full'
+                    }
                     onClick={() => {
+                      // chiudi sheet, poi apri confirm nel frame successivo (evita overlay multipli)
                       setDetailsOpen(false);
-                      // UX Fix: setTimeout per evitare overlay multipli
-                      setTimeout(() => setConfirm({ tenant: selectedTenant }), 0);
+                      requestAnimationFrame(() => setConfirm({ tenant: selectedTenant }));
                     }}
                     disabled={busyId === selectedTenant.id}
                   >
