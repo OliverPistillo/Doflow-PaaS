@@ -13,9 +13,9 @@ const base =
   'inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background';
 
 const variants: Record<Variant, string> = {
-  default: 'bg-white text-black hover:bg-zinc-100',
-  ghost: 'bg-transparent text-zinc-300 hover:bg-zinc-900',
-  outline: 'border border-zinc-800 bg-transparent text-zinc-100 hover:bg-zinc-900',
+  default: 'bg-primary text-primary-foreground hover:opacity-90',
+  ghost: 'bg-transparent text-foreground hover:bg-accent',
+  outline: 'border border-border bg-transparent text-foreground hover:bg-accent',
 };
 
 const sizes: Record<Size, string> = {

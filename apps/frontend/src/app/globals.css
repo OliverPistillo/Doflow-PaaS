@@ -1,59 +1,106 @@
 @import "tailwindcss";
 
 /* ===========================
-   Tema base + variabili Doflow
+   shadcn tokens (DoFlow)
    =========================== */
 
 :root {
-  /* colori shadcn base */
+  /* core */
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f172a;
 
-  /* 4 colori personalizzabili Doflow (default) */
-  --doflow-primary: #2563eb;   /* blu */
-  --doflow-secondary: #22c55e; /* verde */
-  --doflow-accent: #eab308;    /* giallo */
-  --doflow-muted: #6b7280;     /* grigio */
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+
+  --muted: #f1f5f9;
+  --muted-foreground: #475569;
+
+  --accent: #f1f5f9;
+  --accent-foreground: #0f172a;
+
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #2563eb;
+
+  /* brand (DoFlow) */
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+
+  --secondary: #22c55e;
+  --secondary-foreground: #052e16;
+
+  /* opzionali */
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
 }
 
-/* Tailwind inline theme mapping */
+/* DARK THEME (class="dark" on html) */
+.dark {
+  --background: #020617;
+  --foreground: #e2e8f0;
+
+  --card: #0b1220;
+  --card-foreground: #e2e8f0;
+
+  --popover: #0b1220;
+  --popover-foreground: #e2e8f0;
+
+  --muted: #0f172a;
+  --muted-foreground: #94a3b8;
+
+  --accent: #111827;
+  --accent-foreground: #e2e8f0;
+
+  --border: #1f2937;
+  --input: #1f2937;
+  --ring: #3b82f6;
+
+  --primary: #3b82f6;
+  --primary-foreground: #0b1220;
+
+  --secondary: #22c55e;
+  --secondary-foreground: #052e16;
+
+  --destructive: #f87171;
+  --destructive-foreground: #0b1220;
+}
+
+/* Tailwind v4 inline theme mapping */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
-
-/* DARK THEME (class="dark") */
-.dark {
-  --background: #020617; /* quasi nero */
-  --foreground: #e5e5e5;
-
-  --doflow-primary: #3b82f6;
-  --doflow-secondary: #22c55e;
-  --doflow-accent: #eab308;
-  --doflow-muted: #9ca3af;
-}
-
-/* LIGHT THEME (data-theme='light') */
-[data-theme='light'] {
-  --background: #ffffff;
-  --foreground: #111827;
-
-  --doflow-primary: #1d4ed8;
-  --doflow-secondary: #16a34a;
-  --doflow-accent: #ca8a04;
-  --doflow-muted: #4b5563;
-}
-
-/* CUSTOM: verrà sovrascritto runtime via JS */
-[data-theme='custom'] {
-  /* i valori vengono impostati via document.documentElement.style.setProperty */
-}
-
-/* ===========================
-   Base body
-   =========================== */
 
 body {
   background: var(--background);

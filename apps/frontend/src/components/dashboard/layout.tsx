@@ -64,15 +64,17 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
   };
 
   return (
+    // A) Wrapper: bg-background text-foreground
     <div className="min-h-screen flex bg-background text-foreground">
       {/* Sidebar */}
       <aside
-        className={`flex flex-col border-r border-zinc-800 bg-black/70 backdrop-blur-xl transition-all duration-200 ${
+        // B) Sidebar: border-border, bg-background/70
+        className={`flex flex-col border-r border-border bg-background/70 backdrop-blur-xl transition-all duration-200 ${
           collapsed ? 'w-16' : 'w-60'
         }`}
       >
         {/* Top: logo + collapse */}
-        <div className="flex items-center justify-between px-3 py-3 border-b border-zinc-800">
+        <div className="flex items-center justify-between px-3 py-3 border-b border-border">
           <div className="flex items-center gap-2 overflow-hidden">
             <Image
               src="/logo-doflow.svg"
@@ -89,7 +91,7 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 text-zinc-400 hover:text-zinc-100"
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
             onClick={() => setCollapsed((c) => !c)}
             aria-label="Toggle sidebar"
           >
@@ -105,7 +107,8 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
               <button
                 key={item.id}
                 onClick={item.onClick}
-                className="w-full flex items-center gap-2 px-2 py-2 text-xs rounded-md hover:bg-zinc-900 text-zinc-300"
+                // C) Menu Items: hover:bg-accent text-muted-foreground hover:text-foreground
+                className="w-full flex items-center gap-2 px-2 py-2 text-xs rounded-md hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Icon className="h-4 w-4 flex-shrink-0" />
                 {!collapsed && <span className="truncate">{item.label}</span>}
@@ -115,22 +118,22 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
         </nav>
 
         {/* Bottom: theme + user + logout */}
-        <div className="border-t border-zinc-800 px-2 py-2 flex flex-col gap-2">
-          {/* Theme toggle (next-themes) */}
+        <div className="border-t border-border px-2 py-2 flex flex-col gap-2">
+          {/* Theme toggle */}
           <div className={collapsed ? 'flex justify-center' : ''}>
             <ThemeToggle />
           </div>
 
-          <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-400">
+          <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
             <div className="flex items-center gap-1 overflow-hidden">
-              <div className="h-6 w-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-[10px] font-semibold">
+              <div className="h-6 w-6 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-[10px] font-semibold text-white">
                 {userEmail?.[0]?.toUpperCase() ?? '?'}
               </div>
 
               {!collapsed && (
                 <div className="flex flex-col">
                   <span className="truncate">{userEmail}</span>
-                  <span className="uppercase text-[9px] text-blue-300">
+                  <span className="uppercase text-[9px] text-blue-500 font-medium">
                     {role.toLowerCase().replace('_', ' ')}
                   </span>
                 </div>
@@ -140,7 +143,7 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 text-zinc-400 hover:text-red-400"
+              className="h-7 w-7 text-muted-foreground hover:text-destructive"
               onClick={handleLogout}
               aria-label="Logout"
             >
@@ -152,7 +155,8 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
 
       {/* Content */}
       <section className="flex-1 flex flex-col">
-        <main className="flex-1 p-4 bg-gradient-to-br from-black via-zinc-950 to-black">
+        {/* D) Main content: bg-background pulito */}
+        <main className="flex-1 p-4 bg-background">
           {children}
         </main>
       </section>
