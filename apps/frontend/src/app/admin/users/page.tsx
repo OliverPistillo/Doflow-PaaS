@@ -465,7 +465,12 @@ export default function AdminUsersPage() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => (window.location.href = `${CONTROL_PLANE_URL}/admin/users`)}
+            onClick={() => {
+              const t = window.localStorage.getItem('doflow_token');
+              const qs = t ? `?token=${encodeURIComponent(t)}` : '';
+              window.location.href = `${CONTROL_PLANE_URL}/admin/users${qs}`;
+            }}
+
             className="text-xs px-3 py-1 border rounded border-border hover:bg-accent"
           >
             Control Plane

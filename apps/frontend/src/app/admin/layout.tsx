@@ -39,24 +39,45 @@ function mapRoleToLayoutRole(role?: string): LayoutRole {
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+
   const [email, setEmail] = React.useState('utente');
   const [role, setRole] = React.useState<LayoutRole>('USER');
+  const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
+    // 1) Se arrivo con ?token=... (da tenant -> control plane), lo salvo qui
+    const url = new URL(window.location.href);
+    const tokenFromQuery = url.searchParams.get('token');
+
+    if (tokenFromQuery && tokenFromQuery.length > 20) {
+      window.localStorage.setItem('doflow_token', tokenFromQuery);
+      url.searchParams.delete('token');
+      window.history.replaceState({}, '', url.toString());
+    }
+
+    // 2) Leggo il token "finale" dal localStorage (del sottodominio corrente)
     const token = window.localStorage.getItem('doflow_token');
     if (!token) {
       router.push('/login');
       return;
     }
 
+    // 3) Decodifico e valorizzo UI
     const payload = parseJwtPayload(token);
     if (payload?.email) setEmail(payload.email);
     setRole(mapRoleToLayoutRole(payload?.role));
+
+    setReady(true);
   }, [router]);
 
-  return (
-    <DashboardLayout role={role} userEmail={email}>
-      {children}
-    </DashboardLayout>
-  );
+  // Evita render parziale (sidebar “strana” / flash)
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        <p className="text-sm text-muted-foreground animate-pulse">Caricamento…</p>
+      </div>
+    );
+  }
+
+  return <DashboardLayout role={role} userEmail={email}>{children}</DashboardLayout>;
 }
