@@ -3,11 +3,9 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { apiFetch } from '@/lib/api';
-import { cn } from '@/lib/utils';
 
 type TenantRow = {
   id: string;
@@ -24,18 +22,90 @@ type ListTenantsResponse = {
 };
 
 type HealthStatus = 'ok' | 'warn' | 'down';
-type HealthCheck = { status: HealthStatus; latency_ms?: number; message?: string };
-type SystemHealthResponse = {
+
+type HealthCheck = {
+  status: HealthStatus;
+  latency_ms?: number;
+  message?: string;
+};
+
+type HealthResponse = {
   status: HealthStatus;
   checks: {
-    api: HealthCheck;
-    db: HealthCheck;
-    redis: HealthCheck;
-    ws: HealthCheck;
-    storage: HealthCheck;
+    api?: HealthCheck;
+    db?: HealthCheck;
+    redis?: HealthCheck;
+    ws?: HealthCheck;
+    storage?: HealthCheck;
+    [k: string]: HealthCheck | undefined;
   };
-  ts: string;
+  ts?: string;
 };
+
+function cx(...classes: Array<string | false | undefined | null>) {
+  return classes.filter(Boolean).join(' ');
+}
+
+function getToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem('doflow_token');
+}
+
+function statusColors(status: HealthStatus) {
+  // badge + dot
+  switch (status) {
+    case 'ok':
+      return {
+        badge: 'border-border bg-accent text-foreground',
+        dot: 'bg-emerald-500',
+        title: 'OK',
+      };
+    case 'warn':
+      return {
+        badge: 'border-border bg-muted text-foreground',
+        dot: 'bg-amber-500',
+        title: 'Warn',
+      };
+    case 'down':
+    default:
+      return {
+        badge: 'border-border bg-muted text-foreground',
+        dot: 'bg-red-500',
+        title: 'Down',
+      };
+  }
+}
+
+function StatusPill({
+  label,
+  check,
+}: {
+  label: string;
+  check?: HealthCheck;
+}) {
+  const status = check?.status ?? 'warn';
+  const { badge, dot, title } = statusColors(status);
+
+  const latency =
+    typeof check?.latency_ms === 'number' ? `${check.latency_ms}ms` : undefined;
+
+  const hint =
+    check?.message ? check.message : latency ? latency : undefined;
+
+  return (
+    <span
+      className={cx(
+        'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
+        badge,
+      )}
+      title={hint ? `${title} • ${hint}` : title}
+    >
+      <span className={cx('mr-1 inline-block h-2 w-2 rounded-full', dot)} />
+      {label}
+      {latency ? <span className="ml-1 text-[10px] text-muted-foreground">({latency})</span> : null}
+    </span>
+  );
+}
 
 function MetricCard({
   label,
@@ -55,67 +125,6 @@ function MetricCard({
   );
 }
 
-function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return window.localStorage.getItem('doflow_token');
-}
-
-function StatusPill({
-  label,
-  check,
-}: {
-  label: string;
-  check?: HealthCheck;
-}) {
-  const status = check?.status ?? 'down';
-
-  const color =
-    status === 'ok'
-      ? 'bg-emerald-500'
-      : status === 'warn'
-      ? 'bg-amber-500'
-      : 'bg-red-500';
-
-  const borderBg =
-    status === 'ok'
-      ? 'border-emerald-500/30 bg-emerald-500/10 text-foreground'
-      : status === 'warn'
-      ? 'border-amber-500/30 bg-amber-500/10 text-foreground'
-      : 'border-red-500/30 bg-red-500/10 text-foreground';
-
-  const tooltipParts: string[] = [];
-  if (check?.latency_ms != null) tooltipParts.push(`latency: ${check.latency_ms}ms`);
-  if (check?.message) tooltipParts.push(check.message);
-  const title = tooltipParts.length ? tooltipParts.join(' • ') : undefined;
-
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
-        borderBg,
-      )}
-      title={title}
-    >
-      <span className={cn('mr-2 inline-block h-2 w-2 rounded-full', color)} />
-      {label}
-      {check?.latency_ms != null ? (
-        <span className="ml-2 text-[10px] text-muted-foreground">{check.latency_ms}ms</span>
-      ) : null}
-    </span>
-  );
-}
-
-function formatTs(ts?: string) {
-  if (!ts) return '—';
-  const ms = Date.parse(ts);
-  if (Number.isNaN(ms)) return ts;
-  try {
-    return new Date(ms).toLocaleString();
-  } catch {
-    return ts;
-  }
-}
-
 export default function SuperadminDashboardPage() {
   const router = useRouter();
 
@@ -123,9 +132,10 @@ export default function SuperadminDashboardPage() {
   const [loadingTenants, setLoadingTenants] = React.useState(true);
   const [errorTenants, setErrorTenants] = React.useState<string | null>(null);
 
-  const [health, setHealth] = React.useState<SystemHealthResponse | null>(null);
+  const [health, setHealth] = React.useState<HealthResponse | null>(null);
   const [loadingHealth, setLoadingHealth] = React.useState(true);
   const [errorHealth, setErrorHealth] = React.useState<string | null>(null);
+  const [lastHealthAt, setLastHealthAt] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const token = getToken();
@@ -141,9 +151,11 @@ export default function SuperadminDashboardPage() {
         headers: { 'x-doflow-tenant-id': 'public' },
         cache: 'no-store',
       });
+
       setTenants(Array.isArray(data?.tenants) ? data.tenants : []);
     } catch (e: unknown) {
-      setErrorTenants(e instanceof Error ? e.message : 'Errore caricamento tenants');
+      const msg = e instanceof Error ? e.message : 'Errore caricamento tenants';
+      setErrorTenants(msg);
     } finally {
       setLoadingTenants(false);
     }
@@ -154,18 +166,19 @@ export default function SuperadminDashboardPage() {
     setErrorHealth(null);
 
     try {
-      // Endpoint backend: GET /health/system  (tu lo esponi)
-      const data = await apiFetch<SystemHealthResponse>('/api/health/system', {
+      // 🔥 IMPORTANTE: usa /api/health/system (coerente con gli altri endpoint)
+      const data = await apiFetch<HealthResponse>('/api/health/system', {
         headers: { 'x-doflow-tenant-id': 'public' },
         cache: 'no-store',
       });
 
-      // guardrail minimo
-      if (!data?.checks) throw new Error('Risposta health non valida');
       setHealth(data);
+      setLastHealthAt(new Date().toISOString());
     } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Errore caricamento health';
+      setErrorHealth(msg);
       setHealth(null);
-      setErrorHealth(e instanceof Error ? e.message : 'Health check fallito');
+      setLastHealthAt(new Date().toISOString());
     } finally {
       setLoadingHealth(false);
     }
@@ -176,12 +189,12 @@ export default function SuperadminDashboardPage() {
     void loadHealth();
   }, [loadTenants, loadHealth]);
 
-  // Polling health
+  // refresh health automatico
   React.useEffect(() => {
-    const id = window.setInterval(() => {
+    const t = window.setInterval(() => {
       void loadHealth();
-    }, 10_000);
-    return () => window.clearInterval(id);
+    }, 15000);
+    return () => window.clearInterval(t);
   }, [loadHealth]);
 
   const kpi = React.useMemo(() => {
@@ -194,16 +207,20 @@ export default function SuperadminDashboardPage() {
   const recentTenants = React.useMemo(() => {
     return [...tenants]
       .sort((a, b) => {
-        const da = a.created_at ? Date.parse(a.created_at) : -Infinity;
-        const db = b.created_at ? Date.parse(b.created_at) : -Infinity;
+        const da = a.created_at ? Date.parse(a.created_at) : 0;
+        const db = b.created_at ? Date.parse(b.created_at) : 0;
         return db - da;
       })
       .slice(0, 6);
   }, [tenants]);
 
   function openTenant(slug: string) {
-    window.location.assign(`https://${slug}.doflow.it/admin/users`);
+    window.location.href = `https://${slug}.doflow.it/admin/users`;
   }
+
+  const checks = health?.checks ?? {};
+  const overallStatus: HealthStatus = health?.status ?? (errorHealth ? 'down' : 'warn');
+  const overall = statusColors(overallStatus);
 
   return (
     <div className="flex flex-col gap-4">
@@ -217,16 +234,21 @@ export default function SuperadminDashboardPage() {
             </span>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Vista operativa globale — tenants + stato infrastruttura.
+            Vista operativa globale — tenants, stato e accesso rapido.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={loadTenants} disabled={loadingTenants}>
-            {loadingTenants ? 'Aggiorno…' : 'Aggiorna tenants'}
-          </Button>
-          <Button variant="outline" size="sm" onClick={loadHealth} disabled={loadingHealth}>
-            {loadingHealth ? 'Check…' : 'Aggiorna health'}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void loadHealth();
+              void loadTenants();
+            }}
+            disabled={loadingTenants || loadingHealth}
+          >
+            {(loadingTenants || loadingHealth) ? 'Aggiorno…' : 'Aggiorna'}
           </Button>
           <Link href="/superadmin/tenants">
             <Button variant="default" size="sm">Gestisci tenants</Button>
@@ -244,7 +266,7 @@ export default function SuperadminDashboardPage() {
 
       {errorHealth ? (
         <Card className="p-3">
-          <div className="text-sm font-medium">Errore system health</div>
+          <div className="text-sm font-medium">Errore health</div>
           <div className="text-sm text-muted-foreground mt-1 break-words">{errorHealth}</div>
         </Card>
       ) : null}
@@ -256,22 +278,34 @@ export default function SuperadminDashboardPage() {
         <MetricCard label="Tenants disabilitati" value={loadingTenants ? '—' : kpi.disabled} />
       </div>
 
-      {/* System status (REAL) */}
+      {/* System status (REALE) */}
       <Card className="p-4">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold">System status</div>
+            <div className="flex items-center gap-2">
+              <div className="text-sm font-semibold">System status</div>
+              <span
+                className={cx(
+                  'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                  overall.badge
+                )}
+                title={overall.title}
+              >
+                <span className={cx('mr-1 inline-block h-2 w-2 rounded-full', overall.dot)} />
+                {overallStatus.toUpperCase()}
+              </span>
+            </div>
             <div className="text-xs text-muted-foreground mt-1">
-              Fonte: <span className="font-mono">/health/system</span> • ultimo update: {health ? formatTs(health.ts) : '—'}
+              {lastHealthAt ? `Ultimo check: ${new Date(lastHealthAt).toLocaleTimeString()}` : '—'}
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <StatusPill label="API" check={health?.checks.api} />
-            <StatusPill label="DB" check={health?.checks.db} />
-            <StatusPill label="Redis" check={health?.checks.redis} />
-            <StatusPill label="WS" check={health?.checks.ws} />
-            <StatusPill label="Storage" check={health?.checks.storage} />
+            <StatusPill label="API" check={checks.api} />
+            <StatusPill label="DB" check={checks.db} />
+            <StatusPill label="Redis" check={checks.redis} />
+            <StatusPill label="Realtime" check={checks.ws} />
+            <StatusPill label="Storage" check={checks.storage} />
           </div>
         </div>
       </Card>
@@ -279,7 +313,10 @@ export default function SuperadminDashboardPage() {
       {/* Quick actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <Card className="p-4 lg:col-span-2">
-          <div className="text-sm font-semibold">Quick actions</div>
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-semibold">Quick actions</div>
+          </div>
+
           <div className="mt-3 flex flex-wrap gap-2">
             <Link href="/superadmin/tenants">
               <Button variant="default" size="sm">+ Crea / gestisci tenant</Button>
@@ -294,8 +331,9 @@ export default function SuperadminDashboardPage() {
               <Button variant="outline" size="sm">Test notifiche</Button>
             </Link>
           </div>
+
           <div className="text-xs text-muted-foreground mt-3">
-            Nota: Health è globale. Audit qui è tenant corrente (debug).
+            Nota: “Audit tenant corrente” qui è utile solo per debug. Audit globale = step futuro.
           </div>
         </Card>
 
@@ -308,7 +346,7 @@ export default function SuperadminDashboardPage() {
             Tenant: <span className="text-muted-foreground">public</span>
           </div>
           <div className="mt-3 text-xs text-muted-foreground">
-            Qui governi il condominio. Se cade Redis, senti il boato prima degli inquilini.
+            Regola d’oro: qui non sei “un tenant”, sei l’amministratore del condominio.
           </div>
         </Card>
       </div>
@@ -352,9 +390,9 @@ export default function SuperadminDashboardPage() {
                     <td className="px-4 py-3">{t.name}</td>
                     <td className="px-4 py-3">
                       <span
-                        className={cn(
+                        className={cx(
                           'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                          t.is_active ? 'border-border bg-accent text-foreground' : 'border-border bg-muted text-muted-foreground',
+                          t.is_active ? 'border-border bg-accent text-foreground' : 'border-border bg-muted text-muted-foreground'
                         )}
                       >
                         {t.is_active ? 'active' : 'disabled'}
