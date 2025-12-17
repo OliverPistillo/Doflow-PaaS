@@ -17,6 +17,13 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
+    // --- NEW METHOD FOR HEALTH CHECK ---
+  async ping(): Promise<{ pong: string; latency_ms: number }> {
+    const t0 = Date.now();
+    const pong = await this.client.ping(); // qui sei dentro la classe, quindi ok
+    return { pong, latency_ms: Date.now() - t0 };
+  }
+
   // --- LIFECYCLE METHODS ---
 
   async onModuleInit() {

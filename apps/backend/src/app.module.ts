@@ -25,9 +25,11 @@ import { AuthPasswordController } from './auth-password.controller';
 import { SuperadminTenantsController } from './superadmin/superadmin-tenants.controller';
 import { ProjectsEventsService } from './realtime/projects-events.service';
 import { TenantBootstrapService } from './tenancy/tenant-bootstrap.service';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
+    HealthModule,
     ConfigModule.forRoot({
       isGlobal: true,
       ignoreEnvFile: true,
