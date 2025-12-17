@@ -115,12 +115,18 @@ function errorMessage(e: unknown, fallback: string) {
 
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken();
-  const res = await fetch(`${API_BASE}/${path.replace(/^\//, '')}`, {
+
+  // Normalizza base e path
+  const base = (API_BASE || '').replace(/\/+$/, ''); // no trailing /
+  const cleanPath = `/${path.replace(/^\/+/, '')}`;  // always starts with /
+  const url = `${base}/api${cleanPath}`;             // <-- globalPrefix
+
+  const res = await fetch(url, {
     ...init,
     headers: {
-      'Content-Type': 'application/json',
       ...(init?.headers || {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
     },
     cache: 'no-store',
   });
@@ -128,11 +134,18 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const text = await res.text().catch(() => '');
 
   if (!res.ok) {
-    throw new Error(text || `HTTP ${res.status}`);
+    // prova a estrarre message/error JSON se presente
+    try {
+      const j = JSON.parse(text) as { message?: string; error?: string };
+      throw new Error(j.message || j.error || text || `HTTP ${res.status}`);
+    } catch {
+      throw new Error(text || `HTTP ${res.status}`);
+    }
   }
 
   return (text ? (JSON.parse(text) as T) : (null as T));
 }
+
 
 export default function SuperadminTenantsPage() {
   const router = useRouter();
@@ -168,16 +181,19 @@ export default function SuperadminTenantsPage() {
   }, [router]);
 
   const loadTenants = React.useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  setLoading(true);
+  setError(null);
 
-    try {
-      const data = await apiJson<ListTenantsResponse>('superadmin/tenants');
-      setTenants(Array.isArray(data?.tenants) ? data.tenants : []);
-    } catch (e: unknown) {
-      setError(errorMessage(e, 'Errore caricamento tenants'));
-    } finally {
-      setLoading(false);
+  try {
+    const data = await apiJson<ListTenantsResponse>('/superadmin/tenants', {
+      headers: { 'x-doflow-tenant-id': 'public' },
+    });
+
+    setTenants(Array.isArray(data?.tenants) ? data.tenants : []);
+  } catch (e: unknown) {
+    setError(errorMessage(e, 'Errore caricamento tenants'));
+  } finally {
+    setLoading(false);
     }
   }, []);
 
