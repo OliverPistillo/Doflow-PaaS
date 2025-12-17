@@ -1,14 +1,13 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-// type invece di interface vuota → niente warning
 export type CardProps = React.HTMLAttributes<HTMLDivElement>;
 
 export function Card({ className, ...props }: CardProps) {
   return (
     <div
       className={cn(
-        'rounded-xl border border-zinc-800 bg-black/40 backdrop-blur-xl shadow-md',
+        'rounded-xl border border-border bg-card text-card-foreground shadow-sm',
         className,
       )}
       {...props}
@@ -22,7 +21,7 @@ export function CardHeader({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('p-4 border-b border-zinc-800', className)}
+      className={cn('p-4 border-b border-border', className)}
       {...props}
     />
   );
@@ -45,7 +44,7 @@ export function CardDescription({
   ...props
 }: React.HTMLAttributes<HTMLParagraphElement>) {
   return (
-    <p className={cn('text-sm text-zinc-400', className)} {...props} />
+    <p className={cn('text-sm text-muted-foreground', className)} {...props} />
   );
 }
 
@@ -62,7 +61,7 @@ export function CardFooter({
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('px-4 py-3 border-t border-zinc-800', className)}
+      className={cn('px-4 py-3 border-t border-border', className)}
       {...props}
     />
   );

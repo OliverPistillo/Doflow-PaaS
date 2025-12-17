@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { DashboardLayout } from '@/components/dashboard/layout';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { getTenantHeader } from '@/lib/tenant-fetch';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.doflow.it';
@@ -22,29 +23,19 @@ type AuditResponse = {
   entries: AuditEntry[];
 };
 
-type LayoutRole = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'USER';
-
-function mapRoleToLayoutRole(role: string | null): LayoutRole {
-  const r = (role || '').toLowerCase();
-  if (r === 'owner' || r === 'superadmin' || r === 'super_admin') return 'SUPER_ADMIN';
-  if (r === 'admin') return 'ADMIN';
-  if (r === 'manager') return 'MANAGER';
-  return 'USER';
-}
-
 function ActionBadge({ action }: { action: string }) {
   const a = action.toUpperCase();
 
   const styles: Record<string, string> = {
-    USER_INVITED: 'bg-blue-600/20 text-blue-300',
-    USER_ROLE_CHANGED: 'bg-yellow-600/20 text-yellow-300',
-    USER_DISABLED: 'bg-red-600/20 text-red-300',
-    LOGIN_SUCCESS: 'bg-green-600/20 text-green-300',
-    LOGIN_FAILED: 'bg-red-600/20 text-red-300',
+    USER_INVITED: 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
+    USER_ROLE_CHANGED: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-300',
+    USER_DISABLED: 'bg-red-500/15 text-red-700 dark:text-red-300',
+    LOGIN_SUCCESS: 'bg-green-500/15 text-green-700 dark:text-green-300',
+    LOGIN_FAILED: 'bg-red-500/15 text-red-700 dark:text-red-300',
   };
 
   return (
-    <span className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase ${styles[a] || 'bg-zinc-700/30 text-zinc-300'}`}>
+    <span className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase ${styles[a] || 'bg-muted text-muted-foreground'}`}>
       {action}
     </span>
   );
@@ -57,14 +48,9 @@ export default function AdminAuditPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
-  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
-
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const storedToken = window.localStorage.getItem('doflow_token');
-      setToken(storedToken);
-    }
+    const storedToken = window.localStorage.getItem('doflow_token');
+    setToken(storedToken);
   }, []);
 
   useEffect(() => {
@@ -93,100 +79,105 @@ export default function AdminAuditPage() {
 
       const data = JSON.parse(text) as AuditResponse;
       setEntries(data.entries ?? []);
-
-      // opzionale: se vuoi valorizzare user email/role, prendi dal JWT decodificato o da un endpoint /me
-      // per ora lascio invariato: UI ok, non blocca nulla.
-    } catch (e) {
+    } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Errore caricamento audit');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogout = () => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem('doflow_token');
-      window.location.href = '/login';
-    }
-  };
-
-  const layoutRole: LayoutRole = mapRoleToLayoutRole(currentUserRole);
-
   return (
-    <DashboardLayout role={layoutRole} userEmail={currentUserEmail || 'admin'}>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Audit log</h1>
-            <p className="text-xs text-zinc-500 mt-1">Storico delle azioni effettuate nel tenant</p>
-          </div>
-
-          <button onClick={handleLogout} className="text-xs px-3 py-1 border rounded border-zinc-700 hover:bg-zinc-800">
-            Logout
-          </button>
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">Audit log</h1>
+          <p className="text-sm text-muted-foreground">
+            Storico delle azioni effettuate nel tenant.
+          </p>
         </div>
 
-        <nav className="flex gap-3 text-sm">
-          <Link href="/admin/users" className="text-gray-400 hover:underline">
-            Utenti
-          </Link>
-          <Link href="/admin/audit" className="underline">
-            Audit log
-          </Link>
-        </nav>
-
-        {loading && <div className="text-sm text-zinc-400">Caricamento eventi...</div>}
-
-        {error && <div className="text-sm text-red-400 border border-red-500/40 rounded px-3 py-2">{error}</div>}
-
-        {!loading && !error && (
-          <section className="border border-zinc-800 rounded-lg p-4">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-zinc-800">
-                    <th className="text-left py-2 pr-2">Data</th>
-                    <th className="text-left py-2 pr-2">Azione</th>
-                    <th className="text-left py-2 pr-2">Attore</th>
-                    <th className="text-left py-2 pr-2">Target</th>
-                    <th className="text-left py-2 pr-2">IP</th>
-                    <th className="text-left py-2 pr-2">Metadata</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {entries.map((e) => (
-                    <tr key={e.id} className="border-b border-zinc-800 last:border-b-0">
-                      <td className="py-2 pr-2 text-gray-400">{new Date(e.created_at).toLocaleString()}</td>
-                      <td className="py-2 pr-2">
-                        <ActionBadge action={e.action} />
-                      </td>
-                      <td className="py-2 pr-2 font-mono">
-                        {e.actor_email ?? '-'}
-                        {e.actor_role && <span className="text-[10px] text-zinc-400 ml-1">({e.actor_role})</span>}
-                      </td>
-                      <td className="py-2 pr-2 font-mono">{e.target_email ?? '-'}</td>
-                      <td className="py-2 pr-2 text-gray-500">{e.ip ?? '-'}</td>
-                      <td className="py-2 pr-2 max-w-xs">
-                        <pre className="whitespace-pre-wrap break-words text-[10px] text-gray-400">
-                          {e.metadata ? JSON.stringify(e.metadata, null, 2) : '{}'}
-                        </pre>
-                      </td>
-                    </tr>
-                  ))}
-
-                  {entries.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="py-6 text-center text-xs text-zinc-500">
-                        Nessun evento audit disponibile.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
+        <Button variant="outline" size="sm" onClick={() => void loadAudit()} disabled={loading}>
+          {loading ? 'Carico…' : 'Ricarica'}
+        </Button>
       </div>
-    </DashboardLayout>
+
+      <nav className="flex gap-3 text-sm">
+        <Link href="/admin/users" className="text-muted-foreground hover:text-foreground">
+          Utenti
+        </Link>
+        <Link href="/admin/audit" className="text-foreground font-medium">
+          Audit log
+        </Link>
+      </nav>
+
+      {error ? (
+        <Card className="p-3">
+          <div className="text-sm font-medium">Errore</div>
+          <div className="text-sm text-muted-foreground mt-1 break-words">{error}</div>
+        </Card>
+      ) : null}
+
+      <Card className="overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+          <div className="text-sm font-semibold">Eventi</div>
+          <div className="text-xs text-muted-foreground">{entries.length}</div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs border-collapse">
+            <thead className="text-muted-foreground">
+              <tr className="border-b border-border">
+                <th className="text-left py-2 px-4">Data</th>
+                <th className="text-left py-2 px-4">Azione</th>
+                <th className="text-left py-2 px-4">Attore</th>
+                <th className="text-left py-2 px-4">Target</th>
+                <th className="text-left py-2 px-4">IP</th>
+                <th className="text-left py-2 px-4">Metadata</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="py-6 px-4 text-muted-foreground">
+                    Caricamento eventi…
+                  </td>
+                </tr>
+              ) : entries.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 px-4 text-center text-muted-foreground">
+                    Nessun evento audit disponibile.
+                  </td>
+                </tr>
+              ) : (
+                entries.map((e) => (
+                  <tr key={e.id} className="border-b border-border last:border-b-0">
+                    <td className="py-3 px-4 text-muted-foreground">
+                      {new Date(e.created_at).toLocaleString()}
+                    </td>
+                    <td className="py-3 px-4">
+                      <ActionBadge action={e.action} />
+                    </td>
+                    <td className="py-3 px-4 font-mono">
+                      {e.actor_email ?? '-'}
+                      {e.actor_role ? (
+                        <span className="text-[10px] text-muted-foreground ml-1">({e.actor_role})</span>
+                      ) : null}
+                    </td>
+                    <td className="py-3 px-4 font-mono">{e.target_email ?? '-'}</td>
+                    <td className="py-3 px-4 text-muted-foreground">{e.ip ?? '-'}</td>
+                    <td className="py-3 px-4 max-w-xs">
+                      <pre className="whitespace-pre-wrap break-words text-[10px] text-muted-foreground">
+                        {e.metadata ? JSON.stringify(e.metadata, null, 2) : '{}'}
+                      </pre>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
   );
 }

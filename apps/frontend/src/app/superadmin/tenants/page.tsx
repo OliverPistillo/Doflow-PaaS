@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { DashboardLayout } from '@/components/dashboard/layout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -19,8 +18,6 @@ type TenantRow = {
   created_at?: string;
   updated_at?: string;
 };
-
-type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'USER';
 
 type JwtPayload = {
   email?: string;
@@ -110,17 +107,6 @@ function parseJwtPayload(token: string): JwtPayload | null {
   }
 }
 
-function normalizeRole(raw?: string): UserRole {
-  const r = String(raw ?? '')
-    .toUpperCase()
-    .replace(/[^A-Z_]/g, '');
-
-  if (r === 'SUPERADMIN' || r === 'SUPER_ADMIN' || r === 'OWNER') return 'SUPER_ADMIN';
-  if (r === 'ADMIN') return 'ADMIN';
-  if (r === 'MANAGER') return 'MANAGER';
-  return 'USER';
-}
-
 function errorMessage(e: unknown, fallback: string) {
   if (e instanceof Error) return e.message || fallback;
   if (typeof e === 'string') return e || fallback;
@@ -151,9 +137,6 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
 export default function SuperadminTenantsPage() {
   const router = useRouter();
 
-  const [userEmail, setUserEmail] = React.useState('superadmin');
-  const [role, setRole] = React.useState<UserRole>('SUPER_ADMIN');
-
   const [tenants, setTenants] = React.useState<TenantRow[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -180,9 +163,8 @@ export default function SuperadminTenantsPage() {
       return;
     }
 
-    const payload = parseJwtPayload(token);
-    if (payload?.email) setUserEmail(payload.email);
-    setRole(normalizeRole(payload?.role));
+    // keep this (optional): it validates token shape early and prevents weird states
+    void parseJwtPayload(token);
   }, [router]);
 
   const loadTenants = React.useCallback(async () => {
@@ -285,151 +267,149 @@ export default function SuperadminTenantsPage() {
   }
 
   return (
-    <DashboardLayout role={role} userEmail={userEmail}>
-      <div className="flex flex-col gap-4">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold">Tenants</h1>
-            <p className="text-sm text-muted-foreground">
-              Control Plane — crea tenant, gestisci stato e accedi al runtime.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={loadTenants} disabled={loading}>
-              {loading ? 'Aggiorno…' : 'Aggiorna'}
-            </Button>
-            <Button variant="default" size="sm" onClick={() => setCreateOpen(true)}>
-              + Crea tenant
-            </Button>
-          </div>
+    <div className="flex flex-col gap-4">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">Tenants</h1>
+          <p className="text-sm text-muted-foreground">
+            Control Plane — crea tenant, gestisci stato e accedi al runtime.
+          </p>
         </div>
 
-        {/* Error */}
-        {error ? (
-          <Card className="p-3 border border-border">
-            <div className="text-sm font-medium">Errore</div>
-            <div className="text-sm text-muted-foreground mt-1 break-words">{error}</div>
-          </Card>
-        ) : null}
-
-        {/* KPI */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <Card className="p-4 border border-border">
-            <div className="text-xs text-muted-foreground">Totali</div>
-            <div className="text-2xl font-semibold mt-1">{kpi.total}</div>
-          </Card>
-          <Card className="p-4 border border-border">
-            <div className="text-xs text-muted-foreground">Attivi</div>
-            <div className="text-2xl font-semibold mt-1">{kpi.active}</div>
-          </Card>
-          <Card className="p-4 border border-border">
-            <div className="text-xs text-muted-foreground">Disabilitati</div>
-            <div className="text-2xl font-semibold mt-1">{kpi.disabled}</div>
-          </Card>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={loadTenants} disabled={loading}>
+            {loading ? 'Aggiorno…' : 'Aggiorna'}
+          </Button>
+          <Button variant="default" size="sm" onClick={() => setCreateOpen(true)}>
+            + Crea tenant
+          </Button>
         </div>
+      </div>
 
-        {/* Filters */}
-        <Card className="p-4 border border-border">
-          <div className="flex flex-col md:flex-row md:items-end gap-3">
-            <div className="flex-1">
-              <Label htmlFor="q">Cerca</Label>
-              <Input
-                id="q"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="slug, nome, schema…"
-              />
-            </div>
-
-            <div className="w-full md:w-56">
-              <Label htmlFor="status">Stato</Label>
-              <select
-                id="status"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as 'all' | 'active' | 'disabled')}
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="all">Tutti</option>
-                <option value="active">Attivi</option>
-                <option value="disabled">Disabilitati</option>
-              </select>
-            </div>
-          </div>
+      {/* Error */}
+      {error ? (
+        <Card className="p-3">
+          <div className="text-sm font-medium">Errore</div>
+          <div className="text-sm text-muted-foreground mt-1 break-words">{error}</div>
         </Card>
+      ) : null}
 
-        {/* Table */}
-        <Card className="border border-border overflow-hidden">
-          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-            <div className="text-sm font-semibold">Elenco tenant</div>
-            <div className="text-xs text-muted-foreground">
-              {loading ? '…' : `${filtered.length} risultati`}
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-xs text-muted-foreground">
-                <tr className="border-b border-border">
-                  <th className="text-left font-medium px-4 py-3">Slug</th>
-                  <th className="text-left font-medium px-4 py-3">Nome</th>
-                  <th className="text-left font-medium px-4 py-3">Schema</th>
-                  <th className="text-left font-medium px-4 py-3">Stato</th>
-                  <th className="text-right font-medium px-4 py-3">Azioni</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td className="px-4 py-6 text-muted-foreground" colSpan={5}>
-                      Caricamento tenants…
-                    </td>
-                  </tr>
-                ) : filtered.length === 0 ? (
-                  <tr>
-                    <td className="px-4 py-6 text-muted-foreground" colSpan={5}>
-                      Nessun tenant trovato.
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map((t) => (
-                    <tr key={t.id} className="border-b border-border last:border-b-0">
-                      <td className="px-4 py-3 font-medium">{t.slug}</td>
-                      <td className="px-4 py-3">{t.name}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{t.schema_name || '-'}</td>
-                      <td className="px-4 py-3">
-                        <Badge active={t.is_active} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="outline" size="sm" onClick={() => copyUrl(t.slug)}>
-                            Copia URL
-                          </Button>
-
-                          <Button variant="outline" size="sm" onClick={() => openTenant(t.slug)}>
-                            Entra
-                          </Button>
-
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setConfirm({ tenant: t })}
-                            disabled={busyId === t.id}
-                          >
-                            {t.is_active ? 'Disabilita' : 'Attiva'}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+      {/* KPI */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Card className="p-4">
+          <div className="text-xs text-muted-foreground">Totali</div>
+          <div className="text-2xl font-semibold mt-1">{kpi.total}</div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs text-muted-foreground">Attivi</div>
+          <div className="text-2xl font-semibold mt-1">{kpi.active}</div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs text-muted-foreground">Disabilitati</div>
+          <div className="text-2xl font-semibold mt-1">{kpi.disabled}</div>
         </Card>
       </div>
+
+      {/* Filters */}
+      <Card className="p-4">
+        <div className="flex flex-col md:flex-row md:items-end gap-3">
+          <div className="flex-1">
+            <Label htmlFor="q">Cerca</Label>
+            <Input
+              id="q"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="slug, nome, schema…"
+            />
+          </div>
+
+          <div className="w-full md:w-56">
+            <Label htmlFor="status">Stato</Label>
+            <select
+              id="status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as 'all' | 'active' | 'disabled')}
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+            >
+              <option value="all">Tutti</option>
+              <option value="active">Attivi</option>
+              <option value="disabled">Disabilitati</option>
+            </select>
+          </div>
+        </div>
+      </Card>
+
+      {/* Table */}
+      <Card className="overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+          <div className="text-sm font-semibold">Elenco tenant</div>
+          <div className="text-xs text-muted-foreground">
+            {loading ? '…' : `${filtered.length} risultati`}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-xs text-muted-foreground">
+              <tr className="border-b border-border">
+                <th className="text-left font-medium px-4 py-3">Slug</th>
+                <th className="text-left font-medium px-4 py-3">Nome</th>
+                <th className="text-left font-medium px-4 py-3">Schema</th>
+                <th className="text-left font-medium px-4 py-3">Stato</th>
+                <th className="text-right font-medium px-4 py-3">Azioni</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td className="px-4 py-6 text-muted-foreground" colSpan={5}>
+                    Caricamento tenants…
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td className="px-4 py-6 text-muted-foreground" colSpan={5}>
+                    Nessun tenant trovato.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((t) => (
+                  <tr key={t.id} className="border-b border-border last:border-b-0">
+                    <td className="px-4 py-3 font-medium">{t.slug}</td>
+                    <td className="px-4 py-3">{t.name}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{t.schema_name || '-'}</td>
+                    <td className="px-4 py-3">
+                      <Badge active={t.is_active} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => copyUrl(t.slug)}>
+                          Copia URL
+                        </Button>
+
+                        <Button variant="outline" size="sm" onClick={() => openTenant(t.slug)}>
+                          Entra
+                        </Button>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setConfirm({ tenant: t })}
+                          disabled={busyId === t.id}
+                        >
+                          {t.is_active ? 'Disabilita' : 'Attiva'}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
       {/* Create modal */}
       <Modal
@@ -504,7 +484,12 @@ export default function SuperadminTenantsPage() {
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="ghost" type="button" onClick={() => setCreateOpen(false)} disabled={creating}>
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => setCreateOpen(false)}
+              disabled={creating}
+            >
               Annulla
             </Button>
             <Button variant="default" type="submit" disabled={creating}>
@@ -540,6 +525,6 @@ export default function SuperadminTenantsPage() {
           </Button>
         </div>
       </Modal>
-    </DashboardLayout>
+    </div>
   );
 }
