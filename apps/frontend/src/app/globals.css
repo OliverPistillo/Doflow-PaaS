@@ -24,8 +24,8 @@
   --font-mono: var(--font-geist-mono);
 }
 
-/* DARK THEME (data-theme='dark') */
-[data-theme='dark'] {
+/* DARK THEME (class="dark") */
+.dark {
   --background: #020617; /* quasi nero */
   --foreground: #e5e5e5;
 

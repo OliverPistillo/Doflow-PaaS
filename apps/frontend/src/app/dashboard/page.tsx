@@ -135,7 +135,7 @@ function Centered({
   error?: boolean;
 }) {
   return (
-    <main className="min-h-screen flex items-center justify-center bg-black text-zinc-100">
+    <main className="min-h-screen flex items-center justify-center bg-background text-foreground">
       <div className="text-center space-y-2">
         {title && <h1 className="text-xl font-semibold">{title}</h1>}
         <p className={`text-sm ${error ? 'text-red-400' : 'text-zinc-400'}`}>

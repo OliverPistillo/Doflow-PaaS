@@ -349,7 +349,7 @@ export default function AdminUsersPage() {
 
   if (mode === 'loading') {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-black text-zinc-100">
+      <main className="min-h-screen flex items-center justify-center bg-background text-foreground">
         <p className="text-sm text-zinc-400">Inizializzazione...</p>
       </main>
     );

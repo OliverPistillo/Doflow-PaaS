@@ -64,7 +64,7 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
   };
 
   return (
-    <div className="min-h-screen flex bg-black text-zinc-100">
+    <div className="min-h-screen flex bg-background text-foreground">
       {/* Sidebar */}
       <aside
         className={`flex flex-col border-r border-zinc-800 bg-black/70 backdrop-blur-xl transition-all duration-200 ${
