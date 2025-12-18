@@ -7,8 +7,9 @@ type HealthStatus = 'ok' | 'warn' | 'down';
 type Check = { status: HealthStatus; latency_ms?: number; message?: string };
 
 function statusFromChecks(checks: Record<string, Check>): HealthStatus {
-  if (Object.values(checks).some((c) => c.status === 'down')) return 'down';
-  if (Object.values(checks).some((c) => c.status === 'warn')) return 'warn';
+  const values = Object.values(checks);
+  if (values.some((c) => c.status === 'down')) return 'down';
+  if (values.some((c) => c.status === 'warn')) return 'warn';
   return 'ok';
 }
 
@@ -20,21 +21,15 @@ export class HealthService {
   ) {}
 
   async system() {
-    const checks: {
-      api: Check;
-      db: Check;
-      redis: Check;
-      ws: Check;
-      storage: Check;
-    } = {
-      api: { status: 'ok' }, // se sei arrivato qui, l'API risponde
+    const checks: Record<string, Check> = {
+      api: { status: 'ok' },
       db: { status: 'down' },
       redis: { status: 'down' },
-      ws: { status: 'warn', message: 'not verified' },
+      realtime: { status: 'warn', message: 'not verified' },
       storage: { status: 'warn', message: 'not verified' },
     };
 
-    // 1) DB check
+    // DB
     {
       const t0 = Date.now();
       try {
@@ -47,7 +42,7 @@ export class HealthService {
       }
     }
 
-    // 2) Redis check (via RedisService.ping())
+    // Redis (usa RedisService.ping() che hai già aggiunto)
     {
       try {
         const { pong, latency_ms } = await this.redis.ping();
@@ -61,16 +56,14 @@ export class HealthService {
       }
     }
 
-    // 3) WS check (pragmatico ma sensato)
-    // Se usi Redis per Pub/Sub del realtime, Redis giù => realtime degradato.
+    // Realtime: euristica sensata (se Redis giù, Pub/Sub degradato)
     if (checks.redis.status === 'down') {
-      checks.ws = { status: 'warn', message: 'redis down → ws pubsub may be degraded' };
+      checks.realtime = { status: 'warn', message: 'redis down → realtime may be degraded' };
     } else {
-      checks.ws = { status: 'ok' };
+      checks.realtime = { status: 'ok' };
     }
 
-    // 4) Storage check
-    // TODO: quando colleghi S3/MinIO, fai un HEAD/LIST rapido e setta ok/warn/down
+    // Storage: placeholder finché non fai probe su S3/MinIO
     checks.storage = { status: 'warn', message: 'storage probe not implemented' };
 
     return {
