@@ -26,7 +26,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // 🔥 QUESTA È LA RIGA MANCANTE CHE RISOLVE IL 404
-  app.setGlobalPrefix('api'); 
+  app.setGlobalPrefix('api');
 
   app.enableCors({
     origin: true,
