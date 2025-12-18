@@ -1,7 +1,6 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  output: "standalone", // <--- FONDAMENTALE PER DOCKER
   typescript: {
     ignoreBuildErrors: true,
   },
