@@ -21,25 +21,24 @@ type ListTenantsResponse = {
   tenants: TenantRow[];
 };
 
-type HealthStatus = 'ok' | 'warn' | 'down';
+type HealthLevel = 'ok' | 'warn' | 'down';
 
 type HealthCheck = {
-  status: HealthStatus;
+  status: HealthLevel;
   latency_ms?: number;
   message?: string;
 };
 
-type HealthResponse = {
-  status: HealthStatus;
+type SystemHealthResponse = {
+  status: HealthLevel;
   checks: {
     api?: HealthCheck;
     db?: HealthCheck;
     redis?: HealthCheck;
-    ws?: HealthCheck;
+    realtime?: HealthCheck;
     storage?: HealthCheck;
-    [k: string]: HealthCheck | undefined;
   };
-  ts?: string;
+  ts?: string; // ISO string
 };
 
 function cx(...classes: Array<string | false | undefined | null>) {
@@ -51,58 +50,47 @@ function getToken(): string | null {
   return window.localStorage.getItem('doflow_token');
 }
 
-function statusColors(status: HealthStatus) {
-  // badge + dot
-  switch (status) {
-    case 'ok':
-      return {
-        badge: 'border-border bg-accent text-foreground',
-        dot: 'bg-emerald-500',
-        title: 'OK',
-      };
-    case 'warn':
-      return {
-        badge: 'border-border bg-muted text-foreground',
-        dot: 'bg-amber-500',
-        title: 'Warn',
-      };
-    case 'down':
-    default:
-      return {
-        badge: 'border-border bg-muted text-foreground',
-        dot: 'bg-red-500',
-        title: 'Down',
-      };
-  }
+function dotClass(level: HealthLevel) {
+  // non settiamo colori custom: usiamo classi Tailwind standard
+  if (level === 'ok') return 'bg-emerald-500';
+  if (level === 'warn') return 'bg-amber-500';
+  return 'bg-rose-500';
+}
+
+function pillClass(level: HealthLevel) {
+  if (level === 'ok') return 'border-border bg-accent text-foreground';
+  if (level === 'warn') return 'border-border bg-amber-500/10 text-foreground';
+  return 'border-border bg-rose-500/10 text-foreground';
+}
+
+function labelFromLevel(level: HealthLevel) {
+  if (level === 'ok') return 'OK';
+  if (level === 'warn') return 'WARN';
+  return 'DOWN';
 }
 
 function StatusPill({
   label,
-  check,
+  status,
+  latencyMs,
 }: {
   label: string;
-  check?: HealthCheck;
+  status: HealthLevel;
+  latencyMs?: number;
 }) {
-  const status = check?.status ?? 'warn';
-  const { badge, dot, title } = statusColors(status);
-
-  const latency =
-    typeof check?.latency_ms === 'number' ? `${check.latency_ms}ms` : undefined;
-
-  const hint =
-    check?.message ? check.message : latency ? latency : undefined;
-
   return (
     <span
       className={cx(
         'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
-        badge,
+        pillClass(status),
       )}
-      title={hint ? `${title} • ${hint}` : title}
+      title={latencyMs != null ? `${labelFromLevel(status)} • ${latencyMs}ms` : labelFromLevel(status)}
     >
-      <span className={cx('mr-1 inline-block h-2 w-2 rounded-full', dot)} />
+      <span className={cx('mr-1 inline-block h-2 w-2 rounded-full', dotClass(status))} />
       {label}
-      {latency ? <span className="ml-1 text-[10px] text-muted-foreground">({latency})</span> : null}
+      {latencyMs != null ? (
+        <span className="ml-2 text-[10px] text-muted-foreground">{latencyMs}ms</span>
+      ) : null}
     </span>
   );
 }
@@ -129,12 +117,12 @@ export default function SuperadminDashboardPage() {
   const router = useRouter();
 
   const [tenants, setTenants] = React.useState<TenantRow[]>([]);
-  const [loadingTenants, setLoadingTenants] = React.useState(true);
-  const [errorTenants, setErrorTenants] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const [health, setHealth] = React.useState<HealthResponse | null>(null);
-  const [loadingHealth, setLoadingHealth] = React.useState(true);
-  const [errorHealth, setErrorHealth] = React.useState<string | null>(null);
+  const [health, setHealth] = React.useState<SystemHealthResponse | null>(null);
+  const [healthLoading, setHealthLoading] = React.useState(true);
+  const [healthError, setHealthError] = React.useState<string | null>(null);
   const [lastHealthAt, setLastHealthAt] = React.useState<string | null>(null);
 
   React.useEffect(() => {
@@ -143,8 +131,8 @@ export default function SuperadminDashboardPage() {
   }, [router]);
 
   const loadTenants = React.useCallback(async () => {
-    setLoadingTenants(true);
-    setErrorTenants(null);
+    setLoading(true);
+    setError(null);
 
     try {
       const data = await apiFetch<ListTenantsResponse>('/api/superadmin/tenants', {
@@ -154,20 +142,19 @@ export default function SuperadminDashboardPage() {
 
       setTenants(Array.isArray(data?.tenants) ? data.tenants : []);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Errore caricamento tenants';
-      setErrorTenants(msg);
+      const msg = e instanceof Error ? e.message : 'Errore caricamento dashboard';
+      setError(msg);
     } finally {
-      setLoadingTenants(false);
+      setLoading(false);
     }
   }, []);
 
   const loadHealth = React.useCallback(async () => {
-    setLoadingHealth(true);
-    setErrorHealth(null);
+    setHealthLoading(true);
+    setHealthError(null);
 
     try {
-      // 🔥 IMPORTANTE: usa /api/health/system (coerente con gli altri endpoint)
-      const data = await apiFetch<HealthResponse>('/api/health/system', {
+      const data = await apiFetch<SystemHealthResponse>('/api/health/system', {
         headers: { 'x-doflow-tenant-id': 'public' },
         cache: 'no-store',
       });
@@ -175,27 +162,36 @@ export default function SuperadminDashboardPage() {
       setHealth(data);
       setLastHealthAt(new Date().toISOString());
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Errore caricamento health';
-      setErrorHealth(msg);
-      setHealth(null);
+      const msg = e instanceof Error ? e.message : 'Errore health check';
+      setHealthError(msg);
+      // fallback “down” se non risponde
+      setHealth({
+        status: 'down',
+        checks: {
+          api: { status: 'down', message: msg },
+          db: { status: 'down' },
+          redis: { status: 'down' },
+          realtime: { status: 'down' },
+          storage: { status: 'down' },
+        },
+        ts: new Date().toISOString(),
+      });
       setLastHealthAt(new Date().toISOString());
     } finally {
-      setLoadingHealth(false);
+      setHealthLoading(false);
     }
   }, []);
 
   React.useEffect(() => {
     void loadTenants();
     void loadHealth();
-  }, [loadTenants, loadHealth]);
 
-  // refresh health automatico
-  React.useEffect(() => {
-    const t = window.setInterval(() => {
+    const id = window.setInterval(() => {
       void loadHealth();
     }, 15000);
-    return () => window.clearInterval(t);
-  }, [loadHealth]);
+
+    return () => window.clearInterval(id);
+  }, [loadTenants, loadHealth]);
 
   const kpi = React.useMemo(() => {
     const total = tenants.length;
@@ -219,8 +215,16 @@ export default function SuperadminDashboardPage() {
   }
 
   const checks = health?.checks ?? {};
-  const overallStatus: HealthStatus = health?.status ?? (errorHealth ? 'down' : 'warn');
-  const overall = statusColors(overallStatus);
+  const overall = health?.status ?? (healthLoading ? 'warn' : 'down');
+
+  const lastCheckedLabel = React.useMemo(() => {
+    if (!lastHealthAt) return '—';
+    try {
+      return new Date(lastHealthAt).toLocaleString();
+    } catch {
+      return lastHealthAt;
+    }
+  }, [lastHealthAt]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -231,6 +235,16 @@ export default function SuperadminDashboardPage() {
             <h1 className="text-xl font-semibold">Super Admin</h1>
             <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium">
               Control Plane
+            </span>
+            <span
+              className={cx(
+                'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                pillClass(overall),
+              )}
+              title="Stato complessivo"
+            >
+              <span className={cx('mr-1 inline-block h-2 w-2 rounded-full', dotClass(overall))} />
+              {labelFromLevel(overall)}
             </span>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
@@ -243,12 +257,12 @@ export default function SuperadminDashboardPage() {
             variant="outline"
             size="sm"
             onClick={() => {
-              void loadHealth();
               void loadTenants();
+              void loadHealth();
             }}
-            disabled={loadingTenants || loadingHealth}
+            disabled={loading || healthLoading}
           >
-            {(loadingTenants || loadingHealth) ? 'Aggiorno…' : 'Aggiorna'}
+            {(loading || healthLoading) ? 'Aggiorno…' : 'Aggiorna'}
           </Button>
           <Link href="/superadmin/tenants">
             <Button variant="default" size="sm">Gestisci tenants</Button>
@@ -257,56 +271,49 @@ export default function SuperadminDashboardPage() {
       </div>
 
       {/* Errors */}
-      {errorTenants ? (
+      {error ? (
         <Card className="p-3">
           <div className="text-sm font-medium">Errore tenants</div>
-          <div className="text-sm text-muted-foreground mt-1 break-words">{errorTenants}</div>
+          <div className="text-sm text-muted-foreground mt-1 break-words">{error}</div>
         </Card>
       ) : null}
 
-      {errorHealth ? (
+      {healthError ? (
         <Card className="p-3">
-          <div className="text-sm font-medium">Errore health</div>
-          <div className="text-sm text-muted-foreground mt-1 break-words">{errorHealth}</div>
+          <div className="text-sm font-medium">Errore system health</div>
+          <div className="text-sm text-muted-foreground mt-1 break-words">{healthError}</div>
         </Card>
       ) : null}
 
       {/* KPI */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <MetricCard label="Tenants totali" value={loadingTenants ? '—' : kpi.total} />
-        <MetricCard label="Tenants attivi" value={loadingTenants ? '—' : kpi.active} />
-        <MetricCard label="Tenants disabilitati" value={loadingTenants ? '—' : kpi.disabled} />
+        <MetricCard label="Tenants totali" value={loading ? '—' : kpi.total} />
+        <MetricCard label="Tenants attivi" value={loading ? '—' : kpi.active} />
+        <MetricCard label="Tenants disabilitati" value={loading ? '—' : kpi.disabled} />
       </div>
 
       {/* System status (REALE) */}
       <Card className="p-4">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2">
-              <div className="text-sm font-semibold">System status</div>
-              <span
-                className={cx(
-                  'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                  overall.badge
-                )}
-                title={overall.title}
-              >
-                <span className={cx('mr-1 inline-block h-2 w-2 rounded-full', overall.dot)} />
-                {overallStatus.toUpperCase()}
-              </span>
-            </div>
+            <div className="text-sm font-semibold">System status</div>
             <div className="text-xs text-muted-foreground mt-1">
-              {lastHealthAt ? `Ultimo check: ${new Date(lastHealthAt).toLocaleTimeString()}` : '—'}
+              Last check: {healthLoading ? '…' : lastCheckedLabel}
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <StatusPill label="API" check={checks.api} />
-            <StatusPill label="DB" check={checks.db} />
-            <StatusPill label="Redis" check={checks.redis} />
-            <StatusPill label="Realtime" check={checks.ws} />
-            <StatusPill label="Storage" check={checks.storage} />
+            <StatusPill label="API" status={checks.api?.status ?? overall} latencyMs={checks.api?.latency_ms} />
+            <StatusPill label="DB" status={checks.db?.status ?? overall} latencyMs={checks.db?.latency_ms} />
+            <StatusPill label="Redis" status={checks.redis?.status ?? overall} latencyMs={checks.redis?.latency_ms} />
+            <StatusPill label="Realtime" status={checks.realtime?.status ?? overall} latencyMs={checks.realtime?.latency_ms} />
+            <StatusPill label="Storage" status={checks.storage?.status ?? overall} latencyMs={checks.storage?.latency_ms} />
           </div>
+        </div>
+
+        {/* Hint tecnico (solo se serve) */}
+        <div className="mt-3 text-xs text-muted-foreground">
+          Endpoint: <span className="font-mono">/api/health/system</span>
         </div>
       </Card>
 
@@ -333,7 +340,7 @@ export default function SuperadminDashboardPage() {
           </div>
 
           <div className="text-xs text-muted-foreground mt-3">
-            Nota: “Audit tenant corrente” qui è utile solo per debug. Audit globale = step futuro.
+            Nota: “Audit tenant corrente” qui è utile solo per debug. Audit globale = step successivo.
           </div>
         </Card>
 
@@ -356,7 +363,7 @@ export default function SuperadminDashboardPage() {
         <div className="px-4 py-3 border-b border-border flex items-center justify-between">
           <div className="text-sm font-semibold">Ultimi tenants</div>
           <div className="text-xs text-muted-foreground">
-            {loadingTenants ? '…' : `${recentTenants.length} mostrati`}
+            {loading ? '…' : `${recentTenants.length} mostrati`}
           </div>
         </div>
 
@@ -371,7 +378,7 @@ export default function SuperadminDashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {loadingTenants ? (
+              {loading ? (
                 <tr>
                   <td className="px-4 py-6 text-muted-foreground" colSpan={4}>
                     Caricamento…
@@ -392,7 +399,7 @@ export default function SuperadminDashboardPage() {
                       <span
                         className={cx(
                           'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                          t.is_active ? 'border-border bg-accent text-foreground' : 'border-border bg-muted text-muted-foreground'
+                          t.is_active ? 'border-border bg-accent text-foreground' : 'border-border bg-muted text-muted-foreground',
                         )}
                       >
                         {t.is_active ? 'active' : 'disabled'}
