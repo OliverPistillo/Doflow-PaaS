@@ -35,7 +35,7 @@ type SystemHealthResponse = {
     api?: HealthCheck;
     db?: HealthCheck;
     redis?: HealthCheck;
-    realtime?: HealthCheck;
+    ws?: HealthCheck;
     storage?: HealthCheck;
   };
   ts?: string; // ISO string
@@ -171,7 +171,7 @@ export default function SuperadminDashboardPage() {
           api: { status: 'down', message: msg },
           db: { status: 'down' },
           redis: { status: 'down' },
-          realtime: { status: 'down' },
+          ws: { status: 'down' },
           storage: { status: 'down' },
         },
         ts: new Date().toISOString(),
@@ -306,8 +306,9 @@ export default function SuperadminDashboardPage() {
             <StatusPill label="API" status={checks.api?.status ?? overall} latencyMs={checks.api?.latency_ms} />
             <StatusPill label="DB" status={checks.db?.status ?? overall} latencyMs={checks.db?.latency_ms} />
             <StatusPill label="Redis" status={checks.redis?.status ?? overall} latencyMs={checks.redis?.latency_ms} />
-            <StatusPill label="Realtime" status={checks.realtime?.status ?? overall} latencyMs={checks.realtime?.latency_ms} />
+            <StatusPill label="ws" status={checks.ws?.status ?? overall} latencyMs={checks.ws?.latency_ms} />
             <StatusPill label="Storage" status={checks.storage?.status ?? overall} latencyMs={checks.storage?.latency_ms} />
+            <StatusPill label="Realtime" status={checks.ws?.status ?? overall} latencyMs={checks.ws?.latency_ms} />
           </div>
         </div>
 

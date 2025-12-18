@@ -1,9 +1,9 @@
 import { Controller, Get } from '@nestjs/common';
 
-@Controller('health')
+@Controller()
 export class AppController {
   @Get()
-  getHealth() {
-    return { status: 'ok', service: 'doflow-backend' };
+  root() {
+    return { ok: true, service: 'doflow-backend' };
   }
 }
