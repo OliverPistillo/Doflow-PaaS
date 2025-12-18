@@ -8,7 +8,7 @@ export class HealthController {
   // ✅ mantiene /api/health
   @Get()
   live() {
-    return { status: 'ok', service: 'doflow-backend' };
+    return { status: 'ok', service: 'doflow-backend', marker: 'health-v2-2025-12-18' };
   }
 
   // ✅ aggiunge /api/health/system
