@@ -30,29 +30,25 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Crea un utente non-root per sicurezza (opzionale ma consigliato)
+# Crea utente e gruppo
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# --- COPIA I FILE NECESSARI DALLA BUILD ---
-
-# 1. Copia la cartella 'public' (immagini, favicon, ecc.)
+# 1. Copia Public e Static (come prima)
 COPY --from=builder /app/apps/frontend/public ./apps/frontend/public
-
-# 2. Copia la cartella '.next/static' (CSS, JS client-side)
-#    La modalità standalone non la include di default, va copiata a mano!
 RUN mkdir -p apps/frontend/.next
 COPY --from=builder /app/apps/frontend/.next/static ./apps/frontend/.next/static
 
-# 3. Copia la build standalone (contiene server.js e node_modules minimi)
+# 2. Copia la build Standalone (come prima)
 COPY --from=builder --chown=nextjs:nodejs /app/apps/frontend/.next/standalone ./
 
-# Imposta l'utente corretto
+# 3. [FIX] Copia ANCHE i node_modules originali dalla root
+#    Questo risolve l'errore "Cannot find module 'next'" sovrascrivendo le mancanze della standalone
+COPY --from=builder /app/node_modules ./node_modules
+
 USER nextjs
 
-# Esponi la porta
 EXPOSE 3000
 
-# Avvia il server.js standalone invece di "next start"
-# NOTA: Il percorso è relativo alla root del monorepo copiata in standalone
+# Avvia il server
 CMD ["node", "apps/frontend/server.js"]
