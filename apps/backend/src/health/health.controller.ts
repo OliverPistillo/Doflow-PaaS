@@ -5,13 +5,13 @@ import { HealthService } from './health.service';
 export class HealthController {
   constructor(private readonly health: HealthService) {}
 
-  // ✅ compatibilità con quello che testavi prima
+  // ✅ mantiene /api/health
   @Get()
   live() {
     return { status: 'ok', service: 'doflow-backend' };
   }
 
-  // ✅ quello che serve alla dashboard
+  // ✅ aggiunge /api/health/system
   @Get('system')
   system() {
     return this.health.system();
