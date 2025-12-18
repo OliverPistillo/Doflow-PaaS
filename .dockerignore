@@ -1,0 +1,30 @@
+# dependencies
+**/node_modules
+**/.ignored_node_modules
+**/.pnpm-store
+**/.pnp
+**/.pnp.cjs
+
+# build output
+**/.next
+**/dist
+**/build
+**/.turbo
+**/.cache
+
+# logs
+**/*.log
+
+# vcs
+.git
+.gitignore
+
+# env
+**/.env
+**/.env.*
+!.env.example
+
+# misc
+**/.DS_Store
+docker-data
+coverage

@@ -7,3 +7,4 @@ build/
 *.log
 docker-data/
 coverage/
+.ignored_node_modules/
