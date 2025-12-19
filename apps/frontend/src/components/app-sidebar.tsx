@@ -1,12 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import Image from 'next/image';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
-  Users,
   Building2,
+  Users,
   FolderKanban,
   LogOut,
   Shield,
@@ -19,164 +19,185 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  SidebarSeparator,
 } from '@/components/ui/sidebar';
 
 type Role = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'USER';
 
-type AppSidebarProps = {
-  role: Role;
-  userEmail: string;
-  onLogout: () => void;
+export type AppSidebarProps = {
+  role?: Role;
+  userEmail?: string;
+  onLogout?: () => void;
 };
 
-type NavItem = {
-  title: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  visibleFor: Role[];
-};
+type JwtPayload = { email?: string; role?: string };
 
-function isActivePath(pathname: string | null, href: string) {
-  if (!pathname) return false;
-  if (href === '/') return pathname === '/';
-  return pathname === href || pathname.startsWith(href + '/');
+function parseJwtPayload(token: string): JwtPayload | null {
+  try {
+    const part = token.split('.')[1];
+    if (!part) return null;
+    const json = atob(part.replace(/-/g, '+').replace(/_/g, '/'));
+    const parsed = JSON.parse(json) as Record<string, unknown>;
+    return {
+      email: typeof parsed.email === 'string' ? parsed.email : undefined,
+      role: typeof parsed.role === 'string' ? parsed.role : undefined,
+    };
+  } catch {
+    return null;
+  }
 }
 
-export function AppSidebar({ role, userEmail, onLogout }: AppSidebarProps) {
+function getToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem('doflow_token');
+}
+
+function normalizeRole(r?: string): Role {
+  const up = (r || '').toUpperCase();
+  if (up === 'SUPER_ADMIN') return 'SUPER_ADMIN';
+  if (up === 'ADMIN') return 'ADMIN';
+  if (up === 'MANAGER') return 'MANAGER';
+  return 'USER';
+}
+
+export function AppSidebar(props: AppSidebarProps) {
+  const router = useRouter();
   const pathname = usePathname();
+
+  const [derivedRole, setDerivedRole] = React.useState<Role>('USER');
+  const [derivedEmail, setDerivedEmail] = React.useState<string>('—');
+
+  React.useEffect(() => {
+    const token = getToken();
+    const payload = token ? parseJwtPayload(token) : null;
+    setDerivedRole(normalizeRole(payload?.role));
+    setDerivedEmail(payload?.email || '—');
+  }, []);
+
+  const role: Role = props.role ?? derivedRole;
+  const userEmail: string = props.userEmail ?? derivedEmail;
 
   const homePath = role === 'SUPER_ADMIN' ? '/superadmin/dashboard' : '/dashboard';
 
-  const mainItems: NavItem[] = [
-    {
-      title: role === 'SUPER_ADMIN' ? 'Control Plane' : 'Overview',
-      href: homePath,
-      icon: role === 'SUPER_ADMIN' ? Shield : LayoutDashboard,
-      visibleFor: ['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'USER'],
-    },
-  ];
+  const items = React.useMemo(() => {
+    return [
+      {
+        label: role === 'SUPER_ADMIN' ? 'Control Plane' : 'Overview',
+        icon: role === 'SUPER_ADMIN' ? Shield : LayoutDashboard,
+        href: homePath,
+        visible: true,
+      },
+      {
+        label: 'Tenants',
+        icon: Building2,
+        href: '/superadmin/tenants',
+        visible: role === 'SUPER_ADMIN',
+      },
+      {
+        label: 'Utenti',
+        icon: Users,
+        href: '/admin/users',
+        visible: role === 'SUPER_ADMIN' || role === 'ADMIN',
+      },
+      {
+        label: 'Progetti',
+        icon: FolderKanban,
+        href: '/projects',
+        visible: role !== 'SUPER_ADMIN',
+      },
+    ].filter((x) => x.visible);
+  }, [role, homePath]);
 
-  const workspaceItems: NavItem[] = [
-    {
-      title: 'Tenants',
-      href: '/superadmin/tenants',
-      icon: Building2,
-      visibleFor: ['SUPER_ADMIN'],
-    },
-    {
-      title: 'Utenti',
-      href: '/admin/users',
-      icon: Users,
-      visibleFor: ['SUPER_ADMIN', 'ADMIN'],
-    },
-    {
-      title: 'Progetti',
-      href: '/projects',
-      icon: FolderKanban,
-      visibleFor: ['ADMIN', 'MANAGER', 'USER'],
-    },
-  ];
+  function isActive(href: string) {
+    if (!pathname) return false;
+    if (href === '/') return pathname === '/';
+    return pathname === href || pathname.startsWith(href + '/');
+  }
 
-  const visibleMain = mainItems.filter((i) => i.visibleFor.includes(role));
-  const visibleWorkspace = workspaceItems.filter((i) => i.visibleFor.includes(role));
+  function defaultLogout() {
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('doflow_token');
+    }
+    router.push('/login');
+  }
+
+  const onLogout = props.onLogout ?? defaultLogout;
 
   return (
-    <Sidebar variant="sidebar" collapsible="icon">
-      <SidebarHeader className="gap-2">
-        {/* Brand */}
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Home">
-              <Link href={homePath}>
-                <Shield className="h-4 w-4" />
-                <span>Doflow</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+    <Sidebar collapsible="icon">
+      <SidebarHeader>
+        <div className="flex items-center gap-2 px-2 py-2">
+          <Image
+            src="/doflow_logo.svg"
+            alt="Doflow"
+            width={22}
+            height={22}
+            className="shrink-0"
+            priority
+          />
+          <div className="min-w-0">
+            <div className="text-sm font-semibold leading-tight">Doflow</div>
+            <div className="text-[11px] text-muted-foreground leading-tight">
+              {role === 'SUPER_ADMIN' ? 'Control Plane' : 'Workspace'}
+            </div>
+          </div>
 
-        {/* Theme toggle */}
-        <div className="px-2">
-          <ThemeToggle />
+          <div className="ml-auto flex items-center">
+            <ThemeToggle />
+          </div>
         </div>
+        <SidebarSeparator />
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Navigazione</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {visibleMain.map((item) => {
-                const active = isActivePath(pathname, item.href);
-                const Icon = item.icon;
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
-                      <Link href={item.href}>
-                        <Icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <SidebarMenu>
+          {items.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.href);
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Workspace</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {visibleWorkspace.map((item) => {
-                const active = isActivePath(pathname, item.href);
-                const Icon = item.icon;
-                return (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
-                      <Link href={item.href}>
-                        <Icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+            return (
+              <SidebarMenuItem key={item.href}>
+                <SidebarMenuButton
+                  isActive={active}
+                  tooltip={item.label}
+                  onClick={() => router.push(item.href)}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{item.label}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
       </SidebarContent>
 
-      <SidebarFooter className="gap-2">
-        {/* User */}
-        <div className="px-2">
-          <div className="flex items-center gap-2 rounded-md border border-border p-2">
-            <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-[11px] font-semibold text-white">
-              {userEmail?.[0]?.toUpperCase() ?? '?'}
-            </div>
+      <SidebarFooter>
+        <SidebarSeparator />
+        <div className="px-2 py-2">
+          <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <div className="text-xs font-medium truncate">{userEmail}</div>
-              <div className="text-[10px] text-muted-foreground uppercase">
-                {role.toLowerCase().replace('_', ' ')}
+              <div className="truncate text-xs font-medium">{userEmail}</div>
+              <div className="truncate text-[11px] text-muted-foreground">
+                {role.replace('_', ' ').toLowerCase()}
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Logout */}
-        <div className="px-2 pb-2">
-          <Button variant="outline" className="w-full justify-start" onClick={onLogout}>
-            <LogOut className="mr-2 h-4 w-4" />
-            Logout
-          </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Logout"
+              title="Logout"
+              onClick={onLogout}
+              className="shrink-0"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </SidebarFooter>
 
