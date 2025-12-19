@@ -3,18 +3,9 @@
 import * as React from 'react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import {
-  LayoutDashboard,
-  Building2,
-  Users,
-  FolderKanban,
-  LogOut,
-  Shield,
-} from 'lucide-react';
+import { LayoutDashboard, Building2, Users, FolderKanban, LogOut, Shield } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/theme/theme-toggle';
-
 import {
   Sidebar,
   SidebarContent,
@@ -23,7 +14,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 
@@ -131,25 +121,24 @@ export function AppSidebar(props: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-2">
-          <Image
-            src="/doflow_logo.svg"
-            alt="Doflow"
-            width={22}
-            height={22}
-            className="shrink-0"
-            priority
-          />
-          <div className="min-w-0">
-            <div className="text-sm font-semibold leading-tight">Doflow</div>
-            <div className="text-[11px] text-muted-foreground leading-tight">
-              {role === 'SUPER_ADMIN' ? 'Control Plane' : 'Workspace'}
-            </div>
-          </div>
-
-          <div className="ml-auto flex items-center">
-            <ThemeToggle />
-          </div>
+        {/* SOLO LOGO (niente testo, niente theme switch) */}
+        <div className="flex items-center justify-center px-2 py-2">
+          <button
+            type="button"
+            onClick={() => router.push(homePath)}
+            className="rounded-md p-1 hover:bg-sidebar-accent focus:outline-none focus:ring-2 focus:ring-sidebar-ring"
+            aria-label="Home"
+            title="Home"
+          >
+            <Image
+              src="/doflow_logo.svg"
+              alt="Doflow"
+              width={22}
+              height={22}
+              className="shrink-0"
+              priority
+            />
+          </button>
         </div>
         <SidebarSeparator />
       </SidebarHeader>
@@ -180,6 +169,7 @@ export function AppSidebar(props: AppSidebarProps) {
         <SidebarSeparator />
         <div className="px-2 py-2">
           <div className="flex items-center justify-between gap-2">
+            {/* in collapsed verrà “tagliato” automaticamente dal layout */}
             <div className="min-w-0">
               <div className="truncate text-xs font-medium">{userEmail}</div>
               <div className="truncate text-[11px] text-muted-foreground">
@@ -201,7 +191,7 @@ export function AppSidebar(props: AppSidebarProps) {
         </div>
       </SidebarFooter>
 
-      <SidebarRail />
+      {/* NIENTE SidebarRail: spesso crea overlay e “mangia” click */}
     </Sidebar>
   );
 }
