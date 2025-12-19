@@ -133,8 +133,7 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
 
           {/* Brand (piccolo) */}
           <div className="flex items-center gap-2 pr-2">
-            <Image src="/doflow_logo.svg" alt="Doflow" width={18} height={18} />
-            <span className="text-sm font-semibold hidden sm:inline">Doflow</span>
+            <Image src="/doflow_logo.svg" alt="Doflow" width={60} height={30} />
             {role === 'SUPER_ADMIN' ? (
               <span className="hidden md:inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">
                 <Shield className="h-3 w-3" /> Control Plane

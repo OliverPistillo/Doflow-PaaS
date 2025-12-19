@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "build:frontend": "pnpm --filter frontend build",
+    "build:backend": "pnpm --filter backend build",
+    "build": "pnpm build:frontend && pnpm build:backend",
     "dev": "pnpm --parallel --filter \"./apps/**\" run dev"
   },
   "devDependencies": {
@@ -16,5 +19,8 @@
       "@types/react": "18.3.27",
       "@types/react-dom": "18.3.7"
     }
+  },
+  "volta": {
+    "node": "20.19.6"
   }
 }
