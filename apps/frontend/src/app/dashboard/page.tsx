@@ -1,147 +1,50 @@
-'use client';
+import { AppSidebar } from "@/components/app-sidebar"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
+import { Separator } from "@/components/ui/separator"
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar"
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { DashboardLayout } from '@/components/dashboard/layout';
-import { mapBackendRoleToLayout } from '@/lib/roles';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://api.doflow.it';
-
-type MeResponse = {
-  user: {
-    id: string;
-    email: string;
-    role: string;
-    tenantId: string;
-  };
-};
-
-type State =
-  | { status: 'loading' }
-  | { status: 'no-token' }
-  | { status: 'error'; message: string }
-  | { status: 'ok'; me: MeResponse };
-
-export default function DashboardPage() {
-  const router = useRouter();
-  const [state, setState] = useState<State>({ status: 'loading' });
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadMe = async () => {
-      try {
-        const token = window.localStorage.getItem('doflow_token');
-
-        if (!token) {
-          if (!cancelled) setState({ status: 'no-token' });
-          router.push('/login');
-          return;
-        }
-
-        const res = await fetch(`${API_BASE}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: 'no-store',
-        });
-
-        const text = await res.text();
-
-        if (!res.ok) {
-          if (!cancelled) {
-            setState({
-              status: 'error',
-              message: text || 'Errore caricamento profilo',
-            });
-          }
-          if (res.status === 401 || res.status === 403) {
-            router.push('/login');
-          }
-          return;
-        }
-
-        const data = JSON.parse(text) as MeResponse;
-
-        if (!cancelled) {
-          setState({ status: 'ok', me: data });
-        }
-      } catch {
-        if (!cancelled) {
-          setState({ status: 'error', message: 'Errore di rete' });
-        }
-      }
-    };
-
-    void loadMe();
-    return () => {
-      cancelled = true;
-    };
-  }, [router]);
-
-  // RENDER STATES
-
-  if (state.status === 'loading') {
-    return <Centered text="Caricamento dashboard..." />;
-  }
-
-  if (state.status === 'no-token') {
-    return <Centered text="Nessun token trovato, reindirizzamento..." />;
-  }
-
-  if (state.status === 'error') {
-    return (
-      <Centered
-        title="Errore Dashboard"
-        text={state.message}
-        error
-      />
-    );
-  }
-
-  // OK
-  const { user } = state.me;
-  const layoutRole = mapBackendRoleToLayout(user.role);
-
+export default function Page() {
   return (
-    <DashboardLayout role={layoutRole} userEmail={user.email}>
-      <div className="space-y-4">
-        <h1 className="text-xl font-semibold">DoFlow Dashboard</h1>
-
-        <p className="text-sm text-zinc-400">
-          Utente: <span className="font-mono">{user.email}</span>
-        </p>
-
-        <p className="text-sm text-zinc-400">
-          Ruolo backend:{' '}
-          <span className="font-mono">{user.role}</span> → UI:{' '}
-          <span className="font-mono">{layoutRole}</span>
-        </p>
-
-        <p className="text-sm text-zinc-400">
-          Tenant: <span className="font-mono">{user.tenantId}</span>
-        </p>
-      </div>
-    </DashboardLayout>
-  );
-}
-
-// helper minimale
-function Centered({
-  text,
-  title,
-  error,
-}: {
-  text: string;
-  title?: string;
-  error?: boolean;
-}) {
-  return (
-    <main className="min-h-screen flex items-center justify-center bg-background text-foreground">
-      <div className="text-center space-y-2">
-        {title && <h1 className="text-xl font-semibold">{title}</h1>}
-        <p className={`text-sm ${error ? 'text-red-400' : 'text-zinc-400'}`}>
-          {text}
-        </p>
-      </div>
-    </main>
-  );
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-2 h-4" />
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem className="hidden md:block">
+                <BreadcrumbLink href="#">
+                  Building Your Application
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator className="hidden md:block" />
+              <BreadcrumbItem>
+                <BreadcrumbPage>Data Fetching</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </header>
+        <div className="flex flex-1 flex-col gap-4 p-4">
+          <div className="grid auto-rows-min gap-4 md:grid-cols-3">
+            <div className="aspect-video rounded-xl bg-muted/50" />
+            <div className="aspect-video rounded-xl bg-muted/50" />
+            <div className="aspect-video rounded-xl bg-muted/50" />
+          </div>
+          <div className="min-h-[100vh] flex-1 rounded-xl bg-muted/50 md:min-h-min" />
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
+  )
 }
