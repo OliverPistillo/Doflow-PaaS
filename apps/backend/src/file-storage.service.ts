@@ -1,8 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  HeadBucketCommand,
+  ListBucketsCommand,
+} from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
 import { DataSource } from 'typeorm';
 import { Request } from 'express';
+
+type StorageProbeStatus = 'ok' | 'warn' | 'down';
 
 @Injectable()
 export class FileStorageService {
@@ -35,6 +42,83 @@ export class FileStorageService {
       throw new Error('No tenant connection on request');
     }
     return conn;
+  }
+
+  /**
+   * ✅ Probe reale Storage (S3/MinIO):
+   * - tenta HeadBucket (cheap)
+   * - fallback a ListBuckets (alcuni setup MinIO/S3 policy)
+   */
+  async probe(): Promise<{ status: StorageProbeStatus; latency_ms: number; message?: string }> {
+    const t0 = Date.now();
+
+    // Guardrail: se mancano credenziali spesso significa che storage non è configurato
+    const accessKey = process.env.S3_ACCESS_KEY_ID ?? '';
+    const secretKey = process.env.S3_SECRET_ACCESS_KEY ?? '';
+    if (!accessKey || !secretKey) {
+      return {
+        status: 'warn',
+        latency_ms: Date.now() - t0,
+        message: 'missing S3 credentials (S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY)',
+      };
+    }
+
+    try {
+      // 1) prova HeadBucket sul bucket configurato
+      await this.s3.send(new HeadBucketCommand({ Bucket: this.bucket }));
+      const ms = Date.now() - t0;
+      return {
+        status: ms > 350 ? 'warn' : 'ok',
+        latency_ms: ms,
+      };
+    } catch (e: any) {
+      // Alcuni errori comuni
+      const name = e?.name as string | undefined;
+      const code = e?.Code as string | undefined;
+      const httpCode = e?.$metadata?.httpStatusCode as number | undefined;
+
+      // 404 / NoSuchBucket → down (bucket non esiste o endpoint errato)
+      if (httpCode === 404 || code === 'NoSuchBucket' || name === 'NoSuchBucket') {
+        const ms = Date.now() - t0;
+        return {
+          status: 'down',
+          latency_ms: ms,
+          message: `bucket not found: ${this.bucket}`,
+        };
+      }
+
+      // Access denied → warn (storage raggiungibile ma permessi non sufficienti)
+      if (httpCode === 403 || name === 'AccessDenied' || code === 'AccessDenied') {
+        const ms = Date.now() - t0;
+        return {
+          status: 'warn',
+          latency_ms: ms,
+          message: `access denied on bucket: ${this.bucket}`,
+        };
+      }
+
+      // 2) fallback: ListBuckets (utile su MinIO/policy strane)
+      try {
+        await this.s3.send(new ListBucketsCommand({}));
+        const ms = Date.now() - t0;
+        return {
+          status: ms > 350 ? 'warn' : 'ok',
+          latency_ms: ms,
+          message: 'headBucket failed, listBuckets ok',
+        };
+      } catch (e2: any) {
+        const ms = Date.now() - t0;
+        const msg =
+          e2?.message ||
+          e?.message ||
+          'storage probe failed';
+        return {
+          status: 'down',
+          latency_ms: ms,
+          message: msg,
+        };
+      }
+    }
   }
 
   async uploadFile(req: Request, file: Express.Multer.File) {

@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { RedisService } from '../redis/redis.service';
 import { WebSocket } from 'ws';
+import { FileStorageService } from '../file-storage.service';
 
 type HealthStatus = 'ok' | 'warn' | 'down';
 type Check = { status: HealthStatus; latency_ms?: number; message?: string };
@@ -98,6 +99,7 @@ export class HealthService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly redis: RedisService,
+    private readonly storage: FileStorageService,
   ) {}
 
   async system() {
@@ -185,7 +187,17 @@ export class HealthService {
     }
 
     // Storage: placeholder finché non fai probe su S3/MinIO
-    checks.storage = { status: 'warn', message: 'storage probe not implemented' };
+    try {
+      const res = await this.storage.probe();
+      checks.storage = {
+        status: res.status,
+        latency_ms: res.latency_ms,
+        message: res.message,
+      };
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'storage error';
+      checks.storage = { status: 'down', message: msg };
+    }
 
     return {
       status: statusFromChecks(checks),
