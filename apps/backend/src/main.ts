@@ -115,6 +115,35 @@ async function bootstrap() {
       };
       socket.send(JSON.stringify(hello));
 
+      // ✅ PROBE REALE: health ping/pong
+      socket.on('message', (data: any) => {
+        try {
+          const raw =
+            typeof data === 'string'
+              ? data
+              : Buffer.isBuffer(data)
+              ? data.toString('utf8')
+              : data?.toString?.('utf8');
+
+          if (!raw) return;
+
+          const msg = JSON.parse(raw);
+
+          if (msg?.type === 'health_ping' && typeof msg?.nonce === 'string') {
+            const pong = {
+              type: 'health_pong' as const,
+              nonce: msg.nonce,
+              ts: new Date().toISOString(),
+            };
+            if (socket.readyState === WebSocket.OPEN) {
+              socket.send(JSON.stringify(pong));
+            }
+          }
+        } catch {
+          // ignora messaggi non JSON / non validi
+        }
+      });
+
       socket.on('close', () => {
         clients.delete(socket);
       });
@@ -124,6 +153,7 @@ async function bootstrap() {
       socket.close(4002, 'Invalid token');
     }
   });
+
 
   // 🔁 Collega Redis Pub/Sub → WebSocket clients
   notifications.registerHandler((channel, payload) => {
