@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { HealthController } from './health.controller';
 import { HealthService } from './health.service';
 import { RedisService } from '../redis/redis.service';
+import { FileStorageService } from '../file-storage.service';
 
 @Module({
   imports: [
@@ -11,6 +12,10 @@ import { RedisService } from '../redis/redis.service';
     TypeOrmModule.forFeature([]),
   ],
   controllers: [HealthController],
-  providers: [HealthService, RedisService],
+  providers: [
+    HealthService,
+    RedisService,
+    FileStorageService,
+  ],
 })
 export class HealthModule {}
