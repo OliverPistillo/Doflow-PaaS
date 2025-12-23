@@ -89,32 +89,30 @@ export function LoginForm() {
 
   return (
     <Card className="overflow-hidden">
-      <div className="grid md:grid-cols-2">
+      <div className="grid md:grid-cols-[1.05fr_0.95fr]">
         {/* FORM */}
-        <div className="p-6 md:p-8">
-          {/* Logo ONLY (no text) */}
-          <div className="flex items-center gap-3">
-            <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg border bg-background">
-              <Image
-                src="/doflow_logo.svg"
-                alt="Doflow"
-                width={26}
-                height={26}
-                className="h-[26px] w-[26px]"
-                priority
-              />
-            </div>
+        <div className="p-8 md:p-12">
+          {/* Logo ONLY (no box, no square) */}
+          <div className="flex items-center">
+            <Image
+              src="/doflow_logo.svg"
+              alt="Doflow"
+              width={36}
+              height={36}
+              className="h-9 w-9 object-contain"
+              priority
+            />
           </div>
 
-          <div className="mt-6 space-y-2">
-            <h1 className="text-2xl font-semibold tracking-tight">Accedi</h1>
+          <div className="mt-7 space-y-2">
+            <h1 className="text-3xl font-semibold tracking-tight">Accedi</h1>
             <p className="text-sm text-muted-foreground">
               Inserisci le credenziali per continuare.{" "}
               <span className="font-mono">Tenant: {tenantHost || "..."}</span>
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <form onSubmit={handleSubmit} className="mt-8 space-y-5 max-w-md">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -126,6 +124,7 @@ export function LoginForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={loading}
+                className="h-11"
               />
             </div>
 
@@ -149,6 +148,7 @@ export function LoginForm() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={loading}
+                className="h-11"
               />
             </div>
 
@@ -158,7 +158,7 @@ export function LoginForm() {
               </div>
             ) : null}
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full h-11" disabled={loading}>
               {loading ? "Accesso…" : "Login"}
             </Button>
 
@@ -168,55 +168,31 @@ export function LoginForm() {
           </form>
         </div>
 
-        {/* COVER / CAROUSEL */}
-        <div className="relative hidden md:block overflow-hidden bg-muted">
-          {/* Background blur della slide corrente (riempie, ma sotto) */}
-          <div className="absolute inset-0">
-            {SLIDES.map((s, i) => (
+        {/* COVER / CAROUSEL (FULL COVER) */}
+        <div className="relative hidden md:block min-h-[640px] bg-muted">
+          {SLIDES.map((s, i) => (
+            <div
+              key={s.src}
+              className={cn(
+                "absolute inset-0 transition-opacity duration-700",
+                i === slide ? "opacity-100" : "opacity-0"
+              )}
+            >
               <Image
-                key={`bg-${s.src}`}
                 src={s.src}
-                alt=""
+                alt={s.alt}
                 fill
-                sizes="(min-width: 768px) 50vw, 0vw"
-                className={cn(
-                  "object-cover blur-2xl scale-110 opacity-0 transition-opacity duration-700",
-                  i === slide ? "opacity-40" : "opacity-0"
-                )}
                 priority={i === 0}
+                sizes="(min-width: 768px) 45vw, 0vw"
+                className="object-cover"
               />
-            ))}
-          </div>
-
-          {/* Foreground: RISPOSTA ALLE “PROPORZIONI” -> object-contain (zero crop) */}
-          <div className="absolute inset-0 flex items-center justify-center p-8">
-            <div className="relative h-full w-full">
-              {SLIDES.map((s, i) => (
-                <div
-                  key={s.src}
-                  className={cn(
-                    "absolute inset-0 transition-opacity duration-700",
-                    i === slide ? "opacity-100" : "opacity-0"
-                  )}
-                >
-                  <Image
-                    src={s.src}
-                    alt={s.alt}
-                    fill
-                    sizes="(min-width: 768px) 50vw, 0vw"
-                    className="object-contain"
-                    priority={i === 0}
-                  />
-                </div>
-              ))}
+              {/* overlay leggero per evitare “sparaflash” */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-black/10" />
             </div>
-          </div>
+          ))}
 
-          {/* Overlay leggero per “coerenza” */}
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-black/10" />
-
-          {/* Dots */}
-          <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 rounded-full border bg-background/70 px-3 py-2 backdrop-blur">
+          {/* dots */}
+          <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 rounded-full bg-black/30 px-3 py-2 backdrop-blur">
             {SLIDES.map((_, i) => (
               <button
                 key={i}
@@ -224,8 +200,8 @@ export function LoginForm() {
                 aria-label={`Slide ${i + 1}`}
                 onClick={() => setSlide(i)}
                 className={cn(
-                  "h-2.5 w-2.5 rounded-full ring-1 ring-foreground/20 transition",
-                  i === slide ? "bg-foreground/70" : "bg-foreground/20 hover:bg-foreground/35"
+                  "h-2.5 w-2.5 rounded-full ring-1 ring-white/40 transition",
+                  i === slide ? "bg-white" : "bg-white/30 hover:bg-white/50"
                 )}
               />
             ))}
