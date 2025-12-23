@@ -116,7 +116,6 @@ export function LoginForm() {
             <h1 className="text-3xl font-semibold tracking-tight">Accedi</h1>
             <p className="text-sm text-muted-foreground">
               Inserisci le credenziali per continuare.
-              <span className="ml-2 font-mono text-xs">Tenant: {tenantHost || "..."}</span>
             </p>
           </div>
 
@@ -127,7 +126,7 @@ export function LoginForm() {
                 id="email"
                 type="email"
                 autoComplete="email"
-                placeholder="nome@azienda.it"
+                placeholder="es. nome@azienda.it"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
