@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { cn } from "@/lib/utils"
 
 type LoginOkResponse = { token: string }
 type LoginErrorResponse = { error: string }
@@ -21,10 +22,6 @@ const SLIDES = [
   { src: "/login-cover-2.webp", alt: "Doflow cover 2" },
   { src: "/login-cover-3.webp", alt: "Doflow cover 3" },
 ] as const
-
-function cn(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ")
-}
 
 function getHost(): string {
   if (typeof window === "undefined") return ""
@@ -82,8 +79,6 @@ export function LoginForm() {
       if (!("token" in data) || !data.token) throw new Error("Token mancante nella risposta")
 
       window.localStorage.setItem("doflow_token", data.token)
-
-      // Se vuoi: puoi redirectare a /superadmin/dashboard leggendo role dal JWT.
       router.push("/dashboard")
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Errore di rete")
@@ -97,24 +92,25 @@ export function LoginForm() {
       <div className="grid md:grid-cols-2">
         {/* FORM */}
         <div className="p-6 md:p-8">
-          <div className="flex items-center gap-2">
-            <div className="rounded-md bg-primary p-2">
+          {/* Logo ONLY (no text) */}
+          <div className="flex items-center gap-3">
+            <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg border bg-background">
               <Image
-                src="/logo-transparent-svg.svg"
+                src="/doflow_logo.svg"
                 alt="Doflow"
-                width={22}
-                height={22}
-                className="h-[22px] w-[22px]"
+                width={26}
+                height={26}
+                className="h-[26px] w-[26px]"
                 priority
               />
             </div>
-            <div className="text-sm font-semibold leading-none">Doflow</div>
           </div>
 
           <div className="mt-6 space-y-2">
-            <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Accedi</h1>
             <p className="text-sm text-muted-foreground">
-              Accedi al tuo account. <span className="font-mono">Tenant: {tenantHost || "..."}</span>
+              Inserisci le credenziali per continuare.{" "}
+              <span className="font-mono">Tenant: {tenantHost || "..."}</span>
             </p>
           </div>
 
@@ -172,30 +168,55 @@ export function LoginForm() {
           </form>
         </div>
 
-        {/* IMAGE (CAROUSEL) */}
-        <div className="bg-muted relative hidden md:block">
-          {SLIDES.map((s, i) => (
-            <div
-              key={s.src}
-              className={cn(
-                "absolute inset-0 transition-opacity duration-700",
-                i === slide ? "opacity-100" : "opacity-0",
-              )}
-            >
+        {/* COVER / CAROUSEL */}
+        <div className="relative hidden md:block overflow-hidden bg-muted">
+          {/* Background blur della slide corrente (riempie, ma sotto) */}
+          <div className="absolute inset-0">
+            {SLIDES.map((s, i) => (
               <Image
+                key={`bg-${s.src}`}
                 src={s.src}
-                alt={s.alt}
+                alt=""
                 fill
-                priority={i === 0}
-                className="object-cover dark:brightness-[0.25] dark:grayscale"
                 sizes="(min-width: 768px) 50vw, 0vw"
+                className={cn(
+                  "object-cover blur-2xl scale-110 opacity-0 transition-opacity duration-700",
+                  i === slide ? "opacity-40" : "opacity-0"
+                )}
+                priority={i === 0}
               />
-              <div className="absolute inset-0 bg-black/20" />
-            </div>
-          ))}
+            ))}
+          </div>
 
-          {/* dots */}
-          <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 rounded-full bg-black/30 px-3 py-2 backdrop-blur">
+          {/* Foreground: RISPOSTA ALLE “PROPORZIONI” -> object-contain (zero crop) */}
+          <div className="absolute inset-0 flex items-center justify-center p-8">
+            <div className="relative h-full w-full">
+              {SLIDES.map((s, i) => (
+                <div
+                  key={s.src}
+                  className={cn(
+                    "absolute inset-0 transition-opacity duration-700",
+                    i === slide ? "opacity-100" : "opacity-0"
+                  )}
+                >
+                  <Image
+                    src={s.src}
+                    alt={s.alt}
+                    fill
+                    sizes="(min-width: 768px) 50vw, 0vw"
+                    className="object-contain"
+                    priority={i === 0}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Overlay leggero per “coerenza” */}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-black/10" />
+
+          {/* Dots */}
+          <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 rounded-full border bg-background/70 px-3 py-2 backdrop-blur">
             {SLIDES.map((_, i) => (
               <button
                 key={i}
@@ -203,8 +224,8 @@ export function LoginForm() {
                 aria-label={`Slide ${i + 1}`}
                 onClick={() => setSlide(i)}
                 className={cn(
-                  "h-2.5 w-2.5 rounded-full ring-1 ring-white/40 transition",
-                  i === slide ? "bg-white" : "bg-white/30 hover:bg-white/50",
+                  "h-2.5 w-2.5 rounded-full ring-1 ring-foreground/20 transition",
+                  i === slide ? "bg-foreground/70" : "bg-foreground/20 hover:bg-foreground/35"
                 )}
               />
             ))}
