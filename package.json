@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build:frontend": "pnpm --filter frontend build",
-    "build:backend": "pnpm --filter backend build",
-    "build": "pnpm build:frontend && pnpm build:backend",
+    "build:frontend": "pnpm -C apps/frontend build",
+    "build:backend": "pnpm -C apps/backend build",
+    "build": "pnpm run build:frontend && pnpm run build:backend",
     "dev": "pnpm --parallel --filter \"./apps/**\" run dev"
   },
   "devDependencies": {
@@ -18,9 +18,14 @@
       "react-dom": "18.3.1",
       "@types/react": "18.3.27",
       "@types/react-dom": "18.3.7"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "sharp"
+    ]
   },
   "volta": {
-    "node": "20.19.6"
+    "node": "20.19.6",
+    "pnpm": "10.24.0"
   }
 }
