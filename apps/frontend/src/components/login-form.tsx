@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 
+import { Eye, EyeOff } from "lucide-react"
+
 type LoginOkResponse = { token: string }
 type LoginErrorResponse = { error: string }
 type LoginResponse = LoginOkResponse | LoginErrorResponse
@@ -33,6 +35,8 @@ export function LoginForm() {
 
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
+  const [showPassword, setShowPassword] = React.useState(false)
+
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -52,6 +56,10 @@ export function LoginForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+
+    // ✅ sicurezza/UX: se era visibile, la richiudi subito quando premi Login
+    setShowPassword(false)
+
     setError(null)
     setLoading(true)
 
@@ -97,9 +105,9 @@ export function LoginForm() {
             <Image
               src="/doflow_logo.svg"
               alt="Doflow"
-              width={50}
-              height={100}
-              className="h-9 w-9 object-contain"
+              width={96}
+              height={96}
+              className="h-12 w-auto object-contain"
               priority
             />
           </div>
@@ -108,6 +116,7 @@ export function LoginForm() {
             <h1 className="text-3xl font-semibold tracking-tight">Accedi</h1>
             <p className="text-sm text-muted-foreground">
               Inserisci le credenziali per continuare.
+              <span className="ml-2 font-mono text-xs">Tenant: {tenantHost || "..."}</span>
             </p>
           </div>
 
@@ -138,17 +147,30 @@ export function LoginForm() {
                   Recupera password
                 </button>
               </div>
-              <Input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={loading}
-                className="h-11"
-              />
+
+              {/* ✅ password con toggle visibilità */}
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={loading}
+                  className="h-11 pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? "Nascondi password" : "Mostra password"}
+                  disabled={loading}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             {error ? (
