@@ -97,8 +97,8 @@ export function LoginForm() {
             <Image
               src="/doflow_logo.svg"
               alt="Doflow"
-              width={36}
-              height={36}
+              width={50}
+              height={100}
               className="h-9 w-9 object-contain"
               priority
             />
@@ -107,8 +107,7 @@ export function LoginForm() {
           <div className="mt-7 space-y-2">
             <h1 className="text-3xl font-semibold tracking-tight">Accedi</h1>
             <p className="text-sm text-muted-foreground">
-              Inserisci le credenziali per continuare.{" "}
-              <span className="font-mono">Tenant: {tenantHost || "..."}</span>
+              Inserisci le credenziali per continuare.
             </p>
           </div>
 
