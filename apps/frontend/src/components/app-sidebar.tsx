@@ -95,9 +95,9 @@ export function AppSidebar(props: AppSidebarProps) {
         visible: role === 'SUPER_ADMIN' || role === 'ADMIN',
       },
       {
-        label: 'Progetti',
+        label: 'Clienti',
         icon: FolderKanban,
-        href: '/projects',
+        href: '/clients',
         visible: role !== 'SUPER_ADMIN',
       },
     ].filter((x) => x.visible);

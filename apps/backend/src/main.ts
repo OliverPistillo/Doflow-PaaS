@@ -14,9 +14,7 @@ type ClientWithMeta = WebSocket & { __meta?: ClientMeta };
 
 function decodeJwt(token: string): any {
   const parts = token.split('.');
-  if (parts.length < 2) {
-    throw new Error('Malformed token');
-  }
+  if (parts.length < 2) throw new Error('Malformed token');
   const payload = parts[1];
   const json = Buffer.from(payload, 'base64url').toString('utf8');
   return JSON.parse(json);
@@ -25,7 +23,7 @@ function decodeJwt(token: string): any {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // 🔥 QUESTA È LA RIGA MANCANTE CHE RISOLVE IL 404
+  // ✅ Global prefix API
   app.setGlobalPrefix('api');
 
   app.enableCors({
@@ -43,28 +41,20 @@ async function bootstrap() {
   const notifications = app.get(NotificationsService);
   const wsPath = process.env.WS_PATH ?? '/ws';
 
-  // 🔥 WebSocketServer in modalità "noServer"
+  // ✅ WebSocketServer in modalità "noServer"
   const wss = new WebSocketServer({ noServer: true });
   const clients = new Set<ClientWithMeta>();
 
-  // 🔍 Log e instradamento manuale dell'upgrade
+  // 🔍 Instradamento manuale dell'upgrade
   httpServer.on('upgrade', (req: any, socket: any, head: Buffer) => {
     const url = req.url ?? '/';
 
     // eslint-disable-next-line no-console
-    console.log(
-      '[UPGRADE RAW]',
-      'url=',
-      url,
-      'host=',
-      req.headers?.host,
-    );
+    console.log('[UPGRADE RAW]', 'url=', url, 'host=', req.headers?.host);
 
     try {
       const fullUrl = new URL(url, 'http://localhost');
-      if (fullUrl.pathname !== wsPath) {
-        return;
-      }
+      if (fullUrl.pathname !== wsPath) return;
 
       wss.handleUpgrade(req, socket, head, (ws) => {
         wss.emit('connection', ws, req);
@@ -106,37 +96,36 @@ async function bootstrap() {
       // eslint-disable-next-line no-console
       console.log('[WS RAW] client connected', meta);
 
-      const hello = {
-        type: 'hello' as const,
-        payload: {
-          tenantId: meta.tenantId,
-          userId: meta.userId,
-        },
-      };
-      socket.send(JSON.stringify(hello));
+      // handshake
+      socket.send(
+        JSON.stringify({
+          type: 'hello',
+          payload: { tenantId: meta.tenantId, userId: meta.userId },
+        }),
+      );
 
-      // ✅ PROBE REALE: health ping/pong
+      // ✅ probe health ping/pong
       socket.on('message', (data: any) => {
         try {
           const raw =
             typeof data === 'string'
               ? data
               : Buffer.isBuffer(data)
-              ? data.toString('utf8')
-              : data?.toString?.('utf8');
+                ? data.toString('utf8')
+                : data?.toString?.('utf8');
 
           if (!raw) return;
-
           const msg = JSON.parse(raw);
 
           if (msg?.type === 'health_ping' && typeof msg?.nonce === 'string') {
-            const pong = {
-              type: 'health_pong' as const,
-              nonce: msg.nonce,
-              ts: new Date().toISOString(),
-            };
             if (socket.readyState === WebSocket.OPEN) {
-              socket.send(JSON.stringify(pong));
+              socket.send(
+                JSON.stringify({
+                  type: 'health_pong',
+                  nonce: msg.nonce,
+                  ts: new Date().toISOString(),
+                }),
+              );
             }
           }
         } catch {
@@ -144,9 +133,7 @@ async function bootstrap() {
         }
       });
 
-      socket.on('close', () => {
-        clients.delete(socket);
-      });
+      socket.on('close', () => clients.delete(socket));
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('[WS RAW] connection error', e);
@@ -154,8 +141,7 @@ async function bootstrap() {
     }
   });
 
-
-  // 🔁 Collega Redis Pub/Sub → WebSocket clients
+  // 🔁 Redis Pub/Sub → WebSocket clients
   notifications.registerHandler((channel, payload) => {
     for (const socket of clients) {
       const meta = socket.__meta;
@@ -165,41 +151,38 @@ async function bootstrap() {
         const [, tenantId] = channel.split(':');
         if (meta.tenantId !== tenantId) continue;
 
-        const msg = {
-          type: 'tenant_notification' as const,
-          channel,
-          payload,
-        };
         try {
           if (socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify(msg));
+            socket.send(
+              JSON.stringify({
+                type: 'tenant_notification',
+                channel,
+                payload,
+              }),
+            );
           }
-        } catch {
-          // ignore
-        }
+        } catch {}
       } else if (channel.startsWith('user:')) {
         const [, userId] = channel.split(':');
         if (meta.userId !== userId) continue;
 
-        const msg = {
-          type: 'user_notification' as const,
-          channel,
-          payload,
-        };
         try {
           if (socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify(msg));
+            socket.send(
+              JSON.stringify({
+                type: 'user_notification',
+                channel,
+                payload,
+              }),
+            );
           }
-        } catch {
-          // ignore
-        }
+        } catch {}
       }
     }
   });
 
   // eslint-disable-next-line no-console
-  console.log(
-    `✅ Backend running on http://localhost:${port} (WS path: ${wsPath})`,
-  );
+  console.log(`✅ Backend running on http://localhost:${port} (WS path: ${wsPath})`);
 }
+
 bootstrap();
