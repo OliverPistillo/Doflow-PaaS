@@ -1,4 +1,3 @@
-// apps/frontend/src/components/login-form.tsx
 "use client"
 
 import * as React from "react"
@@ -10,9 +9,7 @@ import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
-
 import { apiFetch } from "@/lib/api"
-
 
 import { Eye, EyeOff } from "lucide-react"
 
@@ -20,18 +17,11 @@ type LoginOkResponse = { token: string }
 type LoginErrorResponse = { error: string }
 type LoginResponse = LoginOkResponse | LoginErrorResponse
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://api.doflow.it"
-
 const SLIDES = [
   { src: "/login-cover-1.webp", alt: "Doflow cover 1" },
   { src: "/login-cover-2.webp", alt: "Doflow cover 2" },
   { src: "/login-cover-3.webp", alt: "Doflow cover 3" },
 ] as const
-
-function getHost(): string {
-  if (typeof window === "undefined") return ""
-  return window.location.host
-}
 
 export function LoginForm() {
   const router = useRouter()
@@ -42,13 +32,7 @@ export function LoginForm() {
 
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
-
-  const [tenantHost, setTenantHost] = React.useState("")
   const [slide, setSlide] = React.useState(0)
-
-  React.useEffect(() => {
-    setTenantHost(getHost())
-  }, [])
 
   React.useEffect(() => {
     const id = window.setInterval(() => {
@@ -58,43 +42,41 @@ export function LoginForm() {
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
-  e.preventDefault()
+    e.preventDefault()
 
-  setShowPassword(false)
-  setError(null)
-  setLoading(true)
+    setShowPassword(false)
+    setError(null)
+    setLoading(true)
 
-  try {
-    const data = await apiFetch<LoginResponse>("/api/auth/login", {
-      method: "POST",
-      auth: false,
-      body: JSON.stringify({ email, password }),
-    })
+    try {
+      const data = await apiFetch<LoginResponse>("/api/auth/login", {
+        method: "POST",
+        auth: false,
+        body: JSON.stringify({ email, password }),
+      })
 
-    if ("error" in data) throw new Error(data.error)
-    if (!("token" in data) || !data.token) throw new Error("Token mancante nella risposta")
+      if ("error" in data) throw new Error(data.error)
+      if (!("token" in data) || !data.token) {
+        throw new Error("Token mancante nella risposta")
+      }
 
-    window.localStorage.setItem("doflow_token", data.token)
+      // ✅ salva token
+      window.localStorage.setItem("doflow_token", data.token)
 
-    // ✅ redirect tenant-aware: federicanerone.* -> /federicanerone
-    const host = typeof window !== "undefined" ? window.location.host.toLowerCase() : ""
-    const nextPath = host.startsWith("federicanerone.") ? "/federicanerone" : "/dashboard"
-
-    router.push(nextPath)
-  } catch (err: unknown) {
-    setError(err instanceof Error ? err.message : "Errore di rete")
-  } finally {
-    setLoading(false)
+      // ✅ SEMPRE select-tenant
+      router.push("/select-tenant")
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Errore di rete")
+    } finally {
+      setLoading(false)
+    }
   }
-}
-
 
   return (
     <Card className="overflow-hidden">
       <div className="grid md:grid-cols-[1.05fr_0.95fr]">
         {/* FORM */}
         <div className="p-8 md:p-12">
-          {/* Logo ONLY (no box, no square) */}
           <div className="flex items-center">
             <Image
               src="/doflow_logo.svg"
@@ -120,7 +102,6 @@ export function LoginForm() {
                 id="email"
                 type="email"
                 autoComplete="email"
-                placeholder="es. nome@azienda.it"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -130,24 +111,13 @@ export function LoginForm() {
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
-                <button
-                  type="button"
-                  onClick={() => router.push("/forgot-password")}
-                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4"
-                >
-                  Recupera password
-                </button>
-              </div>
+              <Label htmlFor="password">Password</Label>
 
-              {/* ✅ password con toggle visibilità */}
               <div className="relative">
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
-                  placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -156,34 +126,28 @@ export function LoginForm() {
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-muted-foreground hover:text-foreground"
-                  aria-label={showPassword ? "Nascondi password" : "Mostra password"}
-                  disabled={loading}
+                  onClick={() => setShowPassword(v => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-muted-foreground"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
 
-            {error ? (
+            {error && (
               <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                 {error}
               </div>
-            ) : null}
+            )}
 
             <Button type="submit" className="w-full h-11" disabled={loading}>
               {loading ? "Accesso…" : "Login"}
             </Button>
-
-            <p className="text-[11px] text-muted-foreground">
-              By clicking continue, you agree to our Terms of Service and Privacy Policy.
-            </p>
           </form>
         </div>
 
-        {/* COVER / CAROUSEL (FULL COVER) */}
-        <div className="relative hidden md:block min-h-[640px] bg-muted">
+        {/* COVER */}
+        <div className="relative hidden md:block min-h-[640px]">
           {SLIDES.map((s, i) => (
             <div
               key={s.src}
@@ -196,30 +160,10 @@ export function LoginForm() {
                 src={s.src}
                 alt={s.alt}
                 fill
-                priority={i === 0}
-                sizes="(min-width: 768px) 45vw, 0vw"
                 className="object-cover"
               />
-              {/* overlay leggero per evitare “sparaflash” */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-black/10" />
             </div>
           ))}
-
-          {/* dots */}
-          <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 rounded-full bg-black/30 px-3 py-2 backdrop-blur">
-            {SLIDES.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                aria-label={`Slide ${i + 1}`}
-                onClick={() => setSlide(i)}
-                className={cn(
-                  "h-2.5 w-2.5 rounded-full ring-1 ring-white/40 transition",
-                  i === slide ? "bg-white" : "bg-white/30 hover:bg-white/50"
-                )}
-              />
-            ))}
-          </div>
         </div>
       </div>
     </Card>
