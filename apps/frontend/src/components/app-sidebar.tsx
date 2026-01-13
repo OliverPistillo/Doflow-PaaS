@@ -3,7 +3,16 @@
 import * as React from 'react';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Building2, Users, FolderKanban, LogOut, Shield } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Building2,
+  Users,
+  LogOut,
+  Shield,
+  UserRound,
+  Scissors,
+  CalendarDays,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -49,11 +58,24 @@ function getToken(): string | null {
 
 function normalizeRole(r?: string): Role {
   const up = (r || '').toUpperCase();
-  if (up === 'SUPER_ADMIN') return 'SUPER_ADMIN';
+  if (up === 'SUPER_ADMIN' || up === 'SUPERADMIN' || up === 'OWNER') return 'SUPER_ADMIN';
   if (up === 'ADMIN') return 'ADMIN';
   if (up === 'MANAGER') return 'MANAGER';
   return 'USER';
 }
+
+function isFedericaHost(): boolean {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.host.toLowerCase();
+  return host.startsWith('federicanerone.');
+}
+
+type NavItem = {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  visible: boolean;
+};
 
 export function AppSidebar(props: AppSidebarProps) {
   const router = useRouter();
@@ -61,21 +83,30 @@ export function AppSidebar(props: AppSidebarProps) {
 
   const [derivedRole, setDerivedRole] = React.useState<Role>('USER');
   const [derivedEmail, setDerivedEmail] = React.useState<string>('—');
+  const [isFederica, setIsFederica] = React.useState(false);
 
   React.useEffect(() => {
     const token = getToken();
     const payload = token ? parseJwtPayload(token) : null;
     setDerivedRole(normalizeRole(payload?.role));
     setDerivedEmail(payload?.email || '—');
+    setIsFederica(isFedericaHost());
   }, []);
 
   const role: Role = props.role ?? derivedRole;
   const userEmail: string = props.userEmail ?? derivedEmail;
 
-  const homePath = role === 'SUPER_ADMIN' ? '/superadmin/dashboard' : '/dashboard';
+  // Home coerente
+  const homePath =
+    role === 'SUPER_ADMIN'
+      ? '/superadmin/dashboard'
+      : isFederica
+        ? '/federicanerone/clienti'
+        : '/dashboard';
 
-  const items = React.useMemo(() => {
-    return [
+  const items = React.useMemo<NavItem[]>(() => {
+    // ---- Superadmin / piattaforma
+    const base: NavItem[] = [
       {
         label: role === 'SUPER_ADMIN' ? 'Control Plane' : 'Overview',
         icon: role === 'SUPER_ADMIN' ? Shield : LayoutDashboard,
@@ -94,14 +125,32 @@ export function AppSidebar(props: AppSidebarProps) {
         href: '/admin/users',
         visible: role === 'SUPER_ADMIN' || role === 'ADMIN',
       },
+    ];
+
+    // ---- Federica-only (solo su host federicanerone.*)
+    const federica: NavItem[] = [
       {
         label: 'Clienti',
-        icon: FolderKanban,
-        href: '/clients',
-        visible: role !== 'SUPER_ADMIN',
+        icon: UserRound,
+        href: '/federicanerone/clienti',
+        visible: isFederica,
       },
-    ].filter((x) => x.visible);
-  }, [role, homePath]);
+      {
+        label: 'Trattamenti',
+        icon: Scissors,
+        href: '/federicanerone/trattamenti',
+        visible: isFederica,
+      },
+      {
+        label: 'Appuntamenti',
+        icon: CalendarDays,
+        href: '/federicanerone/appuntamenti',
+        visible: isFederica,
+      },
+    ];
+
+    return [...base, ...federica].filter((x) => x.visible);
+  }, [role, homePath, isFederica]);
 
   function isActive(href: string) {
     if (!pathname) return false;
@@ -121,7 +170,7 @@ export function AppSidebar(props: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        {/* SOLO LOGO (niente testo, niente theme switch) */}
+        {/* SOLO LOGO */}
         <div className="flex items-center justify-center px-2 py-2">
           <button
             type="button"
@@ -169,7 +218,6 @@ export function AppSidebar(props: AppSidebarProps) {
         <SidebarSeparator />
         <div className="px-2 py-2">
           <div className="flex items-center justify-between gap-2">
-            {/* in collapsed verrà “tagliato” automaticamente dal layout */}
             <div className="min-w-0">
               <div className="truncate text-xs font-medium">{userEmail}</div>
               <div className="truncate text-[11px] text-muted-foreground">
@@ -190,8 +238,6 @@ export function AppSidebar(props: AppSidebarProps) {
           </div>
         </div>
       </SidebarFooter>
-
-      {/* NIENTE SidebarRail: spesso crea overlay e “mangia” click */}
     </Sidebar>
   );
 }
