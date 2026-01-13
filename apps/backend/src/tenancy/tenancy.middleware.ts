@@ -1,8 +1,16 @@
-// C:\Doflow\apps\backend\src\tenancy\tenancy.middleware.ts
+// apps/backend/src/tenancy/tenancy.middleware.ts
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { DataSource } from 'typeorm';
 import { RedisService } from '../redis/redis.service';
+
+function safeSchema(input: string): string {
+  const s = String(input || '').trim().toLowerCase();
+  if (!s) return 'public';
+  // solo schema name sicuro
+  if (!/^[a-z0-9_]+$/.test(s)) return 'public';
+  return s;
+}
 
 @Injectable()
 export class TenancyMiddleware implements NestMiddleware {
@@ -14,9 +22,7 @@ export class TenancyMiddleware implements NestMiddleware {
     const hdr = (req.headers['x-doflow-tenant-id'] as string | undefined)?.trim();
 
     /**
-     * 0) HEADER SLUG-ONLY MODE (standard consigliato)
-     * Supporta: "public" | "demo" | "acme_1"
-     * NOTA: Se passa "demo.doflow.it" non entra qui e finisce nel ramo host-based.
+     * 0) HEADER SLUG-ONLY MODE
      */
     if (hdr && /^[a-z0-9_]+$/i.test(hdr)) {
       const slugOrPublic = hdr.toLowerCase();
@@ -25,7 +31,6 @@ export class TenancyMiddleware implements NestMiddleware {
         return this.attachTenant(req, next, 'public');
       }
 
-      // Cache (slug -> schema)
       const cacheKey = `tenant:slug:${slugOrPublic}`;
       const cachedSchema = await this.redis.get(cacheKey);
 
@@ -39,7 +44,6 @@ export class TenancyMiddleware implements NestMiddleware {
         return this.attachTenant(req, next, cachedSchema);
       }
 
-      // DB lookup su public.tenants
       const publicDs = await this.getOrCreateConnection('public');
       const rows = await publicDs.query(
         `
@@ -60,14 +64,13 @@ export class TenancyMiddleware implements NestMiddleware {
         });
       }
 
-      const schemaName = rows[0].schema_name as string;
+      const schemaName = safeSchema(rows[0].schema_name as string);
       await this.redis.set(cacheKey, schemaName, 60);
       return this.attachTenant(req, next, schemaName);
     }
 
     /**
      * 1) HOST MODE (fallback)
-     * Qui gestiamo: "app.doflow.it", "api.doflow.it", "demo.doflow.it", "localhost", "custom domains"
      */
     const rawHost =
       hdr ||
@@ -89,13 +92,11 @@ export class TenancyMiddleware implements NestMiddleware {
     const isSystemDomain = host.endsWith(`.${APP_DOMAIN}`);
 
     /**
-     * 2) CUSTOM DOMAIN LOOKUP
-     * Se NON finisce con .doflow.it => dominio custom
+     * 2) CUSTOM DOMAIN LOOKUP (optional)
      */
     if (!isSystemDomain) {
       const publicDs = await this.getOrCreateConnection('public');
 
-      // NOTE: questo richiede tabella public.tenant_domains (se non esiste, togli questo ramo)
       const rows = await publicDs.query(
         `
         select t.schema_name
@@ -115,16 +116,14 @@ export class TenancyMiddleware implements NestMiddleware {
         });
       }
 
-      return this.attachTenant(req, next, rows[0].schema_name);
+      return this.attachTenant(req, next, safeSchema(rows[0].schema_name));
     }
 
     /**
      * 3) SUBDOMAIN LOOKUP (con Redis cache)
-     * Esempio: demo.doflow.it -> subdomain = "demo"
      */
     const subdomain = host.split('.')[0];
 
-    // parole riservate (safe)
     if (['app', 'api', 'www'].includes(subdomain)) {
       return this.attachTenant(req, next, 'public');
     }
@@ -162,13 +161,11 @@ export class TenancyMiddleware implements NestMiddleware {
       });
     }
 
-    const schemaName = rows[0].schema_name as string;
+    const schemaName = safeSchema(rows[0].schema_name as string);
     await this.redis.set(cacheKey, schemaName, 60);
 
     return this.attachTenant(req, next, schemaName);
   }
-
-  // --- Helpers ---
 
   private async attachTenant(req: Request, next: NextFunction, schema: string) {
     const ds = await this.getOrCreateConnection(schema);
@@ -178,21 +175,24 @@ export class TenancyMiddleware implements NestMiddleware {
   }
 
   private async getOrCreateConnection(schema: string): Promise<DataSource> {
-    if (TenancyMiddleware.connectionMap.has(schema)) {
-      return TenancyMiddleware.connectionMap.get(schema)!;
+    const s = safeSchema(schema);
+
+    if (TenancyMiddleware.connectionMap.has(s)) {
+      return TenancyMiddleware.connectionMap.get(s)!;
     }
 
     const ds = new DataSource({
       type: 'postgres',
       url: process.env.DATABASE_URL,
-      schema,
-      synchronize: false, // MAI true in SaaS multi-tenant
+      schema: s,
+      synchronize: false,
     });
 
     await ds.initialize();
-    TenancyMiddleware.connectionMap.set(schema, ds);
+    TenancyMiddleware.connectionMap.set(s, ds);
 
-    console.log(`✅ Tenant connection ready → schema: ${schema}`);
+    // eslint-disable-next-line no-console
+    console.log(`✅ Tenant connection ready → schema: ${s}`);
     return ds;
   }
 }
