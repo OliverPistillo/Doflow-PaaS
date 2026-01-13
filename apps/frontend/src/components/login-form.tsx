@@ -11,6 +11,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 
+import { apiFetch } from "@/lib/api"
+
+
 import { Eye, EyeOff } from "lucide-react"
 
 type LoginOkResponse = { token: string }
@@ -55,45 +58,36 @@ export function LoginForm() {
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  e.preventDefault()
 
-    // ✅ sicurezza/UX: se era visibile, la richiudi subito quando premi Login
-    setShowPassword(false)
+  setShowPassword(false)
+  setError(null)
+  setLoading(true)
 
-    setError(null)
-    setLoading(true)
+  try {
+    const data = await apiFetch<LoginResponse>("/api/auth/login", {
+      method: "POST",
+      auth: false,
+      body: JSON.stringify({ email, password }),
+    })
 
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        body: JSON.stringify({ email, password }),
-      })
+    if ("error" in data) throw new Error(data.error)
+    if (!("token" in data) || !data.token) throw new Error("Token mancante nella risposta")
 
-      const text = await res.text()
+    window.localStorage.setItem("doflow_token", data.token)
 
-      if (!res.ok) {
-        let msg = `HTTP ${res.status}`
-        try {
-          const json = JSON.parse(text) as Partial<LoginErrorResponse>
-          if (json?.error) msg = json.error
-        } catch {}
-        throw new Error(msg)
-      }
+    // ✅ redirect tenant-aware: federicanerone.* -> /federicanerone
+    const host = typeof window !== "undefined" ? window.location.host.toLowerCase() : ""
+    const nextPath = host.startsWith("federicanerone.") ? "/federicanerone" : "/dashboard"
 
-      const data = JSON.parse(text) as LoginResponse
-      if ("error" in data) throw new Error(data.error)
-      if (!("token" in data) || !data.token) throw new Error("Token mancante nella risposta")
-
-      window.localStorage.setItem("doflow_token", data.token)
-      router.push("/dashboard")
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Errore di rete")
-    } finally {
-      setLoading(false)
-    }
+    router.push(nextPath)
+  } catch (err: unknown) {
+    setError(err instanceof Error ? err.message : "Errore di rete")
+  } finally {
+    setLoading(false)
   }
+}
+
 
   return (
     <Card className="overflow-hidden">
