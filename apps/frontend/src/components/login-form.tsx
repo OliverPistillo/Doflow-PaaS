@@ -68,49 +68,62 @@ export function LoginForm() {
     return () => window.clearInterval(id)
   }, [])
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setShowPassword(false)
-    setError(null)
-    setLoading(true)
+async function handleSubmit(e: React.FormEvent) {
+  e.preventDefault();
 
+  setShowPassword(false);
+  setError(null);
+  setLoading(true);
+
+  function parseJwtPayload(token: string): { tenantId?: string; role?: string } | null {
     try {
-      const data = await apiFetch<LoginResponse>("/api/auth/login", {
-        method: "POST",
-        auth: false,
-        body: JSON.stringify({ email, password }),
-      })
-
-      if ("error" in data) throw new Error(data.error)
-      if (!("token" in data) || !data.token) throw new Error("Token mancante nella risposta")
-
-      const token = data.token
-      window.localStorage.setItem("doflow_token", token)
-
-      const payload = parseJwtPayload(token)
-      const role = normalizeRole(payload?.role)
-      const tenant = getTenantFromPayload(payload)
-
-      // ✅ routing definitivo
-      if (role === "SUPER_ADMIN") {
-        router.push("/superadmin/dashboard")
-        return
-      }
-
-      // tenant user: va al suo tenant
-      if (tenant && tenant !== "public") {
-        router.push(`/${tenant}`)
-        return
-      }
-
-      // fallback
-      router.push("/dashboard")
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Errore di rete")
-    } finally {
-      setLoading(false)
+      const part = token.split(".")[1];
+      if (!part) return null;
+      const json = atob(part.replace(/-/g, "+").replace(/_/g, "/"));
+      return JSON.parse(json) as { tenantId?: string; role?: string };
+    } catch {
+      return null;
     }
   }
+
+  try {
+    // NB: niente auth qui, ovvio
+    const data = await apiFetch<LoginResponse>("/api/auth/login", {
+      method: "POST",
+      auth: false,
+      body: JSON.stringify({ email, password }),
+    });
+
+    if ("error" in data) throw new Error(data.error);
+    if (!("token" in data) || !data.token) throw new Error("Token mancante nella risposta");
+
+    window.localStorage.setItem("doflow_token", data.token);
+
+    const payload = parseJwtPayload(data.token);
+    const role = (payload?.role || "").toUpperCase();
+    const tenantId = (payload?.tenantId || "public").toLowerCase();
+
+    // ✅ routing richiesto
+    if (role === "SUPER_ADMIN") {
+      router.push("/superadmin"); // vecchio pannello
+      return;
+    }
+
+    // tutti gli altri: tenant dashboard diretta
+    if (tenantId && tenantId !== "public") {
+      router.push(`/${tenantId}/dashboard`);
+      return;
+    }
+
+    // fallback
+    router.push("/dashboard");
+  } catch (err: unknown) {
+    setError(err instanceof Error ? err.message : "Errore di rete");
+  } finally {
+    setLoading(false);
+  }
+}
+
 
   return (
     <Card className="overflow-hidden">

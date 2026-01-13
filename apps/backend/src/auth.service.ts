@@ -1,3 +1,4 @@
+// apps/backend/src/auth.service.ts
 import { Injectable } from '@nestjs/common';
 import { Request } from 'express';
 import { DataSource } from 'typeorm';
@@ -12,28 +13,34 @@ type JwtPayload = {
   role: Role;
 };
 
+function safeSchema(input: string): string {
+  const s = String(input || '').trim().toLowerCase();
+  if (!s) return 'public';
+  if (!/^[a-z0-9_]+$/.test(s)) return 'public';
+  return s;
+}
+
 @Injectable()
 export class AuthService {
   private getConn(req: Request): DataSource {
     const conn = (req as any).tenantConnection as DataSource | undefined;
-    if (!conn) {
-      throw new Error('No tenant connection on request');
-    }
+    if (!conn) throw new Error('No tenant connection on request');
     return conn;
   }
 
   private getTenantId(req: Request): string {
     const tenantId = (req as any).tenantId as string | undefined;
-    return tenantId ?? 'public';
+    return safeSchema(tenantId ?? 'public');
   }
 
-  // ✅ HELPER: Blocca operazioni se il tenant è disattivato
+  // ✅ blocca operazioni se tenant disattivato
   private async assertTenantActive(conn: DataSource, tenantId: string) {
-    if (tenantId === 'public') return; // public = control plane (sempre attivo)
+    const t = safeSchema(tenantId);
+    if (t === 'public') return;
 
     const rows = await conn.query(
       `select is_active from public.tenants where schema_name = $1 limit 1`,
-      [tenantId],
+      [t],
     );
 
     if (!rows[0] || rows[0].is_active !== true) {
@@ -41,22 +48,126 @@ export class AuthService {
     }
   }
 
+  private signToken(userId: number, email: string, tenantId: string, role: Role) {
+    const secret = process.env.JWT_SECRET;
+    if (!secret) throw new Error('JWT_SECRET not set');
+
+    const payload: JwtPayload = {
+      sub: userId,
+      email,
+      tenantId: safeSchema(tenantId),
+      role,
+    };
+
+    return jwt.sign(payload, secret, { expiresIn: '1d' });
+  }
+
+  // ✅ login in un tenant specifico (usando schema.table)
+  private async loginInTenant(
+    conn: DataSource,
+    tenantId: string,
+    email: string,
+    password: string,
+  ) {
+    const t = safeSchema(tenantId);
+
+    await this.assertTenantActive(conn, t);
+
+    const rows = await conn.query(
+      `
+      select id, email, password_hash, created_at, role
+      from ${t}.users
+      where lower(email) = lower($1)
+      limit 1
+      `,
+      [email],
+    );
+
+    const user = rows[0];
+    if (!user || !user.password_hash) throw new Error('Invalid credentials');
+
+    const ok = await bcrypt.compare(password, user.password_hash as string);
+    if (!ok) throw new Error('Invalid credentials');
+
+    const token = this.signToken(user.id, user.email, t, user.role as Role);
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        created_at: user.created_at,
+        tenantId: t,
+        role: user.role,
+      },
+      token,
+    };
+  }
+
+  // ✅ lista tenant attivi
+  private async listActiveTenants(conn: DataSource): Promise<string[]> {
+    const rows = await conn.query(
+      `
+      select schema_name
+      from public.tenants
+      where is_active = true
+      order by created_at asc
+      `,
+    );
+
+    return (rows || [])
+      .map((r: any) => safeSchema(r.schema_name))
+      .filter((s: string) => s && s !== 'public');
+  }
+
+  /**
+   * ✅ LOGIN AUTO (per app.doflow.it)
+   * - se sei già in tenant -> login normale
+   * - se sei in public -> prova in public, se fallisce prova in tutti i tenant attivi
+   */
+  async loginAuto(req: Request, email: string, password: string) {
+    const conn = this.getConn(req);
+    const currentTenant = this.getTenantId(req);
+
+    // se la request è già tenant-scoped, non fare magia
+    if (currentTenant !== 'public') {
+      return this.login(req, email, password);
+    }
+
+    // 1) prova login in public (superadmin/control plane)
+    try {
+      return await this.loginInTenant(conn, 'public', email, password);
+    } catch {
+      // continua
+    }
+
+    // 2) prova login in tutti i tenant attivi (piccolo SaaS: ok)
+    const tenants = await this.listActiveTenants(conn);
+
+    for (const t of tenants) {
+      try {
+        return await this.loginInTenant(conn, t, email, password);
+      } catch {
+        // prova prossimo tenant
+      }
+    }
+
+    throw new Error('Invalid credentials');
+  }
+
+  // =============== API ESISTENTI ===============
+
   async register(req: Request, email: string, password: string) {
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
 
-    // Check tenant active
     await this.assertTenantActive(conn, tenantId);
 
     const existing = await conn.query(
-      `select id from ${tenantId}.users where email = $1 limit 1`,
+      `select id from ${tenantId}.users where lower(email) = lower($1) limit 1`,
       [email],
     );
-    if (existing.length > 0) {
-      throw new Error('User already exists');
-    }
+    if (existing.length > 0) throw new Error('User already exists');
 
-    // primo utente del tenant -> admin, gli altri -> user
     const countRes = await conn.query(
       `select count(*)::int as count from ${tenantId}.users`,
     );
@@ -75,12 +186,7 @@ export class AuthService {
     );
 
     const user = rows[0];
-    const token = this.signToken(
-      user.id,
-      user.email,
-      tenantId,
-      user.role as Role,
-    );
+    const token = this.signToken(user.id, user.email, tenantId, user.role as Role);
 
     return { user: { ...user, tenantId, role: user.role }, token };
   }
@@ -89,53 +195,13 @@ export class AuthService {
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
 
-    // Check tenant active
-    await this.assertTenantActive(conn, tenantId);
-
-    const rows = await conn.query(
-      `
-      select id, email, password_hash, created_at, role
-      from ${tenantId}.users
-      where email = $1
-      limit 1
-      `,
-      [email],
-    );
-
-    const user = rows[0];
-    if (!user || !user.password_hash) {
-      throw new Error('Invalid credentials');
-    }
-
-    const ok = await bcrypt.compare(password, user.password_hash as string);
-    if (!ok) {
-      throw new Error('Invalid credentials');
-    }
-
-    const token = this.signToken(
-      user.id,
-      user.email,
-      tenantId,
-      user.role as Role,
-    );
-
-    return {
-      user: {
-        id: user.id,
-        email: user.email,
-        created_at: user.created_at,
-        tenantId,
-        role: user.role,
-      },
-      token,
-    };
+    return this.loginInTenant(conn, tenantId, email, password);
   }
 
   async acceptInvite(req: Request, token: string, password: string) {
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
 
-    // Check tenant active
     await this.assertTenantActive(conn, tenantId);
 
     const invites = await conn.query(
@@ -149,26 +215,17 @@ export class AuthService {
     );
 
     const invite = invites[0];
-    if (!invite) {
-      throw new Error('Invalid invite token');
-    }
-
-    if (invite.accepted_at) {
-      throw new Error('Invite already used');
-    }
-
+    if (!invite) throw new Error('Invalid invite token');
+    if (invite.accepted_at) throw new Error('Invite already used');
     if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
       throw new Error('Invite expired');
     }
 
-    // controlla se esiste già un utente con quella email
     const existingUsers = await conn.query(
-      `select id from ${tenantId}.users where email = $1 limit 1`,
+      `select id from ${tenantId}.users where lower(email) = lower($1) limit 1`,
       [invite.email],
     );
-    if (existingUsers.length > 0) {
-      throw new Error('User already exists for this email');
-    }
+    if (existingUsers.length > 0) throw new Error('User already exists for this email');
 
     const passwordHash = await bcrypt.hash(password, 10);
 
@@ -183,37 +240,16 @@ export class AuthService {
 
     const user = users[0];
 
-    // marca l'invito come usato
     await conn.query(
       `update ${tenantId}.invites set accepted_at = now() where id = $1`,
       [invite.id],
     );
 
-    const jwtToken = this.signToken(
-      user.id,
-      user.email,
-      tenantId,
-      user.role as Role,
-    );
+    const jwtToken = this.signToken(user.id, user.email, tenantId, user.role as Role);
 
     return {
       user: { ...user, tenantId },
       token: jwtToken,
     };
-  }
-
-  private signToken(
-    userId: number,
-    email: string,
-    tenantId: string,
-    role: Role,
-  ) {
-    const secret = process.env.JWT_SECRET;
-    if (!secret) {
-      throw new Error('JWT_SECRET not set');
-    }
-
-    const payload: JwtPayload = { sub: userId, email, tenantId, role };
-    return jwt.sign(payload, secret, { expiresIn: '1d' });
   }
 }
