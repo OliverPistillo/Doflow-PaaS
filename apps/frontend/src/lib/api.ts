@@ -1,56 +1,63 @@
 // apps/frontend/src/lib/api.ts
-import { getTenantHeader } from './tenant-fetch';
+import { getTenantHeader } from "./tenant-fetch";
 
 type ApiFetchOptions = RequestInit & { auth?: boolean };
 
-/**
- * Decide il base URL in modo robusto:
- * - Se NEXT_PUBLIC_API_URL è definita (es. https://api.doflow.it) => usa quella
- * - Altrimenti usa /api (proxy Next verso backend)
- */
-function getApiBase(): string {
-  // Evita di affidarti a process in runtime browser: Next sostituisce a build-time,
-  // ma qui lo usiamo solo come stringa statica "iniettata".
+function getEnvBase(): string | null {
   const envBase = process.env.NEXT_PUBLIC_API_URL;
-  if (envBase && typeof envBase === 'string' && envBase.trim().length > 0) {
-    return envBase.replace(/\/+$/, '');
+  if (envBase && typeof envBase === "string" && envBase.trim().length > 0) {
+    return envBase.replace(/\/+$/, "");
   }
-  return '/api';
+  return null;
 }
 
 /**
- * Normalizza il path:
- * - accetta "auth/login", "/auth/login", "/api/auth/login"
- * - restituisce sempre "/auth/login" (senza prefissi duplicati)
+ * Ritorna il path SENZA prefisso /api
+ * - "auth/login" -> "/auth/login"
+ * - "/auth/login" -> "/auth/login"
+ * - "/api/auth/login" -> "/auth/login"
+ * - "/api/api/auth/login" -> "/auth/login"
  */
-function normalizePath(input: string): string {
-  const raw = (input || '').trim();
-  if (!raw) return '/';
+function normalizePathNoApi(input: string): string {
+  const raw = (input || "").trim();
+  if (!raw) return "/";
 
-  let p = raw.startsWith('/') ? raw : `/${raw}`;
+  let p = raw.startsWith("/") ? raw : `/${raw}`;
 
-  // elimina prefissi ripetuti "/api"
-  // es: "/api/auth/login" -> "/auth/login"
-  // es: "/api/api/auth/login" -> "/auth/login"
-  while (p.startsWith('/api/')) p = p.slice(4); // rimuove "/api"
-  if (p === '/api') p = '/';
+  // rimuove uno o più prefissi /api
+  while (p === "/api" || p.startsWith("/api/")) {
+    p = p === "/api" ? "/" : p.slice(4);
+  }
 
-  return p;
+  return p.startsWith("/") ? p : `/${p}`;
 }
 
 /**
- * Se base è "/api" e path è "/auth/login" => "/api/auth/login"
- * Se base è "https://api.doflow.it" => "https://api.doflow.it/auth/login"
+ * Costruisce sempre URL verso /api del backend (una sola volta)
+ * - Se NEXT_PUBLIC_API_URL non c'è => usa proxy Next: "/api" + path
+ * - Se NEXT_PUBLIC_API_URL è "https://api.doflow.it" => "https://api.doflow.it/api" + path
+ * - Se NEXT_PUBLIC_API_URL è "https://api.doflow.it/api" => "https://api.doflow.it/api" + path
  */
-function buildUrl(base: string, path: string): string {
-  const cleanBase = base.replace(/\/+$/, '');
-  const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  return `${cleanBase}${cleanPath}`;
+function buildApiUrl(pathNoApi: string): string {
+  const envBase = getEnvBase();
+
+  const cleanPath = pathNoApi.startsWith("/") ? pathNoApi : `/${pathNoApi}`;
+  const apiPrefix = "/api";
+
+  // proxy next (relative)
+  if (!envBase) return `${apiPrefix}${cleanPath}`;
+
+  // se envBase include già /api alla fine, lo togliamo e lo rimettiamo (così non duplichiamo mai)
+  const origin = envBase.endsWith("/api") ? envBase.slice(0, -4) : envBase;
+
+  return `${origin}${apiPrefix}${cleanPath}`;
 }
 
-export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptions = {}): Promise<T> {
-  const base = getApiBase();
-  const normalizedPath = normalizePath(path);
+export async function apiFetch<T = unknown>(
+  path: string,
+  options: ApiFetchOptions = {},
+): Promise<T> {
+  const pathNoApi = normalizePathNoApi(path);
 
   const headers: Record<string, string> = {
     ...getTenantHeader(),
@@ -58,40 +65,44 @@ export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptio
   };
 
   // Content-Type JSON solo se non FormData e non già impostato
-  if (!headers['Content-Type'] && !(options.body instanceof FormData)) {
-    headers['Content-Type'] = 'application/json';
+  if (!headers["Content-Type"] && !(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
   }
 
   // Auth di default ON (a meno che auth:false)
-  if (options.auth !== false && typeof window !== 'undefined') {
-    const token = window.localStorage.getItem('doflow_token');
+  if (options.auth !== false && typeof window !== "undefined") {
+    const token = window.localStorage.getItem("doflow_token");
     if (token) headers.Authorization = `Bearer ${token}`;
   }
 
-  const url = buildUrl(base, normalizedPath);
+  const url = buildApiUrl(pathNoApi);
 
   const res = await fetch(url, {
     ...options,
     headers,
-    cache: 'no-store',
+    cache: "no-store",
   });
 
   const text = await res.text();
 
-  if (!res.ok) {
-    let message = text || `HTTP ${res.status}`;
-    try {
-      const json = JSON.parse(text);
-      message = json.error || json.message || message;
-    } catch {
-      // ignore
-    }
-    throw new Error(message);
+  // NOTE: il tuo backend a volte risponde 201 con { error: "..." } (l'hai visto tu)
+  // Quindi: errore se !ok O se payload contiene "error".
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    // ignore
   }
 
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    return text as unknown as T;
+  if (!res.ok) {
+    const msg = json?.error || json?.message || text || `HTTP ${res.status}`;
+    throw new Error(msg);
   }
+
+  if (json && typeof json === "object" && json.error) {
+    throw new Error(json.error);
+  }
+
+  // se non è JSON, torna testo
+  return (json ?? (text as unknown)) as T;
 }

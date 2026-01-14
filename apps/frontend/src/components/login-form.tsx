@@ -75,47 +75,51 @@ async function handleSubmit(e: React.FormEvent) {
   setError(null);
   setLoading(true);
 
-  function parseJwtPayload(token: string): { tenantId?: string; role?: string } | null {
-    try {
-      const part = token.split(".")[1];
-      if (!part) return null;
-      const json = atob(part.replace(/-/g, "+").replace(/_/g, "/"));
-      return JSON.parse(json) as { tenantId?: string; role?: string };
-    } catch {
-      return null;
-    }
-  }
-
   try {
-    // NB: niente auth qui, ovvio
-    const data = await apiFetch<LoginResponse>("/api/auth/login", {
+    const base =
+      (process.env.NEXT_PUBLIC_API_URL ?? "https://api.doflow.it").replace(/\/+$/, "");
+
+    // se NEXT_PUBLIC_API_URL è "https://api.doflow.it" allora url diventa ".../api/auth/login"
+    // se invece è già "https://api.doflow.it/api" allora url resta corretto
+    const url = base.endsWith("/api") ? `${base}/auth/login` : `${base}/api/auth/login`;
+
+    const res = await fetch(url, {
       method: "POST",
-      auth: false,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
 
-    if ("error" in data) throw new Error(data.error);
-    if (!("token" in data) || !data.token) throw new Error("Token mancante nella risposta");
+    const text = await res.text();
+    let data: any = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      // se non è JSON, lo trattiamo come errore testuale
+    }
+
+    // backend tuo: spesso ritorna { error: ... } e pure 201; gestiamo entrambi
+    if (!res.ok || data?.error) {
+      throw new Error(data?.error || data?.message || `Login fallito (${res.status})`);
+    }
+
+    if (!data?.token) throw new Error("Token mancante nella risposta");
 
     window.localStorage.setItem("doflow_token", data.token);
 
     const payload = parseJwtPayload(data.token);
     const role = (payload?.role || "").toUpperCase();
-    const tenantId = (payload?.tenantId || "public").toLowerCase();
+    const tenantId = (payload?.tenantId || payload?.tenant_id || "public").toLowerCase();
 
-    // ✅ routing richiesto
     if (role === "SUPER_ADMIN") {
-      router.push("/superadmin"); // vecchio pannello
+      router.push("/superadmin");
       return;
     }
 
-    // tutti gli altri: tenant dashboard diretta
     if (tenantId && tenantId !== "public") {
       router.push(`/${tenantId}/dashboard`);
       return;
     }
 
-    // fallback
     router.push("/dashboard");
   } catch (err: unknown) {
     setError(err instanceof Error ? err.message : "Errore di rete");
@@ -123,7 +127,6 @@ async function handleSubmit(e: React.FormEvent) {
     setLoading(false);
   }
 }
-
 
   return (
     <Card className="overflow-hidden">
