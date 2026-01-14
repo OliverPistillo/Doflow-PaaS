@@ -77,30 +77,27 @@ export class TenantAdminController {
     if (!tenantId) return;
 
     const authUser = (req as any).authUser;
-    if (!authUser) {
-      return res.status(401).json({ error: 'Not authenticated' });
-    }
+    if (!authUser) return res.status(401).json({ error: 'Not authenticated' });
     if (!hasRoleAtLeast(authUser.role, 'manager')) {
       return res.status(403).json({ error: 'Manager or admin only' });
     }
 
     const conn = this.getConn(req);
 
-    // Unione di Users (attivi) e Invites (pending)
     const rows = await conn.query(
       `
       select
-        id,
+        ('user:' || id::text) as id,
         email,
         role,
         created_at,
         'active' as status
       from ${tenantId}.users
-      
+
       union all
-      
+
       select
-        -id as id,
+        ('invite:' || id::text) as id,
         email,
         role,
         created_at,
@@ -108,7 +105,7 @@ export class TenantAdminController {
       from ${tenantId}.invites
       where accepted_at is null
         and (expires_at is null or expires_at > now())
-      
+
       order by created_at desc
       `,
     );
@@ -284,14 +281,19 @@ export class TenantAdminController {
     @Req() req: Request,
     @Res() res: Response,
   ) {
-    // 🛡️ Guard: Tenant Context
     const tenantId = this.ensureTenantContext(req, res);
     if (!tenantId) return;
 
     const authUser = this.ensureAdmin(req, res);
     if (!authUser) return;
 
-    const userId = Number(id);
+    // accetta "user:123" oppure "123"
+    const raw = id.startsWith('user:') ? id.split(':')[1] : id;
+    if (id.startsWith('invite:')) {
+      return res.status(400).json({ error: 'Cannot change role for an invite. Accept invite first.' });
+    }
+
+    const userId = Number(raw);
     if (Number.isNaN(userId)) {
       return res.status(400).json({ error: 'Invalid user id' });
     }
@@ -308,9 +310,7 @@ export class TenantAdminController {
       [userId],
     );
 
-    if (!existingRows[0]) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    if (!existingRows[0]) return res.status(404).json({ error: 'User not found' });
 
     const oldRole = existingRows[0].role;
 
@@ -331,56 +331,55 @@ export class TenantAdminController {
   }
 
   @Delete('users/:id')
-  async deleteUser(
-    @Param('id') id: string,
-    @Req() req: Request,
-    @Res() res: Response,
-  ) {
-    // 🛡️ Guard: Tenant Context
+  async deleteUser(@Param('id') id: string, @Req() req: Request, @Res() res: Response) {
     const tenantId = this.ensureTenantContext(req, res);
     if (!tenantId) return;
 
     const authUser = this.ensureAdmin(req, res);
     if (!authUser) return;
 
-    const userId = Number(id);
-    if (Number.isNaN(userId)) {
-      return res.status(400).json({ error: 'Invalid user id' });
-    }
-
-    const isInvite = userId < 0;
-    const realId = Math.abs(userId);
-
     const conn = this.getConn(req);
 
-    let result;
+    const isInvite = id.startsWith('invite:');
+    const isUser = id.startsWith('user:');
+
+    if (!isInvite && !isUser) {
+      return res.status(400).json({ error: 'Invalid id format. Expected user:<id> or invite:<id>' });
+    }
+
+    const rawId = id.split(':')[1];
+
+    let result: any[];
     if (isInvite) {
-      // Cancellazione Invito
+      // rawId è UUID -> NON convertire a Number
       result = await conn.query(
         `delete from ${tenantId}.invites where id = $1 returning id, email`,
-        [realId],
+        [rawId],
       );
     } else {
-      // Cancellazione Utente reale
+      // rawId è numerico
+      const userId = Number(rawId);
+      if (Number.isNaN(userId)) return res.status(400).json({ error: 'Invalid user id' });
+
       result = await conn.query(
         `delete from ${tenantId}.users where id = $1 returning id, email`,
-        [realId],
+        [userId],
       );
     }
 
-    if ((result as any[]).length === 0) {
+    if (!result?.length) {
       return res.status(404).json({ error: isInvite ? 'Invite not found' : 'User not found' });
     }
 
-    const deletedEmail = result[0]?.email || `ID:${realId}`;
+    const deletedEmail = result[0]?.email || `ID:${id}`;
 
     await this.auditService.log(req, {
       action: isInvite ? 'admin_delete_invite' : 'admin_delete_user',
       targetEmail: deletedEmail,
-      metadata: { deletedId: userId, type: isInvite ? 'invite' : 'user' },
+      metadata: { deletedId: id, type: isInvite ? 'invite' : 'user' },
     });
 
-    return res.json({ status: 'ok', deletedId: userId });
+    return res.json({ status: 'ok', deletedId: id });
   }
 
   @Get('audit')

@@ -11,7 +11,7 @@ const PAGE_SIZE = 10;
 type UserStatus = 'active' | 'invited' | 'disabled';
 
 type User = {
-  id: number;
+  id: string; // "user:123" | "invite:<uuid>"
   email: string;
   role: string;
   created_at: string;
@@ -39,6 +39,22 @@ type Tenant = {
 type TenantsResponse = { tenants: Tenant[] };
 
 const ALL_ROLES: string[] = ['admin', 'manager', 'editor', 'viewer', 'user'];
+
+// --- Helpers ---
+function isInviteId(id: string) {
+  return id.startsWith('invite:');
+}
+
+function isUserId(id: string) {
+  return id.startsWith('user:');
+}
+
+function stripPrefix(id: string) {
+  const parts = id.split(':');
+  return parts.length > 1 ? parts.slice(1).join(':') : id;
+}
+
+// --- Components ---
 
 function RoleBadge({ role }: { role: string }) {
   const r = role.toLowerCase();
@@ -97,7 +113,8 @@ export default function AdminUsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  const [actionUserId, setActionUserId] = useState<number | null>(null);
+  // Aggiornato a string | null
+  const [actionUserId, setActionUserId] = useState<string | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   const [search, setSearch] = useState('');
@@ -224,20 +241,35 @@ export default function AdminUsersPage() {
     }
   };
 
-  const handleChangeRole = async (userId: number, newRole: string) => {
+  const handleChangeRole = async (userId: string, newRole: string) => {
     if (!ensureToken()) return;
     setError(null);
     setInfo(null);
     setActionUserId(userId);
 
     try {
-      const res = await fetch(`${API_BASE}/api/tenant/admin/users/${userId}/role`, {
-        method: 'POST',
-        headers: getTenantHeaders(true),
-        body: JSON.stringify({ role: newRole }),
-      });
+      // safety: non provare a cambiare ruolo su un invite
+      if (isInviteId(userId)) {
+        throw new Error('Non puoi cambiare ruolo su un invito. Deve prima accettare.');
+      }
 
-      if (!res.ok) throw new Error(`Errore cambio ruolo: ${res.status}`);
+      const res = await fetch(
+        `${API_BASE}/api/tenant/admin/users/${encodeURIComponent(userId)}/role`,
+        {
+          method: 'POST',
+          headers: getTenantHeaders(true),
+          body: JSON.stringify({ role: newRole }),
+        },
+      );
+
+      const text = await res.text();
+      if (!res.ok) {
+        let msg = `Errore cambio ruolo: ${res.status}`;
+        try {
+          msg = JSON.parse(text).error || msg;
+        } catch {}
+        throw new Error(msg);
+      }
 
       setInfo('Ruolo aggiornato.');
       setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u)));
@@ -248,21 +280,31 @@ export default function AdminUsersPage() {
     }
   };
 
-  const handleDeleteUser = async (userId: number) => {
+  const handleDeleteUser = async (userId: string) => {
     if (!ensureToken()) return;
     setError(null);
     setInfo(null);
     setActionUserId(userId);
 
     try {
-      const res = await fetch(`${API_BASE}/api/tenant/admin/users/${userId}`, {
-        method: 'DELETE',
-        headers: getTenantHeaders(false),
-      });
+      const res = await fetch(
+        `${API_BASE}/api/tenant/admin/users/${encodeURIComponent(userId)}`,
+        {
+          method: 'DELETE',
+          headers: getTenantHeaders(false),
+        },
+      );
 
-      if (!res.ok) throw new Error(`Errore eliminazione: ${res.status}`);
+      const text = await res.text();
+      if (!res.ok) {
+        let msg = `Errore eliminazione: ${res.status}`;
+        try {
+          msg = JSON.parse(text).error || msg;
+        } catch {}
+        throw new Error(msg);
+      }
 
-      setInfo('Utente eliminato.');
+      setInfo(isInviteId(userId) ? 'Invito eliminato.' : 'Utente eliminato.');
       setUsers((prev) => prev.filter((u) => u.id !== userId));
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Errore sconosciuto');
@@ -470,7 +512,6 @@ export default function AdminUsersPage() {
               const qs = t ? `?token=${encodeURIComponent(t)}` : '';
               window.location.href = `${CONTROL_PLANE_URL}/admin/users${qs}`;
             }}
-
             className="text-xs px-3 py-1 border rounded border-border hover:bg-accent"
           >
             Control Plane
@@ -578,6 +619,7 @@ export default function AdminUsersPage() {
               {paginatedUsers.map((u) => {
                 const isActionLoading = actionUserId === u.id;
                 const status: UserStatus = u.status ?? 'active';
+                const isInvite = isInviteId(u.id);
 
                 return (
                   <tr key={u.id} className="border-b border-border last:border-b-0">
@@ -590,7 +632,7 @@ export default function AdminUsersPage() {
                           className="border border-input rounded px-2 py-0.5 text-xs bg-background text-foreground max-w-[120px] opacity-80 hover:opacity-100 transition-opacity"
                           value={u.role}
                           onChange={(e) => handleChangeRole(u.id, e.target.value)}
-                          disabled={!canManageUsers || loading || isActionLoading}
+                          disabled={!canManageUsers || loading || isActionLoading || isInvite}
                         >
                           {ALL_ROLES.map((r) => (
                             <option key={r} value={r}>
