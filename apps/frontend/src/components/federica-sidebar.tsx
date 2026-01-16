@@ -60,9 +60,8 @@ export function FedericaSidebar() {
 
       <SidebarContent>
         <SidebarMenu>
-          {/* ✅ Overview = ROOT */}
-          <Item href="/federicanerone" label="Overview" icon={LayoutDashboard} />
-
+          {/* ✅ Dashboard = ROOT */}
+          <Item href="/federicanerone/dashboard" label="Dashboard" icon={LayoutDashboard} />
           <Item href="/federicanerone/clienti" label="Clienti" icon={Users} />
           <Item href="/federicanerone/trattamenti" label="Trattamenti" icon={Sparkles} />
           <Item href="/federicanerone/appuntamenti" label="Appuntamenti" icon={CalendarDays} />
