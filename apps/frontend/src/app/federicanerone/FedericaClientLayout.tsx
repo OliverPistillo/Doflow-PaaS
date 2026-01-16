@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { FedericaSidebar } from '@/components/federica-sidebar';
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 
 type JwtPayload = { email?: string; role?: string; tenantId?: string; tenant_id?: string };
 
@@ -22,8 +23,8 @@ function parseJwtPayload(token: string): JwtPayload | null {
     return {
       email: typeof parsed.email === 'string' ? parsed.email : undefined,
       role: typeof parsed.role === 'string' ? parsed.role : undefined,
-      tenantId: typeof parsed.tenantId === 'string' ? parsed.tenantId : undefined,
-      tenant_id: typeof parsed.tenant_id === 'string' ? parsed.tenant_id : undefined,
+      tenantId: typeof (parsed as any).tenantId === 'string' ? (parsed as any).tenantId : undefined,
+      tenant_id: typeof (parsed as any).tenant_id === 'string' ? (parsed as any).tenant_id : undefined,
     };
   } catch {
     return null;
@@ -37,7 +38,6 @@ export default function FedericaClientLayout({ children }: { children: React.Rea
   const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
-    // 1) Se arrivo con ?token=..., lo salvo e pulisco l'URL
     const url = new URL(window.location.href);
     const tokenFromQuery = url.searchParams.get('token');
 
@@ -47,21 +47,18 @@ export default function FedericaClientLayout({ children }: { children: React.Rea
       window.history.replaceState({}, '', url.toString());
     }
 
-    // 2) Token finale
     const token = window.localStorage.getItem('doflow_token');
     if (!token) {
       router.push('/login');
       return;
     }
 
-    // 3) Decodifica
     const payload = parseJwtPayload(token);
     if (payload?.email) setEmail(payload.email);
 
-    // 4) Path-based tenant: se il token NON è federicanerone, fuori
-    const tenant = (payload?.tenantId ?? payload?.tenant_id ?? 'public').toString().toLowerCase();
-    if (tenant !== 'federicanerone') {
-      router.push('/login');
+    const tenant = (payload?.tenantId ?? payload?.tenant_id ?? '').toString().toLowerCase();
+    if (tenant && tenant !== 'federicanerone') {
+      router.push('/dashboard');
       return;
     }
 
@@ -77,17 +74,18 @@ export default function FedericaClientLayout({ children }: { children: React.Rea
   }
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
+    <SidebarProvider>
       <FedericaSidebar />
 
-      <main className="flex-1 p-6">
-        {/* opzionale: header minimale */}
-        <div className="mb-4 text-xs text-muted-foreground">
-          Logged: <span className="font-mono">{email}</span>
-        </div>
-
-        {children}
-      </main>
-    </div>
+      {/* SidebarInset è il wrapper “giusto” per il contenuto quando usi Sidebar */}
+      <SidebarInset>
+        <main className="p-6">
+          <div className="mb-4 text-xs text-muted-foreground">
+            Logged: <span className="font-mono">{email}</span>
+          </div>
+          {children}
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
