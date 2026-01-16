@@ -59,9 +59,9 @@ export default function FedericaClientLayout({ children }: { children: React.Rea
     if (payload?.email) setEmail(payload.email);
 
     // 4) Path-based tenant: se il token NON è federicanerone, fuori
-    const tenant = (payload?.tenantId ?? payload?.tenant_id ?? '').toString().toLowerCase();
-    if (tenant && tenant !== 'federicanerone') {
-      router.push('/dashboard');
+    const tenant = (payload?.tenantId ?? payload?.tenant_id ?? 'public').toString().toLowerCase();
+    if (tenant !== 'federicanerone') {
+      router.push('/login');
       return;
     }
 

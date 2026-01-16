@@ -107,20 +107,20 @@ async function handleSubmit(e: React.FormEvent) {
     window.localStorage.setItem("doflow_token", data.token);
 
     const payload = parseJwtPayload(data.token);
-    const role = (payload?.role || "").toUpperCase();
-    const tenantId = (payload?.tenantId || payload?.tenant_id || "public").toLowerCase();
+    const role = (payload?.role || '').toUpperCase();
+    const tenantId = (payload?.tenantId || payload?.tenant_id || 'public').toLowerCase();
 
-    if (role === "SUPER_ADMIN") {
-      router.push("/superadmin");
+    if (role === 'SUPER_ADMIN') {
+      router.push('/superadmin');
       return;
     }
 
-    if (tenantId && tenantId !== "public") {
-      router.push(`/${tenantId}/dashboard`);
+    if (tenantId && tenantId !== 'public') {
+      router.push(`/${tenantId}`);
       return;
     }
 
-    router.push("/dashboard");
+    router.push('/dashboard');
   } catch (err: unknown) {
     setError(err instanceof Error ? err.message : "Errore di rete");
   } finally {
