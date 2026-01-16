@@ -116,8 +116,7 @@ async function handleSubmit(e: React.FormEvent) {
     }
 
     if (tenantId && tenantId !== "public") {
-      // vai al subdomain tenant
-      window.location.href = `https://${tenantId}.doflow.it/dashboard`;
+      router.push(`/${tenantId}/dashboard`);
       return;
     }
 

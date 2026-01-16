@@ -2,10 +2,9 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { DashboardLayout } from '@/components/dashboard/layout';
+import { FedericaSidebar } from '@/components/federica-sidebar';
 
-type LayoutRole = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'USER';
-type JwtPayload = { email?: string; role?: string };
+type JwtPayload = { email?: string; role?: string; tenantId?: string; tenant_id?: string };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
@@ -23,25 +22,11 @@ function parseJwtPayload(token: string): JwtPayload | null {
     return {
       email: typeof parsed.email === 'string' ? parsed.email : undefined,
       role: typeof parsed.role === 'string' ? parsed.role : undefined,
+      tenantId: typeof parsed.tenantId === 'string' ? parsed.tenantId : undefined,
+      tenant_id: typeof parsed.tenant_id === 'string' ? parsed.tenant_id : undefined,
     };
   } catch {
     return null;
-  }
-}
-
-function mapRoleToLayoutRole(role?: string): LayoutRole {
-  const r = (role ?? '').toLowerCase();
-  if (r === 'owner' || r === 'superadmin' || r === 'super_admin') return 'SUPER_ADMIN';
-  if (r === 'admin') return 'ADMIN';
-  if (r === 'manager') return 'MANAGER';
-  return 'USER';
-}
-
-function assertFedericaHostOrRedirect(router: ReturnType<typeof useRouter>) {
-  if (typeof window === 'undefined') return;
-  const host = window.location.host.toLowerCase();
-  if (!host.startsWith('federicanerone.')) {
-    router.push('/admin');
   }
 }
 
@@ -49,13 +34,9 @@ export default function FedericaClientLayout({ children }: { children: React.Rea
   const router = useRouter();
 
   const [email, setEmail] = React.useState('utente');
-  const [role, setRole] = React.useState<LayoutRole>('USER');
   const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
-    // 0) Gate: solo federicanerone.*
-    assertFedericaHostOrRedirect(router);
-
     // 1) Se arrivo con ?token=..., lo salvo e pulisco l'URL
     const url = new URL(window.location.href);
     const tokenFromQuery = url.searchParams.get('token');
@@ -76,7 +57,13 @@ export default function FedericaClientLayout({ children }: { children: React.Rea
     // 3) Decodifica
     const payload = parseJwtPayload(token);
     if (payload?.email) setEmail(payload.email);
-    setRole(mapRoleToLayoutRole(payload?.role));
+
+    // 4) Path-based tenant: se il token NON è federicanerone, fuori
+    const tenant = (payload?.tenantId ?? payload?.tenant_id ?? '').toString().toLowerCase();
+    if (tenant && tenant !== 'federicanerone') {
+      router.push('/dashboard');
+      return;
+    }
 
     setReady(true);
   }, [router]);
@@ -89,5 +76,18 @@ export default function FedericaClientLayout({ children }: { children: React.Rea
     );
   }
 
-  return <DashboardLayout role={role} userEmail={email}>{children}</DashboardLayout>;
+  return (
+    <div className="flex min-h-screen bg-background text-foreground">
+      <FedericaSidebar />
+
+      <main className="flex-1 p-6">
+        {/* opzionale: header minimale */}
+        <div className="mb-4 text-xs text-muted-foreground">
+          Logged: <span className="font-mono">{email}</span>
+        </div>
+
+        {children}
+      </main>
+    </div>
+  );
 }
