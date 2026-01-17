@@ -229,7 +229,7 @@ export default function FedericaAppuntamentiPage() {
       setNotes('');
       setFinalPrice('');
 
-      // Ricarica completa per evitare problemi di stato
+      // Ricarica completa
       await loadAll(); 
 
     } catch (e) {
@@ -263,7 +263,7 @@ export default function FedericaAppuntamentiPage() {
     }
   }
 
-  // Modificato per ricaricare i dati e prevenire la sparizione dell'oggetto
+  // Modificato per prevenire sparizioni: ricarica tutto dopo update
   async function handleUpdateStatus(id: string, next: AppuntamentoStatus) {
     try {
       setLoading(true);
@@ -271,10 +271,10 @@ export default function FedericaAppuntamentiPage() {
         method: 'PATCH',
         body: JSON.stringify({ status: next }),
       });
-      await loadAll(); // Ricarica tutto per sincronizzare
+      await loadAll(); 
     } catch (e) { 
-      console.error(e); 
-      setLoading(false);
+      console.error(e);
+      setLoading(false); 
     }
   }
 
@@ -319,7 +319,8 @@ export default function FedericaAppuntamentiPage() {
   return (
     <div className="space-y-6 relative">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Appuntamenti</h1>
+        {/* Titolo modificato per conferma aggiornamento */}
+        <h1 className="text-2xl font-semibold tracking-tight">Appuntamenti v2</h1>
         <p className="text-sm text-muted-foreground">Gestione agenda e clienti.</p>
       </div>
 
@@ -427,7 +428,7 @@ export default function FedericaAppuntamentiPage() {
         </CardContent>
       </Card>
 
-      {/* A. Alert Confirmation */}
+      {/* POPUP: Alert Confirmation */}
       <AlertDialog open={showNewClientAlert} onOpenChange={setShowNewClientAlert}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -445,7 +446,7 @@ export default function FedericaAppuntamentiPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* B. Form Dati Cliente */}
+      {/* POPUP: Form Dati Cliente */}
       <Dialog open={showNewClientForm} onOpenChange={setShowNewClientForm}>
         <DialogContent>
           <DialogHeader>
@@ -507,6 +508,7 @@ export default function FedericaAppuntamentiPage() {
                       <span className={`text-xs font-semibold mb-1 ${isSel ? 'text-primary' : ''}`}>{d.getDate()}</span>
                       <div className="w-full space-y-1">
                         {dayApps.slice(0, 3).map(a => {
+                          // COLORI: Giallo (prenotato), Verde (eseguito)
                           let color = "bg-gray-100 text-gray-700 border-gray-200";
                           if(a.status === 'booked') color = "bg-yellow-100 text-yellow-800 border-yellow-200";
                           else if(a.status === 'closed_won') color = "bg-green-100 text-green-800 border-green-200";
@@ -555,10 +557,9 @@ export default function FedericaAppuntamentiPage() {
                          </div>
                          <div className="flex flex-col gap-1 items-end">
                             <div className="flex gap-2 items-center mt-2">
-                              {/* Mostra Eseguito SOLO se non è già chiuso */}
+                              {/* Pulsante ESEGUITO verde */}
                               {a.status !== 'closed_won' && (
                                 <Button 
-                                  variant="default" 
                                   size="sm" 
                                   className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white" 
                                   onClick={() => handleUpdateStatus(a.id, 'closed_won')}
@@ -567,7 +568,13 @@ export default function FedericaAppuntamentiPage() {
                                 </Button>
                               )}
                               
-                              <Button variant="ghost" size="sm" className="h-7 text-xs text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(a.id)}>
+                              {/* Pulsante ELIMINA rosso */}
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 text-xs text-red-500 hover:text-red-700 hover:bg-red-50" 
+                                onClick={() => handleDelete(a.id)}
+                              >
                                 Elimina
                               </Button>
                             </div>
@@ -598,13 +605,20 @@ export default function FedericaAppuntamentiPage() {
                      {clienti.find(c => String(c.id) === String(a.client_id))?.full_name}
                    </div>
                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground uppercase">{STATUS_LABEL[a.status]}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded ${
+                        a.status === 'booked' ? 'bg-yellow-100 text-yellow-800' :
+                        a.status === 'closed_won' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {STATUS_LABEL[a.status]}
+                      </span>
+
+                      {/* Bottoni anche nella lista */}
                       {a.status !== 'closed_won' && (
                         <Button 
                           size="sm" variant="outline" className="h-6 text-[10px] text-green-600 border-green-200 bg-green-50"
                           onClick={() => handleUpdateStatus(a.id, 'closed_won')}
                         >
-                          Eseguito
+                          ✓
                         </Button>
                       )}
                       <Button 
