@@ -63,7 +63,7 @@ const STATUS_LABEL: Record<AppuntamentoStatus, string> = {
   no_answer: 'Nessuna risposta',
   waiting: 'Attesa',
   booked: 'Prenotato',
-  closed_won: 'Chiuso',
+  closed_won: 'Eseguito', // Parola migliore per "Concluso/Chiuso"
   closed_lost: 'Perso',
 };
 
@@ -301,7 +301,7 @@ export default function FedericaAppuntamentiPage() {
 
   // --- UPDATE / DELETE (Come prima) ---
 
-  async function handleUpdateStatus(id: string, next: AppuntamentoStatus) {
+  async function handleUpdateStatus(id: string, next: string) {
     try {
       const data = await apiFetch<UpdateResponse>(`/appuntamenti/${id}`, {
         method: 'PATCH',
@@ -542,9 +542,11 @@ export default function FedericaAppuntamentiPage() {
                       <span className={`text-xs font-semibold mb-1 ${isSel ? 'text-primary' : ''}`}>{d.getDate()}</span>
                       <div className="w-full space-y-1">
                         {dayApps.slice(0, 3).map(a => {
+                          // LOGICA COLORI CELLE CALENDARIO AGGIORNATA
                           let color = "bg-gray-100 text-gray-700";
-                          if(a.status === 'booked') color = "bg-green-100 text-green-800 border-green-200";
-                          else if(a.status === 'closed_lost') color = "bg-red-50 text-red-800 opacity-60 line-through";
+                          if(a.status === 'booked') color = "bg-yellow-100 text-yellow-800 border-yellow-200"; // Giallo
+                          else if(a.status === 'closed_won') color = "bg-green-100 text-green-800 border-green-200"; // Verde
+                          else if(a.status === 'closed_lost' || a.status === 'cancelled') color = "bg-red-50 text-red-800 opacity-60 line-through";
                           
                           // Cerchiamo nome cliente
                           const cName = clienti.find(c => String(c.id) === String(a.client_id))?.full_name || '...';
@@ -590,9 +592,17 @@ export default function FedericaAppuntamentiPage() {
                            {a.notes && <div className="text-xs italic mt-1">{a.notes}</div>}
                          </div>
                          <div className="flex flex-col gap-1 items-end">
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground mb-1">
-                              {STATUS_LABEL[a.status]}
-                            </span>
+                            {/* MODIFICA: Select per cambiare stato invece che badge statico */}
+                            <select
+                              className="h-7 text-[10px] rounded border bg-transparent px-1 mb-1 focus:outline-none focus:ring-1 focus:ring-primary"
+                              value={a.status}
+                              onChange={(e) => handleUpdateStatus(a.id, e.target.value)}
+                            >
+                               {Object.keys(STATUS_LABEL).map(k => (
+                                 <option key={k} value={k}>{STATUS_LABEL[k as AppuntamentoStatus]}</option>
+                               ))}
+                            </select>
+
                             <Button variant="ghost" size="sm" className="h-6 text-xs text-red-500" onClick={() => handleDelete(a.id)}>
                               Elimina
                             </Button>
@@ -623,7 +633,16 @@ export default function FedericaAppuntamentiPage() {
                      {' - '}
                      {clienti.find(c => String(c.id) === String(a.client_id))?.full_name}
                    </div>
-                   <div className="text-xs text-muted-foreground">{STATUS_LABEL[a.status]}</div>
+                   {/* Anche qui dropdown per coerenza, o lasciare label */}
+                   <select
+                      className="text-xs border-none bg-transparent"
+                      value={a.status}
+                      onChange={(e) => handleUpdateStatus(a.id, e.target.value)}
+                   >
+                       {Object.keys(STATUS_LABEL).map(k => (
+                         <option key={k} value={k}>{STATUS_LABEL[k as AppuntamentoStatus]}</option>
+                       ))}
+                   </select>
                  </div>
                ))}
              </div>
