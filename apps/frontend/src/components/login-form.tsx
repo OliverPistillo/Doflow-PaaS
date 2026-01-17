@@ -1,3 +1,4 @@
+// apps/frontend/src/components/login-form.tsx
 "use client";
 
 import * as React from "react";
@@ -13,10 +14,15 @@ import { apiFetch } from "@/lib/api";
 
 import { Eye, EyeOff } from "lucide-react";
 
-type LoginResponse = {
-  token?: string;
-  error?: string;
-};
+type LoginOkResponse = { token: string };
+type LoginErrorResponse = { error: string; message?: string };
+type LoginResponse = LoginOkResponse | LoginErrorResponse;
+
+const SLIDES = [
+  { src: "/login-cover-1.webp", alt: "Doflow cover 1" },
+  { src: "/login-cover-2.webp", alt: "Doflow cover 2" },
+  { src: "/login-cover-3.webp", alt: "Doflow cover 3" },
+] as const;
 
 type JwtPayload = {
   email?: string;
@@ -24,12 +30,6 @@ type JwtPayload = {
   tenantId?: string;
   tenant_id?: string;
 };
-
-const SLIDES = [
-  { src: "/login-cover-1.webp", alt: "Doflow cover 1" },
-  { src: "/login-cover-2.webp", alt: "Doflow cover 2" },
-  { src: "/login-cover-3.webp", alt: "Doflow cover 3" },
-] as const;
 
 function parseJwtPayload(token: string): JwtPayload | null {
   try {
@@ -43,11 +43,18 @@ function parseJwtPayload(token: string): JwtPayload | null {
 }
 
 function normalizeRole(role?: string) {
-  const r = String(role ?? "").toUpperCase();
+  const r = String(role ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z_]/g, "");
   if (r === "OWNER" || r === "SUPERADMIN" || r === "SUPER_ADMIN") return "SUPER_ADMIN";
   if (r === "ADMIN") return "ADMIN";
   if (r === "MANAGER") return "MANAGER";
   return "USER";
+}
+
+function getTenantFromPayload(p: JwtPayload | null) {
+  const t = (p?.tenantId ?? p?.tenant_id ?? "public").toString().trim().toLowerCase();
+  return t || "public";
 }
 
 export function LoginForm() {
@@ -56,55 +63,62 @@ export function LoginForm() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
+
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
   const [slide, setSlide] = React.useState(0);
 
   React.useEffect(() => {
-    const id = window.setInterval(() => {
-      setSlide((s) => (s + 1) % SLIDES.length);
-    }, 4500);
+    const id = window.setInterval(() => setSlide((s) => (s + 1) % SLIDES.length), 4500);
     return () => window.clearInterval(id);
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    setShowPassword(false);
     setError(null);
     setLoading(true);
-    setShowPassword(false);
 
     try {
+      // ✅ chiama sempre tramite apiFetch, che gestisce base URL + tenant header
+      // NB: auth:false perché qui non c'è token ancora
       const data = await apiFetch<LoginResponse>("/auth/login", {
         method: "POST",
         auth: false,
         body: JSON.stringify({ email, password }),
       });
 
-      if (!data?.token) {
-        throw new Error(data?.error || "Credenziali non valide");
+      if (!data) throw new Error("Risposta vuota dal server");
+
+      // backend può rispondere con { error } anche con status 201/200
+      if ("error" in data && data.error) {
+        throw new Error(data.error || data.message || "Login fallito");
       }
 
-      // salva token
+      if (!("token" in data) || !data.token) {
+        throw new Error("Token mancante nella risposta");
+      }
+
       window.localStorage.setItem("doflow_token", data.token);
 
-      // decode
       const payload = parseJwtPayload(data.token);
       const role = normalizeRole(payload?.role);
-      const tenant =
-        (payload?.tenantId || payload?.tenant_id || "public").toLowerCase();
+      const tenantId = getTenantFromPayload(payload);
 
-      // ROUTING DEFINITIVO
       if (role === "SUPER_ADMIN") {
-        router.replace("/superadmin/dashboard");
+        router.push("/superadmin");
         return;
       }
 
-      if (tenant !== "public") {
-        router.replace(`/${tenant}/dashboard`);
+      // ✅ path-based tenant
+      if (tenantId && tenantId !== "public") {
+        router.push(`/${tenantId}/dashboard`);
         return;
       }
 
-      router.replace("/dashboard");
+      router.push("/dashboard");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Errore di rete");
     } finally {
@@ -115,7 +129,6 @@ export function LoginForm() {
   return (
     <Card className="overflow-hidden">
       <div className="grid md:grid-cols-[1.05fr_0.95fr]">
-        {/* FORM */}
         <div className="p-8 md:p-12">
           <div className="flex items-center">
             <Image
@@ -130,9 +143,7 @@ export function LoginForm() {
 
           <div className="mt-7 space-y-2">
             <h1 className="text-3xl font-semibold tracking-tight">Accedi</h1>
-            <p className="text-sm text-muted-foreground">
-              Inserisci le credenziali per continuare.
-            </p>
+            <p className="text-sm text-muted-foreground">Inserisci le credenziali per continuare.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5 max-w-md">
@@ -142,6 +153,7 @@ export function LoginForm() {
                 id="email"
                 type="email"
                 autoComplete="email"
+                placeholder="es. nome@azienda.it"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -156,7 +168,7 @@ export function LoginForm() {
                 <button
                   type="button"
                   onClick={() => router.push("/forgot-password")}
-                  className="text-xs underline underline-offset-4 text-muted-foreground"
+                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4"
                 >
                   Recupera password
                 </button>
@@ -167,6 +179,7 @@ export function LoginForm() {
                   id="password"
                   type={showPassword ? "text" : "password"}
                   autoComplete="current-password"
+                  placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -176,26 +189,31 @@ export function LoginForm() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? "Nascondi password" : "Mostra password"}
+                  disabled={loading}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
 
-            {error && (
+            {error ? (
               <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                 {error}
               </div>
-            )}
+            ) : null}
 
             <Button type="submit" className="w-full h-11" disabled={loading}>
               {loading ? "Accesso…" : "Login"}
             </Button>
+
+            <p className="text-[11px] text-muted-foreground">
+              By clicking continue, you agree to our Terms of Service and Privacy Policy.
+            </p>
           </form>
         </div>
 
-        {/* SLIDES */}
         <div className="relative hidden md:block min-h-[640px] bg-muted">
           {SLIDES.map((s, i) => (
             <div
@@ -210,8 +228,10 @@ export function LoginForm() {
                 alt={s.alt}
                 fill
                 priority={i === 0}
+                sizes="(min-width: 768px) 45vw, 0vw"
                 className="object-cover"
               />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-black/10" />
             </div>
           ))}
         </div>

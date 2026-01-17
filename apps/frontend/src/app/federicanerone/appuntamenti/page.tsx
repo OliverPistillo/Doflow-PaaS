@@ -2,342 +2,627 @@
 
 import * as React from 'react';
 import { apiFetch } from '@/lib/api';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
-} from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 
-type Cliente = { id: number; full_name: string };
-type Trattamento = { id: number; name: string; price_cents: number; duration_minutes: number; is_active?: boolean };
+// --- TIPI ---
+
+type AppuntamentoStatus =
+  | 'new_lead'
+  | 'no_answer'
+  | 'waiting'
+  | 'booked'
+  | 'closed_won'
+  | 'closed_lost';
 
 type Appuntamento = {
-  id: number;
-  client_id: number;
-  client_name: string;
-  treatment_id: number;
-  treatment_name: string;
+  id: string;
+  client_id: string;
+  treatment_id: string;
   starts_at: string;
   ends_at: string | null;
   final_price_cents: number | null;
   notes: string | null;
-  status: string;
+  status: AppuntamentoStatus;
+  google_event_id: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
-function centsToEuro(cents: number | null | undefined) {
-  const n = typeof cents === 'number' ? cents : 0;
-  return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n / 100);
+type ListResponse = { appuntamenti: Appuntamento[] };
+type CreateResponse = { appuntamento: Appuntamento };
+type UpdateResponse = { appuntamento: Appuntamento };
+
+// --- COSTANTI & HELPER ---
+
+const STATUS_LABEL: Record<AppuntamentoStatus, string> = {
+  new_lead: 'Nuovo lead',
+  no_answer: 'Nessuna risposta',
+  waiting: 'Attesa',
+  booked: 'Prenotato',
+  closed_won: 'Chiuso',
+  closed_lost: 'Perso',
+};
+
+function moneyFromCents(cents: number | null | undefined): string {
+  if (cents == null) return '—';
+  return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(cents / 100);
 }
 
-function euroToCents(input: string) {
-  const eur = Number((input ?? '').replace(',', '.'));
-  return Number.isFinite(eur) ? Math.round(eur * 100) : null;
+function fromDatetimeLocalValue(v: string): string {
+  return new Date(v).toISOString();
 }
 
-function toLocalDatetimeInputValue(iso: string) {
-  const d = new Date(iso);
+// Helper date per il calendario
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+}
+function endOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+}
+function addMonths(d: Date, n: number) {
+  return new Date(d.getFullYear(), d.getMonth() + n, 1);
+}
+function toYMD(d: Date): string {
   const pad = (x: number) => String(x).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function sameDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
 }
 
-export default function AppuntamentiPage() {
+// --- COMPONENTE PRINCIPALE ---
+
+export default function FedericaAppuntamentiPage() {
+  const [tab, setTab] = React.useState<'calendar' | 'list'>('calendar');
+
   const [items, setItems] = React.useState<Appuntamento[]>([]);
-  const [clienti, setClienti] = React.useState<Cliente[]>([]);
-  const [trattamenti, setTrattamenti] = React.useState<Trattamento[]>([]);
-  const [q, setQ] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const [open, setOpen] = React.useState(false);
-  const [isEdit, setIsEdit] = React.useState(false);
-  const [editingId, setEditingId] = React.useState<number | null>(null);
+  // Stato Calendario
+  const [month, setMonth] = React.useState<Date>(() => startOfMonth(new Date()));
+  const [selectedDay, setSelectedDay] = React.useState<Date>(() => new Date());
 
-  // form
-  const [clientId, setClientId] = React.useState<string>('');
-  const [treatmentId, setTreatmentId] = React.useState<string>('');
-  const [startsAt, setStartsAt] = React.useState<string>(() => {
-    const d = new Date(Date.now() + 30 * 60 * 1000);
-    return toLocalDatetimeInputValue(d.toISOString());
-  });
-  const [finalPriceEuro, setFinalPriceEuro] = React.useState<string>('');
-  const [notes, setNotes] = React.useState<string>('');
-  const [status, setStatus] = React.useState<string>('booked');
+  // Stato Filtri (List View & Fetch)
+  const [status, setStatus] = React.useState<AppuntamentoStatus | 'all'>('all');
+  const [from, setFrom] = React.useState('');
+  const [to, setTo] = React.useState('');
 
-  async function loadAll() {
-    const [a, c, t] = await Promise.all([
-      apiFetch<{ appuntamenti: Appuntamento[] }>('/api/appuntamenti'),
-      apiFetch<{ clienti: Cliente[] }>('/api/clienti'),
-      apiFetch<{ trattamenti: Trattamento[] }>('/api/trattamenti'),
-    ]);
+  // Form Creazione
+  const [clientId, setClientId] = React.useState('');
+  const [treatmentId, setTreatmentId] = React.useState('');
+  const [startsAt, setStartsAt] = React.useState('');
+  const [endsAt, setEndsAt] = React.useState('');
+  const [notes, setNotes] = React.useState('');
+  const [finalPrice, setFinalPrice] = React.useState('');
+  const [createStatus, setCreateStatus] = React.useState<AppuntamentoStatus>('booked');
 
-    setItems(Array.isArray(a.appuntamenti) ? a.appuntamenti : []);
-    setClienti(Array.isArray(c.clienti) ? c.clienti : []);
-    setTrattamenti(Array.isArray(t.trattamenti) ? t.trattamenti : []);
-  }
+  // --- Caricamento Dati ---
 
-  React.useEffect(() => { void loadAll(); }, []);
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-  const filtered = React.useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return items;
-    return items.filter((a) =>
-      a.client_name.toLowerCase().includes(s) ||
-      a.treatment_name.toLowerCase().includes(s) ||
-      (a.status ?? '').toLowerCase().includes(s),
-    );
-  }, [items, q]);
+    try {
+      const qs = new URLSearchParams();
+      if (status !== 'all') qs.set('status', status);
+      if (from) qs.set('from', from);
+      if (to) qs.set('to', to);
 
-  const selectedTreatment = React.useMemo(() => {
-    const id = Number(treatmentId);
-    if (!id) return null;
-    return trattamenti.find((t) => t.id === id) ?? null;
-  }, [treatmentId, trattamenti]);
+      const url = qs.toString() ? `/appuntamenti?${qs.toString()}` : '/appuntamenti';
+      const data = await apiFetch<ListResponse>(url);
+      const raw = Array.isArray(data?.appuntamenti) ? data.appuntamenti : [];
+
+      setItems(raw);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Errore caricamento');
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [status, from, to]);
 
   React.useEffect(() => {
-    if (selectedTreatment && !finalPriceEuro.trim()) {
-      setFinalPriceEuro(String((selectedTreatment.price_cents / 100).toFixed(2)).replace('.', ','));
-    }
-  }, [selectedTreatment, finalPriceEuro]);
+    void load();
+  }, [load]);
 
-  function resetForm() {
-    setClientId('');
-    setTreatmentId('');
-    setNotes('');
-    setStatus('booked');
-    setFinalPriceEuro('');
-    const d = new Date(Date.now() + 30 * 60 * 1000);
-    setStartsAt(toLocalDatetimeInputValue(d.toISOString()));
-    setIsEdit(false);
-    setEditingId(null);
-  }
+  // --- Azioni (Create, Update, Delete) ---
 
-  function openCreate() {
-    resetForm();
-    setOpen(true);
-  }
+  async function handleCreate() {
+    setError(null);
 
-  function openEditRow(a: Appuntamento) {
-    setIsEdit(true);
-    setEditingId(a.id);
-    setClientId(String(a.client_id));
-    setTreatmentId(String(a.treatment_id));
-    setStartsAt(toLocalDatetimeInputValue(a.starts_at));
-    setFinalPriceEuro(
-      a.final_price_cents != null
-        ? String((a.final_price_cents / 100).toFixed(2)).replace('.', ',')
-        : ''
-    );
-    setNotes(a.notes ?? '');
-    setStatus(a.status ?? 'booked');
-    setOpen(true);
-  }
+    if (!clientId.trim() || !treatmentId.trim())
+      return setError('client_id e treatment_id sono obbligatori.');
+    if (!startsAt) return setError('starts_at è obbligatorio.');
 
-  async function save() {
-    const cid = Number(clientId);
-    const tid = Number(treatmentId);
-    if (!cid || !tid) return;
+    const euros = finalPrice.trim();
+    const final_price_cents = euros
+      ? Math.round(Number(euros.replace(',', '.')) * 100)
+      : null;
+    if (euros && Number.isNaN(final_price_cents as any)) return setError('Prezzo non valido.');
 
-    const startsIso = new Date(startsAt).toISOString();
+    try {
+      setLoading(true);
 
-    const payload = {
-      client_id: cid,
-      treatment_id: tid,
-      starts_at: startsIso,
-      final_price_cents: euroToCents(finalPriceEuro),
-      notes: notes.trim() || null,
-      status,
-    };
+      const body = {
+        client_id: clientId.trim(),
+        treatment_id: treatmentId.trim(),
+        starts_at: fromDatetimeLocalValue(startsAt),
+        ends_at: endsAt ? fromDatetimeLocalValue(endsAt) : null,
+        notes: notes.trim() || null,
+        final_price_cents,
+        status: createStatus,
+      };
 
-    if (isEdit && editingId) {
-      await apiFetch(`/api/appuntamenti/${editingId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(payload),
-      });
-    } else {
-      await apiFetch('/api/appuntamenti', {
+      const data = await apiFetch<CreateResponse>('/appuntamenti', {
         method: 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       });
+
+      // Reset form
+      setClientId('');
+      setTreatmentId('');
+      setStartsAt('');
+      setEndsAt('');
+      setNotes('');
+      setFinalPrice('');
+      setCreateStatus('booked');
+
+      // Aggiunge il nuovo elemento in cima
+      setItems((prev) => [data.appuntamento, ...prev]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Errore creazione');
+    } finally {
+      setLoading(false);
     }
-
-    setOpen(false);
-    resetForm();
-    await loadAll();
   }
 
-  async function remove(id: number) {
-    await apiFetch(`/api/appuntamenti/${id}`, { method: 'DELETE' });
-    await loadAll();
+  async function handleUpdateStatus(id: string, next: AppuntamentoStatus) {
+    setError(null);
+    try {
+      const data = await apiFetch<UpdateResponse>(`/appuntamenti/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: next }),
+      });
+      setItems((prev) => prev.map((x) => (x.id === id ? data.appuntamento : x)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Errore update');
+    }
   }
+
+  async function handleDelete(id: string) {
+    setError(null);
+    try {
+      await apiFetch<{ ok: boolean }>(`/appuntamenti/${id}`, { method: 'DELETE' });
+      setItems((prev) => prev.filter((x) => x.id !== id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Errore delete');
+    }
+  }
+
+  // --- Logica Calendario (Computed) ---
+
+  const monthStart = startOfMonth(month);
+  const monthEnd = endOfMonth(month);
+
+  // Filtriamo gli elementi caricati per mostrare solo quelli del mese corrente nella vista Calendario
+  const monthItems = React.useMemo(() => {
+    return items.filter((a) => {
+      const s = new Date(a.starts_at).getTime();
+      return s >= monthStart.getTime() && s <= monthEnd.getTime();
+    });
+  }, [items, monthStart, monthEnd]);
+
+  const selectedDayItems = React.useMemo(() => {
+    return monthItems
+      .filter((a) => sameDay(new Date(a.starts_at), selectedDay))
+      .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
+  }, [monthItems, selectedDay]);
+
+  const daysGrid = React.useMemo(() => {
+    // Generazione griglia (inizia dal lunedì)
+    const first = startOfMonth(month);
+    const dow = (first.getDay() + 6) % 7; // 0=Mon ... 6=Sun
+    const start = new Date(first);
+    start.setDate(first.getDate() - dow);
+
+    const cells: Date[] = [];
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      cells.push(d);
+    }
+    return cells;
+  }, [month]);
+
+  function countDay(d: Date) {
+    return monthItems.filter((a) => sameDay(new Date(a.starts_at), d)).length;
+  }
+
+  // --- Render ---
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-semibold">Appuntamenti</h1>
-          <p className="text-sm text-muted-foreground">
-            Cliente + trattamento + data/ora + prezzo + note.
-          </p>
-        </div>
-
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openCreate}>Nuovo appuntamento</Button>
-          </DialogTrigger>
-
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{isEdit ? 'Modifica appuntamento' : 'Nuovo appuntamento'}</DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Cliente</Label>
-                  <select
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    value={clientId}
-                    onChange={(e) => setClientId(e.target.value)}
-                  >
-                    <option value="">Seleziona…</option>
-                    {clienti.map((c) => (
-                      <option key={c.id} value={String(c.id)}>
-                        {c.full_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <Label>Trattamento</Label>
-                  <select
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                    value={treatmentId}
-                    onChange={(e) => setTreatmentId(e.target.value)}
-                  >
-                    <option value="">Seleziona…</option>
-                    {trattamenti
-                      .filter((t) => t.is_active !== false)
-                      .map((t) => (
-                        <option key={t.id} value={String(t.id)}>
-                          {t.name}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Inizio</Label>
-                  <Input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
-                </div>
-
-                <div className="space-y-1">
-                  <Label>Prezzo finale (€)</Label>
-                  <Input value={finalPriceEuro} onChange={(e) => setFinalPriceEuro(e.target.value)} inputMode="decimal" />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label>Stato</Label>
-                <select
-                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                >
-                  <option value="booked">Prenotato</option>
-                  <option value="done">Eseguito</option>
-                  <option value="cancelled">Annullato</option>
-                  <option value="no_show">No-show</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <Label>Note</Label>
-                <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
-              </div>
-
-              <Button onClick={save} disabled={!clientId || !treatmentId || !startsAt}>
-                Salva
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Appuntamenti</h1>
+        <p className="text-sm text-muted-foreground">
+          Calendario + lista operativa collegata alle API.
+        </p>
       </div>
 
-      <div className="flex items-center gap-2">
-        <Input placeholder="Cerca…" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-sm" />
-        <Button variant="outline" onClick={loadAll}>Aggiorna</Button>
+      {error ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </div>
+      ) : null}
+
+      {/* Tabs di navigazione */}
+      <div className="flex gap-2">
+        <Button
+          variant={tab === 'calendar' ? 'default' : 'outline'}
+          onClick={() => setTab('calendar')}
+        >
+          Calendario
+        </Button>
+        <Button
+          variant={tab === 'list' ? 'default' : 'outline'}
+          onClick={() => setTab('list')}
+        >
+          Lista
+        </Button>
+        <div className="ml-auto">
+          <Button variant="outline" onClick={() => void load()} disabled={loading}>
+            {loading ? 'Carico...' : 'Ricarica'}
+          </Button>
+        </div>
       </div>
 
-      <div className="border rounded-lg overflow-hidden">
-        <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs text-muted-foreground border-b">
-          <div className="col-span-4">Cliente</div>
-          <div className="col-span-3">Trattamento</div>
-          <div className="col-span-3">Data/Ora</div>
-          <div className="col-span-2 text-right">Azioni</div>
-        </div>
-
-        {filtered.map((a) => (
-          <div key={a.id} className="grid grid-cols-12 gap-2 px-3 py-2 border-b last:border-b-0 text-sm">
-            <div className="col-span-4">
-              <div className="font-medium">{a.client_name}</div>
-              <div className="text-xs text-muted-foreground">{a.status}</div>
+      {/* Form Creazione (sempre visibile) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Crea appuntamento</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div className="space-y-2">
+              <Label>client_id</Label>
+              <Input
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                placeholder="es. 1"
+              />
             </div>
 
-            <div className="col-span-3 flex items-center">{a.treatment_name}</div>
-
-            <div className="col-span-3 flex items-center">
-              {new Date(a.starts_at).toLocaleString('it-IT')}
+            <div className="space-y-2">
+              <Label>treatment_id</Label>
+              <Input
+                value={treatmentId}
+                onChange={(e) => setTreatmentId(e.target.value)}
+                placeholder="es. 2"
+              />
             </div>
 
-            <div className="col-span-2 flex items-center justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => openEditRow(a)}>
-                Modifica
-              </Button>
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <select
+                className="h-10 rounded-md border bg-background px-3 text-sm"
+                value={createStatus}
+                onChange={(e) => setCreateStatus(e.target.value as AppuntamentoStatus)}
+              >
+                {Object.keys(STATUS_LABEL).map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_LABEL[s as AppuntamentoStatus]}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm">Elimina</Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Eliminare appuntamento?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Operazione irreversibile. (Sì, lo so: anche la vita.)
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Annulla</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => remove(a.id)}>
-                      Elimina
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+            <div className="space-y-2">
+              <Label>starts_at</Label>
+              <Input
+                type="datetime-local"
+                value={startsAt}
+                onChange={(e) => setStartsAt(e.target.value)}
+              />
+            </div>
 
-              <div className="text-xs text-muted-foreground pl-2">
-                {centsToEuro(a.final_price_cents)}
-              </div>
+            <div className="space-y-2">
+              <Label>ends_at (opzionale)</Label>
+              <Input
+                type="datetime-local"
+                value={endsAt}
+                onChange={(e) => setEndsAt(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Prezzo finale (EUR, opzionale)</Label>
+              <Input
+                value={finalPrice}
+                onChange={(e) => setFinalPrice(e.target.value)}
+                placeholder="es. 120"
+              />
             </div>
           </div>
-        ))}
 
-        {filtered.length === 0 ? (
-          <div className="px-3 py-6 text-sm text-muted-foreground">Nessun appuntamento.</div>
-        ) : null}
-      </div>
+          <div className="space-y-2">
+            <Label>Note (opzionale)</Label>
+            <Input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Note..."
+            />
+          </div>
+
+          <Button onClick={() => void handleCreate()} disabled={loading}>
+            {loading ? 'Creo...' : 'Crea'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* VISTA CALENDARIO */}
+      {tab === 'calendar' ? (
+        <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-4">
+          {/* Griglia Mese */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <CardTitle className="text-base">
+                {month.toLocaleString('it-IT', { month: 'long', year: 'numeric' })}
+              </CardTitle>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setMonth(addMonths(month, -1))}>
+                  ←
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setMonth(startOfMonth(new Date()))}
+                >
+                  Oggi
+                </Button>
+                <Button variant="outline" onClick={() => setMonth(addMonths(month, +1))}>
+                  →
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent>
+              <div className="grid grid-cols-7 text-xs text-muted-foreground mb-2">
+                {['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'].map((d) => (
+                  <div key={d} className="px-2 py-1">
+                    {d}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-1">
+                {daysGrid.map((d) => {
+                  const inMonth = d.getMonth() === month.getMonth();
+                  const isSel = sameDay(d, selectedDay);
+                  const n = countDay(d);
+
+                  return (
+                    <button
+                      key={d.toISOString()}
+                      onClick={() => setSelectedDay(d)}
+                      className={[
+                        'rounded-md border p-2 text-left hover:bg-muted transition',
+                        inMonth ? 'bg-background' : 'bg-muted/40 text-muted-foreground',
+                        isSel ? 'ring-2 ring-primary' : '',
+                      ].join(' ')}
+                      title={toYMD(d)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm font-medium">{d.getDate()}</div>
+                        {n > 0 ? (
+                          <div className="text-[11px] px-2 py-0.5 rounded-full border">
+                            {n}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="mt-2 text-[11px] text-muted-foreground truncate">
+                        {n > 0 ? 'Appuntamenti' : '—'}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Dettaglio Giorno Selezionato */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                Giorno: {selectedDay.toLocaleDateString('it-IT')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {selectedDayItems.length === 0 ? (
+                <div className="text-sm text-muted-foreground">Nessun appuntamento.</div>
+              ) : (
+                <div className="space-y-2">
+                  {selectedDayItems.map((a) => (
+                    <div key={a.id} className="rounded-md border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-medium">
+                            {new Date(a.starts_at).toLocaleTimeString('it-IT', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                            {' · '}
+                            {STATUS_LABEL[a.status]}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            client_id: <span className="font-mono">{a.client_id}</span> ·
+                            treatment_id:{' '}
+                            <span className="font-mono">{a.treatment_id}</span> · prezzo:{' '}
+                            <span className="font-mono">
+                              {moneyFromCents(a.final_price_cents)}
+                            </span>
+                          </div>
+                          {a.notes ? (
+                            <div className="text-sm mt-2">{a.notes}</div>
+                          ) : null}
+                        </div>
+
+                        <div className="flex flex-col gap-2 items-end">
+                          <select
+                            className="h-9 rounded-md border bg-background px-2 text-sm"
+                            value={a.status}
+                            onChange={(e) =>
+                              void handleUpdateStatus(
+                                a.id,
+                                e.target.value as AppuntamentoStatus
+                              )
+                            }
+                          >
+                            {Object.keys(STATUS_LABEL).map((s) => (
+                              <option key={s} value={s}>
+                                {STATUS_LABEL[s as AppuntamentoStatus]}
+                              </option>
+                            ))}
+                          </select>
+
+                          <Button
+                            variant="outline"
+                            className="h-9"
+                            onClick={() => void handleDelete(a.id)}
+                          >
+                            Elimina
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <>
+          {/* VISTA LISTA: Filtri */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Filtri lista</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col md:flex-row gap-2">
+              <select
+                className="h-10 rounded-md border bg-background px-3 text-sm"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as any)}
+              >
+                <option value="all">Tutti gli status</option>
+                {Object.keys(STATUS_LABEL).map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_LABEL[s as AppuntamentoStatus]}
+                  </option>
+                ))}
+              </select>
+
+              <Input
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+              />
+              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+
+              <Button onClick={() => void load()} disabled={loading}>
+                {loading ? 'Carico...' : 'Applica'}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* VISTA LISTA: Elenco */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Lista ({items.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loading && items.length === 0 ? (
+                <div className="text-sm text-muted-foreground">Caricamento...</div>
+              ) : items.length === 0 ? (
+                <div className="text-sm text-muted-foreground">Nessun appuntamento.</div>
+              ) : (
+                <div className="space-y-2">
+                  {items
+                    .slice()
+                    .sort(
+                      (a, b) =>
+                        new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime()
+                    )
+                    .map((a) => (
+                      <div key={a.id} className="rounded-md border p-3">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0 space-y-1">
+                            <div className="font-medium">
+                              {STATUS_LABEL[a.status]} ·{' '}
+                              {new Date(a.starts_at).toLocaleString('it-IT')}
+                              {a.ends_at
+                                ? ` → ${new Date(a.ends_at).toLocaleString('it-IT')}`
+                                : ''}
+                            </div>
+
+                            <div className="text-xs text-muted-foreground">
+                              client_id: <span className="font-mono">{a.client_id}</span>{' '}
+                              · treatment_id:{' '}
+                              <span className="font-mono">{a.treatment_id}</span> ·
+                              prezzo:{' '}
+                              <span className="font-mono">
+                                {moneyFromCents(a.final_price_cents)}
+                              </span>
+                            </div>
+
+                            {a.notes ? (
+                              <div className="text-sm">{a.notes}</div>
+                            ) : null}
+                          </div>
+
+                          <div className="flex flex-col gap-2 items-end">
+                            <div className="text-xs text-muted-foreground">#{a.id}</div>
+
+                            <select
+                              className="h-9 rounded-md border bg-background px-2 text-sm"
+                              value={a.status}
+                              onChange={(e) =>
+                                void handleUpdateStatus(
+                                  a.id,
+                                  e.target.value as AppuntamentoStatus
+                                )
+                              }
+                            >
+                              {Object.keys(STATUS_LABEL).map((s) => (
+                                <option key={s} value={s}>
+                                  {STATUS_LABEL[s as AppuntamentoStatus]}
+                                </option>
+                              ))}
+                            </select>
+
+                            <Button
+                              variant="outline"
+                              className="h-9"
+                              onClick={() => void handleDelete(a.id)}
+                            >
+                              Elimina
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }

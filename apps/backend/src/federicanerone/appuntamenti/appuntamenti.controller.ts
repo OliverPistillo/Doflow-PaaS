@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { assertAuthenticated, assertFedericaTenant, getTenantConn, respondError } from '../../tenant-helpers';
 import { AppuntamentiService, CreateAppuntamentoDto, UpdateAppuntamentoDto } from './appuntamenti.service';
@@ -8,13 +8,20 @@ export class AppuntamentiController {
   constructor(private readonly service: AppuntamentiService) {}
 
   @Get()
-  async list(@Req() req: Request, @Res() res: Response) {
+  async list(@Req() req: Request, @Res() res: Response, @Query() query: any) {
     try {
       assertFedericaTenant(req);
       assertAuthenticated(req);
 
       const ds = getTenantConn(req);
-      const appuntamenti = await this.service.list(ds);
+      // Passiamo i filtri estratti dalla Query String al service
+      const filters = {
+        status: query.status,
+        from: query.from,
+        to: query.to,
+      };
+
+      const appuntamenti = await this.service.list(ds, filters);
       return res.json({ appuntamenti });
     } catch (e) {
       return respondError(res, e);
