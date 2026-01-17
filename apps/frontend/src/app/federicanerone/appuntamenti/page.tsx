@@ -11,7 +11,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
+  DialogFooter, // <--- ORA FUNZIONA PERFETTAMENTE
 } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -48,7 +48,6 @@ type Appuntamento = {
   updated_at: string;
 };
 
-// Tipi per Clienti e Trattamenti
 type Cliente = { id: string; full_name: string; phone?: string; email?: string };
 type Trattamento = { id: string; name: string; price_cents: number; duration_minutes: number };
 
@@ -63,20 +62,13 @@ const STATUS_LABEL: Record<AppuntamentoStatus, string> = {
   no_answer: 'Nessuna risposta',
   waiting: 'Attesa',
   booked: 'Prenotato',
-  closed_won: 'Eseguito', // Parola migliore per "Concluso/Chiuso"
+  closed_won: 'Eseguito',
   closed_lost: 'Perso',
 };
 
 function moneyFromCents(cents: number | null | undefined): string {
   if (cents == null) return '—';
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(cents / 100);
-}
-
-function toDatetimeLocalValue(iso: string): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function fromDatetimeLocalValue(v: string): string {
@@ -105,7 +97,6 @@ function sameDay(a: Date, b: Date) {
 export default function FedericaAppuntamentiPage() {
   const [tab, setTab] = React.useState<'calendar' | 'list'>('calendar');
 
-  // Dati principali
   const [items, setItems] = React.useState<Appuntamento[]>([]);
   const [clienti, setClienti] = React.useState<Cliente[]>([]);
   const [trattamenti, setTrattamenti] = React.useState<Trattamento[]>([]);
@@ -113,49 +104,44 @@ export default function FedericaAppuntamentiPage() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Stati per il calendario
   const [month, setMonth] = React.useState<Date>(() => startOfMonth(new Date()));
   const [selectedDay, setSelectedDay] = React.useState<Date>(() => new Date());
 
-  // Stati per i filtri lista
+  // Filtri lista
   const [statusFilter, setStatusFilter] = React.useState<AppuntamentoStatus | 'all'>('all');
   const [filterFrom, setFilterFrom] = React.useState('');
   const [filterTo, setFilterTo] = React.useState('');
 
-  // --- FORM CREAZIONE APPUNTAMENTO ---
-  const [inputClientName, setInputClientName] = React.useState(''); // Quello che l'utente scrive
+  // Form Creazione
+  const [inputClientName, setInputClientName] = React.useState(''); 
   const [selectedClientId, setSelectedClientId] = React.useState<string | null>(null);
-  
   const [treatmentId, setTreatmentId] = React.useState('');
   const [startsAt, setStartsAt] = React.useState('');
   const [notes, setNotes] = React.useState('');
-  const [finalPrice, setFinalPrice] = React.useState(''); // euro string
+  const [finalPrice, setFinalPrice] = React.useState('');
 
-  // Stati per gestione "Nuovo Cliente"
+  // Nuovo Cliente Popup
   const [showNewClientAlert, setShowNewClientAlert] = React.useState(false);
   const [showNewClientForm, setShowNewClientForm] = React.useState(false);
-  // Dati form nuovo cliente
   const [newClientPhone, setNewClientPhone] = React.useState('');
   const [newClientEmail, setNewClientEmail] = React.useState('');
 
-  // --- CARICAMENTO DATI ---
+  // --- CARICAMENTO ---
 
   const loadAll = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // 1. Carica Appuntamenti
       const qs = new URLSearchParams();
       if (statusFilter !== 'all') qs.set('status', statusFilter);
       if (filterFrom) qs.set('from', filterFrom);
       if (filterTo) qs.set('to', filterTo);
       
-      const p1 = apiFetch<ListResponse>(`/appuntamenti?${qs.toString()}`);
-      // 2. Carica dati ausiliari (se non già caricati, o ricarica sempre per sicurezza)
-      const p2 = apiFetch<{ clienti: Cliente[] }>('/clienti');
-      const p3 = apiFetch<{ trattamenti: Trattamento[] }>('/trattamenti');
-
-      const [resApp, resCli, resTrat] = await Promise.all([p1, p2, p3]);
+      const [resApp, resCli, resTrat] = await Promise.all([
+        apiFetch<ListResponse>(`/appuntamenti?${qs.toString()}`),
+        apiFetch<{ clienti: Cliente[] }>('/clienti'),
+        apiFetch<{ trattamenti: Trattamento[] }>('/trattamenti')
+      ]);
 
       setItems(Array.isArray(resApp?.appuntamenti) ? resApp.appuntamenti : []);
       setClienti(Array.isArray(resCli?.clienti) ? resCli.clienti : []);
@@ -172,9 +158,8 @@ export default function FedericaAppuntamentiPage() {
     void loadAll();
   }, [loadAll]);
 
-  // --- LOGICA AUTOCOMPLETE CLIENTE ---
+  // --- LOGICA FORM ---
   
-  // Filtra clienti mentre si scrive
   const filteredClients = React.useMemo(() => {
     if (!inputClientName) return [];
     return clienti.filter(c => c.full_name.toLowerCase().includes(inputClientName.toLowerCase()));
@@ -182,8 +167,6 @@ export default function FedericaAppuntamentiPage() {
 
   const handleClientNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInputClientName(e.target.value);
-    // Se l'utente digita, resettiamo l'ID selezionato finché non clicca su un suggerimento
-    // Oppure controlliamo match esatto
     const match = clienti.find(c => c.full_name.toLowerCase() === e.target.value.toLowerCase());
     setSelectedClientId(match ? match.id : null);
   };
@@ -193,40 +176,30 @@ export default function FedericaAppuntamentiPage() {
     setSelectedClientId(c.id);
   };
 
-  // Quando seleziono un trattamento, imposta il prezzo di default se vuoto
   React.useEffect(() => {
     if (treatmentId && !finalPrice) {
       const t = trattamenti.find(x => String(x.id) === treatmentId);
-      if (t) {
-        setFinalPrice(String(t.price_cents / 100));
-      }
+      if (t) setFinalPrice(String(t.price_cents / 100));
     }
   }, [treatmentId, trattamenti, finalPrice]);
 
-
-  // --- CREAZIONE ---
-
-  // 1. Click su "Crea"
   async function onPreCreate() {
     setError(null);
     if (!treatmentId) return setError('Seleziona un trattamento.');
     if (!startsAt) return setError('Inserisci data e ora.');
 
-    // Caso A: Cliente esistente selezionato o match esatto trovato
     if (selectedClientId) {
       await doCreateAppointment(selectedClientId);
       return;
     }
 
-    // Caso B: Nessun ID, ma c'è un nome scritto -> Nuovo Cliente?
     if (inputClientName.trim().length > 0) {
-      setShowNewClientAlert(true); // "Vuoi creare il cliente?"
+      setShowNewClientAlert(true);
     } else {
       setError('Inserisci il nome del cliente.');
     }
   }
 
-  // 2. Creazione effettiva Appuntamento
   async function doCreateAppointment(cid: string) {
     try {
       setLoading(true);
@@ -237,10 +210,10 @@ export default function FedericaAppuntamentiPage() {
         client_id: cid,
         treatment_id: treatmentId,
         starts_at: fromDatetimeLocalValue(startsAt),
-        ends_at: null, // Calcolato dal backend o null
+        ends_at: null,
         notes: notes.trim() || null,
         final_price_cents,
-        status: 'booked', // Default status
+        status: 'booked',
       };
 
       const data = await apiFetch<CreateResponse>('/appuntamenti', {
@@ -248,7 +221,7 @@ export default function FedericaAppuntamentiPage() {
         body: JSON.stringify(body),
       });
 
-      // Reset Form
+      // Reset
       setInputClientName('');
       setSelectedClientId(null);
       setTreatmentId('');
@@ -256,9 +229,7 @@ export default function FedericaAppuntamentiPage() {
       setNotes('');
       setFinalPrice('');
 
-      // Aggiungi alla lista
       setItems((prev) => [data.appuntamento, ...prev]);
-      // Ricarica per sicurezza (aggiorna calendari etc)
       void loadAll(); 
 
     } catch (e) {
@@ -268,11 +239,9 @@ export default function FedericaAppuntamentiPage() {
     }
   }
 
-  // 3. Creazione Nuovo Cliente (Flow Popup)
   async function handleCreateClientAndAppointment() {
     try {
       setLoading(true);
-      // Crea Cliente
       const resCli = await apiFetch<{ cliente: Cliente }>('/clienti', {
         method: 'POST',
         body: JSON.stringify({
@@ -283,23 +252,16 @@ export default function FedericaAppuntamentiPage() {
       });
       
       const newClient = resCli.cliente;
-      // Aggiorna lista locale clienti
       setClienti(prev => [...prev, newClient]);
-      
-      // Chiudi form e procedi a creare appuntamento con il nuovo ID
       setShowNewClientForm(false);
       setNewClientPhone('');
       setNewClientEmail('');
-      
       await doCreateAppointment(newClient.id);
-
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Errore creazione cliente');
-      setLoading(false); // Stop loading solo se errore, altrimenti continua in doCreateAppointment
+      setLoading(false); 
     }
   }
-
-  // --- UPDATE / DELETE (Come prima) ---
 
   async function handleUpdateStatus(id: string, next: string) {
     try {
@@ -319,7 +281,6 @@ export default function FedericaAppuntamentiPage() {
     } catch (e) { console.error(e); }
   }
 
-  // --- CALENDAR COMPUTED ---
   const monthStart = startOfMonth(month);
   const monthEnd = endOfMonth(month);
   
@@ -370,7 +331,7 @@ export default function FedericaAppuntamentiPage() {
         </div>
       </div>
 
-      {/* FORM CREAZIONE (Rinnovato) */}
+      {/* FORM CREAZIONE */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Crea appuntamento</CardTitle>
@@ -428,7 +389,7 @@ export default function FedericaAppuntamentiPage() {
 
             {/* 3. Giorno (Data e Ora) */}
             <div className="space-y-2">
-              <Label>Data e Ora</Label>
+              <Label>Giorno</Label>
               <Input
                 type="datetime-local"
                 value={startsAt}
@@ -436,7 +397,7 @@ export default function FedericaAppuntamentiPage() {
               />
             </div>
 
-            {/* 4. Prezzo (Rinominato) */}
+            {/* 4. Prezzo */}
             <div className="space-y-2">
               <Label>Prezzo (€)</Label>
               <Input
@@ -458,8 +419,6 @@ export default function FedericaAppuntamentiPage() {
         </CardContent>
       </Card>
 
-      {/* --- POPUPs NUOVO CLIENTE --- */}
-      
       {/* A. Alert Confirmation */}
       <AlertDialog open={showNewClientAlert} onOpenChange={setShowNewClientAlert}>
         <AlertDialogContent>
@@ -503,12 +462,10 @@ export default function FedericaAppuntamentiPage() {
         </DialogContent>
       </Dialog>
 
-
       {/* --- VISTE (CALENDARIO / LISTA) --- */}
 
       {tab === 'calendar' ? (
         <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-4">
-          {/* Mese */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <CardTitle className="text-base">{month.toLocaleString('it-IT', { month: 'long', year: 'numeric' })}</CardTitle>
@@ -542,13 +499,12 @@ export default function FedericaAppuntamentiPage() {
                       <span className={`text-xs font-semibold mb-1 ${isSel ? 'text-primary' : ''}`}>{d.getDate()}</span>
                       <div className="w-full space-y-1">
                         {dayApps.slice(0, 3).map(a => {
-                          // LOGICA COLORI CELLE CALENDARIO AGGIORNATA
-                          let color = "bg-gray-100 text-gray-700";
-                          if(a.status === 'booked') color = "bg-yellow-100 text-yellow-800 border-yellow-200"; // Giallo
-                          else if(a.status === 'closed_won') color = "bg-green-100 text-green-800 border-green-200"; // Verde
-                          else if(a.status === 'closed_lost' || a.status === 'cancelled') color = "bg-red-50 text-red-800 opacity-60 line-through";
+                          // COLORI AGGIORNATI: Giallo = Prenotato, Verde = Eseguito
+                          let color = "bg-gray-100 text-gray-700 border-gray-200";
+                          if(a.status === 'booked') color = "bg-yellow-100 text-yellow-800 border-yellow-200";
+                          else if(a.status === 'closed_won') color = "bg-green-100 text-green-800 border-green-200";
+                          else if(a.status === 'closed_lost') color = "bg-red-50 text-red-800 opacity-60 line-through";
                           
-                          // Cerchiamo nome cliente
                           const cName = clienti.find(c => String(c.id) === String(a.client_id))?.full_name || '...';
                           
                           return (
@@ -566,7 +522,6 @@ export default function FedericaAppuntamentiPage() {
             </CardContent>
           </Card>
 
-          {/* Dettaglio Giorno */}
           <Card>
             <CardHeader><CardTitle className="text-base">Giorno: {selectedDay.toLocaleDateString('it-IT')}</CardTitle></CardHeader>
             <CardContent>
@@ -592,7 +547,7 @@ export default function FedericaAppuntamentiPage() {
                            {a.notes && <div className="text-xs italic mt-1">{a.notes}</div>}
                          </div>
                          <div className="flex flex-col gap-1 items-end">
-                            {/* MODIFICA: Select per cambiare stato invece che badge statico */}
+                            {/* SELECT STATUS */}
                             <select
                               className="h-7 text-[10px] rounded border bg-transparent px-1 mb-1 focus:outline-none focus:ring-1 focus:ring-primary"
                               value={a.status}
@@ -616,7 +571,6 @@ export default function FedericaAppuntamentiPage() {
           </Card>
         </div>
       ) : (
-        /* VISTA LISTA (Semplificata) */
         <Card>
           <CardHeader><CardTitle className="text-base">Elenco completo</CardTitle></CardHeader>
           <CardContent className="space-y-4">
@@ -633,7 +587,6 @@ export default function FedericaAppuntamentiPage() {
                      {' - '}
                      {clienti.find(c => String(c.id) === String(a.client_id))?.full_name}
                    </div>
-                   {/* Anche qui dropdown per coerenza, o lasciare label */}
                    <select
                       className="text-xs border-none bg-transparent"
                       value={a.status}
