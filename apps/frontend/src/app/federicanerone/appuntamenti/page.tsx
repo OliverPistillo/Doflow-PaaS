@@ -6,6 +6,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 // --- TIPI ---
 
@@ -31,6 +48,10 @@ type Appuntamento = {
   updated_at: string;
 };
 
+// Tipi per Clienti e Trattamenti
+type Cliente = { id: string; full_name: string; phone?: string; email?: string };
+type Trattamento = { id: string; name: string; price_cents: number; duration_minutes: number };
+
 type ListResponse = { appuntamenti: Appuntamento[] };
 type CreateResponse = { appuntamento: Appuntamento };
 type UpdateResponse = { appuntamento: Appuntamento };
@@ -51,11 +72,17 @@ function moneyFromCents(cents: number | null | undefined): string {
   return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(cents / 100);
 }
 
+function toDatetimeLocalValue(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function fromDatetimeLocalValue(v: string): string {
   return new Date(v).toISOString();
 }
 
-// Helper date per il calendario
 function startOfMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
 }
@@ -64,10 +91,6 @@ function endOfMonth(d: Date) {
 }
 function addMonths(d: Date, n: number) {
   return new Date(d.getFullYear(), d.getMonth() + n, 1);
-}
-function toYMD(d: Date): string {
-  const pad = (x: number) => String(x).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 function sameDay(a: Date, b: Date) {
   return (
@@ -82,83 +105,142 @@ function sameDay(a: Date, b: Date) {
 export default function FedericaAppuntamentiPage() {
   const [tab, setTab] = React.useState<'calendar' | 'list'>('calendar');
 
+  // Dati principali
   const [items, setItems] = React.useState<Appuntamento[]>([]);
+  const [clienti, setClienti] = React.useState<Cliente[]>([]);
+  const [trattamenti, setTrattamenti] = React.useState<Trattamento[]>([]);
+  
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Stato Calendario
+  // Stati per il calendario
   const [month, setMonth] = React.useState<Date>(() => startOfMonth(new Date()));
   const [selectedDay, setSelectedDay] = React.useState<Date>(() => new Date());
 
-  // Stato Filtri (List View & Fetch)
-  const [status, setStatus] = React.useState<AppuntamentoStatus | 'all'>('all');
-  const [from, setFrom] = React.useState('');
-  const [to, setTo] = React.useState('');
+  // Stati per i filtri lista
+  const [statusFilter, setStatusFilter] = React.useState<AppuntamentoStatus | 'all'>('all');
+  const [filterFrom, setFilterFrom] = React.useState('');
+  const [filterTo, setFilterTo] = React.useState('');
 
-  // Form Creazione
-  const [clientId, setClientId] = React.useState('');
+  // --- FORM CREAZIONE APPUNTAMENTO ---
+  const [inputClientName, setInputClientName] = React.useState(''); // Quello che l'utente scrive
+  const [selectedClientId, setSelectedClientId] = React.useState<string | null>(null);
+  
   const [treatmentId, setTreatmentId] = React.useState('');
   const [startsAt, setStartsAt] = React.useState('');
-  const [endsAt, setEndsAt] = React.useState('');
   const [notes, setNotes] = React.useState('');
-  const [finalPrice, setFinalPrice] = React.useState('');
-  const [createStatus, setCreateStatus] = React.useState<AppuntamentoStatus>('booked');
+  const [finalPrice, setFinalPrice] = React.useState(''); // euro string
 
-  // --- Caricamento Dati ---
+  // Stati per gestione "Nuovo Cliente"
+  const [showNewClientAlert, setShowNewClientAlert] = React.useState(false);
+  const [showNewClientForm, setShowNewClientForm] = React.useState(false);
+  // Dati form nuovo cliente
+  const [newClientPhone, setNewClientPhone] = React.useState('');
+  const [newClientEmail, setNewClientEmail] = React.useState('');
 
-  const load = React.useCallback(async () => {
+  // --- CARICAMENTO DATI ---
+
+  const loadAll = React.useCallback(async () => {
     setLoading(true);
     setError(null);
-
     try {
+      // 1. Carica Appuntamenti
       const qs = new URLSearchParams();
-      if (status !== 'all') qs.set('status', status);
-      if (from) qs.set('from', from);
-      if (to) qs.set('to', to);
+      if (statusFilter !== 'all') qs.set('status', statusFilter);
+      if (filterFrom) qs.set('from', filterFrom);
+      if (filterTo) qs.set('to', filterTo);
+      
+      const p1 = apiFetch<ListResponse>(`/appuntamenti?${qs.toString()}`);
+      // 2. Carica dati ausiliari (se non già caricati, o ricarica sempre per sicurezza)
+      const p2 = apiFetch<{ clienti: Cliente[] }>('/clienti');
+      const p3 = apiFetch<{ trattamenti: Trattamento[] }>('/trattamenti');
 
-      const url = qs.toString() ? `/appuntamenti?${qs.toString()}` : '/appuntamenti';
-      const data = await apiFetch<ListResponse>(url);
-      const raw = Array.isArray(data?.appuntamenti) ? data.appuntamenti : [];
+      const [resApp, resCli, resTrat] = await Promise.all([p1, p2, p3]);
 
-      setItems(raw);
+      setItems(Array.isArray(resApp?.appuntamenti) ? resApp.appuntamenti : []);
+      setClienti(Array.isArray(resCli?.clienti) ? resCli.clienti : []);
+      setTrattamenti(Array.isArray(resTrat?.trattamenti) ? resTrat.trattamenti : []);
+
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Errore caricamento');
-      setItems([]);
+      setError(e instanceof Error ? e.message : 'Errore caricamento dati');
     } finally {
       setLoading(false);
     }
-  }, [status, from, to]);
+  }, [statusFilter, filterFrom, filterTo]);
 
   React.useEffect(() => {
-    void load();
-  }, [load]);
+    void loadAll();
+  }, [loadAll]);
 
-  // --- Azioni (Create, Update, Delete) ---
+  // --- LOGICA AUTOCOMPLETE CLIENTE ---
+  
+  // Filtra clienti mentre si scrive
+  const filteredClients = React.useMemo(() => {
+    if (!inputClientName) return [];
+    return clienti.filter(c => c.full_name.toLowerCase().includes(inputClientName.toLowerCase()));
+  }, [clienti, inputClientName]);
 
-  async function handleCreate() {
+  const handleClientNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputClientName(e.target.value);
+    // Se l'utente digita, resettiamo l'ID selezionato finché non clicca su un suggerimento
+    // Oppure controlliamo match esatto
+    const match = clienti.find(c => c.full_name.toLowerCase() === e.target.value.toLowerCase());
+    setSelectedClientId(match ? match.id : null);
+  };
+
+  const selectClient = (c: Cliente) => {
+    setInputClientName(c.full_name);
+    setSelectedClientId(c.id);
+  };
+
+  // Quando seleziono un trattamento, imposta il prezzo di default se vuoto
+  React.useEffect(() => {
+    if (treatmentId && !finalPrice) {
+      const t = trattamenti.find(x => String(x.id) === treatmentId);
+      if (t) {
+        setFinalPrice(String(t.price_cents / 100));
+      }
+    }
+  }, [treatmentId, trattamenti, finalPrice]);
+
+
+  // --- CREAZIONE ---
+
+  // 1. Click su "Crea"
+  async function onPreCreate() {
     setError(null);
+    if (!treatmentId) return setError('Seleziona un trattamento.');
+    if (!startsAt) return setError('Inserisci data e ora.');
 
-    if (!clientId.trim() || !treatmentId.trim())
-      return setError('client_id e treatment_id sono obbligatori.');
-    if (!startsAt) return setError('starts_at è obbligatorio.');
+    // Caso A: Cliente esistente selezionato o match esatto trovato
+    if (selectedClientId) {
+      await doCreateAppointment(selectedClientId);
+      return;
+    }
 
-    const euros = finalPrice.trim();
-    const final_price_cents = euros
-      ? Math.round(Number(euros.replace(',', '.')) * 100)
-      : null;
-    if (euros && Number.isNaN(final_price_cents as any)) return setError('Prezzo non valido.');
+    // Caso B: Nessun ID, ma c'è un nome scritto -> Nuovo Cliente?
+    if (inputClientName.trim().length > 0) {
+      setShowNewClientAlert(true); // "Vuoi creare il cliente?"
+    } else {
+      setError('Inserisci il nome del cliente.');
+    }
+  }
 
+  // 2. Creazione effettiva Appuntamento
+  async function doCreateAppointment(cid: string) {
     try {
       setLoading(true);
+      const euros = finalPrice.trim();
+      const final_price_cents = euros ? Math.round(Number(euros.replace(',', '.')) * 100) : null;
 
       const body = {
-        client_id: clientId.trim(),
-        treatment_id: treatmentId.trim(),
+        client_id: cid,
+        treatment_id: treatmentId,
         starts_at: fromDatetimeLocalValue(startsAt),
-        ends_at: endsAt ? fromDatetimeLocalValue(endsAt) : null,
+        ends_at: null, // Calcolato dal backend o null
         notes: notes.trim() || null,
         final_price_cents,
-        status: createStatus,
+        status: 'booked', // Default status
       };
 
       const data = await apiFetch<CreateResponse>('/appuntamenti', {
@@ -166,53 +248,81 @@ export default function FedericaAppuntamentiPage() {
         body: JSON.stringify(body),
       });
 
-      // Reset form
-      setClientId('');
+      // Reset Form
+      setInputClientName('');
+      setSelectedClientId(null);
       setTreatmentId('');
       setStartsAt('');
-      setEndsAt('');
       setNotes('');
       setFinalPrice('');
-      setCreateStatus('booked');
 
-      // Aggiunge il nuovo elemento in cima
+      // Aggiungi alla lista
       setItems((prev) => [data.appuntamento, ...prev]);
+      // Ricarica per sicurezza (aggiorna calendari etc)
+      void loadAll(); 
+
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Errore creazione');
+      setError(e instanceof Error ? e.message : 'Errore creazione appuntamento');
     } finally {
       setLoading(false);
     }
   }
 
+  // 3. Creazione Nuovo Cliente (Flow Popup)
+  async function handleCreateClientAndAppointment() {
+    try {
+      setLoading(true);
+      // Crea Cliente
+      const resCli = await apiFetch<{ cliente: Cliente }>('/clienti', {
+        method: 'POST',
+        body: JSON.stringify({
+          full_name: inputClientName,
+          phone: newClientPhone,
+          email: newClientEmail
+        })
+      });
+      
+      const newClient = resCli.cliente;
+      // Aggiorna lista locale clienti
+      setClienti(prev => [...prev, newClient]);
+      
+      // Chiudi form e procedi a creare appuntamento con il nuovo ID
+      setShowNewClientForm(false);
+      setNewClientPhone('');
+      setNewClientEmail('');
+      
+      await doCreateAppointment(newClient.id);
+
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Errore creazione cliente');
+      setLoading(false); // Stop loading solo se errore, altrimenti continua in doCreateAppointment
+    }
+  }
+
+  // --- UPDATE / DELETE (Come prima) ---
+
   async function handleUpdateStatus(id: string, next: AppuntamentoStatus) {
-    setError(null);
     try {
       const data = await apiFetch<UpdateResponse>(`/appuntamenti/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ status: next }),
       });
       setItems((prev) => prev.map((x) => (x.id === id ? data.appuntamento : x)));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Errore update');
-    }
+    } catch (e) { console.error(e); }
   }
 
   async function handleDelete(id: string) {
-    setError(null);
+    if(!confirm("Eliminare appuntamento?")) return;
     try {
       await apiFetch<{ ok: boolean }>(`/appuntamenti/${id}`, { method: 'DELETE' });
       setItems((prev) => prev.filter((x) => x.id !== id));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Errore delete');
-    }
+    } catch (e) { console.error(e); }
   }
 
-  // --- Logica Calendario (Computed) ---
-
+  // --- CALENDAR COMPUTED ---
   const monthStart = startOfMonth(month);
   const monthEnd = endOfMonth(month);
-
-  // Filtriamo gli elementi caricati per mostrare solo quelli del mese corrente nella vista Calendario
+  
   const monthItems = React.useMemo(() => {
     return items.filter((a) => {
       const s = new Date(a.starts_at).getTime();
@@ -220,19 +330,11 @@ export default function FedericaAppuntamentiPage() {
     });
   }, [items, monthStart, monthEnd]);
 
-  const selectedDayItems = React.useMemo(() => {
-    return monthItems
-      .filter((a) => sameDay(new Date(a.starts_at), selectedDay))
-      .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
-  }, [monthItems, selectedDay]);
-
   const daysGrid = React.useMemo(() => {
-    // Generazione griglia (inizia dal lunedì)
     const first = startOfMonth(month);
-    const dow = (first.getDay() + 6) % 7; // 0=Mon ... 6=Sun
+    const dow = (first.getDay() + 6) % 7; 
     const start = new Date(first);
     start.setDate(first.getDate() - dow);
-
     const cells: Date[] = [];
     for (let i = 0; i < 42; i++) {
       const d = new Date(start);
@@ -242,90 +344,91 @@ export default function FedericaAppuntamentiPage() {
     return cells;
   }, [month]);
 
-  function countDay(d: Date) {
-    return monthItems.filter((a) => sameDay(new Date(a.starts_at), d)).length;
-  }
-
-  // --- Render ---
+  // --- RENDER ---
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Appuntamenti</h1>
-        <p className="text-sm text-muted-foreground">
-          Calendario + lista operativa collegata alle API.
-        </p>
+        <p className="text-sm text-muted-foreground">Gestione agenda e clienti.</p>
       </div>
 
-      {error ? (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+      {error && (
+        <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
           {error}
         </div>
-      ) : null}
+      )}
 
-      {/* Tabs di navigazione */}
+      {/* Tabs */}
       <div className="flex gap-2">
-        <Button
-          variant={tab === 'calendar' ? 'default' : 'outline'}
-          onClick={() => setTab('calendar')}
-        >
-          Calendario
-        </Button>
-        <Button
-          variant={tab === 'list' ? 'default' : 'outline'}
-          onClick={() => setTab('list')}
-        >
-          Lista
-        </Button>
+        <Button variant={tab === 'calendar' ? 'default' : 'outline'} onClick={() => setTab('calendar')}>Calendario</Button>
+        <Button variant={tab === 'list' ? 'default' : 'outline'} onClick={() => setTab('list')}>Lista</Button>
         <div className="ml-auto">
-          <Button variant="outline" onClick={() => void load()} disabled={loading}>
-            {loading ? 'Carico...' : 'Ricarica'}
+          <Button variant="outline" onClick={() => void loadAll()} disabled={loading}>
+            {loading ? 'Carico...' : 'Aggiorna'}
           </Button>
         </div>
       </div>
 
-      {/* Form Creazione (sempre visibile) */}
+      {/* FORM CREAZIONE (Rinnovato) */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Crea appuntamento</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-            <div className="space-y-2">
-              <Label>client_id</Label>
-              <Input
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                placeholder="es. 1"
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            
+            {/* 1. Cliente (Autocomplete) */}
+            <div className="space-y-2 relative group">
+              <Label>Cliente</Label>
+              <Input 
+                value={inputClientName} 
+                onChange={handleClientNameChange} 
+                placeholder="Cerca o inserisci nome..."
+                autoComplete="off"
               />
+              {/* Dropdown suggerimenti */}
+              {inputClientName && !selectedClientId && filteredClients.length > 0 && (
+                <div className="absolute z-10 w-full bg-white border rounded-md shadow-lg mt-1 max-h-40 overflow-y-auto">
+                  {filteredClients.map(c => (
+                    <div 
+                      key={c.id} 
+                      className="px-3 py-2 text-sm hover:bg-muted cursor-pointer"
+                      onClick={() => selectClient(c)}
+                    >
+                      {c.full_name}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {selectedClientId && (
+                <div className="text-xs text-green-600 flex items-center gap-1">
+                   ✓ Cliente selezionato
+                   <button onClick={() => { setSelectedClientId(null); setInputClientName(''); }} className="underline text-muted-foreground ml-2">Cambia</button>
+                </div>
+              )}
             </div>
 
+            {/* 2. Trattamento (Select) */}
             <div className="space-y-2">
-              <Label>treatment_id</Label>
-              <Input
+              <Label>Trattamento</Label>
+              <select
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                 value={treatmentId}
                 onChange={(e) => setTreatmentId(e.target.value)}
-                placeholder="es. 2"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Status</Label>
-              <select
-                className="h-10 rounded-md border bg-background px-3 text-sm"
-                value={createStatus}
-                onChange={(e) => setCreateStatus(e.target.value as AppuntamentoStatus)}
               >
-                {Object.keys(STATUS_LABEL).map((s) => (
-                  <option key={s} value={s}>
-                    {STATUS_LABEL[s as AppuntamentoStatus]}
+                <option value="">Seleziona...</option>
+                {trattamenti.map(t => (
+                  <option key={t.id} value={String(t.id)}>
+                    {t.name} ({moneyFromCents(t.price_cents)})
                   </option>
                 ))}
               </select>
             </div>
 
+            {/* 3. Giorno (Data e Ora) */}
             <div className="space-y-2">
-              <Label>starts_at</Label>
+              <Label>Data e Ora</Label>
               <Input
                 type="datetime-local"
                 value={startsAt}
@@ -333,101 +436,126 @@ export default function FedericaAppuntamentiPage() {
               />
             </div>
 
+            {/* 4. Prezzo (Rinominato) */}
             <div className="space-y-2">
-              <Label>ends_at (opzionale)</Label>
-              <Input
-                type="datetime-local"
-                value={endsAt}
-                onChange={(e) => setEndsAt(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Prezzo finale (EUR, opzionale)</Label>
+              <Label>Prezzo (€)</Label>
               <Input
                 value={finalPrice}
                 onChange={(e) => setFinalPrice(e.target.value)}
-                placeholder="es. 120"
+                placeholder="es. 50"
               />
             </div>
           </div>
 
           <div className="space-y-2">
             <Label>Note (opzionale)</Label>
-            <Input
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Note..."
-            />
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="..." />
           </div>
 
-          <Button onClick={() => void handleCreate()} disabled={loading}>
-            {loading ? 'Creo...' : 'Crea'}
+          <Button onClick={onPreCreate} disabled={loading}>
+            {loading ? 'Creo...' : 'Crea Appuntamento'}
           </Button>
         </CardContent>
       </Card>
 
-      {/* VISTA CALENDARIO */}
+      {/* --- POPUPs NUOVO CLIENTE --- */}
+      
+      {/* A. Alert Confirmation */}
+      <AlertDialog open={showNewClientAlert} onOpenChange={setShowNewClientAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cliente non trovato</AlertDialogTitle>
+            <AlertDialogDescription>
+              Il cliente "<strong>{inputClientName}</strong>" non esiste nel database. Vuoi aggiungerlo ora?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowNewClientAlert(false)}>Annulla</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setShowNewClientAlert(false); setShowNewClientForm(true); }}>
+              Sì, aggiungi cliente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* B. Form Dati Cliente */}
+      <Dialog open={showNewClientForm} onOpenChange={setShowNewClientForm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nuovo Cliente: {inputClientName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Telefono (opzionale)</Label>
+              <Input value={newClientPhone} onChange={e => setNewClientPhone(e.target.value)} placeholder="333..." />
+            </div>
+            <div className="space-y-2">
+              <Label>Email (opzionale)</Label>
+              <Input value={newClientEmail} onChange={e => setNewClientEmail(e.target.value)} placeholder="email@example.com" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewClientForm(false)}>Annulla</Button>
+            <Button onClick={handleCreateClientAndAppointment} disabled={loading}>
+              {loading ? 'Salvataggio...' : 'Salva e Crea Appuntamento'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
+      {/* --- VISTE (CALENDARIO / LISTA) --- */}
+
       {tab === 'calendar' ? (
         <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-4">
-          {/* Griglia Mese */}
+          {/* Mese */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-2">
-              <CardTitle className="text-base">
-                {month.toLocaleString('it-IT', { month: 'long', year: 'numeric' })}
-              </CardTitle>
+              <CardTitle className="text-base">{month.toLocaleString('it-IT', { month: 'long', year: 'numeric' })}</CardTitle>
               <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setMonth(addMonths(month, -1))}>
-                  ←
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setMonth(startOfMonth(new Date()))}
-                >
-                  Oggi
-                </Button>
-                <Button variant="outline" onClick={() => setMonth(addMonths(month, +1))}>
-                  →
-                </Button>
+                <Button variant="outline" size="sm" onClick={() => setMonth(addMonths(month, -1))}>←</Button>
+                <Button variant="outline" size="sm" onClick={() => setMonth(startOfMonth(new Date()))}>Oggi</Button>
+                <Button variant="outline" size="sm" onClick={() => setMonth(addMonths(month, +1))}>→</Button>
               </div>
             </CardHeader>
-
             <CardContent>
-              <div className="grid grid-cols-7 text-xs text-muted-foreground mb-2">
-                {['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'].map((d) => (
-                  <div key={d} className="px-2 py-1">
-                    {d}
-                  </div>
-                ))}
+              <div className="grid grid-cols-7 text-xs text-muted-foreground mb-1">
+                {['L','M','M','G','V','S','D'].map(d => <div key={d} className="px-1">{d}</div>)}
               </div>
-
-              <div className="grid grid-cols-7 gap-1">
+              <div className="grid grid-cols-7 gap-1 auto-rows-fr">
                 {daysGrid.map((d) => {
                   const inMonth = d.getMonth() === month.getMonth();
                   const isSel = sameDay(d, selectedDay);
-                  const n = countDay(d);
+                  const dayApps = monthItems.filter(a => sameDay(new Date(a.starts_at), d))
+                    .sort((a,b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
 
                   return (
                     <button
                       key={d.toISOString()}
                       onClick={() => setSelectedDay(d)}
                       className={[
-                        'rounded-md border p-2 text-left hover:bg-muted transition',
-                        inMonth ? 'bg-background' : 'bg-muted/40 text-muted-foreground',
-                        isSel ? 'ring-2 ring-primary' : '',
-                      ].join(' ')}
-                      title={toYMD(d)}
+                        "flex flex-col items-start justify-start text-left rounded-md border p-1 h-24 overflow-hidden transition",
+                        inMonth ? "bg-background" : "bg-muted/20 text-muted-foreground",
+                        isSel ? "ring-2 ring-primary border-primary" : "hover:bg-muted"
+                      ].join(" ")}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-medium">{d.getDate()}</div>
-                        {n > 0 ? (
-                          <div className="text-[11px] px-2 py-0.5 rounded-full border">
-                            {n}
-                          </div>
-                        ) : null}
-                      </div>
-                      <div className="mt-2 text-[11px] text-muted-foreground truncate">
-                        {n > 0 ? 'Appuntamenti' : '—'}
+                      <span className={`text-xs font-semibold mb-1 ${isSel ? 'text-primary' : ''}`}>{d.getDate()}</span>
+                      <div className="w-full space-y-1">
+                        {dayApps.slice(0, 3).map(a => {
+                          let color = "bg-gray-100 text-gray-700";
+                          if(a.status === 'booked') color = "bg-green-100 text-green-800 border-green-200";
+                          else if(a.status === 'closed_lost') color = "bg-red-50 text-red-800 opacity-60 line-through";
+                          
+                          // Cerchiamo nome cliente
+                          const cName = clienti.find(c => String(c.id) === String(a.client_id))?.full_name || '...';
+                          
+                          return (
+                            <div key={a.id} className={`text-[9px] px-1 py-0.5 rounded border truncate w-full font-medium ${color}`}>
+                              {new Date(a.starts_at).toLocaleTimeString("it-IT", {hour:'2-digit', minute:'2-digit'})} {cName}
+                            </div>
+                          )
+                        })}
+                        {dayApps.length > 3 && <div className="text-[9px] text-muted-foreground pl-1">+{dayApps.length - 3} altri</div>}
                       </div>
                     </button>
                   );
@@ -436,192 +564,71 @@ export default function FedericaAppuntamentiPage() {
             </CardContent>
           </Card>
 
-          {/* Dettaglio Giorno Selezionato */}
+          {/* Dettaglio Giorno */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">
-                Giorno: {selectedDay.toLocaleDateString('it-IT')}
-              </CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-base">Giorno: {selectedDay.toLocaleDateString('it-IT')}</CardTitle></CardHeader>
             <CardContent>
-              {selectedDayItems.length === 0 ? (
+              {monthItems.filter(a => sameDay(new Date(a.starts_at), selectedDay)).length === 0 ? (
                 <div className="text-sm text-muted-foreground">Nessun appuntamento.</div>
               ) : (
                 <div className="space-y-2">
-                  {selectedDayItems.map((a) => (
-                    <div key={a.id} className="rounded-md border p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="font-medium">
-                            {new Date(a.starts_at).toLocaleTimeString('it-IT', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                            {' · '}
-                            {STATUS_LABEL[a.status]}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            client_id: <span className="font-mono">{a.client_id}</span> ·
-                            treatment_id:{' '}
-                            <span className="font-mono">{a.treatment_id}</span> · prezzo:{' '}
-                            <span className="font-mono">
-                              {moneyFromCents(a.final_price_cents)}
+                   {monthItems.filter(a => sameDay(new Date(a.starts_at), selectedDay))
+                   .sort((a,b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())
+                   .map(a => (
+                     <div key={a.id} className="rounded-md border p-3 bg-card text-card-foreground shadow-sm">
+                       <div className="flex justify-between items-start">
+                         <div>
+                           <div className="font-semibold text-sm">
+                             {new Date(a.starts_at).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'})}
+                             {' - '}
+                             {clienti.find(c => String(c.id) === String(a.client_id))?.full_name || 'Cliente sconosciuto'}
+                           </div>
+                           <div className="text-xs text-muted-foreground">
+                             {trattamenti.find(t => String(t.id) === String(a.treatment_id))?.name || 'Trattamento'}
+                             {' · '}{moneyFromCents(a.final_price_cents)}
+                           </div>
+                           {a.notes && <div className="text-xs italic mt-1">{a.notes}</div>}
+                         </div>
+                         <div className="flex flex-col gap-1 items-end">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground mb-1">
+                              {STATUS_LABEL[a.status]}
                             </span>
-                          </div>
-                          {a.notes ? (
-                            <div className="text-sm mt-2">{a.notes}</div>
-                          ) : null}
-                        </div>
-
-                        <div className="flex flex-col gap-2 items-end">
-                          <select
-                            className="h-9 rounded-md border bg-background px-2 text-sm"
-                            value={a.status}
-                            onChange={(e) =>
-                              void handleUpdateStatus(
-                                a.id,
-                                e.target.value as AppuntamentoStatus
-                              )
-                            }
-                          >
-                            {Object.keys(STATUS_LABEL).map((s) => (
-                              <option key={s} value={s}>
-                                {STATUS_LABEL[s as AppuntamentoStatus]}
-                              </option>
-                            ))}
-                          </select>
-
-                          <Button
-                            variant="outline"
-                            className="h-9"
-                            onClick={() => void handleDelete(a.id)}
-                          >
-                            Elimina
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                            <Button variant="ghost" size="sm" className="h-6 text-xs text-red-500" onClick={() => handleDelete(a.id)}>
+                              Elimina
+                            </Button>
+                         </div>
+                       </div>
+                     </div>
+                   ))}
                 </div>
               )}
             </CardContent>
           </Card>
         </div>
       ) : (
-        <>
-          {/* VISTA LISTA: Filtri */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Filtri lista</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col md:flex-row gap-2">
-              <select
-                className="h-10 rounded-md border bg-background px-3 text-sm"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as any)}
-              >
-                <option value="all">Tutti gli status</option>
-                {Object.keys(STATUS_LABEL).map((s) => (
-                  <option key={s} value={s}>
-                    {STATUS_LABEL[s as AppuntamentoStatus]}
-                  </option>
-                ))}
-              </select>
-
-              <Input
-                type="date"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-              />
-              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-
-              <Button onClick={() => void load()} disabled={loading}>
-                {loading ? 'Carico...' : 'Applica'}
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* VISTA LISTA: Elenco */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Lista ({items.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading && items.length === 0 ? (
-                <div className="text-sm text-muted-foreground">Caricamento...</div>
-              ) : items.length === 0 ? (
-                <div className="text-sm text-muted-foreground">Nessun appuntamento.</div>
-              ) : (
-                <div className="space-y-2">
-                  {items
-                    .slice()
-                    .sort(
-                      (a, b) =>
-                        new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime()
-                    )
-                    .map((a) => (
-                      <div key={a.id} className="rounded-md border p-3">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0 space-y-1">
-                            <div className="font-medium">
-                              {STATUS_LABEL[a.status]} ·{' '}
-                              {new Date(a.starts_at).toLocaleString('it-IT')}
-                              {a.ends_at
-                                ? ` → ${new Date(a.ends_at).toLocaleString('it-IT')}`
-                                : ''}
-                            </div>
-
-                            <div className="text-xs text-muted-foreground">
-                              client_id: <span className="font-mono">{a.client_id}</span>{' '}
-                              · treatment_id:{' '}
-                              <span className="font-mono">{a.treatment_id}</span> ·
-                              prezzo:{' '}
-                              <span className="font-mono">
-                                {moneyFromCents(a.final_price_cents)}
-                              </span>
-                            </div>
-
-                            {a.notes ? (
-                              <div className="text-sm">{a.notes}</div>
-                            ) : null}
-                          </div>
-
-                          <div className="flex flex-col gap-2 items-end">
-                            <div className="text-xs text-muted-foreground">#{a.id}</div>
-
-                            <select
-                              className="h-9 rounded-md border bg-background px-2 text-sm"
-                              value={a.status}
-                              onChange={(e) =>
-                                void handleUpdateStatus(
-                                  a.id,
-                                  e.target.value as AppuntamentoStatus
-                                )
-                              }
-                            >
-                              {Object.keys(STATUS_LABEL).map((s) => (
-                                <option key={s} value={s}>
-                                  {STATUS_LABEL[s as AppuntamentoStatus]}
-                                </option>
-                              ))}
-                            </select>
-
-                            <Button
-                              variant="outline"
-                              className="h-9"
-                              onClick={() => void handleDelete(a.id)}
-                            >
-                              Elimina
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </>
+        /* VISTA LISTA (Semplificata) */
+        <Card>
+          <CardHeader><CardTitle className="text-base">Elenco completo</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+             <div className="flex gap-2">
+               <Input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} className="w-auto" />
+               <Input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)} className="w-auto" />
+               <Button onClick={() => void loadAll()} variant="secondary">Filtra</Button>
+             </div>
+             <div className="space-y-2">
+               {items.map(a => (
+                 <div key={a.id} className="border p-2 rounded flex justify-between items-center text-sm">
+                   <div>
+                     <span className="font-bold">{new Date(a.starts_at).toLocaleDateString()} {new Date(a.starts_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                     {' - '}
+                     {clienti.find(c => String(c.id) === String(a.client_id))?.full_name}
+                   </div>
+                   <div className="text-xs text-muted-foreground">{STATUS_LABEL[a.status]}</div>
+                 </div>
+               ))}
+             </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
