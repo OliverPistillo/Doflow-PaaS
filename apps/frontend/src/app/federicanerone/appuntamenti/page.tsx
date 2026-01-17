@@ -11,7 +11,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter, // <--- ORA FUNZIONA PERFETTAMENTE
+  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -216,7 +216,7 @@ export default function FedericaAppuntamentiPage() {
         status: 'booked',
       };
 
-      const data = await apiFetch<CreateResponse>('/appuntamenti', {
+      await apiFetch<CreateResponse>('/appuntamenti', {
         method: 'POST',
         body: JSON.stringify(body),
       });
@@ -229,8 +229,8 @@ export default function FedericaAppuntamentiPage() {
       setNotes('');
       setFinalPrice('');
 
-      setItems((prev) => [data.appuntamento, ...prev]);
-      void loadAll(); 
+      // Ricarica completa per evitare problemi di stato
+      await loadAll(); 
 
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Errore creazione appuntamento');
@@ -263,22 +263,31 @@ export default function FedericaAppuntamentiPage() {
     }
   }
 
-  async function handleUpdateStatus(id: string, next: string) {
+  // Modificato per ricaricare i dati e prevenire la sparizione dell'oggetto
+  async function handleUpdateStatus(id: string, next: AppuntamentoStatus) {
     try {
-      const data = await apiFetch<UpdateResponse>(`/appuntamenti/${id}`, {
+      setLoading(true);
+      await apiFetch<UpdateResponse>(`/appuntamenti/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ status: next }),
       });
-      setItems((prev) => prev.map((x) => (x.id === id ? data.appuntamento : x)));
-    } catch (e) { console.error(e); }
+      await loadAll(); // Ricarica tutto per sincronizzare
+    } catch (e) { 
+      console.error(e); 
+      setLoading(false);
+    }
   }
 
   async function handleDelete(id: string) {
     if(!confirm("Eliminare appuntamento?")) return;
     try {
+      setLoading(true);
       await apiFetch<{ ok: boolean }>(`/appuntamenti/${id}`, { method: 'DELETE' });
-      setItems((prev) => prev.filter((x) => x.id !== id));
-    } catch (e) { console.error(e); }
+      await loadAll();
+    } catch (e) { 
+      console.error(e);
+      setLoading(false);
+    }
   }
 
   const monthStart = startOfMonth(month);
@@ -339,7 +348,7 @@ export default function FedericaAppuntamentiPage() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             
-            {/* 1. Cliente (Autocomplete) */}
+            {/* 1. Cliente */}
             <div className="space-y-2 relative group">
               <Label>Cliente</Label>
               <Input 
@@ -348,7 +357,6 @@ export default function FedericaAppuntamentiPage() {
                 placeholder="Cerca o inserisci nome..."
                 autoComplete="off"
               />
-              {/* Dropdown suggerimenti */}
               {inputClientName && !selectedClientId && filteredClients.length > 0 && (
                 <div className="absolute z-10 w-full bg-white border rounded-md shadow-lg mt-1 max-h-40 overflow-y-auto">
                   {filteredClients.map(c => (
@@ -370,7 +378,7 @@ export default function FedericaAppuntamentiPage() {
               )}
             </div>
 
-            {/* 2. Trattamento (Select) */}
+            {/* 2. Trattamento */}
             <div className="space-y-2">
               <Label>Trattamento</Label>
               <select
@@ -387,7 +395,7 @@ export default function FedericaAppuntamentiPage() {
               </select>
             </div>
 
-            {/* 3. Giorno (Data e Ora) */}
+            {/* 3. Giorno */}
             <div className="space-y-2">
               <Label>Giorno</Label>
               <Input
@@ -499,7 +507,6 @@ export default function FedericaAppuntamentiPage() {
                       <span className={`text-xs font-semibold mb-1 ${isSel ? 'text-primary' : ''}`}>{d.getDate()}</span>
                       <div className="w-full space-y-1">
                         {dayApps.slice(0, 3).map(a => {
-                          // COLORI AGGIORNATI: Giallo = Prenotato, Verde = Eseguito
                           let color = "bg-gray-100 text-gray-700 border-gray-200";
                           if(a.status === 'booked') color = "bg-yellow-100 text-yellow-800 border-yellow-200";
                           else if(a.status === 'closed_won') color = "bg-green-100 text-green-800 border-green-200";
@@ -547,20 +554,23 @@ export default function FedericaAppuntamentiPage() {
                            {a.notes && <div className="text-xs italic mt-1">{a.notes}</div>}
                          </div>
                          <div className="flex flex-col gap-1 items-end">
-                            {/* SELECT STATUS */}
-                            <select
-                              className="h-7 text-[10px] rounded border bg-transparent px-1 mb-1 focus:outline-none focus:ring-1 focus:ring-primary"
-                              value={a.status}
-                              onChange={(e) => handleUpdateStatus(a.id, e.target.value)}
-                            >
-                               {Object.keys(STATUS_LABEL).map(k => (
-                                 <option key={k} value={k}>{STATUS_LABEL[k as AppuntamentoStatus]}</option>
-                               ))}
-                            </select>
-
-                            <Button variant="ghost" size="sm" className="h-6 text-xs text-red-500" onClick={() => handleDelete(a.id)}>
-                              Elimina
-                            </Button>
+                            <div className="flex gap-2 items-center mt-2">
+                              {/* Mostra Eseguito SOLO se non è già chiuso */}
+                              {a.status !== 'closed_won' && (
+                                <Button 
+                                  variant="default" 
+                                  size="sm" 
+                                  className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white" 
+                                  onClick={() => handleUpdateStatus(a.id, 'closed_won')}
+                                >
+                                  Eseguito
+                                </Button>
+                              )}
+                              
+                              <Button variant="ghost" size="sm" className="h-7 text-xs text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(a.id)}>
+                                Elimina
+                              </Button>
+                            </div>
                          </div>
                        </div>
                      </div>
@@ -587,15 +597,23 @@ export default function FedericaAppuntamentiPage() {
                      {' - '}
                      {clienti.find(c => String(c.id) === String(a.client_id))?.full_name}
                    </div>
-                   <select
-                      className="text-xs border-none bg-transparent"
-                      value={a.status}
-                      onChange={(e) => handleUpdateStatus(a.id, e.target.value)}
-                   >
-                       {Object.keys(STATUS_LABEL).map(k => (
-                         <option key={k} value={k}>{STATUS_LABEL[k as AppuntamentoStatus]}</option>
-                       ))}
-                   </select>
+                   <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground uppercase">{STATUS_LABEL[a.status]}</span>
+                      {a.status !== 'closed_won' && (
+                        <Button 
+                          size="sm" variant="outline" className="h-6 text-[10px] text-green-600 border-green-200 bg-green-50"
+                          onClick={() => handleUpdateStatus(a.id, 'closed_won')}
+                        >
+                          Eseguito
+                        </Button>
+                      )}
+                      <Button 
+                        size="sm" variant="ghost" className="h-6 text-[10px] text-red-500"
+                        onClick={() => handleDelete(a.id)}
+                      >
+                        X
+                      </Button>
+                   </div>
                  </div>
                ))}
              </div>
