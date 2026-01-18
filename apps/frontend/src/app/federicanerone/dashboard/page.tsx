@@ -105,12 +105,12 @@ export default function FedericaDashboardPage() {
 
       {/* --- SEZIONE KPI --- */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-        <KpiCard title="Nuovi Lead" value={data.kpi.new_lead} color="border-l-4 border-l-gray-400" />
+        <KpiCard title="Nuovi Clienti" value={data.kpi.new_lead} color="border-l-4 border-l-gray-400" />
         <KpiCard title="Nessuna Risposta" value={data.kpi.no_answer} color="border-l-4 border-l-orange-300 bg-orange-50/30" />
         <KpiCard title="Appuntamenti" value={data.kpi.booked} color="border-l-4 border-l-blue-400 bg-blue-50/30" />
         <KpiCard title="In Attesa" value={data.kpi.waiting} color="border-l-4 border-l-yellow-400 bg-yellow-50/30" />
-        <KpiCard title="Eseguiti (Won)" value={data.kpi.closed_won} color="border-l-4 border-l-green-500 bg-green-50/30" />
-        <KpiCard title="Persi (Lost)" value={data.kpi.closed_lost} color="border-l-4 border-l-red-400 bg-red-50/30" />
+        <KpiCard title="Eseguiti" value={data.kpi.closed_won} color="border-l-4 border-l-green-500 bg-green-50/30" />
+        <KpiCard title="Persi" value={data.kpi.closed_lost} color="border-l-4 border-l-red-400 bg-red-50/30" />
       </div>
 
       {/* --- SEZIONE FATTURATO --- */}
