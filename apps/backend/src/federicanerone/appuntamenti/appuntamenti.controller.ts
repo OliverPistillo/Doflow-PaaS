@@ -7,6 +7,25 @@ import { AppuntamentiService, CreateAppuntamentoDto, UpdateAppuntamentoDto } fro
 export class AppuntamentiController {
   constructor(private readonly service: AppuntamentiService) {}
 
+  // --- NUOVO ENDPOINT STATISTICHE ---
+  // Importante: mettilo PRIMA di @Get(':id') se ce l'avessi, per evitare conflitti di routing
+  @Get('stats')
+  async getStats(@Req() req: Request, @Res() res: Response, @Query('year') year?: string) {
+    try {
+      assertFedericaTenant(req);
+      assertAuthenticated(req);
+
+      const ds = getTenantConn(req);
+      // Anno corrente di default se non specificato
+      const targetYear = year ? Number(year) : new Date().getFullYear();
+      
+      const stats = await this.service.getStats(ds, targetYear);
+      return res.json(stats);
+    } catch (e) {
+      return respondError(res, e);
+    }
+  }
+
   @Get()
   async list(@Req() req: Request, @Res() res: Response, @Query() query: any) {
     try {
@@ -14,7 +33,6 @@ export class AppuntamentiController {
       assertAuthenticated(req);
 
       const ds = getTenantConn(req);
-      // Passiamo i filtri estratti dalla Query String al service
       const filters = {
         status: query.status,
         from: query.from,

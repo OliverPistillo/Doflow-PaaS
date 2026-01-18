@@ -320,7 +320,7 @@ export default function FedericaAppuntamentiPage() {
     <div className="space-y-6 relative">
       <div>
         {/* Titolo modificato per conferma aggiornamento */}
-        <h1 className="text-2xl font-semibold tracking-tight">Appuntamenti v2</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Appuntamenti</h1>
         <p className="text-sm text-muted-foreground">Gestione agenda e clienti.</p>
       </div>
 

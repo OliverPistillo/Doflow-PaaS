@@ -2,9 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
 export type CreateAppuntamentoDto = {
-  client_id: number | string; // Accettiamo stringhe dal frontend, poi le convertiamo
+  client_id: number | string;
   treatment_id: number | string;
-  starts_at: string; // ISO
+  starts_at: string;
   ends_at?: string | null;
   final_price_cents?: number | null;
   notes?: string | null;
@@ -13,17 +13,97 @@ export type CreateAppuntamentoDto = {
 
 export type UpdateAppuntamentoDto = Partial<CreateAppuntamentoDto>;
 
-// Tipo per i filtri
 export type AppuntamentiFilter = {
   status?: string;
-  from?: string; // yyyy-mm-dd
-  to?: string;   // yyyy-mm-dd
+  from?: string;
+  to?: string;
 };
 
 @Injectable()
 export class AppuntamentiService {
   
-  // 1. Aggiornato per accettare 'filters' e costruire la query dinamica
+  // --- NUOVO METODO PER LE STATISTICHE ---
+  async getStats(ds: DataSource, year: number) {
+    // 1. KPI Totali (Counts per status)
+    // Usiamo una singola query aggregata per efficienza
+    const kpiRaw = await ds.query(`
+      SELECT 
+        status, 
+        COUNT(*) as count,
+        SUM(COALESCE(final_price_cents, 0)) as revenue
+      FROM federicanerone.appuntamenti
+      WHERE EXTRACT(YEAR FROM starts_at) = $1
+      GROUP BY status
+    `, [year]);
+
+    // Trasformiamo l'array in un oggetto { booked: 10, closed_won: 5, ... }
+    const kpiMap: Record<string, number> = {};
+    let totalRevenue = 0;
+
+    kpiRaw.forEach((row: any) => {
+      kpiMap[row.status] = Number(row.count);
+      if (row.status === 'closed_won') {
+        totalRevenue += Number(row.revenue);
+      }
+    });
+
+    // 2. Fatturato Mensile (solo per 'closed_won' o 'done')
+    const monthlyRaw = await ds.query(`
+      SELECT 
+        EXTRACT(MONTH FROM starts_at) as month, 
+        SUM(final_price_cents) as total
+      FROM federicanerone.appuntamenti
+      WHERE 
+        EXTRACT(YEAR FROM starts_at) = $1 
+        AND status = 'closed_won' 
+      GROUP BY month
+      ORDER BY month ASC
+    `, [year]);
+
+    // Normalizziamo per avere tutti i 12 mesi (anche quelli a 0)
+    const monthlyData = Array.from({ length: 12 }, (_, i) => {
+      const found = monthlyRaw.find((r: any) => Number(r.month) === i + 1);
+      return {
+        month: i + 1,
+        value: found ? Number(found.total) / 100 : 0 // Convertiamo cents in euro
+      };
+    });
+
+    // 3. Statistiche Trattamenti (Top 5 per frequenza)
+    const treatmentsRaw = await ds.query(`
+      SELECT 
+        t.name, 
+        COUNT(a.id) as count
+      FROM federicanerone.appuntamenti a
+      JOIN federicanerone.trattamenti t ON t.id = a.treatment_id
+      WHERE EXTRACT(YEAR FROM a.starts_at) = $1
+      GROUP BY t.name
+      ORDER BY count DESC
+      LIMIT 5
+    `, [year]);
+
+    const treatmentsData = treatmentsRaw.map((row: any) => ({
+      name: row.name,
+      value: Number(row.count)
+    }));
+
+    return {
+      kpi: {
+        new_lead: kpiMap['new_lead'] || 0,
+        no_answer: kpiMap['no_answer'] || 0,
+        booked: kpiMap['booked'] || 0,
+        waiting: kpiMap['waiting'] || 0,
+        closed_won: kpiMap['closed_won'] || 0,
+        closed_lost: kpiMap['closed_lost'] || 0,
+        fatturato_eur: totalRevenue / 100, // Euro
+      },
+      monthly: monthlyData,
+      treatments: treatmentsData,
+    };
+  }
+
+  // --- METODI CRUD ESISTENTI (INVARIATI) ---
+
   async list(ds: DataSource, filters: AppuntamentiFilter = {}) {
     let sql = `
       SELECT
@@ -49,28 +129,20 @@ export class AppuntamentiService {
     const params: any[] = [];
     let idx = 1;
 
-    // Filtro Status
     if (filters.status && filters.status !== 'all') {
       sql += ` AND a.status = $${idx++}`;
       params.push(filters.status);
     }
-
-    // Filtro Data Inizio (Da...)
     if (filters.from) {
       sql += ` AND a.starts_at >= $${idx++}`;
-      // Aggiungiamo orario 00:00 per prendere tutto il giorno
       params.push(`${filters.from}T00:00:00.000Z`);
     }
-
-    // Filtro Data Fine (A...)
     if (filters.to) {
       sql += ` AND a.starts_at <= $${idx++}`;
-      // Aggiungiamo orario 23:59 per includere tutto il giorno
       params.push(`${filters.to}T23:59:59.999Z`);
     }
 
     sql += ` ORDER BY a.starts_at DESC`;
-
     return ds.query(sql, params);
   }
 
@@ -82,15 +154,9 @@ export class AppuntamentiService {
     }
 
     const rows = await ds.query(
-      `
-      INSERT INTO federicanerone.appuntamenti
-        (client_id, treatment_id, starts_at, ends_at, final_price_cents, notes, status, created_at, updated_at)
-      VALUES
-        ($1, $2, $3, $4, $5, $6, $7, now(), now())
-      RETURNING *
-      `,
+      `INSERT INTO federicanerone.appuntamenti (client_id, treatment_id, starts_at, ends_at, final_price_cents, notes, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now()) RETURNING *`,
       [
-        Number(dto.client_id), // Assicuriamo che sia un numero
+        Number(dto.client_id),
         Number(dto.treatment_id),
         dto.starts_at,
         dto.ends_at ?? null,
@@ -107,54 +173,25 @@ export class AppuntamentiService {
     const values: any[] = [];
     let idx = 1;
 
-    if (dto.client_id != null) { 
-      fields.push(`client_id = $${idx++}`); 
-      values.push(Number(dto.client_id)); 
-    }
-    if (dto.treatment_id != null) { 
-      fields.push(`treatment_id = $${idx++}`); 
-      values.push(Number(dto.treatment_id)); 
-    }
-    if (typeof dto.starts_at === 'string') { 
-      fields.push(`starts_at = $${idx++}`); 
-      values.push(dto.starts_at); 
-    }
-    if (typeof dto.ends_at === 'string' || dto.ends_at === null) { 
-      fields.push(`ends_at = $${idx++}`); 
-      values.push(dto.ends_at); 
-    }
-    if (typeof dto.final_price_cents === 'number' || dto.final_price_cents === null) { 
-      fields.push(`final_price_cents = $${idx++}`); 
-      values.push(dto.final_price_cents); 
-    }
-    if (typeof dto.notes === 'string' || dto.notes === null) { 
-      fields.push(`notes = $${idx++}`); 
-      values.push(dto.notes ? dto.notes.trim() : null); 
-    }
-    if (typeof dto.status === 'string') { 
-      fields.push(`status = $${idx++}`); 
-      values.push(dto.status.trim()); 
-    }
+    if (dto.client_id != null) { fields.push(`client_id = $${idx++}`); values.push(Number(dto.client_id)); }
+    if (dto.treatment_id != null) { fields.push(`treatment_id = $${idx++}`); values.push(Number(dto.treatment_id)); }
+    if (typeof dto.starts_at === 'string') { fields.push(`starts_at = $${idx++}`); values.push(dto.starts_at); }
+    if (typeof dto.ends_at === 'string' || dto.ends_at === null) { fields.push(`ends_at = $${idx++}`); values.push(dto.ends_at); }
+    if (typeof dto.final_price_cents === 'number' || dto.final_price_cents === null) { fields.push(`final_price_cents = $${idx++}`); values.push(dto.final_price_cents); }
+    if (typeof dto.notes === 'string' || dto.notes === null) { fields.push(`notes = $${idx++}`); values.push(dto.notes ? dto.notes.trim() : null); }
+    if (typeof dto.status === 'string') { fields.push(`status = $${idx++}`); values.push(dto.status.trim()); }
 
     if (fields.length === 0) {
-      // Nessun campo da aggiornare, restituiamo l'originale o errore
-      // Per evitare errori 400 inutili se il frontend manda body vuoto, 
-      // potremmo solo fare una select, ma qui lanciamo errore come prima.
       const err: any = new Error('no fields to update');
       err.statusCode = 400;
       throw err;
     }
 
     fields.push(`updated_at = now()`);
-
     values.push(id);
+    
     const rows = await ds.query(
-      `
-      UPDATE federicanerone.appuntamenti
-      SET ${fields.join(', ')}
-      WHERE id = $${idx}
-      RETURNING *
-      `,
+      `UPDATE federicanerone.appuntamenti SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
       values,
     );
 
@@ -163,7 +200,6 @@ export class AppuntamentiService {
       err.statusCode = 404;
       throw err;
     }
-
     return rows[0];
   }
 
