@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useTheme } from "next-themes";
+import { apiFetch } from "@/lib/api"; // --- MODIFICA VIP: Importato apiFetch ---
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -39,6 +40,9 @@ import {
   AlertTriangle 
 } from "lucide-react";
 
+// --- AGGIUNTA VIP: TIPO ---
+type VipPeriod = "monthly" | "quarterly" | "semiannual" | "annual";
+
 export default function AccountPage() {
   const [loading, setLoading] = React.useState(false);
   const { setTheme, theme } = useTheme();
@@ -58,6 +62,22 @@ export default function AccountPage() {
 
   // --- STATO PREFERENZE ---
   const [defaultView, setDefaultView] = React.useState("calendar");
+
+  // --- AGGIUNTA VIP: STATO ---
+  const [vipPeriod, setVipPeriod] = React.useState<VipPeriod>("annual");
+  const [vipThresholdEur, setVipThresholdEur] = React.useState("500"); // euro
+
+  // --- MODIFICA VIP: Carica impostazioni dal DB al mount ---
+  React.useEffect(() => {
+    apiFetch<{ thresholdEur: number; period: string }>('/federicanerone/settings')
+      .then((data) => {
+        if (data) {
+          setVipThresholdEur(data.thresholdEur.toString());
+          setVipPeriod(data.period as VipPeriod);
+        }
+      })
+      .catch((err) => console.error("Errore caricamento settings", err));
+  }, []);
 
   // Handler Upload Foto
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,6 +119,30 @@ export default function AccountPage() {
       setConfirmPwd("");
     } catch (error) {
       console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- AGGIUNTA VIP: HANDLER REALE ---
+  const handleSaveVipSettings = async () => {
+    const n = Number(vipThresholdEur);
+    if (!Number.isFinite(n) || n <= 0) {
+      alert("Inserisci una soglia VIP valida (numero > 0).");
+      return;
+    }
+  
+    setLoading(true);
+    try {
+      // API call reale
+      await apiFetch('/federicanerone/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ thresholdEur: n, period: vipPeriod }),
+      });
+      alert("Impostazioni VIP salvate correttamente!");
+    } catch (error) {
+      console.error(error);
+      alert("Errore durante il salvataggio.");
     } finally {
       setLoading(false);
     }
@@ -344,6 +388,59 @@ export default function AccountPage() {
 
             </CardContent>
           </Card>
+
+          {/* --- AGGIUNTA VIP: CARD UI --- */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Clienti VIP</CardTitle>
+              <CardDescription>
+                Imposta come viene calcolato il badge VIP (frequenza e soglia di spesa).
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Frequenza</Label>
+                  <Select value={vipPeriod} onValueChange={(v) => setVipPeriod(v as VipPeriod)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleziona frequenza" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="monthly">Mensile</SelectItem>
+                      <SelectItem value="quarterly">Trimestrale</SelectItem>
+                      <SelectItem value="semiannual">Semestrale</SelectItem>
+                      <SelectItem value="annual">Annuale</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    La spesa verrà considerata su questo periodo.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Soglia VIP (EUR)</Label>
+                  <Input
+                    inputMode="decimal"
+                    value={vipThresholdEur}
+                    onChange={(e) => setVipThresholdEur(e.target.value)}
+                    placeholder="Es. 500"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Superata la soglia nel periodo scelto, il cliente diventa VIP.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+
+            <CardFooter className="justify-end border-t bg-muted/20 px-6 py-4">
+              <Button onClick={handleSaveVipSettings} disabled={loading}>
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Salva VIP
+              </Button>
+            </CardFooter>
+          </Card>
+          {/* --- FINE CARD VIP --- */}
 
           {/* Card: Zona Pericolo */}
           <Card className="border-red-200 dark:border-red-900/50">

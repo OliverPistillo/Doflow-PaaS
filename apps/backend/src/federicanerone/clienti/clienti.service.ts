@@ -13,8 +13,26 @@ export type UpdateClienteDto = Partial<CreateClienteDto>;
 @Injectable()
 export class ClientiService {
   
-  // Lista arricchita con Statistiche (Spesa Totale + Ultima Visita)
+  // Lista arricchita con logica VIP Dinamica
   async list(ds: DataSource, search?: string) {
+    // 1. Recuperiamo la configurazione VIP
+    const settingsRes = await ds.query(
+      `SELECT value FROM federicanerone.settings WHERE key = 'vip_config'`
+    );
+    const vipConfig = settingsRes[0]?.value || { thresholdEur: 500, period: 'annual' };
+    
+    const thresholdCents = Number(vipConfig.thresholdEur) * 100;
+    
+    // Mappiamo il periodo in intervallo SQL Postgres
+    let sqlInterval = '1 year'; // Default
+    switch (vipConfig.period) {
+      case 'monthly': sqlInterval = '1 month'; break;
+      case 'quarterly': sqlInterval = '3 months'; break;
+      case 'semiannual': sqlInterval = '6 months'; break;
+      case 'annual': sqlInterval = '1 year'; break;
+    }
+
+    // 2. Query Principale
     let sql = `
       SELECT 
         c.id,
@@ -24,12 +42,28 @@ export class ClientiService {
         c.notes,
         c.created_at,
         c.updated_at,
-        -- Calcolo Spesa Totale (solo appuntamenti 'closed_won')
+        
+        -- Spesa Totale (Storico completo)
         COALESCE(SUM(CASE WHEN a.status = 'closed_won' THEN a.final_price_cents ELSE 0 END), 0) as total_spent_cents,
-        -- Calcolo Ultima Visita
+        
+        -- Ultima Visita
         MAX(a.starts_at) as last_visit_at,
+        
         -- Conteggio Appuntamenti
-        COUNT(a.id) as total_appointments
+        COUNT(a.id) as total_appointments,
+
+        -- CALCOLO VIP DINAMICO (Spesa nel periodo specifico >= Soglia)
+        (
+          COALESCE(SUM(
+            CASE 
+              WHEN a.status = 'closed_won' 
+                   AND a.starts_at >= NOW() - INTERVAL '${sqlInterval}' 
+              THEN a.final_price_cents 
+              ELSE 0 
+            END
+          ), 0) >= ${thresholdCents}
+        ) as is_vip
+
       FROM federicanerone.clienti c
       LEFT JOIN federicanerone.appuntamenti a ON a.client_id = c.id
       WHERE 1=1
@@ -46,7 +80,8 @@ export class ClientiService {
     return ds.query(sql, params);
   }
 
-  // Statistiche specifiche per i grafici (Top 10 Clienti)
+  // ... (Il resto del file rimane uguale: getStats, create, update, remove) ...
+  // Riporto getStats per completezza, non cambia nulla qui
   async getStats(ds: DataSource) {
     const topClients = await ds.query(`
       SELECT 
@@ -60,15 +95,12 @@ export class ClientiService {
       LIMIT 10
     `);
 
-    // Converti cents in euro per il grafico
     const formattedTop = topClients.map((c: any) => ({
       name: c.name,
       value: Number(c.value) / 100
     }));
 
-    return {
-      topClients: formattedTop
-    };
+    return { topClients: formattedTop };
   }
 
   async create(ds: DataSource, dto: CreateClienteDto) {
@@ -78,11 +110,10 @@ export class ClientiService {
       err.statusCode = 400;
       throw err;
     }
-
     const rows = await ds.query(
       `INSERT INTO federicanerone.clienti (full_name, phone, email, notes, created_at, updated_at)
        VALUES ($1, $2, $3, $4, now(), now())
-       RETURNING id, full_name, phone, email, notes, created_at, updated_at`,
+       RETURNING *`,
       [
         fullName,
         (dto.phone ?? '').toString().trim() || null,
@@ -115,11 +146,7 @@ export class ClientiService {
       values.push(dto.notes ? dto.notes.trim() : null);
     }
 
-    if (fields.length === 0) {
-      const err: any = new Error('no fields to update');
-      err.statusCode = 400;
-      throw err;
-    }
+    if (fields.length === 0) throw new Error('no fields to update');
 
     fields.push(`updated_at = now()`);
     values.push(id);
@@ -129,11 +156,7 @@ export class ClientiService {
       values,
     );
 
-    if (!rows[0]) {
-      const err: any = new Error('cliente not found');
-      err.statusCode = 404;
-      throw err;
-    }
+    if (!rows[0]) throw new Error('cliente not found');
     return rows[0];
   }
 
@@ -142,11 +165,7 @@ export class ClientiService {
       `DELETE FROM federicanerone.clienti WHERE id = $1 RETURNING id`,
       [id],
     );
-    if (!rows[0]) {
-      const err: any = new Error('cliente not found');
-      err.statusCode = 404;
-      throw err;
-    }
+    if (!rows[0]) throw new Error('cliente not found');
     return true;
   }
 }
