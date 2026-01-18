@@ -105,7 +105,7 @@ export function FedericaSidebar() {
         <SidebarSeparator />
       </SidebarContent>
 
-      <SidebarFooter>
+<SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
@@ -115,6 +115,7 @@ export function FedericaSidebar() {
                   className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                 >
                   <Avatar className="h-8 w-8 rounded-lg">
+                    {/* Qui potresti leggere l'URL avatar dallo stato globale/user */}
                     <AvatarImage src="" alt="Federica Nerone" />
                     <AvatarFallback className="rounded-lg">FN</AvatarFallback>
                   </Avatar>
@@ -145,18 +146,20 @@ export function FedericaSidebar() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuGroup>
-                  <DropdownMenuItem>
-                    <User className="mr-2 h-4 w-4" />
-                    Account
+                  {/* MODIFICA: Link alla pagina account */}
+                  <DropdownMenuItem asChild>
+                    <Link href="/federicanerone/account" className="cursor-pointer">
+                      <User className="mr-2 h-4 w-4" />
+                      Account
+                    </Link>
                   </DropdownMenuItem>
-                  <DropdownMenuItem>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Upload Profile Picture
-                  </DropdownMenuItem>
+                  
+                  {/* Rimosso "Upload Profile Picture" perché ora è dentro la pagina Account */}
+                  
                   <DropdownMenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
                     <Sun className="mr-2 h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
                     <Moon className="absolute mr-2 h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                    Toggle Theme
+                    Tema
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
