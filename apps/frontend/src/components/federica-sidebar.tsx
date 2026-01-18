@@ -4,7 +4,20 @@ import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Users, Sparkles, CalendarDays, FileText, LogOut } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users,
+  Sparkles,
+  CalendarDays,
+  FileText,
+  LogOut,
+  Settings,
+  User,
+  Upload,
+  Moon,
+  Sun,
+} from "lucide-react";
+import { useTheme } from "next-themes";
 
 import {
   Sidebar,
@@ -15,7 +28,18 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
+  SidebarTrigger,
 } from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 function Item({
   href,
@@ -28,7 +52,8 @@ function Item({
 }) {
   const pathname = usePathname();
   // Active se è il path esatto o una sottocartella (es. /clienti/123)
-  const active = pathname === href || (href !== "/federicanerone" && pathname.startsWith(href + "/"));
+  const active =
+    pathname === href || (href !== "/federicanerone" && pathname.startsWith(href + "/"));
 
   return (
     <SidebarMenuItem>
@@ -44,6 +69,7 @@ function Item({
 
 export function FedericaSidebar() {
   const router = useRouter();
+  const { setTheme, theme } = useTheme();
 
   const logout = React.useCallback(() => {
     window.localStorage.removeItem("doflow_token");
@@ -55,11 +81,11 @@ export function FedericaSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader>
         {/* Container per il logo, centrato per apparire bene anche da chiuso */}
-        <div className="flex h-12 items-center justify-center py-2">
-          <div className="relative h-8 w-8 overflow-hidden rounded-md">
-            <Image 
-              src="/federicanerone/favicon.ico" 
-              alt="Federica Nerone Logo" 
+        <div className="flex h-12 w-full items-center justify-center py-2">
+          <div className="relative h-8 w-8 overflow-hidden rounded-md flex-shrink-0">
+            <Image
+              src="/federicanerone/favicon.ico"
+              alt="Federica Nerone Logo"
               fill
               className="object-contain"
             />
@@ -82,15 +108,64 @@ export function FedericaSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            {/* Usiamo SidebarMenuButton anche qui per gestire l'icon-only mode automaticamente */}
-            <SidebarMenuButton 
-              onClick={logout} 
-              tooltip="Logout"
-              className="text-red-500 hover:text-red-600 hover:bg-red-50"
-            >
-              <LogOut className="h-4 w-4" />
-              <span>Logout</span>
-            </SidebarMenuButton>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton
+                  size="lg"
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                >
+                  <Avatar className="h-8 w-8 rounded-lg">
+                    <AvatarImage src="" alt="Federica Nerone" />
+                    <AvatarFallback className="rounded-lg">FN</AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold">Federica Nerone</span>
+                    <span className="truncate text-xs">m@example.com</span>
+                  </div>
+                  <Settings className="ml-auto h-4 w-4" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"
+                side="bottom"
+                align="end"
+                sideOffset={4}
+              >
+                <DropdownMenuLabel className="p-0 font-normal">
+                  <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                    <Avatar className="h-8 w-8 rounded-lg">
+                      <AvatarImage src="" alt="Federica Nerone" />
+                      <AvatarFallback className="rounded-lg">FN</AvatarFallback>
+                    </Avatar>
+                    <div className="grid flex-1 text-left text-sm leading-tight">
+                      <span className="truncate font-semibold">Federica Nerone</span>
+                      <span className="truncate text-xs">m@example.com</span>
+                    </div>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem>
+                    <User className="mr-2 h-4 w-4" />
+                    Account
+                  </DropdownMenuItem>
+                  <DropdownMenuItem>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload Profile Picture
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+                    <Sun className="mr-2 h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                    <Moon className="absolute mr-2 h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                    Toggle Theme
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={logout} className="text-red-500 hover:text-red-600">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
