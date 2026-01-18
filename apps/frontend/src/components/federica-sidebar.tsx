@@ -13,7 +13,6 @@ import {
   LogOut,
   Settings,
   User,
-  Upload,
   Moon,
   Sun,
 } from "lucide-react";
@@ -28,7 +27,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
-  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu,
@@ -51,7 +49,6 @@ function Item({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   const pathname = usePathname();
-  // Active se è il path esatto o una sottocartella (es. /clienti/123)
   const active =
     pathname === href || (href !== "/federicanerone" && pathname.startsWith(href + "/"));
 
@@ -77,10 +74,8 @@ export function FedericaSidebar() {
   }, [router]);
 
   return (
-    // 'collapsible="icon"' è la chiave per farla ridurre invece che sparire
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        {/* Container per il logo, centrato per apparire bene anche da chiuso */}
         <div className="flex h-12 w-full items-center justify-center py-2">
           <div className="relative h-8 w-8 overflow-hidden rounded-md flex-shrink-0">
             <Image
@@ -105,7 +100,7 @@ export function FedericaSidebar() {
         <SidebarSeparator />
       </SidebarContent>
 
-<SidebarFooter>
+      <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
@@ -115,7 +110,6 @@ export function FedericaSidebar() {
                   className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                 >
                   <Avatar className="h-8 w-8 rounded-lg">
-                    {/* Qui potresti leggere l'URL avatar dallo stato globale/user */}
                     <AvatarImage src="" alt="Federica Nerone" />
                     <AvatarFallback className="rounded-lg">FN</AvatarFallback>
                   </Avatar>
@@ -145,25 +139,28 @@ export function FedericaSidebar() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                
                 <DropdownMenuGroup>
-                  {/* MODIFICA: Link alla pagina account */}
+                  {/* LINK ACCOUNT CORRETTO */}
                   <DropdownMenuItem asChild>
-                    <Link href="/federicanerone/account" className="cursor-pointer">
+                    <Link href="/federicanerone/account" className="flex w-full items-center cursor-pointer">
                       <User className="mr-2 h-4 w-4" />
                       Account
                     </Link>
                   </DropdownMenuItem>
                   
-                  {/* Rimosso "Upload Profile Picture" perché ora è dentro la pagina Account */}
-                  
-                  <DropdownMenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
+                  {/* SWITCH TEMA */}
+                  <DropdownMenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")} className="cursor-pointer">
                     <Sun className="mr-2 h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
                     <Moon className="absolute mr-2 h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                    Tema
+                    <span className="ml-2">Cambia Tema</span>
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
+                
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={logout} className="text-red-500 hover:text-red-600">
+                
+                {/* LOGOUT */}
+                <DropdownMenuItem onClick={logout} className="text-red-500 hover:text-red-600 cursor-pointer">
                   <LogOut className="mr-2 h-4 w-4" />
                   Log out
                 </DropdownMenuItem>
