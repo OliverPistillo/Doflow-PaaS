@@ -3,248 +3,328 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Search, Plus, User, Phone, Mail, Trophy, TrendingUp } from 'lucide-react';
+
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell
+} from 'recharts';
+
+// --- TIPI ---
 
 type Cliente = {
-  id: number;
+  id: string;
   full_name: string;
   phone: string | null;
   email: string | null;
   notes: string | null;
+  created_at: string;
+  total_spent_cents: number; // Arriva dal backend
+  last_visit_at: string | null;
+  total_appointments: number;
 };
 
-export default function ClientiPage() {
-  const [items, setItems] = React.useState<Cliente[]>([]);
-  const [q, setQ] = React.useState('');
+type StatsData = {
+  topClients: { name: string; value: number }[];
+};
 
-  // create dialog
-  const [createOpen, setCreateOpen] = React.useState(false);
-  const [fullName, setFullName] = React.useState('');
-  const [phone, setPhone] = React.useState('');
-  const [email, setEmail] = React.useState('');
-  const [notes, setNotes] = React.useState('');
+// --- HELPER ---
+function money(cents: number) {
+  return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(cents / 100);
+}
 
-  // edit dialog
-  const [editOpen, setEditOpen] = React.useState(false);
-  const [editing, setEditing] = React.useState<Cliente | null>(null);
+function daysAgo(dateStr: string | null) {
+  if (!dateStr) return 'Mai';
+  const diff = new Date().getTime() - new Date(dateStr).getTime();
+  const days = Math.floor(diff / (1000 * 3600 * 24));
+  if (days === 0) return 'Oggi';
+  if (days === 1) return 'Ieri';
+  return `${days} gg fa`;
+}
 
-  async function load() {
-    const res = await apiFetch<{ clienti: Cliente[] }>('/api/clienti');
-    setItems(Array.isArray(res.clienti) ? res.clienti : []);
-  }
+// Colori per il grafico Top 10
+const BAR_COLORS = ['#10B981', '#34D399', '#6EE7B7', '#A7F3D0', '#D1FAE5'];
 
-  React.useEffect(() => { void load(); }, []);
+export default function FedericaClientiPage() {
+  const [clients, setClients] = React.useState<Cliente[]>([]);
+  const [stats, setStats] = React.useState<StatsData | null>(null);
+  
+  const [loading, setLoading] = React.useState(false);
+  const [search, setSearch] = React.useState('');
 
-  const filtered = React.useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return items;
-    return items.filter((c) =>
-      c.full_name.toLowerCase().includes(s) ||
-      (c.email ?? '').toLowerCase().includes(s) ||
-      (c.phone ?? '').toLowerCase().includes(s),
-    );
-  }, [items, q]);
+  // Dialog Crea/Modifica
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [editId, setEditId] = React.useState<string | null>(null);
+  const [formName, setFormName] = React.useState('');
+  const [formPhone, setFormPhone] = React.useState('');
+  const [formEmail, setFormEmail] = React.useState('');
+  const [formNotes, setFormNotes] = React.useState('');
 
-  async function createClient() {
-    await apiFetch('/api/clienti', {
-      method: 'POST',
-      body: JSON.stringify({ full_name: fullName, phone, email, notes }),
-    });
-    setCreateOpen(false);
-    setFullName(''); setPhone(''); setEmail(''); setNotes('');
-    await load();
-  }
+  const loadData = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const [resList, resStats] = await Promise.all([
+        apiFetch<{ clienti: Cliente[] }>(`/clienti?q=${search}`),
+        apiFetch<StatsData>('/clienti/stats')
+      ]);
+      setClients(resList.clienti || []);
+      setStats(resStats);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [search]);
 
-  function openEdit(c: Cliente) {
-    setEditing(c);
-    setFullName(c.full_name ?? '');
-    setPhone(c.phone ?? '');
-    setEmail(c.email ?? '');
-    setNotes(c.notes ?? '');
-    setEditOpen(true);
-  }
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      void loadData();
+    }, 300); // Debounce ricerca
+    return () => clearTimeout(timer);
+  }, [loadData]);
 
-  async function saveEdit() {
-    if (!editing) return;
-    await apiFetch(`/api/clienti/${editing.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        full_name: fullName,
-        phone,
-        email,
-        notes,
-      }),
-    });
-    setEditOpen(false);
-    setEditing(null);
-    setFullName(''); setPhone(''); setEmail(''); setNotes('');
-    await load();
-  }
+  // Gestione Form
+  const openNew = () => {
+    setEditId(null);
+    setFormName(''); setFormPhone(''); setFormEmail(''); setFormNotes('');
+    setIsOpen(true);
+  };
 
-  async function deleteClient(id: number) {
-    await apiFetch(`/api/clienti/${id}`, { method: 'DELETE' });
-    await load();
-  }
+  const openEdit = (c: Cliente) => {
+    setEditId(c.id);
+    setFormName(c.full_name);
+    setFormPhone(c.phone || '');
+    setFormEmail(c.email || '');
+    setFormNotes(c.notes || '');
+    setIsOpen(true);
+  };
+
+  const handleSave = async () => {
+    try {
+      const body = { full_name: formName, phone: formPhone, email: formEmail, notes: formNotes };
+      if (editId) {
+        await apiFetch(`/clienti/${editId}`, { method: 'PATCH', body: JSON.stringify(body) });
+      } else {
+        await apiFetch('/clienti', { method: 'POST', body: JSON.stringify(body) });
+      }
+      setIsOpen(false);
+      void loadData();
+    } catch (e) {
+      alert('Errore salvataggio');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Eliminare cliente?')) return;
+    try {
+      await apiFetch(`/clienti/${id}`, { method: 'DELETE' });
+      void loadData();
+    } catch (e) { console.error(e); }
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold">Clienti</h1>
-          <p className="text-sm text-muted-foreground">Gestione clienti (Federica).</p>
+          <h1 className="text-3xl font-bold tracking-tight">Clienti</h1>
+          <p className="text-sm text-muted-foreground">Analisi, gestione e storico clienti.</p>
         </div>
-
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger asChild>
-            <Button>Nuovo cliente</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Nuovo cliente</DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label>Nome e cognome</Label>
-                <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Telefono</Label>
-                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <Label>Email</Label>
-                  <Input value={email} onChange={(e) => setEmail(e.target.value)} />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label>Note</Label>
-                <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
-              </div>
-
-              <Button onClick={createClient} disabled={!fullName.trim()}>
-                Crea
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={openNew} className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Plus className="mr-2 h-4 w-4" /> Nuovo Cliente
+        </Button>
       </div>
 
-      {/* Edit Dialog */}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+      {/* --- SEZIONE STATISTICHE (STRATEGIA) --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Card 1: Top 5 Clienti (Grafico) */}
+        <Card className="lg:col-span-2 border-l-4 border-l-emerald-500 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-emerald-500" /> Top Clienti per Fatturato
+            </CardTitle>
+            <CardDescription>I clienti che hanno generato più valore nel tempo.</CardDescription>
+          </CardHeader>
+          <CardContent className="h-[250px]">
+            {stats && stats.topClients.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.topClients} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <XAxis type="number" hide />
+                  <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 12}} />
+                  <Tooltip
+                    formatter={(value) => {
+                      const n =
+                        typeof value === "number"
+                          ? value
+                          : value == null
+                            ? 0
+                            : Number(value)
+
+                      return [`€${n.toFixed(2)}`, "Speso"] as [string, string]
+                    }}
+                    contentStyle={{
+                      borderRadius: "8px",
+                      border: "none",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                    }}
+                  />
+                  <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20}>
+                     {stats.topClients.map((entry, index) => (
+                       <Cell key={`cell-${index}`} fill={BAR_COLORS[index % BAR_COLORS.length]} />
+                     ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                Nessun dato sufficiente per le statistiche.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Card 2: Strategia Rapida */}
+        <Card className="bg-gradient-to-br from-indigo-50 to-white dark:from-slate-900 dark:to-slate-800 border-indigo-100 dark:border-slate-700">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400">
+              <TrendingUp className="h-5 w-5" /> Strategia
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            <div className="p-3 bg-white dark:bg-slate-950 rounded-lg shadow-sm border">
+              <div className="font-semibold mb-1">👑 VIP Club</div>
+              <p className="text-muted-foreground text-xs">
+                I clienti con spesa {'>'} 500€ sono evidenziati col badge VIP. Proponi loro pacchetti esclusivi.
+              </p>
+            </div>
+            <div className="p-3 bg-white dark:bg-slate-950 rounded-lg shadow-sm border">
+              <div className="font-semibold mb-1">👻 Clienti Dormienti</div>
+              <p className="text-muted-foreground text-xs">
+                Chi non viene da più di 60 giorni potrebbe aver bisogno di un messaggio di "Recall" o promo dedicata.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* --- LISTA CLIENTI --- */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Elenco Completo</CardTitle>
+          <div className="relative w-full max-w-sm">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Cerca nome, telefono..." 
+              className="pl-8" 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {clients.map(c => {
+              // Logica Badge
+              const isVip = c.total_spent_cents > 50000; // > 500 euro
+              const daysSinceLast = c.last_visit_at ? Math.floor((new Date().getTime() - new Date(c.last_visit_at).getTime()) / (1000 * 3600 * 24)) : 999;
+              const isDormant = daysSinceLast > 60 && c.total_appointments > 0;
+
+              return (
+                <div key={c.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
+                      {c.full_name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="font-semibold flex items-center gap-2">
+                        {c.full_name}
+                        {isVip && <Badge variant="secondary" className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-200 text-[10px] px-1.5 py-0 h-5">VIP</Badge>}
+                        {isDormant && <Badge variant="outline" className="text-gray-500 border-gray-300 text-[10px] px-1.5 py-0 h-5">Inattivo da {daysSinceLast}gg</Badge>}
+                      </div>
+                      <div className="text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mt-1">
+                        {c.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {c.phone}</span>}
+                        {c.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {c.email}</span>}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-6 text-sm">
+                    <div className="text-right min-w-[80px]">
+                      <div className="text-muted-foreground text-xs">Spesa Totale</div>
+                      <div className="font-bold text-emerald-600">{money(c.total_spent_cents)}</div>
+                    </div>
+                    <div className="text-right min-w-[80px]">
+                      <div className="text-muted-foreground text-xs">Ultima Visita</div>
+                      <div className="font-medium">{daysAgo(c.last_visit_at)}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => openEdit(c)}>Modifica</Button>
+                      <Button variant="ghost" size="sm" className="text-red-500 h-8 w-8 p-0" onClick={() => handleDelete(c.id)}>
+                        <span className="sr-only">Elimina</span>
+                        ×
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            
+            {clients.length === 0 && !loading && (
+              <div className="text-center py-8 text-muted-foreground">Nessun cliente trovato.</div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* DIALOG CREA/MODIFICA */}
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Modifica cliente</DialogTitle>
+            <DialogTitle>{editId ? 'Modifica Cliente' : 'Nuovo Cliente'}</DialogTitle>
           </DialogHeader>
-
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Nome e cognome</Label>
-              <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Nome Completo</Label>
+              <Input value={formName} onChange={e => setFormName(e.target.value)} placeholder="Es. Mario Rossi" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
                 <Label>Telefono</Label>
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <Input value={formPhone} onChange={e => setFormPhone(e.target.value)} placeholder="333..." />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <Label>Email</Label>
-                <Input value={email} onChange={(e) => setEmail(e.target.value)} />
+                <Input value={formEmail} onChange={e => setFormEmail(e.target.value)} placeholder="email@..." />
               </div>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-2">
               <Label>Note</Label>
-              <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+              <Input value={formNotes} onChange={e => setFormNotes(e.target.value)} placeholder="Allergie, preferenze..." />
             </div>
-
-            <Button onClick={saveEdit} disabled={!fullName.trim()}>
-              Salva
-            </Button>
           </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsOpen(false)}>Annulla</Button>
+            <Button onClick={handleSave}>Salva</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <Input
-        placeholder="Cerca…"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        className="max-w-sm"
-      />
-
-      <div className="border rounded-lg overflow-hidden">
-        <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs text-muted-foreground border-b">
-          <div className="col-span-5">Nome</div>
-          <div className="col-span-3">Telefono</div>
-          <div className="col-span-4">Azioni</div>
-        </div>
-
-        {filtered.map((c) => (
-          <div key={c.id} className="grid grid-cols-12 gap-2 px-3 py-2 border-b last:border-b-0 text-sm">
-            <div className="col-span-5">
-              <Link
-                href={`/federicanerone/clienti/${c.id}`}
-                className="font-medium hover:underline"
-              >
-                {c.full_name}
-              </Link>
-              <div className="text-xs text-muted-foreground">
-                {c.email ?? '—'}
-              </div>
-            </div>
-
-            <div className="col-span-3 flex items-center">{c.phone ?? '—'}</div>
-
-            <div className="col-span-4 flex items-center gap-2 justify-end">
-              <Button variant="outline" size="sm" onClick={() => openEdit(c)}>
-                Modifica
-              </Button>
-
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    Elimina
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Eliminare cliente?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Se ha appuntamenti collegati, il DB bloccherà l’operazione (ed è giusto così).
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Annulla</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => deleteClient(c.id)}>
-                      Elimina
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          </div>
-        ))}
-
-        {filtered.length === 0 ? (
-          <div className="px-3 py-6 text-sm text-muted-foreground">Nessun cliente.</div>
-        ) : null}
-      </div>
     </div>
   );
 }
