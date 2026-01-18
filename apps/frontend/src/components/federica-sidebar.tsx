@@ -2,10 +2,10 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, Users, Sparkles, CalendarDays, FileText, LogOut } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import {
   Sidebar,
   SidebarContent,
@@ -27,11 +27,12 @@ function Item({
   icon: React.ComponentType<{ className?: string }>;
 }) {
   const pathname = usePathname();
-  const active = pathname === href || pathname.startsWith(href + "/");
+  // Active se è il path esatto o una sottocartella (es. /clienti/123)
+  const active = pathname === href || (href !== "/federicanerone" && pathname.startsWith(href + "/"));
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={active}>
+      <SidebarMenuButton asChild isActive={active} tooltip={label}>
         <Link href={href}>
           <Icon className="h-4 w-4" />
           <span>{label}</span>
@@ -50,11 +51,19 @@ export function FedericaSidebar() {
   }, [router]);
 
   return (
-    <Sidebar>
+    // 'collapsible="icon"' è la chiave per farla ridurre invece che sparire
+    <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="px-3 py-3">
-          <div className="text-sm font-semibold leading-none">Federica Nerone</div>
-          <div className="text-xs text-muted-foreground">Console</div>
+        {/* Container per il logo, centrato per apparire bene anche da chiuso */}
+        <div className="flex h-12 items-center justify-center py-2">
+          <div className="relative h-8 w-8 overflow-hidden rounded-md">
+            <Image 
+              src="/federicanerone/favicon.ico" 
+              alt="Federica Nerone Logo" 
+              fill
+              className="object-contain"
+            />
+          </div>
         </div>
       </SidebarHeader>
 
@@ -71,12 +80,19 @@ export function FedericaSidebar() {
       </SidebarContent>
 
       <SidebarFooter>
-        <div className="p-2">
-          <Button variant="outline" className="w-full justify-start" onClick={logout}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
-        </div>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            {/* Usiamo SidebarMenuButton anche qui per gestire l'icon-only mode automaticamente */}
+            <SidebarMenuButton 
+              onClick={logout} 
+              tooltip="Logout"
+              className="text-red-500 hover:text-red-600 hover:bg-red-50"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Logout</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
   );
