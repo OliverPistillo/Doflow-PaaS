@@ -22,10 +22,9 @@ export type AppuntamentiFilter = {
 @Injectable()
 export class AppuntamentiService {
   
-  // --- NUOVO METODO PER LE STATISTICHE ---
+// --- METODO STATISTICHE AGGIORNATO ---
   async getStats(ds: DataSource, year: number) {
-    // 1. KPI Totali (Counts per status)
-    // Usiamo una singola query aggregata per efficienza
+    // 1. KPI Appuntamenti (Counts per status)
     const kpiRaw = await ds.query(`
       SELECT 
         status, 
@@ -36,7 +35,16 @@ export class AppuntamentiService {
       GROUP BY status
     `, [year]);
 
-    // Trasformiamo l'array in un oggetto { booked: 10, closed_won: 5, ... }
+    // 2. KPI Clienti (Nuovi Lead reali = Clienti creati quest'anno)
+    const clientsRaw = await ds.query(`
+      SELECT COUNT(*) as count 
+      FROM federicanerone.clienti
+      WHERE EXTRACT(YEAR FROM created_at) = $1
+    `, [year]);
+    
+    const newClientsCount = Number(clientsRaw[0]?.count || 0);
+
+    // Mappatura
     const kpiMap: Record<string, number> = {};
     let totalRevenue = 0;
 
@@ -47,7 +55,7 @@ export class AppuntamentiService {
       }
     });
 
-    // 2. Fatturato Mensile (solo per 'closed_won' o 'done')
+    // 3. Fatturato Mensile
     const monthlyRaw = await ds.query(`
       SELECT 
         EXTRACT(MONTH FROM starts_at) as month, 
@@ -60,16 +68,15 @@ export class AppuntamentiService {
       ORDER BY month ASC
     `, [year]);
 
-    // Normalizziamo per avere tutti i 12 mesi (anche quelli a 0)
     const monthlyData = Array.from({ length: 12 }, (_, i) => {
       const found = monthlyRaw.find((r: any) => Number(r.month) === i + 1);
       return {
         month: i + 1,
-        value: found ? Number(found.total) / 100 : 0 // Convertiamo cents in euro
+        value: found ? Number(found.total) / 100 : 0
       };
     });
 
-    // 3. Statistiche Trattamenti (Top 5 per frequenza)
+    // 4. Trattamenti
     const treatmentsRaw = await ds.query(`
       SELECT 
         t.name, 
@@ -89,13 +96,13 @@ export class AppuntamentiService {
 
     return {
       kpi: {
-        new_lead: kpiMap['new_lead'] || 0,
+        new_lead: newClientsCount, // ORA CONTA I CLIENTI VERI
         no_answer: kpiMap['no_answer'] || 0,
         booked: kpiMap['booked'] || 0,
         waiting: kpiMap['waiting'] || 0,
         closed_won: kpiMap['closed_won'] || 0,
-        closed_lost: kpiMap['closed_lost'] || 0,
-        fatturato_eur: totalRevenue / 100, // Euro
+        closed_lost: kpiMap['closed_lost'] || 0, // Si aggiornerà col tasto "Annulla"
+        fatturato_eur: totalRevenue / 100,
       },
       monthly: monthlyData,
       treatments: treatmentsData,

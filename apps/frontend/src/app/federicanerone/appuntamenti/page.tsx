@@ -63,7 +63,7 @@ const STATUS_LABEL: Record<AppuntamentoStatus, string> = {
   waiting: 'Attesa',
   booked: 'Prenotato',
   closed_won: 'Eseguito',
-  closed_lost: 'Perso',
+  closed_lost: 'Annullato/Perso',
 };
 
 function moneyFromCents(cents: number | null | undefined): string {
@@ -107,7 +107,6 @@ export default function FedericaAppuntamentiPage() {
   const [month, setMonth] = React.useState<Date>(() => startOfMonth(new Date()));
   const [selectedDay, setSelectedDay] = React.useState<Date>(() => new Date());
 
-  // Filtri lista
   const [statusFilter, setStatusFilter] = React.useState<AppuntamentoStatus | 'all'>('all');
   const [filterFrom, setFilterFrom] = React.useState('');
   const [filterTo, setFilterTo] = React.useState('');
@@ -120,7 +119,6 @@ export default function FedericaAppuntamentiPage() {
   const [notes, setNotes] = React.useState('');
   const [finalPrice, setFinalPrice] = React.useState('');
 
-  // Nuovo Cliente Popup
   const [showNewClientAlert, setShowNewClientAlert] = React.useState(false);
   const [showNewClientForm, setShowNewClientForm] = React.useState(false);
   const [newClientPhone, setNewClientPhone] = React.useState('');
@@ -221,7 +219,6 @@ export default function FedericaAppuntamentiPage() {
         body: JSON.stringify(body),
       });
 
-      // Reset
       setInputClientName('');
       setSelectedClientId(null);
       setTreatmentId('');
@@ -229,7 +226,6 @@ export default function FedericaAppuntamentiPage() {
       setNotes('');
       setFinalPrice('');
 
-      // Ricarica completa
       await loadAll(); 
 
     } catch (e) {
@@ -263,7 +259,6 @@ export default function FedericaAppuntamentiPage() {
     }
   }
 
-  // Modificato per prevenire sparizioni: ricarica tutto dopo update
   async function handleUpdateStatus(id: string, next: AppuntamentoStatus) {
     try {
       setLoading(true);
@@ -278,8 +273,9 @@ export default function FedericaAppuntamentiPage() {
     }
   }
 
+  // ELIMINAZIONE FISICA (Attenzione: sparisce dalle statistiche!)
   async function handleDelete(id: string) {
-    if(!confirm("Eliminare appuntamento?")) return;
+    if(!confirm("Eliminare appuntamento definitivamente? (Non apparirà nelle statistiche)")) return;
     try {
       setLoading(true);
       await apiFetch<{ ok: boolean }>(`/appuntamenti/${id}`, { method: 'DELETE' });
@@ -319,7 +315,6 @@ export default function FedericaAppuntamentiPage() {
   return (
     <div className="space-y-6 relative">
       <div>
-        {/* Titolo modificato per conferma aggiornamento */}
         <h1 className="text-2xl font-semibold tracking-tight">Appuntamenti</h1>
         <p className="text-sm text-muted-foreground">Gestione agenda e clienti.</p>
       </div>
@@ -428,7 +423,7 @@ export default function FedericaAppuntamentiPage() {
         </CardContent>
       </Card>
 
-      {/* POPUP: Alert Confirmation */}
+      {/* A. Alert Confirmation */}
       <AlertDialog open={showNewClientAlert} onOpenChange={setShowNewClientAlert}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -446,7 +441,7 @@ export default function FedericaAppuntamentiPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* POPUP: Form Dati Cliente */}
+      {/* B. Form Dati Cliente */}
       <Dialog open={showNewClientForm} onOpenChange={setShowNewClientForm}>
         <DialogContent>
           <DialogHeader>
@@ -508,7 +503,6 @@ export default function FedericaAppuntamentiPage() {
                       <span className={`text-xs font-semibold mb-1 ${isSel ? 'text-primary' : ''}`}>{d.getDate()}</span>
                       <div className="w-full space-y-1">
                         {dayApps.slice(0, 3).map(a => {
-                          // COLORI: Giallo (prenotato), Verde (eseguito)
                           let color = "bg-gray-100 text-gray-700 border-gray-200";
                           if(a.status === 'booked') color = "bg-yellow-100 text-yellow-800 border-yellow-200";
                           else if(a.status === 'closed_won') color = "bg-green-100 text-green-800 border-green-200";
@@ -557,8 +551,9 @@ export default function FedericaAppuntamentiPage() {
                          </div>
                          <div className="flex flex-col gap-1 items-end">
                             <div className="flex gap-2 items-center mt-2">
-                              {/* Pulsante ESEGUITO verde */}
-                              {a.status !== 'closed_won' && (
+                              
+                              {/* Pulsante ESEGUITO (Verde) */}
+                              {a.status !== 'closed_won' && a.status !== 'closed_lost' && (
                                 <Button 
                                   size="sm" 
                                   className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white" 
@@ -567,8 +562,20 @@ export default function FedericaAppuntamentiPage() {
                                   Eseguito
                                 </Button>
                               )}
+
+                              {/* Pulsante ANNULLA (Grigio - Conta come 'Perso') */}
+                              {a.status !== 'closed_lost' && a.status !== 'closed_won' && (
+                                <Button 
+                                  variant="secondary"
+                                  size="sm" 
+                                  className="h-7 text-xs border border-gray-300" 
+                                  onClick={() => handleUpdateStatus(a.id, 'closed_lost')}
+                                >
+                                  Annulla
+                                </Button>
+                              )}
                               
-                              {/* Pulsante ELIMINA rosso */}
+                              {/* Pulsante ELIMINA (Rosso - Sparisce) */}
                               <Button 
                                 variant="ghost" 
                                 size="sm" 
@@ -607,13 +614,14 @@ export default function FedericaAppuntamentiPage() {
                    <div className="flex items-center gap-2">
                       <span className={`text-xs px-2 py-0.5 rounded ${
                         a.status === 'booked' ? 'bg-yellow-100 text-yellow-800' :
-                        a.status === 'closed_won' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                        a.status === 'closed_won' ? 'bg-green-100 text-green-800' : 
+                        a.status === 'closed_lost' ? 'bg-red-100 text-red-800 line-through' : 'bg-gray-100 text-gray-800'
                       }`}>
                         {STATUS_LABEL[a.status]}
                       </span>
 
                       {/* Bottoni anche nella lista */}
-                      {a.status !== 'closed_won' && (
+                      {a.status !== 'closed_won' && a.status !== 'closed_lost' && (
                         <Button 
                           size="sm" variant="outline" className="h-6 text-[10px] text-green-600 border-green-200 bg-green-50"
                           onClick={() => handleUpdateStatus(a.id, 'closed_won')}
