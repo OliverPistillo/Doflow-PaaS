@@ -132,10 +132,10 @@ export default function FedericaDashboardPage() {
                   axisLine={false} 
                   tickFormatter={(value) => `€${value}`} 
                 />
-                {/* FIX TYPE ERROR: value: any invece di value: number */}
                 <Tooltip 
                   cursor={{ fill: '#f3f4f6' }}
-                  formatter={(value: any) => [eur.format(Number(value)), 'Fatturato']}
+                  // FIX TYPE ERROR: 'value: any' accetta undefined che Recharts può passare
+                  formatter={(value: any) => [eur.format(Number(value || 0)), 'Fatturato']}
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                 />
                 <Bar 
