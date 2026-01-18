@@ -28,7 +28,16 @@ import {
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { Camera, Save, Loader2, Lock, Monitor, Globe } from "lucide-react";
+import { 
+  Camera, 
+  Loader2, 
+  Lock, 
+  Monitor, 
+  LayoutTemplate, 
+  Download, 
+  Trash2,
+  AlertTriangle 
+} from "lucide-react";
 
 export default function AccountPage() {
   const [loading, setLoading] = React.useState(false);
@@ -47,6 +56,9 @@ export default function AccountPage() {
   const [newPwd, setNewPwd] = React.useState("");
   const [confirmPwd, setConfirmPwd] = React.useState("");
 
+  // --- STATO PREFERENZE ---
+  const [defaultView, setDefaultView] = React.useState("calendar");
+
   // Handler Upload Foto
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -61,9 +73,8 @@ export default function AccountPage() {
   const handleSaveGeneral = async () => {
     setLoading(true);
     try {
-      // Qui andrà la chiamata API reale
       console.log("Saving profile:", { fullName, email, file: selectedFile?.name });
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Fake delay
+      await new Promise((resolve) => setTimeout(resolve, 1000)); 
       alert("Profilo aggiornato con successo!");
     } catch (error) {
       console.error(error);
@@ -93,6 +104,22 @@ export default function AccountPage() {
     }
   };
 
+  // Handler Export Dati
+  const handleExportData = () => {
+    alert("Il download dei tuoi dati (JSON) inizierà a breve.");
+  };
+
+  // Handler Elimina Account
+  const handleDeleteAccount = () => {
+    const confirmText = prompt("Per confermare, scrivi 'CANCELLA' in maiuscolo:");
+    if (confirmText === "CANCELLA") {
+      alert("Account eliminato. Verrai reindirizzato al login.");
+      // Qui logicamente faresti il logout e redirect
+    } else if (confirmText !== null) {
+      alert("Testo di conferma non valido.");
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto pb-10">
       <div>
@@ -112,7 +139,7 @@ export default function AccountPage() {
         </TabsList>
 
         {/* --- TAB 1: GENERALE --- */}
-        <TabsContent value="general">
+        <TabsContent value="general" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>Profilo Personale</CardTitle>
@@ -199,7 +226,7 @@ export default function AccountPage() {
         </TabsContent>
 
         {/* --- TAB 2: SICUREZZA --- */}
-        <TabsContent value="security">
+        <TabsContent value="security" className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle>Password e Sicurezza</CardTitle>
@@ -258,12 +285,14 @@ export default function AccountPage() {
         </TabsContent>
 
         {/* --- TAB 3: PREFERENZE --- */}
-        <TabsContent value="preferences">
+        <TabsContent value="preferences" className="space-y-6">
+          
+          {/* Card: Interfaccia */}
           <Card>
             <CardHeader>
-              <CardTitle>Aspetto e Lingua</CardTitle>
+              <CardTitle>Aspetto e Interfaccia</CardTitle>
               <CardDescription>
-                Personalizza la tua esperienza sulla piattaforma.
+                Personalizza la visualizzazione della piattaforma.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -275,13 +304,10 @@ export default function AccountPage() {
                     <Monitor className="h-4 w-4" /> Tema
                   </Label>
                   <p className="text-sm text-muted-foreground">
-                    Seleziona il tema dell'interfaccia.
+                    Scegli tra tema chiaro o scuro.
                   </p>
                 </div>
-                <Select
-                  value={theme}
-                  onValueChange={(val) => setTheme(val)}
-                >
+                <Select value={theme} onValueChange={setTheme}>
                   <SelectTrigger className="w-[180px]">
                     <SelectValue placeholder="Seleziona tema" />
                   </SelectTrigger>
@@ -295,30 +321,73 @@ export default function AccountPage() {
               
               <Separator />
 
-              {/* Lingua (Mock) */}
+              {/* Vista Default */}
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <Label className="text-base flex items-center gap-2">
-                    <Globe className="h-4 w-4" /> Lingua
+                    <LayoutTemplate className="h-4 w-4" /> Vista Iniziale
                   </Label>
                   <p className="text-sm text-muted-foreground">
-                    Lingua utilizzata nell'interfaccia.
+                    Scegli la vista predefinita per gli appuntamenti.
                   </p>
                 </div>
-                <Select defaultValue="it">
+                <Select value={defaultView} onValueChange={setDefaultView}>
                   <SelectTrigger className="w-[180px]">
-                    <SelectValue placeholder="Seleziona lingua" />
+                    <SelectValue placeholder="Seleziona vista" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="it">Italiano</SelectItem>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="es">Español</SelectItem>
+                    <SelectItem value="calendar">Calendario</SelectItem>
+                    <SelectItem value="list">Lista Elenco</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
             </CardContent>
           </Card>
+
+          {/* Card: Zona Pericolo */}
+          <Card className="border-red-200 dark:border-red-900/50">
+            <CardHeader>
+              <CardTitle className="text-red-600 dark:text-red-500 flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5" /> Zona Pericolo
+              </CardTitle>
+              <CardDescription>
+                Azioni irreversibili o relative alla privacy dei dati.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label className="text-base">Esporta i tuoi dati</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Scarica una copia di tutti i tuoi dati in formato JSON (GDPR).
+                  </p>
+                </div>
+                <Button variant="outline" onClick={handleExportData}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Esporta
+                </Button>
+              </div>
+
+              <Separator />
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label className="text-base text-red-600">Elimina Account</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Rimuove permanentemente l'account e tutti i dati associati.
+                  </p>
+                </div>
+                <Button variant="destructive" onClick={handleDeleteAccount}>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Elimina Account
+                </Button>
+              </div>
+
+            </CardContent>
+          </Card>
+
         </TabsContent>
       </Tabs>
     </div>
