@@ -229,7 +229,7 @@ export default function FedericaDashboardPage() {
             <CardDescription>Quali categorie di servizi sono più richieste?</CardDescription>
           </CardHeader>
           <CardContent className="px-0">
-             <div className="h-[300px] w-full border rounded-2xl bg-card p-4 flex items-center justify-center relative">
+             <div className="h-[350px] w-full border rounded-2xl bg-card p-4 flex items-center justify-center relative">
                 {data.treatments.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -249,20 +249,20 @@ export default function FedericaDashboardPage() {
                       </Pie>
                       <Tooltip 
                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
-                        // CORREZIONE QUI SOTTO:
+                        // FIX ERRORE TYPE: Cast a Number o fallback
                         formatter={(value: any) => [Number(value || 0), 'Eseguiti']}
                       />
-                      <Legend verticalAlign="middle" align="right" layout="vertical" iconType="circle" />
+                      <Legend verticalAlign="bottom" height={36} iconType="circle" />
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
                   <div className="text-sm text-muted-foreground">Nessun dato.</div>
                 )}
-                {/* Center Text */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none pr-32 lg:pr-40">
+                {/* Center Text - ORA CENTRATO PERFETTAMENTE */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
                    <div className="text-center">
-                      <div className="text-3xl font-bold">{data.treatments.reduce((a,b)=>a+b.value,0)}</div>
-                      <div className="text-xs text-muted-foreground uppercase tracking-wider">Totali</div>
+                      <div className="text-4xl font-bold">{data.treatments.reduce((a,b)=>a+b.value,0)}</div>
+                      <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Totali</div>
                    </div>
                 </div>
              </div>
