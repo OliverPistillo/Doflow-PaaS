@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { assertAuthenticated, assertFedericaTenant, getTenantConn, respondError } from '../../tenant-helpers';
 import { TrattamentiService, CreateTrattamentoDto, UpdateTrattamentoDto } from './trattamenti.service';
@@ -7,14 +7,26 @@ import { TrattamentiService, CreateTrattamentoDto, UpdateTrattamentoDto } from '
 export class TrattamentiController {
   constructor(private readonly service: TrattamentiService) {}
 
-  @Get()
-  async list(@Req() req: Request, @Res() res: Response) {
+  @Get('stats')
+  async getStats(@Req() req: Request, @Res() res: Response) {
     try {
       assertFedericaTenant(req);
       assertAuthenticated(req);
-
       const ds = getTenantConn(req);
-      const trattamenti = await this.service.list(ds);
+      const stats = await this.service.getStats(ds);
+      return res.json(stats);
+    } catch (e) {
+      return respondError(res, e);
+    }
+  }
+
+  @Get()
+  async list(@Req() req: Request, @Res() res: Response, @Query('q') q?: string) {
+    try {
+      assertFedericaTenant(req);
+      assertAuthenticated(req);
+      const ds = getTenantConn(req);
+      const trattamenti = await this.service.list(ds, q);
       return res.json({ trattamenti });
     } catch (e) {
       return respondError(res, e);
@@ -26,7 +38,6 @@ export class TrattamentiController {
     try {
       assertFedericaTenant(req);
       assertAuthenticated(req);
-
       const ds = getTenantConn(req);
       const trattamento = await this.service.create(ds, body);
       return res.json({ trattamento });
@@ -45,7 +56,6 @@ export class TrattamentiController {
     try {
       assertFedericaTenant(req);
       assertAuthenticated(req);
-
       const ds = getTenantConn(req);
       const trattamento = await this.service.update(ds, id, body);
       return res.json({ trattamento });
@@ -59,7 +69,6 @@ export class TrattamentiController {
     try {
       assertFedericaTenant(req);
       assertAuthenticated(req);
-
       const ds = getTenantConn(req);
       await this.service.remove(ds, id);
       return res.json({ ok: true });

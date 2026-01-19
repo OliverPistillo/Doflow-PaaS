@@ -4,264 +4,438 @@ import * as React from 'react';
 import { apiFetch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { 
+  Search, 
+  Plus, 
+  Sparkles, 
+  Clock, 
+  MoreHorizontal, 
+  TrendingUp, 
+  Zap, 
+  Trophy 
+} from 'lucide-react';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell
+} from 'recharts';
+import { cn } from "@/lib/utils";
+
+// --- TIPI ---
 
 type Trattamento = {
-  id: number;
+  id: string;
   name: string;
-  duration_minutes: number;
   price_cents: number;
-  category: string | null;
-  badge_color: string | null;
+  duration_minutes: number;
+  total_revenue_cents: number;
+  executed_count: number;
+  category?: string;
+  badge_color?: string;
   is_active: boolean;
 };
 
-function centsToEuro(cents: number | null | undefined) {
-  const n = typeof cents === 'number' ? cents : 0;
-  return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n / 100);
+type StatsData = {
+  topRevenue: { name: string; value: number }[];
+};
+
+// --- HELPER & UTILS ---
+
+function money(cents: number) {
+  return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(cents / 100);
 }
 
-function euroToCents(input: string) {
-  const eur = Number((input ?? '').replace(',', '.'));
-  return Number.isFinite(eur) ? Math.round(eur * 100) : 0;
+function getHourlyRate(cents: number, minutes: number) {
+  if (!minutes) return 0;
+  const price = cents / 100;
+  return (price / minutes) * 60;
 }
 
-export default function TrattamentiPage() {
+// Palette Viola/Indaco per Trattamenti
+const CHART_COLORS = ['#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe', '#e0e7ff'];
+
+export default function FedericaTrattamentiPage() {
   const [items, setItems] = React.useState<Trattamento[]>([]);
-  const [q, setQ] = React.useState('');
+  const [stats, setStats] = React.useState<StatsData | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [search, setSearch] = React.useState('');
 
-  // create/edit
-  const [open, setOpen] = React.useState(false);
-  const [isEdit, setIsEdit] = React.useState(false);
-  const [editingId, setEditingId] = React.useState<number | null>(null);
+  // Dialog State
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [editId, setEditId] = React.useState<string | null>(null);
+  const [formName, setFormName] = React.useState('');
+  const [formPrice, setFormPrice] = React.useState('');
+  const [formDuration, setFormDuration] = React.useState('');
 
-  const [name, setName] = React.useState('');
-  const [duration, setDuration] = React.useState('60');
-  const [priceEuro, setPriceEuro] = React.useState('0');
-  const [category, setCategory] = React.useState('');
-  const [badgeColor, setBadgeColor] = React.useState('');
-  const [isActive, setIsActive] = React.useState(true);
-
-  async function load() {
-    const res = await apiFetch<{ trattamenti: Trattamento[] }>('/api/trattamenti');
-    setItems(Array.isArray(res.trattamenti) ? res.trattamenti : []);
-  }
-
-  React.useEffect(() => { void load(); }, []);
-
-  const filtered = React.useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return items;
-    return items.filter((t) =>
-      t.name.toLowerCase().includes(s) ||
-      (t.category ?? '').toLowerCase().includes(s),
-    );
-  }, [items, q]);
-
-  function resetForm() {
-    setName('');
-    setDuration('60');
-    setPriceEuro('0');
-    setCategory('');
-    setBadgeColor('');
-    setIsActive(true);
-    setIsEdit(false);
-    setEditingId(null);
-  }
-
-  function openCreate() {
-    resetForm();
-    setOpen(true);
-  }
-
-  function openEdit(t: Trattamento) {
-    setIsEdit(true);
-    setEditingId(t.id);
-    setName(t.name ?? '');
-    setDuration(String(t.duration_minutes ?? 60));
-    setPriceEuro(String((t.price_cents / 100).toFixed(2)).replace('.', ','));
-    setCategory(t.category ?? '');
-    setBadgeColor(t.badge_color ?? '');
-    setIsActive(Boolean(t.is_active));
-    setOpen(true);
-  }
-
-  async function save() {
-    const dur = parseInt(duration, 10);
-    const payload = {
-      name,
-      duration_minutes: Number.isFinite(dur) ? dur : 60,
-      price_cents: euroToCents(priceEuro),
-      category: category.trim() || null,
-      badge_color: badgeColor.trim() || null,
-      is_active: isActive,
-    };
-
-    if (!name.trim()) return;
-
-    if (isEdit && editingId) {
-      await apiFetch(`/api/trattamenti/${editingId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(payload),
-      });
-    } else {
-      await apiFetch('/api/trattamenti', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
+  const loadData = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const [resList, resStats] = await Promise.all([
+        apiFetch<{ trattamenti: Trattamento[] }>(`/trattamenti?q=${search}`),
+        apiFetch<StatsData>('/trattamenti/stats')
+      ]);
+      setItems(resList.trattamenti || []);
+      setStats(resStats);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
     }
+  }, [search]);
 
-    setOpen(false);
-    resetForm();
-    await load();
-  }
+  React.useEffect(() => {
+    const t = setTimeout(() => void loadData(), 300);
+    return () => clearTimeout(t);
+  }, [loadData]);
 
-  async function remove(id: number) {
-    await apiFetch(`/api/trattamenti/${id}`, { method: 'DELETE' });
-    await load();
-  }
+  // Gestione Form
+  const openNew = () => {
+    setEditId(null);
+    setFormName(''); setFormPrice(''); setFormDuration('');
+    setIsOpen(true);
+  };
 
-  async function toggleActive(t: Trattamento) {
-    await apiFetch(`/api/trattamenti/${t.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ is_active: !t.is_active }),
-    });
-    await load();
-  }
+  const openEdit = (t: Trattamento) => {
+    setEditId(t.id);
+    setFormName(t.name);
+    setFormPrice(String(t.price_cents / 100));
+    setFormDuration(String(t.duration_minutes));
+    setIsOpen(true);
+  };
+
+  const handleSave = async () => {
+    try {
+      const body = {
+        name: formName,
+        price_cents: Math.round(Number(formPrice.replace(',', '.')) * 100),
+        duration_minutes: Number(formDuration),
+        is_active: true
+      };
+      
+      if (editId) {
+        await apiFetch(`/trattamenti/${editId}`, { method: 'PATCH', body: JSON.stringify(body) });
+      } else {
+        await apiFetch('/trattamenti', { method: 'POST', body: JSON.stringify(body) });
+      }
+      setIsOpen(false);
+      void loadData();
+    } catch (e) { alert('Errore salvataggio'); }
+  };
+
+  const handleDelete = async (id: string) => {
+    if(!confirm("Sei sicuro? Questa azione è irreversibile.")) return;
+    try {
+      await apiFetch(`/trattamenti/${id}`, { method: 'DELETE' });
+      void loadData();
+    } catch(e) { alert("Impossibile eliminare se ci sono appuntamenti collegati."); }
+  };
+
+  // Calcolo KPI per UI
+  const maxExecuted = Math.max(...items.map(i => Number(i.executed_count)), 0);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
+    <div className="min-h-screen bg-transparent space-y-8 pb-20">
+      
+      {/* --- HEADER --- */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-border/40 pb-6">
         <div>
-          <h1 className="text-xl font-semibold">Trattamenti</h1>
-          <p className="text-sm text-muted-foreground">CRUD trattamenti (Federica).</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">Trattamenti</h1>
+          <p className="text-sm text-muted-foreground mt-2 max-w-lg">
+            Gestisci il catalogo dei servizi e monitora la loro efficienza economica.
+          </p>
         </div>
-
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openCreate}>Nuovo trattamento</Button>
-          </DialogTrigger>
-
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{isEdit ? 'Modifica trattamento' : 'Nuovo trattamento'}</DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label>Nome</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Durata (min)</Label>
-                  <Input value={duration} onChange={(e) => setDuration(e.target.value)} inputMode="numeric" />
-                </div>
-                <div className="space-y-1">
-                  <Label>Prezzo (€)</Label>
-                  <Input value={priceEuro} onChange={(e) => setPriceEuro(e.target.value)} inputMode="decimal" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label>Categoria</Label>
-                  <Input value={category} onChange={(e) => setCategory(e.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <Label>Badge color (opz.)</Label>
-                  <Input value={badgeColor} onChange={(e) => setBadgeColor(e.target.value)} />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  id="active"
-                  type="checkbox"
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
-                />
-                <Label htmlFor="active">Attivo</Label>
-              </div>
-
-              <Button onClick={save} disabled={!name.trim()}>
-                Salva
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={openNew} size="lg" className="shadow-lg shadow-indigo-500/20 bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition-all hover:scale-[1.02]">
+          <Plus className="mr-2 h-4 w-4" /> Nuovo Trattamento
+        </Button>
       </div>
 
-      <Input placeholder="Cerca…" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-sm" />
-
-      <div className="border rounded-lg overflow-hidden">
-        <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs text-muted-foreground border-b">
-          <div className="col-span-5">Nome</div>
-          <div className="col-span-2">Durata</div>
-          <div className="col-span-2">Prezzo</div>
-          <div className="col-span-3 text-right">Azioni</div>
-        </div>
-
-        {filtered.map((t) => (
-          <div key={t.id} className="grid grid-cols-12 gap-2 px-3 py-2 border-b last:border-b-0 text-sm">
-            <div className="col-span-5">
-              <div className="font-medium">{t.name}</div>
-              <div className="text-xs text-muted-foreground">
-                {t.category ?? '—'}{t.badge_color ? ` · ${t.badge_color}` : ''}
-              </div>
+      {/* --- BENTO GRID STATS --- */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        {/* Main Chart Card */}
+        <div className="md:col-span-2 rounded-2xl border bg-card text-card-foreground shadow-sm p-6 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
+            <TrendingUp className="w-24 h-24 text-indigo-500" />
+          </div>
+          <div className="flex flex-col h-full justify-between relative z-10">
+            <div className="mb-6">
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                Top Revenue
+                <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-100">Anno Corrente</Badge>
+              </h3>
+              <p className="text-sm text-muted-foreground">I servizi che generano più fatturato.</p>
             </div>
-
-            <div className="col-span-2 flex items-center">{t.duration_minutes} min</div>
-            <div className="col-span-2 flex items-center">{centsToEuro(t.price_cents)}</div>
-
-            <div className="col-span-3 flex items-center justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => toggleActive(t)}>
-                {t.is_active ? 'Attivo' : 'Off'}
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => openEdit(t)}>
-                Modifica
-              </Button>
-
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm">Elimina</Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Eliminare trattamento?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Se ci sono appuntamenti collegati, il DB bloccherà l’eliminazione.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Annulla</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => remove(t.id)}>Elimina</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+            
+            <div className="h-[200px] w-full">
+               {stats && stats.topRevenue.length > 0 ? (
+                 <ResponsiveContainer width="100%" height="100%">
+                   <BarChart data={stats.topRevenue} barSize={32}>
+                     <XAxis 
+                        dataKey="name" 
+                        stroke="#888888" 
+                        fontSize={12} 
+                        tickLine={false} 
+                        axisLine={false}
+                        tickFormatter={(v) => v.length > 10 ? `${v.substring(0,10)}...` : v} 
+                     />
+                     <Tooltip 
+                        cursor={{ fill: 'transparent' }}
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <div className="rounded-lg border bg-background p-2 shadow-xl text-xs font-medium">
+                                <div className="text-muted-foreground mb-1">{payload[0].payload.name}</div>
+                                <div className="text-indigo-600 text-base">€{Number(payload[0].value).toFixed(2)}</div>
+                              </div>
+                            )
+                          }
+                          return null;
+                        }}
+                     />
+                     <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                       {stats.topRevenue.map((entry, index) => (
+                         <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                       ))}
+                     </Bar>
+                   </BarChart>
+                 </ResponsiveContainer>
+               ) : (
+                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground">Dati insufficienti</div>
+               )}
             </div>
           </div>
-        ))}
+        </div>
 
-        {filtered.length === 0 ? (
-          <div className="px-3 py-6 text-sm text-muted-foreground">Nessun trattamento.</div>
-        ) : null}
+        {/* Side Cards */}
+        <div className="space-y-6 flex flex-col">
+          
+          {/* Card: Efficiency Tip */}
+          <div className="flex-1 rounded-2xl border bg-gradient-to-br from-emerald-50 to-white dark:from-slate-900 dark:to-slate-800 p-6 flex flex-col justify-center relative overflow-hidden">
+            <div className="absolute -right-4 -top-4 w-20 h-20 bg-emerald-100 rounded-full blur-2xl opacity-50"></div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
+                <Zap className="w-5 h-5" />
+              </div>
+              <h4 className="font-semibold text-emerald-900 dark:text-emerald-100">Resa Oraria</h4>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Punta a servizi sopra i <span className="font-bold text-emerald-600">60€/h</span>. 
+              Sono la chiave per aumentare il fatturato senza lavorare più ore.
+            </p>
+          </div>
+
+          {/* Card: Best Seller */}
+          <div className="flex-1 rounded-2xl border bg-gradient-to-br from-amber-50 to-white dark:from-slate-900 dark:to-slate-800 p-6 flex flex-col justify-center relative overflow-hidden">
+             <div className="absolute -right-4 -top-4 w-20 h-20 bg-amber-100 rounded-full blur-2xl opacity-50"></div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-amber-100 text-amber-600 rounded-lg">
+                <Trophy className="w-5 h-5" />
+              </div>
+              <h4 className="font-semibold text-amber-900 dark:text-amber-100">Best Seller</h4>
+            </div>
+             <p className="text-sm text-muted-foreground leading-relaxed">
+               I servizi più popolari sono ottimi per fare upsell. Proponi un extra ai clienti che li prenotano.
+             </p>
+          </div>
+        </div>
       </div>
+
+      {/* --- LISTA TRATTAMENTI --- */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Catalogo ({items.length})</h2>
+          <div className="relative w-64">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Cerca..." 
+              className="pl-9 bg-background border-muted hover:border-indigo-300 transition-colors focus-visible:ring-indigo-500" 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3">
+          {items.map((t) => {
+            const hourlyRate = getHourlyRate(t.price_cents, t.duration_minutes);
+            const isHighProfit = hourlyRate >= 60;
+            const isLowProfit = hourlyRate < 35;
+            const isBestSeller = t.executed_count > 0 && Number(t.executed_count) === maxExecuted;
+
+            return (
+              <div 
+                key={t.id} 
+                className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border bg-card hover:shadow-md hover:border-indigo-200 transition-all duration-200"
+              >
+                {/* Left: Info */}
+                <div className="flex items-center gap-4">
+                  <div className={cn(
+                    "h-12 w-12 rounded-2xl flex items-center justify-center transition-colors",
+                    isHighProfit ? "bg-emerald-50 text-emerald-600" : "bg-muted text-muted-foreground"
+                  )}>
+                    <Sparkles className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-foreground text-base">{t.name}</span>
+                      {isBestSeller && (
+                        <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-200 text-[10px] h-5 px-1.5">
+                          Best Seller
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 mt-1.5 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1 bg-muted/50 px-2 py-0.5 rounded-md">
+                        <Clock className="h-3 w-3" /> {t.duration_minutes} min
+                      </span>
+                      <span className="font-medium text-foreground">
+                        {money(t.price_cents)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right: Metrics & Actions */}
+                <div className="flex items-center justify-between sm:justify-end gap-6 mt-4 sm:mt-0 pt-4 sm:pt-0 border-t sm:border-t-0 border-border/50">
+                  
+                  {/* KPI: Hourly Rate */}
+                  <div className="text-right">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-0.5">Resa / Ora</div>
+                    <div className={cn(
+                      "text-sm font-bold flex items-center justify-end gap-1",
+                      isHighProfit ? "text-emerald-600" : isLowProfit ? "text-red-500" : "text-foreground"
+                    )}>
+                      €{hourlyRate.toFixed(0)}
+                      {isHighProfit && <TrendingUp className="h-3 w-3" />}
+                    </div>
+                  </div>
+
+                  {/* KPI: Total Revenue */}
+                  <div className="text-right hidden sm:block">
+                     <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-0.5">Totale</div>
+                     <div className="text-sm font-medium">{money(t.total_revenue_cents)}</div>
+                  </div>
+
+                  {/* Actions Menu */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>Azioni</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => openEdit(t)}>Modifica</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleDelete(t.id)} className="text-red-600 focus:text-red-600">
+                        Elimina
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            );
+          })}
+          
+          {items.length === 0 && !loading && (
+             <div className="text-center py-12 border-2 border-dashed rounded-xl bg-muted/10">
+               <Sparkles className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-50" />
+               <h3 className="font-medium text-foreground">Nessun trattamento trovato</h3>
+               <p className="text-sm text-muted-foreground mt-1">Aggiungine uno nuovo per iniziare.</p>
+             </div>
+          )}
+        </div>
+      </div>
+
+      {/* --- DIALOG --- */}
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>{editId ? 'Modifica Servizio' : 'Nuovo Servizio'}</DialogTitle>
+            <DialogDescription>
+              Inserisci i dettagli. La resa oraria viene calcolata in tempo reale.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Nome Servizio</Label>
+              <Input 
+                id="name" 
+                value={formName} 
+                onChange={e => setFormName(e.target.value)} 
+                placeholder="Es. Pulizia Viso Deluxe"
+                className="col-span-3" 
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="price">Prezzo (€)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">€</span>
+                  <Input 
+                    id="price" 
+                    value={formPrice} 
+                    onChange={e => setFormPrice(e.target.value)} 
+                    placeholder="50" 
+                    className="pl-7"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="duration">Durata (min)</Label>
+                <div className="relative">
+                   <Input 
+                    id="duration" 
+                    value={formDuration} 
+                    onChange={e => setFormDuration(e.target.value)} 
+                    placeholder="60" 
+                  />
+                  <span className="absolute right-3 top-2.5 text-muted-foreground text-xs">min</span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Live Preview of Hourly Rate in Dialog */}
+            {formPrice && formDuration && (
+               <div className="rounded-lg bg-muted/50 p-3 flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground">Resa stimata:</span>
+                  <span className={cn(
+                     "font-bold",
+                     getHourlyRate(Number(formPrice)*100, Number(formDuration)) >= 60 ? "text-emerald-600" : "text-foreground"
+                  )}>
+                     €{getHourlyRate(Number(formPrice)*100, Number(formDuration)).toFixed(0)}/ora
+                  </span>
+               </div>
+            )}
+
+          </div>
+          <DialogFooter>
+             <Button variant="outline" onClick={() => setIsOpen(false)}>Annulla</Button>
+             <Button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700 text-white">Salva</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
