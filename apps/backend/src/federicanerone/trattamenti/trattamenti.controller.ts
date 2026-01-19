@@ -20,6 +20,26 @@ export class TrattamentiController {
     }
   }
 
+  // --- NUOVO ENDPOINT ---
+  @Get('history')
+  async getHistory(
+    @Req() req: Request, 
+    @Res() res: Response, 
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('q') q?: string
+  ) {
+    try {
+      assertFedericaTenant(req);
+      assertAuthenticated(req);
+      const ds = getTenantConn(req);
+      const history = await this.service.getHistory(ds, from, to, q);
+      return res.json({ history });
+    } catch (e) {
+      return respondError(res, e);
+    }
+  }
+
   @Get()
   async list(@Req() req: Request, @Res() res: Response, @Query('q') q?: string) {
     try {

@@ -15,16 +15,14 @@ export type UpdateTrattamentoDto = Partial<CreateTrattamentoDto>;
 @Injectable()
 export class TrattamentiService {
   
-  // Lista arricchita con Statistiche (Fatturato + Conteggio)
+  // Lista Catalogo (con statistiche aggregate)
   async list(ds: DataSource, search?: string) {
     let sql = `
       SELECT 
         t.id, t.name, t.duration_minutes, t.price_cents, 
         t.category, t.badge_color, t.is_active, 
         t.created_at, t.updated_at,
-        -- Fatturato generato (solo appuntamenti confermati/eseguiti)
         COALESCE(SUM(CASE WHEN a.status = 'closed_won' THEN a.final_price_cents ELSE 0 END), 0) as total_revenue_cents,
-        -- Numero esecuzioni
         COUNT(CASE WHEN a.status = 'closed_won' THEN 1 END) as executed_count
       FROM federicanerone.trattamenti t
       LEFT JOIN federicanerone.appuntamenti a ON a.treatment_id = t.id
@@ -42,9 +40,45 @@ export class TrattamentiService {
     return ds.query(sql, params);
   }
 
-  // Statistiche per i grafici
+  // --- NUOVO: Storico Esecuzioni ---
+  async getHistory(ds: DataSource, from?: string, to?: string, q?: string) {
+    let sql = `
+      SELECT 
+        a.id, 
+        a.starts_at, 
+        a.final_price_cents,
+        c.full_name as client_name,
+        t.name as treatment_name
+      FROM federicanerone.appuntamenti a
+      JOIN federicanerone.clienti c ON a.client_id = c.id
+      JOIN federicanerone.trattamenti t ON a.treatment_id = t.id
+      WHERE a.status = 'closed_won' -- Solo quelli eseguiti
+    `;
+
+    const params: any[] = [];
+    let pIdx = 1;
+
+    if (from) {
+      sql += ` AND a.starts_at >= $${pIdx++}`;
+      params.push(from);
+    }
+    if (to) {
+      sql += ` AND a.starts_at <= $${pIdx++}`;
+      params.push(to);
+    }
+    if (q) {
+      sql += ` AND (c.full_name ILIKE $${pIdx} OR t.name ILIKE $${pIdx})`;
+      params.push(`%${q}%`);
+      pIdx++;
+    }
+
+    sql += ` ORDER BY a.starts_at DESC LIMIT 200`; // Limitiamo per sicurezza
+
+    return ds.query(sql, params);
+  }
+
+  // Statistiche (Invariato)
   async getStats(ds: DataSource) {
-    // Top 5 per Fatturato
     const topRevenue = await ds.query(`
       SELECT 
         t.name, 
@@ -112,10 +146,7 @@ export class TrattamentiService {
     values.push(id);
 
     const rows = await ds.query(
-      `UPDATE federicanerone.trattamenti
-       SET ${fields.join(', ')}
-       WHERE id = $${idx}
-       RETURNING *`,
+      `UPDATE federicanerone.trattamenti SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
       values,
     );
 
@@ -124,15 +155,11 @@ export class TrattamentiService {
       err.statusCode = 404;
       throw err;
     }
-
     return rows[0];
   }
 
   async remove(ds: DataSource, id: string) {
-    const rows = await ds.query(
-      `DELETE FROM federicanerone.trattamenti WHERE id = $1 RETURNING id`,
-      [id],
-    );
+    const rows = await ds.query(`DELETE FROM federicanerone.trattamenti WHERE id = $1 RETURNING id`, [id]);
     if (!rows[0]) {
       const err: any = new Error('trattamento not found');
       err.statusCode = 404;
