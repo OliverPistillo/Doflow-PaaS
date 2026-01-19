@@ -282,6 +282,8 @@ export default function FedericaAppuntamentiPage() {
          <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
            <Plus className="h-5 w-5 text-primary" /> Nuovo Appuntamento
          </h3>
+         
+         {/* PRIMA RIGA: Input Principali + Prezzo */}
          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
             
             {/* Input Cliente con Autocomplete */}
@@ -334,23 +336,31 @@ export default function FedericaAppuntamentiPage() {
                <Input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
             </div>
 
-            {/* Bottone Conferma */}
-            <div className="lg:col-span-1">
-               <Button onClick={onPreCreate} disabled={loading} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                 {loading ? '...' : 'Conferma Prenotazione'}
-               </Button>
+            {/* Input Prezzo */}
+            <div className="lg:col-span-1 space-y-2">
+               <Label>Prezzo (€)</Label>
+               <Input 
+                 value={finalPrice} 
+                 onChange={(e) => setFinalPrice(e.target.value)} 
+                 placeholder="es. 50" 
+               />
             </div>
          </div>
          
-         {/* -- REINSERIMENTO CAMPO NOTE -- */}
-         <div className="mt-4 grid grid-cols-1 lg:grid-cols-4 gap-4">
-            <div className="lg:col-span-4 space-y-2">
+         {/* SECONDA RIGA: Note + Bottone */}
+         <div className="mt-4 grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
+            <div className="lg:col-span-3 space-y-2">
                <Label>Note (opzionale)</Label>
                <Input 
                  value={notes} 
                  onChange={(e) => setNotes(e.target.value)} 
                  placeholder="Dettagli aggiuntivi, preferenze..." 
                />
+            </div>
+            <div className="lg:col-span-1">
+               <Button onClick={onPreCreate} disabled={loading} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+                 {loading ? '...' : 'Conferma'}
+               </Button>
             </div>
          </div>
       </div>
