@@ -72,7 +72,6 @@ function getHourlyRate(cents: number, minutes: number) {
   return (price / minutes) * 60;
 }
 
-// Palette Viola/Indaco per Trattamenti
 const CHART_COLORS = ['#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe', '#e0e7ff'];
 
 export default function FedericaTrattamentiPage() {
@@ -151,8 +150,18 @@ export default function FedericaTrattamentiPage() {
     } catch(e) { alert("Impossibile eliminare se ci sono appuntamenti collegati."); }
   };
 
-  // Calcolo KPI per UI
-  const maxExecuted = Math.max(...items.map(i => Number(i.executed_count)), 0);
+  // --- CALCOLO KPI LIVE ---
+  
+  // 1. Max Executed (per best seller)
+  const sortedByExecution = [...items].sort((a, b) => Number(b.executed_count) - Number(a.executed_count));
+  const bestSellerItem = sortedByExecution.length > 0 ? sortedByExecution[0] : null;
+  const maxExecuted = bestSellerItem ? Number(bestSellerItem.executed_count) : 0;
+
+  // 2. Resa Oraria Media del Listino
+  const validItems = items.filter(i => i.duration_minutes > 0);
+  const avgHourlyRate = validItems.length > 0
+    ? validItems.reduce((acc, curr) => acc + getHourlyRate(curr.price_cents, curr.duration_minutes), 0) / validItems.length
+    : 0;
 
   return (
     <div className="min-h-screen bg-transparent space-y-8 pb-20">
@@ -162,7 +171,7 @@ export default function FedericaTrattamentiPage() {
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-foreground">Trattamenti</h1>
           <p className="text-sm text-muted-foreground mt-2 max-w-lg">
-            Gestisci il catalogo dei servizi e monitora la loro efficienza economica.
+            Analisi del catalogo servizi e performance economica.
           </p>
         </div>
         <Button onClick={openNew} size="lg" className="shadow-lg shadow-indigo-500/20 bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition-all hover:scale-[1.02]">
@@ -184,7 +193,7 @@ export default function FedericaTrattamentiPage() {
                 Top Revenue
                 <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-100">Anno Corrente</Badge>
               </h3>
-              <p className="text-sm text-muted-foreground">I servizi che generano più fatturato.</p>
+              <p className="text-sm text-muted-foreground">Analisi dei servizi con maggior impatto sul fatturato.</p>
             </div>
             
             <div className="h-[200px] w-full">
@@ -227,36 +236,52 @@ export default function FedericaTrattamentiPage() {
           </div>
         </div>
 
-        {/* Side Cards */}
+        {/* Side Cards (KPI Reali) */}
         <div className="space-y-6 flex flex-col">
           
-          {/* Card: Efficiency Tip */}
+          {/* Card: Efficiency KPI */}
           <div className="flex-1 rounded-2xl border bg-gradient-to-br from-emerald-50 to-white dark:from-slate-900 dark:to-slate-800 p-6 flex flex-col justify-center relative overflow-hidden">
             <div className="absolute -right-4 -top-4 w-20 h-20 bg-emerald-100 rounded-full blur-2xl opacity-50"></div>
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
                 <Zap className="w-5 h-5" />
               </div>
-              <h4 className="font-semibold text-emerald-900 dark:text-emerald-100">Resa Oraria</h4>
+              <h4 className="font-semibold text-emerald-900 dark:text-emerald-100">Media Resa Oraria</h4>
             </div>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Punta a servizi sopra i <span className="font-bold text-emerald-600">60€/h</span>. 
-              Sono la chiave per aumentare il fatturato senza lavorare più ore.
+            <div className="mt-2">
+              <span className="text-3xl font-bold text-emerald-700 dark:text-emerald-400">
+                €{avgHourlyRate.toFixed(0)}
+              </span>
+              <span className="text-sm text-muted-foreground ml-1">/ ora</span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Valore medio calcolato sull'intero listino servizi attivo.
             </p>
           </div>
 
-          {/* Card: Best Seller */}
+          {/* Card: Best Seller KPI */}
           <div className="flex-1 rounded-2xl border bg-gradient-to-br from-amber-50 to-white dark:from-slate-900 dark:to-slate-800 p-6 flex flex-col justify-center relative overflow-hidden">
              <div className="absolute -right-4 -top-4 w-20 h-20 bg-amber-100 rounded-full blur-2xl opacity-50"></div>
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2 bg-amber-100 text-amber-600 rounded-lg">
                 <Trophy className="w-5 h-5" />
               </div>
-              <h4 className="font-semibold text-amber-900 dark:text-amber-100">Best Seller</h4>
+              <h4 className="font-semibold text-amber-900 dark:text-amber-100">Top Performer</h4>
             </div>
-             <p className="text-sm text-muted-foreground leading-relaxed">
-               I servizi più popolari sono ottimi per fare upsell. Proponi un extra ai clienti che li prenotano.
-             </p>
+             <div className="mt-2">
+               {bestSellerItem ? (
+                 <>
+                  <div className="text-xl font-bold text-amber-800 dark:text-amber-400 truncate" title={bestSellerItem.name}>
+                    {bestSellerItem.name}
+                  </div>
+                  <div className="text-xs font-medium text-amber-700/70 mt-1">
+                    {bestSellerItem.executed_count} esecuzioni totali
+                  </div>
+                 </>
+               ) : (
+                 <div className="text-sm text-muted-foreground">Nessun dato</div>
+               )}
+             </div>
           </div>
         </div>
       </div>
