@@ -360,8 +360,8 @@ export default function FedericaAppuntamentiPage() {
                <Button 
                  onClick={onPreCreate} 
                  disabled={loading} 
-                 // GRADIENTE CIPRIA -> BLU
-                 className="w-full bg-gradient-to-b from-pink-300 to-indigo-600 text-white font-medium border-0 hover:opacity-90 transition-opacity"
+                 // STILE: Cipria chiaro sfondo, Blu Navy testo
+                 className="w-full bg-pink-200 text-blue-900 font-medium border-0 hover:bg-pink-300 transition-colors"
                >
                  {loading ? '...' : 'Conferma'}
                </Button>

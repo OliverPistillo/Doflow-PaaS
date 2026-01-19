@@ -172,8 +172,8 @@ export default function FedericaClientiPage() {
           <Button 
             onClick={openNew} 
             size="lg" 
-            // GRADIENTE CIPRIA -> BLU
-            className="shadow-lg shadow-indigo-500/20 bg-gradient-to-b from-pink-300 to-indigo-600 text-white border-0 hover:opacity-90 hover:scale-[1.02] transition-all"
+            // STILE: Cipria chiaro sfondo, Blu Navy testo
+            className="shadow-lg shadow-pink-200/50 bg-pink-200 text-blue-900 font-medium border-0 transition-all hover:bg-pink-300 hover:scale-[1.02]"
           >
             <Plus className="mr-2 h-4 w-4" /> Nuovo Cliente
           </Button>
