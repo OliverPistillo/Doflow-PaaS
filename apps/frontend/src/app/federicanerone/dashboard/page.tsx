@@ -2,10 +2,21 @@
 
 import * as React from 'react';
 import { apiFetch } from '@/lib/api';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
+import { Badge } from '@/components/ui/badge';
+import { 
+  TrendingUp, 
+  Users, 
+  PhoneMissed, 
+  CalendarCheck, 
+  Clock, 
+  CheckCircle2, 
+  XCircle, 
+  DollarSign,
+  Activity
+} from 'lucide-react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -17,7 +28,10 @@ import {
   Pie,
   Cell,
   Legend,
+  AreaChart,
+  Area
 } from 'recharts';
+import { cn } from '@/lib/utils';
 
 // --- TIPI ---
 type StatsResponse = {
@@ -39,8 +53,9 @@ const MONTH_NAMES = [
   'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'
 ];
 
-// Colori per il grafico a torta
-const PIE_COLORS = ['#A78BFA', '#F472B6', '#FCD34D', '#60A5FA', '#34D399'];
+// Palette Moderna
+const PIE_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#10b981'];
+const CHART_COLOR = '#10b981'; // Emerald per i soldi
 
 export default function FedericaDashboardPage() {
   const [data, setData] = React.useState<StatsResponse | null>(null);
@@ -64,9 +79,9 @@ export default function FedericaDashboardPage() {
     void loadStats();
   }, [loadStats]);
 
-  // Se i dati non sono ancora pronti
-  if (!data && loading) return <div className="p-8 text-muted-foreground">Caricamento dashboard...</div>;
-  if (!data) return <div className="p-8 text-red-500">Errore caricamento dati.</div>;
+  // Loading / Error states minimali
+  if (!data && loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Caricamento analytics...</div>;
+  if (!data) return <div className="flex h-screen items-center justify-center text-red-500">Errore caricamento dati.</div>;
 
   // Preparazione dati grafici
   const chartMonthly = data.monthly.map(m => ({
@@ -74,21 +89,23 @@ export default function FedericaDashboardPage() {
     Fatturato: m.value
   }));
 
-  // Formattatore valuta
-  const eur = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
+  const eur = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="min-h-screen bg-transparent space-y-8 pb-20">
+      
+      {/* HEADER */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 border-b border-border/40 pb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Panoramica prestazioni e obiettivi.</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-2">
+            Panoramica delle performance di business per l'anno <strong>{year}</strong>.
+          </p>
         </div>
         
-        {/* Selettore Anno */}
         <div className="flex items-center gap-2">
           <Select value={year} onValueChange={setYear}>
-            <SelectTrigger className="w-[100px]">
+            <SelectTrigger className="w-[120px] bg-background">
               <SelectValue placeholder="Anno" />
             </SelectTrigger>
             <SelectContent>
@@ -97,121 +114,187 @@ export default function FedericaDashboardPage() {
               <SelectItem value="2026">2026</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="icon" onClick={loadStats} disabled={loading}>
-            ↻
+          <Button variant="outline" size="icon" onClick={loadStats} disabled={loading} className="shrink-0">
+            <Activity className={cn("h-4 w-4", loading && "animate-spin")} />
           </Button>
         </div>
       </div>
 
-      {/* --- SEZIONE KPI --- */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-        <KpiCard title="Nuovi Clienti" value={data.kpi.new_lead} color="border-l-4 border-l-gray-400" />
-        <KpiCard title="Nessuna Risposta" value={data.kpi.no_answer} color="border-l-4 border-l-orange-300 bg-orange-50/30" />
-        <KpiCard title="Appuntamenti" value={data.kpi.booked} color="border-l-4 border-l-blue-400 bg-blue-50/30" />
-        <KpiCard title="In Attesa" value={data.kpi.waiting} color="border-l-4 border-l-yellow-400 bg-yellow-50/30" />
-        <KpiCard title="Eseguiti" value={data.kpi.closed_won} color="border-l-4 border-l-green-500 bg-green-50/30" />
-        <KpiCard title="Persi" value={data.kpi.closed_lost} color="border-l-4 border-l-red-400 bg-red-50/30" />
+      {/* --- SEZIONE KPI (Top Row) --- */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <KpiCard 
+          title="Fatturato Totale" 
+          value={eur.format(data.kpi.fatturato_eur)} 
+          icon={DollarSign} 
+          trend="high"
+          trendColor="text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30"
+        />
+        <KpiCard 
+          title="Nuovi Clienti" 
+          value={data.kpi.new_lead} 
+          icon={Users}
+          trendColor="text-blue-600 bg-blue-50 dark:bg-blue-950/30"
+        />
+        <KpiCard 
+          title="Appuntamenti" 
+          value={data.kpi.booked + data.kpi.closed_won} 
+          icon={CalendarCheck}
+          trendColor="text-violet-600 bg-violet-50 dark:bg-violet-950/30"
+        />
+        <KpiCard 
+          title="Tasso Conversione" 
+          value={`${data.kpi.closed_won > 0 ? Math.round((data.kpi.closed_won / (data.kpi.booked + data.kpi.closed_won + data.kpi.closed_lost)) * 100) : 0}%`}
+          icon={TrendingUp}
+          trendColor="text-indigo-600 bg-indigo-50 dark:bg-indigo-950/30"
+        />
       </div>
 
-      {/* --- SEZIONE FATTURATO --- */}
-      <Card className="border-l-4 border-l-emerald-500 overflow-hidden">
-        <CardHeader className="bg-emerald-50/20 pb-2">
-          <CardTitle className="text-sm font-medium text-emerald-800">Fatturato Totale {year}</CardTitle>
-          <div className="text-4xl font-bold text-emerald-600">
-            {eur.format(data.kpi.fatturato_eur)}
-          </div>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartMonthly}>
-                <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis 
-                  fontSize={12} 
-                  tickLine={false} 
-                  axisLine={false} 
-                  tickFormatter={(value) => `€${value}`} 
-                />
-                <Tooltip 
-                  cursor={{ fill: '#f3f4f6' }}
-                  // FIX TYPE ERROR: 'value: any' accetta undefined che Recharts può passare
-                  formatter={(value: any) => [eur.format(Number(value || 0)), 'Fatturato']}
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                />
-                <Bar 
-                  dataKey="Fatturato" 
-                  fill="#10B981" 
-                  radius={[4, 4, 0, 0]} 
-                  barSize={40}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+      {/* --- MAIN GRID (Bento) --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-auto">
+        
+        {/* Main Chart: Fatturato */}
+        <div className="lg:col-span-2 rounded-2xl border bg-card text-card-foreground shadow-sm p-6 relative">
+           <div className="mb-6 flex items-center justify-between">
+             <div>
+                <h3 className="font-semibold text-lg">Andamento Fatturato</h3>
+                <p className="text-sm text-muted-foreground">Distribuzione mensile delle entrate.</p>
+             </div>
+             <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50">Yearly</Badge>
+           </div>
+           
+           <div className="h-[300px] w-full">
+             <ResponsiveContainer width="100%" height="100%">
+               <AreaChart data={chartMonthly}>
+                 <defs>
+                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                     <stop offset="5%" stopColor={CHART_COLOR} stopOpacity={0.3}/>
+                     <stop offset="95%" stopColor={CHART_COLOR} stopOpacity={0}/>
+                   </linearGradient>
+                 </defs>
+                 <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} tickMargin={10} />
+                 <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `€${v}`} />
+                 <Tooltip 
+                   cursor={{ stroke: '#e2e8f0' }}
+                   content={({ active, payload }) => {
+                     if (active && payload && payload.length) {
+                       return (
+                         <div className="rounded-lg border bg-background p-2 shadow-xl text-xs font-medium">
+                           <div className="text-muted-foreground mb-1">{payload[0].payload.name}</div>
+                           <div className="text-emerald-600 text-base font-bold">
+                              {eur.format(Number(payload[0].value))}
+                           </div>
+                         </div>
+                       )
+                     }
+                     return null;
+                   }}
+                 />
+                 <Area 
+                   type="monotone" 
+                   dataKey="Fatturato" 
+                   stroke={CHART_COLOR} 
+                   strokeWidth={3}
+                   fillOpacity={1} 
+                   fill="url(#colorRevenue)" 
+                 />
+               </AreaChart>
+             </ResponsiveContainer>
+           </div>
+        </div>
 
-      {/* --- SEZIONE TRATTAMENTI --- */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Grafico a Torta */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Distribuzione Trattamenti</CardTitle>
+        {/* Funnel Stats (Vertical Stack) */}
+        <div className="space-y-6">
+           <div className="rounded-2xl border bg-card p-6 h-full flex flex-col">
+              <h3 className="font-semibold text-lg mb-1">Stato Appuntamenti</h3>
+              <p className="text-sm text-muted-foreground mb-6">Pipeline operativa corrente.</p>
+              
+              <div className="space-y-4 flex-1">
+                 <FunnelRow label="Eseguiti (Won)" value={data.kpi.closed_won} total={100} color="bg-emerald-500" icon={CheckCircle2} />
+                 <FunnelRow label="Prenotati (Booked)" value={data.kpi.booked} total={100} color="bg-blue-500" icon={CalendarCheck} />
+                 <FunnelRow label="In Attesa (Waiting)" value={data.kpi.waiting} total={100} color="bg-amber-400" icon={Clock} />
+                 <FunnelRow label="No Risposta" value={data.kpi.no_answer} total={100} color="bg-orange-400" icon={PhoneMissed} />
+                 <FunnelRow label="Persi (Lost)" value={data.kpi.closed_lost} total={100} color="bg-red-400" icon={XCircle} />
+              </div>
+           </div>
+        </div>
+      </div>
+
+      {/* --- BOTTOM ROW: PRODUCTS & INSIGHTS --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        
+        {/* Pie Chart: Trattamenti */}
+        <Card className="border-none shadow-none bg-transparent">
+          <CardHeader className="px-0 pt-0">
+            <CardTitle>Distribuzione Servizi</CardTitle>
+            <CardDescription>Quali categorie di servizi sono più richieste?</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="h-[300px] w-full flex items-center justify-center">
-              {data.treatments.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={data.treatments}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {data.treatments.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="text-sm text-muted-foreground">Nessun dato trattamenti.</div>
-              )}
-            </div>
+          <CardContent className="px-0">
+             <div className="h-[300px] w-full border rounded-2xl bg-card p-4 flex items-center justify-center relative">
+                {data.treatments.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={data.treatments}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={80} // Donut style
+                        outerRadius={100}
+                        paddingAngle={5}
+                        dataKey="value"
+                        cornerRadius={5}
+                      >
+                        {data.treatments.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                        // CORREZIONE QUI SOTTO:
+                        formatter={(value: any) => [Number(value || 0), 'Eseguiti']}
+                      />
+                      <Legend verticalAlign="middle" align="right" layout="vertical" iconType="circle" />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-sm text-muted-foreground">Nessun dato.</div>
+                )}
+                {/* Center Text */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none pr-32 lg:pr-40">
+                   <div className="text-center">
+                      <div className="text-3xl font-bold">{data.treatments.reduce((a,b)=>a+b.value,0)}</div>
+                      <div className="text-xs text-muted-foreground uppercase tracking-wider">Totali</div>
+                   </div>
+                </div>
+             </div>
           </CardContent>
         </Card>
 
-        {/* Lista Top 5 */}
-        <Card>
-          <CardHeader>
+        {/* Top 5 List */}
+        <Card className="border-none shadow-none bg-transparent">
+          <CardHeader className="px-0 pt-0">
             <CardTitle>Top 5 Trattamenti</CardTitle>
+            <CardDescription>Classifica per volume di vendita.</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {data.treatments.map((t, idx) => (
-                <div key={t.name} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div 
-                      className="w-3 h-3 rounded-full" 
-                      style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }} 
-                    />
-                    <span className="font-medium text-sm truncate max-w-[200px]" title={t.name}>
-                      {t.name}
-                    </span>
-                  </div>
-                  <div className="text-sm font-bold text-muted-foreground">
-                    {t.value} <span className="font-normal text-xs">eseguiti</span>
-                  </div>
-                </div>
-              ))}
-              {data.treatments.length === 0 && (
-                <div className="text-sm text-muted-foreground">Nessun dato.</div>
-              )}
+          <CardContent className="px-0">
+            <div className="rounded-2xl border bg-card overflow-hidden">
+               {data.treatments.slice(0, 5).map((t, idx) => (
+                 <div key={t.name} className="flex items-center justify-between p-4 border-b last:border-0 hover:bg-muted/30 transition-colors">
+                   <div className="flex items-center gap-3">
+                     <div 
+                       className="w-2 h-8 rounded-full" 
+                       style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }} 
+                     />
+                     <div>
+                        <div className="font-medium text-sm text-foreground">{t.name}</div>
+                        <div className="text-xs text-muted-foreground">Rank #{idx + 1}</div>
+                     </div>
+                   </div>
+                   <Badge variant="secondary" className="font-mono">{t.value}</Badge>
+                 </div>
+               ))}
+               {data.treatments.length === 0 && (
+                 <div className="p-6 text-center text-sm text-muted-foreground">Nessun dato disponibile.</div>
+               )}
             </div>
           </CardContent>
         </Card>
@@ -220,18 +303,32 @@ export default function FedericaDashboardPage() {
   );
 }
 
-// Componente helper per le card KPI
-function KpiCard({ title, value, color }: { title: string; value: number; color?: string }) {
+// --- MICRO COMPONENTS ---
+
+function KpiCard({ title, value, icon: Icon, trendColor }: any) {
   return (
-    <Card className={`shadow-sm ${color || ''}`}>
-      <CardHeader className="p-4 pb-2">
-        <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-4 pt-0">
-        <div className="text-2xl font-bold">{value}</div>
-      </CardContent>
-    </Card>
+    <div className="rounded-xl border bg-card p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
+      <div>
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">{title}</p>
+        <h3 className="text-2xl font-bold text-foreground">{value}</h3>
+      </div>
+      <div className={cn("p-3 rounded-xl", trendColor)}>
+        <Icon className="h-5 w-5" />
+      </div>
+    </div>
   );
+}
+
+function FunnelRow({ label, value, color, icon: Icon }: any) {
+  return (
+    <div className="flex items-center justify-between p-3 rounded-lg border bg-background/50">
+       <div className="flex items-center gap-3">
+          <div className={cn("p-2 rounded-md text-white shadow-sm", color)}>
+            <Icon className="h-4 w-4" />
+          </div>
+          <span className="text-sm font-medium">{label}</span>
+       </div>
+       <span className="font-bold text-sm">{value}</span>
+    </div>
+  )
 }

@@ -3,19 +3,30 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Search, Plus, User, Phone, Mail, Trophy, TrendingUp } from 'lucide-react';
+import { Search, Plus, User, Phone, Mail, Trophy, MoreHorizontal, CalendarClock } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Tooltip as UITooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import {
   BarChart,
@@ -26,17 +37,9 @@ import {
   ResponsiveContainer,
   Cell
 } from 'recharts';
-
-import {
-  Tooltip as UITooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-
+import { cn } from '@/lib/utils';
 
 // --- TIPI ---
-
 type Cliente = {
   id: string;
   full_name: string;
@@ -47,7 +50,7 @@ type Cliente = {
   total_spent_cents: number; 
   last_visit_at: string | null;
   total_appointments: number;
-  is_vip: boolean; // --- MODIFICA VIP: Arriva dal backend ---
+  is_vip: boolean; 
 };
 
 type StatsData = {
@@ -56,7 +59,7 @@ type StatsData = {
 
 // --- HELPER ---
 function money(cents: number) {
-  return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(cents / 100);
+  return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(cents / 100);
 }
 
 function daysAgo(dateStr: string | null) {
@@ -68,7 +71,6 @@ function daysAgo(dateStr: string | null) {
   return `${days} gg fa`;
 }
 
-// Colori per il grafico Top 10
 const BAR_COLORS = ['#10B981', '#34D399', '#6EE7B7', '#A7F3D0', '#D1FAE5'];
 
 export default function FedericaClientiPage() {
@@ -105,7 +107,7 @@ export default function FedericaClientiPage() {
   React.useEffect(() => {
     const timer = setTimeout(() => {
       void loadData();
-    }, 300); // Debounce ricerca
+    }, 300);
     return () => clearTimeout(timer);
   }, [loadData]);
 
@@ -150,163 +152,170 @@ export default function FedericaClientiPage() {
 
   return (
     <TooltipProvider>
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="min-h-screen bg-transparent space-y-8 pb-20">
+        
+        {/* HEADER */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 border-b border-border/40 pb-6">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Clienti</h1>
-            <p className="text-sm text-muted-foreground">Analisi, gestione e storico clienti.</p>
+            <h1 className="text-3xl font-semibold tracking-tight text-foreground">Clienti</h1>
+            <p className="text-sm text-muted-foreground mt-2">
+               Gestisci l'anagrafica, analizza lo storico e identifica i top spender.
+            </p>
           </div>
-          <Button onClick={openNew} className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Button onClick={openNew} size="lg" className="shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90">
             <Plus className="mr-2 h-4 w-4" /> Nuovo Cliente
           </Button>
         </div>
 
-        {/* --- SEZIONE STATISTICHE (STRATEGIA) --- */}
+        {/* --- STATS SECTION --- */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
-          {/* Card 1: Top 5 Clienti (Grafico) */}
-          <Card className="lg:col-span-2 border-l-4 border-l-emerald-500 shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5 text-emerald-500" /> Top Clienti per Fatturato
-              </CardTitle>
-              <CardDescription>I clienti che hanno generato più valore nel tempo.</CardDescription>
-            </CardHeader>
-            <CardContent className="h-[250px]">
-              {stats && stats.topClients.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats.topClients} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                    <XAxis type="number" hide />
-                    <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 12}} />
-                    <Tooltip
-                      formatter={(value) => {
-                        const n =
-                          typeof value === "number"
-                            ? value
-                            : value == null
-                              ? 0
-                              : Number(value)
-
-                        return [`€${n.toFixed(2)}`, "Speso"] as [string, string]
-                      }}
-                      contentStyle={{
-                        borderRadius: "8px",
-                        border: "none",
-                        boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-                      }}
-                    />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20}>
-                        {stats.topClients.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={BAR_COLORS[index % BAR_COLORS.length]} />
-                        ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                  Nessun dato sufficiente per le statistiche.
+          <div className="rounded-2xl border bg-card text-card-foreground shadow-sm p-6 relative">
+             <div className="mb-4 flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
+                  <Trophy className="h-5 w-5" />
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <div>
+                   <h3 className="font-semibold text-lg">Top Clienti</h3>
+                   <p className="text-sm text-muted-foreground">Classifica per fatturato generato.</p>
+                </div>
+             </div>
+             
+             <div className="h-[220px] w-full">
+               {stats && stats.topClients.length > 0 ? (
+                 <ResponsiveContainer width="100%" height="100%">
+                   <BarChart data={stats.topClients} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                     <XAxis type="number" hide />
+                     <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 12}} tickLine={false} axisLine={false} />
+                     <Tooltip
+                       cursor={{ fill: 'transparent' }}
+                       content={({ active, payload }) => {
+                         if (active && payload && payload.length) {
+                           return (
+                             <div className="rounded-lg border bg-background p-2 shadow-xl text-xs font-medium">
+                               <div className="text-muted-foreground mb-1">{payload[0].payload.name}</div>
+                               <div className="text-emerald-600 text-base font-bold">€{Number(payload[0].value).toFixed(2)}</div>
+                             </div>
+                           )
+                         }
+                         return null;
+                       }}
+                     />
+                     <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
+                         {stats.topClients.map((entry, index) => (
+                           <Cell key={`cell-${index}`} fill={BAR_COLORS[index % BAR_COLORS.length]} />
+                         ))}
+                     </Bar>
+                   </BarChart>
+                 </ResponsiveContainer>
+               ) : (
+                 <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                   Dati insufficienti.
+                 </div>
+               )}
+             </div>
+          </div>
+          
+          {/* Info Card / Quick Stats (Placeholder per futura espansione) */}
+          <div className="rounded-2xl border bg-gradient-to-br from-emerald-50 to-white dark:from-slate-900 dark:to-slate-800 p-6 flex flex-col justify-center">
+             <h3 className="text-lg font-semibold text-emerald-900 dark:text-emerald-100 mb-2">Strategia Fedeltà</h3>
+             <p className="text-sm text-muted-foreground mb-4">
+               I clienti contrassegnati come <strong>VIP</strong> hanno superato la soglia di spesa definita.
+               Considera di offrire loro slot prioritari o trattamenti esclusivi.
+             </p>
+             <div className="flex gap-2">
+                <Badge variant="outline" className="bg-white/50 border-emerald-200 text-emerald-700">VIP &gt; 500€</Badge>
+                <Badge variant="outline" className="bg-white/50 border-amber-200 text-amber-700">Dormienti &gt; 60gg</Badge>
+             </div>
+          </div>
         </div>
 
         {/* --- LISTA CLIENTI --- */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Elenco Completo</CardTitle>
-            <div className="relative w-full max-w-sm">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Elenco Completo ({clients.length})</h2>
+            <div className="relative w-64">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input 
-                placeholder="Cerca nome, telefono..." 
-                className="pl-8" 
+                placeholder="Cerca cliente..." 
+                className="pl-9 bg-background border-muted hover:border-emerald-300 transition-colors focus-visible:ring-emerald-500" 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {clients.map(c => {
-                // --- MODIFICA VIP: Logica Badge dal Backend ---
-                // Non calcoliamo più localmente. Usiamo il flag del DB.
-                const isVip = c.is_vip; 
-                
-                const daysSinceLast = c.last_visit_at ? Math.floor((new Date().getTime() - new Date(c.last_visit_at).getTime()) / (1000 * 3600 * 24)) : 999;
-                const isDormant = daysSinceLast > 60 && c.total_appointments > 0;
+          </div>
 
-                return (
-                  <div key={c.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors gap-4">
-                    <div className="flex items-start gap-3">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
-                        {c.full_name.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="font-semibold flex items-center gap-2">
-                          {c.full_name}
-                          {isVip && (
-                            <UITooltip>
-                              <TooltipTrigger asChild>
-                                <Badge
-                                  variant="secondary"
-                                  className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-200 text-[10px] px-1.5 py-0 h-5 cursor-help"
-                                >
-                                  VIP
-                                </Badge>
-                              </TooltipTrigger>
+          <div className="grid grid-cols-1 gap-3">
+            {clients.map(c => {
+              const isVip = c.is_vip; 
+              const daysSinceLast = c.last_visit_at ? Math.floor((new Date().getTime() - new Date(c.last_visit_at).getTime()) / (1000 * 3600 * 24)) : 999;
+              const isDormant = daysSinceLast > 60 && c.total_appointments > 0;
 
-                              <TooltipContent side="top" align="start" className="w-[280px] p-3">
-                                <div className="space-y-2">
-                                  <div className="flex items-center justify-between">
-                                    <div className="text-xs font-semibold">VIP = cliente ad alto valore</div>
-                                    <div className="text-[10px] text-muted-foreground">
-                                      Attuale: {money(c.total_spent_cents)}
-                                    </div>
-                                  </div>
-
-                                  <div className="text-[11px] text-muted-foreground leading-snug">
-                                    Il cliente ha superato la soglia di spesa nel periodo configurato.
-                                  </div>
-                                </div>
-                              </TooltipContent>
-                            </UITooltip>
-                          )}
-                          {isDormant && <Badge variant="outline" className="text-gray-500 border-gray-300 text-[10px] px-1.5 py-0 h-5">Inattivo da {daysSinceLast}gg</Badge>}
-                        </div>
-                        <div className="text-xs text-muted-foreground flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mt-1">
-                          {c.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {c.phone}</span>}
-                          {c.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {c.email}</span>}
-                        </div>
-                      </div>
+              return (
+                <div key={c.id} className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border bg-card hover:shadow-md hover:border-emerald-200 transition-all duration-200">
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg font-bold border border-emerald-100">
+                      {c.full_name.charAt(0).toUpperCase()}
                     </div>
-
-                    <div className="flex items-center gap-6 text-sm">
-                      <div className="text-right min-w-[80px]">
-                        <div className="text-muted-foreground text-xs">Spesa Totale</div>
-                        <div className="font-bold text-emerald-600">{money(c.total_spent_cents)}</div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Link href={`/federicanerone/clienti/${c.id}`} className="font-semibold text-foreground text-base hover:underline decoration-emerald-500/50 underline-offset-4">
+                           {c.full_name}
+                        </Link>
+                        {isVip && (
+                          <UITooltip>
+                            <TooltipTrigger>
+                              <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-200 text-[10px] h-5 px-1.5 cursor-help">VIP</Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>Cliente alto valore (&gt;500€)</TooltipContent>
+                          </UITooltip>
+                        )}
+                        {isDormant && <Badge variant="outline" className="text-gray-500 border-gray-200 text-[10px] h-5 px-1.5">Inattivo {daysSinceLast}gg</Badge>}
                       </div>
-                      <div className="text-right min-w-[80px]">
-                        <div className="text-muted-foreground text-xs">Ultima Visita</div>
-                        <div className="font-medium">{daysAgo(c.last_visit_at)}</div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => openEdit(c)}>Modifica</Button>
-                        <Button variant="ghost" size="sm" className="text-red-500 h-8 w-8 p-0" onClick={() => handleDelete(c.id)}>
-                          <span className="sr-only">Elimina</span>
-                          ×
-                        </Button>
+                      <div className="text-xs text-muted-foreground flex items-center gap-3 mt-1.5">
+                        {c.phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {c.phone}</span>}
+                        {c.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {c.email}</span>}
                       </div>
                     </div>
                   </div>
-                );
-              })}
-              
-              {clients.length === 0 && !loading && (
-                <div className="text-center py-8 text-muted-foreground">Nessun cliente trovato.</div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+
+                  <div className="flex items-center justify-between sm:justify-end gap-6 mt-4 sm:mt-0 pt-4 sm:pt-0 border-t sm:border-t-0 border-border/50">
+                    <div className="text-right">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-0.5">Spesa Totale</div>
+                      <div className="font-bold text-emerald-600">{money(c.total_spent_cents)}</div>
+                    </div>
+                    <div className="text-right hidden sm:block">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-0.5">Ultima Visita</div>
+                      <div className="font-medium flex items-center justify-end gap-1">
+                         <CalendarClock className="h-3 w-3 text-muted-foreground" />
+                         {daysAgo(c.last_visit_at)}
+                      </div>
+                    </div>
+                    
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                         <DropdownMenuItem onClick={() => openEdit(c)}>Modifica Anagrafica</DropdownMenuItem>
+                         <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(c.id)}>Elimina Cliente</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              );
+            })}
+            
+            {clients.length === 0 && !loading && (
+               <div className="text-center py-12 border-2 border-dashed rounded-xl bg-muted/10">
+                 <User className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-50" />
+                 <h3 className="font-medium text-foreground">Nessun cliente trovato</h3>
+                 <p className="text-sm text-muted-foreground mt-1">Aggiungi il primo cliente per iniziare.</p>
+               </div>
+            )}
+          </div>
+        </div>
 
         {/* DIALOG CREA/MODIFICA */}
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -314,7 +323,7 @@ export default function FedericaClientiPage() {
             <DialogHeader>
               <DialogTitle>{editId ? 'Modifica Cliente' : 'Nuovo Cliente'}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 py-2">
+            <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label>Nome Completo</Label>
                 <Input value={formName} onChange={e => setFormName(e.target.value)} placeholder="Es. Mario Rossi" />
