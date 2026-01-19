@@ -22,7 +22,9 @@ import {
   MoreHorizontal, 
   TrendingUp, 
   Zap, 
-  Trophy 
+  Trophy,
+  Banknote,
+  Layers
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -150,18 +152,19 @@ export default function FedericaTrattamentiPage() {
     } catch(e) { alert("Impossibile eliminare se ci sono appuntamenti collegati."); }
   };
 
-  // --- CALCOLO KPI LIVE ---
-  
-  // 1. Max Executed (per best seller)
+  // --- CALCOLO KPI AGGREGATI ---
   const sortedByExecution = [...items].sort((a, b) => Number(b.executed_count) - Number(a.executed_count));
   const bestSellerItem = sortedByExecution.length > 0 ? sortedByExecution[0] : null;
   const maxExecuted = bestSellerItem ? Number(bestSellerItem.executed_count) : 0;
 
-  // 2. Resa Oraria Media del Listino
   const validItems = items.filter(i => i.duration_minutes > 0);
   const avgHourlyRate = validItems.length > 0
     ? validItems.reduce((acc, curr) => acc + getHourlyRate(curr.price_cents, curr.duration_minutes), 0) / validItems.length
     : 0;
+
+  const totalRevenueAll = items.reduce((acc, curr) => acc + Number(curr.total_revenue_cents), 0);
+  const totalExecutionsAll = items.reduce((acc, curr) => acc + Number(curr.executed_count), 0);
+  const avgTicket = totalExecutionsAll > 0 ? (totalRevenueAll / totalExecutionsAll) : 0;
 
   return (
     <div className="min-h-screen bg-transparent space-y-8 pb-20">
@@ -174,7 +177,12 @@ export default function FedericaTrattamentiPage() {
             Analisi del catalogo servizi e performance economica.
           </p>
         </div>
-        <Button onClick={openNew} size="lg" className="shadow-lg shadow-indigo-500/20 bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition-all hover:scale-[1.02]">
+        <Button 
+          onClick={openNew} 
+          size="lg" 
+          // GRADIENTE CIPRIA -> BLU
+          className="shadow-lg shadow-indigo-500/20 bg-gradient-to-b from-pink-300 to-indigo-600 text-white font-medium border-0 transition-all hover:opacity-90 hover:scale-[1.02]"
+        >
           <Plus className="mr-2 h-4 w-4" /> Nuovo Trattamento
         </Button>
       </div>
@@ -233,26 +241,44 @@ export default function FedericaTrattamentiPage() {
           </div>
         </div>
 
-        {/* Side Cards (KPI Reali - Niente testo inutile) */}
+        {/* Side Cards */}
         <div className="space-y-6 flex flex-col">
           
-          {/* Card: Media Listino */}
+          {/* Card: Performance Listino */}
           <div className="flex-1 rounded-2xl border bg-card p-6 flex flex-col justify-center relative overflow-hidden shadow-sm">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
-                <Zap className="w-5 h-5" />
+                <Banknote className="w-5 h-5" />
               </div>
-              <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Media Resa Oraria</h4>
+              <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Performance Listino</h4>
             </div>
-            <div>
-              <span className="text-3xl font-bold text-foreground">
-                €{avgHourlyRate.toFixed(0)}
-              </span>
-              <span className="text-sm text-muted-foreground ml-1">/ ora</span>
+            
+            <div className="mb-4">
+              <div className="text-3xl font-bold text-foreground">
+                {money(avgTicket)}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Ticket medio per servizio</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 border-t pt-4">
+               <div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Volumi</div>
+                  <div className="font-semibold flex items-center gap-1">
+                     <Layers className="h-3 w-3 text-indigo-500" />
+                     {totalExecutionsAll}
+                  </div>
+               </div>
+               <div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Efficienza</div>
+                  <div className="font-semibold flex items-center gap-1">
+                     <Zap className="h-3 w-3 text-amber-500" />
+                     €{avgHourlyRate.toFixed(0)}/h
+                  </div>
+               </div>
             </div>
           </div>
 
-          {/* Card: Top Performer */}
+          {/* Card: Best Seller */}
           <div className="flex-1 rounded-2xl border bg-card p-6 flex flex-col justify-center relative overflow-hidden shadow-sm">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-amber-100 text-amber-600 rounded-lg">
@@ -266,8 +292,13 @@ export default function FedericaTrattamentiPage() {
                   <div className="text-xl font-bold text-foreground truncate" title={bestSellerItem.name}>
                     {bestSellerItem.name}
                   </div>
-                  <div className="text-xs font-medium text-muted-foreground mt-1">
-                    {bestSellerItem.executed_count} vendite totali
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-100">
+                       {bestSellerItem.executed_count} vendite
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                       {money(bestSellerItem.total_revenue_cents)} tot.
+                    </span>
                   </div>
                  </>
                ) : (
@@ -334,8 +365,6 @@ export default function FedericaTrattamentiPage() {
 
                 {/* Right: Metrics & Actions */}
                 <div className="flex items-center justify-between sm:justify-end gap-6 mt-4 sm:mt-0 pt-4 sm:pt-0 border-t sm:border-t-0 border-border/50">
-                  
-                  {/* KPI: Hourly Rate */}
                   <div className="text-right">
                     <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-0.5">Resa / Ora</div>
                     <div className={cn(
@@ -346,13 +375,11 @@ export default function FedericaTrattamentiPage() {
                     </div>
                   </div>
 
-                  {/* KPI: Total Revenue */}
                   <div className="text-right hidden sm:block">
                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-0.5">Totale</div>
                      <div className="text-sm font-medium">{money(t.total_revenue_cents)}</div>
                   </div>
 
-                  {/* Actions Menu */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">

@@ -277,16 +277,16 @@ export default function FedericaAppuntamentiPage() {
         </div>
       </div>
 
-      {/* --- FORM RAPIDO (Sempre visibile per comodità) --- */}
+      {/* --- FORM RAPIDO --- */}
       <div className="rounded-2xl border bg-card p-6 shadow-sm">
          <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
            <Plus className="h-5 w-5 text-primary" /> Nuovo Appuntamento
          </h3>
          
-         {/* PRIMA RIGA: Input Principali + Prezzo */}
+         {/* PRIMA RIGA */}
          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
             
-            {/* Input Cliente con Autocomplete */}
+            {/* Input Cliente */}
             <div className="lg:col-span-1 space-y-2 relative">
                <Label>Cliente</Label>
                <div className="relative">
@@ -303,7 +303,6 @@ export default function FedericaAppuntamentiPage() {
                    </div>
                  )}
                </div>
-               {/* Dropdown suggerimenti */}
                {inputClientName && !selectedClientId && filteredClients.length > 0 && (
                   <div className="absolute z-10 w-full bg-popover border rounded-md shadow-lg mt-1 max-h-40 overflow-y-auto">
                     {filteredClients.map(c => (
@@ -347,7 +346,7 @@ export default function FedericaAppuntamentiPage() {
             </div>
          </div>
          
-         {/* SECONDA RIGA: Note + Bottone */}
+         {/* SECONDA RIGA */}
          <div className="mt-4 grid grid-cols-1 lg:grid-cols-4 gap-4 items-end">
             <div className="lg:col-span-3 space-y-2">
                <Label>Note (opzionale)</Label>
@@ -358,7 +357,12 @@ export default function FedericaAppuntamentiPage() {
                />
             </div>
             <div className="lg:col-span-1">
-               <Button onClick={onPreCreate} disabled={loading} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+               <Button 
+                 onClick={onPreCreate} 
+                 disabled={loading} 
+                 // GRADIENTE CIPRIA -> BLU
+                 className="w-full bg-gradient-to-b from-pink-300 to-indigo-600 text-white font-medium border-0 hover:opacity-90 transition-opacity"
+               >
                  {loading ? '...' : 'Conferma'}
                </Button>
             </div>

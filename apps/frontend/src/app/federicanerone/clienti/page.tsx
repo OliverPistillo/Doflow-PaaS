@@ -169,7 +169,12 @@ export default function FedericaClientiPage() {
                Gestisci l'anagrafica, analizza lo storico e identifica i top spender.
             </p>
           </div>
-          <Button onClick={openNew} size="lg" className="shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90">
+          <Button 
+            onClick={openNew} 
+            size="lg" 
+            // GRADIENTE CIPRIA -> BLU
+            className="shadow-lg shadow-indigo-500/20 bg-gradient-to-b from-pink-300 to-indigo-600 text-white border-0 hover:opacity-90 hover:scale-[1.02] transition-all"
+          >
             <Plus className="mr-2 h-4 w-4" /> Nuovo Cliente
           </Button>
         </div>
