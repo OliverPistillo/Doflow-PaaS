@@ -184,22 +184,19 @@ export default function FedericaTrattamentiPage() {
         
         {/* Main Chart Card */}
         <div className="md:col-span-2 rounded-2xl border bg-card text-card-foreground shadow-sm p-6 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:opacity-20 transition-opacity">
-            <TrendingUp className="w-24 h-24 text-indigo-500" />
-          </div>
           <div className="flex flex-col h-full justify-between relative z-10">
-            <div className="mb-6">
-              <h3 className="font-semibold text-lg flex items-center gap-2">
-                Top Revenue
-                <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-100">Anno Corrente</Badge>
-              </h3>
-              <p className="text-sm text-muted-foreground">Analisi dei servizi con maggior impatto sul fatturato.</p>
+            <div className="mb-6 flex justify-between items-start">
+              <div>
+                <h3 className="font-semibold text-lg">Top Revenue</h3>
+                <p className="text-sm text-muted-foreground">Servizi con maggior impatto sul fatturato.</p>
+              </div>
+              <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border-indigo-100">Yearly</Badge>
             </div>
             
             <div className="h-[200px] w-full">
                {stats && stats.topRevenue.length > 0 ? (
                  <ResponsiveContainer width="100%" height="100%">
-                   <BarChart data={stats.topRevenue} barSize={32}>
+                   <BarChart data={stats.topRevenue} barSize={40}>
                      <XAxis 
                         dataKey="name" 
                         stroke="#888888" 
@@ -236,46 +233,41 @@ export default function FedericaTrattamentiPage() {
           </div>
         </div>
 
-        {/* Side Cards (KPI Reali) */}
+        {/* Side Cards (KPI Reali - Niente testo inutile) */}
         <div className="space-y-6 flex flex-col">
           
-          {/* Card: Efficiency KPI */}
-          <div className="flex-1 rounded-2xl border bg-gradient-to-br from-emerald-50 to-white dark:from-slate-900 dark:to-slate-800 p-6 flex flex-col justify-center relative overflow-hidden">
-            <div className="absolute -right-4 -top-4 w-20 h-20 bg-emerald-100 rounded-full blur-2xl opacity-50"></div>
-            <div className="flex items-center gap-3 mb-2">
+          {/* Card: Media Listino */}
+          <div className="flex-1 rounded-2xl border bg-card p-6 flex flex-col justify-center relative overflow-hidden shadow-sm">
+            <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
                 <Zap className="w-5 h-5" />
               </div>
-              <h4 className="font-semibold text-emerald-900 dark:text-emerald-100">Media Resa Oraria</h4>
+              <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Media Resa Oraria</h4>
             </div>
-            <div className="mt-2">
-              <span className="text-3xl font-bold text-emerald-700 dark:text-emerald-400">
+            <div>
+              <span className="text-3xl font-bold text-foreground">
                 €{avgHourlyRate.toFixed(0)}
               </span>
               <span className="text-sm text-muted-foreground ml-1">/ ora</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Valore medio calcolato sull'intero listino servizi attivo.
-            </p>
           </div>
 
-          {/* Card: Best Seller KPI */}
-          <div className="flex-1 rounded-2xl border bg-gradient-to-br from-amber-50 to-white dark:from-slate-900 dark:to-slate-800 p-6 flex flex-col justify-center relative overflow-hidden">
-             <div className="absolute -right-4 -top-4 w-20 h-20 bg-amber-100 rounded-full blur-2xl opacity-50"></div>
-            <div className="flex items-center gap-3 mb-2">
+          {/* Card: Top Performer */}
+          <div className="flex-1 rounded-2xl border bg-card p-6 flex flex-col justify-center relative overflow-hidden shadow-sm">
+            <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-amber-100 text-amber-600 rounded-lg">
                 <Trophy className="w-5 h-5" />
               </div>
-              <h4 className="font-semibold text-amber-900 dark:text-amber-100">Top Performer</h4>
+              <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Best Seller</h4>
             </div>
-             <div className="mt-2">
+             <div>
                {bestSellerItem ? (
                  <>
-                  <div className="text-xl font-bold text-amber-800 dark:text-amber-400 truncate" title={bestSellerItem.name}>
+                  <div className="text-xl font-bold text-foreground truncate" title={bestSellerItem.name}>
                     {bestSellerItem.name}
                   </div>
-                  <div className="text-xs font-medium text-amber-700/70 mt-1">
-                    {bestSellerItem.executed_count} esecuzioni totali
+                  <div className="text-xs font-medium text-muted-foreground mt-1">
+                    {bestSellerItem.executed_count} vendite totali
                   </div>
                  </>
                ) : (
@@ -305,7 +297,6 @@ export default function FedericaTrattamentiPage() {
           {items.map((t) => {
             const hourlyRate = getHourlyRate(t.price_cents, t.duration_minutes);
             const isHighProfit = hourlyRate >= 60;
-            const isLowProfit = hourlyRate < 35;
             const isBestSeller = t.executed_count > 0 && Number(t.executed_count) === maxExecuted;
 
             return (
@@ -349,10 +340,9 @@ export default function FedericaTrattamentiPage() {
                     <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-0.5">Resa / Ora</div>
                     <div className={cn(
                       "text-sm font-bold flex items-center justify-end gap-1",
-                      isHighProfit ? "text-emerald-600" : isLowProfit ? "text-red-500" : "text-foreground"
+                      isHighProfit ? "text-emerald-600" : "text-foreground"
                     )}>
                       €{hourlyRate.toFixed(0)}
-                      {isHighProfit && <TrendingUp className="h-3 w-3" />}
                     </div>
                   </div>
 

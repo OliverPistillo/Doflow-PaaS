@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Search, Plus, User, Phone, Mail, Trophy, MoreHorizontal, CalendarClock } from 'lucide-react';
+import { Search, Plus, User, Phone, Mail, Trophy, MoreHorizontal, CalendarClock, Crown, BedDouble } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -150,6 +150,13 @@ export default function FedericaClientiPage() {
     } catch (e) { console.error(e); }
   };
 
+  // --- CALCOLO KPI LOCALI ---
+  const vipCount = clients.filter(c => c.is_vip).length;
+  const dormantCount = clients.filter(c => {
+    const daysSinceLast = c.last_visit_at ? Math.floor((new Date().getTime() - new Date(c.last_visit_at).getTime()) / (1000 * 3600 * 24)) : 999;
+    return daysSinceLast > 60 && c.total_appointments > 0;
+  }).length;
+
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-transparent space-y-8 pb-20">
@@ -167,9 +174,11 @@ export default function FedericaClientiPage() {
           </Button>
         </div>
 
-        {/* --- STATS SECTION --- */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="rounded-2xl border bg-card text-card-foreground shadow-sm p-6 relative">
+        {/* --- STATS SECTION (BENTO STYLE) --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* Main Chart */}
+          <div className="lg:col-span-2 rounded-2xl border bg-card text-card-foreground shadow-sm p-6 relative">
              <div className="mb-4 flex items-center gap-3">
                 <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
                   <Trophy className="h-5 w-5" />
@@ -180,7 +189,7 @@ export default function FedericaClientiPage() {
                 </div>
              </div>
              
-             <div className="h-[220px] w-full">
+             <div className="h-[200px] w-full">
                {stats && stats.topClients.length > 0 ? (
                  <ResponsiveContainer width="100%" height="100%">
                    <BarChart data={stats.topClients} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
@@ -215,16 +224,24 @@ export default function FedericaClientiPage() {
              </div>
           </div>
           
-          {/* Info Card / Quick Stats (Placeholder per futura espansione) */}
-          <div className="rounded-2xl border bg-gradient-to-br from-emerald-50 to-white dark:from-slate-900 dark:to-slate-800 p-6 flex flex-col justify-center">
-             <h3 className="text-lg font-semibold text-emerald-900 dark:text-emerald-100 mb-2">Strategia Fedeltà</h3>
-             <p className="text-sm text-muted-foreground mb-4">
-               I clienti contrassegnati come <strong>VIP</strong> hanno superato la soglia di spesa definita.
-               Considera di offrire loro slot prioritari o trattamenti esclusivi.
-             </p>
-             <div className="flex gap-2">
-                <Badge variant="outline" className="bg-white/50 border-emerald-200 text-emerald-700">VIP &gt; 500€</Badge>
-                <Badge variant="outline" className="bg-white/50 border-amber-200 text-amber-700">Dormienti &gt; 60gg</Badge>
+          {/* Side KPI Cards (Numeri PURI) */}
+          <div className="flex flex-col gap-6">
+             <div className="flex-1 rounded-2xl border bg-card p-6 flex flex-col justify-center shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                   <Crown className="h-4 w-4 text-amber-500" />
+                   <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Totale VIP</h4>
+                </div>
+                <div className="text-3xl font-bold">{vipCount}</div>
+                <div className="text-xs text-muted-foreground mt-1">Clienti con alta spesa</div>
+             </div>
+
+             <div className="flex-1 rounded-2xl border bg-card p-6 flex flex-col justify-center shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                   <BedDouble className="h-4 w-4 text-slate-400" />
+                   <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dormienti</h4>
+                </div>
+                <div className="text-3xl font-bold">{dormantCount}</div>
+                <div className="text-xs text-muted-foreground mt-1">Assenti da {'>'}60gg</div>
              </div>
           </div>
         </div>
@@ -266,7 +283,7 @@ export default function FedericaClientiPage() {
                             <TooltipTrigger>
                               <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-200 text-[10px] h-5 px-1.5 cursor-help">VIP</Badge>
                             </TooltipTrigger>
-                            <TooltipContent>Cliente alto valore (&gt;500€)</TooltipContent>
+                            <TooltipContent>Cliente alto valore</TooltipContent>
                           </UITooltip>
                         )}
                         {isDormant && <Badge variant="outline" className="text-gray-500 border-gray-200 text-[10px] h-5 px-1.5">Inattivo {daysSinceLast}gg</Badge>}

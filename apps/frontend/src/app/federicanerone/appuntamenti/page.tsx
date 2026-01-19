@@ -341,6 +341,18 @@ export default function FedericaAppuntamentiPage() {
                </Button>
             </div>
          </div>
+         
+         {/* -- REINSERIMENTO CAMPO NOTE -- */}
+         <div className="mt-4 grid grid-cols-1 lg:grid-cols-4 gap-4">
+            <div className="lg:col-span-4 space-y-2">
+               <Label>Note (opzionale)</Label>
+               <Input 
+                 value={notes} 
+                 onChange={(e) => setNotes(e.target.value)} 
+                 placeholder="Dettagli aggiuntivi, preferenze..." 
+               />
+            </div>
+         </div>
       </div>
 
       {/* --- VISTA CALENDARIO --- */}
@@ -440,6 +452,12 @@ export default function FedericaAppuntamentiPage() {
                               <span>{treatment?.name || 'Trattamento'}</span>
                               <span className="font-semibold text-foreground">{moneyFromCents(a.final_price_cents)}</span>
                            </div>
+                           
+                           {a.notes && (
+                             <div className="mt-2 text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                               Note: {a.notes}
+                             </div>
+                           )}
 
                            {/* Azioni Rapide (Hover) */}
                            <div className="mt-4 pt-3 border-t flex items-center justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
