@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'; // Tabs come in Trattamenti
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -197,7 +197,7 @@ export default function FedericaAppuntamentiPage() {
     }
   }, [isCreateOpen, selectedDay]); 
 
-  // FORM HANDLERS (Identici a prima)
+  // FORM HANDLERS
   const filteredClients = React.useMemo(() => {
     if (!inputClientName) return [];
     if (selectedClientId) return [];
@@ -309,7 +309,7 @@ export default function FedericaAppuntamentiPage() {
     return cells;
   }, [month]);
 
-  // Lista filtrata per la view "Lista"
+  // Lista filtrata
   const filteredListItems = React.useMemo(() => {
      if (!searchQuery) return items;
      return items.filter(a => {
@@ -465,7 +465,7 @@ export default function FedericaAppuntamentiPage() {
                 </div>
             </Card>
 
-            {/* COLONNA DESTRA: DETTAGLIO GIORNO */}
+            {/* COLONNA DESTRA: DETTAGLIO GIORNO (Modificato come richiesto) */}
             <div className="flex flex-col gap-4 h-full">
                 <Card className="border-none shadow-lg shadow-indigo-100/50 h-full flex flex-col">
                     <CardHeader className="py-5 border-b bg-gradient-to-r from-indigo-50 to-white">
@@ -503,28 +503,13 @@ export default function FedericaAppuntamentiPage() {
                                             <div className={cn("absolute left-0 top-3 bottom-3 w-1 rounded-r-md", config.color.replace('border-l-', 'bg-'))}></div>
                                             
                                             <div className="pl-3">
-                                                <div className="flex justify-between items-start mb-2">
+                                                <div className="flex justify-between items-start mb-1">
                                                     <span className="font-bold text-lg text-foreground tabular-nums tracking-tight">
                                                         {new Date(a.starts_at).toLocaleTimeString('it-IT', {hour:'2-digit', minute:'2-digit'})}
                                                     </span>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="icon" className="h-6 w-6 -mr-2 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem onClick={() => handleUpdateStatus(a.id, 'closed_won')} className="text-emerald-600">
-                                                                <Check className="h-3 w-3 mr-2" /> Segna Eseguito
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => handleUpdateStatus(a.id, 'closed_lost')} className="text-rose-600">
-                                                                <X className="h-3 w-3 mr-2" /> Segna Annullato
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => handleDelete(a.id)}>
-                                                                Elimina
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
+                                                    <Badge variant="secondary" className={cn("text-[10px] font-medium uppercase tracking-wider h-5 px-1.5 rounded-md", config.badge)}>
+                                                        {config.label}
+                                                    </Badge>
                                                 </div>
                                                 
                                                 <div className="font-semibold text-base mb-0.5 text-foreground">{client?.full_name || 'Cliente sconosciuto'}</div>
@@ -536,15 +521,27 @@ export default function FedericaAppuntamentiPage() {
                                                     </Badge>
                                                 </div>
                                                 
-                                                <div className="flex justify-between items-center mt-2">
-                                                    <Badge variant="secondary" className={cn("text-[10px] font-medium uppercase tracking-wider h-5 px-1.5 rounded-md", config.badge)}>
-                                                        {config.label}
-                                                    </Badge>
-                                                    {a.notes && (
-                                                        <span className="text-[10px] text-muted-foreground italic truncate max-w-[120px]">
-                                                            {a.notes}
-                                                        </span>
+                                                {a.notes && (
+                                                    <div className="mt-2 text-[10px] text-muted-foreground italic truncate bg-muted/30 p-1.5 rounded">
+                                                        "{a.notes}"
+                                                    </div>
+                                                )}
+
+                                                {/* AZIONI RAPIDE A SCOMPARSA (Restored) */}
+                                                <div className="mt-3 flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                                    {a.status !== 'closed_won' && a.status !== 'closed_lost' && (
+                                                        <>
+                                                        <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" onClick={() => handleUpdateStatus(a.id, 'closed_won')} title="Esegui">
+                                                            <Check className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:bg-amber-50 hover:text-amber-700" onClick={() => handleUpdateStatus(a.id, 'closed_lost')} title="Annulla">
+                                                            <X className="h-4 w-4" />
+                                                        </Button>
+                                                        </>
                                                     )}
+                                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(a.id)} title="Elimina">
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
                                                 </div>
                                             </div>
                                         </div>
