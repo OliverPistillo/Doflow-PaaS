@@ -1,6 +1,8 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,23 +17,30 @@ import {
   CheckCircle2, 
   XCircle, 
   DollarSign,
-  Activity
+  Activity,
+  ArrowUpRight,
+  ChevronRight
 } from 'lucide-react';
 import {
   ResponsiveContainer,
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   Tooltip,
-  PieChart,
-  Pie,
+  BarChart,
+  Bar,
   Cell,
-  Legend,
-  AreaChart,
-  Area
+  CartesianGrid
 } from 'recharts';
 import { cn } from '@/lib/utils';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 // --- TIPI ---
 type StatsResponse = {
@@ -54,13 +63,17 @@ const MONTH_NAMES = [
 ];
 
 // Palette Moderna
-const PIE_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#10b981'];
-const CHART_COLOR = '#10b981'; // Emerald per i soldi
+const CHART_COLOR_PRIMARY = '#10b981'; // Emerald
+const BAR_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#10b981'];
 
 export default function FedericaDashboardPage() {
+  const router = useRouter();
   const [data, setData] = React.useState<StatsResponse | null>(null);
   const [year, setYear] = React.useState<string>(String(new Date().getFullYear()));
   const [loading, setLoading] = React.useState(false);
+  
+  // Stato per Dialog Dettaglio Trattamento
+  const [selectedTreatment, setSelectedTreatment] = React.useState<{ name: string; value: number } | null>(null);
 
   // Caricamento Dati
   const loadStats = React.useCallback(async () => {
@@ -79,8 +92,8 @@ export default function FedericaDashboardPage() {
     void loadStats();
   }, [loadStats]);
 
-  // Loading / Error states minimali
-  if (!data && loading) return <div className="flex h-screen items-center justify-center text-muted-foreground">Caricamento analytics...</div>;
+  // Loading / Error states
+  if (!data && loading) return <div className="flex h-screen items-center justify-center text-muted-foreground animate-pulse">Caricamento analytics...</div>;
   if (!data) return <div className="flex h-screen items-center justify-center text-red-500">Errore caricamento dati.</div>;
 
   // Preparazione dati grafici
@@ -88,6 +101,9 @@ export default function FedericaDashboardPage() {
     name: MONTH_NAMES[m.month - 1],
     Fatturato: m.value
   }));
+
+  // Preparazione dati Top Trattamenti (Ordina e prendi i primi 5)
+  const sortedTreatments = [...data.treatments].sort((a, b) => b.value - a.value).slice(0, 5);
 
   const eur = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
 
@@ -105,7 +121,7 @@ export default function FedericaDashboardPage() {
         
         <div className="flex items-center gap-2">
           <Select value={year} onValueChange={setYear}>
-            <SelectTrigger className="w-[120px] bg-background">
+            <SelectTrigger className="w-[120px] bg-background shadow-sm">
               <SelectValue placeholder="Anno" />
             </SelectTrigger>
             <SelectContent>
@@ -114,73 +130,94 @@ export default function FedericaDashboardPage() {
               <SelectItem value="2026">2026</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="icon" onClick={loadStats} disabled={loading} className="shrink-0">
+          <Button variant="outline" size="icon" onClick={loadStats} disabled={loading} className="shrink-0 shadow-sm">
             <Activity className={cn("h-4 w-4", loading && "animate-spin")} />
           </Button>
         </div>
       </div>
 
-      {/* --- SEZIONE KPI (Top Row) --- */}
+      {/* --- SEZIONE KPI (Top Row - Cliccabili) --- */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <KpiCard 
-          title="Fatturato Totale" 
-          value={eur.format(data.kpi.fatturato_eur)} 
-          icon={DollarSign} 
-          trend="high"
-          trendColor="text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30"
-        />
-        <KpiCard 
-          title="Nuovi Clienti" 
-          value={data.kpi.new_lead} 
-          icon={Users}
-          trendColor="text-blue-600 bg-blue-50 dark:bg-blue-950/30"
-        />
-        <KpiCard 
-          title="Appuntamenti" 
-          value={data.kpi.booked + data.kpi.closed_won} 
-          icon={CalendarCheck}
-          trendColor="text-violet-600 bg-violet-50 dark:bg-violet-950/30"
-        />
-        <KpiCard 
-          title="Tasso Conversione" 
-          value={`${data.kpi.closed_won > 0 ? Math.round((data.kpi.closed_won / (data.kpi.booked + data.kpi.closed_won + data.kpi.closed_lost)) * 100) : 0}%`}
-          icon={TrendingUp}
-          trendColor="text-indigo-600 bg-indigo-50 dark:bg-indigo-950/30"
-        />
+        {/* FATTURATO -> Vai a storico pagamenti/appuntamenti */}
+        <Link href={`/federicanerone/appuntamenti?view=list&status=closed_won&year=${year}`} className="block group">
+            <KpiCard 
+              title="Fatturato Totale" 
+              value={eur.format(data.kpi.fatturato_eur)} 
+              icon={DollarSign} 
+              trendColor="text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30"
+              borderColor="group-hover:border-emerald-500/50"
+            />
+        </Link>
+
+        {/* NUOVI CLIENTI -> Vai a clienti */}
+        <Link href="/federicanerone/clienti?sort=created_desc" className="block group">
+            <KpiCard 
+              title="Nuovi Clienti" 
+              value={data.kpi.new_lead} 
+              icon={Users}
+              trendColor="text-blue-600 bg-blue-50 dark:bg-blue-950/30"
+              borderColor="group-hover:border-blue-500/50"
+            />
+        </Link>
+
+        {/* APPUNTAMENTI -> Vai a calendario */}
+        <Link href="/federicanerone/appuntamenti" className="block group">
+            <KpiCard 
+              title="Appuntamenti Totali" 
+              value={data.kpi.booked + data.kpi.closed_won} 
+              icon={CalendarCheck}
+              trendColor="text-violet-600 bg-violet-50 dark:bg-violet-950/30"
+              borderColor="group-hover:border-violet-500/50"
+            />
+        </Link>
+
+        {/* CONVERSIONE -> Non linkabile direttamente, ma KPI informativo */}
+        <div className="cursor-default">
+            <KpiCard 
+              title="Tasso Conversione" 
+              value={`${data.kpi.closed_won > 0 ? Math.round((data.kpi.closed_won / (data.kpi.booked + data.kpi.closed_won + data.kpi.closed_lost)) * 100) : 0}%`}
+              icon={TrendingUp}
+              trendColor="text-indigo-600 bg-indigo-50 dark:bg-indigo-950/30"
+            />
+        </div>
       </div>
 
       {/* --- MAIN GRID (Bento) --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-auto">
         
         {/* Main Chart: Fatturato */}
-        <div className="lg:col-span-2 rounded-2xl border bg-card text-card-foreground shadow-sm p-6 relative">
+        <div className="lg:col-span-2 rounded-2xl border bg-card text-card-foreground shadow-sm p-6 relative group hover:shadow-md transition-all duration-300">
            <div className="mb-6 flex items-center justify-between">
              <div>
-                <h3 className="font-semibold text-lg">Andamento Fatturato</h3>
+                <h3 className="font-semibold text-lg flex items-center gap-2">
+                    Andamento Fatturato
+                    <ArrowUpRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                </h3>
                 <p className="text-sm text-muted-foreground">Distribuzione mensile delle entrate.</p>
              </div>
              <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50">Yearly</Badge>
            </div>
            
-           <div className="h-[300px] w-full">
+           <div className="h-[320px] w-full">
              <ResponsiveContainer width="100%" height="100%">
-               <AreaChart data={chartMonthly}>
+               <AreaChart data={chartMonthly} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                  <defs>
                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                     <stop offset="5%" stopColor={CHART_COLOR} stopOpacity={0.3}/>
-                     <stop offset="95%" stopColor={CHART_COLOR} stopOpacity={0}/>
+                     <stop offset="5%" stopColor={CHART_COLOR_PRIMARY} stopOpacity={0.3}/>
+                     <stop offset="95%" stopColor={CHART_COLOR_PRIMARY} stopOpacity={0}/>
                    </linearGradient>
                  </defs>
-                 <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} tickMargin={10} />
-                 <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `€${v}`} />
+                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                 <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} tickMargin={10} stroke="#9ca3af" />
+                 <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `€${v}`} stroke="#9ca3af" />
                  <Tooltip 
-                   cursor={{ stroke: '#e2e8f0' }}
+                   cursor={{ stroke: '#10b981', strokeWidth: 1, strokeDasharray: '4 4' }}
                    content={({ active, payload }) => {
                      if (active && payload && payload.length) {
                        return (
-                         <div className="rounded-lg border bg-background p-2 shadow-xl text-xs font-medium">
-                           <div className="text-muted-foreground mb-1">{payload[0].payload.name}</div>
-                           <div className="text-emerald-600 text-base font-bold">
+                         <div className="rounded-lg border bg-background p-3 shadow-xl text-xs font-medium">
+                           <div className="text-muted-foreground mb-1 uppercase tracking-wider">{payload[0].payload.name}</div>
+                           <div className="text-emerald-600 text-lg font-bold">
                               {eur.format(Number(payload[0].value))}
                            </div>
                          </div>
@@ -192,28 +229,39 @@ export default function FedericaDashboardPage() {
                  <Area 
                    type="monotone" 
                    dataKey="Fatturato" 
-                   stroke={CHART_COLOR} 
+                   stroke={CHART_COLOR_PRIMARY} 
                    strokeWidth={3}
                    fillOpacity={1} 
                    fill="url(#colorRevenue)" 
+                   activeDot={{ r: 6, strokeWidth: 0 }}
                  />
                </AreaChart>
              </ResponsiveContainer>
            </div>
         </div>
 
-        {/* Funnel Stats (Vertical Stack) */}
+        {/* Funnel Stats (Vertical Stack - Cliccabili) */}
         <div className="space-y-6">
            <div className="rounded-2xl border bg-card p-6 h-full flex flex-col">
-              <h3 className="font-semibold text-lg mb-1">Stato Appuntamenti</h3>
-              <p className="text-sm text-muted-foreground mb-6">Pipeline operativa corrente.</p>
+              <h3 className="font-semibold text-lg mb-1">Pipeline Appuntamenti</h3>
+              <p className="text-sm text-muted-foreground mb-6">Stato operativo corrente. Clicca per filtrare.</p>
               
-              <div className="space-y-4 flex-1">
-                 <FunnelRow label="Eseguiti (Won)" value={data.kpi.closed_won} total={100} color="bg-emerald-500" icon={CheckCircle2} />
-                 <FunnelRow label="Prenotati (Booked)" value={data.kpi.booked} total={100} color="bg-blue-500" icon={CalendarCheck} />
-                 <FunnelRow label="In Attesa (Waiting)" value={data.kpi.waiting} total={100} color="bg-amber-400" icon={Clock} />
-                 <FunnelRow label="No Risposta" value={data.kpi.no_answer} total={100} color="bg-orange-400" icon={PhoneMissed} />
-                 <FunnelRow label="Persi (Lost)" value={data.kpi.closed_lost} total={100} color="bg-red-400" icon={XCircle} />
+              <div className="space-y-3 flex-1">
+                 <Link href="/federicanerone/appuntamenti?status=closed_won" className="block transition-transform hover:scale-[1.02]">
+                    <FunnelRow label="Eseguiti (Won)" value={data.kpi.closed_won} color="bg-emerald-500" icon={CheckCircle2} />
+                 </Link>
+                 <Link href="/federicanerone/appuntamenti?status=booked" className="block transition-transform hover:scale-[1.02]">
+                    <FunnelRow label="Prenotati (Booked)" value={data.kpi.booked} color="bg-blue-500" icon={CalendarCheck} />
+                 </Link>
+                 <Link href="/federicanerone/appuntamenti?status=waiting" className="block transition-transform hover:scale-[1.02]">
+                    <FunnelRow label="In Attesa (Waiting)" value={data.kpi.waiting} color="bg-amber-400" icon={Clock} />
+                 </Link>
+                 <Link href="/federicanerone/appuntamenti?status=no_answer" className="block transition-transform hover:scale-[1.02]">
+                    <FunnelRow label="No Risposta" value={data.kpi.no_answer} color="bg-orange-400" icon={PhoneMissed} />
+                 </Link>
+                 <Link href="/federicanerone/appuntamenti?status=closed_lost" className="block transition-transform hover:scale-[1.02]">
+                    <FunnelRow label="Persi (Lost)" value={data.kpi.closed_lost} color="bg-red-400" icon={XCircle} />
+                 </Link>
               </div>
            </div>
         </div>
@@ -222,92 +270,143 @@ export default function FedericaDashboardPage() {
       {/* --- BOTTOM ROW: PRODUCTS & INSIGHTS --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        {/* Pie Chart: Trattamenti */}
-        <Card className="border-none shadow-none bg-transparent">
-          <CardHeader className="px-0 pt-0">
-            <CardTitle>Distribuzione Servizi</CardTitle>
-            <CardDescription>Quali categorie di servizi sono più richieste?</CardDescription>
-          </CardHeader>
-          <CardContent className="px-0">
-             <div className="h-[350px] w-full border rounded-2xl bg-card p-4 flex items-center justify-center relative">
-                {data.treatments.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={data.treatments}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={80} // Donut style
-                        outerRadius={100}
-                        paddingAngle={5}
-                        dataKey="value"
-                        cornerRadius={5}
-                      >
-                        {data.treatments.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
-                        // FIX ERRORE TYPE: Cast a Number o fallback
-                        formatter={(value: any) => [Number(value || 0), 'Eseguiti']}
-                      />
-                      <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="text-sm text-muted-foreground">Nessun dato.</div>
-                )}
-                {/* Center Text - ORA CENTRATO PERFETTAMENTE */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
-                   <div className="text-center">
-                      <div className="text-4xl font-bold">{data.treatments.reduce((a,b)=>a+b.value,0)}</div>
-                      <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Totali</div>
-                   </div>
-                </div>
-             </div>
-          </CardContent>
-        </Card>
+        {/* NEW CHART: Top Servizi (Bar Chart Orizzontale) */}
+        <div className="rounded-2xl border bg-card p-6 shadow-sm">
+           <div className="mb-6">
+             <h3 className="font-semibold text-lg">Performance Servizi</h3>
+             <p className="text-sm text-muted-foreground">Confronto volumi di vendita per trattamento.</p>
+           </div>
+           
+           <div className="h-[300px] w-full">
+             {sortedTreatments.length > 0 ? (
+               <ResponsiveContainer width="100%" height="100%">
+                 <BarChart 
+                   layout="vertical" 
+                   data={sortedTreatments} 
+                   margin={{ top: 0, right: 30, left: 0, bottom: 0 }}
+                   barCategoryGap={20}
+                 >
+                   <XAxis type="number" hide />
+                   <YAxis 
+                     dataKey="name" 
+                     type="category" 
+                     width={150} 
+                     tick={{ fontSize: 12, fill: '#6b7280' }} 
+                     axisLine={false}
+                     tickLine={false}
+                   />
+                   <Tooltip 
+                     cursor={{ fill: 'transparent' }}
+                     content={({ active, payload }) => {
+                       if (active && payload && payload.length) {
+                         return (
+                           <div className="bg-popover text-popover-foreground px-3 py-1.5 rounded-md text-xs border shadow-md font-medium">
+                             {payload[0].value} Esecuzioni
+                           </div>
+                         )
+                       }
+                       return null;
+                     }}
+                   />
+                   <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
+                      {sortedTreatments.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={BAR_COLORS[index % BAR_COLORS.length]} />
+                      ))}
+                   </Bar>
+                 </BarChart>
+               </ResponsiveContainer>
+             ) : (
+                <div className="h-full flex items-center justify-center text-muted-foreground text-sm">Nessun dato disponibile.</div>
+             )}
+           </div>
+        </div>
 
-        {/* Top 5 List */}
+        {/* Top 5 List (Cliccabile con Dialog) */}
         <Card className="border-none shadow-none bg-transparent">
           <CardHeader className="px-0 pt-0">
-            <CardTitle>Top 5 Trattamenti</CardTitle>
-            <CardDescription>Classifica per volume di vendita.</CardDescription>
+            <CardTitle>Classifica Dettagliata</CardTitle>
+            <CardDescription>Clicca su un trattamento per vedere i dettagli.</CardDescription>
           </CardHeader>
           <CardContent className="px-0">
             <div className="rounded-2xl border bg-card overflow-hidden">
-               {data.treatments.slice(0, 5).map((t, idx) => (
-                 <div key={t.name} className="flex items-center justify-between p-4 border-b last:border-0 hover:bg-muted/30 transition-colors">
-                   <div className="flex items-center gap-3">
-                     <div 
-                       className="w-2 h-8 rounded-full" 
-                       style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }} 
-                     />
+               {sortedTreatments.map((t, idx) => (
+                 <div 
+                    key={t.name} 
+                    onClick={() => setSelectedTreatment(t)}
+                    className="flex items-center justify-between p-4 border-b last:border-0 hover:bg-muted/50 transition-colors cursor-pointer group"
+                 >
+                   <div className="flex items-center gap-4">
+                     <div className="font-bold text-muted-foreground/50 text-lg w-4">#{idx + 1}</div>
                      <div>
-                        <div className="font-medium text-sm text-foreground">{t.name}</div>
-                        <div className="text-xs text-muted-foreground">Rank #{idx + 1}</div>
+                        <div className="font-medium text-sm text-foreground group-hover:text-primary transition-colors">{t.name}</div>
+                        <div className="text-xs text-muted-foreground">{t.value} vendite quest'anno</div>
                      </div>
                    </div>
-                   <Badge variant="secondary" className="font-mono">{t.value}</Badge>
+                   <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                  </div>
                ))}
-               {data.treatments.length === 0 && (
+               {sortedTreatments.length === 0 && (
                  <div className="p-6 text-center text-sm text-muted-foreground">Nessun dato disponibile.</div>
                )}
+            </div>
+            
+            <div className="mt-4 text-center">
+               <Link href="/federicanerone/trattamenti" className="text-sm text-primary hover:underline font-medium inline-flex items-center">
+                  Vedi Catalogo Completo <ArrowUpRight className="ml-1 h-3 w-3" />
+               </Link>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* --- DIALOG DETTAGLIO TRATTAMENTO --- */}
+      <Dialog open={!!selectedTreatment} onOpenChange={(open) => !open && setSelectedTreatment(null)}>
+         <DialogContent>
+            <DialogHeader>
+               <DialogTitle className="flex items-center gap-2">
+                  <div className="bg-primary/10 p-2 rounded-full"><Activity className="h-5 w-5 text-primary"/></div>
+                  {selectedTreatment?.name}
+               </DialogTitle>
+               <DialogDescription>
+                  Statistiche rapide per questo servizio nel {year}.
+               </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+               <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-muted/30 rounded-xl border text-center">
+                     <div className="text-2xl font-bold text-foreground">{selectedTreatment?.value}</div>
+                     <div className="text-xs text-muted-foreground uppercase tracking-wider">Esecuzioni</div>
+                  </div>
+                  <div className="p-4 bg-muted/30 rounded-xl border text-center">
+                     <div className="text-2xl font-bold text-emerald-600">Top 5%</div>
+                     <div className="text-xs text-muted-foreground uppercase tracking-wider">Ranking</div>
+                  </div>
+               </div>
+               
+               <div className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950/20 text-blue-800 dark:text-blue-300 p-3 rounded-lg border border-blue-100 dark:border-blue-900">
+                  💡 <strong>Consiglio:</strong> Questo è uno dei tuoi servizi più popolari. Assicurati di avere slot disponibili in agenda.
+               </div>
+            </div>
+            <div className="flex justify-end gap-2">
+               <Button variant="outline" onClick={() => setSelectedTreatment(null)}>Chiudi</Button>
+               <Button onClick={() => {
+                  router.push(`/federicanerone/appuntamenti?search=${encodeURIComponent(selectedTreatment?.name || '')}`);
+                  setSelectedTreatment(null);
+               }}>
+                  Vedi Appuntamenti
+               </Button>
+            </div>
+         </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
 // --- MICRO COMPONENTS ---
 
-function KpiCard({ title, value, icon: Icon, trendColor }: any) {
+function KpiCard({ title, value, icon: Icon, trendColor, borderColor = "border-border" }: any) {
   return (
-    <div className="rounded-xl border bg-card p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
+    <div className={cn("rounded-xl border bg-card p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-all duration-200", borderColor)}>
       <div>
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">{title}</p>
         <h3 className="text-2xl font-bold text-foreground">{value}</h3>
@@ -321,14 +420,17 @@ function KpiCard({ title, value, icon: Icon, trendColor }: any) {
 
 function FunnelRow({ label, value, color, icon: Icon }: any) {
   return (
-    <div className="flex items-center justify-between p-3 rounded-lg border bg-background/50">
+    <div className="flex items-center justify-between p-3 rounded-lg border bg-background/50 hover:bg-background transition-colors cursor-pointer group">
        <div className="flex items-center gap-3">
-          <div className={cn("p-2 rounded-md text-white shadow-sm", color)}>
+          <div className={cn("p-2 rounded-md text-white shadow-sm transition-transform group-hover:scale-110", color)}>
             <Icon className="h-4 w-4" />
           </div>
-          <span className="text-sm font-medium">{label}</span>
+          <span className="text-sm font-medium group-hover:text-foreground/80 transition-colors">{label}</span>
        </div>
-       <span className="font-bold text-sm">{value}</span>
+       <div className="flex items-center gap-2">
+          <span className="font-bold text-sm">{value}</span>
+          <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
+       </div>
     </div>
   )
 }
