@@ -20,6 +20,7 @@
     "@nestjs/typeorm": "^11.0.0",
     "@nestjs/websockets": "^10.0.0",
     "@types/ws": "^8.18.1",
+    "axios": "^1.13.2",
     "bcryptjs": "^2.4.3",
     "ioredis": "^5.8.2",
     "jsonwebtoken": "^9.0.2",

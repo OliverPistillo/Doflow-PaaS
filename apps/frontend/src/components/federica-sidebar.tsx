@@ -15,6 +15,7 @@ import {
   User,
   Moon,
   Sun,
+  Megaphone,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -95,6 +96,7 @@ export function FedericaSidebar() {
           <Item href="/federicanerone/trattamenti" label="Trattamenti" icon={Sparkles} />
           <Item href="/federicanerone/appuntamenti" label="Appuntamenti" icon={CalendarDays} />
           <Item href="/federicanerone/documenti" label="Documenti" icon={FileText} />
+          <Item href="/federicanerone/leads" label="Lead Ads" icon={Megaphone} />
         </SidebarMenu>
 
         <SidebarSeparator />
