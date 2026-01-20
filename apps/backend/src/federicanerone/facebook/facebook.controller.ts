@@ -6,7 +6,7 @@ import axios from 'axios';
 
 // CONFIGURAZIONE (Da mettere in .env in produzione)
 const FB_VERIFY_TOKEN = 'doflow_verify_token'; // Scegli una password a caso
-const FB_PAGE_ACCESS_TOKEN = 'EAAWZA2QtQvFUBQvELZBxOSDYR0rXtOEfG9QCsyNb3ZAGIifv2ldt9xzQJSqXX9Ax9BrzMNqDZC550ZAbHeKnHipUNOW8HrriUxzFXzJlhMO9xGZCQniMMDRLehMdk6XRKe1hMqyM4ufELTPV8dYAQlJJZBE0Pf3hnMd7pgXddhKNQMq0UPDAGI9cNcAZAKNfDQZDZD'; 
+const FB_PAGE_ACCESS_TOKEN = 'EAAWZA2QtQvFUBQqpWorD5ZBg055G0gOWasgWCkdZBLVvGyZA35ZA6vWEyfu1kflD1slUV6HDVahCYvCNxjYPR6vEP0BZChCCLZAni42NYdWcnNm8U8UsIBGlpqkPKJpBuZAkTvizL0RvfNTAfZBYXyWZBSEVufUkwgFmix7tnHw0jzKW2iQ4tKdgAWpTEFpdWthDoH2KCbZAGyZBjfgzZBZCfr7Eb815KOkcZBs3JuSK5pPtzAbEsApKu3d6LtZBTR0ZD'; 
 
 @Controller('facebook')
 export class FacebookController {
