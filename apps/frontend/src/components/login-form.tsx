@@ -3,7 +3,11 @@
 
 import * as React from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -12,30 +16,24 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 
-type LoginOkResponse = { token: string };
-type LoginErrorResponse = { error: string; message?: string };
-type LoginResponse = LoginOkResponse | LoginErrorResponse;
-
-const SLIDES = [
-  { src: "/login-cover-1.webp", alt: "Doflow cover 1" },
-  { src: "/login-cover-2.webp", alt: "Doflow cover 2" },
-  { src: "/login-cover-3.webp", alt: "Doflow cover 3" },
-] as const;
+// --- LOGICA UTILS (Puoi spostarla in src/lib/auth.ts) ---
 
 type JwtPayload = {
   email?: string;
   role?: string;
   tenantId?: string;
   tenant_id?: string;
+  exp?: number;
 };
 
 function parseJwtPayload(token: string): JwtPayload | null {
   try {
     const part = token.split(".")[1];
     if (!part) return null;
-    const json = atob(part.replace(/-/g, "+").replace(/_/g, "/"));
+    const base64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(base64);
     return JSON.parse(json) as JwtPayload;
   } catch {
     return null;
@@ -43,10 +41,8 @@ function parseJwtPayload(token: string): JwtPayload | null {
 }
 
 function normalizeRole(role?: string) {
-  const r = String(role ?? "")
-    .toUpperCase()
-    .replace(/[^A-Z_]/g, "");
-  if (r === "OWNER" || r === "SUPERADMIN" || r === "SUPER_ADMIN") return "SUPER_ADMIN";
+  const r = String(role ?? "").toUpperCase().replace(/[^A-Z_]/g, "");
+  if (["OWNER", "SUPERADMIN", "SUPER_ADMIN"].includes(r)) return "SUPER_ADMIN";
   if (r === "ADMIN") return "ADMIN";
   if (r === "MANAGER") return "MANAGER";
   return "USER";
@@ -57,170 +53,236 @@ function getTenantFromPayload(p: JwtPayload | null) {
   return t || "public";
 }
 
+// --- CONFIGURAZIONE SLIDER ---
+
+const SLIDES = [
+  { 
+    src: "/login-cover-1.webp", 
+    alt: "Gestione semplificata",
+    quote: "La piattaforma all-in-one per gestire il tuo business.",
+    author: "Doflow Team"
+  },
+  { 
+    src: "/login-cover-2.webp", 
+    alt: "Analytics avanzati",
+    quote: "Tieni traccia di ogni lead e ottimizza le conversioni.",
+    author: "Performance Analytics"
+  },
+  { 
+    src: "/login-cover-3.webp", 
+    alt: "Automazione workflow",
+    quote: "Automatizza i processi ripetitivi e risparmia tempo prezioso.",
+    author: "Workflow Engine"
+  },
+] as const;
+
+// --- SCHEMA DI VALIDAZIONE ---
+
+const loginSchema = z.object({
+  email: z.string().min(1, "L'email è obbligatoria").email("Inserisci un'email valida"),
+  password: z.string().min(1, "La password è obbligatoria"),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
+type LoginResponse = { token: string } | { error: string; message?: string };
+
+// --- COMPONENTE ---
+
 export function LoginForm() {
   const router = useRouter();
-
-  const [email, setEmail] = React.useState("");
-  const [password, setPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
-
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-
+  const [generalError, setGeneralError] = React.useState<string | null>(null);
   const [slide, setSlide] = React.useState(0);
 
+  // Gestione form con React Hook Form
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "" },
+  });
+
+  // Rotazione slide
   React.useEffect(() => {
-    const id = window.setInterval(() => setSlide((s) => (s + 1) % SLIDES.length), 4500);
+    const id = window.setInterval(() => setSlide((s) => (s + 1) % SLIDES.length), 5000);
     return () => window.clearInterval(id);
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
-    setShowPassword(false);
-    setError(null);
-    setLoading(true);
+  const onSubmit = async (values: LoginFormValues) => {
+    setGeneralError(null);
+    setShowPassword(false); // Sicurezza UX
 
     try {
-      // ✅ chiama sempre tramite apiFetch, che gestisce base URL + tenant header
-      // NB: auth:false perché qui non c'è token ancora
       const data = await apiFetch<LoginResponse>("/auth/login", {
         method: "POST",
         auth: false,
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(values),
       });
 
-      if (!data) throw new Error("Risposta vuota dal server");
+      if (!data) throw new Error("Nessuna risposta dal server");
 
-      // backend può rispondere con { error } anche con status 201/200
+      // Gestione errori restituiti dal backend con status 200/201 (se capita)
       if ("error" in data && data.error) {
-        throw new Error(data.error || data.message || "Login fallito");
+        throw new Error(data.error || data.message || "Credenziali non valide");
       }
 
       if (!("token" in data) || !data.token) {
-        throw new Error("Token mancante nella risposta");
+        throw new Error("Token di accesso mancante");
       }
 
-      window.localStorage.setItem("doflow_token", data.token);
+      // Successo
+      const token = data.token;
+      window.localStorage.setItem("doflow_token", token);
 
-      const payload = parseJwtPayload(data.token);
+      const payload = parseJwtPayload(token);
       const role = normalizeRole(payload?.role);
       const tenantId = getTenantFromPayload(payload);
 
+      // Routing intelligente
       if (role === "SUPER_ADMIN") {
         router.push("/superadmin");
-        return;
-      }
-
-      // ✅ path-based tenant
-      if (tenantId && tenantId !== "public") {
+      } else if (tenantId && tenantId !== "public") {
         router.push(`/${tenantId}/dashboard`);
-        return;
+      } else {
+        router.push("/dashboard");
       }
 
-      router.push("/dashboard");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Errore di rete");
-    } finally {
-      setLoading(false);
+      console.error("Login error:", err);
+      setGeneralError(err instanceof Error ? err.message : "Si è verificato un errore imprevisto.");
     }
-  }
+  };
 
   return (
-    <Card className="overflow-hidden">
-      <div className="grid md:grid-cols-[1.05fr_0.95fr]">
-        <div className="p-8 md:p-12">
-          <div className="flex items-center">
-            <Image
-              src="/doflow_logo.svg"
-              alt="Doflow"
-              width={96}
-              height={96}
-              className="h-12 w-auto object-contain"
-              priority
-            />
-          </div>
-
-          <div className="mt-7 space-y-2">
-            <h1 className="text-3xl font-semibold tracking-tight">Accedi</h1>
-            <p className="text-sm text-muted-foreground">Inserisci le credenziali per continuare.</p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="mt-8 space-y-5 max-w-md">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                autoComplete="email"
-                placeholder="es. nome@azienda.it"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={loading}
-                className="h-11"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
-                <button
-                  type="button"
-                  onClick={() => router.push("/forgot-password")}
-                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4"
-                >
-                  Recupera password
-                </button>
-              </div>
-
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  disabled={loading}
-                  className="h-11 pr-10"
+    <Card className="overflow-hidden border-none shadow-xl sm:border sm:border-border">
+      <div className="grid lg:grid-cols-2 h-full min-h-[600px]">
+        
+        {/* PARTE SINISTRA: FORM */}
+        <div className="p-8 md:p-12 flex flex-col justify-center bg-card">
+          <div className="w-full max-w-[350px] mx-auto space-y-6">
+            
+            {/* Logo e Header */}
+            <div className="flex flex-col space-y-2 text-center sm:text-left">
+              <div className="mb-4 flex justify-center sm:justify-start">
+                <Image
+                  src="/doflow_logo.svg"
+                  alt="Doflow"
+                  width={120}
+                  height={40}
+                  className="h-10 w-auto object-contain"
+                  priority
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-2 text-muted-foreground hover:text-foreground"
-                  aria-label={showPassword ? "Nascondi password" : "Mostra password"}
-                  disabled={loading}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
               </div>
+              <h1 className="text-2xl font-semibold tracking-tight">Bentornato</h1>
+              <p className="text-sm text-muted-foreground">
+                Inserisci le tue credenziali per accedere al workspace.
+              </p>
             </div>
 
-            {error ? (
-              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                {error}
+            {/* Form */}
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              
+              {/* Email Field */}
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="nome@azienda.it"
+                  autoComplete="email"
+                  disabled={isSubmitting}
+                  className={cn(errors.email && "border-destructive focus-visible:ring-destructive")}
+                  {...register("email")}
+                />
+                {errors.email && (
+                  <p className="text-xs text-destructive font-medium animate-in fade-in slide-in-from-top-1">
+                    {errors.email.message}
+                  </p>
+                )}
               </div>
-            ) : null}
 
-            <Button type="submit" className="w-full h-11" disabled={loading}>
-              {loading ? "Accesso…" : "Login"}
-            </Button>
+              {/* Password Field */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <Link
+                    href="/forgot-password"
+                    className="text-xs font-medium text-primary hover:underline underline-offset-4"
+                    tabIndex={-1}
+                  >
+                    Password dimenticata?
+                  </Link>
+                </div>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    disabled={isSubmitting}
+                    className={cn("pr-10", errors.password && "border-destructive focus-visible:ring-destructive")}
+                    {...register("password")}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-muted-foreground hover:text-foreground transition-colors"
+                    disabled={isSubmitting}
+                    aria-label={showPassword ? "Nascondi password" : "Mostra password"}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-xs text-destructive font-medium animate-in fade-in slide-in-from-top-1">
+                    {errors.password.message}
+                  </p>
+                )}
+              </div>
 
-            <p className="text-[11px] text-muted-foreground">
-              By clicking continue, you agree to our Terms of Service and Privacy Policy.
+              {/* General Error Alert */}
+              {generalError && (
+                <div className="flex items-center gap-2 rounded-md bg-destructive/15 p-3 text-sm text-destructive animate-in zoom-in-95">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{generalError}</span>
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <Button type="submit" className="w-full h-11 font-medium" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Accesso in corso...
+                  </>
+                ) : (
+                  "Accedi"
+                )}
+              </Button>
+            </form>
+
+            <p className="text-xs text-center text-muted-foreground px-4">
+              Cliccando su Accedi, accetti i nostri{" "}
+              <Link href="/terms" className="underline underline-offset-4 hover:text-primary">
+                Termini di Servizio
+              </Link>{" "}
+              e la{" "}
+              <Link href="/privacy" className="underline underline-offset-4 hover:text-primary">
+                Privacy Policy
+              </Link>.
             </p>
-          </form>
+          </div>
         </div>
 
-        <div className="relative hidden md:block min-h-[640px] bg-muted">
+        {/* PARTE DESTRA: SLIDER IMMAGINI */}
+        <div className="relative hidden lg:block bg-muted overflow-hidden">
           {SLIDES.map((s, i) => (
             <div
               key={s.src}
               className={cn(
-                "absolute inset-0 transition-opacity duration-700",
-                i === slide ? "opacity-100" : "opacity-0"
+                "absolute inset-0 transition-opacity duration-1000 ease-in-out",
+                i === slide ? "opacity-100 z-10" : "opacity-0 z-0"
               )}
             >
               <Image
@@ -228,10 +290,21 @@ export function LoginForm() {
                 alt={s.alt}
                 fill
                 priority={i === 0}
-                sizes="(min-width: 768px) 45vw, 0vw"
+                sizes="50vw"
                 className="object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-black/10" />
+              {/* Gradiente Overlay per leggibilità testo */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+              
+              {/* Testo Overlay */}
+              <div className="absolute bottom-0 left-0 p-10 text-white space-y-2">
+                <blockquote className="text-lg font-medium leading-relaxed">
+                  &ldquo;{s.quote}&rdquo;
+                </blockquote>
+                <div className="text-sm text-white/80 font-semibold">
+                  {s.author}
+                </div>
+              </div>
             </div>
           ))}
         </div>
