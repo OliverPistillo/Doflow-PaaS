@@ -18,8 +18,7 @@ import { apiFetch } from "@/lib/api";
 
 import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 
-// --- LOGICA UTILS (Puoi spostarla in src/lib/auth.ts) ---
-
+// --- LOGICA UTILS ---
 type JwtPayload = {
   email?: string;
   role?: string;
@@ -54,7 +53,6 @@ function getTenantFromPayload(p: JwtPayload | null) {
 }
 
 // --- CONFIGURAZIONE SLIDER ---
-
 const SLIDES = [
   { 
     src: "/login-cover-1.webp", 
@@ -77,7 +75,6 @@ const SLIDES = [
 ] as const;
 
 // --- SCHEMA DI VALIDAZIONE ---
-
 const loginSchema = z.object({
   email: z.string().min(1, "L'email è obbligatoria").email("Inserisci un'email valida"),
   password: z.string().min(1, "La password è obbligatoria"),
@@ -87,14 +84,12 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 type LoginResponse = { token: string } | { error: string; message?: string };
 
 // --- COMPONENTE ---
-
 export function LoginForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = React.useState(false);
   const [generalError, setGeneralError] = React.useState<string | null>(null);
   const [slide, setSlide] = React.useState(0);
 
-  // Gestione form con React Hook Form
   const {
     register,
     handleSubmit,
@@ -104,7 +99,6 @@ export function LoginForm() {
     defaultValues: { email: "", password: "" },
   });
 
-  // Rotazione slide
   React.useEffect(() => {
     const id = window.setInterval(() => setSlide((s) => (s + 1) % SLIDES.length), 5000);
     return () => window.clearInterval(id);
@@ -112,7 +106,7 @@ export function LoginForm() {
 
   const onSubmit = async (values: LoginFormValues) => {
     setGeneralError(null);
-    setShowPassword(false); // Sicurezza UX
+    setShowPassword(false);
 
     try {
       const data = await apiFetch<LoginResponse>("/auth/login", {
@@ -123,7 +117,6 @@ export function LoginForm() {
 
       if (!data) throw new Error("Nessuna risposta dal server");
 
-      // Gestione errori restituiti dal backend con status 200/201 (se capita)
       if ("error" in data && data.error) {
         throw new Error(data.error || data.message || "Credenziali non valide");
       }
@@ -132,7 +125,6 @@ export function LoginForm() {
         throw new Error("Token di accesso mancante");
       }
 
-      // Successo
       const token = data.token;
       window.localStorage.setItem("doflow_token", token);
 
@@ -140,7 +132,6 @@ export function LoginForm() {
       const role = normalizeRole(payload?.role);
       const tenantId = getTenantFromPayload(payload);
 
-      // Routing intelligente
       if (role === "SUPER_ADMIN") {
         router.push("/superadmin");
       } else if (tenantId && tenantId !== "public") {
@@ -157,13 +148,16 @@ export function LoginForm() {
 
   return (
     <Card className="overflow-hidden border-none shadow-xl sm:border sm:border-border">
-      <div className="grid lg:grid-cols-2 h-full min-h-[600px]">
+      {/* Here is the change: 
+         Modificato lg:grid-cols-2 in lg:grid-cols-[1.5fr_1fr] 
+         per rendere la colonna immagini più stretta.
+      */}
+      <div className="grid lg:grid-cols-[1.5fr_1fr] h-full min-h-[600px]">
         
         {/* PARTE SINISTRA: FORM */}
         <div className="p-8 md:p-12 flex flex-col justify-center bg-card">
           <div className="w-full max-w-[350px] mx-auto space-y-6">
             
-            {/* Logo e Header */}
             <div className="flex flex-col space-y-2 text-center sm:text-left">
               <div className="mb-4 flex justify-center sm:justify-start">
                 <Image
@@ -181,10 +175,8 @@ export function LoginForm() {
               </p>
             </div>
 
-            {/* Form */}
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               
-              {/* Email Field */}
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -203,7 +195,6 @@ export function LoginForm() {
                 )}
               </div>
 
-              {/* Password Field */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
@@ -242,7 +233,6 @@ export function LoginForm() {
                 )}
               </div>
 
-              {/* General Error Alert */}
               {generalError && (
                 <div className="flex items-center gap-2 rounded-md bg-destructive/15 p-3 text-sm text-destructive animate-in zoom-in-95">
                   <AlertCircle className="h-4 w-4 shrink-0" />
@@ -250,7 +240,6 @@ export function LoginForm() {
                 </div>
               )}
 
-              {/* Submit Button */}
               <Button type="submit" className="w-full h-11 font-medium" disabled={isSubmitting}>
                 {isSubmitting ? (
                   <>
@@ -290,13 +279,11 @@ export function LoginForm() {
                 alt={s.alt}
                 fill
                 priority={i === 0}
-                sizes="50vw"
+                sizes="(min-width: 1024px) 40vw, 0vw" // Aggiornato sizes per performance
                 className="object-cover"
               />
-              {/* Gradiente Overlay per leggibilità testo */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
               
-              {/* Testo Overlay */}
               <div className="absolute bottom-0 left-0 p-10 text-white space-y-2">
                 <blockquote className="text-lg font-medium leading-relaxed">
                   &ldquo;{s.quote}&rdquo;
