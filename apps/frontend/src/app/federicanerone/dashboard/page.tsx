@@ -1,13 +1,14 @@
+// apps\frontend\src\app\federicanerone\dashboard\page.tsx
 'use client';
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { 
   TrendingUp, 
   Users, 
@@ -18,8 +19,10 @@ import {
   XCircle, 
   DollarSign,
   Activity,
-  ArrowUpRight,
-  ChevronRight
+  ArrowRight,
+  ChevronRight,
+  BarChart3,
+  ExternalLink
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -40,6 +43,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter
 } from "@/components/ui/dialog";
 
 // --- TIPI ---
@@ -62,7 +66,6 @@ const MONTH_NAMES = [
   'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'
 ];
 
-// Palette Moderna
 const CHART_COLOR_PRIMARY = '#10b981'; // Emerald
 const BAR_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#10b981'];
 
@@ -71,9 +74,23 @@ export default function FedericaDashboardPage() {
   const [data, setData] = React.useState<StatsResponse | null>(null);
   const [year, setYear] = React.useState<string>(String(new Date().getFullYear()));
   const [loading, setLoading] = React.useState(false);
+
+  // --- STATO DEL POPUP UNICO ---
+  // modalType definisce cosa mostrare dentro il dialog
+  type ModalType = 'KPI_REVENUE' | 'KPI_CLIENTS' | 'KPI_APPS' | 'STATUS_DETAIL' | 'TREATMENT_DETAIL' | null;
   
-  // Stato per Dialog Dettaglio Trattamento
-  const [selectedTreatment, setSelectedTreatment] = React.useState<{ name: string; value: number } | null>(null);
+  const [modalType, setModalType] = React.useState<ModalType>(null);
+  const [modalData, setModalData] = React.useState<any>(null); // Dati dinamici da passare al modale
+
+  const openModal = (type: ModalType, data: any = {}) => {
+    setModalData(data);
+    setModalType(type);
+  };
+
+  const closeModal = () => {
+    setModalType(null);
+    setModalData(null);
+  };
 
   // Caricamento Dati
   const loadStats = React.useCallback(async () => {
@@ -92,8 +109,7 @@ export default function FedericaDashboardPage() {
     void loadStats();
   }, [loadStats]);
 
-  // Loading / Error states
-  if (!data && loading) return <div className="flex h-screen items-center justify-center text-muted-foreground animate-pulse">Caricamento analytics...</div>;
+  if (!data && loading) return <div className="flex h-screen items-center justify-center text-muted-foreground animate-pulse">Analisi dati in corso...</div>;
   if (!data) return <div className="flex h-screen items-center justify-center text-red-500">Errore caricamento dati.</div>;
 
   // Preparazione dati grafici
@@ -102,10 +118,133 @@ export default function FedericaDashboardPage() {
     Fatturato: m.value
   }));
 
-  // Preparazione dati Top Trattamenti (Ordina e prendi i primi 5)
   const sortedTreatments = [...data.treatments].sort((a, b) => b.value - a.value).slice(0, 5);
-
   const eur = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+
+  // --- RENDER CONTENT DEL MODALE ---
+  // Questa funzione decide cosa renderizzare dentro il popup in base al tipo
+  const renderModalContent = () => {
+    if (!modalType) return null;
+
+    switch (modalType) {
+      case 'KPI_REVENUE':
+        return (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-emerald-700">
+                <DollarSign className="h-5 w-5" /> Analisi Fatturato {year}
+              </DialogTitle>
+              <DialogDescription>Dettaglio delle entrate registrate.</DialogDescription>
+            </DialogHeader>
+            <div className="py-6 space-y-4">
+               <div className="text-center">
+                 <div className="text-4xl font-bold text-emerald-600">{eur.format(data.kpi.fatturato_eur)}</div>
+                 <p className="text-sm text-muted-foreground mt-1">Totale Incassato (Appuntamenti Eseguiti)</p>
+               </div>
+               <div className="bg-muted/30 p-4 rounded-lg text-sm border">
+                 <p>💡 <strong>Insight:</strong> Questo valore include solo gli appuntamenti segnati come "Eseguito". I prenotati non sono ancora contabilizzati.</p>
+               </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={closeModal}>Chiudi</Button>
+              <Button onClick={() => router.push(`/federicanerone/appuntamenti?year=${year}&status=closed_won&view=list`)}>
+                 Vedi Storico Pagamenti <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </DialogFooter>
+          </>
+        );
+
+      case 'KPI_CLIENTS':
+        return (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-blue-700">
+                <Users className="h-5 w-5" /> Nuovi Clienti
+              </DialogTitle>
+              <DialogDescription>Acquisizione clienti nell'anno {year}.</DialogDescription>
+            </DialogHeader>
+            <div className="py-6 grid grid-cols-2 gap-4">
+               <div className="text-center p-4 bg-blue-50 dark:bg-blue-950/20 rounded-xl">
+                 <div className="text-3xl font-bold text-blue-600">{data.kpi.new_lead}</div>
+                 <p className="text-xs text-muted-foreground uppercase mt-1">Acquisiti</p>
+               </div>
+               <div className="text-center p-4 bg-muted/50 rounded-xl">
+                 <div className="text-3xl font-bold text-foreground">--%</div>
+                 <p className="text-xs text-muted-foreground uppercase mt-1">Retention</p>
+               </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={closeModal}>Chiudi</Button>
+              <Button onClick={() => router.push('/federicanerone/clienti?sort=created_desc')}>
+                 Vai alla Rubrica <Users className="ml-2 h-4 w-4" />
+              </Button>
+            </DialogFooter>
+          </>
+        );
+
+      case 'STATUS_DETAIL':
+        const { statusLabel, statusValue, statusKey, colorClass } = modalData;
+        return (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                 <div className={cn("w-3 h-3 rounded-full", colorClass.replace('bg-', 'bg-'))} /> 
+                 Dettaglio: {statusLabel}
+              </DialogTitle>
+              <DialogDescription>Gestione operativa della pipeline.</DialogDescription>
+            </DialogHeader>
+            <div className="py-6">
+               <div className="flex items-center justify-between p-4 border rounded-xl bg-card shadow-sm">
+                  <span className="text-muted-foreground">Quantità attuale</span>
+                  <span className="text-2xl font-bold">{statusValue}</span>
+               </div>
+               <p className="mt-4 text-sm text-muted-foreground">
+                 Cliccando qui sotto verrai reindirizzato alla lista filtrata per gestire questi specifici appuntamenti.
+               </p>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={closeModal}>Indietro</Button>
+              <Button onClick={() => router.push(`/federicanerone/appuntamenti?status=${statusKey}`)}>
+                 Gestisci {statusLabel} <ExternalLink className="ml-2 h-4 w-4" />
+              </Button>
+            </DialogFooter>
+          </>
+        );
+
+      case 'TREATMENT_DETAIL':
+        const { tName, tValue } = modalData;
+        return (
+           <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                 <BarChart3 className="h-5 w-5 text-primary"/>
+                 {tName}
+              </DialogTitle>
+              <DialogDescription>Statistiche di vendita per questo servizio.</DialogDescription>
+            </DialogHeader>
+            <div className="py-6 space-y-4">
+               <div className="p-6 bg-muted/20 border rounded-xl flex flex-col items-center">
+                  <span className="text-4xl font-bold text-foreground">{tValue}</span>
+                  <span className="text-sm text-muted-foreground mt-1 uppercase tracking-wider">Esecuzioni totali</span>
+               </div>
+               <div className="text-sm text-muted-foreground px-2">
+                 Questo servizio rappresenta una parte importante del tuo fatturato annuale.
+               </div>
+            </div>
+            <DialogFooter>
+               <Button variant="outline" onClick={closeModal}>Chiudi</Button>
+               <Button onClick={() => router.push(`/federicanerone/appuntamenti?search=${encodeURIComponent(tName)}`)}>
+                  Cerca in Agenda
+               </Button>
+            </DialogFooter>
+           </>
+        );
+
+      default:
+        return null;
+    }
+  };
+
 
   return (
     <div className="min-h-screen bg-transparent space-y-8 pb-20">
@@ -136,10 +275,9 @@ export default function FedericaDashboardPage() {
         </div>
       </div>
 
-      {/* --- SEZIONE KPI (Top Row - Cliccabili) --- */}
+      {/* --- SEZIONE KPI (Cliccabili -> Popup) --- */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {/* FATTURATO -> Vai a storico pagamenti/appuntamenti */}
-        <Link href={`/federicanerone/appuntamenti?view=list&status=closed_won&year=${year}`} className="block group">
+        <div onClick={() => openModal('KPI_REVENUE')} className="cursor-pointer group">
             <KpiCard 
               title="Fatturato Totale" 
               value={eur.format(data.kpi.fatturato_eur)} 
@@ -147,10 +285,9 @@ export default function FedericaDashboardPage() {
               trendColor="text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30"
               borderColor="group-hover:border-emerald-500/50"
             />
-        </Link>
+        </div>
 
-        {/* NUOVI CLIENTI -> Vai a clienti */}
-        <Link href="/federicanerone/clienti?sort=created_desc" className="block group">
+        <div onClick={() => openModal('KPI_CLIENTS')} className="cursor-pointer group">
             <KpiCard 
               title="Nuovi Clienti" 
               value={data.kpi.new_lead} 
@@ -158,10 +295,10 @@ export default function FedericaDashboardPage() {
               trendColor="text-blue-600 bg-blue-50 dark:bg-blue-950/30"
               borderColor="group-hover:border-blue-500/50"
             />
-        </Link>
+        </div>
 
-        {/* APPUNTAMENTI -> Vai a calendario */}
-        <Link href="/federicanerone/appuntamenti" className="block group">
+        {/* Questo KPI apre semplicemente il calendario, senza popup intermedio perché è un'azione diretta molto comune */}
+        <div onClick={() => router.push('/federicanerone/appuntamenti')} className="cursor-pointer group">
             <KpiCard 
               title="Appuntamenti Totali" 
               value={data.kpi.booked + data.kpi.closed_won} 
@@ -169,10 +306,9 @@ export default function FedericaDashboardPage() {
               trendColor="text-violet-600 bg-violet-50 dark:bg-violet-950/30"
               borderColor="group-hover:border-violet-500/50"
             />
-        </Link>
+        </div>
 
-        {/* CONVERSIONE -> Non linkabile direttamente, ma KPI informativo */}
-        <div className="cursor-default">
+        <div className="cursor-default select-none">
             <KpiCard 
               title="Tasso Conversione" 
               value={`${data.kpi.closed_won > 0 ? Math.round((data.kpi.closed_won / (data.kpi.booked + data.kpi.closed_won + data.kpi.closed_lost)) * 100) : 0}%`}
@@ -182,16 +318,15 @@ export default function FedericaDashboardPage() {
         </div>
       </div>
 
-      {/* --- MAIN GRID (Bento) --- */}
+      {/* --- MAIN GRID --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-auto">
         
         {/* Main Chart: Fatturato */}
-        <div className="lg:col-span-2 rounded-2xl border bg-card text-card-foreground shadow-sm p-6 relative group hover:shadow-md transition-all duration-300">
+        <div className="lg:col-span-2 rounded-2xl border bg-card text-card-foreground shadow-sm p-6 relative">
            <div className="mb-6 flex items-center justify-between">
              <div>
                 <h3 className="font-semibold text-lg flex items-center gap-2">
                     Andamento Fatturato
-                    <ArrowUpRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                 </h3>
                 <p className="text-sm text-muted-foreground">Distribuzione mensile delle entrate.</p>
              </div>
@@ -240,28 +375,48 @@ export default function FedericaDashboardPage() {
            </div>
         </div>
 
-        {/* Funnel Stats (Vertical Stack - Cliccabili) */}
+        {/* Funnel Stats (Cliccabili -> Popup) */}
         <div className="space-y-6">
            <div className="rounded-2xl border bg-card p-6 h-full flex flex-col">
               <h3 className="font-semibold text-lg mb-1">Pipeline Appuntamenti</h3>
-              <p className="text-sm text-muted-foreground mb-6">Stato operativo corrente. Clicca per filtrare.</p>
+              <p className="text-sm text-muted-foreground mb-6">Clicca su uno stato per i dettagli.</p>
               
               <div className="space-y-3 flex-1">
-                 <Link href="/federicanerone/appuntamenti?status=closed_won" className="block transition-transform hover:scale-[1.02]">
-                    <FunnelRow label="Eseguiti (Won)" value={data.kpi.closed_won} color="bg-emerald-500" icon={CheckCircle2} />
-                 </Link>
-                 <Link href="/federicanerone/appuntamenti?status=booked" className="block transition-transform hover:scale-[1.02]">
-                    <FunnelRow label="Prenotati (Booked)" value={data.kpi.booked} color="bg-blue-500" icon={CalendarCheck} />
-                 </Link>
-                 <Link href="/federicanerone/appuntamenti?status=waiting" className="block transition-transform hover:scale-[1.02]">
-                    <FunnelRow label="In Attesa (Waiting)" value={data.kpi.waiting} color="bg-amber-400" icon={Clock} />
-                 </Link>
-                 <Link href="/federicanerone/appuntamenti?status=no_answer" className="block transition-transform hover:scale-[1.02]">
-                    <FunnelRow label="No Risposta" value={data.kpi.no_answer} color="bg-orange-400" icon={PhoneMissed} />
-                 </Link>
-                 <Link href="/federicanerone/appuntamenti?status=closed_lost" className="block transition-transform hover:scale-[1.02]">
-                    <FunnelRow label="Persi (Lost)" value={data.kpi.closed_lost} color="bg-red-400" icon={XCircle} />
-                 </Link>
+                 <FunnelRow 
+                    label="Eseguiti (Won)" 
+                    value={data.kpi.closed_won} 
+                    color="bg-emerald-500" 
+                    icon={CheckCircle2} 
+                    onClick={() => openModal('STATUS_DETAIL', { statusLabel: 'Eseguiti', statusValue: data.kpi.closed_won, statusKey: 'closed_won', colorClass: 'bg-emerald-500' })}
+                 />
+                 <FunnelRow 
+                    label="Prenotati (Booked)" 
+                    value={data.kpi.booked} 
+                    color="bg-blue-500" 
+                    icon={CalendarCheck} 
+                    onClick={() => openModal('STATUS_DETAIL', { statusLabel: 'Prenotati', statusValue: data.kpi.booked, statusKey: 'booked', colorClass: 'bg-blue-500' })}
+                 />
+                 <FunnelRow 
+                    label="In Attesa (Waiting)" 
+                    value={data.kpi.waiting} 
+                    color="bg-amber-400" 
+                    icon={Clock} 
+                    onClick={() => openModal('STATUS_DETAIL', { statusLabel: 'In Attesa', statusValue: data.kpi.waiting, statusKey: 'waiting', colorClass: 'bg-amber-400' })}
+                 />
+                 <FunnelRow 
+                    label="No Risposta" 
+                    value={data.kpi.no_answer} 
+                    color="bg-orange-400" 
+                    icon={PhoneMissed} 
+                    onClick={() => openModal('STATUS_DETAIL', { statusLabel: 'No Risposta', statusValue: data.kpi.no_answer, statusKey: 'no_answer', colorClass: 'bg-orange-400' })}
+                 />
+                 <FunnelRow 
+                    label="Persi (Lost)" 
+                    value={data.kpi.closed_lost} 
+                    color="bg-red-400" 
+                    icon={XCircle} 
+                    onClick={() => openModal('STATUS_DETAIL', { statusLabel: 'Persi', statusValue: data.kpi.closed_lost, statusKey: 'closed_lost', colorClass: 'bg-red-400' })}
+                 />
               </div>
            </div>
         </div>
@@ -270,11 +425,11 @@ export default function FedericaDashboardPage() {
       {/* --- BOTTOM ROW: PRODUCTS & INSIGHTS --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        {/* NEW CHART: Top Servizi (Bar Chart Orizzontale) */}
+        {/* CHART: Top Servizi (Bar Chart Orizzontale) */}
         <div className="rounded-2xl border bg-card p-6 shadow-sm">
            <div className="mb-6">
              <h3 className="font-semibold text-lg">Performance Servizi</h3>
-             <p className="text-sm text-muted-foreground">Confronto volumi di vendita per trattamento.</p>
+             <p className="text-sm text-muted-foreground">Volume di vendita per tipologia.</p>
            </div>
            
            <div className="h-[300px] w-full">
@@ -308,7 +463,14 @@ export default function FedericaDashboardPage() {
                        return null;
                      }}
                    />
-                   <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
+                   <Bar 
+                     dataKey="value" 
+                     radius={[0, 4, 4, 0]} 
+                     barSize={24}
+                     // Rendiamo le barre cliccabili
+                     onClick={(data) => openModal('TREATMENT_DETAIL', { tName: data.name, tValue: data.value })}
+                     cursor="pointer"
+                   >
                       {sortedTreatments.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={BAR_COLORS[index % BAR_COLORS.length]} />
                       ))}
@@ -321,18 +483,18 @@ export default function FedericaDashboardPage() {
            </div>
         </div>
 
-        {/* Top 5 List (Cliccabile con Dialog) */}
+        {/* Top 5 List (Cliccabile -> Popup) */}
         <Card className="border-none shadow-none bg-transparent">
           <CardHeader className="px-0 pt-0">
             <CardTitle>Classifica Dettagliata</CardTitle>
-            <CardDescription>Clicca su un trattamento per vedere i dettagli.</CardDescription>
+            <CardDescription>Clicca su un servizio per analizzarlo.</CardDescription>
           </CardHeader>
           <CardContent className="px-0">
             <div className="rounded-2xl border bg-card overflow-hidden">
                {sortedTreatments.map((t, idx) => (
                  <div 
                     key={t.name} 
-                    onClick={() => setSelectedTreatment(t)}
+                    onClick={() => openModal('TREATMENT_DETAIL', { tName: t.name, tValue: t.value })}
                     className="flex items-center justify-between p-4 border-b last:border-0 hover:bg-muted/50 transition-colors cursor-pointer group"
                  >
                    <div className="flex items-center gap-4">
@@ -351,51 +513,18 @@ export default function FedericaDashboardPage() {
             </div>
             
             <div className="mt-4 text-center">
-               <Link href="/federicanerone/trattamenti" className="text-sm text-primary hover:underline font-medium inline-flex items-center">
-                  Vedi Catalogo Completo <ArrowUpRight className="ml-1 h-3 w-3" />
-               </Link>
+               <Button variant="link" onClick={() => router.push('/federicanerone/trattamenti')} className="text-primary">
+                  Vedi Catalogo Completo <ArrowRight className="ml-1 h-3 w-3" />
+               </Button>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* --- DIALOG DETTAGLIO TRATTAMENTO --- */}
-      <Dialog open={!!selectedTreatment} onOpenChange={(open) => !open && setSelectedTreatment(null)}>
-         <DialogContent>
-            <DialogHeader>
-               <DialogTitle className="flex items-center gap-2">
-                  <div className="bg-primary/10 p-2 rounded-full"><Activity className="h-5 w-5 text-primary"/></div>
-                  {selectedTreatment?.name}
-               </DialogTitle>
-               <DialogDescription>
-                  Statistiche rapide per questo servizio nel {year}.
-               </DialogDescription>
-            </DialogHeader>
-            <div className="py-4 space-y-4">
-               <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-muted/30 rounded-xl border text-center">
-                     <div className="text-2xl font-bold text-foreground">{selectedTreatment?.value}</div>
-                     <div className="text-xs text-muted-foreground uppercase tracking-wider">Esecuzioni</div>
-                  </div>
-                  <div className="p-4 bg-muted/30 rounded-xl border text-center">
-                     <div className="text-2xl font-bold text-emerald-600">Top 5%</div>
-                     <div className="text-xs text-muted-foreground uppercase tracking-wider">Ranking</div>
-                  </div>
-               </div>
-               
-               <div className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-950/20 text-blue-800 dark:text-blue-300 p-3 rounded-lg border border-blue-100 dark:border-blue-900">
-                  💡 <strong>Consiglio:</strong> Questo è uno dei tuoi servizi più popolari. Assicurati di avere slot disponibili in agenda.
-               </div>
-            </div>
-            <div className="flex justify-end gap-2">
-               <Button variant="outline" onClick={() => setSelectedTreatment(null)}>Chiudi</Button>
-               <Button onClick={() => {
-                  router.push(`/federicanerone/appuntamenti?search=${encodeURIComponent(selectedTreatment?.name || '')}`);
-                  setSelectedTreatment(null);
-               }}>
-                  Vedi Appuntamenti
-               </Button>
-            </div>
+      {/* --- GLOBAL POPUP / DIALOG --- */}
+      <Dialog open={!!modalType} onOpenChange={(open) => !open && closeModal()}>
+         <DialogContent className="sm:max-w-md">
+            {renderModalContent()}
          </DialogContent>
       </Dialog>
     </div>
@@ -418,9 +547,12 @@ function KpiCard({ title, value, icon: Icon, trendColor, borderColor = "border-b
   );
 }
 
-function FunnelRow({ label, value, color, icon: Icon }: any) {
+function FunnelRow({ label, value, color, icon: Icon, onClick }: any) {
   return (
-    <div className="flex items-center justify-between p-3 rounded-lg border bg-background/50 hover:bg-background transition-colors cursor-pointer group">
+    <div 
+      onClick={onClick}
+      className="flex items-center justify-between p-3 rounded-lg border bg-background/50 hover:bg-background transition-colors cursor-pointer group"
+    >
        <div className="flex items-center gap-3">
           <div className={cn("p-2 rounded-md text-white shadow-sm transition-transform group-hover:scale-110", color)}>
             <Icon className="h-4 w-4" />
