@@ -11,7 +11,6 @@ import {
   CalendarDays,
   FileText,
   LogOut,
-  Settings,
   User,
   Moon,
   Sun,
@@ -65,8 +64,7 @@ function Item({
         asChild
         isActive={active}
         tooltip={label}
-        // gap-3 e pl-3 spostano il testo a destra quando aperta, 
-        // ma l'icona resta centrata quando è chiusa grazie a Shadcn
+        // gap-3 e pl-3 spostano il testo a destra quando aperta
         className={`gap-3 pl-3 transition-all duration-200 ${
           active 
             ? "font-semibold bg-sidebar-accent text-sidebar-accent-foreground border-l-4 border-indigo-500 rounded-l-none" 
@@ -74,7 +72,7 @@ function Item({
         }`}
       >
         <Link href={href}>
-          <Icon className="h-5 w-5" /> {/* Icona leggermente più grande */}
+          <Icon className="h-5 w-5" />
           <span>{label}</span>
         </Link>
       </SidebarMenuButton>
@@ -86,11 +84,10 @@ export function FedericaSidebar() {
   const router = useRouter();
   const { setTheme, theme } = useTheme();
 
-  // Dati utente simulati (puoi prenderli dal context o JWT)
   const user = {
     name: "Federica Nerone",
     role: "Owner", 
-    avatar: "", // Metti qui l'URL dell'immagine se c'è
+    avatar: "", 
     initials: "FN",
   };
 
@@ -102,28 +99,42 @@ export function FedericaSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-border/40 bg-sidebar/95 backdrop-blur supports-[backdrop-filter]:bg-sidebar/60">
       
-      {/* HEADER: Solo Logo (Minimal) */}
-      <SidebarHeader className="h-16 flex items-center justify-center border-b border-sidebar-border/50">
-        <div className="flex w-full items-center justify-center gap-2 px-2">
-          <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-indigo-600 text-sidebar-primary-foreground">
-             {/* Logo Icona (visibile sempre o sostituita da immagine) */}
-             <Image
-              src="/federicanerone/favicon.ico" // Assicurati che esista o usa un'icona Lucide come fallback
-              alt="Logo"
-              width={24}
-              height={24}
-              className="object-contain invert brightness-0 dark:invert-0"
-            />
+      {/* HEADER DINAMICO */}
+      <SidebarHeader className="h-16 border-b border-sidebar-border/50 p-0 overflow-hidden">
+        <div className="flex h-full w-full items-center justify-center">
+
+          {/* 1. LOGO APERTO (logo_nerone.png) */}
+          {/* Visibile SOLO quando la sidebar è espansa */}
+          <div className="flex group-data-[collapsible=icon]:hidden items-center justify-center w-full h-full p-4 transition-all duration-300">
+             <div className="relative w-full h-full max-w-[140px]">
+               <Image
+                src="/federicanerone/logo_nerone.png"
+                alt="Federica Nerone"
+                fill
+                className="object-contain"
+                priority
+              />
+             </div>
           </div>
-          {/* Il testo qui sotto sparirà automaticamente quando la sidebar collassa grazie a group-data-[collapsible=icon] di Shadcn */}
-          <div className="flex flex-col gap-0.5 leading-none group-data-[collapsible=icon]:hidden">
-            <span className="font-bold text-lg tracking-tight">Doflow</span>
+
+          {/* 2. LOGO CHIUSO (logo_trigger_nerone.png) */}
+          {/* Visibile SOLO quando la sidebar è collapsata (icon mode) */}
+          <div className="hidden group-data-[collapsible=icon]:flex items-center justify-center w-full h-full transition-all duration-300">
+             <div className="relative w-8 h-8">
+               <Image
+                src="/federicanerone/logo_trigger_nerone.png"
+                alt="Logo"
+                fill
+                className="object-contain"
+              />
+             </div>
           </div>
+
         </div>
       </SidebarHeader>
 
       <SidebarContent className="pt-4">
-        {/* Gruppo Principale */}
+        {/* Gruppo Piattaforma */}
         <SidebarGroup>
           <SidebarGroupLabel>Piattaforma</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -136,7 +147,7 @@ export function FedericaSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Gruppo Marketing & Docs */}
+        {/* Gruppo Gestione */}
         <SidebarGroup>
           <SidebarGroupLabel>Gestione</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -148,7 +159,7 @@ export function FedericaSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      {/* FOOTER: Utente & Ruolo */}
+      {/* FOOTER */}
       <SidebarFooter className="border-t border-sidebar-border/50 p-2">
         <SidebarMenu>
           <SidebarMenuItem>
@@ -221,7 +232,6 @@ export function FedericaSidebar() {
         </SidebarMenu>
       </SidebarFooter>
       
-      {/* Rail per ridimensionamento (Shadcn standard) */}
       <SidebarRail />
     </Sidebar>
   );
