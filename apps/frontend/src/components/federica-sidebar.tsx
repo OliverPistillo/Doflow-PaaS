@@ -64,7 +64,6 @@ function Item({
         asChild
         isActive={active}
         tooltip={label}
-        // gap-3 e pl-3 spostano il testo a destra quando aperta
         className={`gap-3 pl-3 transition-all duration-200 ${
           active 
             ? "font-semibold bg-sidebar-accent text-sidebar-accent-foreground border-l-4 border-indigo-500 rounded-l-none" 
@@ -97,35 +96,43 @@ export function FedericaSidebar() {
   }, [router]);
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-border/40 bg-sidebar/95 backdrop-blur supports-[backdrop-filter]:bg-sidebar/60">
+    <Sidebar 
+      collapsible="icon" 
+      // MODIFICA QUI: Aggiunto un gradiente verticale sottile (from-muted/30 to-sidebar)
+      className="border-r border-border/40 bg-gradient-to-b from-muted/30 to-sidebar backdrop-blur supports-[backdrop-filter]:bg-sidebar/60"
+    >
       
       {/* HEADER DINAMICO */}
-      <SidebarHeader className="h-16 border-b border-sidebar-border/50 p-0 overflow-hidden">
+      {/* MODIFICA QUI: Aumentata altezza a h-20, rimosso bordo inferiore e reso trasparente */}
+      <SidebarHeader className="h-20 border-b-0 p-0 overflow-hidden bg-transparent">
         <div className="flex h-full w-full items-center justify-center">
 
           {/* 1. LOGO APERTO (logo_nerone.png) */}
-          {/* Visibile SOLO quando la sidebar è espansa */}
           <div className="flex group-data-[collapsible=icon]:hidden items-center justify-center w-full h-full p-4 transition-all duration-300">
-             <div className="relative w-full h-full max-w-[140px]">
+             {/* MODIFICA QUI: Aumentato max-w a 160px */}
+             <div className="relative w-full h-full max-w-[160px]">
                <Image
                 src="/federicanerone/logo_nerone.png"
                 alt="Federica Nerone"
                 fill
-                className="object-contain"
+                // MODIFICA QUI: Aggiunto drop-shadow-sm per far staccare il logo
+                className="object-contain drop-shadow-sm"
                 priority
               />
              </div>
           </div>
 
           {/* 2. LOGO CHIUSO (logo_trigger_nerone.png) */}
-          {/* Visibile SOLO quando la sidebar è collapsata (icon mode) */}
           <div className="hidden group-data-[collapsible=icon]:flex items-center justify-center w-full h-full transition-all duration-300">
-             <div className="relative w-8 h-8">
+             {/* MODIFICA QUI: Aumentato dimensione a w-10 h-10 */}
+             <div className="relative w-10 h-10">
                <Image
                 src="/federicanerone/logo_trigger_nerone.png"
                 alt="Logo"
                 fill
-                className="object-contain"
+                // MODIFICA QUI: Aggiunto drop-shadow-sm
+                className="object-contain drop-shadow-sm"
+                priority
               />
              </div>
           </div>
@@ -133,7 +140,7 @@ export function FedericaSidebar() {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="pt-4">
+      <SidebarContent className="pt-2"> {/* Ridotto padding-top visto l'header più alto */}
         {/* Gruppo Piattaforma */}
         <SidebarGroup>
           <SidebarGroupLabel>Piattaforma</SidebarGroupLabel>
@@ -160,7 +167,7 @@ export function FedericaSidebar() {
       </SidebarContent>
 
       {/* FOOTER */}
-      <SidebarFooter className="border-t border-sidebar-border/50 p-2">
+      <SidebarFooter className="border-t border-sidebar-border/50 p-2 bg-sidebar/50"> {/* Leggermente più scuro */}
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
