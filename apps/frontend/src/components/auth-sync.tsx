@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 export function AuthSync() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -12,17 +11,31 @@ export function AuthSync() {
     const tokenFromUrl = searchParams.get("accessToken");
 
     if (tokenFromUrl) {
-      // 1. Salva il token nel LocalStorage del NUOVO dominio
+      // 1. Salva IMMEDIATAMENTE il token
       window.localStorage.setItem("doflow_token", tokenFromUrl);
 
-      // 2. Pulisci l'URL per sicurezza (rimuovi il token dalla barra indirizzi)
+      // 2. Rimuovi il parametro dal browser senza ricaricare (estetica)
       const newUrl = window.location.pathname;
-      router.replace(newUrl);
       
-      // 3. (Opzionale) Forza un refresh per assicurarsi che apiFetch legga il nuovo token
-      router.refresh();
+      // 3. FORZA IL RELOAD DELLA PAGINA
+      // Usiamo window.location.href invece del router di Next.js.
+      // Questo costringe il browser a ripartire da zero.
+      // Al riavvio, il token sarà già nel localStorage e le API funzioneranno.
+      window.location.href = newUrl;
     }
-  }, [searchParams, router]);
+  }, [searchParams]);
 
-  return null; // Questo componente non renderizza nulla visivamente
+  // Se c'è un token in URL, mostriamo un loader per evitare "flash" di contenuti non autorizzati
+  if (searchParams.get("accessToken")) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-2">
+           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+           <p className="text-sm text-muted-foreground font-medium">Autenticazione in corso...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
