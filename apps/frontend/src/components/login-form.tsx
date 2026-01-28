@@ -52,6 +52,24 @@ function getTenantFromPayload(p: JwtPayload | null) {
   return t || "public";
 }
 
+// Helper per capire su quale dominio siamo ORA
+function getCurrentSubdomain() {
+  if (typeof window === 'undefined') return 'public';
+  const host = window.location.hostname;
+  const parts = host.split('.');
+  
+  // Se siamo in locale, gestiamo localhost come public (o doflow se preferisci)
+  if (host.includes('localhost')) return 'public'; 
+
+  // Se il dominio è "app" o "www", siamo nel portale principale
+  if (parts[0] === 'app' || parts[0] === 'www') {
+    return 'global_portal'; // Etichetta speciale per capire che siamo sul portale
+  }
+
+  // Altrimenti restituisci il sottodominio (es. "federicanerone")
+  return parts[0];
+}
+
 // --- CONFIGURAZIONE SLIDER ---
 const SLIDES = [
   { 
@@ -109,40 +127,78 @@ export function LoginForm() {
     setShowPassword(false);
 
     try {
+      const subdomain = getCurrentSubdomain();
+      
+      // LOGICA CHIAVE:
+      // Se siamo sul "global_portal" (app.doflow.it), diciamo al backend di cercare nel DB 'public'.
+      // Se siamo su "federicanerone.doflow.it", cerchiamo nel DB 'federicanerone'.
+      // Se il SuperAdmin è su 'doflow' invece che 'public', cambia 'public' con 'doflow' qui sotto.
+      const loginTenantContext = subdomain === 'global_portal' ? 'public' : subdomain;
+
       const data = await apiFetch<LoginResponse>("/auth/login", {
         method: "POST",
         auth: false,
+        headers: {
+          // Forziamo il contesto corretto per la ricerca dell'utente
+          'x-tenant-id': loginTenantContext
+        },
         body: JSON.stringify(values),
       });
 
       if (!data) throw new Error("Nessuna risposta dal server");
+      if ("error" in data && data.error) throw new Error(data.error || "Credenziali non valide");
+      if (!("token" in data) || !data.token) throw new Error("Token mancante");
 
-      if ("error" in data && data.error) {
-        throw new Error(data.error || data.message || "Credenziali non valide");
-      }
-
-      if (!("token" in data) || !data.token) {
-        throw new Error("Token di accesso mancante");
-      }
-
+      // Login OK
       const token = data.token;
       window.localStorage.setItem("doflow_token", token);
 
+      // Decodifica Token per capire CHI si è loggato
       const payload = parseJwtPayload(token);
       const role = normalizeRole(payload?.role);
-      const tenantId = getTenantFromPayload(payload);
+      const userTenantId = getTenantFromPayload(payload); // Es: "federicanerone" o "public"
 
+      // --- LOGICA DI REINDIRIZZAMENTO ---
+
+      // CASO 1: È un SUPER ADMIN
       if (role === "SUPER_ADMIN") {
-        router.push("/superadmin");
-      } else if (tenantId && tenantId !== "public") {
-        router.push(`/${tenantId}/dashboard`);
+        router.push("/superadmin"); // O la dashboard generale
+        return;
+      }
+
+      // CASO 2: È un utente normale (Federica) che si è loggata da app.doflow.it
+      // Dobbiamo spedirla al SUO sottodominio corretto.
+      if (subdomain === 'global_portal' && userTenantId !== 'public') {
+        // Costruisci l'URL del tenant
+        const protocol = window.location.protocol; // http o https
+        const baseDomain = window.location.hostname.replace('app.', ''); // toglie 'app.' per ottenere 'doflow.it'
+        
+        // Redirect forzato al sottodominio corretto (es: https://federicanerone.doflow.it/dashboard)
+        // Nota: Assicurati che baseDomain sia corretto (es. "doflow.it" o "localhost")
+        if (window.location.hostname.includes('localhost')) {
+             // Gestione dev locale se usi sottodomini simulati, altrimenti router push
+             router.push(`/${userTenantId}/dashboard`);
+        } else {
+             window.location.href = `${protocol}//${userTenantId}.${baseDomain}/dashboard`;
+        }
+        return;
+      }
+
+      // CASO 3: Utente normale già sul dominio giusto o routing path-based
+      if (userTenantId && userTenantId !== "public") {
+        router.push(`/${userTenantId}/dashboard`);
       } else {
         router.push("/dashboard");
       }
 
     } catch (err: unknown) {
       console.error("Login error:", err);
-      setGeneralError(err instanceof Error ? err.message : "Si è verificato un errore imprevisto.");
+      // Suggerimento visivo se sbaglia contesto
+      const msg = err instanceof Error ? err.message : "Errore imprevisto";
+      
+      // Se l'errore è "User not found" e siamo sul portale globale, potrebbe essere che l'utente esiste ma non nel DB public
+      // Ma con la logica sopra, il SuperAdmin (che è in public) dovrebbe funzionare.
+      setGeneralError(msg);
     }
   };
 
