@@ -3,7 +3,7 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation"; // Aggiunto useSearchParams
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -17,8 +17,7 @@ import { apiFetch } from "@/lib/api";
 import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 
 // --- CONFIGURAZIONE ---
-// CAMBIA QUI SE IL TUO DB PRINCIPALE SI CHIAMA 'doflow' INVECE DI 'public'
-const MAIN_TENANT = "public"; 
+const MAIN_DB_NAME = "public"; // Il nome del db dove sta il SuperAdmin
 
 // --- UTILS ---
 type JwtPayload = { email?: string; role?: string; tenantId?: string; tenant_id?: string; };
@@ -33,37 +32,49 @@ function parseJwtPayload(token: string): JwtPayload | null {
 function normalizeRole(role?: string) {
   const r = String(role ?? "").toUpperCase();
   if (r.includes("SUPER")) return "SUPER_ADMIN";
-  return r; // USER, ADMIN, MANAGER
+  return r;
 }
 
 function getTenantFromPayload(p: JwtPayload | null) {
-  return (p?.tenantId ?? p?.tenant_id ?? MAIN_TENANT).toString().trim().toLowerCase();
+  return (p?.tenantId ?? p?.tenant_id ?? MAIN_DB_NAME).toString().trim().toLowerCase();
 }
 
-// Capisce su che dominio siamo ORA
-function getCurrentContext() {
-  if (typeof window === 'undefined') return MAIN_TENANT;
+// Helper per capire se siamo sul portale principale
+function isMainPortal() {
+  if (typeof window === 'undefined') return false;
   const host = window.location.hostname;
-  const parts = host.split('.');
-  
-  if (host.includes('localhost')) return 'localhost';
-  // Se siamo su app.doflow.it o www.doflow.it -> siamo sul portale
-  if (parts[0] === 'app' || parts[0] === 'www') return 'portal';
-  
-  return parts[0]; // es: federicanerone
+  return host.startsWith('app.') || host.startsWith('www.') || host === 'doflow.it';
 }
 
 const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: z.string().email("Email non valida"),
+  password: z.string().min(1, "Password richiesta"),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams(); // Hook per leggere l'URL
+  
   const [showPassword, setShowPassword] = React.useState(false);
   const [generalError, setGeneralError] = React.useState<string | null>(null);
+  const [isRedirecting, setIsRedirecting] = React.useState(false);
+
+  // 1. EFFETTO "ACCHIAPPA TOKEN" (Magic Link)
+  // Se arriviamo qui con ?accessToken=..., ci logghiamo automaticamente.
+  React.useEffect(() => {
+    const tokenFromUrl = searchParams.get("accessToken");
+    if (tokenFromUrl) {
+      console.log("🔄 Token ricevuto via URL. Login automatico...");
+      setIsRedirecting(true); // Mostra loader
+      window.localStorage.setItem("doflow_token", tokenFromUrl);
+      
+      // Puliamo l'URL e andiamo alla dashboard
+      // Usiamo window.location per essere sicuri di ricaricare il contesto
+      window.location.href = "/dashboard"; 
+    }
+  }, [searchParams]);
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema)
@@ -72,72 +83,83 @@ export function LoginForm() {
   const onSubmit = async (values: LoginFormValues) => {
     setGeneralError(null);
     try {
-      const currentContext = getCurrentContext();
+      const onPortal = isMainPortal();
       
-      // 1. DECIDIAMO L'HEADER X-TENANT-ID
-      // Se siamo su localhost o app.doflow.it -> usiamo MAIN_TENANT (public)
-      // Se siamo su federicanerone.doflow.it -> usiamo federicanerone
-      let headerTenant = currentContext;
-      if (currentContext === 'portal' || currentContext === 'localhost') {
-        headerTenant = MAIN_TENANT; 
+      // 2. HEADER TENANT: 
+      // Se siamo sul portale (app.doflow.it), forziamo 'public'. 
+      // Altrimenti il browser manda in automatico il sottodominio (es. federicanerone) tramite apiFetch
+      const headers: Record<string, string> = {};
+      if (onPortal) {
+        headers['x-tenant-id'] = MAIN_DB_NAME;
       }
 
-      console.log("Tentativo login su DB:", headerTenant);
+      console.log(`📡 Login request from ${window.location.hostname}. Target DB: ${onPortal ? MAIN_DB_NAME : 'Auto'}`);
 
       const data = await apiFetch<{ token: string, error?: string }>("/auth/login", {
         method: "POST",
         auth: false,
-        headers: { 'x-tenant-id': headerTenant }, // FORZIAMO IL TENANT
+        headers,
         body: JSON.stringify(values),
       });
 
-      if (!data) throw new Error("Errore di rete");
+      if (!data) throw new Error("Nessuna risposta dal server");
       if (data.error) throw new Error(data.error);
       
       const token = data.token;
-      // Salviamo il token subito nel dominio corrente per sicurezza
-      window.localStorage.setItem("doflow_token", token);
-
-      // 2. ANALIZZIAMO CHI SI È LOGGATO
+      
+      // Analizziamo il token PRIMA di salvarlo o reindirizzare
       const payload = parseJwtPayload(token);
       const role = normalizeRole(payload?.role);
-      const targetTenant = getTenantFromPayload(payload); // Es: "federicanerone"
+      const targetTenant = getTenantFromPayload(payload); 
+
+      // --- LOGICA DI REINDIRIZZAMENTO ---
 
       // CASO A: SUPER ADMIN
       if (role === "SUPER_ADMIN") {
+        window.localStorage.setItem("doflow_token", token);
         router.push("/superadmin");
         return;
       }
 
-      // CASO B: UTENTE NORMALE (Federica)
-      // Dobbiamo capire se siamo sul dominio giusto o no
-      
-      // Se siamo su app.doflow.it MA l'utente appartiene a 'federicanerone'
-      if ((currentContext === 'portal' || currentContext === 'localhost') && targetTenant !== MAIN_TENANT) {
-         
-         // Se siamo in localhost, simula il redirect (router push semplice)
-         if (window.location.hostname.includes('localhost')) {
-            router.push(`/${targetTenant}/dashboard`);
-            return;
-         }
-
-         // Redirect VERO verso il sottodominio con passaggio token
+      // CASO B: SIAMO SUL DOMINIO SBAGLIATO? (Es. Federica su app.doflow.it)
+      // Se sono sul portale MA il tenant dell'utente NON è public
+      if (onPortal && targetTenant !== MAIN_DB_NAME) {
+         setIsRedirecting(true);
          const protocol = window.location.protocol;
-         const baseDomain = window.location.hostname.replace('app.', ''); // ottiene doflow.it
-         const newUrl = `${protocol}//${targetTenant}.${baseDomain}/dashboard?accessToken=${token}`;
+         // Prendi il dominio base (es da app.doflow.it -> doflow.it)
+         const baseDomain = window.location.hostname.split('.').slice(1).join('.'); 
          
-         window.location.href = newUrl;
+         // Costruisci il link verso il login del tenant
+         // Invece di mandare alla dashboard, mandiamo alla pagina di LOGIN del tenant con il token
+         // Così questo stesso file intercetterà il token nell'useEffect sopra.
+         const targetUrl = `${protocol}//${targetTenant}.${baseDomain}/login?accessToken=${token}`;
+         
+         console.log("✈️ Redirect cross-domain verso:", targetUrl);
+         window.location.href = targetUrl;
          return;
       }
 
-      // Se siamo già sul dominio giusto
+      // CASO C: TUTTO NORMALE (Siamo già sul dominio giusto)
+      window.localStorage.setItem("doflow_token", token);
       router.push("/dashboard");
 
     } catch (err: any) {
       console.error(err);
-      setGeneralError(err.message || "Errore login");
+      setGeneralError(err.message || "Errore durante il login");
     }
   };
+
+  // Se stiamo reindirizzando, mostra solo un loader pulito
+  if (isRedirecting) {
+    return (
+      <Card className="h-[600px] flex items-center justify-center border-none shadow-none">
+         <div className="flex flex-col items-center gap-4">
+           <Loader2 className="h-10 w-10 animate-spin text-primary" />
+           <p className="text-muted-foreground">Accesso al workspace in corso...</p>
+         </div>
+      </Card>
+    )
+  }
 
   return (
     <Card className="overflow-hidden border-none shadow-xl sm:border sm:border-border">
@@ -145,44 +167,52 @@ export function LoginForm() {
         {/* PARTE SINISTRA: FORM */}
         <div className="p-8 md:p-12 flex flex-col justify-center bg-card">
           <div className="w-full max-w-[350px] mx-auto space-y-6">
+             
+             {/* HEADER */}
              <div className="flex flex-col space-y-2 text-center sm:text-left">
-               <h1 className="text-2xl font-semibold tracking-tight">Accedi</h1>
+               <div className="mb-4 flex justify-center sm:justify-start">
+                  <Image src="/doflow_logo.svg" alt="Doflow" width={120} height={40} className="h-10 w-auto object-contain" priority />
+               </div>
+               <h1 className="text-2xl font-semibold tracking-tight">Bentornato</h1>
                <p className="text-sm text-muted-foreground">Inserisci le credenziali.</p>
              </div>
 
+             {/* FORM */}
              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <div className="space-y-2">
                    <Label>Email</Label>
-                   <Input type="email" {...register("email")} />
-                   {errors.email && <p className="text-xs text-red-500">{errors.email.message as string}</p>}
+                   <Input type="email" placeholder="nome@azienda.it" {...register("email")} />
+                   {errors.email && <p className="text-xs text-destructive">{errors.email.message as string}</p>}
                 </div>
                 <div className="space-y-2">
                    <Label>Password</Label>
                    <div className="relative">
-                     <Input type={showPassword ? "text" : "password"} {...register("password")} />
-                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-2">
+                     <Input type={showPassword ? "text" : "password"} placeholder="••••••••" {...register("password")} />
+                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-2 text-muted-foreground">
                         {showPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
                      </button>
                    </div>
-                   {errors.password && <p className="text-xs text-red-500">{errors.password.message as string}</p>}
+                   {errors.password && <p className="text-xs text-destructive">{errors.password.message as string}</p>}
                 </div>
 
                 {generalError && (
-                  <div className="flex items-center gap-2 p-3 text-sm text-red-600 bg-red-50 rounded-md">
+                  <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 rounded-md">
                      <AlertCircle className="w-4 h-4"/> {generalError}
                   </div>
                 )}
 
                 <Button type="submit" className="w-full" disabled={isSubmitting}>
-                   {isSubmitting ? <Loader2 className="animate-spin w-4 h-4"/> : "Login"}
+                   {isSubmitting ? <Loader2 className="animate-spin w-4 h-4 mr-2"/> : null} 
+                   {isSubmitting ? "Accesso..." : "Accedi"}
                 </Button>
              </form>
           </div>
         </div>
 
-        {/* PARTE DESTRA: FOTO STATICA (Semplificata per ora per evitare errori) */}
+        {/* PARTE DESTRA: IMMAGINE */}
         <div className="hidden lg:block bg-muted relative">
            <Image src="/login-cover-1.webp" alt="Cover" fill className="object-cover" priority />
+           <div className="absolute inset-0 bg-black/20" />
         </div>
       </div>
     </Card>
