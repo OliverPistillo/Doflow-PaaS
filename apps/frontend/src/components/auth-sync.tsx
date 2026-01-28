@@ -7,31 +7,33 @@ export function AuthSync() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    // Cerca il token nell'URL
+    // C'è un token nell'URL?
     const tokenFromUrl = searchParams.get("accessToken");
 
     if (tokenFromUrl) {
-      // 1. Salva IMMEDIATAMENTE il token
+      console.log("Token rilevato in URL. Sincronizzazione...");
+      
+      // 1. Sovrascrivi qualsiasi cosa ci sia nel localStorage
       window.localStorage.setItem("doflow_token", tokenFromUrl);
 
-      // 2. Rimuovi il parametro dal browser senza ricaricare (estetica)
-      const newUrl = window.location.pathname;
-      
-      // 3. FORZA IL RELOAD DELLA PAGINA
-      // Usiamo window.location.href invece del router di Next.js.
-      // Questo costringe il browser a ripartire da zero.
-      // Al riavvio, il token sarà già nel localStorage e le API funzioneranno.
-      window.location.href = newUrl;
+      // 2. Costruisci l'URL pulito (senza query params)
+      const cleanUrl = window.location.pathname;
+
+      // 3. HARD RELOAD. Questo è fondamentale.
+      // Non usare router.push o replace qui. Vogliamo che il browser
+      // riparta da zero leggendo il localStorage fresco.
+      window.location.href = cleanUrl;
     }
   }, [searchParams]);
 
-  // Se c'è un token in URL, mostriamo un loader per evitare "flash" di contenuti non autorizzati
+  // Se stiamo processando il token, mostriamo una pagina bianca o loader
+  // per evitare che l'utente veda "401 Error" per una frazione di secondo.
   if (searchParams.get("accessToken")) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-2">
-           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-           <p className="text-sm text-muted-foreground font-medium">Autenticazione in corso...</p>
+      <div className="fixed inset-0 bg-white z-[9999] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+           <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+           <p className="text-gray-500 font-medium">Autenticazione in corso...</p>
         </div>
       </div>
     );
