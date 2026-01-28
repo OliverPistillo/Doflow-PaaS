@@ -19,6 +19,8 @@ import { apiFetch } from "@/lib/api";
 import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 
 // --- LOGICA UTILS ---
+const MAIN_DB_NAME = "public"; // Nome del DB principale dove risiede il SuperAdmin
+
 type JwtPayload = {
   email?: string;
   role?: string;
@@ -48,8 +50,19 @@ function normalizeRole(role?: string) {
 }
 
 function getTenantFromPayload(p: JwtPayload | null) {
-  const t = (p?.tenantId ?? p?.tenant_id ?? "public").toString().trim().toLowerCase();
-  return t || "public";
+  const t = (p?.tenantId ?? p?.tenant_id ?? MAIN_DB_NAME).toString().trim().toLowerCase();
+  return t || MAIN_DB_NAME;
+}
+
+// Funzione per capire se siamo sul portale principale (app.doflow.it) o su un tenant
+function getCurrentContext() {
+  if (typeof window === 'undefined') return 'unknown';
+  const host = window.location.hostname;
+  
+  if (host.includes('localhost')) return 'localhost';
+  if (host.startsWith('app.') || host.startsWith('www.') || host === 'doflow.it') return 'portal';
+  
+  return 'tenant'; // Siamo su un sottodominio specifico (es. federicanerone.doflow.it)
 }
 
 // --- CONFIGURAZIONE SLIDER ---
@@ -88,7 +101,24 @@ export function LoginForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = React.useState(false);
   const [generalError, setGeneralError] = React.useState<string | null>(null);
+  const [isRedirecting, setIsRedirecting] = React.useState(false); // Stato per il loader durante redirect
   const [slide, setSlide] = React.useState(0);
+
+  // 1. ACCHIAPPA TOKEN (Gestione redirect cross-domain)
+  React.useEffect(() => {
+    // Leggiamo i parametri URL manualmente per evitare dipendenze da Suspense
+    const params = new URLSearchParams(window.location.search);
+    const tokenFromUrl = params.get("accessToken");
+
+    if (tokenFromUrl) {
+      console.log("🔄 Token rilevato nell'URL. Login automatico...");
+      setIsRedirecting(true); // Mostra loader
+      window.localStorage.setItem("doflow_token", tokenFromUrl);
+      
+      // Puliamo l'URL e andiamo alla dashboard
+      router.replace("/dashboard");
+    }
+  }, [router]);
 
   const {
     register,
@@ -109,9 +139,22 @@ export function LoginForm() {
     setShowPassword(false);
 
     try {
+      const context = getCurrentContext();
+      
+      // 2. HEADER LOGIC
+      // Se siamo sul portale (app.doflow.it), forziamo la ricerca in 'public'.
+      // Altrimenti lasciamo che apiFetch usi il sottodominio corrente.
+      const headers: Record<string, string> = {};
+      if (context === 'portal' || context === 'localhost') {
+        headers['x-tenant-id'] = MAIN_DB_NAME;
+      }
+
+      console.log(`Login attempt from: ${context}. Target DB: ${headers['x-tenant-id'] || 'Auto'}`);
+
       const data = await apiFetch<LoginResponse>("/auth/login", {
         method: "POST",
         auth: false,
+        headers, // Iniettiamo l'header calcolato
         body: JSON.stringify(values),
       });
 
@@ -126,32 +169,81 @@ export function LoginForm() {
       }
 
       const token = data.token;
-      window.localStorage.setItem("doflow_token", token);
-
+      
+      // Analisi Token
       const payload = parseJwtPayload(token);
       const role = normalizeRole(payload?.role);
-      const tenantId = getTenantFromPayload(payload);
+      const userTenant = getTenantFromPayload(payload);
 
+      // --- 3. ROUTING INTELLIGENTE ---
+
+      // CASO A: SUPER ADMIN (Resta qui e va a /superadmin)
       if (role === "SUPER_ADMIN") {
+        window.localStorage.setItem("doflow_token", token);
         router.push("/superadmin");
-      } else if (tenantId && tenantId !== "public") {
-        router.push(`/${tenantId}/dashboard`);
+        return;
+      }
+
+      // CASO B: Utente normale che si logga dal portale SBAGLIATO
+      // (Es. Federica su app.doflow.it invece che su federicanerone.doflow.it)
+      if ((context === 'portal' || context === 'localhost') && userTenant !== MAIN_DB_NAME) {
+         
+         // Se siamo in localhost, simuliamo il redirect (non possiamo cambiare sottodominio facilmente)
+         if (context === 'localhost') {
+            window.localStorage.setItem("doflow_token", token);
+            router.push(`/${userTenant}/dashboard`);
+            return;
+         }
+
+         // Redirect VERO verso il sottodominio corretto
+         setIsRedirecting(true);
+         const protocol = window.location.protocol;
+         const baseDomain = window.location.hostname.replace('app.', ''); // ottiene doflow.it
+         
+         // Mandiamo a /login con il token, così l'useEffect sopra lo cattura
+         const targetUrl = `${protocol}//${userTenant}.${baseDomain}/login?accessToken=${token}`;
+         
+         console.log("✈️ Redirect verso tenant:", targetUrl);
+         window.location.href = targetUrl;
+         return;
+      }
+
+      // CASO C: Login Standard (Siamo già sul dominio giusto)
+      window.localStorage.setItem("doflow_token", token);
+      
+      // Path-based routing di sicurezza
+      if (userTenant && userTenant !== "public") {
+        router.push(`/${userTenant}/dashboard`);
       } else {
         router.push("/dashboard");
       }
 
     } catch (err: unknown) {
       console.error("Login error:", err);
-      setGeneralError(err instanceof Error ? err.message : "Si è verificato un errore imprevisto.");
+      // Messaggio più utile se l'utente sbaglia portale
+      const msg = err instanceof Error ? err.message : "Errore imprevisto";
+      if (msg.includes("User not found") && getCurrentContext() === 'portal') {
+          setGeneralError("Utente non trovato. Sei sicuro di essere sul portale giusto?");
+      } else {
+          setGeneralError(msg);
+      }
     }
   };
 
+  // Loader a tutto schermo durante il redirect
+  if (isRedirecting) {
+    return (
+      <Card className="h-[600px] flex items-center justify-center border-none shadow-none">
+         <div className="flex flex-col items-center gap-4">
+           <Loader2 className="h-10 w-10 animate-spin text-primary" />
+           <p className="text-muted-foreground font-medium">Accesso al tuo workspace...</p>
+         </div>
+      </Card>
+    )
+  }
+
   return (
     <Card className="overflow-hidden border-none shadow-xl sm:border sm:border-border">
-      {/* Here is the change: 
-         Modificato lg:grid-cols-2 in lg:grid-cols-[1.5fr_1fr] 
-         per rendere la colonna immagini più stretta.
-      */}
       <div className="grid lg:grid-cols-[1.5fr_1fr] h-full min-h-[600px]">
         
         {/* PARTE SINISTRA: FORM */}
@@ -279,7 +371,7 @@ export function LoginForm() {
                 alt={s.alt}
                 fill
                 priority={i === 0}
-                sizes="(min-width: 1024px) 40vw, 0vw" // Aggiornato sizes per performance
+                sizes="(min-width: 1024px) 40vw, 0vw"
                 className="object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
