@@ -167,19 +167,17 @@ export function LoginForm() {
       }
 
       // CASO 2: È un utente normale (Federica) che si è loggata da app.doflow.it
-      // Dobbiamo spedirla al SUO sottodominio corretto.
       if (subdomain === 'global_portal' && userTenantId !== 'public') {
-        // Costruisci l'URL del tenant
-        const protocol = window.location.protocol; // http o https
-        const baseDomain = window.location.hostname.replace('app.', ''); // toglie 'app.' per ottenere 'doflow.it'
+        const protocol = window.location.protocol;
+        const baseDomain = window.location.hostname.replace('app.', '');
         
-        // Redirect forzato al sottodominio corretto (es: https://federicanerone.doflow.it/dashboard)
-        // Nota: Assicurati che baseDomain sia corretto (es. "doflow.it" o "localhost")
+        // 🔹 MODIFICA QUI: Aggiungiamo il token all'URL
+        const targetUrl = `${protocol}//${userTenantId}.${baseDomain}/dashboard?accessToken=${token}`;
+        
         if (window.location.hostname.includes('localhost')) {
-             // Gestione dev locale se usi sottodomini simulati, altrimenti router push
              router.push(`/${userTenantId}/dashboard`);
         } else {
-             window.location.href = `${protocol}//${userTenantId}.${baseDomain}/dashboard`;
+             window.location.href = targetUrl;
         }
         return;
       }
