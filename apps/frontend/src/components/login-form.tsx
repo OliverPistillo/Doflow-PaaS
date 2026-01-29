@@ -32,7 +32,7 @@ type JwtPayload = {
   role?: string;
   tenantId?: string;
   tenant_id?: string;
-  tenantSlug?: string; // potrebbe NON esserci
+  tenantSlug?: string;
 };
 
 function parseJwtPayload(token: string): JwtPayload | null {
@@ -53,9 +53,24 @@ function normalizeRole(role?: string) {
 }
 
 const SLIDES = [
-  { src: "/login-cover-1.webp", alt: "Gestione semplificata", quote: "La piattaforma all-in-one per gestire il tuo business.", author: "Doflow Team" },
-  { src: "/login-cover-2.webp", alt: "Analytics avanzati", quote: "Tieni traccia di ogni lead e ottimizza le conversioni.", author: "Performance Analytics" },
-  { src: "/login-cover-3.webp", alt: "Automazione workflow", quote: "Automatizza i processi ripetitivi e risparmia tempo prezioso.", author: "Workflow Engine" },
+  {
+    src: "/login-cover-1.webp",
+    alt: "Gestione semplificata",
+    quote: "La piattaforma all-in-one per gestire il tuo business.",
+    author: "Doflow Team",
+  },
+  {
+    src: "/login-cover-2.webp",
+    alt: "Analytics avanzati",
+    quote: "Tieni traccia di ogni lead e ottimizza le conversioni.",
+    author: "Performance Analytics",
+  },
+  {
+    src: "/login-cover-3.webp",
+    alt: "Automazione workflow",
+    quote: "Automatizza i processi ripetitivi e risparmia tempo prezioso.",
+    author: "Workflow Engine",
+  },
 ] as const;
 
 const loginSchema = z.object({
@@ -71,7 +86,8 @@ function getHostContext() {
       ? window.location.hostname.toLowerCase()
       : "app.doflow.it";
 
-  const isAppHost = host === "app.doflow.it" || host === "admin.doflow.it" || host === "localhost";
+  const isAppHost =
+    host === "app.doflow.it" || host === "admin.doflow.it" || host === "localhost";
 
   const subdomain = host.endsWith(".doflow.it")
     ? host.replace(".doflow.it", "").split(".")[0]
@@ -93,9 +109,10 @@ export function LoginForm() {
   const [generalError, setGeneralError] = React.useState<string | null>(null);
   const [slide, setSlide] = React.useState(0);
 
+  // Stati per il redirect tenant
   const [showTenantRedirect, setShowTenantRedirect] = React.useState(false);
   const [tenantRedirectUrl, setTenantRedirectUrl] = React.useState<string | null>(null);
-  const [tenantDialogMsg, setTenantDialogMsg] = React.useState<string>("");
+  const [tenantDialogMode, setTenantDialogMode] = React.useState<"redirect" | "info">("redirect");
 
   const {
     register,
@@ -111,6 +128,7 @@ export function LoginForm() {
     return () => clearInterval(id);
   }, []);
 
+  // Redirect automatico con countdown (solo se abbiamo una URL)
   React.useEffect(() => {
     if (!showTenantRedirect || !tenantRedirectUrl) return;
 
@@ -145,39 +163,38 @@ export function LoginForm() {
 
       const payload = parseJwtPayload(data.token);
       const role = normalizeRole(payload?.role);
+      const userTenantSlug = payload?.tenantSlug; // Slug reale dal token (se presente)
 
+      // ✅ Superadmin: sempre qui
       if (role === "SUPER_ADMIN") {
         router.push("/superadmin");
         return;
       }
 
-      // Tenant user su app/admin: serve tenantSlug (NON tenantId)
+      // ✅ Se sei su app/admin e NON sei superadmin -> popup + redirect se possibile
       if (isAppHost) {
-        const userTenantSlug = payload?.tenantSlug;
-
-        if (userTenantSlug) {
+        if (userTenantSlug && /^[a-z0-9_]+$/i.test(userTenantSlug)) {
           const redirectUrl = `https://${userTenantSlug}.doflow.it/login`;
           setTenantRedirectUrl(redirectUrl);
-          setTenantDialogMsg("Questo account appartiene a un tenant aziendale. Ti reindirizzo al dominio corretto.");
+          setTenantDialogMode("redirect");
           setShowTenantRedirect(true);
           return;
         }
 
-        // fallback: non possiamo dedurre lo slug
+        // Se il token non contiene tenantSlug, non possiamo costruire l'URL in modo affidabile
         setTenantRedirectUrl(null);
-        setTenantDialogMsg(
-          "Questo account appartiene a un tenant aziendale, ma non riesco a determinare automaticamente il dominio. Accedi dal dominio della tua azienda (es. https://nomeazienda.doflow.it/login)."
-        );
+        setTenantDialogMode("info");
         setShowTenantRedirect(true);
         return;
       }
 
-      // tenant subdomain normale
+      // ✅ Tenant: usa lo slug dal subdomain
       if (tenantSub) {
         router.push(`/${tenantSub}/dashboard`);
         return;
       }
 
+      // fallback di sicurezza
       router.push("/login");
     } catch (err: any) {
       setGeneralError(err?.message || "Si è verificato un errore imprevisto.");
@@ -186,19 +203,27 @@ export function LoginForm() {
 
   return (
     <>
-      {/* ✅ Dialog FUORI dalla Card (niente overflow/stacking issues) */}
+      {/* ✅ Dialog FUORI dalla Card: evita clipping/overflow */}
       <AlertDialog open={showTenantRedirect} onOpenChange={setShowTenantRedirect}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Accesso al dominio aziendale</AlertDialogTitle>
             <AlertDialogDescription>
-              {tenantDialogMsg}
-              {tenantRedirectUrl && (
+              {tenantDialogMode === "redirect" ? (
                 <>
+                  Questo account appartiene a un tenant aziendale.
+                  <br />
+                  Per continuare, devi accedere dal dominio corretto della tua azienda.
                   <br />
                   <span className="text-muted-foreground text-xs mt-2 block">
                     Verrai reindirizzato automaticamente tra pochi secondi...
                   </span>
+                </>
+              ) : (
+                <>
+                  Questo account appartiene a un tenant aziendale.
+                  <br />
+                  Per continuare, accedi dal dominio della tua azienda (es. https://nomeazienda.doflow.it/login).
                 </>
               )}
             </AlertDialogDescription>
@@ -219,8 +244,136 @@ export function LoginForm() {
 
       <Card className="mx-auto w-full max-w-[1100px] overflow-hidden border-none shadow-2xl sm:border sm:border-border">
         <div className="grid min-h-[650px] lg:grid-cols-2">
-          {/* ... il resto del tuo JSX identico ... */}
-          {/* (non lo ripeto qui per non farti un papiro: copia/incolla la parte sotto della tua Card com'è) */}
+          <div className="flex flex-col justify-center bg-card p-8 md:p-12 lg:p-16">
+            <div className="mx-auto w-full max-w-[350px] space-y-8">
+              <div className="flex flex-col items-center space-y-2 text-center">
+                <Image
+                  src="/doflow_logo.svg"
+                  alt="Doflow"
+                  width={120}
+                  height={40}
+                  className="mb-4 h-10 w-auto object-contain"
+                  priority
+                />
+                <h1 className="text-2xl font-bold tracking-tight">Bentornato</h1>
+                <p className="text-sm text-muted-foreground">
+                  Inserisci le tue credenziali per accedere.
+                </p>
+              </div>
+
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="nome@azienda.it"
+                    disabled={isSubmitting}
+                    className={cn(errors.email && "border-destructive focus-visible:ring-destructive")}
+                    {...register("email")}
+                  />
+                  {errors.email && (
+                    <p className="text-[11px] font-medium text-destructive">
+                      {errors.email.message}
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid gap-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Password</Label>
+                    <Link
+                      href="/forgot-password"
+                      className="text-xs font-semibold text-primary hover:underline"
+                    >
+                      Dimenticata?
+                    </Link>
+                  </div>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      disabled={isSubmitting}
+                      className={cn("pr-10", errors.password && "border-destructive")}
+                      {...register("password")}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      disabled={isSubmitting}
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  {errors.password && (
+                    <p className="text-[11px] font-medium text-destructive">
+                      {errors.password.message}
+                    </p>
+                  )}
+                </div>
+
+                {generalError && (
+                  <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">
+                    <AlertCircle size={16} />
+                    <span>{generalError}</span>
+                  </div>
+                )}
+
+                <Button type="submit" className="w-full h-11 font-semibold" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> In corso...
+                    </>
+                  ) : (
+                    "Accedi"
+                  )}
+                </Button>
+              </form>
+
+              <p className="text-center text-[11px] text-muted-foreground leading-relaxed">
+                Cliccando su Accedi, accetti i nostri{" "}
+                <Link href="/terms" className="underline underline-offset-4 hover:text-primary">
+                  Termini
+                </Link>{" "}
+                e la{" "}
+                <Link href="/privacy" className="underline underline-offset-4 hover:text-primary">
+                  Privacy Policy
+                </Link>
+                .
+              </p>
+            </div>
+          </div>
+
+          <div className="relative hidden lg:block bg-muted overflow-hidden">
+            {SLIDES.map((s, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "absolute inset-0 transition-opacity duration-1000 ease-in-out",
+                  i === slide ? "opacity-100 z-10" : "opacity-0 z-0",
+                )}
+              >
+                <Image
+                  src={s.src}
+                  alt={s.alt}
+                  fill
+                  priority={i === 0}
+                  className="object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                <div className="absolute bottom-0 left-0 p-12 text-white w-full">
+                  <blockquote className="text-lg font-medium leading-relaxed italic">
+                    &ldquo;{s.quote}&rdquo;
+                  </blockquote>
+                  <p className="mt-4 text-sm font-semibold text-white/80">
+                    — {s.author}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </Card>
     </>
