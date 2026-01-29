@@ -15,6 +15,16 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+
 import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 
 type JwtPayload = {
@@ -98,6 +108,10 @@ export function LoginForm() {
   const [generalError, setGeneralError] = React.useState<string | null>(null);
   const [slide, setSlide] = React.useState(0);
 
+  // Stati per il redirect tenant
+  const [showTenantRedirect, setShowTenantRedirect] = React.useState(false);
+  const [tenantRedirectUrl, setTenantRedirectUrl] = React.useState<string | null>(null);
+
   const {
     register,
     handleSubmit,
@@ -111,6 +125,17 @@ export function LoginForm() {
     const id = setInterval(() => setSlide((s) => (s + 1) % SLIDES.length), 5000);
     return () => clearInterval(id);
   }, []);
+
+  // Redirect automatico con countdown (UX enterprise)
+  React.useEffect(() => {
+    if (!showTenantRedirect || !tenantRedirectUrl) return;
+
+    const t = setTimeout(() => {
+      window.location.href = tenantRedirectUrl;
+    }, 4000);
+
+    return () => clearTimeout(t);
+  }, [showTenantRedirect, tenantRedirectUrl]);
 
   const onSubmit = async (values: LoginFormValues) => {
     setGeneralError(null);
@@ -136,6 +161,7 @@ export function LoginForm() {
 
       const payload = parseJwtPayload(data.token);
       const role = normalizeRole(payload?.role);
+      const userTenantSlug = payload?.tenantSlug; // Slug reale dal token
 
       // ✅ Superadmin: sempre qui
       if (role === "SUPER_ADMIN") {
@@ -143,11 +169,13 @@ export function LoginForm() {
         return;
       }
 
-      // ✅ Se sei su app/admin e NON sei superadmin -> NON mandarlo a /dashboard
-      if (isAppHost) {
-        setGeneralError(
-          "Questo account appartiene a un tenant. Accedi dal dominio della tua azienda (es. https://federicanerone.doflow.it/login)."
-        );
+      // ✅ Se sei su app/admin e NON sei superadmin -> Redirect al dominio del tenant
+      // Nota: usiamo userTenantSlug dal token perché tenantSub (dall'URL) è null su app.doflow.it
+      if (isAppHost && userTenantSlug) {
+        const redirectUrl = `https://${userTenantSlug}.doflow.it/login`;
+
+        setTenantRedirectUrl(redirectUrl);
+        setShowTenantRedirect(true);
         return;
       }
 
@@ -166,6 +194,36 @@ export function LoginForm() {
 
   return (
     <Card className="mx-auto w-full max-w-[1100px] overflow-hidden border-none shadow-2xl sm:border sm:border-border">
+      {/* Dialog per redirect tenant */}
+      <AlertDialog open={showTenantRedirect} onOpenChange={setShowTenantRedirect}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Accesso al dominio aziendale</AlertDialogTitle>
+            <AlertDialogDescription>
+              Questo account appartiene a un tenant aziendale.
+              <br />
+              Per continuare, devi accedere dal dominio corretto della tua azienda.
+              <br />
+              <span className="text-muted-foreground text-xs mt-2 block">
+                Verrai reindirizzato automaticamente tra pochi secondi...
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => {
+                if (tenantRedirectUrl) {
+                  window.location.href = tenantRedirectUrl;
+                }
+              }}
+            >
+              Vai al dominio aziendale
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div className="grid min-h-[650px] lg:grid-cols-2">
         <div className="flex flex-col justify-center bg-card p-8 md:p-12 lg:p-16">
           <div className="mx-auto w-full max-w-[350px] space-y-8">
