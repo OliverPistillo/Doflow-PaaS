@@ -10,6 +10,7 @@ type JwtPayload = {
   sub: number;
   email: string;
   tenantId: string;
+  tenantSlug: string; // ✅ aggiunto: usato dal frontend per redirect dominio
   role: Role;
 };
 
@@ -52,10 +53,13 @@ export class AuthService {
     const secret = process.env.JWT_SECRET;
     if (!secret) throw new Error('JWT_SECRET not set');
 
+    const t = safeSchema(tenantId);
+
     const payload: JwtPayload = {
       sub: userId,
       email,
-      tenantId: safeSchema(tenantId),
+      tenantId: t,
+      tenantSlug: t, // ✅ per ora = tenantId (schema). Perfetto per redirect: https://{tenantSlug}.doflow.it
       role,
     };
 
