@@ -34,6 +34,9 @@ import { HealthModule } from './health/health.module';
 // ✅ Federica-only module (nuovo)
 import { FedericaNeroneModule } from './federicanerone/federicanerone.module';
 
+// ✅ Businaro-only module (nuovo)
+import { BusinaroModule } from './businaro/businaro.module';
+
 @Module({
   imports: [
     HealthModule,
@@ -70,6 +73,8 @@ import { FedericaNeroneModule } from './federicanerone/federicanerone.module';
 
     // ✅ Feature isolate per tenant Federica (gated a runtime)
     FedericaNeroneModule,
+    // ✅ Feature isolate per tenant Businaro (gated a runtime)
+    BusinaroModule,
   ],
 
   controllers: [

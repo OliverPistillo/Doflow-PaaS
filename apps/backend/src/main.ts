@@ -3,10 +3,12 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { NotificationsService } from './realtime/notifications.service';
 import { WebSocketServer, WebSocket } from 'ws';
+import { TenancyMiddleware } from './tenancy/tenancy.middleware';
 
 type ClientMeta = {
   userId: string;
-  tenantId: string;
+  tenantId: string;     // in pratica = schema (es. "businaro")
+  tenantSlug?: string;  // slug logico (es. "businaro") se presente nel JWT
   email?: string;
 };
 
@@ -20,18 +22,55 @@ function decodeJwt(token: string): any {
   return JSON.parse(json);
 }
 
+function pickTenantFromJwt(decoded: any): { tenantId: string; tenantSlug?: string } {
+  // ✅ nuovo standard: tenantSlug nel token (lo avete già sistemato)
+  const slug =
+    decoded.tenantSlug ??
+    decoded.tenant_slug ??
+    decoded.activeTenantSlug ??
+    decoded.active_tenant_slug ??
+    undefined;
+
+  // ✅ fallback legacy: tenantId/schema
+  const tenantId =
+    (decoded.tenantId ??
+      decoded.tenant_id ??
+      decoded.activeTenantId ??
+      decoded.active_tenant_id ??
+      decoded.tenant ??
+      slug ??
+      'public') as string;
+
+  return {
+    tenantId: String(tenantId).toLowerCase(),
+    tenantSlug: slug ? String(slug).toLowerCase() : undefined,
+  };
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // ✅ Global prefix API
-  app.setGlobalPrefix('api');
-
+  // ✅ CORS
   app.enableCors({
     origin: true,
     credentials: true,
   });
 
-  const port = 4000;
+  // ✅ Global prefix API
+  app.setGlobalPrefix('api');
+
+  /**
+   * ✅ TENANCY MIDDLEWARE (Injectable)
+   * Usiamo l'istanza gestita da Nest (con RedisService dentro).
+   * Questo applica:
+   * - header x-doflow-tenant-id (slug mode)
+   * - host mode (subdomain/custom domain)
+   * - attach tenantConnection + tenantId(req)
+   */
+  const tenancy = app.get(TenancyMiddleware);
+  app.use((req: any, res: any, next: any) => tenancy.use(req, res, next));
+
+  const port = Number(process.env.PORT ?? 4000);
   await app.listen(port);
 
   // ⚠️ Prendiamo il VERO http.Server da Nest via HttpAdapter
@@ -80,13 +119,12 @@ async function bootstrap() {
 
       const decoded: any = decodeJwt(token);
 
+      const { tenantId, tenantSlug } = pickTenantFromJwt(decoded);
+
       const meta: ClientMeta = {
         userId: String(decoded.sub),
-        tenantId:
-          (decoded.tenantId ??
-            decoded.tenant_id ??
-            decoded.tenant ??
-            'public') as string,
+        tenantId,
+        tenantSlug,
         email: decoded.email as string | undefined,
       };
 
@@ -100,7 +138,11 @@ async function bootstrap() {
       socket.send(
         JSON.stringify({
           type: 'hello',
-          payload: { tenantId: meta.tenantId, userId: meta.userId },
+          payload: {
+            tenantId: meta.tenantId,
+            tenantSlug: meta.tenantSlug,
+            userId: meta.userId,
+          },
         }),
       );
 
@@ -147,6 +189,7 @@ async function bootstrap() {
       const meta = socket.__meta;
       if (!meta) continue;
 
+      // Tenant channel: tenant:<tenantId/schema>
       if (channel.startsWith('tenant:')) {
         const [, tenantId] = channel.split(':');
         if (meta.tenantId !== tenantId) continue;
@@ -162,7 +205,10 @@ async function bootstrap() {
             );
           }
         } catch {}
-      } else if (channel.startsWith('user:')) {
+      }
+
+      // User channel: user:<userId>
+      else if (channel.startsWith('user:')) {
         const [, userId] = channel.split(':');
         if (meta.userId !== userId) continue;
 
@@ -182,7 +228,9 @@ async function bootstrap() {
   });
 
   // eslint-disable-next-line no-console
-  console.log(`✅ Backend running on http://localhost:${port} (WS path: ${wsPath})`);
+  console.log(
+    `✅ Backend running on http://localhost:${port} (WS path: ${wsPath})`,
+  );
 }
 
 bootstrap();

@@ -3,6 +3,8 @@ import './globals.css';
 
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { ThemeProvider } from '@/components/theme/theme-provider';
+import { Toaster } from "@/components/ui/toaster";
+
 
 const inter = Inter({
   subsets: ['latin'],
@@ -26,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="it" suppressHydrationWarning>
       <body className={`${inter.variable} ${mono.variable} antialiased`}>
         <ThemeProvider>{children}</ThemeProvider>
+        <Toaster />
       </body>
     </html>
   );
