@@ -7,16 +7,17 @@ function getTenantFromHost(): string | null {
   const parts = host.split(".");
   const sub = parts[0];
 
-  // host riservati
-  if (!sub || ["app", "admin", "api", "www", "localhost"].includes(sub)) return "public";
+  if (!sub) return null;
 
-  // dominio doflow standard
-  if (host.endsWith(".doflow.it")) {
-    if (/^[a-z0-9_]+$/i.test(sub)) return sub.toLowerCase();
+  // host riservati -> public
+  if (["app", "admin", "api", "www", "localhost"].includes(sub)) return "public";
+
+  // dominio doflow standard -> subdomain = tenant slug
+  if (host.endsWith(".doflow.it") && /^[a-z0-9_]+$/i.test(sub)) {
+    return sub.toLowerCase();
   }
 
-  // custom domain: qui NON possiamo sapere lo slug senza chiamare il backend
-  // quindi NON forziamo un tenant; lasciamo null e il backend userà host-mode
+  // custom domain -> non possiamo conoscere lo slug lato client
   return null;
 }
 
@@ -24,7 +25,6 @@ function getTenantFromPathname(pathname: string): string | null {
   const seg = pathname.split("?")[0].split("/").filter(Boolean)[0];
   if (!seg) return null;
 
-  // rotte che NON sono tenant
   const reserved = [
     "login",
     "logout",
@@ -46,7 +46,6 @@ function getTenantFromPathname(pathname: string): string | null {
 
 function isAuthOrPublicPath(pathname: string): boolean {
   const p = pathname.split("?")[0];
-
   return (
     p === "/" ||
     p.startsWith("/login") ||
@@ -59,10 +58,11 @@ function isAuthOrPublicPath(pathname: string): boolean {
 }
 
 /**
- * Regola enterprise:
- * - su app/admin: tenant header = public SEMPRE
- * - su tenant subdomain: tenant = subdomain
- * - altrimenti (custom domain): NON inviare tenant header, lascia decidere al backend
+ * Regola finale:
+ * - app/admin -> public SEMPRE
+ * - subdomain tenant (*.doflow.it) -> SEMPRE quel tenant (anche su /login)
+ * - path mode su app: /{tenant}/... -> tenant
+ * - custom domain -> null (backend fa lookup)
  */
 export function getTenantIdForRequest(): string | null {
   if (typeof window === "undefined") return "public";
@@ -70,21 +70,21 @@ export function getTenantIdForRequest(): string | null {
   const hostTenant = getTenantFromHost();
   const pathname = window.location.pathname;
 
-  // App/Admin: public fisso (evita "tenant fantasma" dal token)
+  // app/admin/api/www/localhost -> public fisso
   if (hostTenant === "public") return "public";
 
-  // se è un percorso auth/public, non mandare tenant (o manda public)
-  // qui scegliamo: manda public, così la tenancy middleware non cerca tenant
-  if (isAuthOrPublicPath(pathname)) return "public";
-
-  // tenant da host (subdomain) ha priorità: è il caso "federicanerone.doflow.it"
+  // se sei su tenant subdomain, usa SEMPRE il tenant anche su /login
+  // (le auth routes non manderanno header perché api.ts le esclude)
   if (hostTenant) return hostTenant;
 
-  // fallback: se sei su app.doflow.it ma sei in /{tenant}/... (multi-tenant path mode)
+  // custom domain: se è una pagina public/auth puoi mandare public, altrimenti lascia null
+  if (isAuthOrPublicPath(pathname)) return "public";
+
+  // fallback: path mode /{tenant}/...
   const pathTenant = getTenantFromPathname(pathname);
   if (pathTenant) return pathTenant;
 
-  // custom domain senza slug: meglio non inviare header, backend fa lookup dominio
+  // custom domain senza slug: lascia decidere al backend tramite host lookup
   return null;
 }
 

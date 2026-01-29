@@ -11,13 +11,6 @@ function getEnvBase(): string | null {
   return null;
 }
 
-/**
- * Ritorna il path SENZA prefisso /api
- * - "auth/login" -> "/auth/login"
- * - "/auth/login" -> "/auth/login"
- * - "/api/auth/login" -> "/auth/login"
- * - "/api/api/auth/login" -> "/auth/login"
- */
 function normalizePathNoApi(input: string): string {
   const raw = (input || "").trim();
   if (!raw) return "/";
@@ -42,12 +35,12 @@ function buildApiUrl(pathNoApi: string): string {
   return `${origin}${apiPrefix}${cleanPath}`;
 }
 
-function isSystemOrAuthPath(pathNoApi: string): boolean {
-  // auth & public flows: nessun tenant header
+function isNoTenantHeaderPath(pathNoApi: string): boolean {
+  // auth routes: MAI tenant header
   if (pathNoApi === "/auth/login") return true;
   if (pathNoApi.startsWith("/auth/")) return true;
 
-  // utili / pubbliche
+  // health/telemetry eventuali
   if (pathNoApi === "/health" || pathNoApi.startsWith("/health/")) return true;
   if (pathNoApi.startsWith("/telemetry/")) return true;
 
@@ -61,7 +54,7 @@ export async function apiFetch<T = unknown>(
   const pathNoApi = normalizePathNoApi(path);
 
   const headers: Record<string, string> = {
-    ...(isSystemOrAuthPath(pathNoApi) ? {} : getTenantHeader()),
+    ...(isNoTenantHeaderPath(pathNoApi) ? {} : getTenantHeader()),
     ...(options.headers as Record<string, string> | undefined),
   };
 

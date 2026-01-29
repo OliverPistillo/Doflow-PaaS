@@ -71,12 +71,23 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 function getHostContext() {
-  const host = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : "app.doflow.it";
+  const host =
+    typeof window !== "undefined"
+      ? window.location.hostname.toLowerCase()
+      : "app.doflow.it";
+
   const isAppHost = host === "app.doflow.it" || host === "admin.doflow.it" || host === "localhost";
 
-  const subdomain = host.endsWith(".doflow.it") ? host.replace(".doflow.it", "").split(".")[0] : null;
+  const subdomain = host.endsWith(".doflow.it")
+    ? host.replace(".doflow.it", "").split(".")[0]
+    : null;
+
   const tenantSub =
-    !isAppHost && subdomain && !["app", "admin", "api", "www"].includes(subdomain) ? subdomain : null;
+    !isAppHost &&
+    subdomain &&
+    !["app", "admin", "api", "www"].includes(subdomain)
+      ? subdomain
+      : null;
 
   return { host, isAppHost, tenantSub };
 }
@@ -108,10 +119,6 @@ export function LoginForm() {
     const realm = isAppHost ? "platform" : "tenant";
 
     try {
-      // (opzionale ma utile): se avevi token vecchi, li sovrascrivi comunque dopo,
-      // ma almeno eviti effetti collaterali mentre fai login.
-      // window.localStorage.removeItem("doflow_token");
-
       const data = await apiFetch<{ token: string; error?: string; message?: string }>("/auth/login", {
         method: "POST",
         auth: false,
@@ -130,19 +137,28 @@ export function LoginForm() {
       const payload = parseJwtPayload(data.token);
       const role = normalizeRole(payload?.role);
 
+      // ✅ Superadmin: sempre qui
       if (role === "SUPER_ADMIN") {
         router.push("/superadmin");
         return;
       }
 
-      // Tenant realm: usa lo slug dal subdomain (non tenantId del token)
+      // ✅ Se sei su app/admin e NON sei superadmin -> NON mandarlo a /dashboard
+      if (isAppHost) {
+        setGeneralError(
+          "Questo account appartiene a un tenant. Accedi dal dominio della tua azienda (es. https://federicanerone.doflow.it/login)."
+        );
+        return;
+      }
+
+      // ✅ Tenant: usa lo slug dal subdomain
       if (tenantSub) {
         router.push(`/${tenantSub}/dashboard`);
         return;
       }
 
-      // App realm: dashboard generica
-      router.push("/dashboard");
+      // fallback di sicurezza
+      router.push("/login");
     } catch (err: any) {
       setGeneralError(err?.message || "Si è verificato un errore imprevisto.");
     }
