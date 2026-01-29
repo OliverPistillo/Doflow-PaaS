@@ -19,8 +19,6 @@ export class TenancyMiddleware implements NestMiddleware {
   constructor(private readonly redis: RedisService) {}
 
   async use(req: Request, res: Response, next: NextFunction) {
-    // Nota: Assicurati che il frontend mandi l'header corretto ('x-doflow-tenant-id' o 'x-tenant-id')
-    // Qui stai leggendo 'x-doflow-tenant-id'.
     const hdr = (req.headers['x-doflow-tenant-id'] as string | undefined)?.trim();
 
     /**
@@ -82,12 +80,12 @@ export class TenancyMiddleware implements NestMiddleware {
     const host = rawHost.split(':')[0].toLowerCase();
 
     // Reserved / Local / Admin
-    // MODIFICA QUI: Aggiunto admin.doflow.it alla lista dei domini "public"
+    // MODIFICA QUI: Aggiunto admin.doflow.it
     if (
       host === 'localhost' ||
       host === 'app.doflow.it' ||
       host === 'api.doflow.it' ||
-      host === 'admin.doflow.it' 
+      host === 'admin.doflow.it'
     ) {
       return this.attachTenant(req, next, 'public');
     }
@@ -128,7 +126,7 @@ export class TenancyMiddleware implements NestMiddleware {
      */
     const subdomain = host.split('.')[0];
 
-    // MODIFICA QUI: Aggiunto 'admin' alla lista dei sottodomini riservati
+    // MODIFICA QUI: Aggiunto 'admin' alla lista dei domini di sistema
     if (['app', 'api', 'www', 'admin'].includes(subdomain)) {
       return this.attachTenant(req, next, 'public');
     }
