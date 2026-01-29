@@ -79,13 +79,11 @@ export class TenancyMiddleware implements NestMiddleware {
 
     const host = rawHost.split(':')[0].toLowerCase();
 
-    // Reserved / Local / Admin
-    // MODIFICA QUI: Aggiunto admin.doflow.it
+    // Reserved / Local
     if (
       host === 'localhost' ||
       host === 'app.doflow.it' ||
-      host === 'api.doflow.it' ||
-      host === 'admin.doflow.it'
+      host === 'api.doflow.it'
     ) {
       return this.attachTenant(req, next, 'public');
     }
@@ -126,8 +124,7 @@ export class TenancyMiddleware implements NestMiddleware {
      */
     const subdomain = host.split('.')[0];
 
-    // MODIFICA QUI: Aggiunto 'admin' alla lista dei domini di sistema
-    if (['app', 'api', 'www', 'admin'].includes(subdomain)) {
+    if (['app', 'api', 'www'].includes(subdomain)) {
       return this.attachTenant(req, next, 'public');
     }
 

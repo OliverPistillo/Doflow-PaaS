@@ -15,208 +15,288 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
+
 import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 
-// --- CONFIGURAZIONE ---
-const MAIN_DB_NAME = "public"; 
-const DOMAIN_ROOT = "doflow.it"; 
-
-// --- UTILS ---
-type JwtPayload = { email?: string; role?: string; tenantId?: string; tenant_id?: string; };
+// --- LOGICA UTILS ---
+type JwtPayload = {
+  email?: string;
+  role?: string;
+  tenantId?: string;
+  tenant_id?: string;
+  exp?: number;
+};
 
 function parseJwtPayload(token: string): JwtPayload | null {
-  try {
-    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    return JSON.parse(atob(base64)) as JwtPayload;
-  } catch { return null; }
+  try {
+    const part = token.split(".")[1];
+    if (!part) return null;
+    const base64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(base64);
+    return JSON.parse(json) as JwtPayload;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeRole(role?: string) {
+  const r = String(role ?? "").toUpperCase().replace(/[^A-Z_]/g, "");
+  if (["OWNER", "SUPERADMIN", "SUPER_ADMIN"].includes(r)) return "SUPER_ADMIN";
+  if (r === "ADMIN") return "ADMIN";
+  if (r === "MANAGER") return "MANAGER";
+  return "USER";
 }
 
 function getTenantFromPayload(p: JwtPayload | null) {
-  return (p?.tenantId ?? p?.tenant_id ?? MAIN_DB_NAME).toString().trim().toLowerCase();
+  const t = (p?.tenantId ?? p?.tenant_id ?? "public").toString().trim().toLowerCase();
+  return t || "public";
 }
 
-// Funzione che determina il contesto
-function getDomainContext() {
-  if (typeof window === 'undefined') return 'unknown';
-  const host = window.location.hostname;
+// --- CONFIGURAZIONE SLIDER ---
+const SLIDES = [
+  { 
+    src: "/login-cover-1.webp", 
+    alt: "Gestione semplificata",
+    quote: "La piattaforma all-in-one per gestire il tuo business.",
+    author: "Doflow Team"
+  },
+  { 
+    src: "/login-cover-2.webp", 
+    alt: "Analytics avanzati",
+    quote: "Tieni traccia di ogni lead e ottimizza le conversioni.",
+    author: "Performance Analytics"
+  },
+  { 
+    src: "/login-cover-3.webp", 
+    alt: "Automazione workflow",
+    quote: "Automatizza i processi ripetitivi e risparmia tempo prezioso.",
+    author: "Workflow Engine"
+  },
+] as const;
 
-  if (host.startsWith('admin.')) return 'admin_portal';
-  if (host.startsWith('app.') || host.startsWith('www.') || host === DOMAIN_ROOT) return 'generic_portal';
-  if (host.includes('localhost')) return 'localhost';
-
-  return 'tenant_specific';
-}
-
+// --- SCHEMA DI VALIDAZIONE ---
 const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: z.string().min(1, "L'email è obbligatoria").email("Inserisci un'email valida"),
+  password: z.string().min(1, "La password è obbligatoria"),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
+type LoginResponse = { token: string } | { error: string; message?: string };
 
-const SLIDES = [
-  { src: "/login-cover-1.webp", alt: "Cover 1" },
-  { src: "/login-cover-2.webp", alt: "Cover 2" },
-  { src: "/login-cover-3.webp", alt: "Cover 3" },
-] as const;
-
+// --- COMPONENTE ---
 export function LoginForm() {
-  const router = useRouter();
-  const [showPassword, setShowPassword] = React.useState(false);
-  const [generalError, setGeneralError] = React.useState<string | null>(null);
-  const [isRedirecting, setIsRedirecting] = React.useState(false);
-  const [slide, setSlide] = React.useState(0);
+  const router = useRouter();
+  const [showPassword, setShowPassword] = React.useState(false);
+  const [generalError, setGeneralError] = React.useState<string | null>(null);
+  const [slide, setSlide] = React.useState(0);
 
-  // 1. ACCHIAPPA TOKEN
-  React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tokenFromUrl = params.get("accessToken");
-    if (tokenFromUrl) {
-      console.log("🔄 Token rilevato nell'URL. Login automatico...");
-      setIsRedirecting(true);
-      window.localStorage.setItem("doflow_token", tokenFromUrl);
-      window.location.href = "/dashboard";
-    }
-  }, []);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "" },
+  });
 
-  // Slider
-  React.useEffect(() => {
-    const id = window.setInterval(() => setSlide((s) => (s + 1) % SLIDES.length), 5000);
-    return () => window.clearInterval(id);
-  }, []);
+  React.useEffect(() => {
+    const id = window.setInterval(() => setSlide((s) => (s + 1) % SLIDES.length), 5000);
+    return () => window.clearInterval(id);
+  }, []);
 
-  const { register, handleSubmit, formState: { isSubmitting, errors } } = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema)
-  });
+  const onSubmit = async (values: LoginFormValues) => {
+    setGeneralError(null);
+    setShowPassword(false);
 
-  const onSubmit = async (values: LoginFormValues) => {
-    setGeneralError(null);
-    try {
-      const context = getDomainContext();
-      
-      const headers: Record<string, string> = {};
-      if (context === 'admin_portal' || context === 'generic_portal') {
-        // *** CORREZIONE QUI SOTTO: x-doflow-tenant-id invece di x-tenant-id ***
-        headers['x-doflow-tenant-id'] = MAIN_DB_NAME;
-      }
+    try {
+      const data = await apiFetch<LoginResponse>("/auth/login", {
+        method: "POST",
+        auth: false,
+        body: JSON.stringify(values),
+      });
 
-      console.log(`🔐 Context: ${context}. Header: ${headers['x-doflow-tenant-id'] || 'Auto'}`);
+      if (!data) throw new Error("Nessuna risposta dal server");
 
-      const data = await apiFetch<{ token: string, error?: string }>("/auth/login", {
-        method: "POST",
-        auth: false,
-        headers,
-        body: JSON.stringify(values),
-      });
+      if ("error" in data && data.error) {
+        throw new Error(data.error || data.message || "Credenziali non valide");
+      }
 
-      if (!data || !data.token) throw new Error(data?.error || "Credenziali non valide");
-      
-      const token = data.token;
-      const payload = parseJwtPayload(token);
-      const userTenant = getTenantFromPayload(payload);
-      const userRole = payload?.role;
+      if (!("token" in data) || !data.token) {
+        throw new Error("Token di accesso mancante");
+      }
 
-      // --- LOGICA DI REINDIRIZZAMENTO ---
+      const token = data.token;
+      window.localStorage.setItem("doflow_token", token);
 
-      // A. SUPERADMIN
-      if (userRole === "SUPER_ADMIN" || userRole === "OWNER") {
-         if (context !== 'admin_portal' && context !== 'localhost') {
-            setIsRedirecting(true);
-            const protocol = window.location.protocol;
-            window.location.href = `${protocol}//admin.${DOMAIN_ROOT}/superadmin?accessToken=${token}`;
-            return;
-         }
-         window.localStorage.setItem("doflow_token", token);
-         router.push("/superadmin");
-         return;
-      }
+      const payload = parseJwtPayload(token);
+      const role = normalizeRole(payload?.role);
+      const tenantId = getTenantFromPayload(payload);
 
-      // B. UTENTE TENANT
-      if (context !== 'tenant_specific' && context !== 'localhost') {
-         if (userTenant !== MAIN_DB_NAME) {
-             setIsRedirecting(true);
-             const protocol = window.location.protocol;
-             const targetUrl = `${protocol}//${userTenant}.${DOMAIN_ROOT}/login?accessToken=${token}`;
-             window.location.href = targetUrl;
-             return;
-         }
-      }
+      if (role === "SUPER_ADMIN") {
+        router.push("/superadmin");
+      } else if (tenantId && tenantId !== "public") {
+        router.push(`/${tenantId}/dashboard`);
+      } else {
+        router.push("/dashboard");
+      }
 
-      // C. LOGIN STANDARD
-      window.localStorage.setItem("doflow_token", token);
-      
-      if (context === 'localhost' && userTenant !== MAIN_DB_NAME) {
-          router.push(`/${userTenant}/dashboard`);
-      } else {
-          router.push("/dashboard");
-      }
+    } catch (err: unknown) {
+      console.error("Login error:", err);
+      setGeneralError(err instanceof Error ? err.message : "Si è verificato un errore imprevisto.");
+    }
+  };
 
-    } catch (err: any) {
-      console.error(err);
-      setGeneralError(err.message || "Errore login");
-    }
-  };
+  return (
+    <Card className="overflow-hidden border-none shadow-xl sm:border sm:border-border">
+      {/* Here is the change: 
+         Modificato lg:grid-cols-2 in lg:grid-cols-[1.5fr_1fr] 
+         per rendere la colonna immagini più stretta.
+      */}
+      <div className="grid lg:grid-cols-[1.5fr_1fr] h-full min-h-[600px]">
+        
+        {/* PARTE SINISTRA: FORM */}
+        <div className="p-8 md:p-12 flex flex-col justify-center bg-card">
+          <div className="w-full max-w-[350px] mx-auto space-y-6">
+            
+            <div className="flex flex-col space-y-2 text-center sm:text-left">
+              <div className="mb-4 flex justify-center sm:justify-start">
+                <Image
+                  src="/doflow_logo.svg"
+                  alt="Doflow"
+                  width={120}
+                  height={40}
+                  className="h-10 w-auto object-contain"
+                  priority
+                />
+              </div>
+              <h1 className="text-2xl font-semibold tracking-tight">Bentornato</h1>
+              <p className="text-sm text-muted-foreground">
+                Inserisci le tue credenziali per accedere al workspace.
+              </p>
+            </div>
 
-  if (isRedirecting) {
-    return (
-      <div className="h-screen flex flex-col items-center justify-center bg-white">
-         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-         <p className="text-gray-500">Accesso al workspace in corso...</p>
-      </div>
-    )
-  }
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="nome@azienda.it"
+                  autoComplete="email"
+                  disabled={isSubmitting}
+                  className={cn(errors.email && "border-destructive focus-visible:ring-destructive")}
+                  {...register("email")}
+                />
+                {errors.email && (
+                  <p className="text-xs text-destructive font-medium animate-in fade-in slide-in-from-top-1">
+                    {errors.email.message}
+                  </p>
+                )}
+              </div>
 
-  return (
-    <Card className="overflow-hidden border-none shadow-xl sm:border sm:border-border">
-      <div className="grid lg:grid-cols-[1.5fr_1fr] h-full min-h-[600px]">
-        <div className="p-8 md:p-12 flex flex-col justify-center bg-card">
-          <div className="w-full max-w-[350px] mx-auto space-y-6">
-             <div className="flex flex-col space-y-2 text-center sm:text-left">
-               <div className="mb-4 flex justify-center sm:justify-start">
-                  <Image src="/doflow_logo.svg" alt="Doflow" width={120} height={40} className="h-10 w-auto object-contain" priority />
-               </div>
-               <h1 className="text-2xl font-semibold tracking-tight">Bentornato</h1>
-               <p className="text-sm text-muted-foreground">Accedi al workspace.</p>
-             </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <Link
+                    href="/forgot-password"
+                    className="text-xs font-medium text-primary hover:underline underline-offset-4"
+                    tabIndex={-1}
+                  >
+                    Password dimenticata?
+                  </Link>
+                </div>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    disabled={isSubmitting}
+                    className={cn("pr-10", errors.password && "border-destructive focus-visible:ring-destructive")}
+                    {...register("password")}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-muted-foreground hover:text-foreground transition-colors"
+                    disabled={isSubmitting}
+                    aria-label={showPassword ? "Nascondi password" : "Mostra password"}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-xs text-destructive font-medium animate-in fade-in slide-in-from-top-1">
+                    {errors.password.message}
+                  </p>
+                )}
+              </div>
 
-             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                <div className="space-y-2">
-                   <Label>Email</Label>
-                   <Input type="email" placeholder="nome@azienda.it" {...register("email")} />
-                   {errors.email && <p className="text-xs text-destructive">{errors.email.message as string}</p>}
-                </div>
-                <div className="space-y-2">
-                   <Label>Password</Label>
-                   <div className="relative">
-                     <Input type={showPassword ? "text" : "password"} placeholder="••••••••" {...register("password")} />
-                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-2 text-muted-foreground hover:text-foreground">
-                        {showPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
-                     </button>
-                   </div>
-                   {errors.password && <p className="text-xs text-destructive">{errors.password.message as string}</p>}
-                </div>
+              {generalError && (
+                <div className="flex items-center gap-2 rounded-md bg-destructive/15 p-3 text-sm text-destructive animate-in zoom-in-95">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{generalError}</span>
+                </div>
+              )}
 
-                {generalError && (
-                  <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 rounded-md">
-                     <AlertCircle className="w-4 h-4"/> {generalError}
-                  </div>
-                )}
+              <Button type="submit" className="w-full h-11 font-medium" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Accesso in corso...
+                  </>
+                ) : (
+                  "Accedi"
+                )}
+              </Button>
+            </form>
 
-                <Button type="submit" className="w-full h-11" disabled={isSubmitting}>
-                   {isSubmitting ? <Loader2 className="animate-spin w-4 h-4 mr-2"/> : "Accedi"}
-                </Button>
-             </form>
-          </div>
-        </div>
-        <div className="hidden lg:block bg-muted relative">
-           {SLIDES.map((s, i) => (
-            <div key={i} className={cn("absolute inset-0 transition-opacity duration-1000", i === slide ? "opacity-100" : "opacity-0")}>
-               <Image src={s.src} alt={s.alt} fill className="object-cover" priority={i===0} />
-               <div className="absolute inset-0 bg-black/20" />
-            </div>
-           ))}
-        </div>
-      </div>
-    </Card>
-  );
+            <p className="text-xs text-center text-muted-foreground px-4">
+              Cliccando su Accedi, accetti i nostri{" "}
+              <Link href="/terms" className="underline underline-offset-4 hover:text-primary">
+                Termini di Servizio
+              </Link>{" "}
+              e la{" "}
+              <Link href="/privacy" className="underline underline-offset-4 hover:text-primary">
+                Privacy Policy
+              </Link>.
+            </p>
+          </div>
+        </div>
+
+        {/* PARTE DESTRA: SLIDER IMMAGINI */}
+        <div className="relative hidden lg:block bg-muted overflow-hidden">
+          {SLIDES.map((s, i) => (
+            <div
+              key={s.src}
+              className={cn(
+                "absolute inset-0 transition-opacity duration-1000 ease-in-out",
+                i === slide ? "opacity-100 z-10" : "opacity-0 z-0"
+              )}
+            >
+              <Image
+                src={s.src}
+                alt={s.alt}
+                fill
+                priority={i === 0}
+                sizes="(min-width: 1024px) 40vw, 0vw" // Aggiornato sizes per performance
+                className="object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+              
+              <div className="absolute bottom-0 left-0 p-10 text-white space-y-2">
+                <blockquote className="text-lg font-medium leading-relaxed">
+                  &ldquo;{s.quote}&rdquo;
+                </blockquote>
+                <div className="text-sm text-white/80 font-semibold">
+                  {s.author}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
 }
+
