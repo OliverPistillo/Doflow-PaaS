@@ -83,6 +83,7 @@ export class TenancyMiddleware implements NestMiddleware {
     if (
       host === 'localhost' ||
       host === 'app.doflow.it' ||
+      host === 'admin.doflow.it' ||   // ✅ aggiungi
       host === 'api.doflow.it'
     ) {
       return this.attachTenant(req, next, 'public');

@@ -24,7 +24,6 @@ function normalizePathNoApi(input: string): string {
 
   let p = raw.startsWith("/") ? raw : `/${raw}`;
 
-  // rimuove uno o più prefissi /api
   while (p === "/api" || p.startsWith("/api/")) {
     p = p === "/api" ? "/" : p.slice(4);
   }
@@ -32,25 +31,27 @@ function normalizePathNoApi(input: string): string {
   return p.startsWith("/") ? p : `/${p}`;
 }
 
-/**
- * Costruisce sempre URL verso /api del backend (una sola volta)
- * - Se NEXT_PUBLIC_API_URL non c'è => usa proxy Next: "/api" + path
- * - Se NEXT_PUBLIC_API_URL è "https://api.doflow.it" => "https://api.doflow.it/api" + path
- * - Se NEXT_PUBLIC_API_URL è "https://api.doflow.it/api" => "https://api.doflow.it/api" + path
- */
 function buildApiUrl(pathNoApi: string): string {
   const envBase = getEnvBase();
-
   const cleanPath = pathNoApi.startsWith("/") ? pathNoApi : `/${pathNoApi}`;
   const apiPrefix = "/api";
 
-  // proxy next (relative)
   if (!envBase) return `${apiPrefix}${cleanPath}`;
 
-  // se envBase include già /api alla fine, lo togliamo e lo rimettiamo (così non duplichiamo mai)
   const origin = envBase.endsWith("/api") ? envBase.slice(0, -4) : envBase;
-
   return `${origin}${apiPrefix}${cleanPath}`;
+}
+
+function isSystemOrAuthPath(pathNoApi: string): boolean {
+  // auth & public flows: nessun tenant header
+  if (pathNoApi === "/auth/login") return true;
+  if (pathNoApi.startsWith("/auth/")) return true;
+
+  // utili / pubbliche
+  if (pathNoApi === "/health" || pathNoApi.startsWith("/health/")) return true;
+  if (pathNoApi.startsWith("/telemetry/")) return true;
+
+  return false;
 }
 
 export async function apiFetch<T = unknown>(
@@ -60,16 +61,14 @@ export async function apiFetch<T = unknown>(
   const pathNoApi = normalizePathNoApi(path);
 
   const headers: Record<string, string> = {
-    ...getTenantHeader(),
+    ...(isSystemOrAuthPath(pathNoApi) ? {} : getTenantHeader()),
     ...(options.headers as Record<string, string> | undefined),
   };
 
-  // Content-Type JSON solo se non FormData e non già impostato
   if (!headers["Content-Type"] && !(options.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }
 
-  // Auth di default ON (a meno che auth:false)
   if (options.auth !== false && typeof window !== "undefined") {
     const token = window.localStorage.getItem("doflow_token");
     if (token) headers.Authorization = `Bearer ${token}`;
@@ -85,8 +84,6 @@ export async function apiFetch<T = unknown>(
 
   const text = await res.text();
 
-  // NOTE: il tuo backend a volte risponde 201 con { error: "..." } (l'hai visto tu)
-  // Quindi: errore se !ok O se payload contiene "error".
   let json: any = null;
   try {
     json = text ? JSON.parse(text) : null;
@@ -103,6 +100,5 @@ export async function apiFetch<T = unknown>(
     throw new Error(json.error);
   }
 
-  // se non è JSON, torna testo
   return (json ?? (text as unknown)) as T;
 }

@@ -17,12 +17,12 @@ import { apiFetch } from "@/lib/api";
 
 import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 
-// --- LOGICA UTILS ---
 type JwtPayload = {
   email?: string;
   role?: string;
   tenantId?: string;
   tenant_id?: string;
+  tenantSlug?: string;
 };
 
 function parseJwtPayload(token: string): JwtPayload | null {
@@ -42,25 +42,24 @@ function normalizeRole(role?: string) {
   return "USER";
 }
 
-// --- CONFIGURAZIONE SLIDER (TUTTE E 3 LE SLIDE) ---
 const SLIDES = [
-  { 
-    src: "/login-cover-1.webp", 
+  {
+    src: "/login-cover-1.webp",
     alt: "Gestione semplificata",
     quote: "La piattaforma all-in-one per gestire il tuo business.",
-    author: "Doflow Team"
+    author: "Doflow Team",
   },
-  { 
-    src: "/login-cover-2.webp", 
+  {
+    src: "/login-cover-2.webp",
     alt: "Analytics avanzati",
     quote: "Tieni traccia di ogni lead e ottimizza le conversioni.",
-    author: "Performance Analytics"
+    author: "Performance Analytics",
   },
-  { 
-    src: "/login-cover-3.webp", 
+  {
+    src: "/login-cover-3.webp",
     alt: "Automazione workflow",
     quote: "Automatizza i processi ripetitivi e risparmia tempo prezioso.",
-    author: "Workflow Engine"
+    author: "Workflow Engine",
   },
 ] as const;
 
@@ -71,13 +70,28 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
+function getHostContext() {
+  const host = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : "app.doflow.it";
+  const isAppHost = host === "app.doflow.it" || host === "admin.doflow.it" || host === "localhost";
+
+  const subdomain = host.endsWith(".doflow.it") ? host.replace(".doflow.it", "").split(".")[0] : null;
+  const tenantSub =
+    !isAppHost && subdomain && !["app", "admin", "api", "www"].includes(subdomain) ? subdomain : null;
+
+  return { host, isAppHost, tenantSub };
+}
+
 export function LoginForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = React.useState(false);
   const [generalError, setGeneralError] = React.useState<string | null>(null);
   const [slide, setSlide] = React.useState(0);
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginFormValues>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
@@ -89,38 +103,56 @@ export function LoginForm() {
 
   const onSubmit = async (values: LoginFormValues) => {
     setGeneralError(null);
+
+    const { isAppHost, tenantSub } = getHostContext();
+    const realm = isAppHost ? "platform" : "tenant";
+
     try {
-      const data = await apiFetch<{token: string; error?: string; message?: string}>("/auth/login", {
+      // (opzionale ma utile): se avevi token vecchi, li sovrascrivi comunque dopo,
+      // ma almeno eviti effetti collaterali mentre fai login.
+      // window.localStorage.removeItem("doflow_token");
+
+      const data = await apiFetch<{ token: string; error?: string; message?: string }>("/auth/login", {
         method: "POST",
         auth: false,
-        body: JSON.stringify(values),
+        body: JSON.stringify({
+          ...values,
+          realm,
+          tenantSlug: tenantSub ?? undefined,
+        }),
       });
 
       if (data?.error) throw new Error(data.error || data.message);
       if (!data?.token) throw new Error("Token di accesso mancante");
 
       window.localStorage.setItem("doflow_token", data.token);
+
       const payload = parseJwtPayload(data.token);
       const role = normalizeRole(payload?.role);
-      const tenantId = payload?.tenantId ?? payload?.tenant_id ?? "public";
 
-      if (role === "SUPER_ADMIN") router.push("/superadmin");
-      else if (tenantId !== "public") router.push(`/${tenantId}/dashboard`);
-      else router.push("/dashboard");
+      if (role === "SUPER_ADMIN") {
+        router.push("/superadmin");
+        return;
+      }
 
+      // Tenant realm: usa lo slug dal subdomain (non tenantId del token)
+      if (tenantSub) {
+        router.push(`/${tenantSub}/dashboard`);
+        return;
+      }
+
+      // App realm: dashboard generica
+      router.push("/dashboard");
     } catch (err: any) {
-      setGeneralError(err.message || "Si è verificato un errore imprevisto.");
+      setGeneralError(err?.message || "Si è verificato un errore imprevisto.");
     }
   };
 
   return (
     <Card className="mx-auto w-full max-w-[1100px] overflow-hidden border-none shadow-2xl sm:border sm:border-border">
       <div className="grid min-h-[650px] lg:grid-cols-2">
-        
-        {/* PARTE SINISTRA: FORM */}
         <div className="flex flex-col justify-center bg-card p-8 md:p-12 lg:p-16">
           <div className="mx-auto w-full max-w-[350px] space-y-8">
-            
             <div className="flex flex-col items-center space-y-2 text-center">
               <Image
                 src="/doflow_logo.svg"
@@ -131,9 +163,7 @@ export function LoginForm() {
                 priority
               />
               <h1 className="text-2xl font-bold tracking-tight">Bentornato</h1>
-              <p className="text-sm text-muted-foreground">
-                Inserisci le tue credenziali per accedere.
-              </p>
+              <p className="text-sm text-muted-foreground">Inserisci le tue credenziali per accedere.</p>
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -147,18 +177,13 @@ export function LoginForm() {
                   className={cn(errors.email && "border-destructive focus-visible:ring-destructive")}
                   {...register("email")}
                 />
-                {errors.email && (
-                  <p className="text-[11px] font-medium text-destructive">{errors.email.message}</p>
-                )}
+                {errors.email && <p className="text-[11px] font-medium text-destructive">{errors.email.message}</p>}
               </div>
 
               <div className="grid gap-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password">Password</Label>
-                  <Link
-                    href="/forgot-password"
-                    className="text-xs font-semibold text-primary hover:underline"
-                  >
+                  <Link href="/forgot-password" className="text-xs font-semibold text-primary hover:underline">
                     Dimenticata?
                   </Link>
                 </div>
@@ -205,38 +230,34 @@ export function LoginForm() {
 
             <p className="text-center text-[11px] text-muted-foreground leading-relaxed">
               Cliccando su Accedi, accetti i nostri{" "}
-              <Link href="/terms" className="underline underline-offset-4 hover:text-primary">Termini</Link>
-              {" "}e la{" "}
-              <Link href="/privacy" className="underline underline-offset-4 hover:text-primary">Privacy Policy</Link>.
+              <Link href="/terms" className="underline underline-offset-4 hover:text-primary">
+                Termini
+              </Link>{" "}
+              e la{" "}
+              <Link href="/privacy" className="underline underline-offset-4 hover:text-primary">
+                Privacy Policy
+              </Link>
+              .
             </p>
           </div>
         </div>
 
-        {/* PARTE DESTRA: SLIDER (3 IMMAGINI) */}
         <div className="relative hidden lg:block bg-muted overflow-hidden">
           {SLIDES.map((s, i) => (
             <div
               key={i}
               className={cn(
                 "absolute inset-0 transition-opacity duration-1000 ease-in-out",
-                i === slide ? "opacity-100 z-10" : "opacity-0 z-0"
+                i === slide ? "opacity-100 z-10" : "opacity-0 z-0",
               )}
             >
-              <Image
-                src={s.src}
-                alt={s.alt}
-                fill
-                priority={i === 0}
-                className="object-cover"
-              />
+              <Image src={s.src} alt={s.alt} fill priority={i === 0} className="object-cover" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
               <div className="absolute bottom-0 left-0 p-12 text-white w-full">
                 <blockquote className="text-lg font-medium leading-relaxed italic">
                   &ldquo;{s.quote}&rdquo;
                 </blockquote>
-                <p className="mt-4 text-sm font-semibold text-white/80">
-                  — {s.author}
-                </p>
+                <p className="mt-4 text-sm font-semibold text-white/80">— {s.author}</p>
               </div>
             </div>
           ))}

@@ -1,51 +1,94 @@
 // apps/frontend/src/lib/tenant-fetch.ts
 
-type JwtPayload = { tenantId?: string; role?: string; email?: string };
+function getTenantFromHost(): string | null {
+  if (typeof window === "undefined") return null;
 
-function parseJwtPayload(token: string): JwtPayload | null {
-  try {
-    const part = token.split(".")[1];
-    if (!part) return null;
-    const json = atob(part.replace(/-/g, "+").replace(/_/g, "/"));
-    return JSON.parse(json) as JwtPayload;
-  } catch {
-    return null;
+  const host = window.location.host.toLowerCase().split(":")[0];
+  const parts = host.split(".");
+  const sub = parts[0];
+
+  // host riservati
+  if (!sub || ["app", "admin", "api", "www", "localhost"].includes(sub)) return "public";
+
+  // dominio doflow standard
+  if (host.endsWith(".doflow.it")) {
+    if (/^[a-z0-9_]+$/i.test(sub)) return sub.toLowerCase();
   }
+
+  // custom domain: qui NON possiamo sapere lo slug senza chiamare il backend
+  // quindi NON forziamo un tenant; lasciamo null e il backend userà host-mode
+  return null;
 }
 
 function getTenantFromPathname(pathname: string): string | null {
   const seg = pathname.split("?")[0].split("/").filter(Boolean)[0];
   if (!seg) return null;
-  if (["login", "superadmin", "admin", "dashboard"].includes(seg)) return null;
+
+  // rotte che NON sono tenant
+  const reserved = [
+    "login",
+    "logout",
+    "superadmin",
+    "admin",
+    "dashboard",
+    "forgot-password",
+    "reset-password",
+    "terms",
+    "privacy",
+    "auth",
+    "api",
+  ];
+
+  if (reserved.includes(seg)) return null;
   if (!/^[a-z0-9_]+$/i.test(seg)) return null;
   return seg.toLowerCase();
 }
 
-export function getTenantId(): string {
-  // 1) se siamo nel browser, prima prova dal path: /{tenant}/...
-  if (typeof window !== "undefined") {
-    const fromPath = getTenantFromPathname(window.location.pathname);
-    if (fromPath) return fromPath;
+function isAuthOrPublicPath(pathname: string): boolean {
+  const p = pathname.split("?")[0];
 
-    // 2) altrimenti prova dal token (tenant dell'utente loggato)
-    const token = window.localStorage.getItem("doflow_token");
-    if (token) {
-      const payload = parseJwtPayload(token);
-      if (payload?.tenantId && /^[a-z0-9_]+$/i.test(payload.tenantId)) {
-        return payload.tenantId.toLowerCase();
-      }
-    }
+  return (
+    p === "/" ||
+    p.startsWith("/login") ||
+    p.startsWith("/forgot-password") ||
+    p.startsWith("/reset-password") ||
+    p.startsWith("/terms") ||
+    p.startsWith("/privacy") ||
+    p.startsWith("/auth/")
+  );
+}
 
-    // 3) fallback host-based
-    const host = window.location.host.toLowerCase().split(":")[0];
-    const sub = host.split(".")[0];
-    if (!sub || ["app", "api", "www", "localhost"].includes(sub)) return "public";
-    if (host.endsWith(".doflow.it")) return sub;
-  }
+/**
+ * Regola enterprise:
+ * - su app/admin: tenant header = public SEMPRE
+ * - su tenant subdomain: tenant = subdomain
+ * - altrimenti (custom domain): NON inviare tenant header, lascia decidere al backend
+ */
+export function getTenantIdForRequest(): string | null {
+  if (typeof window === "undefined") return "public";
 
-  return "public";
+  const hostTenant = getTenantFromHost();
+  const pathname = window.location.pathname;
+
+  // App/Admin: public fisso (evita "tenant fantasma" dal token)
+  if (hostTenant === "public") return "public";
+
+  // se è un percorso auth/public, non mandare tenant (o manda public)
+  // qui scegliamo: manda public, così la tenancy middleware non cerca tenant
+  if (isAuthOrPublicPath(pathname)) return "public";
+
+  // tenant da host (subdomain) ha priorità: è il caso "federicanerone.doflow.it"
+  if (hostTenant) return hostTenant;
+
+  // fallback: se sei su app.doflow.it ma sei in /{tenant}/... (multi-tenant path mode)
+  const pathTenant = getTenantFromPathname(pathname);
+  if (pathTenant) return pathTenant;
+
+  // custom domain senza slug: meglio non inviare header, backend fa lookup dominio
+  return null;
 }
 
 export function getTenantHeader(): Record<string, string> {
-  return { "x-doflow-tenant-id": getTenantId() };
+  const tid = getTenantIdForRequest();
+  return tid ? { "x-doflow-tenant-id": tid } : {};
 }
