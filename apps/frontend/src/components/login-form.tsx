@@ -1,3 +1,4 @@
+// apps/frontend/src/components/login-form.tsx
 "use client";
 
 import * as React from "react";
@@ -18,7 +19,7 @@ import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 
 // --- CONFIGURAZIONE ---
 const MAIN_DB_NAME = "public"; 
-const DOMAIN_ROOT = "doflow.it"; // Il tuo dominio principale
+const DOMAIN_ROOT = "doflow.it"; 
 
 // --- UTILS ---
 type JwtPayload = { email?: string; role?: string; tenantId?: string; tenant_id?: string; };
@@ -40,10 +41,7 @@ function getDomainContext() {
   const host = window.location.hostname;
 
   if (host.startsWith('admin.')) return 'admin_portal';
-  // Consideriamo portale generico app., www. o il dominio nudo
   if (host.startsWith('app.') || host.startsWith('www.') || host === DOMAIN_ROOT) return 'generic_portal';
-  
-  // Se siamo in localhost
   if (host.includes('localhost')) return 'localhost';
 
   return 'tenant_specific';
@@ -56,6 +54,12 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
+const SLIDES = [
+  { src: "/login-cover-1.webp", alt: "Cover 1" },
+  { src: "/login-cover-2.webp", alt: "Cover 2" },
+  { src: "/login-cover-3.webp", alt: "Cover 3" },
+] as const;
+
 export function LoginForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = React.useState(false);
@@ -63,7 +67,7 @@ export function LoginForm() {
   const [isRedirecting, setIsRedirecting] = React.useState(false);
   const [slide, setSlide] = React.useState(0);
 
-  // 1. ACCHIAPPA TOKEN (Gestione redirect cross-domain)
+  // 1. ACCHIAPPA TOKEN
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tokenFromUrl = params.get("accessToken");
@@ -71,8 +75,6 @@ export function LoginForm() {
       console.log("🔄 Token rilevato nell'URL. Login automatico...");
       setIsRedirecting(true);
       window.localStorage.setItem("doflow_token", tokenFromUrl);
-      
-      // PULIZIA TOTALE: Ricarica la pagina per assicurarsi che lo stato sia pulito
       window.location.href = "/dashboard";
     }
   }, []);
@@ -92,13 +94,13 @@ export function LoginForm() {
     try {
       const context = getDomainContext();
       
-      // HEADER: Se siamo su portali di sistema, forziamo public.
       const headers: Record<string, string> = {};
       if (context === 'admin_portal' || context === 'generic_portal') {
-        headers['x-tenant-id'] = MAIN_DB_NAME;
+        // *** CORREZIONE QUI SOTTO: x-doflow-tenant-id invece di x-tenant-id ***
+        headers['x-doflow-tenant-id'] = MAIN_DB_NAME;
       }
 
-      console.log(`🔐 Login Context: ${context}. Header inviato: ${headers['x-tenant-id'] || 'Auto'}`);
+      console.log(`🔐 Context: ${context}. Header: ${headers['x-doflow-tenant-id'] || 'Auto'}`);
 
       const data = await apiFetch<{ token: string, error?: string }>("/auth/login", {
         method: "POST",
@@ -114,17 +116,13 @@ export function LoginForm() {
       const userTenant = getTenantFromPayload(payload);
       const userRole = payload?.role;
 
-      console.log(`👤 Utente loggato. Ruolo: ${userRole}, Tenant: ${userTenant}`);
-
       // --- LOGICA DI REINDIRIZZAMENTO ---
 
-      // A. SUPERADMIN -> Deve andare su admin.doflow.it
+      // A. SUPERADMIN
       if (userRole === "SUPER_ADMIN" || userRole === "OWNER") {
-         // Se non siamo già su admin (e non siamo in localhost)
          if (context !== 'admin_portal' && context !== 'localhost') {
             setIsRedirecting(true);
             const protocol = window.location.protocol;
-            // Redirect a admin.doflow.it
             window.location.href = `${protocol}//admin.${DOMAIN_ROOT}/superadmin?accessToken=${token}`;
             return;
          }
@@ -133,28 +131,22 @@ export function LoginForm() {
          return;
       }
 
-      // B. UTENTE TENANT (Federica) -> Deve andare sul suo sottodominio
-      // Se NON siamo sul dominio del tenant (e non siamo in localhost)
+      // B. UTENTE TENANT
       if (context !== 'tenant_specific' && context !== 'localhost') {
-         // Controlliamo che il tenant non sia 'public' (caso raro)
          if (userTenant !== MAIN_DB_NAME) {
              setIsRedirecting(true);
              const protocol = window.location.protocol;
-             
              const targetUrl = `${protocol}//${userTenant}.${DOMAIN_ROOT}/login?accessToken=${token}`;
-             console.log(`✈️ Redirect necessario. Destinazione: ${targetUrl}`);
-             
              window.location.href = targetUrl;
              return;
          }
       }
 
-      // C. SIAMO GIA' NEL POSTO GIUSTO (O in Localhost)
-      console.log("✅ Login standard sul dominio corrente.");
+      // C. LOGIN STANDARD
       window.localStorage.setItem("doflow_token", token);
       
       if (context === 'localhost' && userTenant !== MAIN_DB_NAME) {
-          router.push(`/${userTenant}/dashboard`); // Path routing per dev
+          router.push(`/${userTenant}/dashboard`);
       } else {
           router.push("/dashboard");
       }
@@ -174,8 +166,6 @@ export function LoginForm() {
     )
   }
 
-  // ... (TUTTO IL RESTO DELL'UI RIMANE UGUALE: Card, Form, Slider) ...
-  // Copia la parte return (...) dal codice precedente, è identica.
   return (
     <Card className="overflow-hidden border-none shadow-xl sm:border sm:border-border">
       <div className="grid lg:grid-cols-[1.5fr_1fr] h-full min-h-[600px]">
@@ -219,16 +209,14 @@ export function LoginForm() {
           </div>
         </div>
         <div className="hidden lg:block bg-muted relative">
-           <Image src="/login-cover-1.webp" alt="Cover" fill className="object-cover" priority />
-           <div className="absolute inset-0 bg-black/20" />
+           {SLIDES.map((s, i) => (
+            <div key={i} className={cn("absolute inset-0 transition-opacity duration-1000", i === slide ? "opacity-100" : "opacity-0")}>
+               <Image src={s.src} alt={s.alt} fill className="object-cover" priority={i===0} />
+               <div className="absolute inset-0 bg-black/20" />
+            </div>
+           ))}
         </div>
       </div>
     </Card>
   );
 }
-
-const SLIDES = [
-  { src: "/login-cover-1.webp", alt: "Cover 1" },
-  { src: "/login-cover-2.webp", alt: "Cover 2" },
-  { src: "/login-cover-3.webp", alt: "Cover 3" },
-] as const;
