@@ -1,9 +1,9 @@
+// apps/backend/src/main.ts
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { NotificationsService } from './realtime/notifications.service';
 import { WebSocketServer, WebSocket } from 'ws';
-import { TenancyMiddleware } from './tenancy/tenancy.middleware';
 
 type ClientMeta = {
   userId: string;
@@ -51,42 +51,32 @@ async function bootstrap() {
   // ✅ Global prefix
   app.setGlobalPrefix('api');
 
-  // ✅ CORS (in prod puoi restringere, ma così non blocchi login)
+  // ✅ CORS
+  // NB: origin: true riflette l'Origin header -> ok per app.doflow.it e tenant domains
   app.enableCors({
     origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-DOFLOW-TENANT-ID'],
+    exposedHeaders: ['Content-Length'],
+    maxAge: 86400,
   });
-
-  // ✅ Tenancy middleware (NON deve far crashare tutto se manca)
-  try {
-    const tenancy = app.get(TenancyMiddleware, { strict: false });
-    if (tenancy) {
-      app.use((req: any, res: any, next: any) => tenancy.use(req, res, next));
-      // eslint-disable-next-line no-console
-      console.log('✅ TenancyMiddleware attached');
-    } else {
-      // eslint-disable-next-line no-console
-      console.warn('⚠️ TenancyMiddleware not found: running WITHOUT tenancy resolution');
-    }
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn('⚠️ TenancyMiddleware init failed: running WITHOUT tenancy resolution', e);
-  }
 
   const port = Number(process.env.PORT ?? 4000);
   await app.listen(port, '0.0.0.0');
 
+  // ⚠️ Prendiamo il VERO http.Server da Nest via HttpAdapter
   const httpAdapter: any = (app as any).getHttpAdapter();
   const httpServer: any = httpAdapter.getHttpServer();
 
   const notifications = app.get(NotificationsService);
   const wsPath = process.env.WS_PATH ?? '/ws';
 
+  // ✅ WebSocketServer in modalità "noServer"
   const wss = new WebSocketServer({ noServer: true });
   const clients = new Set<ClientWithMeta>();
 
+  // 🔍 Instradamento manuale dell'upgrade
   httpServer.on('upgrade', (req: any, socket: any, head: Buffer) => {
     try {
       const url = req.url ?? '/';
@@ -98,11 +88,12 @@ async function bootstrap() {
       });
     } catch (e) {
       // eslint-disable-next-line no-console
-      console.error('[UPGRADE RAW] error parsing URL', e);
+      console.error('[UPGRADE] error parsing URL', e);
       socket.destroy();
     }
   });
 
+  // 🔗 Gestione connessione WS
   wss.on('connection', (socket: ClientWithMeta, req: any) => {
     try {
       const urlStr = req.url ?? '/';
@@ -127,6 +118,7 @@ async function bootstrap() {
       socket.__meta = meta;
       clients.add(socket);
 
+      // handshake
       socket.send(
         JSON.stringify({
           type: 'hello',
@@ -134,6 +126,7 @@ async function bootstrap() {
         }),
       );
 
+      // probe health ping/pong
       socket.on('message', (data: any) => {
         try {
           const raw =
@@ -165,11 +158,12 @@ async function bootstrap() {
       socket.on('close', () => clients.delete(socket));
     } catch (e) {
       // eslint-disable-next-line no-console
-      console.error('[WS RAW] connection error', e);
+      console.error('[WS] connection error', e);
       socket.close(4002, 'Invalid token');
     }
   });
 
+  // 🔁 Redis Pub/Sub → WebSocket clients
   notifications.registerHandler((channel, payload) => {
     for (const socket of clients) {
       const meta = socket.__meta;
@@ -198,7 +192,7 @@ async function bootstrap() {
   });
 
   // eslint-disable-next-line no-console
-  console.log(`✅ Backend running on port ${port} (WS path: ${wsPath})`);
+  console.log(`✅ Backend running on http://0.0.0.0:${port} (WS path: ${wsPath})`);
 }
 
 bootstrap();

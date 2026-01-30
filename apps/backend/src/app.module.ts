@@ -15,7 +15,6 @@ import { NotificationsTestController } from './realtime/notifications-test.contr
 import { AuthPasswordController } from './auth-password.controller';
 import { SuperadminTenantsController } from './superadmin/superadmin-tenants.controller';
 
-import { RedisService } from './redis/redis.service';
 import { TelemetryService } from './telemetry/telemetry.service';
 import { AuthService } from './auth.service';
 import { AuditService } from './audit.service';
@@ -25,32 +24,35 @@ import { NotificationsService } from './realtime/notifications.service';
 import { ProjectsEventsService } from './realtime/projects-events.service';
 import { TenantBootstrapService } from './tenancy/tenant-bootstrap.service';
 
+import { TenancyMiddleware } from './tenancy/tenancy.middleware';
 import { AuthMiddleware } from './auth.middleware';
 
 import { TenantModule } from './tenant/tenant.module';
 import { MailModule } from './mail/mail.module';
 import { HealthModule } from './health/health.module';
 
-// ✅ tenant-specific feature modules
 import { FedericaNeroneModule } from './federicanerone/federicanerone.module';
 import { BusinaroModule } from './businaro/businaro.module';
 
-// ✅ NEW: tenancy module (exports TenancyMiddleware)
 import { TenancyModule } from './tenancy/tenancy.module';
-import { TenancyMiddleware } from './tenancy/tenancy.middleware';
+import { RedisModule } from './redis/redis.module';
 
 @Module({
   imports: [
-    // health endpoints (k8s/traefik probe ecc)
     HealthModule,
 
-    // global config
     ConfigModule.forRoot({
       isGlobal: true,
       ignoreEnvFile: true,
     }),
 
-    // default DB connection (public / bootstrap / health / future DI)
+    // ✅ Redis (Global)
+    RedisModule,
+
+    // ✅ Tenancy (fornisce TenancyMiddleware con Redis in DI)
+    TenancyModule,
+
+    // ✅ Default DB connection (schema public / default)
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -63,20 +65,13 @@ import { TenancyMiddleware } from './tenancy/tenancy.middleware';
           url,
           autoLoadEntities: false,
           synchronize: false,
-          // Se sei su provider con SSL obbligatorio:
-          // ssl: { rejectUnauthorized: false },
         };
       },
     }),
 
-    // infra modules
     MailModule,
     TenantModule,
 
-    // ✅ tenancy middleware provider/export
-    TenancyModule,
-
-    // tenant verticals (gated a runtime via rules/guards/tenant)
     FedericaNeroneModule,
     BusinaroModule,
   ],
@@ -96,13 +91,6 @@ import { TenancyMiddleware } from './tenancy/tenancy.middleware';
   ],
 
   providers: [
-    /**
-     * ⚠️ RedisService
-     * Non hai RedisModule, quindi lo dichiariamo qui UNA volta.
-     * TenancyModule lo userà via DI perché è nello stesso application context.
-     */
-    RedisService,
-
     TelemetryService,
     AuthService,
     AuditService,
@@ -115,11 +103,6 @@ import { TenancyMiddleware } from './tenancy/tenancy.middleware';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    /**
-     * Ordine CRITICO:
-     * 1) TenancyMiddleware → attacca tenantConnection + tenantId
-     * 2) AuthMiddleware → valida JWT e attacca req.user
-     */
     consumer.apply(TenancyMiddleware, AuthMiddleware).forRoutes('*');
   }
 }
