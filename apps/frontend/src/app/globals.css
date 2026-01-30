@@ -74,7 +74,7 @@
     --input: 240 3.7% 15.9%;
     --ring: 240 4.9% 83.9%;
 
-    /* sidebar (shadcn) */
+    /* sidebar (shadcn) standard per tutti */
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -83,6 +83,25 @@
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  /* 🔥 AGGIUNTA SICURA: STILE ISOLATO PER BUSINARO 🔥 
+     Queste regole si attivano SOLO se il div padre ha la classe "theme-businaro"
+     Non influisce su nessun altro tenant.
+  */
+  .theme-businaro ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .theme-businaro ::-webkit-scrollbar-track {
+    background: #020617; /* businaro-dark */
+  }
+  .theme-businaro ::-webkit-scrollbar-thumb {
+    background: #334155; /* slate-700 */
+    border-radius: 4px;
+  }
+  .theme-businaro ::-webkit-scrollbar-thumb:hover {
+    background: #475569; /* slate-600 */
   }
 
   * {

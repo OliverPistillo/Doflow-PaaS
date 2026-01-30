@@ -16,6 +16,20 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)",
       },
       colors: {
+        // --- BUSINARO CUSTOM PALETTE ---
+        businaro: {
+          red: "#e11d48",   // Rosso Brand (Rose 600)
+          dark: "#020617",  // Sfondo Pagina (Slate 950)
+          panel: "#0f172a", // Sfondo Card (Slate 900)
+          border: "#1e293b",// Bordi Sottili (Slate 800)
+        },
+        state: {
+          available: "#10b981", // Emerald 500
+          committed: "#eab308", // Yellow 500
+          wip: "#3b82f6",       // Blue 500
+          qc: "#f97316",        // Orange 500
+        },
+        // -------------------------------
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         card: {
