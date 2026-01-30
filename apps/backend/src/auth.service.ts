@@ -10,7 +10,7 @@ type JwtPayload = {
   sub: number;
   email: string;
   tenantId: string;
-  tenantSlug: string; // ✅ aggiunto: usato dal frontend per redirect dominio
+  tenantSlug: string; 
   role: Role;
 };
 
@@ -34,7 +34,6 @@ export class AuthService {
     return safeSchema(tenantId ?? 'public');
   }
 
-  // ✅ blocca operazioni se tenant disattivato
   private async assertTenantActive(conn: DataSource, tenantId: string) {
     const t = safeSchema(tenantId);
     if (t === 'public') return;
@@ -49,7 +48,7 @@ export class AuthService {
     }
   }
 
-  private signToken(userId: number, email: string, tenantId: string, role: Role) {
+  private signToken(userId: number, email: string, tenantId: string, tenantSlug: string, role: Role) {
     const secret = process.env.JWT_SECRET;
     if (!secret) throw new Error('JWT_SECRET not set');
 
@@ -59,14 +58,14 @@ export class AuthService {
       sub: userId,
       email,
       tenantId: t,
-      tenantSlug: t, // ✅ per ora = tenantId (schema). Perfetto per redirect: https://{tenantSlug}.doflow.it
+      tenantSlug: tenantSlug, // ✅ Ora usiamo lo slug reale passato come parametro
       role,
     };
 
     return jwt.sign(payload, secret, { expiresIn: '1d' });
   }
 
-  // ✅ login in un tenant specifico (usando schema.table)
+  // ✅ login in un tenant specifico
   private async loginInTenant(
     conn: DataSource,
     tenantId: string,
@@ -74,6 +73,18 @@ export class AuthService {
     password: string,
   ) {
     const t = safeSchema(tenantId);
+    
+    // Recuperiamo lo SLUG reale (per il redirect frontend)
+    let realSlug = t;
+    if (t !== 'public') {
+        const tenantRow = await conn.query(
+           `select slug from public.tenants where schema_name = $1 limit 1`,
+           [t]
+        );
+        if (tenantRow[0]?.slug) {
+            realSlug = tenantRow[0].slug;
+        }
+    }
 
     await this.assertTenantActive(conn, t);
 
@@ -93,21 +104,22 @@ export class AuthService {
     const ok = await bcrypt.compare(password, user.password_hash as string);
     if (!ok) throw new Error('Invalid credentials');
 
-    const token = this.signToken(user.id, user.email, t, user.role as Role);
+    const token = this.signToken(user.id, user.email, t, realSlug, user.role as Role);
 
     return {
       user: {
         id: user.id,
         email: user.email,
         created_at: user.created_at,
-        tenantId: t,
+        tenantId: t,         // Back-compatibilità
+        schema: t,           // ✅ Esplicito per il frontend
+        tenantSlug: realSlug, // ✅ FONDAMENTALE per il redirect
         role: user.role,
       },
       token,
     };
   }
 
-  // ✅ lista tenant attivi
   private async listActiveTenants(conn: DataSource): Promise<string[]> {
     const rows = await conn.query(
       `
@@ -123,28 +135,22 @@ export class AuthService {
       .filter((s: string) => s && s !== 'public');
   }
 
-  /**
-   * ✅ LOGIN AUTO (per app.doflow.it)
-   * - se sei già in tenant -> login normale
-   * - se sei in public -> prova in public, se fallisce prova in tutti i tenant attivi
-   */
   async loginAuto(req: Request, email: string, password: string) {
     const conn = this.getConn(req);
     const currentTenant = this.getTenantId(req);
 
-    // se la request è già tenant-scoped, non fare magia
     if (currentTenant !== 'public') {
       return this.login(req, email, password);
     }
 
-    // 1) prova login in public (superadmin/control plane)
+    // 1) prova login in public
     try {
       return await this.loginInTenant(conn, 'public', email, password);
     } catch {
       // continua
     }
 
-    // 2) prova login in tutti i tenant attivi (piccolo SaaS: ok)
+    // 2) prova login nei tenant
     const tenants = await this.listActiveTenants(conn);
 
     for (const t of tenants) {
@@ -158,11 +164,19 @@ export class AuthService {
     throw new Error('Invalid credentials');
   }
 
-  // =============== API ESISTENTI ===============
-
   async register(req: Request, email: string, password: string) {
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
+
+    // Recuperiamo lo slug anche qui
+    let realSlug = tenantId;
+    if (tenantId !== 'public') {
+         const tenantRow = await conn.query(
+           `select slug from public.tenants where schema_name = $1 limit 1`,
+           [tenantId]
+        );
+        if (tenantRow[0]?.slug) realSlug = tenantRow[0].slug;
+    }
 
     await this.assertTenantActive(conn, tenantId);
 
@@ -190,21 +204,29 @@ export class AuthService {
     );
 
     const user = rows[0];
-    const token = this.signToken(user.id, user.email, tenantId, user.role as Role);
+    const token = this.signToken(user.id, user.email, tenantId, realSlug, user.role as Role);
 
-    return { user: { ...user, tenantId, role: user.role }, token };
+    return { user: { ...user, tenantId, tenantSlug: realSlug, role: user.role }, token };
   }
 
   async login(req: Request, email: string, password: string) {
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
-
     return this.loginInTenant(conn, tenantId, email, password);
   }
 
   async acceptInvite(req: Request, token: string, password: string) {
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
+
+    let realSlug = tenantId;
+    if (tenantId !== 'public') {
+         const tenantRow = await conn.query(
+           `select slug from public.tenants where schema_name = $1 limit 1`,
+           [tenantId]
+        );
+        if (tenantRow[0]?.slug) realSlug = tenantRow[0].slug;
+    }
 
     await this.assertTenantActive(conn, tenantId);
 
@@ -249,10 +271,10 @@ export class AuthService {
       [invite.id],
     );
 
-    const jwtToken = this.signToken(user.id, user.email, tenantId, user.role as Role);
+    const jwtToken = this.signToken(user.id, user.email, tenantId, realSlug, user.role as Role);
 
     return {
-      user: { ...user, tenantId },
+      user: { ...user, tenantId, tenantSlug: realSlug },
       token: jwtToken,
     };
   }
