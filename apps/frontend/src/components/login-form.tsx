@@ -38,6 +38,7 @@ type JwtPayload = {
   tenantSlug?: string;
 };
 
+// Funzione helper per leggere il token
 function parseJwtPayload(token: string): JwtPayload | null {
   try {
     const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
@@ -138,17 +139,32 @@ export function LoginForm() {
     defaultValues: { email: "", password: "" },
   });
 
-  // 1. ACCHIAPPA TOKEN (Gestione arrivo sul tenant corretto)
+  // =========================================================
+  // 1. GESTIONE ARRIVO SUL TENANT (Il "Check-in" automatico)
+  // =========================================================
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const tokenFromUrl = params.get("accessToken"); // URLSearchParams decodifica automaticamente
+    const tokenFromUrl = params.get("accessToken");
+    
     if (tokenFromUrl) {
+      // Puliamo vecchi token
       window.localStorage.removeItem("doflow_token");
-      console.log("🔄 Token rilevato nell'URL. Login automatico...");
+      console.log("🔄 Token rilevato nell'URL. Configurazione ambiente...");
+      
+      // Salviamo il nuovo token
       window.localStorage.setItem("doflow_token", tokenFromUrl);
       
-      // Redirect pulito per rimuovere il token dall'URL
-      window.location.href = "/dashboard";
+      // Decodifichiamo il token per sapere DOVE andare
+      const payload = parseJwtPayload(tokenFromUrl);
+      const tenantSlug = payload?.tenantSlug || payload?.tenantId;
+
+      // 🔥 FIX: Reindirizziamo alla cartella specifica del tenant (/federicanerone/dashboard)
+      // Invece che a quella generica (/dashboard) che potrebbe non esistere.
+      if (tenantSlug && tenantSlug !== 'public') {
+         window.location.href = `/${tenantSlug}/dashboard`;
+      } else {
+         window.location.href = "/dashboard";
+      }
     }
   }, []);
 
@@ -157,12 +173,12 @@ export function LoginForm() {
     return () => clearInterval(id);
   }, []);
 
-  // Redirect automatico
+  // Redirect automatico (dalla finestra modale)
   React.useEffect(() => {
     if (!showTenantRedirect || !tenantRedirectUrl) return;
     const t = setTimeout(() => {
       window.location.href = tenantRedirectUrl;
-    }, 2000); 
+    }, 2000);
     return () => clearTimeout(t);
   }, [showTenantRedirect, tenantRedirectUrl]);
 
@@ -206,19 +222,18 @@ export function LoginForm() {
 
       console.log(`🔍 Login Check: Ruolo [${role}], Tenant Rilevato [${targetTenant}]`);
 
-      // 1. SUPERADMIN -> Sempre su /superadmin
+      // 1. SUPERADMIN
       if (role === "SUPER_ADMIN") {
         window.localStorage.setItem("doflow_token", token);
         router.push("/superadmin");
         return;
       }
 
-      // 2. REDIRECT TENANT DA APP/ADMIN
+      // 2. REDIRECT VERSO DOMINIO TENANT
       if (isAppHost) {
         if (targetTenant !== "public" && /^[a-z0-9_]+$/i.test(targetTenant)) {
           
-          // 🔥 FIX CRITICO: encodeURIComponent
-          // Questo assicura che caratteri come '+' nel token non vengano persi nel redirect
+          // Encode per sicurezza (gestisce i caratteri + / = nel token)
           const safeToken = encodeURIComponent(token);
           const redirectUrl = `https://${targetTenant}.doflow.it/login?accessToken=${safeToken}`;
           
@@ -228,15 +243,16 @@ export function LoginForm() {
           return;
         } 
         
-        console.warn("⚠️ Attenzione: Utente loggato su App ma il tenant risulta 'public'.");
+        // Fallback se non siamo riusciti a determinare un tenant
         window.localStorage.setItem("doflow_token", token);
         router.push("/dashboard");
         return;
       }
 
-      // 3. UTENTE GIÀ SUL TENANT
+      // 3. UTENTE GIÀ SUL DOMINIO CORRETTO
       window.localStorage.setItem("doflow_token", token);
       if (tenantSub) {
+        // Se siamo già su federicanerone.doflow.it, andiamo alla dashboard specifica
         router.push(`/${tenantSub}/dashboard`);
         return;
       }
@@ -261,7 +277,6 @@ export function LoginForm() {
                   <br />
                   Ti stiamo reindirizzando al tuo spazio di lavoro aziendale.
                   <br />
-                  {/* Nascondiamo l'URL brutto, mostriamo solo un'indicazione visiva */}
                   <div className="flex items-center gap-2 mt-4 p-3 bg-muted rounded-md text-sm text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" /> 
                     <span>Reindirizzamento in corso...</span>
@@ -278,13 +293,11 @@ export function LoginForm() {
           </AlertDialogHeader>
 
           <AlertDialogFooter>
-            {/* Nascondiamo il bottone "OK" durante il redirect automatico per pulizia */}
             {!tenantRedirectUrl && (
                 <AlertDialogAction onClick={() => setShowTenantRedirect(false)}>
                 Ok
                 </AlertDialogAction>
             )}
-            {/* Bottone di emergenza se il redirect automatico fallisse */}
             {tenantRedirectUrl && (
                 <AlertDialogAction onClick={() => window.location.href = tenantRedirectUrl!}>
                 Vai ora
@@ -296,6 +309,7 @@ export function LoginForm() {
 
       <Card className="mx-auto w-full max-w-[1100px] overflow-hidden border-none shadow-2xl sm:border sm:border-border">
         <div className="grid min-h-[650px] lg:grid-cols-2">
+          {/* FORM AREA */}
           <div className="flex flex-col justify-center bg-card p-8 md:p-12 lg:p-16">
             <div className="mx-auto w-full max-w-[350px] space-y-8">
               <div className="flex flex-col items-center space-y-2 text-center">
@@ -398,6 +412,7 @@ export function LoginForm() {
             </div>
           </div>
 
+          {/* SLIDER AREA */}
           <div className="relative hidden lg:block bg-muted overflow-hidden">
             {SLIDES.map((s, i) => (
               <div
