@@ -49,7 +49,6 @@ function parseJwtPayload(token: string): JwtPayload | null {
 
 function normalizeRole(role?: string) {
   const r = String(role ?? "").toUpperCase().replace(/[^A-Z_]/g, "");
-  // Nota: OWNER e SUPERADMIN sono trattati come "admin di sistema" per il routing iniziale
   if (["OWNER", "SUPERADMIN", "SUPER_ADMIN"].includes(r)) return "SUPER_ADMIN";
   return "USER";
 }
@@ -66,7 +65,6 @@ const SLIDES = [
     alt: "Analytics avanzati",
     quote: "Tieni traccia di ogni lead e ottimizza le conversioni.",
     author: "Performance Analytics",
-    authorTitle: "Head of Growth",
   },
   {
     src: "/login-cover-3.webp",
@@ -86,6 +84,7 @@ type LoginResponse = {
   token: string; 
   error?: string; 
   message?: string;
+  // Cerchiamo info sul tenant reale dell'utente
   user?: { 
     tenantSlug?: string;
     tenant_id?: string;
@@ -100,6 +99,7 @@ function getHostContext() {
       ? window.location.hostname.toLowerCase()
       : "app.doflow.it";
 
+  // Consideriamo "App Host" i portali di sistema che non sono tenant specifici
   const isAppHost =
     host.startsWith("app.") || 
     host.startsWith("admin.") || 
@@ -140,36 +140,29 @@ export function LoginForm() {
     defaultValues: { email: "", password: "" },
   });
 
-  // 1. GESTIONE TOKEN DA URL (Login dopo redirect)
+  // 1. ACCHIAPPA TOKEN
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tokenFromUrl = params.get("accessToken");
     if (tokenFromUrl) {
       window.localStorage.removeItem("doflow_token");
-      console.log("🔄 Token rilevato nell'URL. Completamento accesso...");
+      console.log("🔄 Token rilevato nell'URL. Login automatico...");
       window.localStorage.setItem("doflow_token", tokenFromUrl);
-      
-      // Pulizia URL visuale (opzionale, ma mantiene il codice stabile)
-      const newUrl = window.location.pathname;
-      window.history.replaceState({}, document.title, newUrl);
-      
-      // Redirect pulito alla dashboard
       window.location.href = "/dashboard";
     }
   }, []);
 
-  // Slider Background
   React.useEffect(() => {
     const id = setInterval(() => setSlide((s) => (s + 1) % SLIDES.length), 5000);
     return () => clearInterval(id);
   }, []);
 
-  // Redirect automatico (Timer aumentato leggermente per stabilità)
+  // Redirect automatico
   React.useEffect(() => {
     if (!showTenantRedirect || !tenantRedirectUrl) return;
     const t = setTimeout(() => {
       window.location.href = tenantRedirectUrl;
-    }, 2000);
+    }, 4000); // 4 secondi di attesa per leggere il messaggio
     return () => clearTimeout(t);
   }, [showTenantRedirect, tenantRedirectUrl]);
 
@@ -180,8 +173,8 @@ export function LoginForm() {
     const realm = isAppHost ? "platform" : "tenant";
 
     try {
+      // Se siamo su App/Admin, forziamo la ricerca in 'public' per trovare l'utente
       const headers: Record<string, string> = {};
-      // Se siamo sul portale App/Admin, forziamo la ricerca su 'public'
       if (isAppHost) {
         headers['x-doflow-tenant-id'] = MAIN_DB_NAME;
       }
@@ -204,7 +197,13 @@ export function LoginForm() {
       const payload = parseJwtPayload(token);
       const role = normalizeRole(payload?.role);
 
-      // --- DETERMINIAMO IL TENANT TARGET (Logica Smart) ---
+      // --- LOGICA DI RISOLUZIONE DEL TENANT ---
+      // Cerchiamo il tenant reale dell'utente.
+      // Ordine di priorità:
+      // 1. Dati DB diretti (data.user.schema / tenantSlug) -> Più affidabile
+      // 2. Token Payload (payload.tenantSlug) -> Spesso contiene "public" se loggati da app
+      // 3. Fallback a "public"
+      
       let targetTenant = "public";
 
       if (data.user?.schema || data.user?.tenantSlug || data.user?.tenant_id) {
@@ -215,16 +214,18 @@ export function LoginForm() {
 
       console.log(`🔍 Login Check: Ruolo [${role}], Tenant Rilevato [${targetTenant}]`);
 
-      // =================================================================================
-      // 1. PRIORITÀ ASSOLUTA: SE L'UTENTE APPARTIENE A UN TENANT SPECIFICO, MANDALO LÌ.
-      // =================================================================================
-      
+      // 1. SUPERADMIN -> Sempre su /superadmin
+      if (role === "SUPER_ADMIN") {
+        window.localStorage.setItem("doflow_token", token);
+        router.push("/superadmin");
+        return;
+      }
+
+      // 2. UTENTE LOGGATO SU PORTALE GENERALE (APP/ADMIN)
       if (isAppHost) {
+        // Se l'utente appartiene a un tenant specifico (diverso da public), lo reindirizziamo
         if (targetTenant !== "public" && /^[a-z0-9_]+$/i.test(targetTenant)) {
-          console.log(`✈️ Redirect verso tenant specifico: ${targetTenant}`);
           
-          // Costruiamo l'URL "grezzo" perché funzionava.
-          // Non lo mostreremo a video nel popup.
           const redirectUrl = `https://${targetTenant}.doflow.it/login?accessToken=${token}`;
           
           setTenantRedirectUrl(redirectUrl);
@@ -232,26 +233,23 @@ export function LoginForm() {
           setShowTenantRedirect(true);
           return;
         } 
-      }
-
-      // =================================================================================
-      // 2. SOLO SE IL TENANT È "PUBLIC", ALLORA CONTROLLIAMO SE È SUPERADMIN
-      // =================================================================================
-      if (role === "SUPER_ADMIN") {
-        console.log("👑 Utente SuperAdmin su Public -> Dashboard SuperAdmin");
+        
+        // Se targetTenant è ancora "public", c'è un problema:
+        // L'utente è loggato ma il sistema non sa a che tenant appartiene.
+        // Lo logghiamo qui, ma vedrà la dashboard vuota (errore 404 sulle API)
+        console.warn("⚠️ Attenzione: Utente loggato su App ma il tenant risulta 'public'.");
         window.localStorage.setItem("doflow_token", token);
-        router.push("/superadmin");
+        router.push("/dashboard");
         return;
       }
 
-      // 3. FALLBACK: DASHBOARD NORMALE (Siamo già sul tenant o caso standard)
+      // 3. UTENTE LOGGATO DIRETTAMENTE SUL TENANT (Standard)
       window.localStorage.setItem("doflow_token", token);
       if (tenantSub) {
         router.push(`/${tenantSub}/dashboard`);
         return;
       }
 
-      // Utente public normale
       router.push("/dashboard");
       
     } catch (err: any) {
@@ -267,14 +265,15 @@ export function LoginForm() {
             <AlertDialogTitle>Accesso al dominio aziendale</AlertDialogTitle>
             <AlertDialogDescription>
               {tenantDialogMode === "redirect" ? (
-                <div className="flex flex-col gap-3 py-2">
-                  <p>Accesso effettuato correttamente.</p>
-                  <p>Ti stiamo reindirizzando al tuo spazio di lavoro aziendale...</p>
-                  <div className="p-3 bg-muted rounded-md text-xs font-mono text-muted-foreground break-all">
-                     {/* Mostriamo solo il dominio di destinazione, non il token intero */}
-                     Destinazione: https://{tenantRedirectUrl?.split('/')[2]}/login...
-                  </div>
-                </div>
+                <>
+                  Accesso effettuato correttamente.
+                  <br />
+                  Ti stiamo reindirizzando al tuo spazio di lavoro aziendale.
+                  <br />
+                  <span className="text-muted-foreground text-xs mt-2 block font-mono bg-muted p-1 rounded">
+                    Destinazione: {tenantRedirectUrl}
+                  </span>
+                </>
               ) : (
                 <>
                   Questo account appartiene a un tenant aziendale.
@@ -286,24 +285,20 @@ export function LoginForm() {
           </AlertDialogHeader>
 
           <AlertDialogFooter>
-             {!tenantRedirectUrl && (
-                <AlertDialogAction onClick={() => setShowTenantRedirect(false)}>
-                  Ok
-                </AlertDialogAction>
-             )}
-             {/* Bottone "Vai ora" manuale se il JS si blocca */}
-             {tenantRedirectUrl && (
-                <AlertDialogAction onClick={() => window.location.href = tenantRedirectUrl!}>
-                  Vai ora
-                </AlertDialogAction>
-             )}
+            <AlertDialogAction
+              onClick={() => {
+                if (tenantRedirectUrl) window.location.href = tenantRedirectUrl;
+                else setShowTenantRedirect(false);
+              }}
+            >
+              {tenantRedirectUrl ? "Vai ora" : "Ok"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       <Card className="mx-auto w-full max-w-[1100px] overflow-hidden border-none shadow-2xl sm:border sm:border-border">
         <div className="grid min-h-[650px] lg:grid-cols-2">
-          {/* ... UI DEL FORM ... */}
           <div className="flex flex-col justify-center bg-card p-8 md:p-12 lg:p-16">
             <div className="mx-auto w-full max-w-[350px] space-y-8">
               <div className="flex flex-col items-center space-y-2 text-center">
