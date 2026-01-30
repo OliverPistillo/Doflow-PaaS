@@ -51,13 +51,20 @@ async function bootstrap() {
   // ✅ Global prefix
   app.setGlobalPrefix('api');
 
-  // ✅ CORS
-  // NB: origin: true riflette l'Origin header -> ok per app.doflow.it e tenant domains
+  // ✅ CORS (Configurazione aggiornata per supportare header custom tenant)
   app.enableCors({
     origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-DOFLOW-TENANT-ID'],
+    // 👇 HEADER AGGIUNTI PER IL MULTI-TENANCY
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-DOFLOW-TENANT-ID',
+      'x-doflow-tenant-id', // Case-insensitive safety
+      'x-doflow-pathname',
+      'Accept'
+    ],
     exposedHeaders: ['Content-Length'],
     maxAge: 86400,
   });
