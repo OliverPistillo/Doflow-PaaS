@@ -1,3 +1,4 @@
+// apps/backend/src/app.module.ts
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -24,56 +25,59 @@ import { NotificationsService } from './realtime/notifications.service';
 import { ProjectsEventsService } from './realtime/projects-events.service';
 import { TenantBootstrapService } from './tenancy/tenant-bootstrap.service';
 
-import { TenancyMiddleware } from './tenancy/tenancy.middleware';
 import { AuthMiddleware } from './auth.middleware';
 
 import { TenantModule } from './tenant/tenant.module';
 import { MailModule } from './mail/mail.module';
 import { HealthModule } from './health/health.module';
 
-// ✅ Federica-only module (nuovo)
+// ✅ tenant-specific feature modules
 import { FedericaNeroneModule } from './federicanerone/federicanerone.module';
-
-// ✅ Businaro-only module (nuovo)
 import { BusinaroModule } from './businaro/businaro.module';
+
+// ✅ NEW: tenancy module (exports TenancyMiddleware)
+import { TenancyModule } from './tenancy/tenancy.module';
+import { TenancyMiddleware } from './tenancy/tenancy.middleware';
 
 @Module({
   imports: [
+    // health endpoints (k8s/traefik probe ecc)
     HealthModule,
 
+    // global config
     ConfigModule.forRoot({
       isGlobal: true,
       ignoreEnvFile: true,
     }),
 
-    // ✅ Connessione "default" (non tenant) - utile per DI / health / eventuali repository futuri
+    // default DB connection (public / bootstrap / health / future DI)
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => {
         const url = cfg.get<string>('DATABASE_URL');
-        if (!url) {
-          // se manca, meglio crashare subito invece di debug infinito
-          throw new Error('Missing DATABASE_URL');
-        }
+        if (!url) throw new Error('Missing DATABASE_URL');
 
         return {
           type: 'postgres' as const,
           url,
           autoLoadEntities: false,
           synchronize: false,
-          // Se sei su provider con SSL obbligatorio (Neon/Supabase ecc) abilita:
+          // Se sei su provider con SSL obbligatorio:
           // ssl: { rejectUnauthorized: false },
         };
       },
     }),
 
+    // infra modules
     MailModule,
     TenantModule,
 
-    // ✅ Feature isolate per tenant Federica (gated a runtime)
+    // ✅ tenancy middleware provider/export
+    TenancyModule,
+
+    // tenant verticals (gated a runtime via rules/guards/tenant)
     FedericaNeroneModule,
-    // ✅ Feature isolate per tenant Businaro (gated a runtime)
     BusinaroModule,
   ],
 
@@ -92,7 +96,13 @@ import { BusinaroModule } from './businaro/businaro.module';
   ],
 
   providers: [
+    /**
+     * ⚠️ RedisService
+     * Non hai RedisModule, quindi lo dichiariamo qui UNA volta.
+     * TenancyModule lo userà via DI perché è nello stesso application context.
+     */
     RedisService,
+
     TelemetryService,
     AuthService,
     AuditService,
@@ -105,7 +115,11 @@ import { BusinaroModule } from './businaro/businaro.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    // Tenancy prima (per schema), Auth dopo (per JWT)
+    /**
+     * Ordine CRITICO:
+     * 1) TenancyMiddleware → attacca tenantConnection + tenantId
+     * 2) AuthMiddleware → valida JWT e attacca req.user
+     */
     consumer.apply(TenancyMiddleware, AuthMiddleware).forRoutes('*');
   }
 }

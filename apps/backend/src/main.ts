@@ -7,8 +7,8 @@ import { TenancyMiddleware } from './tenancy/tenancy.middleware';
 
 type ClientMeta = {
   userId: string;
-  tenantId: string;     // in pratica = schema (es. "businaro")
-  tenantSlug?: string;  // slug logico (es. "businaro") se presente nel JWT
+  tenantId: string; // schema
+  tenantSlug?: string;
   email?: string;
 };
 
@@ -23,7 +23,6 @@ function decodeJwt(token: string): any {
 }
 
 function pickTenantFromJwt(decoded: any): { tenantId: string; tenantSlug?: string } {
-  // ✅ nuovo standard: tenantSlug nel token (lo avete già sistemato)
   const slug =
     decoded.tenantSlug ??
     decoded.tenant_slug ??
@@ -31,7 +30,6 @@ function pickTenantFromJwt(decoded: any): { tenantId: string; tenantSlug?: strin
     decoded.active_tenant_slug ??
     undefined;
 
-  // ✅ fallback legacy: tenantId/schema
   const tenantId =
     (decoded.tenantId ??
       decoded.tenant_id ??
@@ -50,48 +48,48 @@ function pickTenantFromJwt(decoded: any): { tenantId: string; tenantSlug?: strin
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // ✅ CORS
+  // ✅ Global prefix
+  app.setGlobalPrefix('api');
+
+  // ✅ CORS (in prod puoi restringere, ma così non blocchi login)
   app.enableCors({
     origin: true,
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-DOFLOW-TENANT-ID'],
   });
 
-  // ✅ Global prefix API
-  app.setGlobalPrefix('api');
-
-  /**
-   * ✅ TENANCY MIDDLEWARE (Injectable)
-   * Usiamo l'istanza gestita da Nest (con RedisService dentro).
-   * Questo applica:
-   * - header x-doflow-tenant-id (slug mode)
-   * - host mode (subdomain/custom domain)
-   * - attach tenantConnection + tenantId(req)
-   */
-  const tenancy = app.get(TenancyMiddleware);
-  app.use((req: any, res: any, next: any) => tenancy.use(req, res, next));
+  // ✅ Tenancy middleware (NON deve far crashare tutto se manca)
+  try {
+    const tenancy = app.get(TenancyMiddleware, { strict: false });
+    if (tenancy) {
+      app.use((req: any, res: any, next: any) => tenancy.use(req, res, next));
+      // eslint-disable-next-line no-console
+      console.log('✅ TenancyMiddleware attached');
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn('⚠️ TenancyMiddleware not found: running WITHOUT tenancy resolution');
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn('⚠️ TenancyMiddleware init failed: running WITHOUT tenancy resolution', e);
+  }
 
   const port = Number(process.env.PORT ?? 4000);
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 
-  // ⚠️ Prendiamo il VERO http.Server da Nest via HttpAdapter
   const httpAdapter: any = (app as any).getHttpAdapter();
   const httpServer: any = httpAdapter.getHttpServer();
 
   const notifications = app.get(NotificationsService);
   const wsPath = process.env.WS_PATH ?? '/ws';
 
-  // ✅ WebSocketServer in modalità "noServer"
   const wss = new WebSocketServer({ noServer: true });
   const clients = new Set<ClientWithMeta>();
 
-  // 🔍 Instradamento manuale dell'upgrade
   httpServer.on('upgrade', (req: any, socket: any, head: Buffer) => {
-    const url = req.url ?? '/';
-
-    // eslint-disable-next-line no-console
-    console.log('[UPGRADE RAW]', 'url=', url, 'host=', req.headers?.host);
-
     try {
+      const url = req.url ?? '/';
       const fullUrl = new URL(url, 'http://localhost');
       if (fullUrl.pathname !== wsPath) return;
 
@@ -105,7 +103,6 @@ async function bootstrap() {
     }
   });
 
-  // 🔗 Gestione connessione WS
   wss.on('connection', (socket: ClientWithMeta, req: any) => {
     try {
       const urlStr = req.url ?? '/';
@@ -118,7 +115,6 @@ async function bootstrap() {
       }
 
       const decoded: any = decodeJwt(token);
-
       const { tenantId, tenantSlug } = pickTenantFromJwt(decoded);
 
       const meta: ClientMeta = {
@@ -131,22 +127,13 @@ async function bootstrap() {
       socket.__meta = meta;
       clients.add(socket);
 
-      // eslint-disable-next-line no-console
-      console.log('[WS RAW] client connected', meta);
-
-      // handshake
       socket.send(
         JSON.stringify({
           type: 'hello',
-          payload: {
-            tenantId: meta.tenantId,
-            tenantSlug: meta.tenantSlug,
-            userId: meta.userId,
-          },
+          payload: { tenantId: meta.tenantId, tenantSlug: meta.tenantSlug, userId: meta.userId },
         }),
       );
 
-      // ✅ probe health ping/pong
       socket.on('message', (data: any) => {
         try {
           const raw =
@@ -171,7 +158,7 @@ async function bootstrap() {
             }
           }
         } catch {
-          // ignora messaggi non JSON / non validi
+          // ignore
         }
       });
 
@@ -183,54 +170,35 @@ async function bootstrap() {
     }
   });
 
-  // 🔁 Redis Pub/Sub → WebSocket clients
   notifications.registerHandler((channel, payload) => {
     for (const socket of clients) {
       const meta = socket.__meta;
       if (!meta) continue;
 
-      // Tenant channel: tenant:<tenantId/schema>
       if (channel.startsWith('tenant:')) {
         const [, tenantId] = channel.split(':');
         if (meta.tenantId !== tenantId) continue;
 
-        try {
-          if (socket.readyState === WebSocket.OPEN) {
-            socket.send(
-              JSON.stringify({
-                type: 'tenant_notification',
-                channel,
-                payload,
-              }),
-            );
-          }
-        } catch {}
-      }
-
-      // User channel: user:<userId>
-      else if (channel.startsWith('user:')) {
+        if (socket.readyState === WebSocket.OPEN) {
+          try {
+            socket.send(JSON.stringify({ type: 'tenant_notification', channel, payload }));
+          } catch {}
+        }
+      } else if (channel.startsWith('user:')) {
         const [, userId] = channel.split(':');
         if (meta.userId !== userId) continue;
 
-        try {
-          if (socket.readyState === WebSocket.OPEN) {
-            socket.send(
-              JSON.stringify({
-                type: 'user_notification',
-                channel,
-                payload,
-              }),
-            );
-          }
-        } catch {}
+        if (socket.readyState === WebSocket.OPEN) {
+          try {
+            socket.send(JSON.stringify({ type: 'user_notification', channel, payload }));
+          } catch {}
+        }
       }
     }
   });
 
   // eslint-disable-next-line no-console
-  console.log(
-    `✅ Backend running on http://localhost:${port} (WS path: ${wsPath})`,
-  );
+  console.log(`✅ Backend running on port ${port} (WS path: ${wsPath})`);
 }
 
 bootstrap();
