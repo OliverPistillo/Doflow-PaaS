@@ -27,6 +27,9 @@ import {
 
 import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 
+// --- CONFIGURAZIONE ---
+const MAIN_DB_NAME = "public";
+
 type JwtPayload = {
   email?: string;
   role?: string;
@@ -37,9 +40,7 @@ type JwtPayload = {
 
 function parseJwtPayload(token: string): JwtPayload | null {
   try {
-    const part = token.split(".")[1];
-    if (!part) return null;
-    const base64 = part.replace(/-/g, "+").replace(/_/g, "/");
+    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
     return JSON.parse(atob(base64)) as JwtPayload;
   } catch {
     return null;
@@ -87,7 +88,7 @@ function getHostContext() {
       : "app.doflow.it";
 
   const isAppHost =
-    host === "app.doflow.it" || host === "admin.doflow.it" || host === "localhost";
+    host.startsWith("app.") || host.startsWith("admin.") || host === "doflow.it" || host.includes("localhost");
 
   const subdomain = host.endsWith(".doflow.it")
     ? host.replace(".doflow.it", "").split(".")[0]
@@ -123,6 +124,18 @@ export function LoginForm() {
     defaultValues: { email: "", password: "" },
   });
 
+  // --- NOVITÀ 1: ACCHIAPPA TOKEN (Permette il login automatico dopo il redirect) ---
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tokenFromUrl = params.get("accessToken");
+    if (tokenFromUrl) {
+      window.localStorage.removeItem("doflow_token");
+      console.log("🔄 Token rilevato nell'URL. Login automatico...");
+      window.localStorage.setItem("doflow_token", tokenFromUrl);
+      window.location.href = "/dashboard";
+    }
+  }, []);
+
   React.useEffect(() => {
     const id = setInterval(() => setSlide((s) => (s + 1) % SLIDES.length), 5000);
     return () => clearInterval(id);
@@ -146,9 +159,17 @@ export function LoginForm() {
     const realm = isAppHost ? "platform" : "tenant";
 
     try {
+      // --- NOVITÀ 2: HEADER CORRETTO ---
+      // Se siamo su App/Admin/Localhost, forziamo 'public'
+      const headers: Record<string, string> = {};
+      if (isAppHost) {
+        headers['x-doflow-tenant-id'] = MAIN_DB_NAME;
+      }
+
       const data = await apiFetch<{ token: string; error?: string; message?: string }>("/auth/login", {
         method: "POST",
         auth: false,
+        headers, // Iniettiamo l'header
         body: JSON.stringify({
           ...values,
           realm,
@@ -159,26 +180,39 @@ export function LoginForm() {
       if (data?.error) throw new Error(data.error || data.message);
       if (!data?.token) throw new Error("Token di accesso mancante");
 
-      window.localStorage.setItem("doflow_token", data.token);
-
-      const payload = parseJwtPayload(data.token);
+      // Non salviamo subito il token se dobbiamo reindirizzare, ma lo teniamo in memoria
+      const token = data.token;
+      
+      const payload = parseJwtPayload(token);
       const role = normalizeRole(payload?.role);
-      const userTenantSlug = payload?.tenantSlug; // Slug reale dal token (se presente)
+      const userTenantSlug = payload?.tenantSlug; 
 
       // ✅ Superadmin: sempre qui
       if (role === "SUPER_ADMIN") {
+        window.localStorage.setItem("doflow_token", token);
         router.push("/superadmin");
         return;
       }
 
       // ✅ Se sei su app/admin e NON sei superadmin -> popup + redirect se possibile
       if (isAppHost) {
-        if (userTenantSlug && /^[a-z0-9_]+$/i.test(userTenantSlug)) {
-          const redirectUrl = `https://${userTenantSlug}.doflow.it/login`;
+        // Controllo extra: se userTenantSlug è 'public', restiamo qui (evita loop)
+        if (userTenantSlug && /^[a-z0-9_]+$/i.test(userTenantSlug) && userTenantSlug !== 'public') {
+          
+          // --- NOVITÀ 3: PASSA IL TOKEN NEL REDIRECT ---
+          // Aggiungiamo ?accessToken=... così l'utente non deve rifare il login
+          const redirectUrl = `https://${userTenantSlug}.doflow.it/login?accessToken=${token}`;
+          
           setTenantRedirectUrl(redirectUrl);
           setTenantDialogMode("redirect");
           setShowTenantRedirect(true);
           return;
+        } else if (userTenantSlug === 'public') {
+           // Caso strano: utente normale ma su tenant public. Logghiamo e restiamo qui (dashboard vuota probabilmente)
+           console.warn("Utente 'public' loggato su App.");
+           window.localStorage.setItem("doflow_token", token);
+           router.push("/dashboard");
+           return;
         }
 
         // Se il token non contiene tenantSlug, non possiamo costruire l'URL in modo affidabile
@@ -188,14 +222,15 @@ export function LoginForm() {
         return;
       }
 
-      // ✅ Tenant: usa lo slug dal subdomain
+      // ✅ Tenant: usa lo slug dal subdomain (Siamo già sul posto giusto)
+      window.localStorage.setItem("doflow_token", token);
       if (tenantSub) {
         router.push(`/${tenantSub}/dashboard`);
         return;
       }
 
       // fallback di sicurezza
-      router.push("/login");
+      router.push("/dashboard");
     } catch (err: any) {
       setGeneralError(err?.message || "Si è verificato un errore imprevisto.");
     }
