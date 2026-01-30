@@ -32,11 +32,12 @@ export default function TenantUsersPage() {
     }
 
     try {
+      // Nota: usiamo fetch nativa qui, ma potresti usare tenantFetch importata se vuoi risparmiare codice
       const res = await fetch(`${API_BASE}/api/tenant/users`, {
         cache: 'no-store',
         headers: {
           Authorization: `Bearer ${token}`,
-          ...getTenantHeader(),
+          ...getTenantHeader(), // Ora questa chiamata è sicura
         },
       });
 

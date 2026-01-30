@@ -1,4 +1,4 @@
-import { headers } from "next/headers";
+// apps/frontend/src/lib/tenant-fetch.ts
 
 /**
  * Reserved path segments: non sono tenant slug.
@@ -43,7 +43,6 @@ function getTenantFromHostString(hostRaw: string | null): string | null {
   // dominio doflow standard -> subdomain = tenant slug
   if (host.endsWith(".doflow.it") && isValidSlug(sub)) return sub.toLowerCase();
 
-  // custom domain -> non possiamo conoscere lo slug lato client (o server senza DB)
   return null;
 }
 
@@ -71,39 +70,12 @@ function isAuthOrPublicPath(pathname: string): boolean {
 }
 
 /**
- * Server-side tenant resolution:
- * - Prefer header `x-doflow-tenant-id` (se già settato dal middleware Next)
- * - Else try host subdomain
- * - Else try path hint from header `x-doflow-pathname` (se lo setti tu)
- * - Else if auth/public path -> public
- * - Else null (custom domain non risolvibile qui)
+ * Server-side resolution (SAFE VERSION):
+ * Poiché questo file è condiviso con i Client Component, non possiamo usare `next/headers` qui.
+ * Se sei in un Server Component e ti serve il tenant, passalo esplicitamente o usa un'altra util.
  */
 function getTenantIdForRequestServer(): string | null {
-  // Nota: headers() funziona solo in Server Components
-  try {
-    const h = headers();
-
-    const forced = h.get("x-doflow-tenant-id");
-    if (forced && isValidSlug(forced)) return forced.toLowerCase();
-  
-    const hostTenant = getTenantFromHostString(h.get("host"));
-    if (hostTenant) return hostTenant;
-  
-    // opzionale: se lo mandi dal middleware
-    const pathHint = h.get("x-doflow-pathname");
-    if (pathHint) {
-      const t = getTenantFromPathnameString(pathHint);
-      if (t) return t;
-      if (isAuthOrPublicPath(pathHint)) return "public";
-    }
-  } catch (e) {
-    // Fallback se chiamato impropriamente
-    return null;
-  }
-
-  // se non abbiamo hint pathname, non possiamo distinguere auth path lato server.
-  // per sicurezza: public solo se esplicitamente forced; altrimenti null.
-  return null;
+  return null; // Fallback safe per evitare crash di build
 }
 
 /**
@@ -114,6 +86,8 @@ function getTenantIdForRequestServer(): string | null {
  * - custom domain -> null (backend fa lookup)
  */
 function getTenantIdForRequestClient(): string | null {
+  if (typeof window === 'undefined') return null;
+
   const hostTenant = getTenantFromHostString(window.location.host);
   const pathname = window.location.pathname;
 
@@ -130,13 +104,12 @@ function getTenantIdForRequestClient(): string | null {
   const pathTenant = getTenantFromPathnameString(pathname);
   if (pathTenant) return pathTenant;
 
-  // custom domain senza slug: lascia decidere al backend tramite host lookup
   return null;
 }
 
 /**
  * Public API:
- * - Works in SSR and CSR.
+ * - Works in SSR and CSR (safe version).
  */
 export function getTenantIdForRequest(): string | null {
   if (typeof window === "undefined") return getTenantIdForRequestServer();
@@ -148,17 +121,12 @@ export function getTenantHeader(): Record<string, string> {
   return tid ? { "x-doflow-tenant-id": tid } : {};
 }
 
-// =========================================================
-// 👇 LA FUNZIONE MANCANTE CHE RISOLVE L'ERRORE DI BUILD 👇
-// =========================================================
-
 /**
  * Wrapper attorno a fetch che inietta automaticamente:
  * 1. Content-Type: application/json
  * 2. x-doflow-tenant-id (risolto dinamicamente)
  */
 export const tenantFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-  // Risolviamo i permessi tenant (funziona sia Client che Server side)
   const tenantHeaders = getTenantHeader();
 
   const mergedHeaders = {
