@@ -36,12 +36,24 @@ type JwtPayload = {
   tenantId?: string;
   tenant_id?: string;
   tenantSlug?: string;
+  tenant_slug?: string;
+  activeTenantSlug?: string;
+  active_tenant_slug?: string;
 };
+
+function base64UrlDecode(input: string) {
+  // base64url -> base64 + padding
+  const b64 = input.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = b64.length % 4 === 0 ? "" : "=".repeat(4 - (b64.length % 4));
+  return atob(b64 + pad);
+}
 
 function parseJwtPayload(token: string): JwtPayload | null {
   try {
-    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    return JSON.parse(atob(base64)) as JwtPayload;
+    const parts = token.split(".");
+    if (parts.length < 2) return null;
+    const json = base64UrlDecode(parts[1]);
+    return JSON.parse(json) as JwtPayload;
   } catch {
     return null;
   }
@@ -49,6 +61,7 @@ function parseJwtPayload(token: string): JwtPayload | null {
 
 function normalizeRole(role?: string) {
   const r = String(role ?? "").toUpperCase().replace(/[^A-Z_]/g, "");
+  // nel tuo DB "SUPERADMIN" è una role, nel codice normalizziamo tutto a SUPER_ADMIN
   if (["OWNER", "SUPERADMIN", "SUPER_ADMIN"].includes(r)) return "SUPER_ADMIN";
   return "USER";
 }
@@ -75,22 +88,24 @@ const SLIDES = [
 ] as const;
 
 const loginSchema = z.object({
-  email: z.string().min(1, "L'email è obbligatoria").email("Inserisci un'email valida"),
+  email: z
+    .string()
+    .min(1, "L'email è obbligatoria")
+    .email("Inserisci un'email valida"),
   password: z.string().min(1, "La password è obbligatoria"),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
-type LoginResponse = { 
-  token: string; 
-  error?: string; 
+type LoginResponse = {
+  token: string;
+  error?: string;
   message?: string;
-  // Cerchiamo info sul tenant reale dell'utente
-  user?: { 
+  user?: {
     tenantSlug?: string;
     tenant_id?: string;
     schema?: string;
     role?: string;
-  }
+  };
 };
 
 function getHostContext() {
@@ -99,12 +114,13 @@ function getHostContext() {
       ? window.location.hostname.toLowerCase()
       : "app.doflow.it";
 
-  // Consideriamo "App Host" i portali di sistema che non sono tenant specifici
+  const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1");
+
   const isAppHost =
-    host.startsWith("app.") || 
-    host.startsWith("admin.") || 
-    host === "doflow.it" || 
-    host.includes("localhost");
+    host.startsWith("app.") ||
+    host.startsWith("admin.") ||
+    host === "doflow.it" ||
+    isLocalhost;
 
   const subdomain = host.endsWith(".doflow.it")
     ? host.replace(".doflow.it", "").split(".")[0]
@@ -120,16 +136,40 @@ function getHostContext() {
   return { host, isAppHost, tenantSub };
 }
 
+function resolveTenantFromResponse(data: LoginResponse, payload: JwtPayload | null) {
+  // priorità: response.user (DB) -> token -> public
+  const fromDb =
+    data.user?.schema || data.user?.tenantSlug || data.user?.tenant_id || undefined;
+
+  const fromToken =
+    payload?.tenantSlug ||
+    payload?.tenant_slug ||
+    payload?.activeTenantSlug ||
+    payload?.active_tenant_slug ||
+    payload?.tenantId ||
+    payload?.tenant_id ||
+    undefined;
+
+  const raw = (fromDb ?? fromToken ?? "public").toString().toLowerCase();
+  return raw;
+}
+
+function isValidTenantSlug(s: string) {
+  return /^[a-z0-9_]+$/i.test(s) && !["public"].includes(s.toLowerCase());
+}
+
 export function LoginForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = React.useState(false);
   const [generalError, setGeneralError] = React.useState<string | null>(null);
   const [slide, setSlide] = React.useState(0);
 
-  // Stati per il redirect tenant
+  // Stati per redirect tenant
   const [showTenantRedirect, setShowTenantRedirect] = React.useState(false);
   const [tenantRedirectUrl, setTenantRedirectUrl] = React.useState<string | null>(null);
-  const [tenantDialogMode, setTenantDialogMode] = React.useState<"redirect" | "info">("redirect");
+
+  // evita doppie navigazioni (specialmente “a freddo”)
+  const redirectingRef = React.useRef(false);
 
   const {
     register,
@@ -140,49 +180,57 @@ export function LoginForm() {
     defaultValues: { email: "", password: "" },
   });
 
-  // 1. ACCHIAPPA TOKEN
+  // 1) Token da URL: login automatico (senza hard reload)
   React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
     const params = new URLSearchParams(window.location.search);
     const tokenFromUrl = params.get("accessToken");
-    if (tokenFromUrl) {
-      window.localStorage.removeItem("doflow_token");
-      console.log("🔄 Token rilevato nell'URL. Login automatico...");
-      window.localStorage.setItem("doflow_token", tokenFromUrl);
-      window.location.href = "/dashboard";
-    }
-  }, []);
+    if (!tokenFromUrl) return;
+
+    window.localStorage.setItem("doflow_token", tokenFromUrl);
+
+    // pulisci URL (togli accessToken) e vai in dashboard
+    params.delete("accessToken");
+    const clean =
+      window.location.pathname + (params.toString() ? `?${params.toString()}` : "");
+
+    // replace: evita back-button “sporco”
+    router.replace(clean);
+    React.startTransition(() => {
+      router.replace("/dashboard");
+    });
+  }, [router]);
 
   React.useEffect(() => {
     const id = setInterval(() => setSlide((s) => (s + 1) % SLIDES.length), 5000);
     return () => clearInterval(id);
   }, []);
 
-  // Redirect automatico
+  // redirect automatico dopo dialog
   React.useEffect(() => {
     if (!showTenantRedirect || !tenantRedirectUrl) return;
     const t = setTimeout(() => {
       window.location.href = tenantRedirectUrl;
-    }, 4000); // 4 secondi di attesa per leggere il messaggio
+    }, 3000);
     return () => clearTimeout(t);
   }, [showTenantRedirect, tenantRedirectUrl]);
 
   const onSubmit = async (values: LoginFormValues) => {
     setGeneralError(null);
+    if (redirectingRef.current) return;
 
     const { isAppHost, tenantSub } = getHostContext();
     const realm = isAppHost ? "platform" : "tenant";
 
     try {
-      // Se siamo su App/Admin, forziamo la ricerca in 'public' per trovare l'utente
       const headers: Record<string, string> = {};
-      if (isAppHost) {
-        headers['x-doflow-tenant-id'] = MAIN_DB_NAME;
-      }
+      if (isAppHost) headers["x-doflow-tenant-id"] = MAIN_DB_NAME;
 
       const data = await apiFetch<LoginResponse>("/auth/login", {
         method: "POST",
         auth: false,
-        headers, 
+        headers,
         body: JSON.stringify({
           ...values,
           realm,
@@ -195,64 +243,44 @@ export function LoginForm() {
 
       const token = data.token;
       const payload = parseJwtPayload(token);
-      const role = normalizeRole(payload?.role);
+      const role = normalizeRole(payload?.role ?? data.user?.role);
 
-      // --- LOGICA DI RISOLUZIONE DEL TENANT ---
-      // Cerchiamo il tenant reale dell'utente.
-      // Ordine di priorità:
-      // 1. Dati DB diretti (data.user.schema / tenantSlug) -> Più affidabile
-      // 2. Token Payload (payload.tenantSlug) -> Spesso contiene "public" se loggati da app
-      // 3. Fallback a "public"
-      
-      let targetTenant = "public";
+      const targetTenant = resolveTenantFromResponse(data, payload);
 
-      if (data.user?.schema || data.user?.tenantSlug || data.user?.tenant_id) {
-          targetTenant = (data.user.schema || data.user.tenantSlug || data.user.tenant_id || "public").toLowerCase();
-      } else if (payload?.tenantSlug || payload?.tenantId || payload?.tenant_id) {
-          targetTenant = (payload.tenantSlug || payload.tenantId || payload.tenant_id || "public").toLowerCase();
-      }
+      // salva token subito: evita “secondo tentativo” necessario
+      window.localStorage.setItem("doflow_token", token);
 
-      console.log(`🔍 Login Check: Ruolo [${role}], Tenant Rilevato [${targetTenant}]`);
-
-      // 1. SUPERADMIN -> Sempre su /superadmin
-      if (role === "SUPER_ADMIN") {
-        window.localStorage.setItem("doflow_token", token);
-        router.push("/superadmin");
+      // 1) SUPERADMIN: solo se stai loggando dal portale
+      if (role === "SUPER_ADMIN" && isAppHost) {
+        redirectingRef.current = true;
+        router.replace("/superadmin");
         return;
       }
 
-      // 2. UTENTE LOGGATO SU PORTALE GENERALE (APP/ADMIN)
+      // 2) Sei su app/admin: utente tenant -> redirect al dominio tenant
       if (isAppHost) {
-        // Se l'utente appartiene a un tenant specifico (diverso da public), lo reindirizziamo
-        if (targetTenant !== "public" && /^[a-z0-9_]+$/i.test(targetTenant)) {
-          
-          const redirectUrl = `https://${targetTenant}.doflow.it/login?accessToken=${token}`;
-          
+        if (isValidTenantSlug(targetTenant)) {
+          const redirectUrl = `https://${targetTenant}.doflow.it/login?accessToken=${encodeURIComponent(
+            token,
+          )}`;
+
+          redirectingRef.current = true;
           setTenantRedirectUrl(redirectUrl);
-          setTenantDialogMode("redirect");
           setShowTenantRedirect(true);
           return;
-        } 
-        
-        // Se targetTenant è ancora "public", c'è un problema:
-        // L'utente è loggato ma il sistema non sa a che tenant appartiene.
-        // Lo logghiamo qui, ma vedrà la dashboard vuota (errore 404 sulle API)
-        console.warn("⚠️ Attenzione: Utente loggato su App ma il tenant risulta 'public'.");
-        window.localStorage.setItem("doflow_token", token);
-        router.push("/dashboard");
+        }
+
+        // fallback: rimani su app (tenant non risolto)
+        redirectingRef.current = true;
+        router.replace("/dashboard");
         return;
       }
 
-      // 3. UTENTE LOGGATO DIRETTAMENTE SUL TENANT (Standard)
-      window.localStorage.setItem("doflow_token", token);
-      if (tenantSub) {
-        router.push(`/${tenantSub}/dashboard`);
-        return;
-      }
-
-      router.push("/dashboard");
-      
+      // 3) Sei già su tenant: vai SEMPRE a /dashboard (non /{tenant}/dashboard)
+      redirectingRef.current = true;
+      router.replace("/dashboard");
     } catch (err: any) {
+      redirectingRef.current = false;
       setGeneralError(err?.message || "Si è verificato un errore imprevisto.");
     }
   };
@@ -264,23 +292,13 @@ export function LoginForm() {
           <AlertDialogHeader>
             <AlertDialogTitle>Accesso al dominio aziendale</AlertDialogTitle>
             <AlertDialogDescription>
-              {tenantDialogMode === "redirect" ? (
-                <>
-                  Accesso effettuato correttamente.
-                  <br />
-                  Ti stiamo reindirizzando al tuo spazio di lavoro aziendale.
-                  <br />
-                  <span className="text-muted-foreground text-xs mt-2 block font-mono bg-muted p-1 rounded">
-                    Destinazione: {tenantRedirectUrl}
-                  </span>
-                </>
-              ) : (
-                <>
-                  Questo account appartiene a un tenant aziendale.
-                  <br />
-                  Per continuare, accedi dal dominio della tua azienda.
-                </>
-              )}
+              Accesso effettuato correttamente.
+              <br />
+              Ti stiamo reindirizzando al tuo spazio di lavoro aziendale.
+              <br />
+              <span className="text-muted-foreground text-xs mt-2 block font-mono bg-muted p-1 rounded">
+                Destinazione: {tenantRedirectUrl}
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -291,7 +309,7 @@ export function LoginForm() {
                 else setShowTenantRedirect(false);
               }}
             >
-              {tenantRedirectUrl ? "Vai ora" : "Ok"}
+              Vai ora
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -355,9 +373,10 @@ export function LoginForm() {
                     />
                     <button
                       type="button"
-                      onClick={() => setShowPassword(!showPassword)}
+                      onClick={() => setShowPassword((v) => !v)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                       disabled={isSubmitting}
+                      aria-label={showPassword ? "Nascondi password" : "Mostra password"}
                     >
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -410,21 +429,13 @@ export function LoginForm() {
                   i === slide ? "opacity-100 z-10" : "opacity-0 z-0",
                 )}
               >
-                <Image
-                  src={s.src}
-                  alt={s.alt}
-                  fill
-                  priority={i === 0}
-                  className="object-cover"
-                />
+                <Image src={s.src} alt={s.alt} fill priority={i === 0} className="object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                 <div className="absolute bottom-0 left-0 p-12 text-white w-full">
                   <blockquote className="text-lg font-medium leading-relaxed italic">
                     &ldquo;{s.quote}&rdquo;
                   </blockquote>
-                  <p className="mt-4 text-sm font-semibold text-white/80">
-                    — {s.author}
-                  </p>
+                  <p className="mt-4 text-sm font-semibold text-white/80">— {s.author}</p>
                 </div>
               </div>
             ))}
