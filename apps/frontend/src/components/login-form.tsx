@@ -66,6 +66,7 @@ const SLIDES = [
     alt: "Analytics avanzati",
     quote: "Tieni traccia di ogni lead e ottimizza le conversioni.",
     author: "Performance Analytics",
+    authorTitle: "Head of Growth",
   },
   {
     src: "/login-cover-3.webp",
@@ -147,7 +148,12 @@ export function LoginForm() {
       window.localStorage.removeItem("doflow_token");
       console.log("🔄 Token rilevato nell'URL. Completamento accesso...");
       window.localStorage.setItem("doflow_token", tokenFromUrl);
-      // Redirect hard per pulire l'URL
+      
+      // Pulizia URL visuale (opzionale, ma mantiene il codice stabile)
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+      
+      // Redirect pulito alla dashboard
       window.location.href = "/dashboard";
     }
   }, []);
@@ -158,7 +164,7 @@ export function LoginForm() {
     return () => clearInterval(id);
   }, []);
 
-  // Redirect automatico dopo 2 secondi (più veloce)
+  // Redirect automatico (Timer aumentato leggermente per stabilità)
   React.useEffect(() => {
     if (!showTenantRedirect || !tenantRedirectUrl) return;
     const t = setTimeout(() => {
@@ -175,8 +181,7 @@ export function LoginForm() {
 
     try {
       const headers: Record<string, string> = {};
-      // Se siamo sul portale App/Admin, forziamo la ricerca iniziale su 'public'
-      // Il backend poi userà la logica "smart" per trovare il tenant reale
+      // Se siamo sul portale App/Admin, forziamo la ricerca su 'public'
       if (isAppHost) {
         headers['x-doflow-tenant-id'] = MAIN_DB_NAME;
       }
@@ -199,7 +204,7 @@ export function LoginForm() {
       const payload = parseJwtPayload(token);
       const role = normalizeRole(payload?.role);
 
-      // --- DETERMINIAMO IL TENANT TARGET ---
+      // --- DETERMINIAMO IL TENANT TARGET (Logica Smart) ---
       let targetTenant = "public";
 
       if (data.user?.schema || data.user?.tenantSlug || data.user?.tenant_id) {
@@ -218,8 +223,9 @@ export function LoginForm() {
         if (targetTenant !== "public" && /^[a-z0-9_]+$/i.test(targetTenant)) {
           console.log(`✈️ Redirect verso tenant specifico: ${targetTenant}`);
           
-          // FIX: Usiamo encodeURIComponent per evitare errori con token complessi nell'URL
-          const redirectUrl = `https://${targetTenant}.doflow.it/login?accessToken=${encodeURIComponent(token)}`;
+          // Costruiamo l'URL "grezzo" perché funzionava.
+          // Non lo mostreremo a video nel popup.
+          const redirectUrl = `https://${targetTenant}.doflow.it/login?accessToken=${token}`;
           
           setTenantRedirectUrl(redirectUrl);
           setTenantDialogMode("redirect");
@@ -261,11 +267,12 @@ export function LoginForm() {
             <AlertDialogTitle>Accesso al dominio aziendale</AlertDialogTitle>
             <AlertDialogDescription>
               {tenantDialogMode === "redirect" ? (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-3 py-2">
                   <p>Accesso effettuato correttamente.</p>
                   <p>Ti stiamo reindirizzando al tuo spazio di lavoro aziendale...</p>
-                  <div className="flex items-center gap-2 mt-2 text-muted-foreground text-sm">
-                     <Loader2 className="h-4 w-4 animate-spin" /> Reindirizzamento in corso
+                  <div className="p-3 bg-muted rounded-md text-xs font-mono text-muted-foreground break-all">
+                     {/* Mostriamo solo il dominio di destinazione, non il token intero */}
+                     Destinazione: https://{tenantRedirectUrl?.split('/')[2]}/login...
                   </div>
                 </div>
               ) : (
@@ -279,10 +286,15 @@ export function LoginForm() {
           </AlertDialogHeader>
 
           <AlertDialogFooter>
-             {/* Nascondiamo il bottone se è in corso il redirect automatico per pulizia */}
              {!tenantRedirectUrl && (
                 <AlertDialogAction onClick={() => setShowTenantRedirect(false)}>
                   Ok
+                </AlertDialogAction>
+             )}
+             {/* Bottone "Vai ora" manuale se il JS si blocca */}
+             {tenantRedirectUrl && (
+                <AlertDialogAction onClick={() => window.location.href = tenantRedirectUrl!}>
+                  Vai ora
                 </AlertDialogAction>
              )}
           </AlertDialogFooter>
