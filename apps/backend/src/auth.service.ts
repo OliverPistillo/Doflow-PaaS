@@ -135,27 +135,48 @@ export class AuthService {
       .filter((s: string) => s && s !== 'public');
   }
 
+/**
+   * ✅ LOGIN AUTO (Smart Version)
+   * 1. Cerca in Public. Se trova SuperAdmin -> OK.
+   * 2. Se trova User normale in Public -> IGNORA (assumiamo sia un residuo di test) e cerca nei tenant.
+   * 3. Cerca in tutti i tenant attivi.
+   */
   async loginAuto(req: Request, email: string, password: string) {
     const conn = this.getConn(req);
     const currentTenant = this.getTenantId(req);
 
+    // Se la request è già tenant-scoped (es. login esplicito), usa quella
     if (currentTenant !== 'public') {
       return this.login(req, email, password);
     }
 
-    // 1) prova login in public
+    console.log(`🔍 LoginAuto: Cerco '${email}'...`);
+
+    // 1) Prova login in PUBLIC
     try {
-      return await this.loginInTenant(conn, 'public', email, password);
-    } catch {
-      // continua
+      const publicRes = await this.loginInTenant(conn, 'public', email, password);
+
+      // FIX CRUCIALE: Accetta il login su 'public' SOLO se è un amministratore.
+      // Se è un utente normale, probabilmente esiste anche nel tenant specifico e dobbiamo dare precedenza a quello.
+      const r = String(publicRes.user.role || '').toUpperCase();
+      if (['SUPER_ADMIN', 'SUPERADMIN', 'OWNER'].includes(r)) {
+         console.log(`✅ Trovato SUPER_ADMIN in public.`);
+         return publicRes;
+      } else {
+         console.warn(`⚠️ Trovato USER '${email}' in public, ma non è SuperAdmin. Ignoro e cerco nei tenant specifici...`);
+      }
+    } catch (err) {
+      // Non trovato in public o password errata, proseguiamo
     }
 
-    // 2) prova login nei tenant
+    // 2) Prova login in tutti i tenant attivi
     const tenants = await this.listActiveTenants(conn);
 
     for (const t of tenants) {
       try {
-        return await this.loginInTenant(conn, t, email, password);
+        const tenantRes = await this.loginInTenant(conn, t, email, password);
+        console.log(`✅ Trovato utente in tenant: ${t}`);
+        return tenantRes;
       } catch {
         // prova prossimo tenant
       }
