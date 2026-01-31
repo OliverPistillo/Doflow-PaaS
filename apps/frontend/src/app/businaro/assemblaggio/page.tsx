@@ -1,152 +1,121 @@
 "use client";
 
 import * as React from "react";
-import { Wrench } from "lucide-react";
+import { Wrench, QrCode, ClipboardList, CheckCircle2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import KioskHeader from "../components/KioskHeader";
-import ScanInputCard from "../components/ScanInputCard";
-import KioskActionBar from "../components/KioskActionBar";
 import { tenantFetch } from "@/lib/tenant-fetch";
 
-type Step = "JOB" | "SKU" | "QTY" | "CONFIRM";
+const ACTIVE_TASKS_MOCK = [
+  { job: "C-2024-001", sku: "KIT-VITERIA-A", qty: 45, status: "OK" },
+  { job: "C-2024-001", sku: "GUARNIZIONE-X", qty: 12, status: "OK" },
+];
 
 export default function BusinaroAssemblyKioskPage() {
   const { toast } = useToast();
-
-  const [step, setStep] = React.useState<Step>("JOB");
   const [loading, setLoading] = React.useState(false);
+  
+  const [data, setData] = React.useState({ job: "", sku: "", qty: 1 });
 
-  const [jobOrderCode, setJobOrderCode] = React.useState("");
-  const [sku, setSku] = React.useState("");
-  const [qty, setQty] = React.useState<number>(1);
-
-  const reset = () => {
-    setStep("JOB");
-    setLoading(false);
-    setJobOrderCode("");
-    setSku("");
-    setQty(1);
-  };
-
-  const nextFromJob = () => {
-    if (!jobOrderCode.trim()) return;
-    setStep("SKU");
-    toast({ title: "Commessa acquisita", description: `JOB: ${jobOrderCode}` });
-  };
-
-  const nextFromSku = () => {
-    if (!sku.trim()) return;
-    setStep("QTY");
-  };
-
-  const nextFromQty = () => {
-    if (!qty || qty <= 0) {
-      toast({ title: "Quantità non valida", description: "Inserisci una quantità > 0", variant: "destructive" });
-      return;
-    }
-    setStep("CONFIRM");
-  };
-
-  const consume = async () => {
+  const confirm = async () => {
+    if(!data.job || !data.sku) return;
     setLoading(true);
     try {
-      const res = await tenantFetch("/api/businaro/assembly/consume", {
-        method: "POST",
-        body: JSON.stringify({
-          jobOrderCode,
-          sku,
-          quantity: qty,
-        }),
-      });
-
-      if (!res.ok) {
-        const msg = await res.text();
-        throw new Error(msg || "Errore backend");
-      }
-
-      toast({
-        title: "Consumo registrato ✅",
-        description: `${qty}x ${sku} su ${jobOrderCode}`,
-        className: "bg-green-700 text-white border-green-800",
-      });
-
-      // Reset parziale per consumi multipli sulla stessa commessa
-      setSku("");
-      setQty(1);
-      setStep("SKU");
-    } catch (e: any) {
-      toast({ title: "Errore bloccante", description: e?.message ?? "Consumo fallito", variant: "destructive" });
-      setStep("JOB");
+       await tenantFetch("/api/businaro/assembly/consume", { method: "POST", body: JSON.stringify({ jobOrderCode: data.job, sku: data.sku, quantity: data.qty }) });
+       toast({ title: "CONSUMO OK", className: "bg-primary text-primary-foreground font-bold" });
+       setData(p => ({ ...p, sku: "", qty: 1 })); // Reset parziale
+    } catch {
+       toast({ title: "Errore", variant: "destructive" });
     } finally {
-      setLoading(false);
+       setLoading(false);
     }
   };
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
-      <KioskHeader
-        title="🔧 ASSEMBLAGGIO"
-        subtitle="Consumo materiali su commessa"
-        roleLabel="ASSEMBLY"
-        operatorLabel="MASTER_ASSEMBLAGGIO"
-        onReset={reset}
-      />
+    <div className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-500">
+       
+       {/* LEFT: ACTION */}
+       <div className="lg:col-span-2 space-y-6">
+          <div className="mb-4">
+             <h1 className="text-3xl font-extrabold text-foreground">Assemblaggio</h1>
+             <p className="text-muted-foreground font-medium">Scarico componenti su commessa attiva.</p>
+          </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <ScanInputCard
-          stepActive={step === "JOB"}
-          title="1) Scansiona COMMESSA"
-          placeholder="JOB CODE..."
-          value={jobOrderCode}
-          onChange={setJobOrderCode}
-          onEnter={nextFromJob}
-          accent="blue"
-        />
+          <div className="bg-card border border-border rounded-[2.5rem] p-8 shadow-sm space-y-8">
+             
+             {/* 1. JOB */}
+             <div className="space-y-3">
+                <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                   <ClipboardList className="h-4 w-4" /> Commessa (Job Order)
+                </label>
+                <Input 
+                   value={data.job}
+                   onChange={e => setData({...data, job: e.target.value.toUpperCase()})}
+                   placeholder="SCANSIONA JOB..."
+                   className="h-16 text-2xl font-mono font-bold bg-muted/30 border-2 border-border focus-visible:ring-primary rounded-xl"
+                />
+             </div>
 
-        <ScanInputCard
-          stepActive={step === "SKU"}
-          title="2) Scansiona SKU"
-          placeholder="SKU..."
-          value={sku}
-          onChange={setSku}
-          onEnter={nextFromSku}
-          disabled={step === "JOB"}
-          accent="orange"
-        />
-      </div>
+             <div className="h-px bg-border/50" />
 
-      <ScanInputCard
-        stepActive={step === "QTY"}
-        title="3) Quantità"
-        placeholder="QTY..."
-        value={String(qty)}
-        onChange={(v) => setQty(parseInt(v || "0", 10))}
-        onEnter={nextFromQty}
-        disabled={step !== "QTY"}
-        accent="slate"
-      />
+             {/* 2. SKU & QTY */}
+             <div className="flex flex-col md:flex-row gap-6">
+                <div className="flex-1 space-y-3">
+                   <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                      <QrCode className="h-4 w-4" /> Componente (SKU)
+                   </label>
+                   <Input 
+                      value={data.sku}
+                      onChange={e => setData({...data, sku: e.target.value.toUpperCase()})}
+                      placeholder="SCANSIONA COMPONENTE..."
+                      className="h-20 text-2xl font-mono font-bold bg-muted/30 border-2 border-border focus-visible:ring-primary rounded-xl"
+                   />
+                </div>
+                <div className="w-full md:w-40 space-y-3">
+                   <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Q.tà</label>
+                   <Input 
+                      type="number"
+                      value={data.qty}
+                      onChange={e => setData({...data, qty: Number(e.target.value)})}
+                      className="h-20 text-center text-3xl font-bold bg-muted/30 border-2 border-border rounded-xl"
+                   />
+                </div>
+             </div>
 
-      {step === "CONFIRM" && (
-        <KioskActionBar
-          title="Conferma CONSUMO"
-          subtitle={`${qty}x ${sku} su ${jobOrderCode}`}
-          confirmLabel="CONFERMA CONSUMO"
-          onConfirm={consume}
-          loading={loading}
-          dangerNote="Se la commessa è PRODUCTION_NEW e il lotto non è NEW: il backend bloccherà l'operazione."
-        />
-      )}
+             {/* BUTTON */}
+             <Button 
+                onClick={confirm}
+                disabled={loading || !data.job || !data.sku}
+                className="w-full h-24 rounded-[2rem] text-3xl font-black uppercase tracking-widest bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all active:scale-95"
+             >
+                {loading ? "..." : "Registra Consumo"}
+             </Button>
 
-      <div className="rounded-xl border bg-white p-5 text-slate-700">
-        <div className="flex items-center gap-2 font-bold text-slate-900">
-          <Wrench className="h-5 w-5" />
-          Nota operativa
-        </div>
-        <p className="mt-2">
-          Qui non “inventiamo” regole: la UI guida, ma il backend è il guardiano. Se provi a consumare materiale
-          non compatibile, l’API risponde con errore e la UI mostra il blocco.
-        </p>
-      </div>
+          </div>
+       </div>
+
+       {/* RIGHT: LIST */}
+       <div className="lg:col-span-1">
+          <div className="bg-card border border-border rounded-[2.5rem] p-6 h-full shadow-sm flex flex-col">
+             <div className="text-sm font-bold uppercase text-muted-foreground tracking-widest mb-6 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-primary" /> Attività Recenti
+             </div>
+             
+             <div className="space-y-3 flex-1">
+                {ACTIVE_TASKS_MOCK.map((t, i) => (
+                   <div key={i} className="bg-muted/20 border border-border p-4 rounded-2xl flex items-center justify-between">
+                      <div>
+                         <div className="text-[10px] font-bold text-muted-foreground">{t.job}</div>
+                         <div className="font-bold text-sm">{t.sku}</div>
+                      </div>
+                      <div className="text-xl font-mono font-bold">-{t.qty}</div>
+                   </div>
+                ))}
+             </div>
+          </div>
+       </div>
+
     </div>
   );
 }
