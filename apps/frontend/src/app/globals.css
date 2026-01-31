@@ -3,9 +3,7 @@
 @tailwind utilities;
 
 @layer base {
-  /* ----------------------------------------------------------------------- */
-  /* DEFAULT SHADCN (Per Federica Nerone e Public) - NON TOCCARE             */
-  /* ----------------------------------------------------------------------- */
+  /* --- DEFAULT STANDARD (Non toccare) --- */
   :root {
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
@@ -26,7 +24,7 @@
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
     --ring: 240 10% 3.9%;
-    --radius: 0.5rem; /* Raggio standard (piccolo) */
+    --radius: 0.5rem;
     
     /* Sidebar Standard */
     --sidebar-background: 0 0% 98%;
@@ -59,8 +57,6 @@
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
     --ring: 240 4.9% 83.9%;
-    
-    /* Sidebar Standard Dark */
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -71,23 +67,20 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
-  /* ----------------------------------------------------------------------- */
-  /* TEMA ISOLATO BUSINARO (Soft SaaS / Salesforce Style)                    */
-  /* Si attiva SOLO se il contenitore padre ha la classe "theme-businaro"    */
-  /* ----------------------------------------------------------------------- */
-
+  /* --- NUOVO TEMA BUSINARO (Soft / Salesforce) --- */
+  
   .theme-businaro {
-    /* LIGHT MODE BUSINARO: Etereo, pulito, bordi tondi */
-    --background: 210 20% 98%; 
+    /* LIGHT MODE: Etereo, Soft Gray */
+    --background: 210 20% 98%;
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
     
-    /* Neon Lime come Primario */
+    /* PRIMARY: NEON LIME (#ccf32f) */
     --primary: 74 88% 57%; 
-    --primary-foreground: 222 47% 11%;
+    --primary-foreground: 222 47% 11%; /* Testo scuro su lime */
 
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222 47% 11%;
@@ -99,12 +92,12 @@
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --ring: 74 88% 57%;
     
-    /* 🔥 RADIUS MAGGIORATO SOLO PER QUESTO TEMA */
-    --radius: 1.5rem; 
+    /* RADIUS MOLTO AMPIO (Card Arrotondate) */
+    --radius: 1.75rem; 
 
-    /* Sidebar Light Businaro */
+    /* Sidebar Light */
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 222 47% 11%;
     --sidebar-primary: 74 88% 57%;
@@ -115,11 +108,11 @@
     --sidebar-ring: 74 88% 57%;
   }
 
-  /* DARK MODE BUSINARO: Midnight Blue & Neon */
+  /* DARK MODE BUSINARO: Midnight Blue */
   .dark .theme-businaro {
-    --background: 234 30% 6%; /* Midnight Deep */
+    --background: 234 30% 6%; /* Deep Midnight */
     --foreground: 210 40% 98%;
-    --card: 230 20% 11%; 
+    --card: 230 20% 11%; /* Slightly lighter midnight */
     --card-foreground: 210 40% 98%;
     --popover: 230 20% 11%;
     --popover-foreground: 210 40% 98%;
@@ -139,7 +132,7 @@
     --input: 228 20% 17%;
     --ring: 74 88% 57%;
 
-    /* Sidebar Dark Businaro */
+    /* Sidebar Dark */
     --sidebar-background: 230 20% 11%;
     --sidebar-foreground: 210 40% 98%;
     --sidebar-primary: 74 88% 57%;
@@ -153,8 +146,7 @@
   * {
     @apply border-border;
   }
-
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground transition-colors duration-300;
   }
 }

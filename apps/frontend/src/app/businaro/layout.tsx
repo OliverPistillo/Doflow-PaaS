@@ -4,8 +4,8 @@ import { BusinaroSidebar } from "./components/BusinaroSidebar";
 
 export default function BusinaroLayout({ children }: { children: React.ReactNode }) {
   return (
-    // 🔥 CLASSE "theme-businaro" applicata SOLO qui.
-    // Isola completamente lo stile dal resto dell'app.
+    // 🔥 QUESTA CLASSE "theme-businaro" È FONDAMENTALE PER L'ISOLAMENTO
+    // Se la rimuovi, il design torna standard. Se c'è, attiva il CSS custom.
     <div className="theme-businaro bg-background min-h-screen transition-colors duration-300">
       <SidebarProvider>
         <BusinaroSidebar />
