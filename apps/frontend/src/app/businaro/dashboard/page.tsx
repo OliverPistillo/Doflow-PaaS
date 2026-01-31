@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress"; 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ThemeToggle } from "@/components/theme-toggle"; 
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 
 // Dati Mock
 const ACTIVE_JOBS = [
