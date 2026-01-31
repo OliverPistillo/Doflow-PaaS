@@ -3,38 +3,32 @@
 @tailwind utilities;
 
 @layer base {
+  /* ----------------------------------------------------------------------- */
+  /* DEFAULT SHADCN (Per Federica Nerone e Public) - NON TOCCARE             */
+  /* ----------------------------------------------------------------------- */
   :root {
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
-
     --card: 0 0% 100%;
     --card-foreground: 240 10% 3.9%;
-
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
-
     --primary: 240 5.9% 10%;
     --primary-foreground: 0 0% 98%;
-
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
-
     --muted: 240 4.8% 95.9%;
     --muted-foreground: 240 3.8% 46.1%;
-
     --accent: 240 4.8% 95.9%;
     --accent-foreground: 240 5.9% 10%;
-
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
     --ring: 240 10% 3.9%;
-
-    --radius: 0.5rem;
-
-    /* sidebar (shadcn) */
+    --radius: 0.5rem; /* Raggio standard (piccolo) */
+    
+    /* Sidebar Standard */
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 240 5.9% 10%;
@@ -48,33 +42,25 @@
   .dark {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
-
     --card: 240 10% 3.9%;
     --card-foreground: 0 0% 98%;
-
     --popover: 240 10% 3.9%;
     --popover-foreground: 0 0% 98%;
-
     --primary: 0 0% 98%;
     --primary-foreground: 240 5.9% 10%;
-
     --secondary: 240 3.7% 15.9%;
     --secondary-foreground: 0 0% 98%;
-
     --muted: 240 3.7% 15.9%;
     --muted-foreground: 240 5% 64.9%;
-
     --accent: 240 3.7% 15.9%;
     --accent-foreground: 0 0% 98%;
-
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
     --ring: 240 4.9% 83.9%;
-
-    /* sidebar (shadcn) standard per tutti */
+    
+    /* Sidebar Standard Dark */
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -85,23 +71,83 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
-  /* 🔥 AGGIUNTA SICURA: STILE ISOLATO PER BUSINARO 🔥 
-     Queste regole si attivano SOLO se il div padre ha la classe "theme-businaro"
-     Non influisce su nessun altro tenant.
-  */
-  .theme-businaro ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+  /* ----------------------------------------------------------------------- */
+  /* TEMA ISOLATO BUSINARO (Soft SaaS / Salesforce Style)                    */
+  /* Si attiva SOLO se il contenitore padre ha la classe "theme-businaro"    */
+  /* ----------------------------------------------------------------------- */
+
+  .theme-businaro {
+    /* LIGHT MODE BUSINARO: Etereo, pulito, bordi tondi */
+    --background: 210 20% 98%; 
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    
+    /* Neon Lime come Primario */
+    --primary: 74 88% 57%; 
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    
+    /* 🔥 RADIUS MAGGIORATO SOLO PER QUESTO TEMA */
+    --radius: 1.5rem; 
+
+    /* Sidebar Light Businaro */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 74 88% 57%;
+    --sidebar-primary-foreground: 222 47% 11%;
+    --sidebar-accent: 210 40% 96.1%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 214.3 31.8% 91.4%;
+    --sidebar-ring: 74 88% 57%;
   }
-  .theme-businaro ::-webkit-scrollbar-track {
-    background: #020617; /* businaro-dark */
-  }
-  .theme-businaro ::-webkit-scrollbar-thumb {
-    background: #334155; /* slate-700 */
-    border-radius: 4px;
-  }
-  .theme-businaro ::-webkit-scrollbar-thumb:hover {
-    background: #475569; /* slate-600 */
+
+  /* DARK MODE BUSINARO: Midnight Blue & Neon */
+  .dark .theme-businaro {
+    --background: 234 30% 6%; /* Midnight Deep */
+    --foreground: 210 40% 98%;
+    --card: 230 20% 11%; 
+    --card-foreground: 210 40% 98%;
+    --popover: 230 20% 11%;
+    --popover-foreground: 210 40% 98%;
+    
+    --primary: 74 88% 57%; /* Neon Lime */
+    --primary-foreground: 234 30% 6%;
+
+    --secondary: 228 20% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 228 20% 17%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 228 20% 17%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 228 20% 17%;
+    --input: 228 20% 17%;
+    --ring: 74 88% 57%;
+
+    /* Sidebar Dark Businaro */
+    --sidebar-background: 230 20% 11%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 74 88% 57%;
+    --sidebar-primary-foreground: 234 30% 6%;
+    --sidebar-accent: 228 20% 17%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 228 20% 17%;
+    --sidebar-ring: 74 88% 57%;
   }
 
   * {

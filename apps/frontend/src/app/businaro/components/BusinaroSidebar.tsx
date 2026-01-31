@@ -2,102 +2,74 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarSeparator,
-} from "@/components/ui/sidebar";
-import { LayoutDashboard, Package, Hammer, Wrench, LogOut, Layers } from "lucide-react";
+import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import { LayoutGrid, Package, Hammer, Wrench, LogOut, Layers, Settings, PieChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const items = [
-  { label: "Control Plane", href: "/businaro/dashboard", icon: LayoutDashboard },
+  { label: "Overview", href: "/businaro/dashboard", icon: LayoutGrid },
   { label: "WMS Magazzino", href: "/businaro/magazzino", icon: Package },
   { label: "Macchine Utensili", href: "/businaro/macchine-utensili", icon: Hammer },
   { label: "Assemblaggio", href: "/businaro/assemblaggio", icon: Wrench },
+  { label: "Analytics", href: "#", icon: PieChart },
 ];
 
 export function BusinaroSidebar() {
   const pathname = usePathname();
 
   return (
-    <Sidebar variant="inset" className="border-r border-businaro-border bg-businaro-panel">
-      <SidebarHeader className="p-6 border-b border-businaro-border">
-        <div className="flex items-center gap-2">
-          {/* Logo Minimalista */}
-          <div className="h-8 w-8 bg-businaro-red rounded flex items-center justify-center shadow-[0_0_15px_rgba(225,29,72,0.4)]">
-             <Layers className="text-white h-5 w-5" />
+    <Sidebar variant="inset" className="border-r border-border bg-card">
+      <SidebarHeader className="p-6 pb-2">
+        <div className="flex items-center gap-3 px-2">
+          <div className="h-10 w-10 bg-neon rounded-xl flex items-center justify-center shadow-lg shadow-neon/20 rotate-3 hover:rotate-0 transition-transform">
+             <Layers className="text-black h-6 w-6" />
           </div>
           <div>
-            <div className="font-bold tracking-tight text-white text-lg leading-none">
-              BUSINARO
-            </div>
-            <div className="text-[10px] text-slate-400 font-mono tracking-wider mt-1">
-              PRODUCTION SYSTEM
-            </div>
+            <div className="font-bold tracking-tight text-xl leading-none">Businaro</div>
+            <div className="text-[10px] text-muted-foreground font-bold tracking-widest mt-1 uppercase">Production OS</div>
           </div>
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="p-4">
+      <SidebarContent className="p-4 space-y-1">
+        <div className="text-xs font-bold text-muted-foreground px-4 py-2 uppercase tracking-widest">Menu</div>
         <SidebarMenu>
           {items.map((it) => {
-            const active = pathname === it.href || pathname.startsWith(it.href + "/");
+            const active = pathname === it.href;
             return (
               <SidebarMenuItem key={it.href}>
                 <SidebarMenuButton 
                   asChild 
                   isActive={active} 
-                  size="lg"
                   className={`
-                    transition-all duration-200 
-                    ${active 
-                      ? "bg-businaro-red text-white shadow-lg hover:bg-red-700 hover:text-white" 
-                      : "text-slate-400 hover:text-white hover:bg-white/5"
-                    }
+                    rounded-2xl px-4 py-6 transition-all duration-200 group
+                    ${active ? "bg-foreground text-background font-bold shadow-md" : "text-muted-foreground hover:bg-muted hover:text-foreground"}
                   `}
                 >
-                  <Link href={it.href}>
-                    <it.icon className={`mr-3 h-5 w-5 ${active ? "text-white" : "text-slate-500"}`} />
-                    <span className="font-medium">{it.label}</span>
+                  <Link href={it.href} className="flex items-center gap-3">
+                    <it.icon className={`h-5 w-5 ${active ? "text-neon" : "text-muted-foreground group-hover:text-foreground"}`} />
+                    <span className="text-sm">{it.label}</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             );
           })}
         </SidebarMenu>
-
-        <div className="mt-auto px-2">
-          <div className="rounded-lg bg-businaro-dark border border-businaro-border p-4">
-             <div className="text-xs text-slate-500 font-mono mb-2">SERVER STATUS</div>
-             <div className="flex items-center gap-2 text-xs text-emerald-400">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                Operational
-             </div>
-          </div>
-        </div>
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t border-businaro-border">
-        <Button 
-          variant="ghost" 
-          className="w-full justify-start gap-2 text-slate-400 hover:text-red-400 hover:bg-red-950/20"
-          onClick={() => {
-             // Gestione logout
-             window.localStorage.removeItem("doflow_token");
-             window.location.href = "/login";
-          }}
-        >
-          <LogOut className="h-4 w-4" />
-          Disconnetti
+      <SidebarFooter className="p-6 border-t border-border">
+         <div className="bg-muted/50 rounded-2xl p-4 mb-4 border border-border">
+            <div className="flex justify-between items-center mb-2">
+               <span className="text-xs font-bold uppercase text-muted-foreground">Storage</span>
+               <span className="text-xs font-bold text-neon-dark">78%</span>
+            </div>
+            <div className="h-1.5 w-full bg-background rounded-full overflow-hidden">
+               <div className="h-full w-[78%] bg-neon rounded-full" />
+            </div>
+         </div>
+         
+        <Button variant="ghost" className="w-full justify-start gap-3 rounded-xl hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/30">
+          <LogOut className="h-4 w-4" /> Disconnetti
         </Button>
       </SidebarFooter>
     </Sidebar>
