@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress"; 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ThemeToggle } from "@/components/theme-toggle"; // IMPORTANTE: Il tasto
+import { ThemeToggle } from "@/components/theme-toggle"; 
 
 // Dati Mock
 const ACTIVE_JOBS = [
@@ -41,7 +41,7 @@ export default function BusinaroDashboard() {
           <div className="flex items-center gap-2 pr-2">
             <Button variant="ghost" size="icon" className="rounded-full w-10 h-10 hover:bg-muted"><Bell className="h-5 w-5" /></Button>
             
-            {/* --- IL TASTO PER CAMBIARE TEMA --- */}
+            {/* TASTO TEMA */}
             <ThemeToggle />
             
             <Avatar className="h-10 w-10 border-2 border-background shadow-sm cursor-pointer ml-2">

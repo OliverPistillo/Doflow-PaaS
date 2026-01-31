@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
-import { LayoutGrid, Package, Hammer, Wrench, LogOut, Layers, Settings, PieChart } from "lucide-react";
+import { LayoutGrid, Package, Hammer, Wrench, LogOut, Layers, PieChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const items = [
@@ -21,8 +21,8 @@ export function BusinaroSidebar() {
     <Sidebar variant="inset" className="border-r border-border bg-card">
       <SidebarHeader className="p-6 pb-2">
         <div className="flex items-center gap-3 px-2">
-          <div className="h-10 w-10 bg-neon rounded-xl flex items-center justify-center shadow-lg shadow-neon/20 rotate-3 hover:rotate-0 transition-transform">
-             <Layers className="text-black h-6 w-6" />
+          <div className="h-10 w-10 bg-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20 rotate-3 hover:rotate-0 transition-transform">
+             <Layers className="text-primary-foreground h-6 w-6" />
           </div>
           <div>
             <div className="font-bold tracking-tight text-xl leading-none">Businaro</div>
@@ -47,7 +47,7 @@ export function BusinaroSidebar() {
                   `}
                 >
                   <Link href={it.href} className="flex items-center gap-3">
-                    <it.icon className={`h-5 w-5 ${active ? "text-neon" : "text-muted-foreground group-hover:text-foreground"}`} />
+                    <it.icon className={`h-5 w-5 ${active ? "text-primary" : "text-muted-foreground group-hover:text-foreground"}`} />
                     <span className="text-sm">{it.label}</span>
                   </Link>
                 </SidebarMenuButton>
@@ -61,10 +61,10 @@ export function BusinaroSidebar() {
          <div className="bg-muted/50 rounded-2xl p-4 mb-4 border border-border">
             <div className="flex justify-between items-center mb-2">
                <span className="text-xs font-bold uppercase text-muted-foreground">Storage</span>
-               <span className="text-xs font-bold text-neon-dark">78%</span>
+               <span className="text-xs font-bold text-primary">78%</span>
             </div>
             <div className="h-1.5 w-full bg-background rounded-full overflow-hidden">
-               <div className="h-full w-[78%] bg-neon rounded-full" />
+               <div className="h-full w-[78%] bg-primary rounded-full" />
             </div>
          </div>
          
