@@ -5,6 +5,7 @@
 @layer base {
   /* --- DEFAULT STANDARD (Non toccare) --- */
   :root {
+    /* ... (lascia invariato il root standard) ... */
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
@@ -25,8 +26,6 @@
     --input: 240 5.9% 90%;
     --ring: 240 10% 3.9%;
     --radius: 0.5rem;
-    
-    /* Sidebar Standard */
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 240 5.9% 10%;
@@ -38,6 +37,7 @@
   }
 
   .dark {
+    /* ... (lascia invariato il dark standard) ... */
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
     --card: 240 10% 3.9%;
@@ -67,80 +67,100 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
-  /* --- NUOVO TEMA BUSINARO (Soft / Salesforce) --- */
+  /* --- NUOVO TEMA BUSINARO (Modern Aurora Glass) --- */
   
   .theme-businaro {
-    /* LIGHT MODE: Etereo, Soft Gray */
+    /* LIGHT MODE: Soft Aurora */
     --background: 210 20% 98%;
     --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
+    
+    /* Card semitrasparenti per effetto vetro */
+    --card: 0 0% 100% / 0.7; 
     --card-foreground: 222 47% 11%;
-    --popover: 0 0% 100%;
+    --popover: 0 0% 100% / 0.8;
     --popover-foreground: 222 47% 11%;
     
-    /* PRIMARY: NEON LIME (#ccf32f) */
-    --primary: 74 88% 57%; 
-    --primary-foreground: 222 47% 11%; /* Testo scuro su lime */
+    /* Gradienti Principali (Blu/Viola/Verde) */
+    --primary: 221 83% 53%; /* Blu brillante */
+    --primary-foreground: 210 40% 98%;
 
-    --secondary: 210 40% 96.1%;
+    --secondary: 210 40% 96.1% / 0.5;
     --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96.1%;
+    --muted: 210 40% 96.1% / 0.5;
     --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
+    --accent: 210 40% 96.1% / 0.8;
     --accent-foreground: 222 47% 11%;
+    
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 74 88% 57%;
     
-    /* RADIUS MOLTO AMPIO (Card Arrotondate) */
+    --border: 214.3 31.8% 91.4% / 0.4;
+    --input: 214.3 31.8% 91.4% / 0.5;
+    --ring: 221 83% 53%;
+    
     --radius: 1.75rem; 
 
-    /* Sidebar Light */
-    --sidebar-background: 0 0% 100%;
+    /* Sidebar Glass */
+    --sidebar-background: 0 0% 100% / 0.6;
     --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 74 88% 57%;
-    --sidebar-primary-foreground: 222 47% 11%;
-    --sidebar-accent: 210 40% 96.1%;
+    --sidebar-primary: 221 83% 53%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 210 40% 96.1% / 0.6;
     --sidebar-accent-foreground: 222 47% 11%;
-    --sidebar-border: 214.3 31.8% 91.4%;
-    --sidebar-ring: 74 88% 57%;
+    --sidebar-border: 214.3 31.8% 91.4% / 0.2;
+    --sidebar-ring: 221 83% 53%;
+
+    /* Sfondo Aurora Light */
+    --aurora-bg: radial-gradient(at 0% 0%, hsla(253,100%,85%,0.3) 0px, transparent 50%),
+                 radial-gradient(at 100% 0%, hsla(189,100%,85%,0.3) 0px, transparent 50%),
+                 radial-gradient(at 100% 100%, hsla(309,100%,85%,0.3) 0px, transparent 50%),
+                 radial-gradient(at 0% 100%, hsla(221,100%,85%,0.3) 0px, transparent 50%);
   }
 
-  /* DARK MODE BUSINARO: Midnight Blue */
+  /* DARK MODE BUSINARO: Deep Aurora */
   .dark .theme-businaro {
-    --background: 234 30% 6%; /* Deep Midnight */
+    --background: 222 47% 11%;
     --foreground: 210 40% 98%;
-    --card: 230 20% 11%; /* Slightly lighter midnight */
+    
+    /* Card scure semitrasparenti */
+    --card: 222 47% 11% / 0.7;
     --card-foreground: 210 40% 98%;
-    --popover: 230 20% 11%;
+    --popover: 222 47% 11% / 0.8;
     --popover-foreground: 210 40% 98%;
     
-    --primary: 74 88% 57%; /* Neon Lime */
-    --primary-foreground: 234 30% 6%;
+    /* Primary più luminoso per contrasto */
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 11%;
 
-    --secondary: 228 20% 17%;
+    --secondary: 217 19% 27% / 0.6;
     --secondary-foreground: 210 40% 98%;
-    --muted: 228 20% 17%;
+    --muted: 217 19% 27% / 0.6;
     --muted-foreground: 215 20.2% 65.1%;
-    --accent: 228 20% 17%;
+    --accent: 217 19% 27% / 0.8;
     --accent-foreground: 210 40% 98%;
+    
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    --border: 228 20% 17%;
-    --input: 228 20% 17%;
-    --ring: 74 88% 57%;
+    
+    --border: 217 19% 27% / 0.4;
+    --input: 217 19% 27% / 0.5;
+    --ring: 217 91% 60%;
 
-    /* Sidebar Dark */
-    --sidebar-background: 230 20% 11%;
+    /* Sidebar Dark Glass */
+    --sidebar-background: 222 47% 11% / 0.6;
     --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 74 88% 57%;
-    --sidebar-primary-foreground: 234 30% 6%;
-    --sidebar-accent: 228 20% 17%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 222 47% 11%;
+    --sidebar-accent: 217 19% 27% / 0.6;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 228 20% 17%;
-    --sidebar-ring: 74 88% 57%;
+    --sidebar-border: 217 19% 27% / 0.2;
+    --sidebar-ring: 217 91% 60%;
+
+    /* Sfondo Aurora Dark */
+    --aurora-bg: radial-gradient(at 0% 0%, hsla(253,100%,20%,0.5) 0px, transparent 50%),
+                 radial-gradient(at 100% 0%, hsla(189,100%,20%,0.5) 0px, transparent 50%),
+                 radial-gradient(at 100% 100%, hsla(309,100%,20%,0.5) 0px, transparent 50%),
+                 radial-gradient(at 0% 100%, hsla(221,100%,20%,0.5) 0px, transparent 50%);
   }
 
   * {
@@ -148,5 +168,15 @@
   }
   body {
     @apply bg-background text-foreground transition-colors duration-300;
+  }
+  
+  /* Classe di utilità per l'effetto vetro */
+  .glass {
+    @apply bg-card backdrop-blur-xl border border-white/10 dark:border-white/5 shadow-lg;
+  }
+  
+  /* Classe di utilità per gradienti attivi */
+  .bg-gradient-primary {
+      @apply bg-gradient-to-br from-blue-500 to-violet-500 text-white border-none;
   }
 }
