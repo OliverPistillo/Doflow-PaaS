@@ -26,6 +26,9 @@ RUN mkdir -p apps/backend/dist/redis/scripts \
 FROM node:20-alpine AS runner
 WORKDIR /app
 
+# 🔥 FIX: Installa utility Linux necessarie per 'systeminformation'
+RUN apk add --no-cache util-linux
+
 ENV NODE_ENV=production
 
 # Copy necessary files from builder
