@@ -1,16 +1,24 @@
+version: '3.8'
+
 services:
   # --- Frontend (Next.js) ---
   frontend:
     build:
-      context: .                 # <- ROOT: C:\Doflow
+      context: .
       dockerfile: apps/frontend/Dockerfile
     container_name: doflow-frontend
+    ports:
+      - "3000:3000"  # <-- EXPOSE TO HOST
     env_file:
       - ./.env
     environment:
       - PORT=3000
+      - HOSTNAME=0.0.0.0
+      # Internal Docker URL for SSR/Rewrites
+      - INTERNAL_BACKEND_URL=http://backend:4000
+      # Public URL for browser
+      - NEXT_PUBLIC_API_URL=http://localhost:3000/api
     depends_on:
-      - postgres
       - backend
     networks:
       - doflow-net
@@ -18,13 +26,19 @@ services:
   # --- Backend (NestJS) ---
   backend:
     build:
-      context: .                 # <- ROOT: C:\Doflow
+      context: .
       dockerfile: apps/backend/Dockerfile
     container_name: doflow-backend
+    ports:
+      - "4000:4000" # Optional: expose for direct API access/debug
     env_file:
       - ./.env
     environment:
       - PORT=4000
+      # Connect to 'postgres' service, not localhost
+      - DATABASE_URL=postgres://user:password@postgres:5432/doflow
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
       - postgres
       - redis
@@ -38,6 +52,12 @@ services:
     restart: unless-stopped
     env_file:
       - ./.env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-doflow}
+    ports:
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
@@ -67,7 +87,7 @@ services:
     networks:
       - doflow-net
 
-  # --- Uptime Kuma (opzionale) ---
+  # --- Uptime Kuma ---
   uptime-kuma:
     image: louislam/uptime-kuma:1
     container_name: doflow-status

@@ -1,35 +1,38 @@
 # ===== STAGE 1: BUILD =====
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Monorepo config
+# Copy workspace config
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
 
-# Sorgente backend
+# Copy backend source
 COPY apps/backend ./apps/backend
+# Copy frontend package.json just to satisfy workspace requirements
+COPY apps/frontend/package.json ./apps/frontend/package.json
 
-# Install di tutto il monorepo (node_modules in /app)
-RUN pnpm install
+# Install dependencies
+RUN pnpm install --frozen-lockfile
 
-# Build solo backend
+# Build backend
 RUN pnpm --filter backend run build
 
-# COPIA lo script Lua anche dentro la cartella dist
+# Copy Lua scripts manually if needed
 RUN mkdir -p apps/backend/dist/redis/scripts \
-  && cp apps/backend/src/redis/scripts/dual_probe.lua apps/backend/dist/redis/scripts/dual_probe.lua
+  && cp apps/backend/src/redis/scripts/dual_probe.lua apps/backend/dist/redis/scripts/dual_probe.lua || true
 
 # ===== STAGE 2: RUNNER =====
-FROM node:18-alpine AS runner
+FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Copia TUTTO l'ambiente buildato
-COPY --from=builder /app ./
+# Copy necessary files from builder
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
+COPY --from=builder /app/apps/backend/package.json ./apps/backend/package.json
 
 EXPOSE 4000
 
-# Avvia Nest dal path giusto
 CMD ["node", "apps/backend/dist/main.js"]

@@ -78,7 +78,7 @@ importers:
         specifier: ^5.8.2
         version: 5.9.2
       jsonwebtoken:
-        specifier: ^9.0.2
+        specifier: ^9.0.3
         version: 9.0.3
       multer:
         specifier: ^2.0.2
@@ -115,7 +115,7 @@ importers:
         specifier: ^4.17.25
         version: 4.17.25
       '@types/jsonwebtoken':
-        specifier: ^9.0.6
+        specifier: ^9.0.10
         version: 9.0.10
       '@types/multer':
         specifier: ^2.0.0

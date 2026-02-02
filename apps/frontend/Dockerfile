@@ -2,34 +2,42 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# pnpm
-RUN corepack enable && corepack prepare pnpm@10.24.0 --activate
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# workspace (cache)
+# Copy workspace config
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY apps/backend/package.json ./apps/backend/package.json
 COPY apps/frontend/package.json ./apps/frontend/package.json
 
-# install deps
+# Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# copy frontend
+# Copy source
 COPY apps/frontend ./apps/frontend
 
-# build
+# Build
+# Note: Next.js needs public env vars at build time
+ENV NEXT_PUBLIC_API_URL=http://localhost:3000/api
 RUN pnpm --filter frontend run build
-
 
 # ====== RUNNER ======
 FROM node:20-alpine AS runner
-ENV NODE_ENV=production
 WORKDIR /app
 
-# Standalone (contiene /apps/frontend/server.js nel tuo monorepo)
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+# Copy Standalone build
+# The standalone folder contains a minimal node_modules and the server.js
 COPY --from=builder /app/apps/frontend/.next/standalone ./
 
-# Static + public (Next si aspetta questi path)
+# Copy Static Assets (Next.js needs these for images/css)
 COPY --from=builder /app/apps/frontend/.next/static ./apps/frontend/.next/static
 COPY --from=builder /app/apps/frontend/public ./apps/frontend/public
 
 EXPOSE 3000
-CMD ["node", "/app/apps/frontend/server.js"]
+
+# Start Next.js
+# Note: In standalone mode, the path mirrors your project structure
+CMD ["node", "apps/frontend/server.js"]
