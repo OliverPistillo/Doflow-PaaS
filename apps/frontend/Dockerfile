@@ -15,9 +15,13 @@ RUN pnpm install --frozen-lockfile
 # Copy source
 COPY apps/frontend ./apps/frontend
 
-# Build
-# Note: Next.js needs public env vars at build time
-ENV NEXT_PUBLIC_API_URL=http://localhost:3000/api
+# --- FIX START ---
+# Definiamo un ARGomento che possiamo passare da docker-compose
+ARG NEXT_PUBLIC_API_URL
+# Assegniamo l'argomento alla variabile d'ambiente per la build
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# --- FIX END ---
+
 RUN pnpm --filter frontend run build
 
 # ====== RUNNER ======
@@ -29,15 +33,12 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 # Copy Standalone build
-# The standalone folder contains a minimal node_modules and the server.js
 COPY --from=builder /app/apps/frontend/.next/standalone ./
 
-# Copy Static Assets (Next.js needs these for images/css)
+# Copy Static Assets
 COPY --from=builder /app/apps/frontend/.next/static ./apps/frontend/.next/static
 COPY --from=builder /app/apps/frontend/public ./apps/frontend/public
 
 EXPOSE 3000
 
-# Start Next.js
-# Note: In standalone mode, the path mirrors your project structure
 CMD ["node", "apps/frontend/server.js"]

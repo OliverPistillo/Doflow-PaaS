@@ -1,103 +1,97 @@
 version: '3.8'
 
 services:
-  # --- Frontend (Next.js) ---
+  # --- Frontend ---
   frontend:
     build:
       context: .
       dockerfile: apps/frontend/Dockerfile
+      args:
+        # 🔥 FONDAMENTALE: Se sei su server, metti il dominio pubblico!
+        # Se sei in locale, va bene http://localhost:3000/api
+        - NEXT_PUBLIC_API_URL=https://app.doflow.it/api 
     container_name: doflow-frontend
+    restart: always
     ports:
-      - "3000:3000"  # <-- EXPOSE TO HOST
+      - "3000:3000"
     env_file:
       - ./.env
     environment:
       - PORT=3000
       - HOSTNAME=0.0.0.0
-      # Internal Docker URL for SSR/Rewrites
+      # Questo serve al server Next.js per parlare col backend DENTRO la rete Docker
       - INTERNAL_BACKEND_URL=http://backend:4000
-      # Public URL for browser
-      - NEXT_PUBLIC_API_URL=http://localhost:3000/api
+      # Questo serve al browser dell'utente (che sta fuori)
+      - NEXT_PUBLIC_API_URL=https://app.doflow.it/api
     depends_on:
       - backend
     networks:
       - doflow-net
 
-  # --- Backend (NestJS) ---
+  # --- Backend ---
   backend:
     build:
       context: .
       dockerfile: apps/backend/Dockerfile
     container_name: doflow-backend
+    restart: always
     ports:
-      - "4000:4000" # Optional: expose for direct API access/debug
+      - "4000:4000"
     env_file:
       - ./.env
     environment:
       - PORT=4000
-      # Connect to 'postgres' service, not localhost
       - DATABASE_URL=postgres://user:password@postgres:5432/doflow
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - WS_PATH=/ws
+      # 🔥 FONDAMENTALE: Deve essere uguale a quella usata per generare i token
+      - JWT_SECRET=${JWT_SECRET} 
     depends_on:
       - postgres
       - redis
     networks:
       - doflow-net
 
-  # --- Database (PostgreSQL) ---
+  # --- Database ---
   postgres:
     image: postgres:16-alpine
     container_name: doflow-postgres
-    restart: unless-stopped
-    env_file:
-      - ./.env
+    restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: ${POSTGRES_DB:-doflow}
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: doflow
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
       - doflow-net
 
-  # --- Redis + RedisBloom ---
+  # --- Redis ---
   redis:
     image: redislabs/rebloom:latest
     container_name: doflow-redis
-    restart: unless-stopped
+    restart: always
     ports:
       - "6379:6379"
     networks:
       - doflow-net
 
-  # --- Nginx Reverse Proxy ---
+  # --- Nginx (Opzionale se usi Cloudflare/Coolify, ma utile) ---
   nginx:
     image: nginx:alpine
     container_name: doflow-nginx
+    restart: always
     depends_on:
       - frontend
       - backend
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
       - doflow-net
-
-  # --- Uptime Kuma ---
-  uptime-kuma:
-    image: louislam/uptime-kuma:1
-    container_name: doflow-status
-    ports:
-      - "3002:3001"
-    volumes:
-      - ./docker-data/uptime-kuma:/app/data
-    networks:
-      - doflow-net
-    restart: unless-stopped
 
 networks:
   doflow-net:
