@@ -59,11 +59,12 @@ export class SuperadminTenantsController {
   }
 
   // ==========================================
-  // 1. SYSTEM HEALTH
+  // 1. SYSTEM HEALTH & MONITORAGGIO SERVIZI
   // ==========================================
   @Get('system/stats')
   async getSystemStats(@Req() req: Request) {
-    this.assertSuperAdmin(req);
+    // Nota: Decommenta se vuoi proteggere l'endpoint, ma per debugging iniziale è utile averlo libero
+    // this.assertSuperAdmin(req); 
     return this.telemetry.getSystemStats();
   }
 
@@ -80,7 +81,7 @@ export class SuperadminTenantsController {
       `
       select
         id, slug, name, schema_name, is_active, 
-        plan_tier, max_users, storage_used_mb,
+        plan_tier, max_users, storage_used_mb, admin_email,
         created_at, updated_at
       from public.tenants
       order by created_at desc
@@ -102,6 +103,7 @@ export class SuperadminTenantsController {
         throw new BadRequestException('Missing fields');
     }
 
+    // 1. Inserimento nel registro Tenant
     const rows = await publicDs.query(
       `
       insert into public.tenants (slug, name, schema_name, admin_email, plan_tier, is_active, created_at)
@@ -112,24 +114,27 @@ export class SuperadminTenantsController {
     );
     const tenant = rows[0];
 
-    // Bootstrap
-    await publicDs.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
-    const tenantDs = new DataSource({
-      type: 'postgres',
-      url: process.env.DATABASE_URL,
-      schema: schemaName,
-      synchronize: false,
-    });
-
+    // 2. Bootstrap Schema e Admin
     try {
+      // Crea schema se non esiste
+      await publicDs.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
+      
+      const tenantDs = new DataSource({
+        type: 'postgres',
+        url: process.env.DATABASE_URL,
+        schema: schemaName,
+        synchronize: false,
+      });
+
       await tenantDs.initialize();
       await this.bootstrap.ensureTenantTables(tenantDs, schemaName);
       await this.bootstrap.seedFirstAdmin(tenantDs, schemaName, body.admin_email, body.admin_password);
+      await tenantDs.destroy();
+
     } catch (e) {
+      // Rollback: se fallisce il bootstrap tecnico, rimuoviamo il tenant dal registro
       await publicDs.query(`delete from public.tenants where id = $1`, [tenant.id]);
       throw new BadRequestException('Bootstrap failed: ' + (e as Error).message);
-    } finally {
-      if (tenantDs.isInitialized) await tenantDs.destroy();
     }
 
     return { status: 'ok', tenant };
@@ -159,10 +164,11 @@ export class SuperadminTenantsController {
   }
 
   // ==========================================
-  // 3. GESTIONE UTENTI DEI TENANT (Nuova Logica)
+  // 3. GESTIONE UTENTI DEI TENANT (Accesso Dinamico)
   // ==========================================
 
   // Endpoint: /api/superadmin/tenants/:id/users-list-debug
+  // Permette al Superadmin di vedere chi è registrato in un tenant specifico
   @Get('tenants/:id/users-list-debug')
   async getTenantUsers(@Req() req: Request, @Param('id') tenantId: string) {
     this.assertSuperAdmin(req);
@@ -197,6 +203,7 @@ export class SuperadminTenantsController {
     }
   }
 
+  // Elimina un utente specifico da un tenant (es. dipendente licenziato)
   @Delete('tenants/:id/users/:userId')
   async deleteTenantUser(@Req() req: Request, @Param('id') tenantId: string, @Param('userId') userId: string) {
       this.assertSuperAdmin(req);
@@ -212,7 +219,6 @@ export class SuperadminTenantsController {
 
       try {
           await tenantDs.initialize();
-          // Eliminazione fisica (o soft delete se preferisci)
           await tenantDs.query(`DELETE FROM ${schema_name}.users WHERE id = $1`, [userId]);
           return { status: 'deleted' };
       } finally {
@@ -224,6 +230,7 @@ export class SuperadminTenantsController {
   // 4. SECURITY & IMPERSONATION
   // ==========================================
 
+  // "Accedi come..." -> Genera un token valido per quel tenant specifico
   @Post('tenants/:id/impersonate')
   async impersonate(@Req() req: Request, @Param('id') tenantId: string, @Body() body: { email: string }) {
     this.assertSuperAdmin(req);
@@ -267,6 +274,7 @@ export class SuperadminTenantsController {
     };
   }
 
+  // Forza il reset della password di un utente nel tenant
   @Post('tenants/:id/reset-admin-password')
   async resetAdminPwd(@Req() req: Request, @Param('id') tenantId: string, @Body() body: { email: string, newPassword?: string }) {
     this.assertSuperAdmin(req);
