@@ -6,57 +6,42 @@ import {
   Get,
   NotFoundException,
   Post,
+  Delete,
   Body,
   Req,
   Param,
+  Patch,
+  Query,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { DataSource } from 'typeorm';
+import * as bcrypt from 'bcryptjs';
+import * as jwt from 'jsonwebtoken';
 import { TenantBootstrapService } from '../tenancy/tenant-bootstrap.service';
+import { SystemStatsService } from './telemetry.service';
 
-// --- Helper Types & Auth Logic ---
-
-type AuthUser = {
-  id: string;
-  email?: string | null;
-  role?: string | null;
-};
-
+// --- Types ---
 type CreateTenantBody = {
   slug: string;
   name: string;
   schema_name?: string;
   admin_email: string;
   admin_password: string;
-  isActive?: boolean;
+  plan_tier?: string;
 };
 
-function getAuthUser(req: Request): AuthUser | undefined {
-  return (req as any).authUser ?? (req as any).user;
-}
+type UpdateTenantBody = {
+  name?: string;
+  plan_tier?: string;
+  max_users?: number;
+  is_active?: boolean;
+};
 
-function assertSuperAdmin(req: Request): AuthUser {
-  const user = getAuthUser(req);
-  if (!user) {
-    throw new ForbiddenException('Forbidden (SUPER_ADMIN only)');
-  }
-
-  const rawRole = String(user.role ?? '');
-  const normalized = rawRole.toUpperCase().replace(/[^A-Z]/g, '');
-
-  if (normalized !== 'SUPERADMIN' && normalized !== 'OWNER') {
-    throw new ForbiddenException('Forbidden (SUPER_ADMIN only)');
-  }
-
-  return user;
-}
-
-// --- Controller ---
-
-@Controller('superadmin/tenants')
+@Controller('superadmin')
 export class SuperadminTenantsController {
   constructor(
     private readonly bootstrap: TenantBootstrapService,
+    private readonly telemetry: SystemStatsService,
   ) {}
 
   private getConn(req: Request): DataSource {
@@ -65,102 +50,70 @@ export class SuperadminTenantsController {
     return conn;
   }
 
-  @Get()
-  async list(@Req() req: Request) {
-    assertSuperAdmin(req);
-
-    if ((req as any).tenantId !== 'public') {
-      throw new BadRequestException('Must call this endpoint on public tenant');
+  private assertSuperAdmin(req: Request) {
+    const user = (req as any).authUser ?? (req as any).user;
+    const rawRole = String(user?.role ?? '').toUpperCase();
+    if (rawRole !== 'SUPERADMIN' && rawRole !== 'OWNER') {
+      throw new ForbiddenException('SuperAdmin only');
     }
+  }
 
+  // ==========================================
+  // 1. SYSTEM HEALTH
+  // ==========================================
+  @Get('system/stats')
+  async getSystemStats(@Req() req: Request) {
+    this.assertSuperAdmin(req);
+    return this.telemetry.getSystemStats();
+  }
+
+  // ==========================================
+  // 2. GESTIONE TENANT (Aziende)
+  // ==========================================
+
+  @Get('tenants')
+  async list(@Req() req: Request) {
+    this.assertSuperAdmin(req);
     const publicDs = this.getConn(req);
 
     const rows = await publicDs.query(
       `
       select
-        id,
-        slug,
-        name,
-        schema_name,
-        is_active,
-        created_at,
-        updated_at
+        id, slug, name, schema_name, is_active, 
+        plan_tier, max_users, storage_used_mb,
+        created_at, updated_at
       from public.tenants
       order by created_at desc
-      `,
+      `
     );
-
     return { tenants: rows };
   }
 
-  @Post()
+  @Post('tenants')
   async create(@Req() req: Request, @Body() body: CreateTenantBody) {
-    assertSuperAdmin(req);
-
-    if ((req as any).tenantId !== 'public') {
-      throw new BadRequestException('Must call this endpoint on public tenant');
-    }
-
+    this.assertSuperAdmin(req);
     const publicDs = this.getConn(req);
 
-    // 1. Validazione Input
-    const slug = (body.slug ?? '').trim().toLowerCase();
-    const name = (body.name ?? '').trim();
-    const schemaName = (body.schema_name ?? slug).trim().toLowerCase();
-    const adminEmail = (body.admin_email ?? '').trim().toLowerCase();
-    const adminPassword = body.admin_password ?? '';
-    const isActive = body.isActive ?? true;
+    const slug = (body.slug || '').trim().toLowerCase();
+    const schemaName = (body.schema_name || slug).trim().toLowerCase();
+    const plan = body.plan_tier || 'STARTER';
 
-    if (!slug || !name || !schemaName || !adminEmail) {
-      throw new BadRequestException('Missing required fields (slug, name, schema_name, admin_email)');
-    }
-    
-    if (adminPassword.length < 8) {
-      throw new BadRequestException('Password must be at least 8 characters');
+    if (!slug || !body.name || !body.admin_email || !body.admin_password) {
+        throw new BadRequestException('Missing fields');
     }
 
-    if (!/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(slug)) {
-      throw new BadRequestException('Invalid slug (use a-z0-9 and dash, min 3 chars)');
-    }
-
-    if (!/^[a-z0-9_]+$/.test(schemaName)) {
-      throw new BadRequestException('Invalid schema_name (use a-z0-9_)');
-    }
-
-    // 2. Check duplicati (Slug)
-    const existing = await publicDs.query(
-      `select id from public.tenants where slug = $1 limit 1`,
-      [slug],
-    );
-    if (existing.length > 0) {
-      throw new ConflictException('Tenant slug already exists');
-    }
-
-    // 3. Check duplicati (Schema)
-    const existingSchema = await publicDs.query(
-      `select schema_name from information_schema.schemata where schema_name = $1`,
-      [schemaName]
-    );
-    if (existingSchema.length > 0) {
-       throw new ConflictException(`Database schema '${schemaName}' already exists`);
-    }
-
-    // 4. Creazione riga in public.tenants
     const rows = await publicDs.query(
       `
-      insert into public.tenants (slug, name, schema_name, is_active, created_at, updated_at)
-      values ($1, $2, $3, $4, now(), now())
-      returning id, slug, name, schema_name, is_active, created_at, updated_at
+      insert into public.tenants (slug, name, schema_name, admin_email, plan_tier, is_active, created_at)
+      values ($1, $2, $3, $4, $5, true, now())
+      returning id, slug, schema_name
       `,
-      [slug, name, schemaName, isActive],
+      [slug, body.name, schemaName, body.admin_email, plan]
     );
     const tenant = rows[0];
 
-    // 5. BOOTSTRAP: Creazione Schema, Tabelle e Admin Seed
-    
-    // FIX 2: Creiamo lo schema esplicitamente (safety check)
+    // Bootstrap
     await publicDs.query(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`);
-
     const tenantDs = new DataSource({
       type: 'postgres',
       url: process.env.DATABASE_URL,
@@ -170,59 +123,174 @@ export class SuperadminTenantsController {
 
     try {
       await tenantDs.initialize();
-      
-      // Crea tabelle
       await this.bootstrap.ensureTenantTables(tenantDs, schemaName);
-      
-      // Crea primo admin
-      await this.bootstrap.seedFirstAdmin(tenantDs, schemaName, adminEmail, adminPassword);
-
-    } catch (error) {
-      console.error(`Error bootstrapping tenant ${slug}:`, error);
-      
-      // FIX 1: ROLLBACK! Cancelliamo la riga "orfana" se il bootstrap fallisce
-      // (Nota: lo schema creato potrebbe rimanere vuoto, ma almeno il registry è pulito)
+      await this.bootstrap.seedFirstAdmin(tenantDs, schemaName, body.admin_email, body.admin_password);
+    } catch (e) {
       await publicDs.query(`delete from public.tenants where id = $1`, [tenant.id]);
-      
-      throw new BadRequestException(`Failed to bootstrap tenant: ${(error as Error).message}`);
+      throw new BadRequestException('Bootstrap failed: ' + (e as Error).message);
     } finally {
-      if (tenantDs.isInitialized) {
-        await tenantDs.destroy();
-      }
+      if (tenantDs.isInitialized) await tenantDs.destroy();
     }
 
+    return { status: 'ok', tenant };
+  }
+
+  @Patch('tenants/:id')
+  async updateTenant(@Req() req: Request, @Param('id') id: string, @Body() body: UpdateTenantBody) {
+    this.assertSuperAdmin(req);
+    const publicDs = this.getConn(req);
+
+    const updates: string[] = [];
+    const values: any[] = [];
+    let idx = 1;
+
+    if (body.name !== undefined) { updates.push(`name = $${idx++}`); values.push(body.name); }
+    if (body.plan_tier !== undefined) { updates.push(`plan_tier = $${idx++}`); values.push(body.plan_tier); }
+    if (body.max_users !== undefined) { updates.push(`max_users = $${idx++}`); values.push(body.max_users); }
+    if (body.is_active !== undefined) { updates.push(`is_active = $${idx++}`); values.push(body.is_active); }
+
+    if (updates.length === 0) return { message: 'Nothing to update' };
+
+    values.push(id);
+    const sql = `UPDATE public.tenants SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`;
+    
+    const res = await publicDs.query(sql, values);
+    return { tenant: res[0] };
+  }
+
+  // ==========================================
+  // 3. GESTIONE UTENTI DEI TENANT (Nuova Logica)
+  // ==========================================
+
+  // Endpoint: /api/superadmin/tenants/:id/users-list-debug
+  @Get('tenants/:id/users-list-debug')
+  async getTenantUsers(@Req() req: Request, @Param('id') tenantId: string) {
+    this.assertSuperAdmin(req);
+    const publicDs = this.getConn(req);
+
+    // 1. Recupera nome schema del tenant
+    const tRows = await publicDs.query(`select schema_name, slug from public.tenants where id = $1`, [tenantId]);
+    if (!tRows.length) throw new NotFoundException('Tenant not found');
+    const { schema_name } = tRows[0];
+
+    // 2. Connessione dinamica al tenant
+    const tenantDs = new DataSource({
+        type: 'postgres',
+        url: process.env.DATABASE_URL,
+        schema: schema_name,
+        synchronize: false,
+    });
+
+    try {
+        await tenantDs.initialize();
+        // Query diretta sulla tabella users del tenant
+        const users = await tenantDs.query(`
+            SELECT id, email, role, created_at 
+            FROM ${schema_name}.users 
+            ORDER BY created_at DESC
+        `);
+        return { users };
+    } catch(e) {
+        throw new BadRequestException("Errore lettura utenti tenant");
+    } finally {
+        if (tenantDs.isInitialized) await tenantDs.destroy();
+    }
+  }
+
+  @Delete('tenants/:id/users/:userId')
+  async deleteTenantUser(@Req() req: Request, @Param('id') tenantId: string, @Param('userId') userId: string) {
+      this.assertSuperAdmin(req);
+      const publicDs = this.getConn(req);
+
+      const tRows = await publicDs.query(`select schema_name from public.tenants where id = $1`, [tenantId]);
+      if (!tRows.length) throw new NotFoundException('Tenant not found');
+      const { schema_name } = tRows[0];
+
+      const tenantDs = new DataSource({
+          type: 'postgres', url: process.env.DATABASE_URL, schema: schema_name, synchronize: false,
+      });
+
+      try {
+          await tenantDs.initialize();
+          // Eliminazione fisica (o soft delete se preferisci)
+          await tenantDs.query(`DELETE FROM ${schema_name}.users WHERE id = $1`, [userId]);
+          return { status: 'deleted' };
+      } finally {
+          if (tenantDs.isInitialized) await tenantDs.destroy();
+      }
+  }
+
+  // ==========================================
+  // 4. SECURITY & IMPERSONATION
+  // ==========================================
+
+  @Post('tenants/:id/impersonate')
+  async impersonate(@Req() req: Request, @Param('id') tenantId: string, @Body() body: { email: string }) {
+    this.assertSuperAdmin(req);
+    const publicDs = this.getConn(req);
+
+    const tRows = await publicDs.query(`select schema_name, slug from public.tenants where id = $1`, [tenantId]);
+    if (!tRows.length) throw new NotFoundException('Tenant not found');
+    const { schema_name, slug } = tRows[0];
+
+    const tenantDs = new DataSource({
+      type: 'postgres',
+      url: process.env.DATABASE_URL,
+      schema: schema_name,
+      synchronize: false,
+    });
+    
+    await tenantDs.initialize();
+    const uRows = await tenantDs.query(`select id, email, role from ${schema_name}.users where email = $1`, [body.email]);
+    await tenantDs.destroy();
+
+    if (!uRows.length) throw new NotFoundException(`User ${body.email} not found in tenant ${slug}`);
+    const targetUser = uRows[0];
+
+    const secret = process.env.JWT_SECRET;
+    if (!secret) throw new Error('JWT_SECRET is not defined');
+
+    const payload = {
+      sub: targetUser.id,
+      email: targetUser.email,
+      tenantId: schema_name,
+      tenantSlug: slug,
+      role: targetUser.role,
+      isImpersonated: true 
+    };
+
+    const token = jwt.sign(payload, secret, { expiresIn: '1h' });
+
     return { 
-      status: 'ok', 
-      tenant 
+      token, 
+      redirectUrl: `/${slug}/dashboard`
     };
   }
 
-  @Post(':id/toggle-active')
-  async toggleActive(@Req() req: Request, @Param('id') id: string) {
-    assertSuperAdmin(req);
-
-    if ((req as any).tenantId !== 'public') {
-      throw new BadRequestException('Must call this endpoint on public tenant');
-    }
-
+  @Post('tenants/:id/reset-admin-password')
+  async resetAdminPwd(@Req() req: Request, @Param('id') tenantId: string, @Body() body: { email: string, newPassword?: string }) {
+    this.assertSuperAdmin(req);
     const publicDs = this.getConn(req);
 
-    const rows = await publicDs.query(
-      `
-      update public.tenants
-      set
-        is_active = not is_active,
-        updated_at = now()
-      where id = $1
-      returning id, slug, name, is_active, created_at, updated_at
-      `,
-      [id],
-    );
+    const tRows = await publicDs.query(`select schema_name from public.tenants where id = $1`, [tenantId]);
+    if (!tRows.length) throw new NotFoundException('Tenant not found');
+    const schema = tRows[0].schema_name;
 
-    if (rows.length === 0) {
-      throw new NotFoundException('tenant not found');
-    }
+    const password = body.newPassword || Math.random().toString(36).slice(-8) + "Aa1!";
+    const hash = await bcrypt.hash(password, 10);
 
-    return { tenant: rows[0] };
+    const tenantDs = new DataSource({
+       type: 'postgres', url: process.env.DATABASE_URL, schema, synchronize: false
+    });
+    await tenantDs.initialize();
+    
+    await tenantDs.query(`update ${schema}.users set password_hash = $1 where email = $2`, [hash, body.email]);
+    await tenantDs.destroy();
+
+    return { 
+      status: 'success', 
+      email: body.email, 
+      tempPassword: password 
+    };
   }
 }

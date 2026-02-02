@@ -98,6 +98,9 @@ importers:
       rxjs:
         specifier: ^7.8.1
         version: 7.8.2
+      systeminformation:
+        specifier: ^5.30.7
+        version: 5.30.7
       typeorm:
         specifier: ^0.3.27
         version: 0.3.28(ioredis@5.9.2)(pg@8.17.1)(ts-node@10.9.2(@types/node@20.19.30)(typescript@5.6.3))
@@ -123,6 +126,9 @@ importers:
       '@types/nodemailer':
         specifier: ^7.0.4
         version: 7.0.5
+      '@types/systeminformation':
+        specifier: ^3.54.1
+        version: 3.54.1
       copyfiles:
         specifier: ^2.4.1
         version: 2.4.1
@@ -1618,6 +1624,10 @@ packages:
   '@types/strip-json-comments@0.0.30':
     resolution: {integrity: sha512-7NQmHra/JILCd1QqpSzl8+mJRc8ZHz3uDm8YV1Ks9IhK0epEiTw8aIErbvH9PI+6XbqhyIQy3462nEsn7UVzjQ==}
 
+  '@types/systeminformation@3.54.1':
+    resolution: {integrity: sha512-vvisj2mdWygyc0jk/5XtSVq9gtxCmF3nrGwv8wVway8pwNRhtPji/MU9dc1L0F6rl0F/NFIHa4ScRU7wmNaHmg==}
+    deprecated: This is a stub types definition. systeminformation provides its own type definitions, so you do not need this installed.
+
   '@types/use-sync-external-store@0.0.6':
     resolution: {integrity: sha512-zFDAD+tlpf2r4asuHEj0XH6pY6i0g5NeAHPn+15wk3BV6JA69eERFXC1gyGThDkVa1zCyKr5jox1+2LbV/AMLg==}
 
@@ -3057,6 +3067,12 @@ packages:
   supports-preserve-symlinks-flag@1.0.0:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
+
+  systeminformation@5.30.7:
+    resolution: {integrity: sha512-33B/cftpaWdpvH+Ho9U1b08ss8GQuLxrWHelbJT1yw4M48Taj8W3ezcPuaLoIHZz5V6tVHuQPr5BprEfnBLBMw==}
+    engines: {node: '>=8.0.0'}
+    os: [darwin, linux, win32, freebsd, openbsd, netbsd, sunos, android]
+    hasBin: true
 
   tailwind-merge@3.4.0:
     resolution: {integrity: sha512-uSaO4gnW+b3Y2aWoWfFpX62vn2sR3skfhbjsEnaBI81WD1wBLlHZe5sWf0AqjksNdYTbGBEd0UasQMT3SNV15g==}
@@ -5223,6 +5239,10 @@ snapshots:
 
   '@types/strip-json-comments@0.0.30': {}
 
+  '@types/systeminformation@3.54.1':
+    dependencies:
+      systeminformation: 5.30.7
+
   '@types/use-sync-external-store@0.0.6': {}
 
   '@types/validator@13.15.10': {}
@@ -6657,6 +6677,8 @@ snapshots:
       has-flag: 4.0.0
 
   supports-preserve-symlinks-flag@1.0.0: {}
+
+  systeminformation@5.30.7: {}
 
   tailwind-merge@3.4.0: {}
 

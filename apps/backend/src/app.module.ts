@@ -14,6 +14,7 @@ import { FilesController } from './files.controller';
 import { NotificationsTestController } from './realtime/notifications-test.controller';
 import { AuthPasswordController } from './auth-password.controller';
 import { SuperadminTenantsController } from './superadmin/superadmin-tenants.controller';
+import { SystemStatsService } from './superadmin/telemetry.service';
 
 import { TelemetryService } from './telemetry/telemetry.service';
 import { AuthService } from './auth.service';
@@ -99,6 +100,7 @@ import { RedisModule } from './redis/redis.module';
     NotificationsService,
     ProjectsEventsService,
     TenantBootstrapService,
+    SystemStatsService,
   ],
 })
 export class AppModule implements NestModule {
