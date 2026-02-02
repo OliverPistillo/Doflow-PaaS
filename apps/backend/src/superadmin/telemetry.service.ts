@@ -3,12 +3,10 @@ import * as si from 'systeminformation';
 import { DataSource } from 'typeorm';
 
 @Injectable()
-export class SystemStatsService {
-  // Iniettiamo la connessione DB per testarla
+export class SystemStatsService { // <--- NOME IMPORTANTE
   constructor(private readonly dataSource: DataSource) {}
 
   async getSystemStats() {
-    // 1. Hardware Stats
     const [cpu, mem, currentLoad, fs] = await Promise.all([
       si.cpu(),
       si.mem(),
@@ -19,14 +17,12 @@ export class SystemStatsService {
     const totalDisk = fs.reduce((acc, drive) => acc + drive.size, 0);
     const usedDisk = fs.reduce((acc, drive) => acc + drive.used, 0);
 
-    // 2. Services Health Check (I "pallini")
     const services = {
       database: 'down',
-      redis: 'unknown', // Se hai un RedisService, iniettalo e controllalo qui
-      api: 'up' // Se siamo qui, l'API risponde
+      redis: 'unknown',
+      api: 'up'
     };
 
-    // Check DB reale
     try {
       if (this.dataSource.isInitialized) {
         await this.dataSource.query('SELECT 1');
@@ -55,7 +51,7 @@ export class SystemStatsService {
         },
         uptime: si.time().uptime,
       },
-      services: services // Restituiamo lo stato dei servizi
+      services: services
     };
   }
 }

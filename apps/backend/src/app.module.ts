@@ -1,4 +1,3 @@
-// apps/backend/src/app.module.ts
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -14,9 +13,10 @@ import { FilesController } from './files.controller';
 import { NotificationsTestController } from './realtime/notifications-test.controller';
 import { AuthPasswordController } from './auth-password.controller';
 import { SuperadminTenantsController } from './superadmin/superadmin-tenants.controller';
-import { SystemStatsService } from './superadmin/telemetry.service';
 
-import { TelemetryService } from './telemetry/telemetry.service';
+// --- SERVIZI ---
+import { SystemStatsService } from './superadmin/telemetry.service'; // <--- FIX: Nuovo servizio per la dashboard superadmin
+import { TelemetryService } from './telemetry/telemetry.service';    // Servizio OpenTelemetry standard
 import { AuthService } from './auth.service';
 import { AuditService } from './audit.service';
 import { LoginGuardService } from './login-guard.service';
@@ -25,16 +25,16 @@ import { NotificationsService } from './realtime/notifications.service';
 import { ProjectsEventsService } from './realtime/projects-events.service';
 import { TenantBootstrapService } from './tenancy/tenant-bootstrap.service';
 
+// --- MIDDLEWARE & GUARD ---
 import { TenancyMiddleware } from './tenancy/tenancy.middleware';
 import { AuthMiddleware } from './auth.middleware';
 
+// --- MODULI ---
 import { TenantModule } from './tenant/tenant.module';
 import { MailModule } from './mail/mail.module';
 import { HealthModule } from './health/health.module';
-
 import { FedericaNeroneModule } from './federicanerone/federicanerone.module';
 import { BusinaroModule } from './businaro/businaro.module';
-
 import { TenancyModule } from './tenancy/tenancy.module';
 import { RedisModule } from './redis/redis.module';
 
@@ -92,7 +92,8 @@ import { RedisModule } from './redis/redis.module';
   ],
 
   providers: [
-    TelemetryService,
+    TelemetryService,        // Servizio Telemetria Standard
+    SystemStatsService,      // <--- FIX: Servizio Hardware/System per Superadmin
     AuthService,
     AuditService,
     LoginGuardService,
@@ -100,7 +101,6 @@ import { RedisModule } from './redis/redis.module';
     NotificationsService,
     ProjectsEventsService,
     TenantBootstrapService,
-    SystemStatsService,
   ],
 })
 export class AppModule implements NestModule {
