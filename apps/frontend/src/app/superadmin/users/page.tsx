@@ -59,7 +59,7 @@ type GlobalUser = {
   id: string;
   email: string;
   role: string;
-  tenant_id: string; // ID, schema_name o slug (dipende dai dati storici)
+  tenant_id: string; // ID, schema_name o slug
   tenant_name?: string;
   tenant_slug?: string;
   tenant_schema?: string;
@@ -77,7 +77,7 @@ type AuditRow = {
   created_at: string;
 };
 
-/* --- Tenant directory (for filter + create modal) --- */
+/* --- Tenant directory --- */
 type TenantRow = {
   id: string;
   slug: string;
@@ -166,7 +166,7 @@ export default function SuperadminUsersPage() {
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
 
-  // Tenants directory (id filter + create)
+  // Tenants directory
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [loadingTenants, setLoadingTenants] = useState(false);
 
@@ -189,8 +189,6 @@ export default function SuperadminUsersPage() {
   ========================= */
 
   const [activeTab, setActiveTab] = useState<"global" | "tenant">("global");
-
-  // ✅ USIAMO ID (UUID) per il filtro
   const [targetTenantId, setTargetTenantId] = useState<string>("__all__");
 
   /* =========================
@@ -211,7 +209,7 @@ export default function SuperadminUsersPage() {
   ========================= */
 
   const [createEmail, setCreateEmail] = useState("");
-  const [createTenantId, setCreateTenantId] = useState<string>(""); // UUID
+  const [createTenantId, setCreateTenantId] = useState<string>("");
   const [createRole, setCreateRole] = useState("user");
   const [accessMode, setAccessMode] = useState<"invite" | "password">("invite");
   const [createMfa, setCreateMfa] = useState(true);
@@ -238,7 +236,6 @@ export default function SuperadminUsersPage() {
       const list = Array.isArray(data?.tenants) ? data.tenants : [];
       setTenants(list);
 
-      // se siamo in tab tenant e non abbiamo selezione, pre-seleziona il primo attivo
       if (activeTab === "tenant" && targetTenantId === "__all__") {
         const firstActive = list.find((t) => t.is_active) ?? list[0];
         if (firstActive?.id) setTargetTenantId(firstActive.id);
@@ -274,14 +271,13 @@ export default function SuperadminUsersPage() {
       q,
       role: role === "__all__" ? "" : role,
       is_active: isActive === "__all__" ? "" : isActive,
-      tenantId: tenantParam, // ✅ Inviamo UUID come 'tenantId'
+      tenantId: tenantParam,
       page: String(page),
       pageSize: String(pageSize),
     }).toString();
   };
 
   const loadUsers = async () => {
-    // Se siamo in tab tenant ma non è selezionato nessun tenant, non carichiamo
     if (activeTab === "tenant" && (targetTenantId === "__all__" || !targetTenantId)) {
       setUsers([]);
       setTotal(0);
@@ -291,6 +287,8 @@ export default function SuperadminUsersPage() {
     setLoading(true);
     try {
       const qs = buildUsersQuery();
+      // Se vuoi distinguere tenant users (per tenant) vs global, qui puoi cambiare endpoint
+      // Ma per ora usiamo quello globale filtrato
       const endpoint = `/superadmin/users?${qs}`;
 
       const data = await apiFetch<{
@@ -322,7 +320,7 @@ export default function SuperadminUsersPage() {
       const qs = new URLSearchParams({
         days: "30",
         top: "20",
-        tenantId: tenantFilter, // ✅ UUID
+        tenantId: tenantFilter,
       }).toString();
 
       const data = await apiFetch<UsersKpiResponse>(`/superadmin/users/kpi?${qs}`);
@@ -405,9 +403,6 @@ export default function SuperadminUsersPage() {
     if (!resetUser) return;
 
     try {
-      // NB: resetUser.tenant_id dovrebbe essere lo schema o slug per l'URL, 
-      // oppure l'ID se il backend lo supporta. 
-      // Se users.tenant_id nel DB è lo slug, usiamo quello.
       const res = await apiFetch<{ tempPassword: string }>(
         `/superadmin/tenants/${resetUser.tenant_id}/users/${resetUser.id}/reset-password`,
         { method: "POST" },
@@ -453,7 +448,6 @@ export default function SuperadminUsersPage() {
         sendInvite: accessMode === "invite",
       };
 
-      // ✅ POST usando l'ID del tenant
       const res = await apiFetch<{ tempPassword?: string }>(
         `/superadmin/tenants/${t.id}/users`,
         {
@@ -538,7 +532,6 @@ export default function SuperadminUsersPage() {
         onValueChange={(v) => {
           setActiveTab(v as any);
           setPage(1);
-          // quando passi a tenant senza selezione, prova a impostare un tenant attivo
           if (v === "tenant" && (targetTenantId === "__all__" || !targetTenantId)) {
             const first = tenants.find((t) => t.is_active) ?? tenants[0];
             if (first?.id) setTargetTenantId(first.id);
@@ -654,13 +647,11 @@ export default function SuperadminUsersPage() {
           {/* KPI Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-5">
             {(() => {
-              // Cerchiamo la riga corrispondente al tenant selezionato (usando l'ID se possibile, o fallback)
               const row =
                 activeTab === "tenant" && targetTenantId !== "__all__"
                   ? kpi?.kpiByTenant?.find(
                       (x) =>
-                        x.tenant_id === targetTenantId || 
-                        // Fallback nel caso il KPI ritorni slug o schema invece che UUID
+                        x.tenant_id === targetTenantId ||
                         (x.tenant_slug && resolvedTenantForFilter?.slug === x.tenant_slug)
                     )
                   : null;
@@ -721,10 +712,10 @@ export default function SuperadminUsersPage() {
               </Badge>
             </div>
 
-            {/* ✅ FIX Recharts: Wrapper con dimensioni esplicite e min-width */}
+            {/* ✅ FIX Recharts: Wrapper with explicit dimensions */}
             <div className="mt-3 w-full rounded-xl border border-slate-200 bg-white">
-              <div className="h-[220px] min-h-[220px] w-full min-w-0">
-                <ResponsiveContainer width="100%" height="100%" minHeight={220}>
+              <div style={{ width: "100%", height: 220 }}>
+                <ResponsiveContainer width="100%" height="100%">
                   <LineChart
                     data={kpi?.trend || []}
                     margin={{ top: 12, right: 16, left: 0, bottom: 0 }}
@@ -762,7 +753,6 @@ export default function SuperadminUsersPage() {
                       key={t.tenant_id}
                       className="hover:bg-slate-50 cursor-pointer"
                       onClick={() => {
-                        // Proviamo a trovare il tenant nella nostra lista per ottenere l'ID
                         const found = tenants.find(
                           local => local.slug === t.tenant_slug || local.schema_name === t.tenant_schema
                         );
@@ -918,9 +908,9 @@ export default function SuperadminUsersPage() {
 
       {/* ======================================================
             MODALS (Audit / Create / Reset)
-      ======================================================= */
+      ======================================================= */}
 
-      /* Audit modal */}
+      {/* Audit modal */}
       {selectedUser && (
         <Dialog open onOpenChange={() => setSelectedUser(null)}>
           <DialogContent className="max-w-3xl">

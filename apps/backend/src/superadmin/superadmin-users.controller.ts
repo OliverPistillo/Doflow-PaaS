@@ -201,15 +201,15 @@ export class SuperadminUsersController {
   }
 
   /* ==========================================================
-      A) KPI & ANALYTICS (NEW)
+      A) KPI & ANALYTICS
       GET /api/superadmin/users/kpi
   ========================================================== */
   @Get('users/kpi')
   async usersKpi(
     @Req() req: Request,
-    @Query('tenantId') tenantId?: string, // opzionale: filtra trend su un tenant specifico
-    @Query('days') daysRaw?: string, // default 30
-    @Query('top') topRaw?: string, // default 20
+    @Query('tenantId') tenantId?: string,
+    @Query('days') daysRaw?: string,
+    @Query('top') topRaw?: string,
   ) {
     this.assertSuperAdmin(req);
 
@@ -219,8 +219,6 @@ export class SuperadminUsersController {
     const tFilter = String(tenantId || '').trim();
 
     try {
-      // 1) KPI “directory globale” aggregati per tenant_id
-      // join “furbo” su tenants perché tenant_id può essere schema_name o slug
       const kpiRows: UsersKpiByTenantRow[] = await this.dataSource.query(
         `
         with base as (
@@ -253,8 +251,6 @@ export class SuperadminUsersController {
         [days, top],
       );
 
-      // 2) Trend (nuovi utenti per giorno) — se non passi tenantId: trend globale
-      // Nota: date_trunc + generate_series per avere giorni “bucati” a 0
       const trend: UsersTrendPoint[] = await this.dataSource.query(
         `
         with params as (
@@ -352,7 +348,7 @@ export class SuperadminUsersController {
         `
         with base as (
           select
-            u.id, u.email, u.role, u.tenant_id, u.is_active,
+            u.id, u.email, u.role, u.tenant_id, u.is_active, u.mfa_required,
             u.created_at, u.updated_at,
             t.name as tenant_name,
             t.slug as tenant_slug,
@@ -381,14 +377,14 @@ export class SuperadminUsersController {
   }
 
   /* ==========================================================
-      C) UPDATE UTENTE GLOBALE (role / is_active)
+      C) UPDATE UTENTE GLOBALE (role / is_active / mfa_required)
       PATCH /api/superadmin/users/:id
   ========================================================== */
   @Patch('users/:id')
   async updateGlobalUser(
     @Req() req: Request,
     @Param('id') id: string,
-    @Body() body: { role?: Role; is_active?: boolean },
+    @Body() body: { role?: Role; is_active?: boolean; mfa_required?: boolean },
   ) {
     this.assertSuperAdmin(req);
 
@@ -405,6 +401,12 @@ export class SuperadminUsersController {
       if (typeof body.is_active === 'boolean') {
         sets.push(`is_active = $${idx++}`);
         vals.push(body.is_active);
+      }
+
+      // ✅ FIX: Gestione mfa_required per evitare 400 Bad Request
+      if (typeof body.mfa_required === 'boolean') {
+        sets.push(`mfa_required = $${idx++}`);
+        vals.push(body.mfa_required);
       }
 
       if (!sets.length) throw new BadRequestException('Nothing to update');
@@ -490,7 +492,7 @@ export class SuperadminUsersController {
   }
 
   /* ==========================================================
-      E) CREATE TENANT USER (policy C, invite-ready)
+      E) CREATE TENANT USER
   ========================================================== */
   @Post('tenants/:tenantId/users')
   async createTenantUser(
@@ -517,7 +519,6 @@ export class SuperadminUsersController {
 
       const role = (body.role || 'user').toLowerCase() as Role;
 
-      // POLICY C: admin → invito obbligatorio
       if (['admin', 'owner'].includes(role) && body.sendInvite !== true) {
         throw new BadRequestException('Admins must be invited');
       }
@@ -552,11 +553,9 @@ export class SuperadminUsersController {
           [email, hash, role],
         );
 
-        // INVITE TOKEN (pronto per MailService)
         let inviteToken: string | undefined;
         if (body.sendInvite === true) {
           inviteToken = crypto.randomBytes(32).toString('hex');
-          // TODO: salva token su invites table o redis
         }
 
         await this.auditTenant(tenantDs, schema, req, {
@@ -583,8 +582,7 @@ export class SuperadminUsersController {
   }
 
   /* ==========================================================
-      F) AUDIT PER UTENTE (TAB dedicato)
-      GET /api/superadmin/users/:email/audit
+      F) AUDIT
   ========================================================== */
   @Get('users/:email/audit')
   async auditForUser(
