@@ -13,6 +13,8 @@ import { FilesController } from './files.controller';
 import { NotificationsTestController } from './realtime/notifications-test.controller';
 import { AuthPasswordController } from './auth-password.controller';
 import { SuperadminTenantsController } from './superadmin/superadmin-tenants.controller';
+import { SuperadminUsersController } from './superadmin/superadmin-users.controller';
+
 
 // --- SERVIZI ---
 import { SystemStatsService } from './superadmin/telemetry.service'; // <--- FIX: Nuovo servizio per la dashboard superadmin
@@ -24,6 +26,8 @@ import { FileStorageService } from './file-storage.service';
 import { NotificationsService } from './realtime/notifications.service';
 import { ProjectsEventsService } from './realtime/projects-events.service';
 import { TenantBootstrapService } from './tenancy/tenant-bootstrap.service';
+import { SuperadminAuditController } from './audit.controller';
+
 
 // --- MIDDLEWARE & GUARD ---
 import { TenancyMiddleware } from './tenancy/tenancy.middleware';
@@ -89,6 +93,8 @@ import { RedisModule } from './redis/redis.module';
     NotificationsTestController,
     AuthPasswordController,
     SuperadminTenantsController,
+    SuperadminAuditController,
+    SuperadminUsersController,
   ],
 
   providers: [
