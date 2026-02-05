@@ -59,7 +59,7 @@ type GlobalUser = {
   id: string;
   email: string;
   role: string;
-  tenant_id: string; // schema_name o slug (dipende dai dati storici)
+  tenant_id: string; // ID, schema_name o slug (dipende dai dati storici)
   tenant_name?: string;
   tenant_slug?: string;
   tenant_schema?: string;
@@ -77,7 +77,7 @@ type AuditRow = {
   created_at: string;
 };
 
-/* --- Tenant directory (for slug filter + create modal) --- */
+/* --- Tenant directory (for filter + create modal) --- */
 type TenantRow = {
   id: string;
   slug: string;
@@ -159,14 +159,14 @@ export default function SuperadminUsersPage() {
   const { toast } = useToast();
 
   /* =========================
-      DATA STATE
+       DATA STATE
   ========================= */
 
   const [users, setUsers] = useState<GlobalUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
 
-  // Tenants directory (slug filter + create)
+  // Tenants directory (id filter + create)
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [loadingTenants, setLoadingTenants] = useState(false);
 
@@ -175,7 +175,7 @@ export default function SuperadminUsersPage() {
   const [kpi, setKpi] = useState<UsersKpiResponse | null>(null);
 
   /* =========================
-      FILTER STATE
+       FILTER STATE
   ========================= */
 
   const [q, setQ] = useState("");
@@ -185,16 +185,16 @@ export default function SuperadminUsersPage() {
   const pageSize = 25;
 
   /* =========================
-      VIEW MODE
+       VIEW MODE
   ========================= */
 
   const [activeTab, setActiveTab] = useState<"global" | "tenant">("global");
 
-  // ✅ IMPORTANT: adesso in UI gestiamo come SLUG
-  const [targetTenantSlug, setTargetTenantSlug] = useState<string>("__all__");
+  // ✅ USIAMO ID (UUID) per il filtro
+  const [targetTenantId, setTargetTenantId] = useState<string>("__all__");
 
   /* =========================
-      MODALS
+       MODALS
   ========================= */
 
   const [selectedUser, setSelectedUser] = useState<GlobalUser | null>(null);
@@ -207,46 +207,41 @@ export default function SuperadminUsersPage() {
   const [resetResult, setResetResult] = useState<string | null>(null);
 
   /* =========================
-      CREATE USER STATE
+       CREATE USER STATE
   ========================= */
 
   const [createEmail, setCreateEmail] = useState("");
-  const [createTenantSlug, setCreateTenantSlug] = useState<string>(""); // UI slug
+  const [createTenantId, setCreateTenantId] = useState<string>(""); // UUID
   const [createRole, setCreateRole] = useState("user");
   const [accessMode, setAccessMode] = useState<"invite" | "password">("invite");
   const [createMfa, setCreateMfa] = useState(true);
   const [creating, setCreating] = useState(false);
 
   const resolvedTenantForCreate = useMemo(() => {
-    const slug = (createTenantSlug || "").trim().toLowerCase();
-    if (!slug) return null;
-    const t = tenants.find((x) => x.slug?.toLowerCase() === slug);
-    return t ?? null;
-  }, [createTenantSlug, tenants]);
+    if (!createTenantId || createTenantId === "__none__") return null;
+    return tenants.find((x) => x.id === createTenantId) ?? null;
+  }, [createTenantId, tenants]);
 
   const resolvedTenantForFilter = useMemo(() => {
-    if (targetTenantSlug === "__all__") return null;
-    const slug = (targetTenantSlug || "").trim().toLowerCase();
-    const t = tenants.find((x) => x.slug?.toLowerCase() === slug);
-    return t ?? null;
-  }, [targetTenantSlug, tenants]);
+    if (targetTenantId === "__all__") return null;
+    return tenants.find((x) => x.id === targetTenantId) ?? null;
+  }, [targetTenantId, tenants]);
 
   /* ======================================================
-      LOAD TENANTS
+       LOAD TENANTS
   ======================================================= */
 
   const loadTenants = async () => {
     setLoadingTenants(true);
     try {
-      // assumiamo che esista: GET /superadmin/tenants -> { tenants: TenantRow[] }
       const data = await apiFetch<{ tenants: TenantRow[] }>("/superadmin/tenants");
       const list = Array.isArray(data?.tenants) ? data.tenants : [];
       setTenants(list);
 
       // se siamo in tab tenant e non abbiamo selezione, pre-seleziona il primo attivo
-      if (activeTab === "tenant" && targetTenantSlug === "__all__") {
+      if (activeTab === "tenant" && targetTenantId === "__all__") {
         const firstActive = list.find((t) => t.is_active) ?? list[0];
-        if (firstActive?.slug) setTargetTenantSlug(firstActive.slug);
+        if (firstActive?.id) setTargetTenantId(firstActive.id);
       }
     } catch (e: any) {
       setTenants([]);
@@ -266,28 +261,28 @@ export default function SuperadminUsersPage() {
   }, []);
 
   /* ======================================================
-      LOAD USERS + KPI
+       LOAD USERS + KPI
   ======================================================= */
 
   const buildUsersQuery = () => {
-    const tenant =
-      activeTab === "tenant" && targetTenantSlug !== "__all__"
-        ? targetTenantSlug
+    const tenantParam =
+      activeTab === "tenant" && targetTenantId !== "__all__"
+        ? targetTenantId
         : "";
 
     return new URLSearchParams({
       q,
       role: role === "__all__" ? "" : role,
       is_active: isActive === "__all__" ? "" : isActive,
-      tenant, // ✅ slug
+      tenantId: tenantParam, // ✅ Inviamo UUID come 'tenantId'
       page: String(page),
       pageSize: String(pageSize),
     }).toString();
   };
 
   const loadUsers = async () => {
-    // Se siamo in tab tenant ma non è selezionato nessun tenant (o lista vuota), non carichiamo
-    if (activeTab === "tenant" && (targetTenantSlug === "__all__" || !targetTenantSlug)) {
+    // Se siamo in tab tenant ma non è selezionato nessun tenant, non carichiamo
+    if (activeTab === "tenant" && (targetTenantId === "__all__" || !targetTenantId)) {
       setUsers([]);
       setTotal(0);
       return;
@@ -296,8 +291,6 @@ export default function SuperadminUsersPage() {
     setLoading(true);
     try {
       const qs = buildUsersQuery();
-
-      // ✅ SINGLE endpoint: directory globale con filtro tenant=slug
       const endpoint = `/superadmin/users?${qs}`;
 
       const data = await apiFetch<{
@@ -324,12 +317,12 @@ export default function SuperadminUsersPage() {
     setKpiLoading(true);
     try {
       const tenantFilter =
-        activeTab === "tenant" && targetTenantSlug !== "__all__" ? targetTenantSlug : "";
+        activeTab === "tenant" && targetTenantId !== "__all__" ? targetTenantId : "";
 
       const qs = new URLSearchParams({
         days: "30",
         top: "20",
-        tenant: tenantFilter, // ✅ slug
+        tenantId: tenantFilter, // ✅ UUID
       }).toString();
 
       const data = await apiFetch<UsersKpiResponse>(`/superadmin/users/kpi?${qs}`);
@@ -350,10 +343,10 @@ export default function SuperadminUsersPage() {
     loadUsers();
     loadKpi();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, activeTab, targetTenantSlug, role, isActive]);
+  }, [page, activeTab, targetTenantId, role, isActive]);
 
   /* ======================================================
-      ACTIONS
+       ACTIONS
   ======================================================= */
 
   const patchUser = async (id: string, patch: any) => {
@@ -374,15 +367,17 @@ export default function SuperadminUsersPage() {
   };
 
   const toggleMfa = async (u: GlobalUser) => {
-    // preveniamo spam click
     try {
       await patchUser(u.id, { mfa_required: !u.mfa_required });
+      toast({
+        title: "Aggiornato",
+        description: `MFA ${!u.mfa_required ? "abilitato" : "disabilitato"} per ${u.email}`,
+      });
     } catch {
-      // già toastato
+      // toast gestito in patchUser
     }
   };
 
-  // ✅ audit unico: /superadmin/audit?target_email=...&limit=&offset=
   const loadAudit = async (targetEmail: string) => {
     setAuditLoading(true);
     try {
@@ -410,7 +405,9 @@ export default function SuperadminUsersPage() {
     if (!resetUser) return;
 
     try {
-      // NB: reset è per tenant user. Qui tenant_id può essere slug o schema; il BE deve gestirlo.
+      // NB: resetUser.tenant_id dovrebbe essere lo schema o slug per l'URL, 
+      // oppure l'ID se il backend lo supporta. 
+      // Se users.tenant_id nel DB è lo slug, usiamo quello.
       const res = await apiFetch<{ tempPassword: string }>(
         `/superadmin/tenants/${resetUser.tenant_id}/users/${resetUser.id}/reset-password`,
         { method: "POST" },
@@ -428,7 +425,7 @@ export default function SuperadminUsersPage() {
   };
 
   const submitCreateUser = async () => {
-    if (!createEmail || !createTenantSlug) {
+    if (!createEmail || !createTenantId) {
       toast({
         title: "Dati mancanti",
         description: "Email e tenant sono obbligatori.",
@@ -441,7 +438,7 @@ export default function SuperadminUsersPage() {
     if (!t) {
       toast({
         title: "Tenant non valido",
-        description: "Seleziona un tenant valido (slug).",
+        description: "Seleziona un tenant valido.",
         variant: "destructive",
       });
       return;
@@ -456,7 +453,7 @@ export default function SuperadminUsersPage() {
         sendInvite: accessMode === "invite",
       };
 
-      // ✅ il backend crea su tenants/:tenantId/users (noi passiamo schema_name per sicurezza)
+      // ✅ POST usando l'ID del tenant
       const res = await apiFetch<{ tempPassword?: string }>(
         `/superadmin/tenants/${t.id}/users`,
         {
@@ -479,7 +476,7 @@ export default function SuperadminUsersPage() {
 
       setShowCreate(false);
       setCreateEmail("");
-      setCreateTenantSlug("");
+      setCreateTenantId("");
       setCreateRole("user");
       setCreateMfa(true);
       setAccessMode("invite");
@@ -498,18 +495,18 @@ export default function SuperadminUsersPage() {
   };
 
   /* ======================================================
-      DERIVED
+       DERIVED
   ======================================================= */
 
   const scopeLabel = useMemo(() => {
     if (activeTab === "global") return "Directory globale";
-    if (targetTenantSlug === "__all__") return "Tenant: —";
+    if (targetTenantId === "__all__") return "Tenant: —";
     const t = resolvedTenantForFilter;
-    return t ? `Tenant: ${t.name} (${t.slug})` : `Tenant: ${targetTenantSlug}`;
-  }, [activeTab, targetTenantSlug, resolvedTenantForFilter]);
+    return t ? `Tenant: ${t.name} (${t.slug})` : `Tenant ID: ${targetTenantId}`;
+  }, [activeTab, targetTenantId, resolvedTenantForFilter]);
 
   /* ======================================================
-      RENDER
+       RENDER
   ======================================================= */
 
   return (
@@ -542,9 +539,9 @@ export default function SuperadminUsersPage() {
           setActiveTab(v as any);
           setPage(1);
           // quando passi a tenant senza selezione, prova a impostare un tenant attivo
-          if (v === "tenant" && (targetTenantSlug === "__all__" || !targetTenantSlug)) {
+          if (v === "tenant" && (targetTenantId === "__all__" || !targetTenantId)) {
             const first = tenants.find((t) => t.is_active) ?? tenants[0];
-            if (first?.slug) setTargetTenantSlug(first.slug);
+            if (first?.id) setTargetTenantId(first.id);
           }
         }}
       >
@@ -562,23 +559,22 @@ export default function SuperadminUsersPage() {
         {/* FILTERS */}
         <Card className="p-4 mt-4 flex flex-wrap gap-4 items-center">
           {activeTab === "tenant" && (
-            <div className="w-[280px]">
+            <div className="w-[300px]">
               <Select
-                value={targetTenantSlug}
+                value={targetTenantId}
                 onValueChange={(v) => {
-                  setTargetTenantSlug(v);
+                  setTargetTenantId(v);
                   setPage(1);
                 }}
                 disabled={loadingTenants || tenants.length === 0}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder={loadingTenants ? "Caricamento..." : "Seleziona tenant (slug)"} />
+                  <SelectValue placeholder={loadingTenants ? "Caricamento..." : "Seleziona tenant"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {/* IMPORTANT: value non può essere stringa vuota */}
                   <SelectItem value="__all__">Seleziona…</SelectItem>
                   {tenants.map((t) => (
-                    <SelectItem key={t.id} value={t.slug}>
+                    <SelectItem key={t.id} value={t.id}>
                       {t.name} ({t.slug}){t.is_active ? "" : " — SUSPENDED"}
                     </SelectItem>
                   ))}
@@ -658,16 +654,14 @@ export default function SuperadminUsersPage() {
           {/* KPI Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-5">
             {(() => {
+              // Cerchiamo la riga corrispondente al tenant selezionato (usando l'ID se possibile, o fallback)
               const row =
-                activeTab === "tenant" && targetTenantSlug !== "__all__"
+                activeTab === "tenant" && targetTenantId !== "__all__"
                   ? kpi?.kpiByTenant?.find(
                       (x) =>
-                        (x.tenant_slug || "").toLowerCase() ===
-                          (targetTenantSlug || "").toLowerCase() ||
-                        (x.tenant_schema || "").toLowerCase() ===
-                          (targetTenantSlug || "").toLowerCase() ||
-                        (x.tenant_id || "").toLowerCase() ===
-                          (targetTenantSlug || "").toLowerCase(),
+                        x.tenant_id === targetTenantId || 
+                        // Fallback nel caso il KPI ritorni slug o schema invece che UUID
+                        (x.tenant_slug && resolvedTenantForFilter?.slug === x.tenant_slug)
                     )
                   : null;
 
@@ -727,20 +721,22 @@ export default function SuperadminUsersPage() {
               </Badge>
             </div>
 
-            {/* ✅ FIX chart: container con altezza definita */}
-            <div className="h-[220px] mt-3 rounded-xl border border-slate-200 bg-white">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={kpi?.trend || []}
-                  margin={{ top: 12, right: 16, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="day" tick={{ fontSize: 12 }} minTickGap={24} />
-                  <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="new_users" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
+            {/* ✅ FIX Recharts: Wrapper con dimensioni esplicite e min-width */}
+            <div className="mt-3 w-full rounded-xl border border-slate-200 bg-white">
+              <div className="h-[220px] min-h-[220px] w-full min-w-0">
+                <ResponsiveContainer width="100%" height="100%" minHeight={220}>
+                  <LineChart
+                    data={kpi?.trend || []}
+                    margin={{ top: 12, right: 16, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="day" tick={{ fontSize: 12 }} minTickGap={24} />
+                    <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="new_users" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
 
@@ -766,10 +762,15 @@ export default function SuperadminUsersPage() {
                       key={t.tenant_id}
                       className="hover:bg-slate-50 cursor-pointer"
                       onClick={() => {
-                        // click -> tab tenant + setta slug se disponibile
-                        setActiveTab("tenant");
-                        setTargetTenantSlug(t.tenant_slug || "__all__");
-                        setPage(1);
+                        // Proviamo a trovare il tenant nella nostra lista per ottenere l'ID
+                        const found = tenants.find(
+                          local => local.slug === t.tenant_slug || local.schema_name === t.tenant_schema
+                        );
+                        if (found) {
+                          setActiveTab("tenant");
+                          setTargetTenantId(found.id);
+                          setPage(1);
+                        }
                       }}
                       title="Click per aprire questo tenant"
                     >
@@ -818,10 +819,10 @@ export default function SuperadminUsersPage() {
                     Caricamento…
                   </td>
                 </tr>
-              ) : activeTab === "tenant" && (targetTenantSlug === "__all__" || !targetTenantSlug) ? (
+              ) : activeTab === "tenant" && (targetTenantId === "__all__" || !targetTenantId) ? (
                 <tr>
                   <td colSpan={6} className="p-10 text-center text-slate-400">
-                    Seleziona un tenant (slug) per vedere gli utenti.
+                    Seleziona un tenant per vedere gli utenti.
                   </td>
                 </tr>
               ) : users.length === 0 ? (
@@ -888,7 +889,7 @@ export default function SuperadminUsersPage() {
           </table>
         </Card>
 
-        {/* Pagination (semplice, non elimino nulla: aggiungo) */}
+        {/* Pagination */}
         <div className="flex items-center justify-between mt-4">
           <div className="text-sm text-slate-500">
             Totale: <span className="font-semibold text-slate-700">{total}</span>
@@ -917,15 +918,14 @@ export default function SuperadminUsersPage() {
 
       {/* ======================================================
             MODALS (Audit / Create / Reset)
-      ======================================================= */}
+      ======================================================= */
 
-      {/* Audit modal */}
+      /* Audit modal */}
       {selectedUser && (
         <Dialog open onOpenChange={() => setSelectedUser(null)}>
           <DialogContent className="max-w-3xl">
             <DialogHeader>
               <DialogTitle>{selectedUser.email}</DialogTitle>
-              {/* ✅ Fix a11y warning */}
               <DialogDescription className="sr-only">
                 Audit log utente e dettagli eventi.
               </DialogDescription>
@@ -977,7 +977,7 @@ export default function SuperadminUsersPage() {
             setShowCreate(open);
             if (!open) {
               setCreateEmail("");
-              setCreateTenantSlug("");
+              setCreateTenantId("");
               setCreateRole("user");
               setCreateMfa(true);
               setAccessMode("invite");
@@ -1003,31 +1003,24 @@ export default function SuperadminUsersPage() {
               </div>
 
               <div>
-                <div className="text-sm font-bold text-slate-600">Tenant (slug)</div>
+                <div className="text-sm font-bold text-slate-600">Tenant</div>
                 <Select
-                  value={createTenantSlug}
-                  onValueChange={(v) => setCreateTenantSlug(v)}
+                  value={createTenantId}
+                  onValueChange={(v) => setCreateTenantId(v)}
                   disabled={loadingTenants || tenants.length === 0}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder={loadingTenants ? "Caricamento..." : "Seleziona tenant"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {/* value non può essere "" */}
                     <SelectItem value="__none__">Seleziona…</SelectItem>
                     {tenants.map((t) => (
-                      <SelectItem key={t.id} value={t.slug}>
-                        {t.name} ({t.slug})
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name} ({t.slug}){t.is_active ? "" : " — SUSPENDED"}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-
-                {createTenantSlug && createTenantSlug !== "__none__" && !resolvedTenantForCreate && (
-                  <div className="text-xs text-amber-600 mt-1">
-                    Tenant non trovato nella directory (ricarica tenant).
-                  </div>
-                )}
               </div>
 
               <div>
@@ -1044,7 +1037,6 @@ export default function SuperadminUsersPage() {
                 </Select>
               </div>
 
-              {/* Access mode (non eliminato, rimane) */}
               <div>
                 <div className="text-sm font-bold text-slate-600">Metodo di accesso</div>
                 <Select value={accessMode} onValueChange={(v) => setAccessMode(v as any)}>
