@@ -63,9 +63,14 @@ export class SuperadminTenantsController {
   // ==========================================
   @Get('system/stats')
   async getSystemStats(@Req() req: Request) {
-    // Nota: Decommenta se vuoi proteggere l'endpoint, ma per debugging iniziale è utile averlo libero
-    // this.assertSuperAdmin(req); 
+    this.assertSuperAdmin(req);
     return this.telemetry.getSystemStats();
+  }
+
+  @Get('system/metrics')
+  async getSystemMetrics(@Req() req: Request) {
+    this.assertSuperAdmin(req);
+    return this.telemetry.getSystemMetrics();
   }
 
   // ==========================================
