@@ -7,11 +7,13 @@ import * as jwt from 'jsonwebtoken';
 import { Role } from './roles';
 
 type JwtPayload = {
-  sub: number;
+  sub: any;
   email: string;
   tenantId: string;
-  tenantSlug: string; 
+  tenantSlug: string;
   role: Role;
+  mfa_pending?: boolean;
+  mfa_required?: boolean;
 };
 
 function safeSchema(input: string): string {
@@ -48,21 +50,62 @@ export class AuthService {
     }
   }
 
-  private signToken(userId: number, email: string, tenantId: string, tenantSlug: string, role: Role) {
+  /**
+   * ✅ Token Signer (back-compat + MFA stages)
+   * - Se opts non passato: comportamento identico al vecchio (token FULL 1d)
+   * - Se opts.authStage === 'MFA_PENDING': aggiunge mfa_pending=true e default TTL corto (10m)
+   */
+  private signToken(
+    userId: any,
+    email: string,
+    tenantId: string,
+    tenantSlug: string,
+    role: Role,
+    opts?: {
+      authStage?: 'FULL' | 'MFA_PENDING';
+      mfaRequired?: boolean;
+      expiresIn?: jwt.SignOptions['expiresIn'];
+    },
+  ) {
     const secret = process.env.JWT_SECRET;
     if (!secret) throw new Error('JWT_SECRET not set');
 
     const t = safeSchema(tenantId);
 
+    const authStage = opts?.authStage ?? 'FULL';
+    const expiresIn =
+      opts?.expiresIn ??
+      (authStage === 'MFA_PENDING' ? ('10m' as const) : ('1d' as const));
+
     const payload: JwtPayload = {
       sub: userId,
       email,
       tenantId: t,
-      tenantSlug: tenantSlug, // ✅ Ora usiamo lo slug reale passato come parametro
+      tenantSlug,
       role,
+      ...(authStage === 'MFA_PENDING' ? { mfa_pending: true } : {}),
+      ...(typeof opts?.mfaRequired === 'boolean' ? { mfa_required: opts.mfaRequired } : {}),
     };
 
-    return jwt.sign(payload, secret, { expiresIn: '1d' });
+    // ✅ fix typings: jwt.sign vuole secret: jwt.Secret
+    return jwt.sign(payload as any, secret as jwt.Secret, { expiresIn } as jwt.SignOptions);
+  }
+
+  // ✅ wrapper pubblico per firmare token da controller (MFA unlock ecc.)
+  public signTokenPublic(
+    userId: any,
+    email: string,
+    tenantId: string,
+    tenantSlug: string,
+    role: Role,
+    opts?: {
+      authStage?: 'FULL' | 'MFA_PENDING';
+      mfaRequired?: boolean;
+      expiresIn?: import('jsonwebtoken').SignOptions['expiresIn'];
+    },
+  ) {
+    // chiamiamo il private in modo controllato (senza @ts-expect-error)
+    return (this as any).signToken(userId, email, tenantId, tenantSlug, role, opts);
   }
 
   // ✅ login in un tenant specifico
@@ -73,24 +116,25 @@ export class AuthService {
     password: string,
   ) {
     const t = safeSchema(tenantId);
-    
+
     // Recuperiamo lo SLUG reale (per il redirect frontend)
     let realSlug = t;
     if (t !== 'public') {
-        const tenantRow = await conn.query(
-           `select slug from public.tenants where schema_name = $1 limit 1`,
-           [t]
-        );
-        if (tenantRow[0]?.slug) {
-            realSlug = tenantRow[0].slug;
-        }
+      const tenantRow = await conn.query(
+        `select slug from public.tenants where schema_name = $1 limit 1`,
+        [t],
+      );
+      if (tenantRow[0]?.slug) {
+        realSlug = tenantRow[0].slug;
+      }
     }
 
     await this.assertTenantActive(conn, t);
 
     const rows = await conn.query(
       `
-      select id, email, password_hash, created_at, role
+      select id, email, password_hash, created_at, role,
+             mfa_enabled, mfa_verified_at, mfa_secret
       from ${t}.users
       where lower(email) = lower($1)
       limit 1
@@ -104,19 +148,38 @@ export class AuthService {
     const ok = await bcrypt.compare(password, user.password_hash as string);
     if (!ok) throw new Error('Invalid credentials');
 
-    const token = this.signToken(user.id, user.email, t, realSlug, user.role as Role);
+    // ✅ MFA requirement detection
+    const mfaRequired =
+      !!user.mfa_enabled && !!user.mfa_verified_at && !!user.mfa_secret;
+
+    // ✅ Token: pending se MFA richiesto
+    const token = this.signToken(
+      user.id,
+      user.email,
+      t,
+      realSlug,
+      user.role as Role,
+      mfaRequired
+        ? { authStage: 'MFA_PENDING', mfaRequired: true }
+        : { authStage: 'FULL', mfaRequired: false },
+    );
 
     return {
       user: {
         id: user.id,
         email: user.email,
         created_at: user.created_at,
-        tenantId: t,         // Back-compatibilità
-        schema: t,           // ✅ Esplicito per il frontend
+        tenantId: t, // Back-compatibilità
+        schema: t, // ✅ Esplicito per il frontend
         tenantSlug: realSlug, // ✅ FONDAMENTALE per il redirect
         role: user.role,
+        mfa_enabled: !!user.mfa_enabled,
       },
       token,
+      mfa: {
+        required: mfaRequired,
+        stage: mfaRequired ? 'MFA_PENDING' : 'FULL',
+      },
     };
   }
 
@@ -135,7 +198,7 @@ export class AuthService {
       .filter((s: string) => s && s !== 'public');
   }
 
-/**
+  /**
    * ✅ LOGIN AUTO (Smart Version)
    * 1. Cerca in Public. Se trova SuperAdmin -> OK.
    * 2. Se trova User normale in Public -> IGNORA (assumiamo sia un residuo di test) e cerca nei tenant.
@@ -160,10 +223,12 @@ export class AuthService {
       // Se è un utente normale, probabilmente esiste anche nel tenant specifico e dobbiamo dare precedenza a quello.
       const r = String(publicRes.user.role || '').toUpperCase();
       if (['SUPER_ADMIN', 'SUPERADMIN', 'OWNER'].includes(r)) {
-         console.log(`✅ Trovato SUPER_ADMIN in public.`);
-         return publicRes;
+        console.log(`✅ Trovato SUPER_ADMIN in public.`);
+        return publicRes;
       } else {
-         console.warn(`⚠️ Trovato USER '${email}' in public, ma non è SuperAdmin. Ignoro e cerco nei tenant specifici...`);
+        console.warn(
+          `⚠️ Trovato USER '${email}' in public, ma non è SuperAdmin. Ignoro e cerco nei tenant specifici...`,
+        );
       }
     } catch (err) {
       // Non trovato in public o password errata, proseguiamo
@@ -192,11 +257,11 @@ export class AuthService {
     // Recuperiamo lo slug anche qui
     let realSlug = tenantId;
     if (tenantId !== 'public') {
-         const tenantRow = await conn.query(
-           `select slug from public.tenants where schema_name = $1 limit 1`,
-           [tenantId]
-        );
-        if (tenantRow[0]?.slug) realSlug = tenantRow[0].slug;
+      const tenantRow = await conn.query(
+        `select slug from public.tenants where schema_name = $1 limit 1`,
+        [tenantId],
+      );
+      if (tenantRow[0]?.slug) realSlug = tenantRow[0].slug;
     }
 
     await this.assertTenantActive(conn, tenantId);
@@ -225,9 +290,13 @@ export class AuthService {
     );
 
     const user = rows[0];
+
     const token = this.signToken(user.id, user.email, tenantId, realSlug, user.role as Role);
 
-    return { user: { ...user, tenantId, tenantSlug: realSlug, role: user.role }, token };
+    return {
+      user: { ...user, tenantId, tenantSlug: realSlug, role: user.role },
+      token,
+    };
   }
 
   async login(req: Request, email: string, password: string) {
@@ -242,11 +311,11 @@ export class AuthService {
 
     let realSlug = tenantId;
     if (tenantId !== 'public') {
-         const tenantRow = await conn.query(
-           `select slug from public.tenants where schema_name = $1 limit 1`,
-           [tenantId]
-        );
-        if (tenantRow[0]?.slug) realSlug = tenantRow[0].slug;
+      const tenantRow = await conn.query(
+        `select slug from public.tenants where schema_name = $1 limit 1`,
+        [tenantId],
+      );
+      if (tenantRow[0]?.slug) realSlug = tenantRow[0].slug;
     }
 
     await this.assertTenantActive(conn, tenantId);

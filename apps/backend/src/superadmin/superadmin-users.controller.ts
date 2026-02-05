@@ -27,6 +27,26 @@ type Role =
   | 'user';
 
 /* =========================
+   KPI Response Types
+========================= */
+
+type UsersKpiByTenantRow = {
+  tenant_id: string;
+  tenant_name: string | null;
+  tenant_slug: string | null;
+  tenant_schema: string | null;
+  total_users: number;
+  active_users: number;
+  suspended_users: number;
+  new_users_window: number;
+};
+
+type UsersTrendPoint = {
+  day: string; // YYYY-MM-DD
+  new_users: number;
+};
+
+/* =========================
    Helpers
 ========================= */
 
@@ -58,7 +78,7 @@ export class SuperadminUsersController {
   constructor(private readonly dataSource: DataSource) {}
 
   /* =========================
-     Auth & Context
+      Auth & Context
   ========================= */
 
   private assertSuperAdmin(req: Request) {
@@ -91,7 +111,7 @@ export class SuperadminUsersController {
   }
 
   /* =========================
-     Data helpers
+      Data helpers
   ========================= */
 
   private async openTenantDs(schema: string): Promise<DataSource> {
@@ -123,7 +143,7 @@ export class SuperadminUsersController {
   }
 
   /* =========================
-     Audit helpers
+      Audit helpers
   ========================= */
 
   private async auditPublic(
@@ -181,8 +201,106 @@ export class SuperadminUsersController {
   }
 
   /* ==========================================================
-     A) DIRECTORY GLOBALE — public.users
-     GET /api/superadmin/users
+      A) KPI & ANALYTICS (NEW)
+      GET /api/superadmin/users/kpi
+  ========================================================== */
+  @Get('users/kpi')
+  async usersKpi(
+    @Req() req: Request,
+    @Query('tenantId') tenantId?: string, // opzionale: filtra trend su un tenant specifico
+    @Query('days') daysRaw?: string, // default 30
+    @Query('top') topRaw?: string, // default 20
+  ) {
+    this.assertSuperAdmin(req);
+
+    const days = clampInt(daysRaw, 30, 7, 180);
+    const top = clampInt(topRaw, 20, 5, 100);
+
+    const tFilter = String(tenantId || '').trim();
+
+    try {
+      // 1) KPI “directory globale” aggregati per tenant_id
+      // join “furbo” su tenants perché tenant_id può essere schema_name o slug
+      const kpiRows: UsersKpiByTenantRow[] = await this.dataSource.query(
+        `
+        with base as (
+          select
+            u.tenant_id,
+            u.is_active,
+            u.created_at,
+            t.name as tenant_name,
+            t.slug as tenant_slug,
+            t.schema_name as tenant_schema
+          from public.users u
+          left join public.tenants t
+            on lower(t.schema_name) = lower(u.tenant_id)
+            or lower(t.slug) = lower(u.tenant_id)
+        )
+        select
+          tenant_id,
+          max(tenant_name) as tenant_name,
+          max(tenant_slug) as tenant_slug,
+          max(tenant_schema) as tenant_schema,
+          count(*)::int as total_users,
+          sum(case when is_active then 1 else 0 end)::int as active_users,
+          sum(case when not is_active then 1 else 0 end)::int as suspended_users,
+          sum(case when created_at >= now() - ($1::int || ' days')::interval then 1 else 0 end)::int as new_users_window
+        from base
+        group by tenant_id
+        order by total_users desc, active_users desc
+        limit $2
+        `,
+        [days, top],
+      );
+
+      // 2) Trend (nuovi utenti per giorno) — se non passi tenantId: trend globale
+      // Nota: date_trunc + generate_series per avere giorni “bucati” a 0
+      const trend: UsersTrendPoint[] = await this.dataSource.query(
+        `
+        with params as (
+          select
+            (current_date - ($1::int - 1))::date as start_day,
+            current_date::date as end_day
+        ),
+        days as (
+          select generate_series((select start_day from params), (select end_day from params), '1 day')::date as day
+        ),
+        filtered as (
+          select u.created_at::date as day
+          from public.users u
+          where u.created_at >= (select start_day from params)
+            and ($2 = '' or lower(u.tenant_id) = lower($2))
+        ),
+        agg as (
+          select day, count(*)::int as new_users
+          from filtered
+          group by day
+        )
+        select
+          to_char(d.day, 'YYYY-MM-DD') as day,
+          coalesce(a.new_users, 0)::int as new_users
+        from days d
+        left join agg a on a.day = d.day
+        order by d.day asc
+        `,
+        [days, tFilter],
+      );
+
+      return {
+        windowDays: days,
+        top,
+        tenantFilter: tFilter || null,
+        kpiByTenant: kpiRows,
+        trend,
+      };
+    } catch (e) {
+      this.logAndThrow500('GET /superadmin/users/kpi', e);
+    }
+  }
+
+  /* ==========================================================
+      B) DIRECTORY GLOBALE — public.users
+      GET /api/superadmin/users
   ========================================================== */
   @Get('users')
   async listGlobalUsers(
@@ -263,8 +381,8 @@ export class SuperadminUsersController {
   }
 
   /* ==========================================================
-     B) UPDATE UTENTE GLOBALE (role / is_active)
-     PATCH /api/superadmin/users/:id
+      C) UPDATE UTENTE GLOBALE (role / is_active)
+      PATCH /api/superadmin/users/:id
   ========================================================== */
   @Patch('users/:id')
   async updateGlobalUser(
@@ -319,7 +437,7 @@ export class SuperadminUsersController {
   }
 
   /* ==========================================================
-     C) RESET PASSWORD — TENANT USER
+      D) RESET PASSWORD — TENANT USER
   ========================================================== */
   @Post('tenants/:tenantId/users/:userId/reset-password')
   async resetTenantUserPassword(
@@ -372,7 +490,7 @@ export class SuperadminUsersController {
   }
 
   /* ==========================================================
-     D) CREATE TENANT USER (policy C, invite-ready)
+      E) CREATE TENANT USER (policy C, invite-ready)
   ========================================================== */
   @Post('tenants/:tenantId/users')
   async createTenantUser(
@@ -465,8 +583,8 @@ export class SuperadminUsersController {
   }
 
   /* ==========================================================
-     E) AUDIT PER UTENTE (TAB dedicato)
-     GET /api/superadmin/users/:email/audit
+      F) AUDIT PER UTENTE (TAB dedicato)
+      GET /api/superadmin/users/:email/audit
   ========================================================== */
   @Get('users/:email/audit')
   async auditForUser(

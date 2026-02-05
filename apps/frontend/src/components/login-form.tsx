@@ -36,6 +36,8 @@ type JwtPayload = {
   tenantId?: string;
   tenant_id?: string;
   tenantSlug?: string;
+  authStage?: string;     // Aggiunto per supporto MFA
+  mfa_pending?: boolean;  // Aggiunto per supporto MFA
 };
 
 // Funzione helper per leggere il token
@@ -52,6 +54,11 @@ function normalizeRole(role?: string) {
   const r = String(role ?? "").toUpperCase().replace(/[^A-Z_]/g, "");
   if (["OWNER", "SUPERADMIN", "SUPER_ADMIN"].includes(r)) return "SUPER_ADMIN";
   return "USER";
+}
+
+// Helper per capire se il token è in stato "MFA pending"
+function isMfaPending(payload?: any) {
+  return payload?.mfa_pending === true || payload?.authStage === "MFA_PENDING";
 }
 
 const SLIDES = [
@@ -81,10 +88,17 @@ const loginSchema = z.object({
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
+
+// Aggiornato type LoginResponse per MFA
 type LoginResponse = { 
   token: string; 
   error?: string; 
   message?: string;
+  mfa?: {
+    required?: boolean;         // MFA richiesto adesso
+    pending?: boolean;          // token è MFA_PENDING
+    redirect?: string;          // opzionale: path consigliato es. "/{tenantSlug}/mfa"
+  };
   user?: { 
     tenantSlug?: string;
     tenant_id?: string;
@@ -158,12 +172,15 @@ export function LoginForm() {
       const payload = parseJwtPayload(tokenFromUrl);
       const tenantSlug = payload?.tenantSlug || payload?.tenantId;
 
-      // 🔥 FIX: Reindirizziamo alla cartella specifica del tenant (/federicanerone/dashboard)
-      // Invece che a quella generica (/dashboard) che potrebbe non esistere.
-      if (tenantSlug && tenantSlug !== 'public') {
-         window.location.href = `/${tenantSlug}/dashboard`;
+      // Gestione redirect (MFA vs Dashboard)
+      const next = (params.get("next") || "").toLowerCase();
+      const goMfa = next === "mfa" || isMfaPending(payload);
+
+      // 🔥 FIX: Reindirizziamo alla cartella specifica del tenant (/federicanerone/...)
+      if (tenantSlug && tenantSlug !== "public") {
+        window.location.href = goMfa ? `/${tenantSlug}/mfa` : `/${tenantSlug}/dashboard`;
       } else {
-         window.location.href = "/dashboard";
+        window.location.href = goMfa ? `/mfa` : `/dashboard`;
       }
     }
   }, []);
@@ -221,6 +238,42 @@ export function LoginForm() {
       }
 
       console.log(`🔍 Login Check: Ruolo [${role}], Tenant Rilevato [${targetTenant}]`);
+
+      // 0. CHECK MFA (Priorità assoluta)
+      const mfaRequired = data?.mfa?.required === true || isMfaPending(payload);
+
+      if (mfaRequired) {
+        // salva comunque il token (anche se MFA_PENDING)
+        window.localStorage.setItem("doflow_token", token);
+
+        // Se siamo su app host, dobbiamo mandare l'utente sul dominio tenant,
+        // MA sulla pagina /mfa (non /login e non /dashboard).
+        if (isAppHost) {
+          if (targetTenant !== "public" && /^[a-z0-9_]+$/i.test(targetTenant)) {
+            const safeToken = encodeURIComponent(token);
+            // Aggiungiamo next=mfa all'URL
+            const redirectUrl = `https://${targetTenant}.doflow.it/login?accessToken=${safeToken}&next=mfa`;
+            
+            setTenantRedirectUrl(redirectUrl);
+            setTenantDialogMode("redirect");
+            setShowTenantRedirect(true);
+            return;
+          }
+
+          // fallback super raro: MFA su public da app host
+          router.push(`/mfa`);
+          return;
+        }
+
+        // siamo già sul dominio tenant: vai a /{tenant}/mfa (enterprise-safe)
+        if (tenantSub) {
+          router.push(`/${tenantSub}/mfa`);
+          return;
+        }
+
+        router.push(`/mfa`);
+        return;
+      }
 
       // 1. SUPERADMIN
       if (role === "SUPER_ADMIN") {

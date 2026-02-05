@@ -14,7 +14,9 @@ import { NotificationsTestController } from './realtime/notifications-test.contr
 import { AuthPasswordController } from './auth-password.controller';
 import { SuperadminTenantsController } from './superadmin/superadmin-tenants.controller';
 import { SuperadminUsersController } from './superadmin/superadmin-users.controller';
-
+import { SecurityPolicyController } from './superadmin/security-policy.controller';
+import { AuthMfaController } from './auth-mfa.controller';
+import { AuthMfaService } from './auth-mfa.service';
 
 // --- SERVIZI ---
 import { SystemStatsService } from './superadmin/telemetry.service'; // <--- FIX: Nuovo servizio per la dashboard superadmin
@@ -95,6 +97,8 @@ import { RedisModule } from './redis/redis.module';
     SuperadminTenantsController,
     SuperadminAuditController,
     SuperadminUsersController,
+    SecurityPolicyController,
+    AuthMfaController,
   ],
 
   providers: [
@@ -107,6 +111,7 @@ import { RedisModule } from './redis/redis.module';
     NotificationsService,
     ProjectsEventsService,
     TenantBootstrapService,
+    AuthMfaService,
   ],
 })
 export class AppModule implements NestModule {

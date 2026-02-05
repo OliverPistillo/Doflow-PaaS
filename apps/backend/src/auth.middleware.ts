@@ -17,7 +17,7 @@ export class AuthMiddleware implements NestMiddleware {
           const payload = jwt.verify(token, secret) as any;
 
           // payload creato in AuthService.login:
-          // { sub, email, tenantId, role, iat, exp }
+          // { sub, email, tenantId, tenantSlug, role, authStage?, mfaRequired?, iat, exp }
           const authUser = {
             id: payload.sub,
             email: payload.email,
@@ -30,6 +30,33 @@ export class AuthMiddleware implements NestMiddleware {
           (req as any).user = authUser;
           (req as any).authUser = authUser;
 
+          // =========================================================
+          // ✅ MFA GATE (enterprise-safe)
+          // Se il token è "MFA_PENDING" blocchiamo tutto tranne:
+          // - auth endpoints (login, accept-invite, forgot/reset password, me)
+          // - endpoint MFA (che aggiungeremo)
+          // - health
+          // =========================================================
+          const authStage = String(payload?.authStage ?? 'FULL').toUpperCase();
+
+          if (authStage === 'MFA_PENDING') {
+            const path = String((req as any).originalUrl || req.url || '').toLowerCase();
+
+            const allowWhilePending =
+              path.startsWith('/auth/') || // login/accept-invite/forgot/reset/me ecc.
+              path.startsWith('/api/auth/') ||
+              path.startsWith('/health') ||
+              path.startsWith('/api/health') ||
+              path.startsWith('/auth/mfa') ||
+              path.startsWith('/api/auth/mfa');
+
+            if (!allowWhilePending) {
+              return res.status(403).json({
+                error: 'MFA_REQUIRED',
+                message: 'MFA required to access this resource',
+              });
+            }
+          }
         }
       } catch {
         // Token invalido / scaduto: NON blocchiamo qui,
