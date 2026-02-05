@@ -28,6 +28,7 @@ export class SuperadminAuditController {
   async list(
     @Req() req: Request,
     @Query('q') q?: string,
+    @Query('target_email') targetEmailRaw?: string,
     @Query('limit') limitRaw?: string,
     @Query('offset') offsetRaw?: string,
   ) {
@@ -35,13 +36,18 @@ export class SuperadminAuditController {
 
     const limit = Math.min(Math.max(parseInt(limitRaw || '100', 10) || 100, 1), 500);
     const offset = Math.max(parseInt(offsetRaw || '0', 10) || 0, 0);
+
+    // retrocompat: q generico, + filtro dedicato per target_email
     const query = (q || '').trim();
+    const targetEmail = (targetEmailRaw || '').trim().toLowerCase();
 
     try {
       await this.dataSource.query('select 1');
 
       // Tentativo "ricco" (se la tabella ha queste colonne)
       try {
+        // WHERE: se target_email presente => filtro stretto.
+        // altrimenti: usa q come ricerca generica (retrocompat)
         const rows = await this.dataSource.query(
           `
           select
@@ -55,34 +61,120 @@ export class SuperadminAuditController {
             created_at
           from public.audit_log
           where (
-            $1 = '' or
-            action ilike '%' || $1 || '%' or
-            coalesce(actor_email,'') ilike '%' || $1 || '%' or
-            coalesce(target_email,'') ilike '%' || $1 || '%' or
-            coalesce(ip,'') ilike '%' || $1 || '%'
+            -- filtro primario: target_email
+            ($1 <> '' and lower(coalesce(target_email,'')) = $1)
+            or
+            -- fallback: ricerca generica q (solo se target_email non passato)
+            ($1 = '' and (
+              $2 = '' or
+              action ilike '%' || $2 || '%' or
+              coalesce(actor_email,'') ilike '%' || $2 || '%' or
+              coalesce(target_email,'') ilike '%' || $2 || '%' or
+              coalesce(ip,'') ilike '%' || $2 || '%'
+            ))
           )
-          order by created_at desc
-          limit $2 offset $3
+          order by created_at desc, id desc
+          limit $3 offset $4
           `,
-          [query, limit, offset],
+          [targetEmail, query, limit, offset],
         );
 
-        return { logs: rows, limit, offset };
+        // total per pagination (stessa logica filtri)
+        const totalRows = await this.dataSource.query(
+          `
+          select count(*)::int as total
+          from public.audit_log
+          where (
+            ($1 <> '' and lower(coalesce(target_email,'')) = $1)
+            or
+            ($1 = '' and (
+              $2 = '' or
+              action ilike '%' || $2 || '%' or
+              coalesce(actor_email,'') ilike '%' || $2 || '%' or
+              coalesce(target_email,'') ilike '%' || $2 || '%' or
+              coalesce(ip,'') ilike '%' || $2 || '%'
+            ))
+          )
+          `,
+          [targetEmail, query],
+        );
+
+        return {
+          logs: rows,
+          limit,
+          offset,
+          total: totalRows?.[0]?.total ?? 0,
+          target_email: targetEmail || null,
+          q: query || null,
+        };
       } catch (e: any) {
         // Fallback "minimo" se qualche colonna non esiste
-        this.logger.warn(`[GET /superadmin/audit] rich_select_failed -> fallback: ${e?.message || e}`);
+        this.logger.warn(
+          `[GET /superadmin/audit] rich_select_failed -> fallback: ${e?.message || e}`,
+        );
+
+        // NB: fallback mantiene comunque target_email se possibile
+        if (targetEmail) {
+          // se la tabella non ha target_email, questa query fallirà:
+          // allora scendiamo al select * senza filtro, come ultimo fallback.
+          try {
+            const rows = await this.dataSource.query(
+              `
+              select *
+              from public.audit_log
+              where lower(coalesce(target_email,'')) = $1
+              order by created_at desc, id desc
+              limit $2 offset $3
+              `,
+              [targetEmail, limit, offset],
+            );
+
+            const totalRows = await this.dataSource.query(
+              `
+              select count(*)::int as total
+              from public.audit_log
+              where lower(coalesce(target_email,'')) = $1
+              `,
+              [targetEmail],
+            );
+
+            return {
+              logs: rows,
+              limit,
+              offset,
+              total: totalRows?.[0]?.total ?? 0,
+              target_email: targetEmail,
+              warning: 'fallback_select_star_filtered',
+            };
+          } catch (e2: any) {
+            this.logger.warn(
+              `[GET /superadmin/audit] fallback_filtered_failed -> select * no filter: ${e2?.message || e2}`,
+            );
+          }
+        }
 
         const rows = await this.dataSource.query(
           `
           select *
           from public.audit_log
-          order by created_at desc
+          order by created_at desc, id desc
           limit $1 offset $2
           `,
           [limit, offset],
         );
 
-        return { logs: rows, limit, offset, warning: 'fallback_select_star' };
+        // total "globale" nel fallback ultimo
+        const totalRows = await this.dataSource.query(
+          `select count(*)::int as total from public.audit_log`,
+        );
+
+        return {
+          logs: rows,
+          limit,
+          offset,
+          total: totalRows?.[0]?.total ?? 0,
+          warning: 'fallback_select_star',
+        };
       }
     } catch (e: any) {
       const msg = e?.message || String(e);
