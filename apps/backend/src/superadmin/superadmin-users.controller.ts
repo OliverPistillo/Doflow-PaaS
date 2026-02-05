@@ -1,22 +1,55 @@
 import {
+  BadRequestException,
+  Body,
   Controller,
-  Get,
-  Req,
   ForbiddenException,
+  Get,
   InternalServerErrorException,
   Logger,
+  Param,
+  Patch,
+  Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { DataSource } from 'typeorm';
+import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 
-function assertSuperAdmin(req: Request) {
-  const user = (req as any).authUser ?? (req as any).user;
-  const role = String(user?.role ?? '').toLowerCase().trim();
-  if (role !== 'superadmin' && role !== 'owner') {
-    throw new ForbiddenException('SuperAdmin only');
-  }
+type Role =
+  | 'superadmin'
+  | 'owner'
+  | 'admin'
+  | 'manager'
+  | 'editor'
+  | 'viewer'
+  | 'user';
+
+/* =========================
+   Helpers
+========================= */
+
+function safeSchema(input: string): string {
+  const s = String(input || '').trim().toLowerCase();
+  if (!s) return 'public';
+  if (!/^[a-z0-9_]+$/.test(s)) return 'public';
+  return s;
 }
+
+function clampInt(n: any, def: number, min: number, max: number) {
+  const v = Number.parseInt(String(n ?? ''), 10);
+  if (Number.isNaN(v)) return def;
+  return Math.min(max, Math.max(min, v));
+}
+
+function safeLike(q: string) {
+  return q.replace(/[%_]/g, (m) => `\\${m}`);
+}
+
+/* =========================
+   Controller
+========================= */
 
 @Controller('superadmin')
 export class SuperadminUsersController {
@@ -24,57 +57,438 @@ export class SuperadminUsersController {
 
   constructor(private readonly dataSource: DataSource) {}
 
+  /* =========================
+     Auth & Context
+  ========================= */
+
+  private assertSuperAdmin(req: Request) {
+    const user = (req as any).authUser ?? (req as any).user;
+    const role = String(user?.role ?? '').toLowerCase().trim();
+    if (role !== 'superadmin' && role !== 'owner') {
+      throw new ForbiddenException('SuperAdmin only');
+    }
+  }
+
+  private actor(req: Request) {
+    const user = (req as any).authUser ?? (req as any).user;
+    return {
+      email: user?.email ?? null,
+      role: user?.role ?? null,
+      ip: (req.ip as string | undefined) ?? null,
+    };
+  }
+
+  private logAndThrow500(where: string, e: any): never {
+    const msg = e?.message || String(e);
+    const code = e?.code;
+    this.logger.error(`[${where}] ${msg}`, e?.stack || undefined);
+    throw new InternalServerErrorException({
+      error: 'INTERNAL_ERROR',
+      where,
+      message: msg,
+      code,
+    });
+  }
+
+  /* =========================
+     Data helpers
+  ========================= */
+
+  private async openTenantDs(schema: string): Promise<DataSource> {
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new Error('Missing DATABASE_URL');
+
+    const ds = new DataSource({
+      type: 'postgres',
+      url,
+      schema: safeSchema(schema),
+      synchronize: false,
+    });
+
+    await ds.initialize();
+    return ds;
+  }
+
+  private async getTenantById(tenantId: string) {
+    const rows = await this.dataSource.query(
+      `
+      select id, slug, name, schema_name, is_active
+      from public.tenants
+      where id = $1
+      limit 1
+      `,
+      [tenantId],
+    );
+    return rows?.[0] ?? null;
+  }
+
+  /* =========================
+     Audit helpers
+  ========================= */
+
+  private async auditPublic(
+    req: Request,
+    payload: { action: string; targetEmail?: string | null; metadata?: any },
+  ) {
+    try {
+      const a = this.actor(req);
+      await this.dataSource.query(
+        `
+        insert into public.audit_log
+          (action, actor_email, actor_role, target_email, metadata, ip)
+        values ($1, $2, $3, $4, $5::jsonb, $6)
+        `,
+        [
+          payload.action,
+          a.email,
+          a.role,
+          payload.targetEmail ?? null,
+          JSON.stringify(payload.metadata ?? {}),
+          a.ip,
+        ],
+      );
+    } catch (e: any) {
+      this.logger.warn(`[AUDIT public] skipped: ${e?.message || e}`);
+    }
+  }
+
+  private async auditTenant(
+    tenantDs: DataSource,
+    schema: string,
+    req: Request,
+    payload: { action: string; targetEmail?: string | null; metadata?: any },
+  ) {
+    try {
+      const a = this.actor(req);
+      await tenantDs.query(
+        `
+        insert into "${schema}"."audit_log"
+          (action, actor_email, actor_role, target_email, metadata, ip)
+        values ($1, $2, $3, $4, $5::jsonb, $6)
+        `,
+        [
+          payload.action,
+          a.email,
+          a.role,
+          payload.targetEmail ?? null,
+          JSON.stringify(payload.metadata ?? {}),
+          a.ip,
+        ],
+      );
+    } catch (e: any) {
+      this.logger.warn(`[AUDIT tenant:${schema}] skipped: ${e?.message || e}`);
+    }
+  }
+
+  /* ==========================================================
+     A) DIRECTORY GLOBALE — public.users
+     GET /api/superadmin/users
+  ========================================================== */
   @Get('users')
-  async list(
+  async listGlobalUsers(
     @Req() req: Request,
     @Query('q') q?: string,
     @Query('tenant') tenant?: string,
-    @Query('limit') limitRaw?: string,
-    @Query('offset') offsetRaw?: string,
+    @Query('role') role?: string,
+    @Query('is_active') is_active?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
-    assertSuperAdmin(req);
-
-    const limit = Math.min(Math.max(parseInt(limitRaw || '200', 10) || 200, 1), 500);
-    const offset = Math.max(parseInt(offsetRaw || '0', 10) || 0, 0);
-
-    const query = (q || '').trim();
-    const tenantFilter = (tenant || '').trim().toLowerCase();
+    this.assertSuperAdmin(req);
 
     try {
-      await this.dataSource.query('select 1');
+      const p = clampInt(page, 1, 1, 100_000);
+      const ps = clampInt(pageSize, 25, 5, 200);
+      const offset = (p - 1) * ps;
+
+      const where: string[] = [];
+      const params: any[] = [];
+      let i = 1;
+
+      if (q?.trim()) {
+        const like = `%${safeLike(q.trim().toLowerCase())}%`;
+        params.push(like, like);
+        where.push(
+          `(lower(u.email) like $${i++} escape '\\' or lower(u.tenant_id) like $${i++} escape '\\')`,
+        );
+      }
+
+      if (tenant?.trim()) {
+        params.push(tenant.trim().toLowerCase());
+        where.push(`lower(u.tenant_id) = $${i++}`);
+      }
+
+      if (role?.trim()) {
+        params.push(role.trim().toLowerCase());
+        where.push(`lower(u.role) = $${i++}`);
+      }
+
+      if (typeof is_active === 'string' && is_active.length) {
+        params.push(is_active === 'true' || is_active === '1');
+        where.push(`u.is_active = $${i++}`);
+      }
+
+      const whereSql = where.length ? `where ${where.join(' and ')}` : '';
 
       const rows = await this.dataSource.query(
         `
-        select
-          id,
-          email,
-          role,
-          tenant_id,
-          is_active,
-          created_at,
-          updated_at
-        from public.users
-        where
-          ($1 = '' or email ilike '%' || $1 || '%'
-                 or role ilike '%' || $1 || '%'
-                 or tenant_id ilike '%' || $1 || '%')
-          and ($2 = '' or tenant_id = $2)
+        with base as (
+          select
+            u.id, u.email, u.role, u.tenant_id, u.is_active,
+            u.created_at, u.updated_at,
+            t.name as tenant_name,
+            t.slug as tenant_slug,
+            t.schema_name as tenant_schema
+          from public.users u
+          left join public.tenants t
+            on lower(t.schema_name) = lower(u.tenant_id)
+            or lower(t.slug) = lower(u.tenant_id)
+          ${whereSql}
+        )
+        select *, (select count(*) from base) as total
+        from base
         order by created_at desc
-        limit $3 offset $4
+        limit ${ps} offset ${offset}
         `,
-        [query, tenantFilter, limit, offset],
+        params,
       );
 
-      return { users: rows, limit, offset };
-    } catch (e: any) {
-      const msg = e?.message || String(e);
-      this.logger.error(`[GET /superadmin/users] ${msg}`, e?.stack || undefined);
-      throw new InternalServerErrorException({
-        error: 'INTERNAL_ERROR',
-        where: 'GET /superadmin/users',
-        message: msg,
-        code: e?.code,
+      const total = rows?.[0]?.total ? Number(rows[0].total) : 0;
+      const users = (rows || []).map(({ total: _t, ...rest }: any) => rest);
+
+      return { page: p, pageSize: ps, total, users };
+    } catch (e) {
+      this.logAndThrow500('GET /superadmin/users', e);
+    }
+  }
+
+  /* ==========================================================
+     B) UPDATE UTENTE GLOBALE (role / is_active)
+     PATCH /api/superadmin/users/:id
+  ========================================================== */
+  @Patch('users/:id')
+  async updateGlobalUser(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Body() body: { role?: Role; is_active?: boolean },
+  ) {
+    this.assertSuperAdmin(req);
+
+    try {
+      const sets: string[] = [];
+      const vals: any[] = [];
+      let idx = 1;
+
+      if (typeof body.role === 'string') {
+        sets.push(`role = $${idx++}`);
+        vals.push(body.role.toLowerCase());
+      }
+
+      if (typeof body.is_active === 'boolean') {
+        sets.push(`is_active = $${idx++}`);
+        vals.push(body.is_active);
+      }
+
+      if (!sets.length) throw new BadRequestException('Nothing to update');
+
+      vals.push(id);
+
+      const rows = await this.dataSource.query(
+        `
+        update public.users
+        set ${sets.join(', ')}, updated_at = now()
+        where id = $${idx}
+        returning *
+        `,
+        vals,
+      );
+
+      if (!rows.length) throw new BadRequestException('User not found');
+
+      await this.auditPublic(req, {
+        action: 'GLOBAL_USER_UPDATED',
+        targetEmail: rows[0].email,
+        metadata: body,
       });
+
+      return { user: rows[0] };
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e;
+      this.logAndThrow500('PATCH /superadmin/users/:id', e);
+    }
+  }
+
+  /* ==========================================================
+     C) RESET PASSWORD — TENANT USER
+  ========================================================== */
+  @Post('tenants/:tenantId/users/:userId/reset-password')
+  async resetTenantUserPassword(
+    @Req() req: Request,
+    @Param('tenantId') tenantId: string,
+    @Param('userId') userId: string,
+  ) {
+    this.assertSuperAdmin(req);
+
+    try {
+      const t = await this.getTenantById(tenantId);
+      if (!t) throw new BadRequestException('Tenant not found');
+
+      const schema = safeSchema(t.schema_name);
+      const tenantDs = await this.openTenantDs(schema);
+
+      try {
+        const tempPassword =
+          Math.random().toString(36).slice(-8) + 'Aa1!';
+        const hash = await bcrypt.hash(tempPassword, 10);
+
+        const rows = await tenantDs.query(
+          `
+          update "${schema}"."users"
+          set password_hash = $1, updated_at = now()
+          where id = $2
+          returning email
+          `,
+          [hash, userId],
+        );
+
+        if (!rows.length) throw new BadRequestException('User not found');
+
+        await this.auditTenant(tenantDs, schema, req, {
+          action: 'RESET_PASSWORD',
+          targetEmail: rows[0].email,
+        });
+
+        return { tempPassword };
+      } finally {
+        if (tenantDs.isInitialized) await tenantDs.destroy();
+      }
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e;
+      this.logAndThrow500(
+        'POST /superadmin/tenants/:tenantId/users/:userId/reset-password',
+        e,
+      );
+    }
+  }
+
+  /* ==========================================================
+     D) CREATE TENANT USER (policy C, invite-ready)
+  ========================================================== */
+  @Post('tenants/:tenantId/users')
+  async createTenantUser(
+    @Req() req: Request,
+    @Param('tenantId') tenantId: string,
+    @Body()
+    body: {
+      email: string;
+      role?: Role;
+      password?: string;
+      sendInvite?: boolean;
+    },
+  ) {
+    this.assertSuperAdmin(req);
+
+    try {
+      const t = await this.getTenantById(tenantId);
+      if (!t) throw new BadRequestException('Tenant not found');
+
+      const email = String(body.email || '').trim().toLowerCase();
+      if (!email || !email.includes('@')) {
+        throw new BadRequestException('Invalid email');
+      }
+
+      const role = (body.role || 'user').toLowerCase() as Role;
+
+      // POLICY C: admin → invito obbligatorio
+      if (['admin', 'owner'].includes(role) && body.sendInvite !== true) {
+        throw new BadRequestException('Admins must be invited');
+      }
+
+      const schema = safeSchema(t.schema_name);
+      const tenantDs = await this.openTenantDs(schema);
+
+      try {
+        const dup = await tenantDs.query(
+          `select 1 from "${schema}"."users" where email = $1 limit 1`,
+          [email],
+        );
+        if (dup.length) throw new BadRequestException('User already exists');
+
+        const tempPassword =
+          body.sendInvite === true
+            ? null
+            : body.password || Math.random().toString(36).slice(-10) + 'Aa1!';
+
+        const hash =
+          tempPassword !== null
+            ? await bcrypt.hash(tempPassword, 10)
+            : 'INVITED';
+
+        const rows = await tenantDs.query(
+          `
+          insert into "${schema}"."users"
+            (email, password_hash, role, is_active, created_at, updated_at)
+          values ($1, $2, $3, true, now(), now())
+          returning id, email, role
+          `,
+          [email, hash, role],
+        );
+
+        // INVITE TOKEN (pronto per MailService)
+        let inviteToken: string | undefined;
+        if (body.sendInvite === true) {
+          inviteToken = crypto.randomBytes(32).toString('hex');
+          // TODO: salva token su invites table o redis
+        }
+
+        await this.auditTenant(tenantDs, schema, req, {
+          action: 'TENANT_USER_CREATED',
+          targetEmail: email,
+          metadata: { role, invite: body.sendInvite === true },
+        });
+
+        return {
+          user: rows[0],
+          tempPassword,
+          inviteToken,
+        };
+      } finally {
+        if (tenantDs.isInitialized) await tenantDs.destroy();
+      }
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e;
+      this.logAndThrow500(
+        'POST /superadmin/tenants/:tenantId/users',
+        e,
+      );
+    }
+  }
+
+  /* ==========================================================
+     E) AUDIT PER UTENTE (TAB dedicato)
+     GET /api/superadmin/users/:email/audit
+  ========================================================== */
+  @Get('users/:email/audit')
+  async auditForUser(
+    @Req() req: Request,
+    @Param('email') email: string,
+  ) {
+    this.assertSuperAdmin(req);
+
+    try {
+      const rows = await this.dataSource.query(
+        `
+        select *
+        from public.audit_log
+        where target_email = $1
+        order by created_at desc
+        limit 200
+        `,
+        [email],
+      );
+      return { logs: rows };
+    } catch (e) {
+      this.logAndThrow500('GET /superadmin/users/:email/audit', e);
     }
   }
 }
