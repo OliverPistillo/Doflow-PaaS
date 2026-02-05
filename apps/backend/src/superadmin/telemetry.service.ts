@@ -23,16 +23,15 @@ export class SystemStatsService {
       api: 'up',
     };
 
-    // 1. HARDWARE STATS (Protetto da Try/Catch)
+    // 1) HARDWARE STATS
     try {
-      // Nota: fsSize su Docker a volte fallisce se non ha permessi, quindi lo isoliamo
       const [cpu, mem, currentLoad] = await Promise.all([
-        si.cpu().catch(() => ({ cores: 0, brand: 'N/A' })),
-        si.mem().catch(() => ({ total: 0, active: 0 })),
-        si.currentLoad().catch(() => ({ currentLoad: 0 })),
+        si.cpu().catch(() => ({ cores: 0, brand: 'N/A' } as any)),
+        si.mem().catch(() => ({ total: 0, active: 0 } as any)),
+        si.currentLoad().catch(() => ({ currentLoad: 0 } as any)),
       ]);
 
-      // Tentativo separato per il disco (spesso problematico su container)
+      // Disco (spesso problematico su container)
       let fs: any[] = [];
       try {
         fs = await si.fsSize();
@@ -43,37 +42,44 @@ export class SystemStatsService {
       const totalDisk = fs.reduce((acc, drive) => acc + (drive.size || 0), 0);
       const usedDisk = fs.reduce((acc, drive) => acc + (drive.used || 0), 0);
 
+      // ✅ Uptime corretto (si.time() è async in molte versioni)
+      const t = await Promise.resolve(si.time()).catch(() => ({ uptime: 0 } as any));
+      const uptime = (t as any)?.uptime || process.uptime();
+
       hardware = {
         cpu: {
           cores: cpu.cores || 0,
           brand: cpu.brand || 'Docker/Virtual',
-          load: Math.round(currentLoad.currentLoad || 0),
+          load: Math.round((currentLoad as any).currentLoad || 0),
         },
         memory: {
-          totalGb: (mem.total / 1024 / 1024 / 1024).toFixed(2),
-          usedGb: (mem.active / 1024 / 1024 / 1024).toFixed(2),
-          percent: mem.total > 0 ? Math.round((mem.active / mem.total) * 100) : 0,
+          totalGb: ((mem as any).total / 1024 / 1024 / 1024).toFixed(2),
+          usedGb: ((mem as any).active / 1024 / 1024 / 1024).toFixed(2),
+          percent:
+            (mem as any).total > 0
+              ? Math.round(((mem as any).active / (mem as any).total) * 100)
+              : 0,
         },
         disk: {
           totalGb: (totalDisk / 1024 / 1024 / 1024).toFixed(2),
           usedGb: (usedDisk / 1024 / 1024 / 1024).toFixed(2),
           percent: totalDisk > 0 ? Math.round((usedDisk / totalDisk) * 100) : 0,
         },
-        uptime: si.time().uptime || process.uptime(),
+        uptime,
       };
     } catch (e) {
-      this.logger.error('Critical Error reading Hardware Stats', e);
-      // Non rilanciamo l'errore, lasciamo i valori di default a 0
+      this.logger.error('Critical Error reading Hardware Stats', e as any);
+      // Non rilanciamo: lasciamo i default
     }
 
-    // 2. DB CHECK (Protetto)
+    // 2) DB CHECK
     try {
       if (this.dataSource.isInitialized) {
-        await this.dataSource.query('SELECT 1'); // Ping veloce
+        await this.dataSource.query('SELECT 1');
         services.database = 'up';
       }
     } catch (e) {
-      this.logger.error('Database Check Failed', e);
+      this.logger.error('Database Check Failed', e as any);
       services.database = 'down';
     }
 
