@@ -1,4 +1,11 @@
-import { Body, Controller, Post, Req, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Post,
+  Req,
+  UnauthorizedException,
+  BadRequestException,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { AuthMfaService } from './auth-mfa.service';
 
@@ -15,9 +22,12 @@ export class AuthMfaController {
   @Post('mfa/start')
   async start(@Req() req: Request) {
     const user = (req as any).authUser ?? (req as any).user;
-    if (!user?.id) throw new UnauthorizedException('Not authenticated');
 
-    return this.mfa.start(req, String(user.id));
+    // ✅ FIX 3: accetta sia `id` (mappato dal middleware) sia `sub` (payload JWT standard)
+    const userId = user?.id ?? user?.sub;
+    if (!userId) throw new UnauthorizedException('Not authenticated');
+
+    return this.mfa.start(req, String(userId));
   }
 
   /**
@@ -26,16 +36,18 @@ export class AuthMfaController {
    * - se ok -> token FULL (upgrade) + aggiorna contatori
    */
   @Post('mfa/verify')
-  async verify(
-    @Req() req: Request,
-    @Body() body: { code?: string },
-  ) {
-    const code = String(body.code ?? '').trim();
-    if (!/^\d{6}$/.test(code)) throw new BadRequestException('Invalid code (6 digits)');
+  async verify(@Req() req: Request, @Body() body: { code?: string }) {
+    const code = String(body?.code ?? '').trim();
+    if (!/^\d{6}$/.test(code)) {
+      throw new BadRequestException('Invalid code (6 digits)');
+    }
 
     const user = (req as any).authUser ?? (req as any).user;
-    if (!user?.id) throw new UnauthorizedException('Not authenticated');
 
-    return this.mfa.verify(req, String(user.id), code);
+    // ✅ FIX 3: accetta sia `id` che `sub`
+    const userId = user?.id ?? user?.sub;
+    if (!userId) throw new UnauthorizedException('Not authenticated');
+
+    return this.mfa.verify(req, String(userId), code);
   }
 }

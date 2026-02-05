@@ -13,6 +13,7 @@ import {
   Patch,
   InternalServerErrorException,
   Logger,
+  Query,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { DataSource } from 'typeorm';
@@ -40,11 +41,23 @@ type UpdateTenantBody = {
   vat_number?: string;      // opzionale
 };
 
+// --- Helpers ---
+
 function safeSchema(input: string): string {
   const s = String(input || '').trim().toLowerCase();
   if (!s) return 'public';
   if (!/^[a-z0-9_]+$/.test(s)) return 'public';
   return s;
+}
+
+function clampInt(n: any, def: number, min: number, max: number) {
+  const v = Number.parseInt(String(n ?? ''), 10);
+  if (Number.isNaN(v)) return def;
+  return Math.min(max, Math.max(min, v));
+}
+
+function safeLike(q: string) {
+  return q.replace(/[%_]/g, (m) => `\\${m}`);
 }
 
 @Controller('superadmin')
@@ -65,6 +78,15 @@ export class SuperadminTenantsController {
     }
   }
 
+  private actor(req: Request) {
+    const user = (req as any).authUser ?? (req as any).user;
+    return {
+      email: user?.email ?? null,
+      role: user?.role ?? null,
+      ip: (req.ip as string | undefined) ?? null,
+    };
+  }
+
   private async openTenantDs(schema: string): Promise<DataSource> {
     const s = safeSchema(schema);
 
@@ -82,13 +104,51 @@ export class SuperadminTenantsController {
     return ds;
   }
 
+  private async getTenantById(tenantId: string) {
+    const rows = await this.dataSource.query(
+      `
+      select id, slug, name, schema_name, is_active
+      from public.tenants
+      where id = $1
+      limit 1
+      `,
+      [tenantId],
+    );
+    return rows?.[0] ?? null;
+  }
+
+  private async auditTenant(
+    tenantDs: DataSource,
+    schema: string,
+    req: Request,
+    payload: { action: string; targetEmail?: string | null; metadata?: any },
+  ) {
+    try {
+      const a = this.actor(req);
+      await tenantDs.query(
+        `
+        insert into "${schema}"."audit_log"
+          (action, actor_email, actor_role, target_email, metadata, ip)
+        values ($1, $2, $3, $4, $5::jsonb, $6)
+        `,
+        [
+          payload.action,
+          a.email,
+          a.role,
+          payload.targetEmail ?? null,
+          JSON.stringify(payload.metadata ?? {}),
+          a.ip,
+        ],
+      );
+    } catch (e: any) {
+      this.logger.warn(`[AUDIT tenant:${schema}] skipped: ${e?.message || e}`);
+    }
+  }
+
   private logAndThrow500(where: string, e: any): never {
     const msg = e?.message || String(e);
     const code = e?.code;
     this.logger.error(`[${where}] ${msg}`, e?.stack || undefined);
-
-    // Se vuoi SUPER leggibile anche in UI/proxy, sostituisci tutto con una stringa:
-    // throw new InternalServerErrorException(`INTERNAL_ERROR @ ${where}: ${msg} (code=${code || 'n/a'})`);
 
     throw new InternalServerErrorException({
       error: 'INTERNAL_ERROR',
@@ -291,8 +351,178 @@ export class SuperadminTenantsController {
   }
 
   // ==========================================
-  // 3) TENANT USERS DEBUG
+  // 3) TENANT USERS MANAGEMENT
   // ==========================================
+
+  // A) LISTA UTENTI DI UN TENANT (Connessione allo schema specifico)
+  @Get('tenants/:tenantId/users')
+  async listTenantUsers(
+    @Req() req: Request,
+    @Param('tenantId') tenantId: string,
+    @Query('q') q?: string,
+    @Query('role') role?: string,
+    @Query('is_active') is_active?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    this.assertSuperAdmin(req);
+
+    const p = clampInt(page, 1, 1, 100_000);
+    const ps = clampInt(pageSize, 25, 5, 200);
+    const offset = (p - 1) * ps;
+
+    const t = await this.getTenantById(tenantId);
+    if (!t) throw new BadRequestException('Tenant not found');
+
+    const schema = safeSchema(t.schema_name);
+    const tenantDs = await this.openTenantDs(schema);
+
+    try {
+      const where: string[] = [];
+      const params: any[] = [];
+      let i = 1;
+
+      if (q?.trim()) {
+        const like = `%${safeLike(q.trim().toLowerCase())}%`;
+        params.push(like);
+        where.push(`lower(u.email) like $${i++} escape '\\'`);
+      }
+
+      if (role?.trim()) {
+        params.push(role.trim().toLowerCase());
+        where.push(`lower(u.role) = $${i++}`);
+      }
+
+      if (typeof is_active === 'string' && is_active.length) {
+        params.push(is_active === 'true' || is_active === '1');
+        where.push(`u.is_active = $${i++}`);
+      }
+
+      const whereSql = where.length ? `where ${where.join(' and ')}` : '';
+
+      const rows = await tenantDs.query(
+        `
+        with base as (
+          select
+            u.id, u.email, u.role,
+            u.is_active, u.created_at, u.updated_at,
+            $${i}::text as tenant_id,
+            $${i + 1}::text as tenant_name,
+            $${i + 2}::text as tenant_slug,
+            $${i + 3}::text as tenant_schema,
+            coalesce(u.mfa_enabled, false) as mfa_enabled
+          from "${schema}"."users" u
+          ${whereSql}
+        )
+        select *, (select count(*) from base) as total
+        from base
+        order by created_at desc
+        limit ${ps} offset ${offset}
+        `,
+        [...params, t.id, t.name, t.slug, t.schema_name],
+      );
+
+      const total = rows?.[0]?.total ? Number(rows[0].total) : 0;
+      const users = (rows || []).map(({ total: _t, ...rest }: any) => rest);
+
+      return { page: p, pageSize: ps, total, users };
+    } finally {
+      if (tenantDs.isInitialized) await tenantDs.destroy();
+    }
+  }
+
+  // B) PATCH UTENTE TENANT (MFA, Active)
+  @Patch('tenants/:tenantId/users/:userId')
+  async patchTenantUser(
+    @Req() req: Request,
+    @Param('tenantId') tenantId: string,
+    @Param('userId') userId: string,
+    @Body() body: { is_active?: boolean; mfa_enabled?: boolean },
+  ) {
+    this.assertSuperAdmin(req);
+
+    const t = await this.getTenantById(tenantId);
+    if (!t) throw new BadRequestException('Tenant not found');
+
+    const schema = safeSchema(t.schema_name);
+    const tenantDs = await this.openTenantDs(schema);
+
+    try {
+      const sets: string[] = [];
+      const vals: any[] = [];
+      let idx = 1;
+
+      if (typeof body.is_active === 'boolean') {
+        sets.push(`is_active = $${idx++}`);
+        vals.push(body.is_active);
+      }
+
+      // Qui usiamo mfa_enabled perché tipicamente lo schema tenant ha questa colonna
+      if (typeof body.mfa_enabled === 'boolean') {
+        sets.push(`mfa_enabled = $${idx++}`);
+        vals.push(body.mfa_enabled);
+      }
+
+      if (!sets.length) throw new BadRequestException('Nothing to update');
+
+      vals.push(userId);
+
+      const rows = await tenantDs.query(
+        `
+        update "${schema}"."users"
+        set ${sets.join(', ')}, updated_at = now()
+        where id = $${idx}
+        returning id, email, role, is_active, mfa_enabled
+        `,
+        vals,
+      );
+
+      if (!rows.length) throw new BadRequestException('User not found');
+
+      await this.auditTenant(tenantDs, schema, req, {
+        action: 'TENANT_USER_UPDATED',
+        targetEmail: rows[0].email,
+        metadata: body,
+      });
+
+      return { user: rows[0] };
+    } finally {
+      if (tenantDs.isInitialized) await tenantDs.destroy();
+    }
+  }
+
+  // C) DELETE TENANT USER
+  @Delete('tenants/:id/users/:userId')
+  async deleteTenantUser(
+    @Req() req: Request,
+    @Param('id') tenantId: string,
+    @Param('userId') userId: string,
+  ) {
+    this.assertSuperAdmin(req);
+
+    try {
+      const tRows = await this.dataSource.query(
+        `select schema_name from public.tenants where id = $1`,
+        [tenantId],
+      );
+      if (!tRows.length) throw new NotFoundException('Tenant not found');
+
+      const schema = safeSchema(tRows[0].schema_name);
+
+      const tenantDs = await this.openTenantDs(schema);
+      try {
+        await tenantDs.query(`DELETE FROM "${schema}"."users" WHERE id = $1`, [userId]);
+        return { status: 'deleted' };
+      } finally {
+        if (tenantDs.isInitialized) await tenantDs.destroy();
+      }
+    } catch (e) {
+      if (e instanceof NotFoundException || e instanceof ForbiddenException) throw e;
+      this.logAndThrow500('DELETE /superadmin/tenants/:id/users/:userId', e);
+    }
+  }
+
+  // Debug Endpoint (Legacy?)
   @Get('tenants/:id/users-list-debug')
   async getTenantUsers(@Req() req: Request, @Param('id') tenantId: string) {
     this.assertSuperAdmin(req);
@@ -322,36 +552,6 @@ export class SuperadminTenantsController {
     } catch (e) {
       if (e instanceof NotFoundException || e instanceof ForbiddenException) throw e;
       this.logAndThrow500('GET /superadmin/tenants/:id/users-list-debug', e);
-    }
-  }
-
-  @Delete('tenants/:id/users/:userId')
-  async deleteTenantUser(
-    @Req() req: Request,
-    @Param('id') tenantId: string,
-    @Param('userId') userId: string,
-  ) {
-    this.assertSuperAdmin(req);
-
-    try {
-      const tRows = await this.dataSource.query(
-        `select schema_name from public.tenants where id = $1`,
-        [tenantId],
-      );
-      if (!tRows.length) throw new NotFoundException('Tenant not found');
-
-      const schema = safeSchema(tRows[0].schema_name);
-
-      const tenantDs = await this.openTenantDs(schema);
-      try {
-        await tenantDs.query(`DELETE FROM "${schema}"."users" WHERE id = $1`, [userId]);
-        return { status: 'deleted' };
-      } finally {
-        if (tenantDs.isInitialized) await tenantDs.destroy();
-      }
-    } catch (e) {
-      if (e instanceof NotFoundException || e instanceof ForbiddenException) throw e;
-      this.logAndThrow500('DELETE /superadmin/tenants/:id/users/:userId', e);
     }
   }
 
