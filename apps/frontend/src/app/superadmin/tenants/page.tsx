@@ -10,11 +10,15 @@ import {
   Search,
   Filter,
   RefreshCw,
-  ShieldCheck,
+  AlertTriangle,
+  CheckCircle2,
+  PauseCircle,
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -40,47 +44,75 @@ type TenantRow = {
   schema_name: string;
   is_active: boolean;
   plan_tier?: string | null;
-  admin_email?: string | null;
+  max_users?: number | null;
+  storage_used_mb?: number | null;
+  storage_limit_gb?: number | null;
   created_at?: string | null;
+  updated_at?: string | null;
 };
 
-function StatusPill({ active }: { active: boolean }) {
-  return active ? (
-    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border bg-emerald-50 text-emerald-800 border-emerald-200">
-      <span className="h-2 w-2 rounded-full bg-emerald-500" />
+type ResetModalState = {
+  open: boolean;
+  tenantId: string;
+  email: string;
+  result?: string;
+};
+
+type FetchState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ok" }
+  | { status: "degraded"; message: string };
+
+function formatMbToGb(mb?: number | null): string {
+  if (!mb || mb <= 0) return "0.00";
+  return (mb / 1024).toFixed(2);
+}
+
+function formatDate(iso?: string | null): string {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleString("it-IT", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+const StatusPill = ({ isActive }: { isActive: boolean }) => {
+  return isActive ? (
+    <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+      <CheckCircle2 className="h-4 w-4" />
       Active
     </span>
   ) : (
-    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold border bg-rose-50 text-rose-800 border-rose-200">
-      <span className="h-2 w-2 rounded-full bg-rose-500" />
+    <span className="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700">
+      <PauseCircle className="h-4 w-4" />
       Suspended
     </span>
   );
-}
+};
 
 export default function TenantsPage() {
   const { toast } = useToast();
 
   const [tenants, setTenants] = useState<TenantRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [fetchState, setFetchState] = useState<FetchState>({ status: "idle" });
 
   // Filtri
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "suspended">("all");
 
-  // Modale reset pwd
-  const [resetModal, setResetModal] = useState<{
-    open: boolean;
-    tenantId: string;
-    email: string;
-    result?: string;
-  } | null>(null);
+  // Modali
+  const [resetModal, setResetModal] = useState<ResetModalState | null>(null);
 
   const filteredTenants = useMemo(() => {
     let res = tenants;
 
-    if (search) {
+    if (search.trim()) {
       const q = search.toLowerCase();
       res = res.filter(
         (t) =>
@@ -94,41 +126,39 @@ export default function TenantsPage() {
     if (statusFilter === "suspended") res = res.filter((t) => !t.is_active);
 
     return res;
-  }, [search, statusFilter, tenants]);
+  }, [tenants, search, statusFilter]);
 
   const loadTenants = async () => {
-    setLoading(true);
-    setErrorMsg(null);
-
+    setFetchState({ status: "loading" });
     try {
-      const data = await apiFetch<{ tenants: TenantRow[]; warning?: string }>(
-        "/superadmin/tenants",
-        { method: "GET" },
-      );
+      const data = await apiFetch<{ tenants: TenantRow[]; warning?: string }>("/superadmin/tenants");
+      const list = Array.isArray(data?.tenants) ? data.tenants : [];
 
-      const rows = Array.isArray(data?.tenants) ? data.tenants : [];
-      setTenants(rows);
+      setTenants(list);
+      setFetchState({ status: "ok" });
 
       if (data?.warning) {
-        // non lo spariamo in faccia all’utente, ma lo segnaliamo in toast “soft”
         toast({
-          title: "Nota",
-          description: "Lista tenant caricata in modalità compatibile (fallback).",
+          title: "Avviso",
+          description: `Risposta in modalità fallback (${data.warning}).`,
         });
       }
     } catch (e: any) {
-      const msg = e?.message || "Impossibile caricare la lista tenant.";
+      const msg = e?.message || "Impossibile caricare i tenant";
       setTenants([]);
-      setErrorMsg(msg);
-      toast({ title: "Errore", description: msg, variant: "destructive" });
-    } finally {
-      setLoading(false);
+      setFetchState({ status: "degraded", message: msg });
+
+      toast({
+        title: "Degraded",
+        description: msg,
+        variant: "destructive",
+      });
     }
   };
 
   useEffect(() => {
     loadTenants();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // niente polling aggressivo qui: è pagina “gestionale”
   }, []);
 
   const handleImpersonate = async (tenantId: string) => {
@@ -138,11 +168,17 @@ export default function TenantsPage() {
     try {
       const data = await apiFetch<{ token: string; redirectUrl: string }>(
         `/superadmin/tenants/${tenantId}/impersonate`,
-        { method: "POST", body: JSON.stringify({ email: adminEmail }) },
+        {
+          method: "POST",
+          body: JSON.stringify({ email: adminEmail }),
+        },
       );
 
       window.open(`${data.redirectUrl}?token=${data.token}`, "_blank");
-      toast({ title: "Sessione avviata", description: `Accesso su ${data.redirectUrl}` });
+      toast({
+        title: "Sessione avviata",
+        description: `Accesso fantasma su ${data.redirectUrl}`,
+      });
     } catch (e: any) {
       toast({
         title: "Errore",
@@ -158,104 +194,144 @@ export default function TenantsPage() {
     try {
       const data = await apiFetch<{ tempPassword: string }>(
         `/superadmin/tenants/${resetModal.tenantId}/reset-admin-password`,
-        { method: "POST", body: JSON.stringify({ email: resetModal.email }) },
+        {
+          method: "POST",
+          body: JSON.stringify({ email: resetModal.email }),
+        },
       );
 
       setResetModal({ ...resetModal, result: data.tempPassword });
-      toast({ title: "Successo", description: "Password rigenerata con successo." });
+      toast({
+        title: "Successo",
+        description: "Password rigenerata con successo.",
+      });
     } catch (e: any) {
       toast({
         title: "Errore",
-        description: e?.message || "Reset password fallito.",
+        description: e?.message || "Reset fallito.",
         variant: "destructive",
       });
     }
   };
 
+  const isLoading = fetchState.status === "loading";
+  const isDegraded = fetchState.status === "degraded";
+
   return (
-    <div className="space-y-8 max-w-[1600px] mx-auto">
-      {/* TOP BAR */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-slate-900">
-            <ShieldCheck className="h-5 w-5" />
-            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Tenants</h1>
-          </div>
-          <p className="text-sm text-slate-500">
-            Portfolio clienti, piani, schemi DB e accessi amministrativi.
+    <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in">
+      {/* HEADER */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Clienti & Tenant</h1>
+          <p className="text-slate-500 font-medium">
+            Gestione aziende, contratti, schemi DB e accessi amministrativi.
           </p>
         </div>
 
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={loadTenants} disabled={loading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            Refresh
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+          <Button variant="outline" onClick={loadTenants} disabled={isLoading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+            Aggiorna
           </Button>
-          <Button className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm font-semibold">
-            <Plus className="mr-2 h-4 w-4" /> New Tenant
+
+          <Button
+            className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200 font-bold"
+            onClick={() =>
+              toast({
+                title: "In arrivo",
+                description: "Creazione tenant da UI: prossimo step (ora usiamo provisioning).",
+              })
+            }
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Nuovo Tenant
           </Button>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex flex-col md:flex-row gap-3 md:items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <Input
-              placeholder="Search name, slug, schema…"
-              className="pl-9 border-slate-200"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+      {/* STATUS BANNER */}
+      {isDegraded && (
+        <Card className="p-4 rounded-2xl border border-rose-200 bg-rose-50">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-lg bg-rose-100 p-2 text-rose-700 border border-rose-200">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <div className="font-black text-rose-900">Degraded</div>
+              <div className="text-sm text-rose-800 font-medium mt-1 break-words">
+                {fetchState.status === "degraded" ? fetchState.message : "Errore inatteso."}
+              </div>
+              <div className="mt-3">
+                <Button variant="outline" className="border-rose-200" onClick={loadTenants}>
+                  Riprova
+                </Button>
+              </div>
+            </div>
           </div>
+        </Card>
+      )}
 
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-slate-400" />
-            <select
-              className="h-10 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-            >
-              <option value="all">All statuses</option>
-              <option value="active">Active only</option>
-              <option value="suspended">Suspended only</option>
-            </select>
-          </div>
+      {/* TOOLBAR */}
+      <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            placeholder="Cerca azienda, slug o schema DB..."
+            className="pl-9 border-slate-200"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
 
-        {errorMsg ? (
-          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
-            <div className="font-semibold">Degraded</div>
-            <div className="text-sm mt-1">{errorMsg}</div>
-          </div>
-        ) : null}
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-slate-400" />
+          <select
+            className="h-10 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as any)}
+          >
+            <option value="all">Tutti gli stati</option>
+            <option value="active">Solo attivi</option>
+            <option value="suspended">Sospesi</option>
+          </select>
+        </div>
       </div>
 
-      {/* Table */}
+      {/* TABLE */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="text-sm font-black text-slate-900">
+            Tenant ({filteredTenants.length})
+          </div>
+          <div className="text-xs font-medium text-slate-400">
+            Ultimo refresh: {new Date().toLocaleTimeString("it-IT")}
+          </div>
+        </div>
+
         <table className="w-full text-sm text-left">
-          <thead className="bg-slate-50 text-slate-500 uppercase font-semibold text-xs border-b border-slate-100">
+          <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-xs border-b border-slate-100">
             <tr>
-              <th className="px-6 py-4">Company</th>
-              <th className="px-6 py-4">Plan</th>
+              <th className="px-6 py-4">Azienda</th>
+              <th className="px-6 py-4">Piano</th>
               <th className="px-6 py-4">Schema</th>
-              <th className="px-6 py-4">Status</th>
-              <th className="px-6 py-4 text-right">Actions</th>
+              <th className="px-6 py-4">Storage</th>
+              <th className="px-6 py-4">Stato</th>
+              <th className="px-6 py-4">Aggiornato</th>
+              <th className="px-6 py-4 text-right">Azioni</th>
             </tr>
           </thead>
 
           <tbody className="divide-y divide-slate-100">
-            {loading ? (
+            {isLoading ? (
               <tr>
-                <td colSpan={5} className="p-10 text-center text-slate-400">
-                  Loading tenants…
+                <td colSpan={7} className="p-10 text-center text-slate-400">
+                  Caricamento in corso...
                 </td>
               </tr>
             ) : filteredTenants.length === 0 ? (
               <tr>
-                <td colSpan={5} className="p-10 text-center text-slate-400">
-                  No tenants found.
+                <td colSpan={7} className="p-10 text-center text-slate-400">
+                  Nessun tenant trovato.
                 </td>
               </tr>
             ) : (
@@ -263,12 +339,16 @@ export default function TenantsPage() {
                 <tr key={t.id} className="hover:bg-slate-50 transition-colors group">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-700 shrink-0 border border-indigo-100">
+                      <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0 border border-indigo-100">
                         <Building2 className="h-5 w-5" />
                       </div>
                       <div className="min-w-0">
-                        <div className="font-semibold text-slate-900 truncate">{t.name}</div>
-                        <div className="text-slate-400 text-xs font-mono truncate">/{t.slug}</div>
+                        <div className="font-black text-slate-900 text-base truncate">
+                          {t.name}
+                        </div>
+                        <div className="text-slate-400 text-xs font-mono truncate">
+                          /{t.slug}
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -276,20 +356,41 @@ export default function TenantsPage() {
                   <td className="px-6 py-4">
                     <Badge
                       variant="outline"
-                      className="border-indigo-200 text-indigo-800 bg-indigo-50 font-semibold px-3 py-1"
+                      className="border-indigo-200 text-indigo-700 bg-indigo-50 font-bold px-3 py-1"
                     >
                       {t.plan_tier || "STARTER"}
                     </Badge>
+                    <div className="text-xs text-slate-400 mt-2 font-medium">
+                      Max users: <span className="font-mono">{t.max_users ?? "-"}</span>
+                    </div>
                   </td>
 
                   <td className="px-6 py-4">
-                    <div className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-1 rounded-md w-fit border border-slate-200">
+                    <div className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-1 rounded w-fit border border-slate-200">
                       {t.schema_name}
                     </div>
                   </td>
 
                   <td className="px-6 py-4">
-                    <StatusPill active={!!t.is_active} />
+                    <div className="text-sm font-black text-slate-900">
+                      {formatMbToGb(t.storage_used_mb)} GB
+                    </div>
+                    <div className="text-xs text-slate-400 font-medium">
+                      Limit: <span className="font-mono">{t.storage_limit_gb ?? 0} GB</span>
+                    </div>
+                  </td>
+
+                  <td className="px-6 py-4">
+                    <StatusPill isActive={!!t.is_active} />
+                  </td>
+
+                  <td className="px-6 py-4">
+                    <div className="text-sm font-bold text-slate-700">
+                      {formatDate(t.updated_at || t.created_at)}
+                    </div>
+                    <div className="text-xs text-slate-400 font-medium">
+                      Creato: {formatDate(t.created_at)}
+                    </div>
                   </td>
 
                   <td className="px-6 py-4 text-right">
@@ -298,9 +399,10 @@ export default function TenantsPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleImpersonate(t.id)}
-                        className="hidden group-hover:flex h-8 text-indigo-700 hover:text-indigo-800 hover:bg-indigo-50"
+                        className="hidden group-hover:flex h-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
                       >
-                        <Eye className="h-4 w-4 mr-2" /> Enter
+                        <Eye className="h-4 w-4 mr-2" />
+                        Entra
                       </Button>
 
                       <DropdownMenu>
@@ -311,10 +413,11 @@ export default function TenantsPage() {
                         </DropdownMenuTrigger>
 
                         <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Tenant actions</DropdownMenuLabel>
+                          <DropdownMenuLabel>Azioni Tenant</DropdownMenuLabel>
 
                           <DropdownMenuItem onClick={() => handleImpersonate(t.id)}>
-                            <Eye className="mr-2 h-4 w-4" /> Impersonate admin
+                            <Eye className="mr-2 h-4 w-4" />
+                            Impersona Admin
                           </DropdownMenuItem>
 
                           <DropdownMenuItem
@@ -326,13 +429,23 @@ export default function TenantsPage() {
                               })
                             }
                           >
-                            <KeyRound className="mr-2 h-4 w-4" /> Reset admin password
+                            <KeyRound className="mr-2 h-4 w-4" />
+                            Reset Password
                           </DropdownMenuItem>
 
                           <DropdownMenuSeparator />
 
-                          <DropdownMenuItem className="text-rose-600">
-                            Suspend tenant
+                          <DropdownMenuItem
+                            className="text-slate-500"
+                            onClick={() =>
+                              toast({
+                                title: "Operazione non implementata",
+                                description:
+                                  "Sospensione tenant via UI: prossimo step (ora lo gestiamo lato DB/API).",
+                              })
+                            }
+                          >
+                            Sospendi / Riattiva
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -345,12 +458,12 @@ export default function TenantsPage() {
         </table>
       </div>
 
-      {/* Reset modal */}
+      {/* RESET PASSWORD MODAL */}
       {resetModal && (
         <Dialog open={resetModal.open} onOpenChange={(v) => !v && setResetModal(null)}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-md rounded-2xl">
             <DialogHeader>
-              <DialogTitle>Reset admin password</DialogTitle>
+              <DialogTitle>Reset Password Amministratore</DialogTitle>
               <DialogDescription>
                 Generazione nuove credenziali per <b>{resetModal.email}</b>.
               </DialogDescription>
@@ -359,21 +472,23 @@ export default function TenantsPage() {
             {!resetModal.result ? (
               <div className="flex justify-end gap-2 mt-4">
                 <Button variant="ghost" onClick={() => setResetModal(null)}>
-                  Cancel
+                  Annulla
                 </Button>
                 <Button variant="destructive" onClick={handleResetPassword}>
-                  Generate
+                  Genera Nuova Password
                 </Button>
               </div>
             ) : (
-              <div className="mt-4 bg-slate-900 text-white p-6 rounded-xl text-center shadow-lg">
-                <div className="text-xs text-slate-400 mb-2 uppercase tracking-widest font-semibold">
-                  Temporary password
+              <div className="mt-4 bg-slate-900 text-white p-6 rounded-2xl text-center shadow-lg">
+                <div className="text-xs text-slate-400 mb-2 uppercase tracking-widest font-bold">
+                  Credenziali
                 </div>
                 <div className="text-3xl font-mono font-black tracking-wider select-all cursor-text text-emerald-400">
                   {resetModal.result}
                 </div>
-                <div className="text-xs text-slate-400 mt-4">Copy it now. It won’t be shown again.</div>
+                <div className="text-xs text-slate-500 mt-4">
+                  Copia la password ora. Dopo chiudo la porta e butto via la chiave.
+                </div>
               </div>
             )}
           </DialogContent>

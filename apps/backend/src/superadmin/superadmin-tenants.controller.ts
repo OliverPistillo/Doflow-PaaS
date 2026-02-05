@@ -26,7 +26,7 @@ type CreateTenantBody = {
   slug: string;
   name: string;
   schema_name?: string;
-  admin_email: string;
+  admin_email: string;      // input UI / API: lo mappiamo su public.tenants.contact_email
   admin_password: string;
   plan_tier?: string;
 };
@@ -36,6 +36,8 @@ type UpdateTenantBody = {
   plan_tier?: string;
   max_users?: number;
   is_active?: boolean;
+  contact_email?: string;   // opzionale: se vuoi aggiornare anche email contatto
+  vat_number?: string;      // opzionale
 };
 
 function safeSchema(input: string): string {
@@ -85,6 +87,9 @@ export class SuperadminTenantsController {
     const code = e?.code;
     this.logger.error(`[${where}] ${msg}`, e?.stack || undefined);
 
+    // Se vuoi SUPER leggibile anche in UI/proxy, sostituisci tutto con una stringa:
+    // throw new InternalServerErrorException(`INTERNAL_ERROR @ ${where}: ${msg} (code=${code || 'n/a'})`);
+
     throw new InternalServerErrorException({
       error: 'INTERNAL_ERROR',
       where,
@@ -124,16 +129,16 @@ export class SuperadminTenantsController {
     this.assertSuperAdmin(req);
 
     try {
-      // sanity: datasource alive
       await this.dataSource.query('select 1');
 
-      // tentativo "ricco"
+      // tentativo "ricco" (colonne reali del tuo schema ✅)
       try {
         const rows = await this.dataSource.query(
           `
           select
             id, slug, name, schema_name, is_active,
-            plan_tier, max_users, storage_used_mb, admin_email,
+            plan_tier, max_users, storage_used_mb, storage_limit_gb,
+            contact_email, vat_number,
             created_at, updated_at
           from public.tenants
           order by created_at desc
@@ -150,8 +155,8 @@ export class SuperadminTenantsController {
           `
           select
             id, slug, name, schema_name, is_active,
-            admin_email,
-            created_at
+            contact_email,
+            created_at, updated_at
           from public.tenants
           order by created_at desc
           `,
@@ -188,11 +193,11 @@ export class SuperadminTenantsController {
       );
       if (dup?.length) throw new ConflictException('Tenant slug already exists');
 
-      // 1) registro tenant
+      // 1) registro tenant (✅ colonna corretta: contact_email)
       const rows = await this.dataSource.query(
         `
-        insert into public.tenants (slug, name, schema_name, admin_email, plan_tier, is_active, created_at)
-        values ($1, $2, $3, $4, $5, true, now())
+        insert into public.tenants (slug, name, schema_name, contact_email, plan_tier, is_active, created_at, updated_at)
+        values ($1, $2, $3, $4, $5, true, now(), now())
         returning id, slug, schema_name
         `,
         [slug, body.name, schemaName, body.admin_email, plan],
@@ -216,7 +221,6 @@ export class SuperadminTenantsController {
           if (tenantDs.isInitialized) await tenantDs.destroy();
         }
       } catch (e: any) {
-        // rollback registro tenant
         await this.dataSource.query(`delete from public.tenants where id = $1`, [tenant.id]);
         throw new BadRequestException('Bootstrap failed: ' + (e?.message || 'unknown'));
       }
@@ -260,8 +264,19 @@ export class SuperadminTenantsController {
         updates.push(`is_active = $${idx++}`);
         values.push(body.is_active);
       }
+      if (body.contact_email !== undefined) {
+        updates.push(`contact_email = $${idx++}`);
+        values.push(body.contact_email);
+      }
+      if (body.vat_number !== undefined) {
+        updates.push(`vat_number = $${idx++}`);
+        values.push(body.vat_number);
+      }
 
       if (updates.length === 0) return { message: 'Nothing to update' };
+
+      // ✅ aggiorna updated_at
+      updates.push(`updated_at = now()`);
 
       values.push(id);
       const sql = `UPDATE public.tenants SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`;
@@ -311,7 +326,11 @@ export class SuperadminTenantsController {
   }
 
   @Delete('tenants/:id/users/:userId')
-  async deleteTenantUser(@Req() req: Request, @Param('id') tenantId: string, @Param('userId') userId: string) {
+  async deleteTenantUser(
+    @Req() req: Request,
+    @Param('id') tenantId: string,
+    @Param('userId') userId: string,
+  ) {
     this.assertSuperAdmin(req);
 
     try {
@@ -360,7 +379,9 @@ export class SuperadminTenantsController {
           [body.email],
         );
 
-        if (!uRows.length) throw new NotFoundException(`User ${body.email} not found in tenant ${slug}`);
+        if (!uRows.length) {
+          throw new NotFoundException(`User ${body.email} not found in tenant ${slug}`);
+        }
         const targetUser = uRows[0];
 
         const secret = process.env.JWT_SECRET;
