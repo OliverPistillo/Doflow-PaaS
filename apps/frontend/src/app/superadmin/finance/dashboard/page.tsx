@@ -1,0 +1,1 @@
+export default function Page() { return <div className="p-8"><h1>Finanza</h1><p>Work in progress...</p></div>; }

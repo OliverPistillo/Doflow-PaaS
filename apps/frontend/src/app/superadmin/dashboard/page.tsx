@@ -1,264 +1,145 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowUpRight } from "lucide-react";
 import {
-  Activity,
-  Cpu,
-  Database,
-  Globe,
-  HardDrive,
-  Server,
-  Zap,
-  ShieldCheck,
-} from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { apiFetch } from "@/lib/api";
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
 
-type ServiceStatus = "up" | "down" | "unknown" | string;
+// Dati Mock
+const pipelineData = [
+  { name: "Lead qualificato", value: 45000 },
+  { name: "Preventivo inviato", value: 68000 },
+  { name: "Negoziazione", value: 42000 },
+  { name: "Chiuso vinto", value: 28000 },
+];
 
-type StatsResponse = {
-  hardware: {
-    cpu: { cores: number; brand: string; load: number };
-    memory: { totalGb: string; usedGb: string; percent: number };
-    disk: { totalGb: string; usedGb: string; percent: number };
-    uptime: number;
-  };
-  services: {
-    database: ServiceStatus;
-    redis: ServiceStatus;
-    api: ServiceStatus;
-    redis_latency_ms?: number;
-  };
-};
+const pieData = [
+  { name: "Lead qualificato", value: 20, color: "#BFDBFE" },
+  { name: "Preventivo inviato", value: 20, color: "#93C5FD" },
+  { name: "Negoziazione", value: 40, color: "#FDE68A" },
+  { name: "Chiuso vinto", value: 20, color: "#BBF7D0" },
+];
 
-function statusTone(status: ServiceStatus) {
-  const s = String(status || "").toLowerCase();
-  if (s === "up")
-    return {
-      wrap: "bg-emerald-50 border-emerald-200",
-      icon: "bg-emerald-100 text-emerald-700",
-      text: "text-emerald-700",
-      dot: "bg-emerald-500 animate-pulse",
-      label: "Operational",
-    };
-  if (s === "unknown")
-    return {
-      wrap: "bg-amber-50 border-amber-200",
-      icon: "bg-amber-100 text-amber-800",
-      text: "text-amber-700",
-      dot: "bg-amber-500",
-      label: "Degraded",
-    };
-  return {
-    wrap: "bg-rose-50 border-rose-200",
-    icon: "bg-rose-100 text-rose-700",
-    text: "text-rose-700",
-    dot: "bg-rose-500",
-    label: "Down",
-  };
-}
+const offersData = [
+  { name: "App Mobile", value: 12000 },
+  { name: "Campagna Mkt", value: 15000 },
+  { name: "Consulenza", value: 5000 },
+  { name: "Contratto Beta", value: 22000 },
+  { name: "Audit Security", value: 4500 },
+  { name: "Integrazione CRM", value: 9000 },
+  { name: "Upgrade HW", value: 6000 },
+  { name: "Cloud Mig.", value: 18000 },
+];
 
-const StatusBadge = ({
-  label,
-  status,
-  icon: Icon,
-  meta,
-}: {
-  label: string;
-  status: ServiceStatus;
-  icon: any;
-  meta?: string;
-}) => {
-  const tone = statusTone(status);
-
+function KpiCard({ title, value, subValue }: { title: string; value: string; subValue?: string }) {
   return (
-    <div className={`flex items-center justify-between p-4 rounded-xl border ${tone.wrap}`}>
-      <div className="flex items-center gap-3 min-w-0">
-        <div className={`p-2 rounded-lg ${tone.icon}`}>
-          <Icon className="h-5 w-5" />
-        </div>
-        <div className="min-w-0">
-          <div className="font-semibold text-slate-900 truncate">{label}</div>
-          <div className={`text-xs font-semibold uppercase tracking-wide ${tone.text}`}>
-            {tone.label}
-            {meta ? <span className="ml-2 normal-case font-medium text-slate-500">• {meta}</span> : null}
+    <Card className="border-l-4 border-l-indigo-500 shadow-sm">
+      <CardContent className="p-6">
+        <div className="flex justify-between items-start">
+          <div>
+            <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider mb-1">
+              {title}
+            </p>
+            <h3 className="text-3xl font-black text-slate-900">{value}</h3>
+            {subValue && <p className="text-sm text-slate-500 mt-1">{subValue}</p>}
+          </div>
+          <div className="p-2 bg-indigo-50 rounded-lg">
+            <ArrowUpRight className="h-4 w-4 text-indigo-400" />
           </div>
         </div>
-      </div>
-      <div className={`h-3 w-3 rounded-full ${tone.dot}`} />
-    </div>
+      </CardContent>
+    </Card>
   );
-};
-
-function clamp(n: number) {
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(100, n));
 }
 
-export default function DashboardPage() {
-  const [data, setData] = useState<StatsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const loadData = async () => {
-    try {
-      const json = await apiFetch<StatsResponse>("/superadmin/system/stats", { method: "GET" });
-      setData(json);
-      setErrorMsg(null);
-    } catch (e: any) {
-      console.error(e);
-      setErrorMsg(e?.message || "Errore di connessione al backend (System Stats).");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const uptimeHours = useMemo(() => {
-    const u = data?.hardware?.uptime ?? 0;
-    return (u / 3600).toFixed(1);
-  }, [data]);
-
-  if (loading && !data) {
-    return (
-      <div className="p-10 flex items-center gap-2 text-slate-700">
-        <Activity className="animate-spin" />
-        <span className="font-semibold">Loading Control Tower…</span>
-      </div>
-    );
-  }
-
-  if (errorMsg && !data) {
-    return (
-      <div className="p-10">
-        <div className="max-w-xl rounded-xl border border-rose-200 bg-rose-50 p-5">
-          <div className="font-semibold text-rose-800">System Stats unavailable</div>
-          <div className="text-sm text-rose-700 mt-1">{errorMsg}</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!data) return null;
-
-  const { hardware, services } = data;
-
-  const cpuLoad = clamp(hardware.cpu.load);
-  const memPct = clamp(hardware.memory.percent);
-  const diskPct = clamp(hardware.disk.percent);
-
+export default function SalesDashboardPage() {
   return (
-    <div className="space-y-8 max-w-[1600px] mx-auto">
-      {/* TOP BAR */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-slate-900">
-            <ShieldCheck className="h-5 w-5" />
-            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Superadmin Control Tower</h1>
-          </div>
-          <p className="text-sm text-slate-500">
-            Infrastructure health, service status, and capacity overview.
-          </p>
+    <div className="space-y-8 animate-in fade-in duration-500">
+      
+      {/* Header */}
+      <div>
+        <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
+          <span>Business Intelligence</span>
+          <span className="text-slate-300">/</span>
+          <span className="font-bold text-slate-900">Sales Dashboard</span>
         </div>
-
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl border bg-white px-4 py-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">System Uptime</div>
-            <div className="mt-1 text-xl font-mono font-semibold text-slate-900">{uptimeHours}h</div>
-          </div>
-        </div>
+        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Panoramica della pipeline</h1>
+        <p className="text-slate-500 mt-1 text-sm font-medium">
+          Dati aggregati di vendita e performance globale.
+        </p>
       </div>
 
-      {/* SERVICE HEALTH */}
-      <div className="space-y-3">
-        <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Service Health</div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatusBadge label="Database" status={services.database} icon={Database} />
-          <StatusBadge
-            label="Redis"
-            status={services.redis}
-            icon={Zap}
-            meta={
-              typeof services.redis_latency_ms === "number"
-                ? `${services.redis_latency_ms} ms`
-                : undefined
-            }
-          />
-          <StatusBadge label="API" status={services.api} icon={Globe} />
-        </div>
+      {/* KPI Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <KpiCard title="Offerte in qualificazione" value="6" />
+        <KpiCard title="Valore totale offerte" value="€6,800.00" />
+        <KpiCard title="Tasso di vincita" value="100%" />
+        <KpiCard title="Media offerta" value="€1,253.33" />
       </div>
 
-      {/* CAPACITY */}
-      <div className="space-y-3">
-        <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Capacity</div>
+      {/* Charts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="shadow-sm border-slate-200">
+          <CardHeader>
+            <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+              Valore della pipeline
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={pipelineData} margin={{top: 10, right: 10, left: 0, bottom: 20}}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                  <XAxis dataKey="name" tick={{fontSize: 11, fill: "#64748B"}} interval={0} tickLine={false} axisLine={false} dy={10} />
+                  <YAxis tickFormatter={(value) => `€${value/1000}k`} tick={{fontSize: 11, fill: "#64748B"}} tickLine={false} axisLine={false} />
+                  <Tooltip cursor={{fill: 'transparent'}} />
+                  <Bar dataKey="value" fill="#4F46E5" radius={[4, 4, 0, 0]} barSize={60} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* CPU */}
-          <Card className="p-6 rounded-2xl border bg-white">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">CPU Load</div>
-                <div className="mt-2 text-3xl font-semibold text-slate-900">{cpuLoad}%</div>
-              </div>
-              <div className="p-2 rounded-xl border bg-slate-50">
-                <Cpu className="h-5 w-5 text-slate-700" />
-              </div>
+        <Card className="shadow-sm border-slate-200">
+          <CardHeader>
+            <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+              Distribuzione fase
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px] w-full flex justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={70}
+                    outerRadius={100}
+                    paddingAngle={4}
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
-            <div className="mt-4">
-              <Progress value={cpuLoad} className="h-2 bg-slate-100" />
-              <div className="mt-3 text-xs text-slate-500 flex justify-between">
-                <span>{hardware.cpu.cores} cores</span>
-                <span className="truncate max-w-[70%]">{hardware.cpu.brand}</span>
-              </div>
-            </div>
-          </Card>
-
-          {/* RAM */}
-          <Card className="p-6 rounded-2xl border bg-white">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Memory</div>
-                <div className="mt-2 text-3xl font-semibold text-slate-900">{memPct}%</div>
-              </div>
-              <div className="p-2 rounded-xl border bg-slate-50">
-                <Server className="h-5 w-5 text-slate-700" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <Progress value={memPct} className="h-2 bg-slate-100" />
-              <div className="mt-3 text-xs text-slate-500 flex justify-between">
-                <span>{hardware.memory.usedGb} GB used</span>
-                <span>{hardware.memory.totalGb} GB total</span>
-              </div>
-            </div>
-          </Card>
-
-          {/* DISK */}
-          <Card className="p-6 rounded-2xl border bg-white">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Storage</div>
-                <div className="mt-2 text-3xl font-semibold text-slate-900">{diskPct}%</div>
-              </div>
-              <div className="p-2 rounded-xl border bg-slate-50">
-                <HardDrive className="h-5 w-5 text-slate-700" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <Progress value={diskPct} className="h-2 bg-slate-100" />
-              <div className="mt-3 text-xs text-slate-500 flex justify-between">
-                <span>{hardware.disk.usedGb} GB used</span>
-                <span>{hardware.disk.totalGb} GB total</span>
-              </div>
-            </div>
-          </Card>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
