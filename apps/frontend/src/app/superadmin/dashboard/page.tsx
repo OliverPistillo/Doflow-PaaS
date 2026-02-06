@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowUpRight, Loader2, RefreshCw } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { DrillDownSheet } from "./components/DrillDownSheet"; // Assicurati che il percorso sia corretto
 import {
   BarChart,
   Bar,
@@ -25,7 +26,7 @@ type DashboardData = {
     totalValue: number;
     winRate: number;
     avgDealValue: number;
-    dealsClosingThisMonth: number; // <--- NUOVO CAMPO
+    dealsClosingThisMonth: number;
   };
   pipeline: {
     stage: string;
@@ -43,10 +44,23 @@ type DashboardData = {
 // --- COLORI ---
 const PIE_COLORS = ["#BFDBFE", "#93C5FD", "#FDE68A", "#BBF7D0"];
 
-// --- Componente KPI Card ---
-function KpiCard({ title, value, hoverColorClass }: { title: string; value: string; hoverColorClass: string }) {
+// --- Componente KPI Card Interattiva ---
+function KpiCard({ 
+  title, 
+  value, 
+  hoverColorClass, 
+  onClick 
+}: { 
+  title: string; 
+  value: string; 
+  hoverColorClass: string; 
+  onClick?: () => void;
+}) {
   return (
-    <Card className="shadow-sm hover:shadow-md transition-shadow">
+    <Card 
+      className={`shadow-sm hover:shadow-md transition-shadow ${onClick ? 'cursor-pointer' : ''}`}
+      onClick={onClick}
+    >
       <CardContent className="p-6">
         <div className="flex justify-between items-start">
           <div className="space-y-1">
@@ -57,7 +71,7 @@ function KpiCard({ title, value, hoverColorClass }: { title: string; value: stri
               {value}
             </h3>
           </div>
-          <div className={`h-9 w-9 flex items-center justify-center rounded-lg bg-slate-50 text-slate-400 group-hover:bg-slate-100 transition-colors duration-300 cursor-pointer ${hoverColorClass}`}>
+          <div className={`h-9 w-9 flex items-center justify-center rounded-lg bg-slate-50 text-slate-400 group-hover:bg-slate-100 transition-colors duration-300 ${hoverColorClass}`}>
             <ArrowUpRight className="h-5 w-5" />
           </div>
         </div>
@@ -70,6 +84,16 @@ export default function SalesDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+
+  // --- STATI PER IL DRILL-DOWN (Pannello Laterale) ---
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [sheetConfig, setSheetConfig] = useState<{
+    title: string;
+    filters: { stage?: string; month?: string };
+  }>({
+    title: "",
+    filters: {}
+  });
 
   const loadData = async () => {
     setLoading(true);
@@ -88,6 +112,18 @@ export default function SalesDashboardPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Funzione per aprire il pannello con i filtri contestuali
+  const openDrillDown = (title: string, stage?: string, month?: string) => {
+    setSheetConfig({
+      title,
+      filters: { stage, month }
+    });
+    setIsSheetOpen(true);
+  };
+
+  // Calcolo mese corrente YYYY-MM per il filtro
+  const currentMonth = new Date().toISOString().slice(0, 7);
 
   if (loading) {
     return (
@@ -124,9 +160,9 @@ export default function SalesDashboardPage() {
             <span className="text-slate-300">/</span>
             <span className="font-bold text-slate-900">Sales Dashboard</span>
           </div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Panoramica della pipeline di vendita</h1>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Quadro generale delle trattative di vendita</h1>
           <p className="text-slate-500 mt-1 text-sm font-medium">
-            Pipeline: offerte per fase, tasso di vincita, chiusure del mese e operazioni principali.
+            Offerte per fase, tasso di chiusura, vendite del mese, attività principali.
           </p>
         </div>
         <Button variant="ghost" size="icon" onClick={loadData} className="text-slate-400 hover:text-indigo-600">
@@ -134,41 +170,48 @@ export default function SalesDashboardPage() {
         </Button>
       </div>
 
-      {/* KPI Row */}
+      {/* KPI Row (Interattivi) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <KpiCard 
           title="Offerte in qualificazione" 
           value={String(data.kpi.leadsCount)} 
           hoverColorClass="hover:bg-blue-100 hover:text-blue-600"
+          onClick={() => openDrillDown("Offerte in fase di qualificazione", "Lead qualificato")}
         />
         <KpiCard 
           title="Valore totale offerte" 
           value={`€${data.kpi.totalValue.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
           hoverColorClass="hover:bg-indigo-100 hover:text-indigo-600"
+          onClick={() => openDrillDown("Tutte le offerte")}
         />
         <KpiCard 
           title="Tasso di vincita" 
           value={`${data.kpi.winRate}%`} 
           hoverColorClass="hover:bg-emerald-100 hover:text-emerald-600"
+          onClick={() => openDrillDown("Offerte Vinte", "Chiuso vinto")}
         />
         <KpiCard 
           title="Media offerta" 
           value={`€${data.kpi.avgDealValue.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
           hoverColorClass="hover:bg-violet-100 hover:text-violet-600"
+          onClick={() => openDrillDown("Tutte le offerte")}
         />
       </div>
 
-      {/* Alert Row (DINAMICO) */}
-      <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-5 flex items-center justify-between shadow-sm">
+      {/* Alert Row (DINAMICO & Interattivo) */}
+      <div 
+        className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-5 flex items-center justify-between shadow-sm cursor-pointer hover:bg-indigo-50 transition-colors"
+        onClick={() => openDrillDown("In chiusura questo mese", undefined, currentMonth)}
+      >
         <div>
           <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-1">
             Si prevede che le offerte si chiuderanno questo mese
           </p>
           <p className="text-3xl font-black text-indigo-900 leading-none">
-            {data.kpi.dealsClosingThisMonth} {/* <--- ORA È DINAMICO */}
+            {data.kpi.dealsClosingThisMonth}
           </p>
         </div>
-        <div className="h-9 w-9 bg-white border border-indigo-100 rounded-lg flex items-center justify-center text-indigo-400 hover:bg-indigo-600 hover:text-white transition-colors cursor-pointer">
+        <div className="h-9 w-9 bg-white border border-indigo-100 rounded-lg flex items-center justify-center text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
            <ArrowUpRight className="h-4 w-4" />
         </div>
       </div>
@@ -311,6 +354,14 @@ export default function SalesDashboardPage() {
            </div>
         </CardContent>
       </Card>
+
+      {/* COMPONENTE DRILL-DOWN (Pannello Laterale) */}
+      <DrillDownSheet 
+        isOpen={isSheetOpen}
+        onClose={() => setIsSheetOpen(false)}
+        title={sheetConfig.title}
+        initialFilters={sheetConfig.filters}
+      />
 
     </div>
   );
