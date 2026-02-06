@@ -33,36 +33,22 @@ const invoiceStatus = [
   { name: "Unpaid", value: 40, color: "#60A5FA" }, // Blue
 ];
 
-// --- Componente KPI Card Corretto (Design Classico con Colori Diversi) ---
-function FinanceKpiCard({ 
-  title, 
-  value, 
-  borderClass, 
-  textClass, 
-  iconBgClass, 
-  iconColorClass 
-}: { 
-  title: string; 
-  value: string; 
-  borderClass: string;
-  textClass: string;
-  iconBgClass: string;
-  iconColorClass: string;
-}) {
+// --- Componente KPI Card Neutro ---
+function FinanceKpiCard({ title, value, titleColorClass, hoverColorClass }: { title: string; value: string; titleColorClass: string; hoverColorClass: string }) {
   return (
-    <Card className={`border-l-4 shadow-sm ${borderClass}`}>
+    <Card className="shadow-sm hover:shadow-md transition-shadow">
       <CardContent className="p-6">
         <div className="flex justify-between items-start">
-          <div>
-            <p className={`text-[11px] font-bold uppercase tracking-wider mb-1 ${textClass}`}>
+          <div className="space-y-1">
+            <p className={`text-[11px] font-bold uppercase tracking-wider ${titleColorClass}`}>
               {title}
             </p>
             <h3 className="text-4xl font-black text-slate-900 tracking-tight">
               {value}
             </h3>
           </div>
-          <div className={`p-2 rounded-lg ${iconBgClass}`}>
-            <ArrowUpRight className={`h-5 w-5 ${iconColorClass}`} />
+          <div className={`h-9 w-9 flex items-center justify-center rounded-lg bg-slate-50 text-slate-400 group-hover:bg-slate-100 transition-colors duration-300 cursor-pointer ${hoverColorClass}`}>
+            <ArrowUpRight className="h-5 w-5" />
           </div>
         </div>
       </CardContent>
@@ -84,34 +70,25 @@ export default function FinanceDashboardPage() {
         <p className="text-slate-500 mt-1 text-sm font-medium">Metriche principali su ricavi, fatture e clienti top.</p>
       </div>
 
-      {/* KPI Row (Colori specifici) */}
+      {/* KPI Row (Neutri con accenti su testo) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Ricavi (Verde) */}
         <FinanceKpiCard 
             title="Ricavi totali (fatture pagate)" 
             value="€7,656.15" 
-            borderClass="border-emerald-500"
-            textClass="text-emerald-600"
-            iconBgClass="bg-emerald-50"
-            iconColorClass="text-emerald-600"
+            titleColorClass="text-emerald-600"
+            hoverColorClass="hover:bg-emerald-100 hover:text-emerald-600"
         />
-        {/* Pagamenti Sospesi (Rosso Scuro) */}
         <FinanceKpiCard 
             title="Pagamenti in sospeso" 
             value="€8,210.75" 
-            borderClass="border-red-700"
-            textClass="text-red-700"
-            iconBgClass="bg-red-50"
-            iconColorClass="text-red-700"
+            titleColorClass="text-red-600"
+            hoverColorClass="hover:bg-red-100 hover:text-red-600"
         />
-        {/* Fatture Scadute (Rosso Acceso) */}
         <FinanceKpiCard 
             title="Fatture scadute" 
             value="3" 
-            borderClass="border-rose-500"
-            textClass="text-rose-600"
-            iconBgClass="bg-rose-50"
-            iconColorClass="text-rose-600"
+            titleColorClass="text-rose-700"
+            hoverColorClass="hover:bg-rose-100 hover:text-rose-700"
         />
       </div>
 
@@ -123,7 +100,7 @@ export default function FinanceDashboardPage() {
                <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
                  Distribuzione dello stato di pagamento
                </CardTitle>
-               <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400">
+               <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer transition-colors">
                  <ArrowUpRight className="h-4 w-4" />
                </div>
             </div>
@@ -170,7 +147,7 @@ export default function FinanceDashboardPage() {
                <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
                  Tendenze mensili dei ricavi
                </CardTitle>
-               <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400">
+               <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer transition-colors">
                  <ArrowUpRight className="h-4 w-4" />
                </div>
             </div>
@@ -199,7 +176,7 @@ export default function FinanceDashboardPage() {
              <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
                I migliori clienti per fatturato
              </CardTitle>
-             <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400">
+             <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer transition-colors">
                  <ArrowUpRight className="h-4 w-4" />
              </div>
           </div>

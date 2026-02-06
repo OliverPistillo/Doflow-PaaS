@@ -49,38 +49,23 @@ const offersData = [
   { name: "Expansion", value: 12000 },
 ];
 
-// --- Componente KPI Card Corretto ---
-// borderClass: colore del bordo sinistro (es. border-blue-500)
-// textClass: colore del titolo (es. text-blue-600)
-// iconBgClass: colore sfondo freccia (es. bg-blue-50)
-// iconColorClass: colore icona freccia (es. text-blue-500)
-function KpiCard({ 
-  title, 
-  value, 
-  borderClass, 
-  textClass, 
-  iconBgClass, 
-  iconColorClass 
-}: { 
-  title: string; 
-  value: string; 
-  borderClass: string;
-  textClass: string;
-  iconBgClass: string;
-  iconColorClass: string;
-}) {
+// --- Componente KPI Card Neutro (Shadcn Style) ---
+function KpiCard({ title, value, hoverColorClass }: { title: string; value: string; hoverColorClass: string }) {
   return (
-    <Card className={`border-l-4 shadow-sm ${borderClass}`}>
+    <Card className="shadow-sm hover:shadow-md transition-shadow">
       <CardContent className="p-6">
         <div className="flex justify-between items-start">
-          <div>
-            <p className={`text-[11px] font-bold uppercase tracking-wider mb-1 ${textClass}`}>
+          <div className="space-y-1">
+            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
               {title}
             </p>
-            <h3 className="text-3xl font-black text-slate-900">{value}</h3>
+            <h3 className="text-3xl font-black text-slate-900 tracking-tight">
+              {value}
+            </h3>
           </div>
-          <div className={`p-2 rounded-lg ${iconBgClass}`}>
-            <ArrowUpRight className={`h-5 w-5 ${iconColorClass}`} />
+          {/* Il colore appare solo qui, su hover del genitore o del bottone */}
+          <div className={`h-9 w-9 flex items-center justify-center rounded-lg bg-slate-50 text-slate-400 group-hover:bg-slate-100 transition-colors duration-300 cursor-pointer ${hoverColorClass}`}>
+            <ArrowUpRight className="h-5 w-5" />
           </div>
         </div>
       </CardContent>
@@ -105,43 +90,27 @@ export default function SalesDashboardPage() {
         </p>
       </div>
 
-      {/* KPI Row (Colori Diversificati) */}
+      {/* KPI Row (Neutri) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Card 1: Blue */}
         <KpiCard 
           title="Offerte in qualificazione" 
           value="6" 
-          borderClass="border-blue-500"
-          textClass="text-blue-600"
-          iconBgClass="bg-blue-50"
-          iconColorClass="text-blue-500"
+          hoverColorClass="hover:bg-blue-100 hover:text-blue-600"
         />
-        {/* Card 2: Indigo */}
         <KpiCard 
           title="Valore totale offerte" 
           value="€6,800.00" 
-          borderClass="border-indigo-500"
-          textClass="text-indigo-600"
-          iconBgClass="bg-indigo-50"
-          iconColorClass="text-indigo-500"
+          hoverColorClass="hover:bg-indigo-100 hover:text-indigo-600"
         />
-        {/* Card 3: Emerald */}
         <KpiCard 
           title="Tasso di vincita" 
           value="100%" 
-          borderClass="border-emerald-500"
-          textClass="text-emerald-600"
-          iconBgClass="bg-emerald-50"
-          iconColorClass="text-emerald-500"
+          hoverColorClass="hover:bg-emerald-100 hover:text-emerald-600"
         />
-        {/* Card 4: Violet/Purple */}
         <KpiCard 
           title="Media offerta" 
           value="€1,253.33" 
-          borderClass="border-violet-500"
-          textClass="text-violet-600"
-          iconBgClass="bg-violet-50"
-          iconColorClass="text-violet-500"
+          hoverColorClass="hover:bg-violet-100 hover:text-violet-600"
         />
       </div>
 
@@ -153,7 +122,7 @@ export default function SalesDashboardPage() {
           </p>
           <p className="text-3xl font-black text-indigo-900 leading-none">1</p>
         </div>
-        <div className="h-9 w-9 bg-white border border-indigo-100 rounded-lg flex items-center justify-center text-indigo-400">
+        <div className="h-9 w-9 bg-white border border-indigo-100 rounded-lg flex items-center justify-center text-indigo-400 hover:bg-indigo-600 hover:text-white transition-colors cursor-pointer">
            <ArrowUpRight className="h-4 w-4" />
         </div>
       </div>
@@ -168,7 +137,7 @@ export default function SalesDashboardPage() {
                <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
                  Valore della pipeline per fase
                </CardTitle>
-               <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400">
+               <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer transition-colors">
                  <ArrowUpRight className="h-4 w-4" />
                </div>
             </div>
@@ -211,7 +180,7 @@ export default function SalesDashboardPage() {
                <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
                  Distribuzione della fase dell'accordo
                </CardTitle>
-               <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400">
+               <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer transition-colors">
                  <ArrowUpRight className="h-4 w-4" />
                </div>
             </div>
@@ -263,7 +232,7 @@ export default function SalesDashboardPage() {
              <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
                Le migliori offerte per valore
              </CardTitle>
-             <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400">
+             <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer transition-colors">
                  <ArrowUpRight className="h-4 w-4" />
              </div>
           </div>
