@@ -11,10 +11,7 @@ import {
   ShieldAlert, 
   LogOut,
   BarChart3,
-  Box,
   CreditCard,
-  FileText,
-  CalendarDays
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,14 +20,16 @@ const MENU_GROUPS = [
   {
     label: "Business Intelligence",
     items: [
-      { label: "Sales Dashboard", href: "/dashboard", icon: BarChart3 }, // Puntiamo alla nuova Home CRM
-      { label: "Pipeline", href: "/sales/pipeline", icon: LayoutDashboard },
-      { label: "Finanza", href: "/finance/dashboard", icon: CreditCard },
+      // ✅ CORRETTO: Aggiunto prefisso /superadmin
+      { label: "Sales Dashboard", href: "/superadmin/dashboard", icon: BarChart3 }, 
+      { label: "Pipeline", href: "/superadmin/sales/pipeline", icon: LayoutDashboard },
+      { label: "Finanza", href: "/superadmin/finance/dashboard", icon: CreditCard },
     ],
   },
   {
     label: "Platform Admin",
     items: [
+      // ✅ Questo era già corretto
       { label: "Control Tower", href: "/superadmin/control-tower", icon: ShieldAlert },
       { label: "Gestione Tenant", href: "/superadmin/tenants", icon: Building2 },
       { label: "Gestione Utenti", href: "/superadmin/users", icon: Users },
@@ -68,10 +67,8 @@ export function SuperAdminSidebar() {
             </div>
             <div className="space-y-1">
               {group.items.map((item) => {
-                // Gestione active state:
-                // Se siamo su /dashboard (Sales) e l'item è quello, è attivo.
-                // Se siamo su /superadmin/... e l'item è quello, è attivo.
-                const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+                // ✅ Semplificato: Match esatto dell'URL
+                const isActive = pathname === item.href;
                 
                 return (
                   <Link
