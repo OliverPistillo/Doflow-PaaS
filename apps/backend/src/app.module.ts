@@ -36,6 +36,7 @@ import { SuperadminAuditController } from './audit.controller';
 // ✅ NUOVI IMPORT PER DASHBOARD KPI
 import { SuperadminDashboardController } from './superadmin/superadmin-dashboard.controller';
 import { SuperadminDashboardService } from './superadmin/superadmin-dashboard.service';
+import { PlatformDeal } from './superadmin/entities/platform-deal.entity';
 
 // --- MIDDLEWARE & GUARD ---
 import { TenancyMiddleware } from './tenancy/tenancy.middleware';
@@ -53,6 +54,7 @@ import { RedisModule } from './redis/redis.module';
 @Module({
   imports: [
     HealthModule,
+    TypeOrmModule.forFeature([PlatformDeal]),
 
     ConfigModule.forRoot({
       isGlobal: true,
