@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 // Definizione dei gruppi di navigazione secondo la struttura richiesta
 const MENU_GROUPS = [
   {
-    label: "Pipeline di vendita",
+    label: "Performance commerciali",
     items: [
       { label: "Sales Dashboard", href: "/superadmin/dashboard", icon: BarChart3 }, // Principale
       { label: "Gestione offerte", href: "/superadmin/sales/pipeline", icon: ListTodo },
@@ -77,7 +77,7 @@ export function SuperAdminSidebar() {
       <nav className="flex-1 p-4 space-y-6 overflow-y-auto">
         {MENU_GROUPS.map((group, idx) => (
           <div key={idx}>
-            {/* Titolo del Gruppo (es. Pipeline di vendita) */}
+            {/* Titolo del Gruppo (es. Performance commerciali) */}
             <div className="px-2 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
               {group.label}
             </div>

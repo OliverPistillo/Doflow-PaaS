@@ -16,7 +16,7 @@ import {
   Cell,
 } from "recharts";
 
-// Dati Mock
+// --- Dati Mock ---
 const pipelineData = [
   { name: "Lead qualificato", value: 45000 },
   { name: "Preventivo inviato", value: 68000 },
@@ -40,6 +40,13 @@ const offersData = [
   { name: "Integrazione CRM", value: 9000 },
   { name: "Upgrade HW", value: 6000 },
   { name: "Cloud Mig.", value: 18000 },
+  { name: "SaaS Sub", value: 11000 },
+  { name: "Pilot Project", value: 24000 },
+  { name: "Formazione", value: 8000 },
+  { name: "Redesign Sito", value: 13000 },
+  { name: "Supporto Tec", value: 15000 },
+  { name: "Data Analysis", value: 9000 },
+  { name: "Expansion", value: 12000 },
 ];
 
 function KpiCard({ title, value, subValue }: { title: string; value: string; subValue?: string }) {
@@ -48,7 +55,7 @@ function KpiCard({ title, value, subValue }: { title: string; value: string; sub
       <CardContent className="p-6">
         <div className="flex justify-between items-start">
           <div>
-            <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider mb-1">
+            <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider mb-1">
               {title}
             </p>
             <h3 className="text-3xl font-black text-slate-900">{value}</h3>
@@ -65,7 +72,7 @@ function KpiCard({ title, value, subValue }: { title: string; value: string; sub
 
 export default function SalesDashboardPage() {
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500 p-2 md:p-0">
       
       {/* Header */}
       <div>
@@ -88,12 +95,25 @@ export default function SalesDashboardPage() {
         <KpiCard title="Media offerta" value="€1,253.33" />
       </div>
 
+      {/* Alert Row */}
+      <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-5 flex items-center gap-4 shadow-sm">
+        <div>
+          <p className="text-[10px] font-bold text-indigo-700 uppercase tracking-widest mb-1">
+            Previsione chiusure questo mese
+          </p>
+          <p className="text-3xl font-black text-indigo-900 leading-none">1</p>
+        </div>
+        <ArrowUpRight className="ml-auto h-6 w-6 text-indigo-400" />
+      </div>
+
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Bar Chart Pipeline */}
         <Card className="shadow-sm border-slate-200">
           <CardHeader>
             <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-              Valore della pipeline
+              Valore della pipeline per fase
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -101,9 +121,24 @@ export default function SalesDashboardPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={pipelineData} margin={{top: 10, right: 10, left: 0, bottom: 20}}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                  <XAxis dataKey="name" tick={{fontSize: 11, fill: "#64748B"}} interval={0} tickLine={false} axisLine={false} dy={10} />
-                  <YAxis tickFormatter={(value) => `€${value/1000}k`} tick={{fontSize: 11, fill: "#64748B"}} tickLine={false} axisLine={false} />
-                  <Tooltip cursor={{fill: 'transparent'}} />
+                  <XAxis 
+                    dataKey="name" 
+                    tick={{fontSize: 11, fill: "#64748B"}} 
+                    interval={0}
+                    tickLine={false}
+                    axisLine={false}
+                    dy={10}
+                  />
+                  <YAxis 
+                    tickFormatter={(value) => `€${value/1000}k`} 
+                    tick={{fontSize: 11, fill: "#64748B"}} 
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip 
+                    cursor={{fill: 'transparent'}}
+                    contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}
+                  />
                   <Bar dataKey="value" fill="#4F46E5" radius={[4, 4, 0, 0]} barSize={60} />
                 </BarChart>
               </ResponsiveContainer>
@@ -111,36 +146,92 @@ export default function SalesDashboardPage() {
           </CardContent>
         </Card>
 
+        {/* Pie Chart Distribution */}
         <Card className="shadow-sm border-slate-200">
           <CardHeader>
             <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-              Distribuzione fase
+              Distribuzione fase accordo
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="h-[300px] w-full flex justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={70}
-                    outerRadius={100}
-                    paddingAngle={4}
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+            <div className="flex flex-col md:flex-row items-center h-[300px]">
+              <div className="h-full w-full md:w-2/3 relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={90}
+                      paddingAngle={4}
+                      dataKey="value"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+                
+                {/* Center Text */}
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+                  <span className="text-3xl font-black text-slate-900">4</span>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase">Fasi</p>
+                </div>
+              </div>
+              
+              {/* Legend */}
+              <div className="w-full md:w-1/3 flex flex-col justify-center gap-3 p-4">
+                 {pieData.map((d, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-slate-700">{d.name}</span>
+                        <span className="text-[10px] text-slate-400">{d.value}%</span>
+                      </div>
+                    </div>
+                 ))}
+              </div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* ✅ Deals Row (Aggiunto per completezza screenshot) */}
+      <Card className="shadow-sm border-slate-200">
+        <CardHeader>
+          <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+            Le migliori offerte per valore
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+           <div className="h-[250px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={offersData} margin={{top: 20, right: 30, left: 0, bottom: 5}}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                  <XAxis 
+                    dataKey="name" 
+                    tick={{fontSize: 10, fill: "#64748B"}} 
+                    interval={0} 
+                    angle={-45} 
+                    textAnchor="end" 
+                    height={60} 
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip 
+                    cursor={{fill: '#F8FAFC'}}
+                    contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}
+                  />
+                  <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+           </div>
+        </CardContent>
+      </Card>
+
     </div>
   );
 }
