@@ -17,6 +17,9 @@ import { SuperadminUsersController } from './superadmin/superadmin-users.control
 import { SecurityPolicyController } from './superadmin/security-policy.controller';
 import { AuthMfaController } from './auth-mfa.controller';
 import { AuthMfaService } from './auth-mfa.service';
+import { PassportModule } from '@nestjs/passport';
+import { JwtModule } from '@nestjs/jwt';
+import { JwtStrategy } from './auth/jwt.strategy';
 
 // --- SERVIZI ---
 import { SystemStatsService } from './superadmin/telemetry.service'; // <--- FIX: Nuovo servizio per la dashboard superadmin
@@ -76,6 +79,17 @@ import { RedisModule } from './redis/redis.module';
       },
     }),
 
+    // ✅ AUTH SETUP (Passport + JWT) <--- FIX IMPORTANTE
+    PassportModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET') || 'SECRET_DA_CONFIGURARE',
+        signOptions: { expiresIn: '1d' },
+      }),
+    }),
+
     MailModule,
     TenantModule,
 
@@ -112,6 +126,7 @@ import { RedisModule } from './redis/redis.module';
     ProjectsEventsService,
     TenantBootstrapService,
     AuthMfaService,
+    JwtStrategy,
   ],
 })
 export class AppModule implements NestModule {

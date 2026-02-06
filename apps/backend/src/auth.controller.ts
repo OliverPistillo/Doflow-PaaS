@@ -6,11 +6,14 @@ import {
   Req,
   Get,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { AuditService } from './audit.service';
 import { LoginGuardService } from './login-guard.service';
+// Assumiamo che JwtAuthGuard sia definito in un file vicino, es:
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
 
 type AuthBody = {
   email: string;
@@ -22,6 +25,11 @@ type AcceptInviteBody = {
   password: string;
 };
 
+type MfaConfirmBody = {
+  code: string;   // Codice OTP inserito dall'utente
+  secret: string; // Segreto generato nel setup
+};
+
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -29,6 +37,45 @@ export class AuthController {
     private readonly auditService: AuditService,
     private readonly loginGuard: LoginGuardService,
   ) {}
+
+  // ==========================================
+  // NUOVI ENDPOINT PER MFA SETUP
+  // ==========================================
+
+  @UseGuards(JwtAuthGuard)
+  @Get('mfa/setup')
+  async mfaSetup(@Req() req: Request) {
+    // Richiede un token valido (anche temporaneo MFA_SETUP_NEEDED)
+    return this.authService.generateMfaSetup(req);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('mfa/confirm')
+  async mfaConfirm(@Body() body: MfaConfirmBody, @Req() req: Request) {
+    if (!body.code || !body.secret) {
+      return { error: 'Code and secret required' };
+    }
+
+    try {
+      // Verifica codice e attiva MFA nel DB
+      const result = await this.authService.confirmMfaAndEnable(req, body.code, body.secret);
+
+      const user = (req as any).user;
+      await this.auditService.log(req, {
+        action: 'auth_mfa_enabled_success',
+        targetEmail: user?.email,
+      });
+
+      return result;
+    } catch (e) {
+      if (e instanceof Error) return { error: e.message };
+      return { error: 'MFA Confirmation failed' };
+    }
+  }
+
+  // ==========================================
+  // ENDPOINT ESISTENTI
+  // ==========================================
 
   @Post('accept-invite')
   async acceptInvite(@Body() body: AcceptInviteBody, @Req() req: Request) {
@@ -97,15 +144,15 @@ export class AuthController {
       // 1) controlla se l'identità è già bloccata (Bloom + Redis)
       await this.loginGuard.checkBeforeLogin(req, email);
 
-      // 2) login tenant-aware:
-      // - se il tenant corrente è "public": prova in public, se fallisce risolve tenant da public.tenants e riprova
-      // - se il tenant corrente NON è public: si comporta come login normale
+      // 2) login tenant-aware
       const result = await this.authService.loginAuto(req, email, password);
 
       // 3) audit successo
       await this.auditService.log(req, {
         action: 'auth_login_success',
         targetEmail: email,
+        // Logghiamo se è richiesto MFA o se è FULL
+        metadata: { authStage: result.mfa?.stage || 'FULL' },
       });
 
       // 4) reset dei fallimenti in caso di successo
@@ -144,6 +191,7 @@ export class AuthController {
       email: user.email,
       role: user.role,
       tenantId: user.tenantId ?? user.tenant_id ?? 'public',
+      authStage: user.authStage, // ✅ utile per il frontend
       created_at: user.created_at,
     };
 

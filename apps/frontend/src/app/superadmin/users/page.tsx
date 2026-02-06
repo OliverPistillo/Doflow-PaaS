@@ -64,7 +64,8 @@ type GlobalUser = {
   tenant_slug?: string;
   tenant_schema?: string;
   is_active: boolean;
-  mfa_required?: boolean;
+  mfa_required?: boolean; // Usato per utenti globali
+  mfa_enabled?: boolean;  // Usato per utenti tenant (spesso i nomi colonna differiscono)
   created_at: string;
 };
 
@@ -262,16 +263,12 @@ export default function SuperadminUsersPage() {
   ======================================================= */
 
   const buildUsersQuery = () => {
-    const tenantParam =
-      activeTab === "tenant" && targetTenantId !== "__all__"
-        ? targetTenantId
-        : "";
-
+    // Nota: quando siamo nel tab tenant, il tenantId passa nell'URL, non nella query string per il filtro
+    // ma lo lasciamo per coerenza o filtri aggiuntivi se il BE lo supporta.
     return new URLSearchParams({
       q,
       role: role === "__all__" ? "" : role,
       is_active: isActive === "__all__" ? "" : isActive,
-      tenantId: tenantParam,
       page: String(page),
       pageSize: String(pageSize),
     }).toString();
@@ -287,9 +284,17 @@ export default function SuperadminUsersPage() {
     setLoading(true);
     try {
       const qs = buildUsersQuery();
-      // Se vuoi distinguere tenant users (per tenant) vs global, qui puoi cambiare endpoint
-      // Ma per ora usiamo quello globale filtrato
-      const endpoint = `/superadmin/users?${qs}`;
+      let endpoint = "";
+
+      if (activeTab === "tenant") {
+        // ✅ FIX: Se siamo nel tab Tenant, chiamiamo l'endpoint specifico del tenant
+        // Questo legge dalla tabella users dello schema del tenant, NON public.users
+        endpoint = `/superadmin/tenants/${targetTenantId}/users?${qs}`;
+      } else {
+        // Altrimenti, directory globale (public.users)
+        // Se c'è un filtro tenant globale (es. search), lo aggiungiamo
+        endpoint = `/superadmin/users?${qs}`;
+      }
 
       const data = await apiFetch<{
         users: GlobalUser[];
@@ -349,10 +354,19 @@ export default function SuperadminUsersPage() {
 
   const patchUser = async (id: string, patch: any) => {
     try {
-      await apiFetch(`/superadmin/users/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify(patch),
-      });
+      // ✅ FIX: Patch dinamico. Se siamo in tenant mode, usiamo l'endpoint tenant
+      if (activeTab === "tenant") {
+        await apiFetch(`/superadmin/tenants/${targetTenantId}/users/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(patch),
+        });
+      } else {
+        // Global mode
+        await apiFetch(`/superadmin/users/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(patch),
+        });
+      }
       await loadUsers();
     } catch (e: any) {
       toast({
@@ -366,10 +380,21 @@ export default function SuperadminUsersPage() {
 
   const toggleMfa = async (u: GlobalUser) => {
     try {
-      await patchUser(u.id, { mfa_required: !u.mfa_required });
+      // ✅ Normalizzazione: public usa 'mfa_required', tenant usa 'mfa_enabled' solitamente.
+      // Il backend che ti ho dato gestisce entrambi nel DTO di patch tenant se necessario,
+      // ma per sicurezza inviamo il flag corretto in base al contesto o entrambi.
+      
+      const currentVal = u.mfa_required ?? u.mfa_enabled ?? false;
+      const patchData = {
+        mfa_required: !currentVal, // per global
+        mfa_enabled: !currentVal   // per tenant
+      };
+
+      await patchUser(u.id, patchData);
+      
       toast({
         title: "Aggiornato",
-        description: `MFA ${!u.mfa_required ? "abilitato" : "disabilitato"} per ${u.email}`,
+        description: `MFA ${!currentVal ? "abilitato" : "disabilitato"} per ${u.email}`,
       });
     } catch {
       // toast gestito in patchUser
@@ -403,8 +428,29 @@ export default function SuperadminUsersPage() {
     if (!resetUser) return;
 
     try {
+      // Qui dobbiamo decidere l'ID tenant. Se siamo in tab tenant, usiamo targetTenantId.
+      // Se siamo in global, usiamo resetUser.tenant_id (ma attenzione, se è 'public' o uno slug, 
+      // l'endpoint reset-password si aspetta tipicamente un ID se configurato così, o slug).
+      // Dato che il tuo backend superadmin-tenants.controller.ts usa "getTenantById", si aspetta UUID.
+      // Per global users, reset password su tenant users è complesso se non abbiamo l'UUID del tenant.
+      
+      let tId = targetTenantId;
+      
+      if (activeTab === "global") {
+         // Tentativo di recuperare ID tenant dalla lista tenants se disponibile
+         // (GlobalUser ha solo tenant_id che spesso è slug/schema).
+         const tMatch = tenants.find(t => t.slug === resetUser.tenant_id || t.schema_name === resetUser.tenant_id);
+         if (tMatch) tId = tMatch.id;
+         else {
+             // Fallback o errore se non troviamo l'UUID
+             // Se l'utente è un 'admin' di piattaforma (public), non ha tenant_id.
+             toast({ title: "Attenzione", description: "Impossibile determinare ID tenant per questo utente globale." });
+             return;
+         }
+      }
+
       const res = await apiFetch<{ tempPassword: string }>(
-        `/superadmin/tenants/${resetUser.tenant_id}/users/${resetUser.id}/reset-password`,
+        `/superadmin/tenants/${tId}/users/${resetUser.id}/reset-password`,
         { method: "POST" },
       );
 
@@ -712,7 +758,6 @@ export default function SuperadminUsersPage() {
               </Badge>
             </div>
 
-            {/* ✅ FIX Recharts: Wrapper with explicit dimensions */}
             <div className="mt-3 w-full rounded-xl border border-slate-200 bg-white">
               <div style={{ width: "100%", height: 220 }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -829,7 +874,10 @@ export default function SuperadminUsersPage() {
                       <RoleBadge role={u.role} />
                     </td>
                     <td className="px-6 py-4">
-                      <Switch checked={!!u.mfa_required} onCheckedChange={() => toggleMfa(u)} />
+                      <Switch 
+                        checked={!!(u.mfa_required ?? u.mfa_enabled)} 
+                        onCheckedChange={() => toggleMfa(u)} 
+                      />
                     </td>
                     <td className="px-6 py-4 text-slate-600">
                       {u.tenant_name || u.tenant_slug || u.tenant_id}
