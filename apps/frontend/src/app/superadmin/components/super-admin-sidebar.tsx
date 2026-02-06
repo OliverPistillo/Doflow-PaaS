@@ -11,25 +11,40 @@ import {
   ShieldAlert, 
   LogOut,
   BarChart3,
-  CreditCard,
+  ListTodo,
+  Truck,
+  CalendarDays,
+  Wallet,
+  Receipt
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// Definizione dei gruppi di navigazione
+// Definizione dei gruppi di navigazione secondo la struttura richiesta
 const MENU_GROUPS = [
   {
-    label: "Business Intelligence",
+    label: "Pipeline di vendita",
     items: [
-      // ✅ CORRETTO: Aggiunto prefisso /superadmin
-      { label: "Sales Dashboard", href: "/superadmin/dashboard", icon: BarChart3 }, 
-      { label: "Pipeline", href: "/superadmin/sales/pipeline", icon: LayoutDashboard },
-      { label: "Finanza", href: "/superadmin/finance/dashboard", icon: CreditCard },
+      { label: "Sales Dashboard", href: "/superadmin/dashboard", icon: BarChart3 }, // Principale
+      { label: "Gestione offerte", href: "/superadmin/sales/pipeline", icon: ListTodo },
+    ],
+  },
+  {
+    label: "Consegna del servizio",
+    items: [
+      { label: "Stato del servizio", href: "/superadmin/delivery/status", icon: Truck }, // Principale
+      { label: "Calendario del progetto", href: "/superadmin/delivery/calendar", icon: CalendarDays },
+    ],
+  },
+  {
+    label: "Fatturazione e pagamenti",
+    items: [
+      { label: "Dashboard finanziario", href: "/superadmin/finance/dashboard", icon: Wallet }, // Principale
+      { label: "Gestione delle fatture", href: "/superadmin/finance/invoices", icon: Receipt },
     ],
   },
   {
     label: "Platform Admin",
     items: [
-      // ✅ Questo era già corretto
       { label: "Control Tower", href: "/superadmin/control-tower", icon: ShieldAlert },
       { label: "Gestione Tenant", href: "/superadmin/tenants", icon: Building2 },
       { label: "Gestione Utenti", href: "/superadmin/users", icon: Users },
@@ -62,12 +77,12 @@ export function SuperAdminSidebar() {
       <nav className="flex-1 p-4 space-y-6 overflow-y-auto">
         {MENU_GROUPS.map((group, idx) => (
           <div key={idx}>
+            {/* Titolo del Gruppo (es. Pipeline di vendita) */}
             <div className="px-2 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
               {group.label}
             </div>
             <div className="space-y-1">
               {group.items.map((item) => {
-                // ✅ Semplificato: Match esatto dell'URL
                 const isActive = pathname === item.href;
                 
                 return (

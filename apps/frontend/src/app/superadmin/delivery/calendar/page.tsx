@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from 'react';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, CalendarDays, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 type ProjectEvent = {
   id: string;
   title: string;
-  date: string; // ISO Date string
+  date: string; // YYYY-MM-DD
   type: 'milestone' | 'deadline' | 'meeting';
 };
 
@@ -22,14 +22,13 @@ const MOCK_EVENTS: ProjectEvent[] = [
 ];
 
 const EVENT_STYLES = {
-  milestone: 'bg-indigo-100 text-indigo-700 border-l-4 border-indigo-500',
-  deadline: 'bg-red-100 text-red-700 border-l-4 border-red-500',
-  meeting: 'bg-emerald-100 text-emerald-700 border-l-4 border-emerald-500',
+  milestone: 'bg-indigo-100 text-indigo-700 border-l-2 border-indigo-500',
+  deadline: 'bg-red-100 text-red-700 border-l-2 border-red-500',
+  meeting: 'bg-emerald-100 text-emerald-700 border-l-2 border-emerald-500',
 };
 
 // --- HELPER ---
 function startOfMonth(d: Date) { return new Date(d.getFullYear(), d.getMonth(), 1); }
-function endOfMonth(d: Date) { return new Date(d.getFullYear(), d.getMonth() + 1, 0); }
 function addMonths(d: Date, n: number) { return new Date(d.getFullYear(), d.getMonth() + n, 1); }
 function sameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -39,14 +38,14 @@ export default function ProjectCalendarPage() {
   const [month, setMonth] = React.useState<Date>(() => startOfMonth(new Date()));
   const [selectedDay, setSelectedDay] = React.useState<Date>(() => new Date());
 
-  // CALENDAR LOGIC
+  // Generazione Griglia Giorni
   const daysGrid = React.useMemo(() => {
     const first = startOfMonth(month);
     const dow = (first.getDay() + 6) % 7; // Lunedì = 0
     const start = new Date(first);
     start.setDate(first.getDate() - dow);
     const cells: Date[] = [];
-    for (let i = 0; i < 42; i++) { // 6 settimane
+    for (let i = 0; i < 42; i++) { // 6 righe x 7 giorni
       const d = new Date(start);
       d.setDate(start.getDate() + i);
       cells.push(d);
@@ -55,9 +54,9 @@ export default function ProjectCalendarPage() {
   }, [month]);
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto h-[calc(100vh-100px)] flex flex-col">
+    <div className="space-y-6 max-w-[1600px] mx-auto h-[calc(100vh-140px)] flex flex-col">
       
-      {/* HEADER */}
+      {/* HEADER PAGINA */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -73,9 +72,9 @@ export default function ProjectCalendarPage() {
         </div>
       </div>
 
-      {/* CALENDARIO */}
+      {/* CALENDARIO CARD */}
       <Card className="flex-1 flex flex-col border shadow-sm overflow-hidden">
-        {/* Navigation */}
+        {/* Navigation Header */}
         <CardHeader className="flex flex-row items-center justify-between py-4 px-6 border-b bg-slate-50/50">
             <h2 className="text-lg font-bold capitalize text-slate-800">
                 {month.toLocaleString('it-IT', { month: 'long', year: 'numeric' })}
@@ -90,14 +89,14 @@ export default function ProjectCalendarPage() {
             </div>
         </CardHeader>
         
-        {/* Days Header */}
+        {/* Days Header Row */}
         <div className="grid grid-cols-7 text-xs font-semibold text-slate-500 bg-slate-50 border-b">
             {['Lun','Mar','Mer','Gio','Ven','Sab','Dom'].map(d => (
                 <div key={d} className="py-3 text-center uppercase tracking-wider">{d}</div>
             ))}
         </div>
         
-        {/* Grid */}
+        {/* Days Grid */}
         <div className="grid grid-cols-7 grid-rows-6 flex-1 bg-white">
             {daysGrid.map((d, i) => {
                 const inMonth = d.getMonth() === month.getMonth();
@@ -108,9 +107,9 @@ export default function ProjectCalendarPage() {
                     <div
                         key={i}
                         className={cn(
-                            "p-2 border-b border-r flex flex-col items-start min-h-[100px] transition-colors relative",
-                            !inMonth ? "bg-slate-50/50 text-slate-300" : "hover:bg-slate-50/30",
-                            isToday && "bg-indigo-50/30"
+                            "p-2 border-b border-r flex flex-col items-start min-h-[80px] transition-colors relative",
+                            !inMonth ? "bg-slate-50/30 text-slate-300" : "hover:bg-slate-50/50",
+                            isToday && "bg-indigo-50/20"
                         )}
                         onClick={() => setSelectedDay(d)}
                     >
@@ -121,11 +120,15 @@ export default function ProjectCalendarPage() {
                             {d.getDate()}
                         </span>
                         
-                        <div className="w-full space-y-1 overflow-y-auto max-h-[80px]">
+                        {/* Eventi del giorno */}
+                        <div className="w-full space-y-1 overflow-y-auto max-h-[60px] custom-scrollbar">
                             {dayEvents.map(ev => (
                                 <div 
                                     key={ev.id} 
-                                    className={cn("text-[10px] px-1.5 py-0.5 rounded truncate font-medium cursor-pointer shadow-sm", EVENT_STYLES[ev.type])}
+                                    className={cn(
+                                        "text-[10px] px-1.5 py-0.5 rounded truncate font-medium cursor-pointer shadow-sm transition-all hover:opacity-80", 
+                                        EVENT_STYLES[ev.type]
+                                    )}
                                     title={ev.title}
                                 >
                                     {ev.title}
