@@ -49,28 +49,42 @@ const offersData = [
   { name: "Expansion", value: 12000 },
 ];
 
-// --- Componente KPI Card Ridisegnato ---
-function KpiCard({ title, value }: { title: string; value: string }) {
+// --- Componente KPI Card Corretto ---
+// borderClass: colore del bordo sinistro (es. border-blue-500)
+// textClass: colore del titolo (es. text-blue-600)
+// iconBgClass: colore sfondo freccia (es. bg-blue-50)
+// iconColorClass: colore icona freccia (es. text-blue-500)
+function KpiCard({ 
+  title, 
+  value, 
+  borderClass, 
+  textClass, 
+  iconBgClass, 
+  iconColorClass 
+}: { 
+  title: string; 
+  value: string; 
+  borderClass: string;
+  textClass: string;
+  iconBgClass: string;
+  iconColorClass: string;
+}) {
   return (
-    <div className="relative flex items-center bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden h-32 group hover:shadow-md transition-shadow">
-      {/* Barra laterale colorata (stondata e staccata visivamente) */}
-      <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-indigo-600 rounded-l-xl"></div>
-      
-      <div className="flex-1 px-6 py-4 flex flex-col justify-center h-full ml-2">
-        <p className="text-[11px] font-bold text-indigo-600 uppercase tracking-widest mb-2">
-          {title}
-        </p>
-        <h3 className="text-4xl font-black text-slate-900 tracking-tight">
-          {value}
-        </h3>
-      </div>
-
-      <div className="pr-6">
-        <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-indigo-50 text-indigo-500 group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300 cursor-pointer">
-          <ArrowUpRight className="h-5 w-5" />
+    <Card className={`border-l-4 shadow-sm ${borderClass}`}>
+      <CardContent className="p-6">
+        <div className="flex justify-between items-start">
+          <div>
+            <p className={`text-[11px] font-bold uppercase tracking-wider mb-1 ${textClass}`}>
+              {title}
+            </p>
+            <h3 className="text-3xl font-black text-slate-900">{value}</h3>
+          </div>
+          <div className={`p-2 rounded-lg ${iconBgClass}`}>
+            <ArrowUpRight className={`h-5 w-5 ${iconColorClass}`} />
+          </div>
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -81,7 +95,7 @@ export default function SalesDashboardPage() {
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
-          <span>Pipeline di vendita</span>
+          <span>Business Intelligence</span>
           <span className="text-slate-300">/</span>
           <span className="font-bold text-slate-900">Sales Dashboard</span>
         </div>
@@ -91,12 +105,44 @@ export default function SalesDashboardPage() {
         </p>
       </div>
 
-      {/* KPI Row (Nuovo Design) */}
+      {/* KPI Row (Colori Diversificati) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KpiCard title="Offerte in qualificazione" value="6" />
-        <KpiCard title="Valore totale offerte" value="€6,800.00" />
-        <KpiCard title="Tasso di vincita" value="100%" />
-        <KpiCard title="Media offerta" value="€1,253.33" />
+        {/* Card 1: Blue */}
+        <KpiCard 
+          title="Offerte in qualificazione" 
+          value="6" 
+          borderClass="border-blue-500"
+          textClass="text-blue-600"
+          iconBgClass="bg-blue-50"
+          iconColorClass="text-blue-500"
+        />
+        {/* Card 2: Indigo */}
+        <KpiCard 
+          title="Valore totale offerte" 
+          value="€6,800.00" 
+          borderClass="border-indigo-500"
+          textClass="text-indigo-600"
+          iconBgClass="bg-indigo-50"
+          iconColorClass="text-indigo-500"
+        />
+        {/* Card 3: Emerald */}
+        <KpiCard 
+          title="Tasso di vincita" 
+          value="100%" 
+          borderClass="border-emerald-500"
+          textClass="text-emerald-600"
+          iconBgClass="bg-emerald-50"
+          iconColorClass="text-emerald-500"
+        />
+        {/* Card 4: Violet/Purple */}
+        <KpiCard 
+          title="Media offerta" 
+          value="€1,253.33" 
+          borderClass="border-violet-500"
+          textClass="text-violet-600"
+          iconBgClass="bg-violet-50"
+          iconColorClass="text-violet-500"
+        />
       </div>
 
       {/* Alert Row */}
@@ -195,7 +241,7 @@ export default function SalesDashboardPage() {
                 </ResponsiveContainer>
               </div>
               
-              {/* Legend (Stile screenshot) */}
+              {/* Legend */}
               <div className="w-full md:w-1/3 flex flex-col justify-center gap-4 p-4 text-right">
                  <p className="text-xs text-slate-400 font-medium mb-1">Fase</p>
                  {pieData.map((d, i) => (
