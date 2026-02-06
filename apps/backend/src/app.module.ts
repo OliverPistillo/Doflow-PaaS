@@ -22,8 +22,8 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './auth/jwt.strategy';
 
 // --- SERVIZI ---
-import { SystemStatsService } from './superadmin/telemetry.service'; // <--- FIX: Nuovo servizio per la dashboard superadmin
-import { TelemetryService } from './telemetry/telemetry.service';    // Servizio OpenTelemetry standard
+import { SystemStatsService } from './superadmin/telemetry.service';
+import { TelemetryService } from './telemetry/telemetry.service';
 import { AuthService } from './auth.service';
 import { AuditService } from './audit.service';
 import { LoginGuardService } from './login-guard.service';
@@ -33,6 +33,9 @@ import { ProjectsEventsService } from './realtime/projects-events.service';
 import { TenantBootstrapService } from './tenancy/tenant-bootstrap.service';
 import { SuperadminAuditController } from './audit.controller';
 
+// ✅ NUOVI IMPORT PER DASHBOARD KPI
+import { SuperadminDashboardController } from './superadmin/superadmin-dashboard.controller';
+import { SuperadminDashboardService } from './superadmin/superadmin-dashboard.service';
 
 // --- MIDDLEWARE & GUARD ---
 import { TenancyMiddleware } from './tenancy/tenancy.middleware';
@@ -56,13 +59,9 @@ import { RedisModule } from './redis/redis.module';
       ignoreEnvFile: true,
     }),
 
-    // ✅ Redis (Global)
     RedisModule,
-
-    // ✅ Tenancy (fornisce TenancyMiddleware con Redis in DI)
     TenancyModule,
 
-    // ✅ Default DB connection (schema public / default)
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -79,7 +78,6 @@ import { RedisModule } from './redis/redis.module';
       },
     }),
 
-    // ✅ AUTH SETUP (Passport + JWT) <--- FIX IMPORTANTE
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -92,7 +90,6 @@ import { RedisModule } from './redis/redis.module';
 
     MailModule,
     TenantModule,
-
     FedericaNeroneModule,
     BusinaroModule,
   ],
@@ -113,11 +110,13 @@ import { RedisModule } from './redis/redis.module';
     SuperadminUsersController,
     SecurityPolicyController,
     AuthMfaController,
+    // ✅ REGISTRAZIONE CONTROLLER DASHBOARD
+    SuperadminDashboardController, 
   ],
 
   providers: [
-    TelemetryService,        // Servizio Telemetria Standard
-    SystemStatsService,      // <--- FIX: Servizio Hardware/System per Superadmin
+    TelemetryService,
+    SystemStatsService,
     AuthService,
     AuditService,
     LoginGuardService,
@@ -127,6 +126,8 @@ import { RedisModule } from './redis/redis.module';
     TenantBootstrapService,
     AuthMfaService,
     JwtStrategy,
+    // ✅ REGISTRAZIONE SERVICE DASHBOARD
+    SuperadminDashboardService,
   ],
 })
 export class AppModule implements NestModule {

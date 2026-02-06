@@ -1,8 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, Loader2, RefreshCw } from "lucide-react";
+import { apiFetch } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 import {
   BarChart,
   Bar,
@@ -16,40 +18,31 @@ import {
   Cell,
 } from "recharts";
 
-// --- Dati Mock ---
-const pipelineData = [
-  { name: "Lead qualificato", value: 45000 },
-  { name: "Preventivo inviato", value: 68000 },
-  { name: "Negoziazione", value: 42000 },
-  { name: "Chiuso vinto", value: 28000 },
-];
+// --- TIPI ---
+type DashboardData = {
+  kpi: {
+    leadsCount: number;
+    totalValue: number;
+    winRate: number;
+    avgDealValue: number;
+  };
+  pipeline: {
+    stage: string;
+    value: number;
+    count: number;
+  }[];
+  topDeals: {
+    name: string;
+    client: string;
+    value: number;
+    stage: string;
+  }[];
+};
 
-const pieData = [
-  { name: "Lead qualificato", value: 20, color: "#BFDBFE" },
-  { name: "Preventivo inviato", value: 20, color: "#93C5FD" },
-  { name: "Negoziazione", value: 40, color: "#FDE68A" },
-  { name: "Chiuso vinto", value: 20, color: "#BBF7D0" },
-];
+// --- COLORI ---
+const PIE_COLORS = ["#BFDBFE", "#93C5FD", "#FDE68A", "#BBF7D0"];
 
-const offersData = [
-  { name: "App Mobile", value: 12000 },
-  { name: "Campagna Mkt", value: 15000 },
-  { name: "Consulenza", value: 5000 },
-  { name: "Contratto Beta", value: 22000 },
-  { name: "Audit Security", value: 4500 },
-  { name: "Integrazione CRM", value: 9000 },
-  { name: "Upgrade HW", value: 6000 },
-  { name: "Cloud Mig.", value: 18000 },
-  { name: "SaaS Sub", value: 11000 },
-  { name: "Pilot Project", value: 24000 },
-  { name: "Formazione", value: 8000 },
-  { name: "Redesign Sito", value: 13000 },
-  { name: "Supporto Tec", value: 15000 },
-  { name: "Data Analysis", value: 9000 },
-  { name: "Expansion", value: 12000 },
-];
-
-// --- Componente KPI Card Neutro (Shadcn Style) ---
+// --- Componente KPI Card ---
 function KpiCard({ title, value, hoverColorClass }: { title: string; value: string; hoverColorClass: string }) {
   return (
     <Card className="shadow-sm hover:shadow-md transition-shadow">
@@ -63,7 +56,6 @@ function KpiCard({ title, value, hoverColorClass }: { title: string; value: stri
               {value}
             </h3>
           </div>
-          {/* Il colore appare solo qui, su hover del genitore o del bottone */}
           <div className={`h-9 w-9 flex items-center justify-center rounded-lg bg-slate-50 text-slate-400 group-hover:bg-slate-100 transition-colors duration-300 cursor-pointer ${hoverColorClass}`}>
             <ArrowUpRight className="h-5 w-5" />
           </div>
@@ -74,42 +66,93 @@ function KpiCard({ title, value, hoverColorClass }: { title: string; value: stri
 }
 
 export default function SalesDashboardPage() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  const loadData = async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      const res = await apiFetch<DashboardData>("/superadmin/dashboard/stats");
+      setData(res);
+    } catch (e) {
+      console.error("Errore fetch dashboard:", e);
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-10 w-10 animate-spin text-indigo-600" />
+          <p className="text-sm text-slate-500 font-medium">Caricamento dashboard in corso...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <div className="text-center space-y-4">
+          <p className="text-slate-500">Impossibile caricare i dati della dashboard.</p>
+          <Button onClick={loadData} variant="outline">
+            <RefreshCw className="mr-2 h-4 w-4" /> Riprova
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500 p-2 md:p-0 max-w-[1800px] mx-auto">
       
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
-          <span>Business Intelligence</span>
-          <span className="text-slate-300">/</span>
-          <span className="font-bold text-slate-900">Sales Dashboard</span>
+      <div className="flex justify-between items-end">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
+            <span>Business Intelligence</span>
+            <span className="text-slate-300">/</span>
+            <span className="font-bold text-slate-900">Sales Dashboard</span>
+          </div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Panoramica della pipeline di vendita</h1>
+          <p className="text-slate-500 mt-1 text-sm font-medium">
+            Pipeline: offerte per fase, tasso di vincita, chiusure del mese e operazioni principali.
+          </p>
         </div>
-        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Panoramica della pipeline di vendita</h1>
-        <p className="text-slate-500 mt-1 text-sm font-medium">
-          Pipeline: offerte per fase, tasso di vincita, chiusure del mese e operazioni principali.
-        </p>
+        <Button variant="ghost" size="icon" onClick={loadData} className="text-slate-400 hover:text-indigo-600">
+            <RefreshCw className="h-4 w-4" />
+        </Button>
       </div>
 
-      {/* KPI Row (Neutri) */}
+      {/* KPI Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <KpiCard 
           title="Offerte in qualificazione" 
-          value="6" 
+          value={String(data.kpi.leadsCount)} 
           hoverColorClass="hover:bg-blue-100 hover:text-blue-600"
         />
         <KpiCard 
           title="Valore totale offerte" 
-          value="€6,800.00" 
+          value={`€${data.kpi.totalValue.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
           hoverColorClass="hover:bg-indigo-100 hover:text-indigo-600"
         />
         <KpiCard 
           title="Tasso di vincita" 
-          value="100%" 
+          value={`${data.kpi.winRate}%`} 
           hoverColorClass="hover:bg-emerald-100 hover:text-emerald-600"
         />
         <KpiCard 
           title="Media offerta" 
-          value="€1,253.33" 
+          value={`€${data.kpi.avgDealValue.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
           hoverColorClass="hover:bg-violet-100 hover:text-violet-600"
         />
       </div>
@@ -146,10 +189,10 @@ export default function SalesDashboardPage() {
           <CardContent>
             <div className="h-[300px] w-full mt-4">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={pipelineData} margin={{top: 10, right: 10, left: 0, bottom: 20}}>
+                <BarChart data={data.pipeline} margin={{top: 10, right: 10, left: 0, bottom: 20}}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                   <XAxis 
-                    dataKey="name" 
+                    dataKey="stage" 
                     tick={{fontSize: 11, fill: "#64748B"}} 
                     interval={0}
                     tickLine={false}
@@ -157,7 +200,7 @@ export default function SalesDashboardPage() {
                     dy={10}
                   />
                   <YAxis 
-                    tickFormatter={(value) => `€${value.toLocaleString()}`} 
+                    tickFormatter={(value) => `€${value/1000}k`} 
                     tick={{fontSize: 11, fill: "#64748B"}} 
                     tickLine={false}
                     axisLine={false}
@@ -165,6 +208,8 @@ export default function SalesDashboardPage() {
                   <Tooltip 
                     cursor={{fill: 'transparent'}}
                     contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}
+                    // FIX: Accetta number | undefined e usa fallback
+                    formatter={(value: number | undefined) => [`€${(value || 0).toLocaleString()}`, 'Valore']}
                   />
                   <Bar dataKey="value" fill="#5a7bd4" radius={[4, 4, 0, 0]} barSize={80} />
                 </BarChart>
@@ -192,17 +237,17 @@ export default function SalesDashboardPage() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={pieData}
+                      data={data.pipeline}
                       cx="50%"
                       cy="50%"
                       innerRadius={60}
                       outerRadius={100}
                       paddingAngle={2}
-                      dataKey="value"
+                      dataKey="count"
                       stroke="none"
                     >
-                      {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      {data.pipeline.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip />
@@ -213,10 +258,10 @@ export default function SalesDashboardPage() {
               {/* Legend */}
               <div className="w-full md:w-1/3 flex flex-col justify-center gap-4 p-4 text-right">
                  <p className="text-xs text-slate-400 font-medium mb-1">Fase</p>
-                 {pieData.map((d, i) => (
+                 {data.pipeline.map((d, i) => (
                     <div key={i} className="flex items-center justify-end gap-2">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }} />
-                      <span className="text-xs text-slate-600 font-medium">{d.name}</span>
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                      <span className="text-xs text-slate-600 font-medium">{d.stage}</span>
                     </div>
                  ))}
               </div>
@@ -241,7 +286,7 @@ export default function SalesDashboardPage() {
         <CardContent>
            <div className="h-[250px] w-full mt-4">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={offersData} margin={{top: 20, right: 30, left: 0, bottom: 5}}>
+                <BarChart data={data.topDeals} margin={{top: 20, right: 30, left: 0, bottom: 5}}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                   <XAxis 
                     dataKey="name" 
@@ -256,6 +301,8 @@ export default function SalesDashboardPage() {
                   <Tooltip 
                     cursor={{fill: '#F8FAFC'}}
                     contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}
+                    // FIX: Accetta number | undefined e usa fallback
+                    formatter={(value: number | undefined) => [`€${(value || 0).toLocaleString()}`, 'Valore']}
                   />
                   <Bar dataKey="value" fill="#5a7bd4" radius={[4, 4, 0, 0]} />
                 </BarChart>
