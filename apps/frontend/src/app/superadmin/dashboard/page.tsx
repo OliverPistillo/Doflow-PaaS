@@ -25,6 +25,7 @@ type DashboardData = {
     totalValue: number;
     winRate: number;
     avgDealValue: number;
+    dealsClosingThisMonth: number; // <--- NUOVO CAMPO
   };
   pipeline: {
     stage: string;
@@ -157,13 +158,15 @@ export default function SalesDashboardPage() {
         />
       </div>
 
-      {/* Alert Row */}
+      {/* Alert Row (DINAMICO) */}
       <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-5 flex items-center justify-between shadow-sm">
         <div>
           <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mb-1">
             Si prevede che le offerte si chiuderanno questo mese
           </p>
-          <p className="text-3xl font-black text-indigo-900 leading-none">1</p>
+          <p className="text-3xl font-black text-indigo-900 leading-none">
+            {data.kpi.dealsClosingThisMonth} {/* <--- ORA È DINAMICO */}
+          </p>
         </div>
         <div className="h-9 w-9 bg-white border border-indigo-100 rounded-lg flex items-center justify-center text-indigo-400 hover:bg-indigo-600 hover:text-white transition-colors cursor-pointer">
            <ArrowUpRight className="h-4 w-4" />
@@ -208,7 +211,6 @@ export default function SalesDashboardPage() {
                   <Tooltip 
                     cursor={{fill: 'transparent'}}
                     contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}
-                    // FIX: Accetta number | undefined e usa fallback
                     formatter={(value: number | undefined) => [`€${(value || 0).toLocaleString()}`, 'Valore']}
                   />
                   <Bar dataKey="value" fill="#5a7bd4" radius={[4, 4, 0, 0]} barSize={80} />
@@ -301,7 +303,6 @@ export default function SalesDashboardPage() {
                   <Tooltip 
                     cursor={{fill: '#F8FAFC'}}
                     contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}
-                    // FIX: Accetta number | undefined e usa fallback
                     formatter={(value: number | undefined) => [`€${(value || 0).toLocaleString()}`, 'Valore']}
                   />
                   <Bar dataKey="value" fill="#5a7bd4" radius={[4, 4, 0, 0]} />

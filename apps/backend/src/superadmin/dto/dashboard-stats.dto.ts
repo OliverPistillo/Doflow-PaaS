@@ -3,6 +3,7 @@ export class DashboardKpiDto {
   totalValue!: number;
   winRate!: number;
   avgDealValue!: number;
+  dealsClosingThisMonth!: number; // <--- NUOVO CAMPO
 }
 
 export class PipelineStageDto {

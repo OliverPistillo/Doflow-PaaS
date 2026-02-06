@@ -74,7 +74,7 @@ import { RedisModule } from './redis/redis.module';
           type: 'postgres' as const,
           url,
           autoLoadEntities: true, // Meglio esplicito per sicurezza
-          synchronize: true,
+          synchronize: false, // MAI in produzione! Usare migrazioni
         };
       },
     }),
