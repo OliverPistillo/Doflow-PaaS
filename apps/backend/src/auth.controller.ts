@@ -1,4 +1,3 @@
-// apps/backend/src/auth.controller.ts
 import {
   Body,
   Controller,
@@ -12,9 +11,9 @@ import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { AuditService } from './audit.service';
 import { LoginGuardService } from './login-guard.service';
-// Assumiamo che JwtAuthGuard sia definito in un file vicino, es:
-import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { JwtAuthGuard } from './auth/jwt-auth.guard'; // Assicurati che il percorso sia corretto
 
+// --- DTOs ---
 type AuthBody = {
   email: string;
   password: string;
@@ -30,6 +29,10 @@ type MfaConfirmBody = {
   secret: string; // Segreto generato nel setup
 };
 
+type MfaVerifyBody = {
+  code: string;   // Solo codice per il login normale
+};
+
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -39,16 +42,23 @@ export class AuthController {
   ) {}
 
   // ==========================================
-  // NUOVI ENDPOINT PER MFA SETUP
+  //  MFA FLOW (NUOVI ENDPOINT)
   // ==========================================
 
+  /**
+   * 1. SETUP: Genera Segreto e QR Code
+   * Richiede un token valido (anche temporaneo con stage MFA_SETUP_NEEDED)
+   */
   @UseGuards(JwtAuthGuard)
   @Get('mfa/setup')
   async mfaSetup(@Req() req: Request) {
-    // Richiede un token valido (anche temporaneo MFA_SETUP_NEEDED)
     return this.authService.generateMfaSetup(req);
   }
 
+  /**
+   * 2. CONFIRM: L'utente scansiona e invia il primo codice
+   * Salva il segreto nel DB e attiva l'MFA.
+   */
   @UseGuards(JwtAuthGuard)
   @Post('mfa/confirm')
   async mfaConfirm(@Body() body: MfaConfirmBody, @Req() req: Request) {
@@ -57,7 +67,6 @@ export class AuthController {
     }
 
     try {
-      // Verifica codice e attiva MFA nel DB
       const result = await this.authService.confirmMfaAndEnable(req, body.code, body.secret);
 
       const user = (req as any).user;
@@ -73,8 +82,42 @@ export class AuthController {
     }
   }
 
+  /**
+   * 3. VERIFY: Login successivo (MFA già attivo)
+   * L'utente invia solo il codice. Il backend verifica contro il segreto nel DB.
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('mfa/verify')
+  async mfaVerify(@Body() body: MfaVerifyBody, @Req() req: Request) {
+    if (!body.code) {
+      return { error: 'Code required' };
+    }
+
+    try {
+      const user = (req as any).user; // Qui abbiamo il token MFA_PENDING
+      const result = await this.authService.verifyMfaLogin(user.sub, body.code, req);
+
+      await this.auditService.log(req, {
+        action: 'auth_mfa_login_success',
+        targetEmail: user.email,
+      });
+
+      return result;
+    } catch (e) {
+      // Audit fallimento MFA (opzionale, per sicurezza)
+      const user = (req as any).user;
+      await this.auditService.log(req, {
+        action: 'auth_mfa_login_failed',
+        targetEmail: user?.email,
+      });
+
+      if (e instanceof Error) return { error: e.message };
+      return { error: 'Invalid Code' };
+    }
+  }
+
   // ==========================================
-  // ENDPOINT ESISTENTI
+  //  STANDARD FLOW (ESISTENTI)
   // ==========================================
 
   @Post('accept-invite')

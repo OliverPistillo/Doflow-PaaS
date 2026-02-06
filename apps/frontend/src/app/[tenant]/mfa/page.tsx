@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ShieldCheck, RefreshCw, KeyRound, QrCode, Lock } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
+import { ShieldCheck, RefreshCw, QrCode, Lock, CheckCircle2 } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,36 +11,14 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
 
-type StartResp =
-  | {
-      mode: "challenge";
-      method: "totp";
-      email: string;
-      remainingAttempts: number;
-      lockedUntil: string | null;
-    }
-  | {
-      mode: "setup";
-      method: "totp";
-      email: string;
-      issuer: string;
-      otpauthUrl: string | null;
-      qrDataUrl: string | null;
-    };
-
-function fmtDateTime(iso: string) {
+// Helper per decodificare il token JWT e leggere authStage
+function parseJwtPayload(token: string) {
   try {
-    return new Date(iso).toLocaleString();
+    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(base64));
   } catch {
-    return iso;
+    return null;
   }
-}
-
-function msUntil(iso: string | null) {
-  if (!iso) return 0;
-  const t = new Date(iso).getTime();
-  const now = Date.now();
-  return Math.max(0, t - now);
 }
 
 function normalizeCode(v: string) {
@@ -50,306 +29,234 @@ export default function TenantMfaPage() {
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams<{ tenant: string }>();
-  const search = useSearchParams();
+  const tenantSlug = String(params?.tenant || "").toLowerCase();
 
-  const tenant = String(params?.tenant || "").toLowerCase();
-
+  // Stati applicativi
   const [loading, setLoading] = useState(true);
-  const [start, setStart] = useState<StartResp | null>(null);
+  const [mode, setMode] = useState<"SETUP" | "VERIFY">("VERIFY");
+  
+  // Dati per Setup
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [secret, setSecret] = useState<string | null>(null);
+  const [otpUrl, setOtpUrl] = useState<string | null>(null);
 
+  // Input Utente
   const [code, setCode] = useState("");
-  const [verifying, setVerifying] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  // lock UI
-  const [lockMs, setLockMs] = useState(0);
+  // ==========================================
+  // 1. INIT: Controlla Token e Stage
+  // ==========================================
+  useEffect(() => {
+    initMfa();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const title = useMemo(() => {
-    if (!start) return "Verifica MFA";
-    return start.mode === "setup" ? "Attiva MFA" : "Verifica MFA";
-  }, [start]);
-
-  const locked = useMemo(() => lockMs > 0, [lockMs]);
-
-  const nextParam = (search.get("next") || "").toLowerCase();
-  const nextAfter = nextParam === "dashboard" ? `/${tenant}/dashboard` : `/${tenant}/dashboard`;
-
-  const ensureHasPendingToken = () => {
+  const initMfa = async () => {
     const token = typeof window !== "undefined" ? localStorage.getItem("doflow_token") : null;
+    
     if (!token) {
-      toast({
-        title: "Sessione mancante",
-        description: "Token non trovato. Effettua di nuovo il login.",
-        variant: "destructive",
-      });
-      router.replace(tenant ? `/${tenant}/login` : "/login");
-      return false;
+      // Nessun token -> Login
+      router.replace(tenantSlug ? `/${tenantSlug}/login` : "/login");
+      return;
     }
-    return true;
+
+    const payload = parseJwtPayload(token);
+    const stage = payload?.authStage;
+
+    if (stage === "FULL") {
+      // Già autenticato -> Dashboard
+      router.replace(tenantSlug ? `/${tenantSlug}/dashboard` : "/dashboard");
+      return;
+    }
+
+    if (stage === "MFA_SETUP_NEEDED") {
+      setMode("SETUP");
+      await fetchSetupData();
+    } else {
+      // MFA_PENDING o fallback -> Verify
+      setMode("VERIFY");
+      setLoading(false);
+    }
   };
 
-  const load = async () => {
-    if (!ensureHasPendingToken()) return;
-
-    setLoading(true);
+  // ==========================================
+  // 2. SETUP: Scarica QR dal Backend
+  // ==========================================
+  const fetchSetupData = async () => {
     try {
-      // BE prende userId dal token (mfa_pending) via auth middleware, quindi non serve inviare userId qui.
-      const data = await apiFetch<StartResp>("/auth/mfa/start", { method: "POST" });
-      setStart(data);
-
-      // aggiorna lock state
-      if (data.mode === "challenge") {
-        const ms = msUntil(data.lockedUntil);
-        setLockMs(ms);
-      } else {
-        setLockMs(0);
-      }
+      // Chiama GET /auth/mfa/setup (JWT temporaneo viene inviato automaticamente da apiFetch se configurato)
+      const res = await apiFetch<{ secret: string; qrCodeUrl: string; otpauthUrl: string }>("/auth/mfa/setup");
+      setQrCode(res.qrCodeUrl);
+      setSecret(res.secret);
+      setOtpUrl(res.otpauthUrl);
     } catch (e: any) {
       toast({
-        title: "Errore",
-        description: e?.message || "Impossibile avviare MFA",
+        title: "Errore Setup",
+        description: "Impossibile generare i dati MFA. " + (e.message || ""),
         variant: "destructive",
       });
-      setStart(null);
-      setLockMs(0);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // ==========================================
+  // 3. SUBMIT: Confirm o Verify
+  // ==========================================
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!code || code.length < 6) return;
 
-  // countdown lock
-  useEffect(() => {
-    if (!lockMs) return;
-    const t = setInterval(() => {
-      setLockMs((prev) => Math.max(0, prev - 1000));
-    }, 1000);
-    return () => clearInterval(t);
-  }, [lockMs]);
+    setSubmitting(true);
+    try {
+      let res: { token?: string; error?: string; status?: string };
 
-  const submit = async () => {
-    if (!ensureHasPendingToken()) return;
+      if (mode === "SETUP") {
+        // SETUP: Inviamo codice + secret per confermare e salvare nel DB
+        res = await apiFetch("/auth/mfa/confirm", {
+          method: "POST",
+          body: JSON.stringify({ code, secret }),
+        });
+      } else {
+        // VERIFY: Inviamo solo codice (secret è già nel DB)
+        res = await apiFetch("/auth/mfa/verify", {
+          method: "POST",
+          body: JSON.stringify({ code }),
+        });
+      }
 
-    if (!start) {
-      toast({
-        title: "MFA non pronta",
-        description: "Riprova ad avviare MFA.",
-        variant: "destructive",
-      });
-      return;
-    }
+      if (res.token) {
+        // Successo! Salviamo il token FULL
+        localStorage.setItem("doflow_token", res.token);
+        
+        toast({
+          title: "Accesso Effettuato",
+          description: "Autenticazione MFA completata con successo.",
+        });
 
-    if (locked) {
-      toast({
-        title: "Temporaneamente bloccato",
-        description: "Troppi tentativi. Riprova più tardi.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const clean = normalizeCode(code);
-    if (!/^\d{6}$/.test(clean)) {
+        // Redirect intelligente
+        const p = parseJwtPayload(res.token);
+        const targetSlug = p?.tenantSlug || tenantSlug;
+        
+        if (targetSlug && targetSlug !== 'public') {
+            window.location.href = `/${targetSlug}/dashboard`;
+        } else {
+            window.location.href = "/dashboard";
+        }
+      } else {
+        throw new Error(res.error || "Errore sconosciuto");
+      }
+    } catch (e: any) {
       toast({
         title: "Codice non valido",
-        description: "Inserisci un codice a 6 cifre.",
+        description: e.message || "Riprova con un nuovo codice.",
         variant: "destructive",
       });
-      return;
-    }
-
-    setVerifying(true);
-    try {
-      const res = await apiFetch<{ ok: boolean; token: string; user: any }>("/auth/mfa/verify", {
-        method: "POST",
-        body: JSON.stringify({ code: clean }),
-      });
-
-      // ✅ salva token FULL dove lo usa tutto il FE
-      localStorage.setItem("doflow_token", res.token);
-
-      toast({
-        title: "OK",
-        description: "Accesso verificato.",
-      });
-
-      router.replace(nextAfter);
-    } catch (e: any) {
-      const msg = e?.message || "Codice errato o scaduto.";
-
-      toast({
-        title: "MFA fallita",
-        description: msg,
-        variant: "destructive",
-      });
-
-      // ricarica lo stato (attempts/lock)
-      await load();
+      setCode(""); // Pulisci input per riprovare
     } finally {
-      setVerifying(false);
+      setSubmitting(false);
     }
   };
 
-  const lockLabel = useMemo(() => {
-    if (!start || start.mode !== "challenge" || !start.lockedUntil) return null;
-    if (!locked) return null;
-    return `Bloccato fino a ${fmtDateTime(start.lockedUntil)}`;
-  }, [start, locked]);
+  // ==========================================
+  // RENDER
+  // ==========================================
 
-  const lockCountdown = useMemo(() => {
-    if (!locked) return null;
-    const s = Math.ceil(lockMs / 1000);
-    const mm = Math.floor(s / 60);
-    const ss = s % 60;
-    return `${mm}:${String(ss).padStart(2, "0")}`;
-  }, [locked, lockMs]);
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center text-slate-500 animate-pulse">
+          <RefreshCw className="h-8 w-8 mx-auto mb-2 animate-spin" />
+          <p>Caricamento sicurezza...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-      <div className="w-full max-w-2xl space-y-6">
-        <div className="text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-900 text-white text-xs font-bold">
-            <ShieldCheck className="h-4 w-4" />
-            DOFLOW SECURE ACCESS
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md p-8 shadow-xl border-slate-200 bg-white">
+        
+        {/* Header Icon */}
+        <div className="flex flex-col items-center text-center space-y-4 mb-6">
+          <div className="p-3 bg-indigo-100 rounded-full text-indigo-600">
+            {mode === "SETUP" ? <QrCode className="h-8 w-8" /> : <ShieldCheck className="h-8 w-8" />}
           </div>
-          <h1 className="mt-4 text-3xl font-black text-slate-900 tracking-tight">{title}</h1>
-          <p className="mt-2 text-slate-500 font-medium">
-            {start?.email ? (
-              <>
-                Utente: <span className="font-semibold text-slate-700">{start.email}</span>
-              </>
-            ) : (
-              "Caricamento…"
-            )}
+          <h1 className="text-2xl font-bold text-slate-900">
+            {mode === "SETUP" ? "Configura MFA" : "Verifica Accesso"}
+          </h1>
+          <p className="text-sm text-slate-500 px-4">
+            {mode === "SETUP" 
+              ? "Per proteggere il tuo account, scansiona il QR code con la tua app Authenticator (Google/Microsoft)."
+              : "Inserisci il codice a 6 cifre generato dalla tua app di autenticazione."}
           </p>
         </div>
 
-        <Card className="p-6 rounded-2xl border border-slate-200 shadow-sm bg-white">
-          {loading ? (
-            <div className="flex items-center justify-center py-12 text-slate-500">
-              <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
-              Avvio challenge…
+        {/* QR Code Section (Solo SETUP) */}
+        {mode === "SETUP" && qrCode && (
+          <div className="flex flex-col items-center mb-6 animate-in fade-in zoom-in duration-300">
+            <div className="border-4 border-white shadow-lg rounded-xl overflow-hidden">
+              <Image src={qrCode} alt="QR Code" width={180} height={180} priority />
             </div>
-          ) : !start ? (
-            <div className="text-center py-8 text-slate-500">
-              Non è stato possibile avviare MFA.
-              <div className="mt-4">
-                <Button variant="outline" onClick={load}>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Riprova
-                </Button>
+            
+            {/* Fallback Text */}
+            <details className="mt-4 text-xs text-slate-400 cursor-pointer text-center w-full">
+              <summary className="hover:text-indigo-600 transition-colors">Non riesci a scansionare?</summary>
+              <div className="mt-2 p-3 bg-slate-100 rounded border border-slate-200 font-mono break-all select-all text-slate-600">
+                {secret}
               </div>
+            </details>
+          </div>
+        )}
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+                <Lock className="h-5 w-5" />
+              </div>
+              <Input
+                className="pl-10 text-center text-2xl tracking-[0.5em] font-mono h-14 border-slate-300 focus:border-indigo-500 focus:ring-indigo-500"
+                maxLength={6}
+                placeholder="000000"
+                value={code}
+                onChange={(e) => setCode(normalizeCode(e.target.value))}
+                autoFocus
+                disabled={submitting}
+              />
             </div>
-          ) : (
-            <div className="space-y-6">
-              {start.mode === "setup" && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-xl bg-amber-100 border border-amber-200 text-amber-800">
-                      <QrCode className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-black text-slate-900">Attivazione richiesta</div>
-                      <div className="text-sm text-slate-700 mt-1">
-                        Scansiona il QR con Google Authenticator (o compatibile), poi inserisci il codice a 6 cifre.
-                      </div>
-                    </div>
-                  </div>
+          </div>
 
-                  {start.qrDataUrl && (
-                    <div className="mt-4 flex justify-center">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={start.qrDataUrl}
-                        alt="MFA QR Code"
-                        className="h-48 w-48 rounded-xl border border-slate-200 bg-white p-2"
-                      />
-                    </div>
-                  )}
+          <Button 
+            type="submit" 
+            className="w-full h-12 text-lg font-semibold bg-indigo-600 hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg"
+            disabled={submitting || code.length !== 6}
+          >
+            {submitting ? (
+              <RefreshCw className="mr-2 h-5 w-5 animate-spin" />
+            ) : mode === "SETUP" ? (
+              <>
+                <CheckCircle2 className="mr-2 h-5 w-5" /> Attiva e Accedi
+              </>
+            ) : (
+              "Verifica Codice"
+            )}
+          </Button>
+        </form>
 
-                  {!start.qrDataUrl && start.otpauthUrl && (
-                    <div className="mt-4 text-xs text-slate-600 break-all">
-                      Se non vedi il QR, usa questo URL:
-                      <div className="mt-2 font-mono bg-white border border-slate-200 rounded-lg p-3">
-                        {start.otpauthUrl}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {start.mode === "challenge" && (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                  <div>Inserisci il codice dal tuo Authenticator.</div>
-                  {typeof start.remainingAttempts === "number" && (
-                    <div className="mt-1 text-xs text-slate-500">
-                      Tentativi rimanenti: <span className="font-semibold">{start.remainingAttempts}</span>
-                    </div>
-                  )}
-
-                  {locked && (
-                    <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">
-                      <Lock className="h-4 w-4 mt-0.5" />
-                      <div className="text-xs">
-                        <div className="font-bold">Troppi tentativi.</div>
-                        <div className="mt-1">
-                          {lockLabel}
-                          {lockCountdown ? (
-                            <>
-                              {" "}
-                              — <span className="font-mono font-bold">{lockCountdown}</span>
-                            </>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700">Codice (6 cifre)</label>
-                <div className="flex gap-2">
-                  <Input
-                    value={code}
-                    onChange={(e) => setCode(normalizeCode(e.target.value))}
-                    placeholder="123456"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    className="text-lg font-mono tracking-widest"
-                    disabled={verifying || locked}
-                  />
-                  <Button
-                    onClick={submit}
-                    disabled={verifying || locked}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
-                  >
-                    <KeyRound className="h-4 w-4 mr-2" />
-                    {verifying ? "Verifica…" : "Verifica"}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="flex justify-between">
-                <Button variant="outline" onClick={load} disabled={loading || verifying}>
-                  <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-                  Rigenera
-                </Button>
-                <Button variant="ghost" onClick={() => router.replace(tenant ? `/${tenant}/login` : "/login")}>
-                  Torna al login
-                </Button>
-              </div>
-            </div>
-          )}
-        </Card>
-
-        <div className="text-center text-xs text-slate-400">
-          Se perdi il dispositivo MFA, un superadmin può resettare MFA dall’OPS panel.
+        {/* Footer Actions */}
+        <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+          <Button 
+            variant="link" 
+            className="text-xs text-slate-400 hover:text-slate-600" 
+            onClick={() => router.replace(tenantSlug ? `/${tenantSlug}/login` : "/login")}
+          >
+            Torna al login
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

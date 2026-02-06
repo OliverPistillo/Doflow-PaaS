@@ -4,8 +4,8 @@ import { Request } from 'express';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
-import { authenticator } from '@otplib/preset-default'; // ✅ NEW: Per TOTP
-import { toDataURL } from 'qrcode';     // ✅ NEW: Per QR Code
+import { authenticator } from '@otplib/preset-default'; // ✅ NEW
+import { toDataURL } from 'qrcode';     // ✅ NEW
 import { Role } from './roles';
 
 type JwtPayload = {
@@ -14,7 +14,7 @@ type JwtPayload = {
   tenantId: string;
   tenantSlug: string;
   role: Role;
-  authStage?: 'FULL' | 'MFA_PENDING' | 'MFA_SETUP_NEEDED'; // ✅ Aggiornato
+  authStage?: 'FULL' | 'MFA_PENDING' | 'MFA_SETUP_NEEDED'; 
   mfa_required?: boolean;
 };
 
@@ -52,10 +52,6 @@ export class AuthService {
     }
   }
 
-  /**
-   * ✅ Token Signer Aggiornato
-   * Gestisce authStage per limitare l'accesso durante il setup o la verifica MFA.
-   */
   private signToken(
     userId: any,
     email: string,
@@ -72,10 +68,9 @@ export class AuthService {
     if (!secret) throw new Error('JWT_SECRET not set');
 
     const t = safeSchema(tenantId);
-
     const authStage = opts?.authStage ?? 'FULL';
     
-    // Se non siamo in FULL, il token dura poco (es. 15 minuti per fare setup/verify)
+    // Token breve se non è FULL
     const expiresIn =
       opts?.expiresIn ??
       (authStage !== 'FULL' ? ('15m' as const) : ('1d' as const));
@@ -86,14 +81,14 @@ export class AuthService {
       tenantId: t,
       tenantSlug,
       role,
-      authStage, // ✅ Importante per il frontend
+      authStage,
       ...(typeof opts?.mfaRequired === 'boolean' ? { mfa_required: opts.mfaRequired } : {}),
     };
 
     return jwt.sign(payload as any, secret as jwt.Secret, { expiresIn } as jwt.SignOptions);
   }
 
-  // ✅ Wrapper pubblico
+  // Wrapper pubblico
   public signTokenPublic(
     userId: any,
     email: string,
@@ -110,7 +105,7 @@ export class AuthService {
   }
 
   // =================================================================
-  //  LOGICHE DI LOGIN (Modificate per MFA Setup)
+  //  LOGIN LOGIC
   // =================================================================
 
   private async loginInTenant(
@@ -120,17 +115,13 @@ export class AuthService {
     password: string,
   ) {
     const t = safeSchema(tenantId);
-
-    // Recuperiamo lo SLUG reale
     let realSlug = t;
     if (t !== 'public') {
       const tenantRow = await conn.query(
         `select slug from public.tenants where schema_name = $1 limit 1`,
         [t],
       );
-      if (tenantRow[0]?.slug) {
-        realSlug = tenantRow[0].slug;
-      }
+      if (tenantRow[0]?.slug) realSlug = tenantRow[0].slug;
     }
 
     await this.assertTenantActive(conn, t);
@@ -152,9 +143,9 @@ export class AuthService {
     const ok = await bcrypt.compare(password, user.password_hash as string);
     if (!ok) throw new Error('Invalid credentials');
 
-    // ✅ NUOVA LOGICA MFA
-    const mfaEnabledByAdmin = !!user.mfa_enabled; // Switch nel DB
-    const hasSecret = !!user.mfa_secret;          // Utente ha già configurato?
+    // ✅ CHECK MFA STATUS
+    const mfaEnabledByAdmin = !!user.mfa_enabled;
+    const hasSecret = !!user.mfa_secret;
 
     let authStage: 'FULL' | 'MFA_PENDING' | 'MFA_SETUP_NEEDED' = 'FULL';
     let mfaRequired = false;
@@ -162,11 +153,9 @@ export class AuthService {
     if (mfaEnabledByAdmin) {
       mfaRequired = true;
       if (hasSecret) {
-        // Ha il segreto -> Deve verificare OTP
-        authStage = 'MFA_PENDING';
+        authStage = 'MFA_PENDING'; // Ha il segreto -> Chiedi codice
       } else {
-        // NON ha il segreto -> Deve fare enrollment
-        authStage = 'MFA_SETUP_NEEDED';
+        authStage = 'MFA_SETUP_NEEDED'; // Non ha segreto -> Fai setup
       }
     }
 
@@ -193,21 +182,17 @@ export class AuthService {
       token,
       mfa: {
         required: mfaRequired,
-        stage: authStage, // Il frontend userà questo per il redirect
+        stage: authStage,
       },
     };
   }
 
   // =================================================================
-  //  NUOVI METODI PER MFA (Setup & Confirm)
+  //  MFA METHODS (SETUP & VERIFY)
   // =================================================================
 
-  /**
-   * Genera il segreto MFA e il QR Code.
-   * NON salva ancora nel DB (lo fa al confirm).
-   */
   async generateMfaSetup(req: Request) {
-    const user = (req as any).user; // dal token temporaneo
+    const user = (req as any).user;
     if (!user) throw new UnauthorizedException();
 
     const email = user.email;
@@ -217,13 +202,11 @@ export class AuthService {
     const otpauthUrl = authenticator.keyuri(email, serviceName, secret);
     const qrCodeUrl = await toDataURL(otpauthUrl);
 
-    return { secret, qrCodeUrl };
+    // Ritorniamo il segreto al FE (che poi ce lo ridarà per confermare)
+    // In produzione enterprise, salvalo in Redis con TTL breve.
+    return { secret, qrCodeUrl, otpauthUrl };
   }
 
-  /**
-   * Verifica il codice OTP e, se valido, salva il segreto nel DB del tenant.
-   * Ritorna un nuovo token FULL.
-   */
   async confirmMfaAndEnable(req: Request, tokenOtp: string, secret: string) {
     const userPayload = (req as any).user;
     if (!userPayload) throw new UnauthorizedException();
@@ -234,10 +217,8 @@ export class AuthService {
 
     // 2. Salva nel DB del tenant
     const conn = this.getConn(req);
-    const tenantId = this.getTenantId(req); // dal token temporaneo
-    const t = safeSchema(tenantId);
+    const t = safeSchema(userPayload.tenantId);
 
-    // Salviamo mfa_secret e mfa_enabled (ridondante ma sicuro)
     await conn.query(
       `UPDATE ${t}.users SET mfa_secret = $1, mfa_enabled = true WHERE id = $2`,
       [secret, userPayload.sub],
@@ -256,8 +237,47 @@ export class AuthService {
     return { status: 'ok', token };
   }
 
+  async verifyMfaLogin(userId: string, tokenOtp: string, req: Request) {
+    const conn = this.getConn(req);
+    const t = safeSchema(this.getTenantId(req));
+
+    // 1. Recupera il segreto
+    const rows = await conn.query(
+      `SELECT mfa_secret, email, role, mfa_enabled FROM ${t}.users WHERE id = $1`,
+      [userId]
+    );
+    const user = rows[0];
+
+    if (!user || !user.mfa_enabled || !user.mfa_secret) {
+      throw new UnauthorizedException('MFA not configured for this user');
+    }
+
+    // 2. Verifica OTP
+    const isValid = authenticator.verify({ token: tokenOtp, secret: user.mfa_secret });
+    if (!isValid) throw new UnauthorizedException('Codice non valido');
+
+    // 3. Genera token FULL
+    // Recupera lo slug corretto
+    let realSlug = t;
+    if (t !== 'public') {
+       const tr = await conn.query(`select slug from public.tenants where schema_name = $1`, [t]);
+       if(tr[0]) realSlug = tr[0].slug;
+    }
+
+    const token = this.signToken(
+      userId,
+      user.email,
+      t,
+      realSlug,
+      user.role as Role,
+      { authStage: 'FULL', mfaRequired: true }
+    );
+
+    return { status: 'ok', token };
+  }
+
   // =================================================================
-  //  METODI DI LOGIN AUTO / REGISTER / ACCEPT (Invariati o adattati)
+  //  STANDARD METHODS (INVARIATI)
   // =================================================================
 
   private async listActiveTenants(conn: DataSource): Promise<string[]> {
@@ -275,7 +295,6 @@ export class AuthService {
       return this.loginInTenant(conn, currentTenant, email, password);
     }
 
-    // 1) Prova login in PUBLIC
     try {
       const publicRes = await this.loginInTenant(conn, 'public', email, password);
       const r = String(publicRes.user.role || '').toUpperCase();
@@ -284,7 +303,6 @@ export class AuthService {
       }
     } catch (err) {}
 
-    // 2) Prova login nei tenant
     const tenants = await this.listActiveTenants(conn);
     for (const t of tenants) {
       try {
@@ -298,78 +316,54 @@ export class AuthService {
   async register(req: Request, email: string, password: string) {
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
-
     let realSlug = tenantId;
     if (tenantId !== 'public') {
       const tenantRow = await conn.query(`select slug from public.tenants where schema_name = $1 limit 1`, [tenantId]);
       if (tenantRow[0]?.slug) realSlug = tenantRow[0].slug;
     }
-
     await this.assertTenantActive(conn, tenantId);
-
     const existing = await conn.query(`select id from ${tenantId}.users where lower(email) = lower($1) limit 1`, [email]);
     if (existing.length > 0) throw new Error('User already exists');
-
     const countRes = await conn.query(`select count(*)::int as count from ${tenantId}.users`);
     const isFirst = (countRes[0]?.count ?? 0) === 0;
     const role: Role = isFirst ? 'admin' : 'user';
-
     const passwordHash = await bcrypt.hash(password, 10);
-
     const rows = await conn.query(
       `insert into ${tenantId}.users (email, password_hash, role) values ($1, $2, $3) returning id, email, created_at, role`,
       [email, passwordHash, role],
     );
-
     const user = rows[0];
     const token = this.signToken(user.id, user.email, tenantId, realSlug, user.role as Role);
-
     return { user: { ...user, tenantId, tenantSlug: realSlug, role: user.role }, token };
-  }
-
-  async login(req: Request, email: string, password: string) {
-    const conn = this.getConn(req);
-    const tenantId = this.getTenantId(req);
-    return this.loginInTenant(conn, tenantId, email, password);
   }
 
   async acceptInvite(req: Request, token: string, password: string) {
     const conn = this.getConn(req);
     const tenantId = this.getTenantId(req);
-
     let realSlug = tenantId;
     if (tenantId !== 'public') {
       const tenantRow = await conn.query(`select slug from public.tenants where schema_name = $1 limit 1`, [tenantId]);
       if (tenantRow[0]?.slug) realSlug = tenantRow[0].slug;
     }
-
     await this.assertTenantActive(conn, tenantId);
-
     const invites = await conn.query(
       `select id, email, role, accepted_at, expires_at from ${tenantId}.invites where token = $1 limit 1`,
       [token],
     );
-
     const invite = invites[0];
     if (!invite) throw new Error('Invalid invite token');
     if (invite.accepted_at) throw new Error('Invite already used');
     if (invite.expires_at && new Date(invite.expires_at) < new Date()) throw new Error('Invite expired');
-
     const existingUsers = await conn.query(`select id from ${tenantId}.users where lower(email) = lower($1) limit 1`, [invite.email]);
     if (existingUsers.length > 0) throw new Error('User already exists for this email');
-
     const passwordHash = await bcrypt.hash(password, 10);
-
     const users = await conn.query(
       `insert into ${tenantId}.users (email, password_hash, role) values ($1, $2, $3) returning id, email, created_at, role`,
       [invite.email, passwordHash, invite.role],
     );
-
     const user = users[0];
     await conn.query(`update ${tenantId}.invites set accepted_at = now() where id = $1`, [invite.id]);
-
     const jwtToken = this.signToken(user.id, user.email, tenantId, realSlug, user.role as Role);
-
     return { user: { ...user, tenantId, tenantSlug: realSlug }, token: jwtToken };
   }
 }
