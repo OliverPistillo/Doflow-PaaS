@@ -33,10 +33,10 @@ import { ProjectsEventsService } from './realtime/projects-events.service';
 import { TenantBootstrapService } from './tenancy/tenant-bootstrap.service';
 import { SuperadminAuditController } from './audit.controller';
 
-// ✅ NUOVI IMPORT PER DASHBOARD KPI
+// --- DASHBOARD SUPERADMIN ---
 import { SuperadminDashboardController } from './superadmin/superadmin-dashboard.controller';
 import { SuperadminDashboardService } from './superadmin/superadmin-dashboard.service';
-import { PlatformDeal } from './superadmin/entities/platform-deal.entity';
+import { PlatformDeal } from './superadmin/entities/platform-deal.entity'; // <--- IMPORT ENTITY
 
 // --- MIDDLEWARE & GUARD ---
 import { TenancyMiddleware } from './tenancy/tenancy.middleware';
@@ -54,7 +54,6 @@ import { RedisModule } from './redis/redis.module';
 @Module({
   imports: [
     HealthModule,
-    TypeOrmModule.forFeature([PlatformDeal]),
 
     ConfigModule.forRoot({
       isGlobal: true,
@@ -74,11 +73,14 @@ import { RedisModule } from './redis/redis.module';
         return {
           type: 'postgres' as const,
           url,
-          autoLoadEntities: false,
+          autoLoadEntities: false, // Meglio esplicito per sicurezza
           synchronize: false,
         };
       },
     }),
+
+    // ✅ REGISTRAZIONE ENTITY (Fondamentale!)
+    TypeOrmModule.forFeature([PlatformDeal]),
 
     PassportModule,
     JwtModule.registerAsync({
@@ -112,8 +114,7 @@ import { RedisModule } from './redis/redis.module';
     SuperadminUsersController,
     SecurityPolicyController,
     AuthMfaController,
-    // ✅ REGISTRAZIONE CONTROLLER DASHBOARD
-    SuperadminDashboardController, 
+    SuperadminDashboardController, // ✅ Controller Dashboard
   ],
 
   providers: [
@@ -128,8 +129,7 @@ import { RedisModule } from './redis/redis.module';
     TenantBootstrapService,
     AuthMfaService,
     JwtStrategy,
-    // ✅ REGISTRAZIONE SERVICE DASHBOARD
-    SuperadminDashboardService,
+    SuperadminDashboardService, // ✅ Service Dashboard
   ],
 })
 export class AppModule implements NestModule {
