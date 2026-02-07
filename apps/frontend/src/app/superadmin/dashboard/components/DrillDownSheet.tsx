@@ -1,67 +1,82 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
-import { Input } from "@/components/ui/input";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Search, Filter, Loader2, ArrowLeft, PenSquare } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { DealEditForm } from "./DealEditForm";
 import { STAGE_CONFIG, formatCurrency } from "../utils";
+import { DashboardFilters } from "./GlobalFilterBar";
+
+// Definizione Tipi di Card per il Context
+export type CardContextType = 'QUALIFIED_LEADS' | 'TOTAL_VALUE' | 'WIN_RATE' | 'AVG_VALUE' | 'CLOSING_THIS_MONTH' | null;
 
 interface DrillDownSheetProps {
-  isOpen: boolean;
+  cardType: CardContextType;
   onClose: () => void;
-  title: string;
-  initialFilters: {
-    stage?: string;
-    month?: string; // Format YYYY-MM
-    year?: number;
-  };
+  globalFilters: DashboardFilters;
 }
 
-export function DrillDownSheet({ isOpen, onClose, title, initialFilters }: DrillDownSheetProps) {
+export function DrillDownSheet({ cardType, onClose, globalFilters }: DrillDownSheetProps) {
   const [deals, setDeals] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  
-  // Stati Filtri Locali
-  const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState<string>("all");
-  
-  // Navigazione (LISTA <-> EDIT)
   const [view, setView] = useState<"LIST" | "EDIT">("LIST");
   const [selectedDeal, setSelectedDeal] = useState<any>(null);
 
-  // Fetch Dati
+  // Titolo dinamico in base alla card selezionata
+  const getTitle = () => {
+    switch (cardType) {
+      case 'QUALIFIED_LEADS': return "Offerte in fase di qualificazione";
+      case 'TOTAL_VALUE': return "Tutte le offerte (Valore)";
+      case 'WIN_RATE': return "Storico Vincite/Perdite";
+      case 'AVG_VALUE': return "Offerte incluse nella media";
+      case 'CLOSING_THIS_MONTH': return "In chiusura questo mese";
+      default: return "Dettaglio Offerte";
+    }
+  };
+
   const fetchDeals = async () => {
+    if (!cardType) return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (search) params.append("search", search);
+
+      // 1. APPLICA I FILTRI GLOBALI DI BASE (Cliente, Mese)
+      if (globalFilters.clientName) params.append("clientName", globalFilters.clientName);
+      if (globalFilters.month) params.append("expectedCloseMonth", globalFilters.month);
       
-      // Logica Filtri:
-      // Se c'è un filtro iniziale dai props (es. click su card "Lead"), usiamo quello a meno che l'utente non lo cambi esplicitamente.
-      // Se l'utente seleziona "all", rimuoviamo il filtro stage.
-      const currentStage = stageFilter !== "all" ? stageFilter : (initialFilters.stage || "");
-      if (currentStage) params.append("stages", currentStage);
-      
-      // Filtri Temporali (dal props, es. "Chiudono questo mese")
-      if (initialFilters.month) {
-         // Esempio initialFilters.month = "2024-02"
-         const [y, m] = initialFilters.month.split('-');
-         params.append("expectedCloseYear", y);
-         params.append("expectedCloseMonth", m);
+      // 2. APPLICA LOGICA SPECIFICA DELLA CARD (Override o merge dei filtri)
+      switch (cardType) {
+        case 'QUALIFIED_LEADS':
+          // Questa card DEVE mostrare solo i lead, ignorando il filtro stage globale se diverso
+          params.set("stages", "Lead qualificato"); 
+          break;
+        
+        case 'WIN_RATE':
+          // Mostra solo Vinti o Persi
+          params.append("stages", "Chiuso vinto");
+          params.append("stages", "Chiuso perso");
+          break;
+
+        case 'CLOSING_THIS_MONTH':
+           // Se c'è un filtro mese globale, usa quello, altrimenti usa il mese corrente
+           if (!globalFilters.month) {
+              const now = new Date();
+              params.set("expectedCloseMonth", String(now.getMonth() + 1));
+              params.set("expectedCloseYear", String(now.getFullYear()));
+           }
+           // Applichiamo lo stage globale se presente, altrimenti tutti
+           if (globalFilters.stage) params.set("stages", globalFilters.stage);
+           break;
+
+        case 'TOTAL_VALUE':
+        case 'AVG_VALUE':
+           // Queste card rispettano totalmente i filtri globali (incluso lo stage)
+           if (globalFilters.stage) params.set("stages", globalFilters.stage);
+           break;
       }
 
       const res = await apiFetch<any[]>(`/superadmin/dashboard/deals?${params.toString()}`);
@@ -73,98 +88,59 @@ export function DrillDownSheet({ isOpen, onClose, title, initialFilters }: Drill
     }
   };
 
-  // Trigger Fetch quando cambiano i parametri
+  // Trigger fetch quando cambia il tipo di card o i filtri globali
   useEffect(() => {
-    if (isOpen) {
-      // Se si apre lo sheet, reset view e fetch
-      if (view === "LIST") fetchDeals();
-    }
-  }, [isOpen, search, stageFilter, initialFilters, view]);
-
-  // Reset stato quando si chiude
-  useEffect(() => {
-    if (!isOpen) {
+    if (cardType) {
       setView("LIST");
-      setSearch("");
-      setStageFilter("all");
+      fetchDeals();
     }
-  }, [isOpen]);
+  }, [cardType, globalFilters]);
+
+  const isOpen = !!cardType;
 
   return (
-    <Sheet open={isOpen} onOpenChange={onClose}>
+    <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="w-full sm:max-w-2xl overflow-y-auto sm:w-[800px]">
         
         {/* VISTA: LISTA */}
         {view === "LIST" && (
           <>
-            <SheetHeader className="mb-6 space-y-1">
-              <SheetTitle className="text-2xl font-bold text-slate-900">{title}</SheetTitle>
+            <SheetHeader className="mb-6">
+              <SheetTitle className="text-2xl font-bold text-slate-900">{getTitle()}</SheetTitle>
               <SheetDescription>
-                Clicca su un'offerta per visualizzare i dettagli o modificarla.
+                Lista filtrata in base alla card selezionata e ai filtri globali.
               </SheetDescription>
             </SheetHeader>
 
-            {/* Filtri Bar */}
-            <div className="flex flex-col gap-3 mb-6 bg-slate-50 p-4 rounded-lg border border-slate-100">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
-                <Input
-                  placeholder="Cerca offerta o cliente..."
-                  className="pl-9 bg-white"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-              <div className="flex gap-2">
-                <Select value={stageFilter} onValueChange={setStageFilter}>
-                  <SelectTrigger className="w-[200px] bg-white">
-                    <div className="flex items-center gap-2 text-slate-600">
-                        <Filter className="h-4 w-4"/>
-                        <SelectValue placeholder="Tutte le fasi" />
-                    </div>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tutte le fasi</SelectItem>
-                    {Object.keys(STAGE_CONFIG).map(s => (
-                        <SelectItem key={s} value={s}>{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Tabella */}
             {loading ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+              <div className="flex justify-center py-10">
+                <Loader2 className="h-8 w-8 animate-spin text-indigo-600"/>
               </div>
             ) : deals.length === 0 ? (
-              <div className="text-center py-12 text-slate-500">
-                Nessuna offerta trovata con i filtri correnti.
-              </div>
+               <div className="text-center py-10 text-slate-500 bg-slate-50 rounded border border-dashed">
+                 Nessun dato trovato per i criteri selezionati.
+               </div>
             ) : (
-              <div className="border rounded-md overflow-hidden">
+              <div className="border rounded-md">
                 <Table>
-                  <TableHeader className="bg-slate-50">
+                  <TableHeader>
                     <TableRow>
-                      <TableHead>Offerta / Cliente</TableHead>
+                      <TableHead>Offerta</TableHead>
                       <TableHead>Stato</TableHead>
                       <TableHead className="text-right">Valore</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {deals.map((deal) => {
-                       const config = STAGE_CONFIG[deal.stage] || { badgeClass: 'bg-slate-100', label: deal.stage };
+                       const config = STAGE_CONFIG[deal.stage] || { badgeClass: 'bg-slate-100 text-slate-700', label: deal.stage };
                        return (
                         <TableRow 
                           key={deal.id} 
-                          className="cursor-pointer hover:bg-slate-50 transition-colors group"
+                          className="cursor-pointer hover:bg-slate-50 transition-colors"
                           onClick={() => { setSelectedDeal(deal); setView("EDIT"); }}
                         >
-                          <TableCell className="py-3">
-                            <div className="font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                                {deal.name}
-                            </div>
+                          <TableCell>
+                            <div className="font-medium text-slate-900">{deal.name}</div>
                             <div className="text-xs text-slate-500">{deal.clientName || 'Nessun cliente'}</div>
                           </TableCell>
                           <TableCell>
@@ -172,7 +148,7 @@ export function DrillDownSheet({ isOpen, onClose, title, initialFilters }: Drill
                               {config.label}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-right font-medium text-slate-700">
+                          <TableCell className="text-right font-medium">
                             {formatCurrency(deal.value)}
                           </TableCell>
                         </TableRow>
@@ -185,28 +161,27 @@ export function DrillDownSheet({ isOpen, onClose, title, initialFilters }: Drill
           </>
         )}
 
-        {/* VISTA: EDIT */}
+        {/* VISTA: EDIT FORM */}
         {view === "EDIT" && selectedDeal && (
           <div className="animate-in slide-in-from-right duration-300">
              <Button 
                 variant="ghost" 
                 onClick={() => setView("LIST")} 
-                className="mb-2 pl-0 hover:pl-2 text-slate-500 hover:text-indigo-600 transition-all"
+                className="mb-4 pl-0 hover:pl-2 text-slate-500 hover:text-indigo-600 transition-all"
              >
                 <ArrowLeft className="h-4 w-4 mr-2" /> Torna alla lista
              </Button>
              
              <DealEditForm 
                 deal={selectedDeal} 
-                onSave={() => {
-                  setView("LIST");
-                  // Il fetch verrà triggerato dallo useEffect quando view torna a LIST
+                onSave={() => { 
+                  setView("LIST"); 
+                  fetchDeals(); // Ricarica la lista aggiornata
                 }} 
                 onCancel={() => setView("LIST")} 
              />
           </div>
         )}
-
       </SheetContent>
     </Sheet>
   );
