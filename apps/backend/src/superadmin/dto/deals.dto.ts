@@ -1,53 +1,81 @@
-import { IsOptional, IsString, IsNumber, IsArray, IsEnum, IsDateString } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsOptional, IsString, IsNumber, IsEnum, IsDateString, IsArray, Min, Max } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { DealStage } from '../enums/deal-stage.enum';
 
-// Per i filtri nella lista (Search bar & Dropdowns)
 export class GetDealsQueryDto {
+  // Filtro Multiplo per Fase (es. ?stages=Lead qualificato&stages=Negoziazione)
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  stages?: string[]; // Es: ['Lead qualificato', 'Preventivo inviato']
+  @Transform(({ value }) => {
+    // Trasforma stringa singola in array se necessario
+    if (typeof value === 'string') return [value];
+    return value;
+  })
+  stages?: string[];
 
+  // Filtro Mese Chiusura (1-12)
   @IsOptional()
-  @IsString()
-  month?: string; // Formato 'YYYY-MM' per filtrare per data chiusura
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(12)
+  expectedCloseMonth?: number;
 
+  // Filtro Anno Chiusura (es. 2024)
   @IsOptional()
-  @IsString()
-  clientName?: string; // Ricerca parziale nome cliente
+  @Type(() => Number)
+  @IsNumber()
+  expectedCloseYear?: number;
 
+  // Filtro Cliente
   @IsOptional()
   @IsString()
-  search?: string; // Ricerca libera (nome offerta o cliente)
-  
+  clientName?: string;
+
+  // Ricerca Globale (Titolo offerta)
   @IsOptional()
   @IsString()
-  sortBy?: string; // 'value', 'expectedCloseDate', 'createdAt'
-  
+  search?: string;
+
+  // Ordinamento
+  @IsOptional()
+  @IsString()
+  sortBy?: string; // 'value', 'date', 'created_at'
+
   @IsOptional()
   @IsEnum(['ASC', 'DESC'])
   sortOrder?: 'ASC' | 'DESC';
 }
 
-// Per l'aggiornamento (Edit Form)
 export class UpdateDealDto {
   @IsOptional()
   @IsString()
-  name?: string;
+  title?: string;
 
   @IsOptional()
-  @IsString()
-  stage?: string;
-
-  @IsOptional()
-  @IsNumber()
-  value?: number;
+  @IsEnum(DealStage)
+  stage?: DealStage;
 
   @IsOptional()
   @IsNumber()
-  winProbability?: number;
+  @Min(0)
+  value?: number; // Arriverà in Euro dal FE, il service lo convertirà in Cents se necessario, o viceversa.
+                  // *Convenzione*: I DTO di input meglio che ricevano il valore "umano" (float) 
+                  // e il service lo trasformi in centesimi, oppure il FE manda centesimi.
+                  // Decidiamo qui: IL FE MANDA EURO (FLOAT), IL BE CONVERTE.
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  winProbability?: number; // 0-100 float
 
   @IsOptional()
   @IsDateString()
-  expectedCloseDate?: string; // ISO Date
+  expectedCloseDate?: string; // ISO Date YYYY-MM-DD
+
+  @IsOptional()
+  @IsString()
+  clientName?: string;
 }

@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowUpRight, Loader2, RefreshCw } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { DrillDownSheet } from "./components/DrillDownSheet"; // Assicurati che il percorso sia corretto
+import { DrillDownSheet } from "./components/DrillDownSheet";
+import { STAGE_CONFIG, formatCurrency } from "./utils"; 
 import {
   BarChart,
   Bar,
@@ -41,10 +42,7 @@ type DashboardData = {
   }[];
 };
 
-// --- COLORI ---
-const PIE_COLORS = ["#BFDBFE", "#93C5FD", "#FDE68A", "#BBF7D0"];
-
-// --- Componente KPI Card Interattiva ---
+// --- Componente KPI Card ---
 function KpiCard({ 
   title, 
   value, 
@@ -58,7 +56,7 @@ function KpiCard({
 }) {
   return (
     <Card 
-      className={`shadow-sm hover:shadow-md transition-shadow ${onClick ? 'cursor-pointer' : ''}`}
+      className={`shadow-sm hover:shadow-md transition-shadow group ${onClick ? 'cursor-pointer' : ''}`}
       onClick={onClick}
     >
       <CardContent className="p-6">
@@ -85,15 +83,12 @@ export default function SalesDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  // --- STATI PER IL DRILL-DOWN (Pannello Laterale) ---
+  // Stato Drill-Down
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [sheetConfig, setSheetConfig] = useState<{
     title: string;
     filters: { stage?: string; month?: string };
-  }>({
-    title: "",
-    filters: {}
-  });
+  }>({ title: "", filters: {} });
 
   const loadData = async () => {
     setLoading(true);
@@ -113,16 +108,13 @@ export default function SalesDashboardPage() {
     loadData();
   }, []);
 
-  // Funzione per aprire il pannello con i filtri contestuali
+  // Handler apertura pannello
   const openDrillDown = (title: string, stage?: string, month?: string) => {
-    setSheetConfig({
-      title,
-      filters: { stage, month }
-    });
+    setSheetConfig({ title, filters: { stage, month } });
     setIsSheetOpen(true);
   };
 
-  // Calcolo mese corrente YYYY-MM per il filtro
+  // Mese corrente YYYY-MM
   const currentMonth = new Date().toISOString().slice(0, 7);
 
   if (loading) {
@@ -160,9 +152,9 @@ export default function SalesDashboardPage() {
             <span className="text-slate-300">/</span>
             <span className="font-bold text-slate-900">Sales Dashboard</span>
           </div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Quadro generale delle trattative di vendita</h1>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Quadro generale delle trattative</h1>
           <p className="text-slate-500 mt-1 text-sm font-medium">
-            Offerte per fase, tasso di chiusura, vendite del mese, attività principali.
+            Monitoraggio in tempo reale delle opportunità di vendita.
           </p>
         </div>
         <Button variant="ghost" size="icon" onClick={loadData} className="text-slate-400 hover:text-indigo-600">
@@ -170,7 +162,7 @@ export default function SalesDashboardPage() {
         </Button>
       </div>
 
-      {/* KPI Row (Interattivi) */}
+      {/* KPI Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <KpiCard 
           title="Offerte in qualificazione" 
@@ -180,7 +172,7 @@ export default function SalesDashboardPage() {
         />
         <KpiCard 
           title="Valore totale offerte" 
-          value={`€${data.kpi.totalValue.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
+          value={formatCurrency(data.kpi.totalValue)} 
           hoverColorClass="hover:bg-indigo-100 hover:text-indigo-600"
           onClick={() => openDrillDown("Tutte le offerte")}
         />
@@ -192,15 +184,15 @@ export default function SalesDashboardPage() {
         />
         <KpiCard 
           title="Media offerta" 
-          value={`€${data.kpi.avgDealValue.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
+          value={formatCurrency(data.kpi.avgDealValue)} 
           hoverColorClass="hover:bg-violet-100 hover:text-violet-600"
           onClick={() => openDrillDown("Tutte le offerte")}
         />
       </div>
 
-      {/* Alert Row (DINAMICO & Interattivo) */}
+      {/* Alert Row */}
       <div 
-        className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-5 flex items-center justify-between shadow-sm cursor-pointer hover:bg-indigo-50 transition-colors"
+        className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-5 flex items-center justify-between shadow-sm cursor-pointer hover:bg-indigo-100 transition-colors"
         onClick={() => openDrillDown("In chiusura questo mese", undefined, currentMonth)}
       >
         <div>
@@ -211,7 +203,7 @@ export default function SalesDashboardPage() {
             {data.kpi.dealsClosingThisMonth}
           </p>
         </div>
-        <div className="h-9 w-9 bg-white border border-indigo-100 rounded-lg flex items-center justify-center text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+        <div className="h-9 w-9 bg-white border border-indigo-100 rounded-lg flex items-center justify-center text-indigo-400">
            <ArrowUpRight className="h-4 w-4" />
         </div>
       </div>
@@ -219,14 +211,14 @@ export default function SalesDashboardPage() {
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Bar Chart Pipeline */}
+        {/* Pipeline Bar Chart */}
         <Card className="shadow-sm border-slate-200">
           <CardHeader className="pb-2">
             <div className="flex justify-between items-center">
-               <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                 Valore della pipeline per fase
-               </CardTitle>
-               <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer transition-colors">
+              <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                Valore pipeline per fase
+              </CardTitle>
+              <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer transition-colors">
                  <ArrowUpRight className="h-4 w-4" />
                </div>
             </div>
@@ -254,23 +246,24 @@ export default function SalesDashboardPage() {
                   <Tooltip 
                     cursor={{fill: 'transparent'}}
                     contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}
-                    formatter={(value: number | undefined) => [`€${(value || 0).toLocaleString()}`, 'Valore']}
+                    // FIX: Aggiunto tipo `number | undefined` e fallback `|| 0`
+                    formatter={(val: number | undefined) => [formatCurrency(val || 0), 'Valore']}
                   />
-                  <Bar dataKey="value" fill="#5a7bd4" radius={[4, 4, 0, 0]} barSize={80} />
+                  <Bar dataKey="value" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={60} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </CardContent>
         </Card>
 
-        {/* Pie Chart Distribution */}
+        {/* Pie Chart */}
         <Card className="shadow-sm border-slate-200">
           <CardHeader className="pb-2">
             <div className="flex justify-between items-center">
-               <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                 Distribuzione della fase dell'accordo
-               </CardTitle>
-               <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer transition-colors">
+              <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                Distribuzione offerte
+              </CardTitle>
+              <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer transition-colors">
                  <ArrowUpRight className="h-4 w-4" />
                </div>
             </div>
@@ -281,40 +274,44 @@ export default function SalesDashboardPage() {
               <div className="h-full w-full md:w-2/3 relative flex items-center justify-center">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie
-                      data={data.pipeline}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={2}
-                      dataKey="count"
+                    <Pie 
+                      data={data.pipeline} 
+                      cx="50%" 
+                      cy="50%" 
+                      innerRadius={60} 
+                      outerRadius={100} 
+                      paddingAngle={2} 
+                      dataKey="count" 
                       stroke="none"
                     >
-                      {data.pipeline.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                      ))}
+                      {data.pipeline.map((entry, index) => {
+                          const color = STAGE_CONFIG[entry.stage]?.color || '#cbd5e1';
+                          return <Cell key={`cell-${index}`} fill={color} />;
+                      })}
                     </Pie>
                     <Tooltip />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-              
+
               {/* Legend */}
               <div className="w-full md:w-1/3 flex flex-col justify-center gap-4 p-4 text-right">
                  <p className="text-xs text-slate-400 font-medium mb-1">Fase</p>
-                 {data.pipeline.map((d, i) => (
-                    <div key={i} className="flex items-center justify-end gap-2">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
-                      <span className="text-xs text-slate-600 font-medium">{d.stage}</span>
-                    </div>
-                 ))}
+                 {data.pipeline.map((d, i) => {
+                    const color = STAGE_CONFIG[d.stage]?.color || '#cbd5e1';
+                    return (
+                      <div key={i} className="flex items-center justify-end gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                        <span className="text-xs text-slate-600 font-medium">{d.stage}</span>
+                      </div>
+                    );
+                 })}
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
-
+      
       {/* Deals Row (Bottom) */}
       <Card className="shadow-sm border-slate-200">
         <CardHeader className="pb-2">
@@ -346,7 +343,8 @@ export default function SalesDashboardPage() {
                   <Tooltip 
                     cursor={{fill: '#F8FAFC'}}
                     contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}
-                    formatter={(value: number | undefined) => [`€${(value || 0).toLocaleString()}`, 'Valore']}
+                    // FIX: Aggiunto tipo `number | undefined` e fallback `|| 0`
+                    formatter={(val: number | undefined) => [formatCurrency(val || 0), 'Valore']}
                   />
                   <Bar dataKey="value" fill="#5a7bd4" radius={[4, 4, 0, 0]} />
                 </BarChart>
@@ -355,7 +353,7 @@ export default function SalesDashboardPage() {
         </CardContent>
       </Card>
 
-      {/* COMPONENTE DRILL-DOWN (Pannello Laterale) */}
+      {/* Drill Down Panel */}
       <DrillDownSheet 
         isOpen={isSheetOpen}
         onClose={() => setIsSheetOpen(false)}

@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, Like, In } from 'typeorm';
-import { DashboardResponseDto } from './dto/dashboard-stats.dto';
-import { GetDealsQueryDto, UpdateDealDto } from './dto/deals.dto'; // <--- Importa i nuovi DTO
+import { Repository, SelectQueryBuilder, Brackets } from 'typeorm';
+import { DashboardResponseDto, DashboardKpiDto, PipelineStageDto, TopDealDto } from './dto/dashboard-stats.dto';
+import { GetDealsQueryDto, UpdateDealDto } from './dto/deals.dto';
 import { PlatformDeal } from './entities/platform-deal.entity';
+import { DealStage } from './enums/deal-stage.enum';
 
 @Injectable()
 export class SuperadminDashboardService {
@@ -12,104 +13,194 @@ export class SuperadminDashboardService {
     private dealRepo: Repository<PlatformDeal>,
   ) {}
 
-  // --- METODO ESISTENTE (KPI) ---
-  async getSalesStats(): Promise<DashboardResponseDto> {
-    // ... (Mantieni il codice che ti ho dato nel passaggio precedente per i KPI)
-    // Per brevità non lo riscrivo tutto qui, ma VA LASCIATO UGUALE.
-    // Se vuoi te lo riposto completo, dimmelo.
+  // ===========================================================================
+  // 1. KPI & STATISTICHE (GET /stats)
+  // ===========================================================================
+  async getSalesStats(filters?: GetDealsQueryDto): Promise<DashboardResponseDto> {
+    // 1. Applichiamo i filtri base a una query riutilizzabile
+    // Nota: I KPI "generali" di solito non filtrano per stage specifici (es. "Lead count" deve contare i lead),
+    // ma devono rispettare i filtri temporali (Mese) e Cliente se presenti.
     
-    // ... (Logica calcolo KPI) ...
+    // Calcoliamo i KPI specifici
     
-    // Placeholder per non rompere la compilazione se copi-incolli:
-    const date = new Date();
-    const firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
-    const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    // A) Offerte in qualificazione (Count)
+    // Filtro: Stage = QUALIFIED_LEAD + Filtri globali (Mese/Cliente)
+    const leadsCount = await this.createFilteredQuery(filters)
+      .andWhere('deal.stage = :leadStage', { leadStage: DealStage.QUALIFIED_LEAD })
+      .getCount();
+
+    // B) Valore Totale (Sum)
+    // Di solito questo KPI somma TUTTO o solo quello che l'utente sta filtrando?
+    // Se l'utente non filtra nulla, mostriamo il totale globale.
+    const { totalValueCents } = await this.createFilteredQuery(filters)
+      .select('SUM(deal.value_cents)', 'totalValueCents')
+      .getRawOne();
     
-    const leadsCount = await this.dealRepo.count({ where: { stage: 'Lead qualificato' } });
-    const wonCount = await this.dealRepo.count({ where: { stage: 'Chiuso vinto' } });
-    const totalDeals = await this.dealRepo.count();
-    const dealsClosingThisMonth = await this.dealRepo.count({ where: { expectedCloseDate: Between(firstDay, lastDay) } });
-    const { totalValue } = await this.dealRepo.createQueryBuilder('deal').select('SUM(deal.value)', 'totalValue').getRawOne();
+    // C) Tasso di Vincita
+    // Formula: Vinte / (Vinte + Perse) nel periodo selezionato
+    const wonCount = await this.createFilteredQuery(filters)
+      .andWhere('deal.stage = :wonStage', { wonStage: DealStage.CLOSED_WON })
+      .getCount();
+      
+    const lostCount = await this.createFilteredQuery(filters)
+      .andWhere('deal.stage = :lostStage', { lostStage: DealStage.CLOSED_LOST })
+      .getCount();
+      
+    const closedTotal = wonCount + lostCount;
+    const winRate = closedTotal > 0 ? Math.round((wonCount / closedTotal) * 100) : 0;
+
+    // D) Media Offerta (Average Value)
+    // Media su tutte le offerte trovate dai filtri attuali
+    const { avgValueCents } = await this.createFilteredQuery(filters)
+      .select('AVG(deal.value_cents)', 'avgValueCents')
+      .getRawOne();
+
+    // E) Chiusura prevista questo mese (Count)
+    // Qui forziamo il filtro temporale al mese corrente, ignorando il filtro mese dell'utente se c'è,
+    // perché questo KPI è specifico "QUESTO MESE" per definizione.
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     
-    // ... eccetera (usa il codice del passo precedente per il return)
-    return {
-        kpi: { 
-            leadsCount, 
-            totalValue: Number(totalValue || 0), 
-            winRate: totalDeals > 0 ? Math.round((wonCount / totalDeals) * 100) : 0, 
-            avgDealValue: 0, // Calcola come prima
-            dealsClosingThisMonth 
-        },
-        pipeline: [], // Usa query precedente
-        topDeals: []  // Usa query precedente
+    // Copiamo i filtri ma rimuoviamo quelli temporali per applicare "questo mese"
+    const thisMonthFilters = { ...filters, expectedCloseMonth: undefined, expectedCloseYear: undefined };
+    const dealsClosingThisMonth = await this.createFilteredQuery(thisMonthFilters)
+      .andWhere('deal.expectedCloseDate BETWEEN :start AND :end', { start: startOfMonth, end: endOfMonth })
+      .getCount();
+
+    // F) Pipeline Chart (Group by Stage)
+    const rawPipeline = await this.createFilteredQuery(filters)
+      .select('deal.stage', 'stage')
+      .addSelect('SUM(deal.value_cents)', 'value')
+      .addSelect('COUNT(deal.id)', 'count')
+      .groupBy('deal.stage')
+      .getRawMany();
+
+    const pipeline: PipelineStageDto[] = rawPipeline.map(p => ({
+      stage: p.stage,
+      value: Number(p.value || 0) / 100, // Converti cents -> Euro
+      count: Number(p.count || 0),
+    }));
+
+    // G) Top Deals (List limit 10)
+    const topDealsEntities = await this.createFilteredQuery(filters)
+      .orderBy('deal.value_cents', 'DESC')
+      .take(10)
+      .getMany();
+
+    const topDeals: TopDealDto[] = topDealsEntities.map(d => ({
+      name: d.title,
+      client: d.clientName,
+      value: d.valueCents / 100, // Euro
+      stage: d.stage,
+    }));
+
+    // Costruzione DTO Finale
+    const kpi: DashboardKpiDto = {
+      leadsCount,
+      totalValue: Number(totalValueCents || 0) / 100, // Euro
+      winRate,
+      avgDealValue: Number(avgValueCents || 0) / 100, // Euro
+      dealsClosingThisMonth
     };
+
+    return { kpi, pipeline, topDeals };
   }
 
-  // --- NUOVI METODI PER DRILL-DOWN ---
+  // ===========================================================================
+  // 2. LISTA DRILL-DOWN (GET /deals)
+  // ===========================================================================
+  async findAllDeals(query: GetDealsQueryDto): Promise<any[]> {
+    const deals = await this.createFilteredQuery(query)
+      .orderBy(
+        query.sortBy ? `deal.${query.sortBy}` : 'deal.value_cents', 
+        query.sortOrder || 'DESC'
+      )
+      .getMany();
 
-  // 1. Lista filtrata per il Drill-down
-  async findAllDeals(query: GetDealsQueryDto): Promise<PlatformDeal[]> {
-    const qb = this.dealRepo.createQueryBuilder('deal');
-
-    // Filtro per Fase (Multi-select)
-    if (query.stages && query.stages.length > 0) {
-      // Se arriva una stringa singola invece di array (capita con i query params), la gestiamo
-      const stages = Array.isArray(query.stages) ? query.stages : [query.stages];
-      qb.andWhere('deal.stage IN (:...stages)', { stages });
-    }
-
-    // Filtro per Mese di chiusura (es. "2024-08")
-    if (query.month) {
-      const [year, month] = query.month.split('-');
-      // Costruiamo range inizio-fine mese
-      const startDate = new Date(Number(year), Number(month) - 1, 1);
-      const endDate = new Date(Number(year), Number(month), 0);
-      qb.andWhere('deal.expectedCloseDate BETWEEN :start AND :end', { start: startDate, end: endDate });
-    }
-
-    // Filtro per Cliente (Ricerca parziale)
-    if (query.clientName) {
-      qb.andWhere('deal.clientName ILIKE :clientName', { clientName: `%${query.clientName}%` });
-    }
-
-    // Ricerca Libera (Search bar globale)
-    if (query.search) {
-      qb.andWhere('(deal.name ILIKE :search OR deal.clientName ILIKE :search)', { search: `%${query.search}%` });
-    }
-
-    // Ordinamento
-    if (query.sortBy) {
-        const order = query.sortOrder || 'DESC';
-        // Protezione semplice contro SQL injection nei nomi colonna
-        if (['value', 'expectedCloseDate', 'created_at', 'winProbability'].includes(query.sortBy)) {
-            qb.orderBy(`deal.${query.sortBy}`, order);
-        }
-    } else {
-        qb.orderBy('deal.value', 'DESC'); // Default: i più ricchi prima
-    }
-
-    return qb.getMany();
+    // Mappiamo per il frontend (Euro e %)
+    return deals.map(d => ({
+      id: d.id,
+      name: d.title,
+      clientName: d.clientName,
+      value: d.valueCents / 100, // FE usa Euro float
+      winProbability: d.probabilityBps / 100, // FE usa % float (50.5)
+      stage: d.stage,
+      expectedCloseDate: d.expectedCloseDate,
+    }));
   }
 
-  // 2. Aggiornamento (Edit Form)
+  // ===========================================================================
+  // 3. EDIT FORM (PATCH /deals/:id)
+  // ===========================================================================
   async updateDeal(id: string, updateData: UpdateDealDto): Promise<PlatformDeal> {
     const deal = await this.dealRepo.findOne({ where: { id } });
     if (!deal) throw new NotFoundException('Offerta non trovata');
 
-    // Merge dei dati
-    Object.assign(deal, updateData);
+    // Mapping Update DTO -> Entity
+    if (updateData.title !== undefined) deal.title = updateData.title;
+    if (updateData.clientName !== undefined) deal.clientName = updateData.clientName;
+    if (updateData.stage !== undefined) deal.stage = updateData.stage;
+    if (updateData.expectedCloseDate !== undefined) deal.expectedCloseDate = updateData.expectedCloseDate ? new Date(updateData.expectedCloseDate) : null;
     
+    // Conversioni valuta/probabilità
+    if (updateData.value !== undefined) {
+      deal.valueCents = Math.round(updateData.value * 100);
+    }
+    if (updateData.winProbability !== undefined) {
+      deal.probabilityBps = Math.round(updateData.winProbability * 100);
+    }
+
     return this.dealRepo.save(deal);
   }
 
-  // 3. Lista Clienti unici (per il filtro dropdown)
+  // ===========================================================================
+  // 4. FILTRI: LISTA CLIENTI (GET /filters/clients)
+  // ===========================================================================
   async getUniqueClients(): Promise<string[]> {
     const result = await this.dealRepo
       .createQueryBuilder('deal')
       .select('DISTINCT deal.clientName', 'client')
+      .where('deal.clientName IS NOT NULL')
       .orderBy('deal.clientName', 'ASC')
       .getRawMany();
     
     return result.map(r => r.client);
+  }
+
+  // ===========================================================================
+  // HELPER PRIVATO: QUERY BUILDER CON FILTRI
+  // ===========================================================================
+  private createFilteredQuery(filters: GetDealsQueryDto = {}): SelectQueryBuilder<PlatformDeal> {
+    const qb = this.dealRepo.createQueryBuilder('deal');
+
+    // 1. Filtro Stages (Array)
+    if (filters.stages && filters.stages.length > 0) {
+      // Gestione caso singolo vs array
+      const stages = Array.isArray(filters.stages) ? filters.stages : [filters.stages];
+      qb.andWhere('deal.stage IN (:...stages)', { stages });
+    }
+
+    // 2. Filtro Temporale (Mese/Anno chiusura prevista)
+    if (filters.expectedCloseMonth && filters.expectedCloseYear) {
+      const start = new Date(filters.expectedCloseYear, filters.expectedCloseMonth - 1, 1);
+      const end = new Date(filters.expectedCloseYear, filters.expectedCloseMonth, 0); // Ultimo giorno del mese
+      qb.andWhere('deal.expectedCloseDate BETWEEN :start AND :end', { start, end });
+    }
+
+    // 3. Filtro Cliente
+    if (filters.clientName) {
+      qb.andWhere('deal.clientName = :clientName', { clientName: filters.clientName });
+    }
+
+    // 4. Ricerca Globale (Search Bar)
+    if (filters.search) {
+      qb.andWhere(new Brackets(sqb => {
+        sqb.where('deal.title ILIKE :search', { search: `%${filters.search}%` })
+           .orWhere('deal.clientName ILIKE :search', { search: `%${filters.search}%` });
+      }));
+    }
+
+    return qb;
   }
 }

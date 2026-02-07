@@ -10,18 +10,15 @@ import {
 } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Search, Filter, Loader2, ArrowLeft } from "lucide-react";
+import { Search, Filter, Loader2, ArrowLeft, PenSquare } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { DealEditForm } from "./DealEditForm";
+import { STAGE_CONFIG, formatCurrency } from "../utils";
 
 interface DrillDownSheetProps {
   isOpen: boolean;
@@ -29,7 +26,8 @@ interface DrillDownSheetProps {
   title: string;
   initialFilters: {
     stage?: string;
-    month?: string;
+    month?: string; // Format YYYY-MM
+    year?: number;
   };
 }
 
@@ -37,28 +35,34 @@ export function DrillDownSheet({ isOpen, onClose, title, initialFilters }: Drill
   const [deals, setDeals] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   
-  // Stati per i filtri
+  // Stati Filtri Locali
   const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState<string>(initialFilters.stage || "all");
+  const [stageFilter, setStageFilter] = useState<string>("all");
   
-  // Stati per la navigazione (Lista vs Edit)
+  // Navigazione (LISTA <-> EDIT)
   const [view, setView] = useState<"LIST" | "EDIT">("LIST");
   const [selectedDeal, setSelectedDeal] = useState<any>(null);
 
-  // Fetch dei dati
+  // Fetch Dati
   const fetchDeals = async () => {
     setLoading(true);
     try {
-      // Costruiamo la query string
       const params = new URLSearchParams();
       if (search) params.append("search", search);
       
-      // Se il filtro è "all", non mandiamo nulla, altrimenti mandiamo il valore
-      // Se arriva dai props (initialFilters), ha priorità finché non viene cambiato
-      const stageToSend = stageFilter !== "all" ? stageFilter : undefined;
-      if (stageToSend) params.append("stages", stageToSend);
+      // Logica Filtri:
+      // Se c'è un filtro iniziale dai props (es. click su card "Lead"), usiamo quello a meno che l'utente non lo cambi esplicitamente.
+      // Se l'utente seleziona "all", rimuoviamo il filtro stage.
+      const currentStage = stageFilter !== "all" ? stageFilter : (initialFilters.stage || "");
+      if (currentStage) params.append("stages", currentStage);
       
-      if (initialFilters.month) params.append("month", initialFilters.month);
+      // Filtri Temporali (dal props, es. "Chiudono questo mese")
+      if (initialFilters.month) {
+         // Esempio initialFilters.month = "2024-02"
+         const [y, m] = initialFilters.month.split('-');
+         params.append("expectedCloseYear", y);
+         params.append("expectedCloseMonth", m);
+      }
 
       const res = await apiFetch<any[]>(`/superadmin/dashboard/deals?${params.toString()}`);
       setDeals(res);
@@ -69,113 +73,111 @@ export function DrillDownSheet({ isOpen, onClose, title, initialFilters }: Drill
     }
   };
 
-  // Reset e Fetch quando si apre lo sheet o cambiano i filtri
+  // Trigger Fetch quando cambiano i parametri
   useEffect(() => {
     if (isOpen) {
-      setView("LIST");
-      setStageFilter(initialFilters.stage || "all"); // Reset filtro stage se cambia contesto
-      fetchDeals();
+      // Se si apre lo sheet, reset view e fetch
+      if (view === "LIST") fetchDeals();
     }
-  }, [isOpen, initialFilters, stageFilter, search]);
+  }, [isOpen, search, stageFilter, initialFilters, view]);
 
-  const handleEditClick = (deal: any) => {
-    setSelectedDeal(deal);
-    setView("EDIT");
-  };
-
-  const handleSave = () => {
-    setView("LIST");
-    fetchDeals(); // Ricarica i dati aggiornati
-  };
+  // Reset stato quando si chiude
+  useEffect(() => {
+    if (!isOpen) {
+      setView("LIST");
+      setSearch("");
+      setStageFilter("all");
+    }
+  }, [isOpen]);
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto">
+      <SheetContent className="w-full sm:max-w-2xl overflow-y-auto sm:w-[800px]">
         
         {/* VISTA: LISTA */}
         {view === "LIST" && (
           <>
-            <SheetHeader className="mb-6">
+            <SheetHeader className="mb-6 space-y-1">
               <SheetTitle className="text-2xl font-bold text-slate-900">{title}</SheetTitle>
               <SheetDescription>
-                Lista dettagliata delle offerte. Clicca su una riga per modificare.
+                Clicca su un'offerta per visualizzare i dettagli o modificarla.
               </SheetDescription>
             </SheetHeader>
 
-            {/* Barra dei Filtri */}
-            <div className="flex flex-col gap-3 mb-6">
+            {/* Filtri Bar */}
+            <div className="flex flex-col gap-3 mb-6 bg-slate-50 p-4 rounded-lg border border-slate-100">
               <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
                 <Input
-                  placeholder="Cerca per nome o cliente..."
-                  className="pl-9"
+                  placeholder="Cerca offerta o cliente..."
+                  className="pl-9 bg-white"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
               <div className="flex gap-2">
                 <Select value={stageFilter} onValueChange={setStageFilter}>
-                  <SelectTrigger className="w-[180px]">
-                    <div className="flex items-center gap-2">
-                        <Filter className="h-4 w-4 text-slate-400"/>
-                        <SelectValue placeholder="Filtra Fase" />
+                  <SelectTrigger className="w-[200px] bg-white">
+                    <div className="flex items-center gap-2 text-slate-600">
+                        <Filter className="h-4 w-4"/>
+                        <SelectValue placeholder="Tutte le fasi" />
                     </div>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Tutte le fasi</SelectItem>
-                    <SelectItem value="Lead qualificato">Lead qualificato</SelectItem>
-                    <SelectItem value="Preventivo inviato">Preventivo inviato</SelectItem>
-                    <SelectItem value="Negoziazione">Negoziazione</SelectItem>
-                    <SelectItem value="Chiuso vinto">Chiuso vinto</SelectItem>
+                    {Object.keys(STAGE_CONFIG).map(s => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-                {/* Qui potresti aggiungere altri filtri (Cliente, Mese) */}
               </div>
             </div>
 
-            {/* Tabella Dati */}
+            {/* Tabella */}
             {loading ? (
-              <div className="flex justify-center py-10">
+              <div className="flex justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
               </div>
             ) : deals.length === 0 ? (
-              <div className="text-center py-10 text-slate-500 border rounded-lg bg-slate-50">
-                Nessuna offerta trovata.
+              <div className="text-center py-12 text-slate-500">
+                Nessuna offerta trovata con i filtri correnti.
               </div>
             ) : (
-              <div className="border rounded-md">
+              <div className="border rounded-md overflow-hidden">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="bg-slate-50">
                     <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>Valore</TableHead>
-                      <TableHead>Fase</TableHead>
+                      <TableHead>Offerta / Cliente</TableHead>
+                      <TableHead>Stato</TableHead>
+                      <TableHead className="text-right">Valore</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {deals.map((deal) => (
-                      <TableRow 
-                        key={deal.id} 
-                        className="cursor-pointer hover:bg-slate-50 transition-colors"
-                        onClick={() => handleEditClick(deal)}
-                      >
-                        <TableCell>
-                          <div className="font-medium text-slate-900">{deal.name}</div>
-                          <div className="text-xs text-slate-500">{deal.clientName}</div>
-                        </TableCell>
-                        <TableCell>€{Number(deal.value).toLocaleString()}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={
-                             deal.stage === 'Chiuso vinto' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                             deal.stage === 'Negoziazione' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                             deal.stage === 'Preventivo inviato' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                             'bg-slate-100 text-slate-700'
-                          }>
-                            {deal.stage}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {deals.map((deal) => {
+                       const config = STAGE_CONFIG[deal.stage] || { badgeClass: 'bg-slate-100', label: deal.stage };
+                       return (
+                        <TableRow 
+                          key={deal.id} 
+                          className="cursor-pointer hover:bg-slate-50 transition-colors group"
+                          onClick={() => { setSelectedDeal(deal); setView("EDIT"); }}
+                        >
+                          <TableCell className="py-3">
+                            <div className="font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                                {deal.name}
+                            </div>
+                            <div className="text-xs text-slate-500">{deal.clientName || 'Nessun cliente'}</div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={`font-normal ${config.badgeClass}`}>
+                              {config.label}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-medium text-slate-700">
+                            {formatCurrency(deal.value)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -186,12 +188,20 @@ export function DrillDownSheet({ isOpen, onClose, title, initialFilters }: Drill
         {/* VISTA: EDIT */}
         {view === "EDIT" && selectedDeal && (
           <div className="animate-in slide-in-from-right duration-300">
-             <Button variant="ghost" onClick={() => setView("LIST")} className="mb-4 pl-0 hover:pl-2 transition-all">
+             <Button 
+                variant="ghost" 
+                onClick={() => setView("LIST")} 
+                className="mb-2 pl-0 hover:pl-2 text-slate-500 hover:text-indigo-600 transition-all"
+             >
                 <ArrowLeft className="h-4 w-4 mr-2" /> Torna alla lista
              </Button>
+             
              <DealEditForm 
                 deal={selectedDeal} 
-                onSave={handleSave} 
+                onSave={() => {
+                  setView("LIST");
+                  // Il fetch verrà triggerato dallo useEffect quando view torna a LIST
+                }} 
                 onCancel={() => setView("LIST")} 
              />
           </div>
