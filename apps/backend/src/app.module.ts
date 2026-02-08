@@ -36,7 +36,12 @@ import { SuperadminAuditController } from './audit.controller';
 // --- DASHBOARD SUPERADMIN ---
 import { SuperadminDashboardController } from './superadmin/superadmin-dashboard.controller';
 import { SuperadminDashboardService } from './superadmin/superadmin-dashboard.service';
-import { PlatformDeal } from './superadmin/entities/platform-deal.entity'; // <--- IMPORT ENTITY
+import { PlatformDeal } from './superadmin/entities/platform-deal.entity';
+
+// --- DELIVERY SUPERADMIN (NUOVI) ---
+import { DeliveryController } from './superadmin/delivery.controller';
+import { DeliveryService } from './superadmin/delivery.service';
+import { DeliveryTask } from './superadmin/entities/delivery-task.entity';
 
 // --- MIDDLEWARE & GUARD ---
 import { TenancyMiddleware } from './tenancy/tenancy.middleware';
@@ -73,14 +78,17 @@ import { RedisModule } from './redis/redis.module';
         return {
           type: 'postgres' as const,
           url,
-          autoLoadEntities: true, // Meglio esplicito per sicurezza
-          synchronize: false, // MAI in produzione! Usare migrazioni
+          autoLoadEntities: true,
+          synchronize: true, // <--- MESSO A TRUE PER CREARE LA TABELLA DELIVERY_TASKS
         };
       },
     }),
 
-    // ✅ REGISTRAZIONE ENTITY (Fondamentale!)
-    TypeOrmModule.forFeature([PlatformDeal]),
+    // ✅ REGISTRAZIONE ENTITY (Sales + Delivery)
+    TypeOrmModule.forFeature([
+      PlatformDeal, 
+      DeliveryTask // <--- NUOVO
+    ]),
 
     PassportModule,
     JwtModule.registerAsync({
@@ -114,7 +122,8 @@ import { RedisModule } from './redis/redis.module';
     SuperadminUsersController,
     SecurityPolicyController,
     AuthMfaController,
-    SuperadminDashboardController, // ✅ Controller Dashboard
+    SuperadminDashboardController,
+    DeliveryController, // <--- NUOVO
   ],
 
   providers: [
@@ -129,7 +138,8 @@ import { RedisModule } from './redis/redis.module';
     TenantBootstrapService,
     AuthMfaService,
     JwtStrategy,
-    SuperadminDashboardService, // ✅ Service Dashboard
+    SuperadminDashboardService,
+    DeliveryService, // <--- NUOVO
   ],
 })
 export class AppModule implements NestModule {
