@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea"; // Assicurati di avere questo componente o usa <textarea> standard
-import { Loader2, Save } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea"; 
+import { Loader2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
 interface TaskCreateSheetProps {
@@ -35,18 +35,17 @@ export function TaskCreateSheet({ isOpen, onClose, onSuccess }: TaskCreateSheetP
     setLoading(true);
     try {
       // --- FIX: Prepariamo il payload pulito ---
+      // Se la data è vuota, mandiamo undefined, altrimenti il backend esplode
       const payload = {
         ...formData,
-        // Se la stringa è vuota, mandiamo undefined/null, altrimenti la data
         dueDate: formData.dueDate ? formData.dueDate : undefined,
-        // Convertiamo priority se necessario (ma sembra combaciare con l'Enum backend "Media", "Alta"...)
         priority: formData.priority 
       };
 
       await apiFetch("/superadmin/delivery/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload), // <--- Usiamo payload, non formData diretto
+        body: JSON.stringify(payload),
       });
       
       onSuccess();
@@ -55,7 +54,7 @@ export function TaskCreateSheet({ isOpen, onClose, onSuccess }: TaskCreateSheetP
       setFormData({ name: "", serviceName: "", category: "Marketing", priority: "Media", dueDate: "", notes: "" });
     } catch (e) {
       console.error(e);
-      alert("Errore creazione task. Controlla la console del server per dettagli.");
+      alert("Errore creazione task. Controlla che il backend sia avviato e la tabella esista.");
     } finally {
       setLoading(false);
     }
@@ -123,8 +122,8 @@ export function TaskCreateSheet({ isOpen, onClose, onSuccess }: TaskCreateSheetP
 
           <div className="grid gap-2">
             <Label>Note</Label>
-            <textarea 
-              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            <Textarea 
+              className="resize-none h-24"
               placeholder="Dettagli aggiuntivi..."
               value={formData.notes} 
               onChange={(e) => setFormData({...formData, notes: e.target.value})} 

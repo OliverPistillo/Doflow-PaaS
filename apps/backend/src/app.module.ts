@@ -79,7 +79,7 @@ import { RedisModule } from './redis/redis.module';
           type: 'postgres' as const,
           url,
           autoLoadEntities: true,
-          synchronize: false,
+          synchronize: true,
         };
       },
     }),
