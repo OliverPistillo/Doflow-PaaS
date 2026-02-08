@@ -34,18 +34,28 @@ export function TaskCreateSheet({ isOpen, onClose, onSuccess }: TaskCreateSheetP
     e.preventDefault();
     setLoading(true);
     try {
+      // --- FIX: Prepariamo il payload pulito ---
+      const payload = {
+        ...formData,
+        // Se la stringa è vuota, mandiamo undefined/null, altrimenti la data
+        dueDate: formData.dueDate ? formData.dueDate : undefined,
+        // Convertiamo priority se necessario (ma sembra combaciare con l'Enum backend "Media", "Alta"...)
+        priority: formData.priority 
+      };
+
       await apiFetch("/superadmin/delivery/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload), // <--- Usiamo payload, non formData diretto
       });
+      
       onSuccess();
       onClose();
       // Reset form
       setFormData({ name: "", serviceName: "", category: "Marketing", priority: "Media", dueDate: "", notes: "" });
     } catch (e) {
       console.error(e);
-      alert("Errore creazione task");
+      alert("Errore creazione task. Controlla la console del server per dettagli.");
     } finally {
       setLoading(false);
     }
