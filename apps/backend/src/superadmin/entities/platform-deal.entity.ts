@@ -6,7 +6,9 @@ export class PlatformDeal {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ name: 'title' }) // Spec: "Title"
+  // --- CORREZIONE QUI SOTTO ---
+  // Abbiamo unito "name: 'title'" e "nullable: true" in un'unica colonna.
+  @Column({ name: 'title', nullable: true }) 
   title!: string;
 
   @Column({ name: 'client_name', nullable: true })
