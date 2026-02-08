@@ -168,6 +168,28 @@ export class SuperadminDashboardService {
     return result.map(r => r.client);
   }
 
+  // 5. CREA OFFERTA (POST)
+  async createDeal(data: UpdateDealDto): Promise<PlatformDeal> {
+    const deal = this.dealRepo.create({
+      title: data.title,
+      clientName: data.clientName,
+      stage: data.stage || DealStage.QUALIFIED_LEAD,
+      // Converti Euro -> Cents e % -> BPS
+      valueCents: data.value ? Math.round(data.value * 100) : 0,
+      probabilityBps: data.winProbability ? Math.round(data.winProbability * 100) : 0,
+      expectedCloseDate: data.expectedCloseDate ? new Date(data.expectedCloseDate) : null,
+    });
+    return this.dealRepo.save(deal);
+  }
+
+  // 6. ELIMINA OFFERTA (DELETE)
+  async deleteDeal(id: string): Promise<void> {
+    const result = await this.dealRepo.delete(id);
+    if (result.affected === 0) {
+      throw new NotFoundException('Offerta non trovata');
+    }
+  }
+
   // ===========================================================================
   // HELPER PRIVATO: QUERY BUILDER CON FILTRI
   // ===========================================================================

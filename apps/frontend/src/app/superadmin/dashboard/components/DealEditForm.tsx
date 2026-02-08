@@ -47,18 +47,28 @@ export function DealEditForm({ deal, onSave, onCancel }: DealEditFormProps) {
     e.preventDefault();
     setSaving(true);
     try {
-      await apiFetch(`/superadmin/dashboard/deals/${deal.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-           ...formData,
-           winProbability: formData.winProbability / 100 // Torna a 0-1 per il backend
-        }),
-      });
+      if (deal.id) {
+        // MODIFICA (PATCH)
+        await apiFetch(`/superadmin/dashboard/deals/${deal.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+      } else {
+        // CREAZIONE (POST) - NUOVO RAMO
+        await apiFetch(`/superadmin/dashboard/deals`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+             ...formData,
+             winProbability: formData.winProbability / 100
+          }),
+        });
+      }
       onSave(); 
     } catch (error) {
-      console.error(error);
-      alert("Errore salvataggio");
+      console.error("Errore salvataggio:", error);
+      alert("Errore durante il salvataggio.");
     } finally {
       setSaving(false);
     }

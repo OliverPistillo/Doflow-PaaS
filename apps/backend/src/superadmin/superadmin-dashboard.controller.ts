@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Body, Query, Param, UseGuards, SetMetadata } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Delete, Body, Query, Param, UseGuards, SetMetadata } from '@nestjs/common';
 import { SuperadminDashboardService } from './superadmin-dashboard.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GetDealsQueryDto, UpdateDealDto } from './dto/deals.dto';
@@ -12,7 +12,6 @@ export class SuperadminDashboardController {
   constructor(private readonly dashboardService: SuperadminDashboardService) {}
 
   // 1. STATISTICHE GENERALI (KPI Cards)
-  // Supporta gli stessi filtri della lista per coerenza numerica
   @Get('stats')
   @Roles('superadmin')
   async getStats(@Query() query: GetDealsQueryDto) {
@@ -41,5 +40,19 @@ export class SuperadminDashboardController {
     @Body() body: UpdateDealDto
   ) {
     return this.dashboardService.updateDeal(id, body);
+  }
+
+  // 5. CREA OFFERTA (Nuovo)
+  @Post('deals')
+  @Roles('superadmin')
+  async createDeal(@Body() body: UpdateDealDto) {
+    return this.dashboardService.createDeal(body);
+  }
+
+  // 6. ELIMINA OFFERTA (Nuovo)
+  @Delete('deals/:id')
+  @Roles('superadmin')
+  async deleteDeal(@Param('id') id: string) {
+    return this.dashboardService.deleteDeal(id);
   }
 }
