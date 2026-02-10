@@ -58,6 +58,9 @@ import { RedisModule } from './redis/redis.module';
 import { CalendarEvent } from './superadmin/entities/calendar-event.entity';
 import { CalendarController } from './superadmin/calendar.controller';
 import { CalendarService } from './superadmin/calendar.service';
+import { Invoice } from './superadmin/entities/invoice.entity';
+import { FinanceController } from './superadmin/finance.controller';
+import { FinanceService } from './superadmin/finance.service';
 
 @Module({
   imports: [
@@ -89,9 +92,10 @@ import { CalendarService } from './superadmin/calendar.service';
 
     // ✅ REGISTRAZIONE ENTITY (Sales + Delivery)
     TypeOrmModule.forFeature([
-      PlatformDeal, 
+      PlatformDeal,
       DeliveryTask,
-      CalendarEvent
+      CalendarEvent,
+      Invoice,
     ]),
 
     PassportModule,
@@ -129,6 +133,7 @@ import { CalendarService } from './superadmin/calendar.service';
     SuperadminDashboardController,
     DeliveryController,
     CalendarController,
+    FinanceController,
   ],
 
   providers: [
@@ -146,6 +151,7 @@ import { CalendarService } from './superadmin/calendar.service';
     SuperadminDashboardService,
     DeliveryService,
     CalendarService,
+    FinanceService,
   ],
 })
 export class AppModule implements NestModule {
