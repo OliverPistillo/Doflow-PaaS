@@ -2,20 +2,20 @@
 
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowUpRight } from "lucide-react";
+import { ArrowUpRight, TrendingUp, AlertCircle, Clock } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from "recharts";
 
 // Dati Mock
 const revenueTrend = [
-  { month: "Jan", revenue: 4000 },
+  { month: "Gen", revenue: 4000 },
   { month: "Feb", revenue: 3000 },
   { month: "Mar", revenue: 2000 },
   { month: "Apr", revenue: 2780 },
-  { month: "May", revenue: 1890 },
-  { month: "Jun", revenue: 2390 },
-  { month: "Jul", revenue: 3490 },
+  { month: "Mag", revenue: 1890 },
+  { month: "Giu", revenue: 2390 },
+  { month: "Lug", revenue: 3490 },
 ];
 
 const topClients = [
@@ -28,27 +28,38 @@ const topClients = [
 ];
 
 const invoiceStatus = [
-  { name: "Paid", value: 40, color: "#EC4899" }, // Pink
-  { name: "Overdue", value: 20, color: "#FCD34D" }, // Yellow
-  { name: "Unpaid", value: 40, color: "#60A5FA" }, // Blue
+  { name: "Pagate", value: 40, color: "#10B981" }, // Emerald-500
+  { name: "In Scadenza", value: 20, color: "#F59E0B" }, // Amber-500
+  { name: "Non Pagate", value: 40, color: "#EF4444" }, // Red-500
 ];
 
-// --- Componente KPI Card Neutro ---
-function FinanceKpiCard({ title, value, titleColorClass, hoverColorClass }: { title: string; value: string; titleColorClass: string; hoverColorClass: string }) {
+interface KpiProps {
+  title: string;
+  value: string;
+  subtitle: string;
+  icon: React.ElementType;
+  titleColorClass: string;
+  hoverColorClass: string;
+}
+
+function FinanceKpiCard({ title, value, subtitle, icon: Icon, titleColorClass, hoverColorClass }: KpiProps) {
   return (
-    <Card className="shadow-sm hover:shadow-md transition-shadow">
+    <Card className="shadow-sm hover:shadow-md transition-all duration-300 border-slate-200 group">
       <CardContent className="p-6">
         <div className="flex justify-between items-start">
-          <div className="space-y-1">
+          <div className="space-y-2">
             <p className={`text-[11px] font-bold uppercase tracking-wider ${titleColorClass}`}>
               {title}
             </p>
-            <h3 className="text-4xl font-black text-slate-900 tracking-tight">
-              {value}
-            </h3>
+            <div className="flex flex-col">
+              <h3 className="text-3xl font-black text-slate-900 tracking-tight">
+                {value}
+              </h3>
+              <p className="text-xs text-slate-500 font-medium mt-1">{subtitle}</p>
+            </div>
           </div>
-          <div className={`h-9 w-9 flex items-center justify-center rounded-lg bg-slate-50 text-slate-400 group-hover:bg-slate-100 transition-colors duration-300 cursor-pointer ${hoverColorClass}`}>
-            <ArrowUpRight className="h-5 w-5" />
+          <div className={`h-10 w-10 flex items-center justify-center rounded-xl bg-slate-50 text-slate-400 transition-colors duration-300 ${hoverColorClass}`}>
+            <Icon className="h-5 w-5" />
           </div>
         </div>
       </CardContent>
@@ -58,82 +69,104 @@ function FinanceKpiCard({ title, value, titleColorClass, hoverColorClass }: { ti
 
 export default function FinanceDashboardPage() {
   return (
-    <div className="space-y-8 max-w-[1800px] mx-auto animate-in fade-in duration-500 p-2 md:p-0">
+    <div className="space-y-8 max-w-[1800px] mx-auto animate-in fade-in duration-500 p-4 md:p-0">
       
-      <div>
-        <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
-          <span>Fatturazione e pagamenti</span>
-          <span className="text-slate-300">/</span>
-          <span className="font-bold text-slate-900">Dashboard finanziario</span>
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
+            <span>Amministrazione</span>
+            <span className="text-slate-300">/</span>
+            <span className="font-bold text-slate-900 uppercase tracking-tighter">Finance</span>
+          </div>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight">Dashboard Finanziaria</h1>
+          <p className="text-slate-500 mt-1 text-sm font-medium">Monitoraggio in tempo reale di flussi e fatturazione.</p>
         </div>
-        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Panoramica finanziaria</h1>
-        <p className="text-slate-500 mt-1 text-sm font-medium">Metriche principali su ricavi, fatture e clienti top.</p>
+        
+        <div className="flex gap-2">
+            <button className="px-4 py-2 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm">
+                ESPORTA REPORT
+            </button>
+            <button className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-colors shadow-sm">
+                NUOVA FATTURA
+            </button>
+        </div>
       </div>
 
-      {/* KPI Row (Neutri con accenti su testo) */}
+      {/* KPI Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <FinanceKpiCard 
-            title="Ricavi totali (fatture pagate)" 
+            title="Ricavi Totali" 
             value="€7,656.15" 
+            subtitle="+12.5% rispetto al mese scorso"
+            icon={TrendingUp}
             titleColorClass="text-emerald-600"
-            hoverColorClass="hover:bg-emerald-100 hover:text-emerald-600"
+            hoverColorClass="group-hover:bg-emerald-50 group-hover:text-emerald-600"
         />
         <FinanceKpiCard 
-            title="Pagamenti in sospeso" 
+            title="In Attesa" 
             value="€8,210.75" 
-            titleColorClass="text-red-600"
-            hoverColorClass="hover:bg-red-100 hover:text-red-600"
+            subtitle="14 fatture in attesa di saldo"
+            icon={Clock}
+            titleColorClass="text-amber-600"
+            hoverColorClass="group-hover:bg-amber-50 group-hover:text-amber-600"
         />
         <FinanceKpiCard 
-            title="Fatture scadute" 
+            title="Fatture Scadute" 
             value="3" 
+            subtitle="Richiede attenzione immediata"
+            icon={AlertCircle}
             titleColorClass="text-rose-700"
-            hoverColorClass="hover:bg-rose-100 hover:text-rose-700"
+            hoverColorClass="group-hover:bg-rose-50 group-hover:text-rose-700"
         />
       </div>
 
-      {/* Charts Row 1 */}
+      {/* Main Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="shadow-sm border-slate-200">
-          <CardHeader className="pb-2">
+        {/* Invoice Status Pie */}
+        <Card className="shadow-sm border-slate-200 overflow-hidden">
+          <CardHeader className="border-b border-slate-50 bg-slate-50/30">
             <div className="flex justify-between items-center">
-               <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                 Distribuzione dello stato di pagamento
+               <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                 Stato Pagamenti
                </CardTitle>
-               <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer transition-colors">
-                 <ArrowUpRight className="h-4 w-4" />
-               </div>
+               <ArrowUpRight className="h-4 w-4 text-slate-300" />
             </div>
-            <p className="text-xs text-slate-400 font-medium">Conteggio delle fatture in base al loro stato di pagamento</p>
           </CardHeader>
-          <CardContent>
-            <div className="h-[300px] w-full flex justify-center mt-4">
+          <CardContent className="pt-6 relative">
+            <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={invoiceStatus}
                     cx="50%"
                     cy="50%"
-                    innerRadius={0} // Pie piena
+                    innerRadius={70}
                     outerRadius={100}
-                    paddingAngle={0}
+                    paddingAngle={8}
                     dataKey="value"
-                    stroke="white"
-                    strokeWidth={2}
                   >
                     {invoiceStatus.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                      <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
+              {/* Legend overlay */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                 <div className="text-center">
+                    <p className="text-2xl font-black text-slate-900">100%</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Totale</p>
+                 </div>
+              </div>
             </div>
-            <div className="flex flex-col gap-2 absolute right-10 top-1/2 transform -translate-y-1/2">
-                <p className="text-xs text-slate-400 font-bold mb-1 uppercase">Status</p>
+            <div className="flex justify-center gap-6 mt-4">
                 {invoiceStatus.map((s, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs font-medium text-slate-600">
-                        <div className="w-2 h-2 rounded-full" style={{backgroundColor: s.color}} />
+                    <div key={i} className="flex items-center gap-2 text-[11px] font-bold text-slate-600 uppercase tracking-tighter">
+                        <div className="w-3 h-3 rounded-full" style={{backgroundColor: s.color}} />
                         {s.name}
                     </div>
                 ))}
@@ -141,27 +174,44 @@ export default function FinanceDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm border-slate-200">
-          <CardHeader className="pb-2">
+        {/* Revenue Line Chart */}
+        <Card className="shadow-sm border-slate-200 overflow-hidden">
+          <CardHeader className="border-b border-slate-50 bg-slate-50/30">
             <div className="flex justify-between items-center">
-               <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                 Tendenze mensili dei ricavi
+               <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                 Trend Mensile Ricavi
                </CardTitle>
-               <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer transition-colors">
-                 <ArrowUpRight className="h-4 w-4" />
-               </div>
+               <ArrowUpRight className="h-4 w-4 text-slate-300" />
             </div>
-            <p className="text-xs text-slate-400 font-medium">Importo totale della fattura pagata per mese di data di emissione.</p>
           </CardHeader>
-          <CardContent>
-            <div className="h-[300px] w-full mt-4">
+          <CardContent className="pt-6">
+            <div className="h-[340px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={revenueTrend} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                  <XAxis dataKey="month" tick={{fontSize: 12, fill: "#94a3b8"}} tickLine={false} axisLine={false} dy={10} />
-                  <YAxis tickFormatter={(v) => `€${v.toLocaleString()}`} tick={{fontSize: 12, fill: "#94a3b8"}} tickLine={false} axisLine={false} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="revenue" stroke="#3B82F6" strokeWidth={3} dot={{r: 4, fill: "#3B82F6"}} activeDot={{r: 6}} />
+                <LineChart data={revenueTrend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis 
+                    dataKey="month" 
+                    tick={{fontSize: 10, fill: "#94a3b8", fontWeight: 600}} 
+                    tickLine={false} 
+                    axisLine={false} 
+                  />
+                  <YAxis 
+                    tickFormatter={(v) => `€${v}`} 
+                    tick={{fontSize: 10, fill: "#94a3b8", fontWeight: 600}} 
+                    tickLine={false} 
+                    axisLine={false} 
+                  />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="revenue" 
+                    stroke="#0f172a" 
+                    strokeWidth={4} 
+                    dot={{r: 4, fill: "#0f172a", strokeWidth: 2, stroke: "#fff"}} 
+                    activeDot={{r: 6, strokeWidth: 0}} 
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -169,39 +219,50 @@ export default function FinanceDashboardPage() {
         </Card>
       </div>
 
-      {/* Top Clients */}
-      <Card className="shadow-sm border-slate-200">
-        <CardHeader className="pb-2">
+      {/* Bottom Row - Top Clients */}
+      <Card className="shadow-sm border-slate-200 overflow-hidden">
+        <CardHeader className="border-b border-slate-50 bg-slate-50/30">
           <div className="flex justify-between items-center">
-             <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-               I migliori clienti per fatturato
+             <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+               Top Clienti per Volume d'Affari
              </CardTitle>
-             <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer transition-colors">
-                 <ArrowUpRight className="h-4 w-4" />
-             </div>
+             <button className="text-[10px] font-black text-blue-600 hover:underline">VEDI TUTTI</button>
           </div>
-          <p className="text-xs text-slate-400 font-medium">Importo totale della fattura pagata raggruppato per cliente</p>
         </CardHeader>
-        <CardContent>
-           <div className="h-[250px] w-full mt-4">
+        <CardContent className="pt-8">
+            <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topClients} margin={{top: 20, right: 30, left: 0, bottom: 5}}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <BarChart data={topClients} margin={{top: 0, right: 0, left: 0, bottom: 20}}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis 
                     dataKey="name" 
-                    tick={{fontSize: 11, fill: "#64748B"}} 
-                    interval={0} 
-                    angle={-45} 
-                    textAnchor="end" 
-                    height={60} 
-                    tickLine={false} 
+                    tick={{fontSize: 10, fill: "#64748B", fontWeight: 700}} 
                     axisLine={false}
+                    tickLine={false}
+                    interval={0}
                   />
-                  <Tooltip cursor={{fill: '#F8FAFC'}} />
-                  <Bar dataKey="value" fill="#5a7bd4" radius={[4, 4, 0, 0]} barSize={60} />
+                  <YAxis hide />
+                  <Tooltip 
+                    cursor={{fill: '#f8fafc'}}
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  />
+                  <Bar 
+                    dataKey="value" 
+                    fill="#3b82f6" 
+                    radius={[6, 6, 0, 0]} 
+                    barSize={50}
+                  >
+                    {topClients.map((entry, index) => (
+                        <Cell 
+                            key={`cell-${index}`} 
+                            fill={index % 2 === 0 ? '#0f172a' : '#3b82f6'} 
+                            fillOpacity={0.9}
+                        />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
-           </div>
+            </div>
         </CardContent>
       </Card>
     </div>
