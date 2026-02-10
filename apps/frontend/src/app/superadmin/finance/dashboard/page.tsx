@@ -2,11 +2,13 @@
 
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowUpRight, TrendingUp, AlertCircle, Clock, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button"; // Assicurati di avere questo import
+import { ArrowUpRight, TrendingUp, AlertCircle, Clock, Loader2, Download, Plus } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from "recharts";
 import { apiFetch } from "@/lib/api";
+import { InvoiceCreateSheet } from "./components/InvoiceCreateSheet";
 
 // --- TIPI ---
 interface DashboardData {
@@ -24,7 +26,7 @@ interface DashboardData {
 // Accetta qualsiasi cosa Recharts possa lanciargli (number, string, array, undefined)
 const formatCurrency = (value: any): string => {
   if (value === undefined || value === null) return "€0,00";
-  // Se è un array (succede raramente in grafici semplici, ma Recharts lo prevede), prendiamo il primo
+  // Se è un array (succede raramente in grafici semplici, ma Recharts lo prevede), prendiamo il primo elemento
   const val = Array.isArray(value) ? value[0] : value;
   const num = typeof val === 'string' ? parseFloat(val) : val;
   
@@ -71,22 +73,45 @@ function FinanceKpiCard({ title, value, subtitle, icon: Icon, titleColorClass, h
 export default function FinanceDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+
+  // Funzione di caricamento dati
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const res = await apiFetch<DashboardData>("/superadmin/finance/dashboard");
+      setData(res);
+    } catch (error) {
+      console.error("Errore fetch dashboard finance", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await apiFetch<DashboardData>("/superadmin/finance/dashboard");
-        setData(res);
-      } catch (error) {
-        console.error("Errore fetch dashboard finance", error);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, []);
 
-  if (loading) {
+  // Funzione Export CSV
+  const handleExport = () => {
+    if (!data || data.trend.length === 0) {
+        alert("Nessun dato da esportare.");
+        return;
+    }
+    const csvContent = "data:text/csv;charset=utf-8," 
+        + "Mese,Ricavi\n"
+        + data.trend.map(e => `${e.month},${e.revenue}`).join("\n");
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "report_finanziario.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  if (loading && !data) {
     return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-indigo-600 h-10 w-10" /></div>;
   }
 
@@ -114,12 +139,12 @@ export default function FinanceDashboardPage() {
         </div>
         
         <div className="flex gap-2">
-            <button className="px-4 py-2 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm">
-                ESPORTA REPORT
-            </button>
-            <button className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-colors shadow-sm">
-                NUOVA FATTURA
-            </button>
+            <Button variant="outline" className="border-slate-200" onClick={handleExport}>
+                <Download className="mr-2 h-4 w-4" /> ESPORTA REPORT
+            </Button>
+            <Button className="bg-slate-900 hover:bg-slate-800 text-white" onClick={() => setIsSheetOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" /> NUOVA FATTURA
+            </Button>
         </div>
       </div>
 
@@ -128,7 +153,7 @@ export default function FinanceDashboardPage() {
         <FinanceKpiCard 
             title="Ricavi Totali" 
             value={formatCurrency(stats.kpi.revenue)} 
-            subtitle="Fatturato incassato totale"
+            subtitle="Fatturato incassato totale (Paid)"
             icon={TrendingUp}
             titleColorClass="text-emerald-600"
             hoverColorClass="group-hover:bg-emerald-50 group-hover:text-emerald-600"
@@ -187,7 +212,7 @@ export default function FinanceDashboardPage() {
                     </PieChart>
                   </ResponsiveContainer>
                ) : (
-                  <div className="h-full flex items-center justify-center text-slate-400 text-sm">Nessun dato disponibile</div>
+                  <div className="h-full flex items-center justify-center text-slate-400 text-sm">Nessuna fattura registrata</div>
                )}
 
               {/* Legend overlay */}
@@ -241,8 +266,7 @@ export default function FinanceDashboardPage() {
                       />
                       <Tooltip 
                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                        // CORREZIONE TYPE: Usiamo 'any' nel parametro per bypassare il check stretto di Recharts
-                        // Oppure un union type molto largo. Qui 'any' è sicuro perché formatCurrency gestisce tutto.
+                        // FIX TYPE: Usiamo 'any' per bypassare i check stretti di Recharts che causano errori
                         formatter={(value: any) => [formatCurrency(value), "Ricavi"]}
                       />
                       <Line 
@@ -256,7 +280,7 @@ export default function FinanceDashboardPage() {
                     </LineChart>
                   </ResponsiveContainer>
               ) : (
-                 <div className="h-full flex items-center justify-center text-slate-400 text-sm">Nessun trend disponibile</div>
+                 <div className="h-full flex items-center justify-center text-slate-400 text-sm">Nessuna fattura "Pagata" registrata</div>
               )}
             </div>
           </CardContent>
@@ -290,7 +314,7 @@ export default function FinanceDashboardPage() {
                       <Tooltip 
                         cursor={{fill: '#f8fafc'}}
                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                        // CORREZIONE TYPE: Idem qui
+                        // FIX TYPE: Idem qui
                         formatter={(value: any) => [formatCurrency(value), "Fatturato"]}
                       />
                       <Bar 
@@ -315,6 +339,13 @@ export default function FinanceDashboardPage() {
             </div>
         </CardContent>
       </Card>
+
+      {/* Componente Sheet per Creazione Fattura */}
+      <InvoiceCreateSheet 
+         isOpen={isSheetOpen} 
+         onClose={() => setIsSheetOpen(false)} 
+         onSuccess={fetchData} 
+      />
     </div>
   );
 }

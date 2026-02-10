@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DeepPartial } from 'typeorm'; // <--- AGGIUNTO QUI
 import { Invoice, InvoiceStatus } from './entities/invoice.entity';
 
 @Injectable()
@@ -9,6 +9,11 @@ export class FinanceService {
     @InjectRepository(Invoice)
     private repo: Repository<Invoice>,
   ) {}
+
+  async create(data: DeepPartial<Invoice>) {
+    const invoice = this.repo.create(data);
+    return this.repo.save(invoice);
+  }
 
   async getDashboardStats() {
     // 1. KPI Totali
@@ -26,8 +31,8 @@ export class FinanceService {
       
     const overdueCount = await this.repo.count({ where: { status: InvoiceStatus.OVERDUE } });
 
-    // 2. Trend Ricavi (Ultimi 6 mesi) - Semplificato per demo
-    // In produzione useresti query SQL complesse per raggruppare per mese (date_trunc)
+    // 2. Trend Ricavi (Ultimi 6 mesi)
+    // Nota: TO_CHAR è specifico per PostgreSQL. Se usi MySQL usa DATE_FORMAT.
     const rawTrend = await this.repo.query(`
         SELECT TO_CHAR(issue_date, 'Mon') as month, SUM(amount) as revenue 
         FROM invoices 
@@ -71,10 +76,8 @@ export class FinanceService {
     };
   }
   
-  // Metodo seed per creare dati finti se il db è vuoto (OPZIONALE ma utile)
   async seed() {
      const count = await this.repo.count();
      if(count > 0) return;
-     // ... logica inserimento dati finti ...
   }
 }
