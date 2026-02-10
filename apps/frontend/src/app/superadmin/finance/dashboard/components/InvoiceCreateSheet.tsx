@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,45 +9,92 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
+// Tipo Invoice (copiato per coerenza, ideale spostarlo in types.ts)
+type Invoice = {
+  id: string;
+  invoiceNumber: string;
+  clientName: string;
+  amount: number;
+  issueDate: string;
+  dueDate: string;
+  status: string;
+};
+
 interface InvoiceSheetProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  invoiceToEdit?: Invoice | null; // <--- NUOVO
 }
 
-export function InvoiceCreateSheet({ isOpen, onClose, onSuccess }: InvoiceSheetProps) {
+export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }: InvoiceSheetProps) {
   const [loading, setLoading] = useState(false);
-  // Generiamo un numero fattura random per default
   const [formData, setFormData] = useState({
-    invoiceNumber: `INV-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000)}`,
+    invoiceNumber: "",
     clientName: "",
     amount: "",
-    issueDate: new Date().toISOString().split('T')[0],
+    issueDate: "",
     dueDate: "",
     status: "pending"
   });
+
+  // Reset o Popola al cambio di apertura
+  useEffect(() => {
+    if (isOpen) {
+      if (invoiceToEdit) {
+        // MODALITÀ MODIFICA
+        setFormData({
+          invoiceNumber: invoiceToEdit.invoiceNumber,
+          clientName: invoiceToEdit.clientName,
+          amount: invoiceToEdit.amount.toString(),
+          issueDate: invoiceToEdit.issueDate ? new Date(invoiceToEdit.issueDate).toISOString().split('T')[0] : "",
+          dueDate: invoiceToEdit.dueDate ? new Date(invoiceToEdit.dueDate).toISOString().split('T')[0] : "",
+          status: invoiceToEdit.status
+        });
+      } else {
+        // MODALITÀ CREAZIONE
+        setFormData({
+            invoiceNumber: `INV-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000)}`,
+            clientName: "",
+            amount: "",
+            issueDate: new Date().toISOString().split('T')[0],
+            dueDate: "",
+            status: "pending"
+        });
+      }
+    }
+  }, [isOpen, invoiceToEdit]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await apiFetch("/superadmin/finance/invoices", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            ...formData,
-            amount: parseFloat(formData.amount) // Converti stringa in numero
-        }),
-      });
+      const payload = {
+          ...formData,
+          amount: parseFloat(formData.amount)
+      };
+
+      if (invoiceToEdit) {
+          // PATCH (Modifica)
+          // Nota: Assicurati che il backend supporti PATCH /invoices/:id. 
+          // Se non lo supporta ancora, dovremo aggiungerlo nel controller backend.
+          // Per ora assumiamo di sì o che userai un workaround (es. delete + create, ma meglio patch).
+          await apiFetch(`/superadmin/finance/invoices/${invoiceToEdit.id}`, {
+             method: "PATCH",
+             headers: { "Content-Type": "application/json" },
+             body: JSON.stringify(payload),
+          });
+      } else {
+          // POST (Creazione)
+          await apiFetch("/superadmin/finance/invoices", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+      }
+
       onSuccess();
       onClose();
-      // Reset form parziale
-      setFormData(prev => ({ 
-          ...prev, 
-          clientName: "", 
-          amount: "", 
-          invoiceNumber: `INV-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000)}` 
-      }));
     } catch (e) {
       console.error(e);
       alert("Errore salvataggio fattura");
@@ -60,8 +107,8 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess }: InvoiceSheetP
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="w-full sm:max-w-md">
         <SheetHeader>
-          <SheetTitle>Nuova Fattura</SheetTitle>
-          <SheetDescription>Registra una nuova fattura emessa.</SheetDescription>
+          <SheetTitle>{invoiceToEdit ? "Modifica Fattura" : "Nuova Fattura"}</SheetTitle>
+          <SheetDescription>{invoiceToEdit ? "Aggiorna i dati della fattura esistente." : "Registra una nuova fattura emessa."}</SheetDescription>
         </SheetHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-6">
@@ -106,7 +153,7 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess }: InvoiceSheetP
           <div className="pt-4 flex justify-end">
             <Button type="submit" disabled={loading} className="bg-slate-900">
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Registra Fattura
+              {invoiceToEdit ? "Salva Modifiche" : "Registra Fattura"}
             </Button>
           </div>
         </form>

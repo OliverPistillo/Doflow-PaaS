@@ -10,11 +10,24 @@ export class FinanceService {
     private repo: Repository<Invoice>,
   ) {}
 
+  // CREAZIONE
   async create(data: DeepPartial<Invoice>) {
     const invoice = this.repo.create(data);
     return this.repo.save(invoice);
   }
 
+  // AGGIORNAMENTO (Metodo mancante aggiunto qui)
+  async update(id: string, data: DeepPartial<Invoice>) {
+    // update restituisce un UpdateResult, va bene per il controller
+    return this.repo.update(id, data);
+  }
+
+  // ELIMINAZIONE (Metodo mancante aggiunto qui)
+  async delete(id: string) {
+    return this.repo.delete(id);
+  }
+
+  // DASHBOARD STATS
   async getDashboardStats() {
     // 1. KPI Totali
     const { totalRevenue } = await this.repo
@@ -60,7 +73,6 @@ export class FinanceService {
       .getRawMany();
 
     // 5. LISTA FATTURE (Per Export CSV)
-    // Recuperiamo le ultime 500 fatture per l'export dettagliato
     const invoices = await this.repo.find({
         order: { issueDate: 'DESC' },
         take: 500
@@ -79,15 +91,15 @@ export class FinanceService {
         color: s.name === 'paid' ? '#10B981' : s.name === 'pending' ? '#F59E0B' : '#EF4444'
       })),
       topClients: topClients.map(c => ({ ...c, value: parseFloat(c.value) })),
-      invoices: invoices // <--- NUOVO CAMPO
+      invoices: invoices
     };
   }
 
-  // METODO DI RICERCA AVANZATO
+  // RICERCA E FILTRI
   async findAll(search?: string, status?: string) {
     const qb = this.repo.createQueryBuilder('invoice');
 
-    // 1. Filtro Ricerca (Nome Cliente o Numero Fattura)
+    // 1. Filtro Ricerca
     if (search) {
       qb.where('(invoice.clientName ILIKE :search OR invoice.invoiceNumber ILIKE :search)', { 
         search: `%${search}%` 
@@ -103,5 +115,10 @@ export class FinanceService {
     qb.orderBy('invoice.issueDate', 'DESC');
 
     return qb.getMany();
+  }
+
+  async seed() {
+     const count = await this.repo.count();
+     if(count > 0) return;
   }
 }

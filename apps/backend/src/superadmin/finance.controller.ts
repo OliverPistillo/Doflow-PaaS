@@ -1,7 +1,7 @@
-import { Controller, Get, Post, Body, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Query, Param, Patch, Delete } from '@nestjs/common';
 import { FinanceService } from './finance.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { Invoice } from './entities/invoice.entity'; // Importa l'entity
+import { Invoice } from './entities/invoice.entity';
 
 @Controller('superadmin/finance')
 @UseGuards(JwtAuthGuard)
@@ -21,9 +21,20 @@ export class FinanceController {
     return this.service.getDashboardStats();
   }
 
-  // AGGIUNGI QUESTO ENDPOINT:
   @Post('invoices')
   createInvoice(@Body() body: Partial<Invoice>) {
     return this.service.create(body);
+  }
+
+  // AGGIORNA FATTURA
+  @Patch('invoices/:id')
+  updateInvoice(@Param('id') id: string, @Body() body: Partial<Invoice>) {
+     return this.service.update(id, body);
+  }
+
+  // ELIMINA FATTURA
+  @Delete('invoices/:id')
+  deleteInvoice(@Param('id') id: string) {
+     return this.service.delete(id);
   }
 }

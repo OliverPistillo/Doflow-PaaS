@@ -1,9 +1,8 @@
 import React from "react";
-import { ChevronRight, FileText } from "lucide-react";
+import { Edit2, Trash2, FileText } from "lucide-react"; // Icone Edit/Delete
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-// Tipi (puoi anche spostarli in un file types.ts condiviso)
 export type Invoice = {
   id: string;
   invoiceNumber: string;
@@ -30,9 +29,15 @@ const STATUS_LABELS: Record<string, string> = {
   overdue: "Scaduta"
 };
 
-export function InvoiceRow({ invoice }: { invoice: Invoice }) {
+interface InvoiceRowProps {
+    invoice: Invoice;
+    onEdit: (inv: Invoice) => void;
+    onDelete: (id: string) => void;
+}
+
+export function InvoiceRow({ invoice, onEdit, onDelete }: InvoiceRowProps) {
   return (
-    <div className="bg-white border rounded-md p-4 text-sm shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+    <div className="bg-white border rounded-md p-4 text-sm shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between group">
       {/* Info Sinistra */}
       <div className="flex items-center gap-4">
         <div className="h-10 w-10 bg-slate-100 rounded flex items-center justify-center text-slate-500">
@@ -51,7 +56,7 @@ export function InvoiceRow({ invoice }: { invoice: Invoice }) {
         </div>
       </div>
 
-      {/* Info Destra */}
+      {/* Info Destra & Azioni */}
       <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 pt-3 sm:pt-0">
         <div className="text-right">
           <div className="font-mono font-bold text-lg text-slate-900">
@@ -60,9 +65,14 @@ export function InvoiceRow({ invoice }: { invoice: Invoice }) {
           <div className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Importo</div>
         </div>
         
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-indigo-600">
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-indigo-600" onClick={() => onEdit(invoice)}>
+               <Edit2 className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => onDelete(invoice.id)}>
+               <Trash2 className="h-4 w-4" />
+            </Button>
+        </div>
       </div>
     </div>
   );

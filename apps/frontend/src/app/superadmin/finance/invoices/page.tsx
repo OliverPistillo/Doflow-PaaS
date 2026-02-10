@@ -13,13 +13,15 @@ import { Invoice } from "./components/InvoiceRow";
 export default function InvoicesPage() {
   const [rawInvoices, setRawInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
   
+  // Stati Modale
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
+
   // Filtri
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  // Fetch Dati
   const loadInvoices = async () => {
     setLoading(true);
     try {
@@ -41,7 +43,29 @@ export default function InvoicesPage() {
     return () => clearTimeout(timer);
   }, [search, statusFilter]);
 
-  // Logica Raggruppamento (Business Logic)
+  // Gestori Azioni
+  const openCreate = () => {
+     setEditingInvoice(null);
+     setIsSheetOpen(true);
+  };
+
+  const openEdit = (inv: Invoice) => {
+     setEditingInvoice(inv);
+     setIsSheetOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+      if(!confirm("Sei sicuro di voler eliminare questa fattura?")) return;
+      try {
+          await apiFetch(`/superadmin/finance/invoices/${id}`, { method: "DELETE" });
+          loadInvoices(); // Ricarica dati
+      } catch (e) {
+          console.error("Errore eliminazione", e);
+          alert("Impossibile eliminare la fattura.");
+      }
+  };
+
+  // Logica Raggruppamento
   const groupedClients = useMemo(() => {
     const groups: Record<string, ClientGroup> = {};
     rawInvoices.forEach(inv => {
@@ -79,7 +103,7 @@ export default function InvoicesPage() {
             <Button variant="outline" className="bg-white" onClick={handleExport}>
                 <Download className="h-4 w-4 mr-2" /> Export
             </Button>
-            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => setIsSheetOpen(true)}>
+            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={openCreate}>
                 <Plus className="h-4 w-4 mr-2" /> Nuova Fattura
             </Button>
         </div>
@@ -107,7 +131,7 @@ export default function InvoicesPage() {
 
       {/* Lista Clienti */}
       <div className="space-y-4">
-        {/* Intestazione Tabella */}
+        {/* Intestazione */}
         <div className="grid grid-cols-[30px_2fr_1fr_1fr_1fr] px-4 py-2 text-xs font-bold text-slate-500 uppercase border-b bg-slate-50/50 rounded-t-lg">
             <div></div><div>Cliente</div><div className="text-right pr-8">Volume Totale</div><div>N. Fatture</div><div>Stato Cliente</div>
         </div>
@@ -124,13 +148,20 @@ export default function InvoicesPage() {
                 <ClientRow 
                     key={client.clientId} 
                     client={client} 
-                    onAddInvoice={() => setIsSheetOpen(true)} 
+                    onAddInvoice={openCreate}
+                    onEditInvoice={openEdit}
+                    onDeleteInvoice={handleDelete}
                 />
             ))
         )}
       </div>
 
-      <InvoiceCreateSheet isOpen={isSheetOpen} onClose={() => setIsSheetOpen(false)} onSuccess={loadInvoices} />
+      <InvoiceCreateSheet 
+         isOpen={isSheetOpen} 
+         onClose={() => setIsSheetOpen(false)} 
+         onSuccess={loadInvoices}
+         invoiceToEdit={editingInvoice} // <--- Passiamo la fattura da modificare
+      />
     </div>
   );
 }
