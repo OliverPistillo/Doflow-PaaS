@@ -1,5 +1,4 @@
-import { IsString, IsEnum, IsDateString, IsOptional } from 'class-validator';
-import { EventType } from '../entities/calendar-event.entity';
+import { IsString, IsDateString, IsOptional } from 'class-validator';
 
 export class CreateEventDto {
   @IsString()
@@ -8,8 +7,8 @@ export class CreateEventDto {
   @IsDateString()
   date!: string;
 
-  @IsEnum(EventType)
-  type!: EventType;
+  @IsString()
+  type!: string; // Accetta stringa semplice
 
   @IsOptional()
   @IsString()
@@ -26,8 +25,8 @@ export class UpdateEventDto {
   date?: string;
 
   @IsOptional()
-  @IsEnum(EventType)
-  type?: EventType;
+  @IsString()
+  type?: string;
 
   @IsOptional()
   @IsString()
