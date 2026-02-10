@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common'; // Aggiungi Post, Body
+import { Controller, Get, Post, Body, UseGuards, Query } from '@nestjs/common';
 import { FinanceService } from './finance.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Invoice } from './entities/invoice.entity'; // Importa l'entity
@@ -7,6 +7,14 @@ import { Invoice } from './entities/invoice.entity'; // Importa l'entity
 @UseGuards(JwtAuthGuard)
 export class FinanceController {
   constructor(private readonly service: FinanceService) {}
+
+  @Get('invoices')
+  getAllInvoices(
+    @Query('search') search?: string,
+    @Query('status') status?: string
+  ) {
+    return this.service.findAll(search, status);
+  }
 
   @Get('dashboard')
   getDashboard() {

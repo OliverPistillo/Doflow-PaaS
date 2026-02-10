@@ -82,4 +82,26 @@ export class FinanceService {
       invoices: invoices // <--- NUOVO CAMPO
     };
   }
+
+  // METODO DI RICERCA AVANZATO
+  async findAll(search?: string, status?: string) {
+    const qb = this.repo.createQueryBuilder('invoice');
+
+    // 1. Filtro Ricerca (Nome Cliente o Numero Fattura)
+    if (search) {
+      qb.where('(invoice.clientName ILIKE :search OR invoice.invoiceNumber ILIKE :search)', { 
+        search: `%${search}%` 
+      });
+    }
+
+    // 2. Filtro Stato
+    if (status && status !== 'all') {
+      qb.andWhere('invoice.status = :status', { status });
+    }
+
+    // Ordina per data emissione decrescente
+    qb.orderBy('invoice.issueDate', 'DESC');
+
+    return qb.getMany();
+  }
 }
