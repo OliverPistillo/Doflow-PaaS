@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Plus, Clock, Loader2, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Clock, Loader2, RefreshCw, Trash2, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
 import { TaskCreateSheet } from "./components/TaskCreateSheet";
 
@@ -15,9 +16,9 @@ type Task = {
   serviceName: string;
   category: string;
   dueDate: string;
-  priority: "Alta" | "Media" | "Bassa" | "Urgente";
+  priority: string;
   notes: string;
-  status: "todo" | "inprogress" | "review" | "done";
+  status: string;
 };
 
 type ServiceGroup = {
@@ -35,13 +36,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Technical Services": "bg-sky-100 text-sky-700",
   "Content Creation": "bg-teal-100 text-teal-700",
   "Default": "bg-slate-100 text-slate-700"
-};
-
-const STATUS_BADGES: Record<string, React.ReactNode> = {
-  todo: <Badge variant="secondary" className="bg-pink-100 text-pink-700 hover:bg-pink-200 border-0">Da iniziare</Badge>,
-  inprogress: <Badge variant="secondary" className="bg-blue-100 text-blue-700 hover:bg-blue-200 border-0">In corso</Badge>,
-  review: <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-200 border-0">In revisione</Badge>,
-  done: <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-200 border-0">Completato</Badge>,
 };
 
 const PRIORITY_STYLES: Record<string, string> = {
@@ -64,11 +58,10 @@ export default function DeliveryStatusPage() {
       const res = await apiFetch<Task[]>("/superadmin/delivery/tasks");
       setTasks(res);
       
-      // Espandi automaticamente tutti i gruppi all'inizio
       const allGroups = new Set(res.map(t => t.serviceName));
       const initialExpanded: Record<string, boolean> = {};
       allGroups.forEach(g => initialExpanded[g] = true);
-      setExpanded(prev => ({...initialExpanded, ...prev})); // Mantieni stato se già presente
+      setExpanded(prev => ({...initialExpanded, ...prev}));
     } catch (e) {
       console.error("Errore caricamento tasks", e);
     } finally {
@@ -80,9 +73,39 @@ export default function DeliveryStatusPage() {
     loadTasks();
   }, []);
 
+  // 2. Aggiornamento Stato
+  const updateStatus = async (taskId: string, newStatus: string) => {
+    // Aggiornamento ottimistico (vediamo subito la modifica)
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+
+    try {
+      await apiFetch(`/superadmin/delivery/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus })
+      });
+    } catch (e) {
+      console.error("Errore aggiornamento stato", e);
+      alert("Impossibile aggiornare lo stato");
+      loadTasks(); // Revert in caso di errore
+    }
+  };
+
+  // 3. Eliminazione Task
+  const deleteTask = async (taskId: string) => {
+    if(!confirm("Sei sicuro di voler eliminare questo task?")) return;
+    try {
+        await apiFetch(`/superadmin/delivery/tasks/${taskId}`, { method: "DELETE" });
+        loadTasks();
+    } catch(e) {
+        console.error(e);
+        alert("Errore eliminazione");
+    }
+  };
+
   const toggle = (id: string) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
 
-  // 2. Logica Raggruppamento
+  // 4. Logica Raggruppamento
   const groupedData: ServiceGroup[] = Object.values(
     tasks.reduce((acc, task) => {
       const key = task.serviceName;
@@ -121,13 +144,12 @@ export default function DeliveryStatusPage() {
 
       {/* Content */}
       <div className="space-y-8">
-        {loading ? (
+        {loading && tasks.length === 0 ? (
              <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-600 h-8 w-8" /></div>
         ) : groupedData.length === 0 ? (
             <div className="text-center py-16 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                <p className="text-slate-500 font-medium">Nessun task attivo al momento.</p>
-                <p className="text-slate-400 text-sm mb-4">Crea il primo task per iniziare il monitoraggio.</p>
-                <Button onClick={() => setIsSheetOpen(true)} variant="outline">Crea Task</Button>
+                <p className="text-slate-500 font-medium">Nessun task attivo.</p>
+                <Button onClick={() => setIsSheetOpen(true)} variant="outline" className="mt-4">Crea Task</Button>
             </div>
         ) : (
             groupedData.map((group) => (
@@ -150,18 +172,30 @@ export default function DeliveryStatusPage() {
                     {group.tasks.map((task) => (
                     <div key={task.id} className="space-y-2">
                         
-                        {/* Status Label sopra la card */}
+                        {/* Selector Stato (sopra la card per accesso rapido) */}
                         <div className="flex items-center gap-2 mb-1">
-                           {STATUS_BADGES[task.status] || <Badge>Sconosciuto</Badge>}
+                           <Select value={task.status} onValueChange={(val) => updateStatus(task.id, val)}>
+                             <SelectTrigger className="h-7 w-[130px] text-xs bg-white border-slate-200">
+                               <SelectValue />
+                             </SelectTrigger>
+                             <SelectContent>
+                               <SelectItem value="todo">Da iniziare</SelectItem>
+                               <SelectItem value="inprogress">In corso</SelectItem>
+                               <SelectItem value="review">In revisione</SelectItem>
+                               <SelectItem value="done">Completato</SelectItem>
+                             </SelectContent>
+                           </Select>
                         </div>
                         
                         <Card className="p-0 overflow-hidden border-slate-200 shadow-sm hover:shadow-md transition-shadow group/card">
                             <div className="grid grid-cols-[1fr_auto_auto] md:grid-cols-[1fr_150px_120px_1fr] items-center gap-4 p-4 text-sm">
                                 
-                                {/* Task Name + Indicator */}
+                                {/* Task Name */}
                                 <div className="flex items-center gap-3">
                                     <div className={`w-1 h-8 rounded-full ${task.status === 'done' ? 'bg-green-500' : 'bg-slate-300 group-hover/card:bg-indigo-400 transition-colors'}`}></div>
-                                    <span className="font-medium text-slate-700 text-base">{task.name}</span>
+                                    <span className={`font-medium text-base ${task.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                                        {task.name}
+                                    </span>
                                 </div>
                                 
                                 {/* Date */}
@@ -174,7 +208,7 @@ export default function DeliveryStatusPage() {
 
                                 {/* Priority */}
                                 <div>
-                                    <Badge variant="outline" className={`text-xs px-2 py-0.5 ${PRIORITY_STYLES[task.priority]}`}>
+                                    <Badge variant="outline" className={`text-xs px-2 py-0.5 ${PRIORITY_STYLES[task.priority] || PRIORITY_STYLES['Media']}`}>
                                         {task.priority}
                                     </Badge>
                                 </div>
@@ -188,8 +222,13 @@ export default function DeliveryStatusPage() {
                             {/* Footer azioni */}
                             <div className="px-4 py-1.5 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center">
                                 <span className="text-[10px] text-slate-400 font-mono">ID: {task.id.split('-')[0]}</span>
-                                <Button variant="ghost" size="sm" className="h-6 text-[10px] text-slate-400 hover:text-indigo-600 px-2">
-                                    Dettagli
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-6 text-[10px] text-slate-400 hover:text-red-600 px-2"
+                                    onClick={() => deleteTask(task.id)}
+                                >
+                                    <Trash2 className="h-3 w-3 mr-1" /> Elimina
                                 </Button>
                             </div>
                         </Card>
@@ -202,7 +241,6 @@ export default function DeliveryStatusPage() {
         )}
       </div>
 
-      {/* Componente Sheet Creazione */}
       <TaskCreateSheet 
         isOpen={isSheetOpen} 
         onClose={() => setIsSheetOpen(false)} 
