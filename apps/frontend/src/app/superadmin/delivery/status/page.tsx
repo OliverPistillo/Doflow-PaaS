@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Plus, Clock, Loader2, RefreshCw, Trash2, MoreHorizontal } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Clock, Loader2, RefreshCw, Trash2, Edit, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -38,6 +38,14 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Default": "bg-slate-100 text-slate-700"
 };
 
+// Mapping visivo degli stati
+const STATUS_LABELS: Record<string, string> = {
+  todo: "Da iniziare",
+  inprogress: "In corso",
+  review: "In revisione",
+  done: "Completato"
+};
+
 const PRIORITY_STYLES: Record<string, string> = {
   Alta: "bg-orange-50 text-orange-700 border-orange-200",
   Media: "bg-yellow-50 text-yellow-700 border-yellow-200",
@@ -49,7 +57,10 @@ export default function DeliveryStatusPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  
+  // Stati per la modale (Sheet)
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   // 1. Caricamento Dati
   const loadTasks = async () => {
@@ -75,7 +86,7 @@ export default function DeliveryStatusPage() {
 
   // 2. Aggiornamento Stato
   const updateStatus = async (taskId: string, newStatus: string) => {
-    // Aggiornamento ottimistico (vediamo subito la modifica)
+    // Aggiornamento OTTIMISTICO (cambia subito nel frontend)
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
 
     try {
@@ -86,26 +97,38 @@ export default function DeliveryStatusPage() {
       });
     } catch (e) {
       console.error("Errore aggiornamento stato", e);
-      alert("Impossibile aggiornare lo stato");
-      loadTasks(); // Revert in caso di errore
+      alert("Impossibile aggiornare lo stato. Ricarico i dati.");
+      loadTasks(); // Se fallisce, ricarica i dati reali
     }
   };
 
-  // 3. Eliminazione Task
+  // 3. Gestione Eliminazione
   const deleteTask = async (taskId: string) => {
     if(!confirm("Sei sicuro di voler eliminare questo task?")) return;
     try {
         await apiFetch(`/superadmin/delivery/tasks/${taskId}`, { method: "DELETE" });
-        loadTasks();
+        // Rimuoviamo localmente per velocità
+        setTasks(prev => prev.filter(t => t.id !== taskId));
     } catch(e) {
         console.error(e);
         alert("Errore eliminazione");
     }
   };
 
+  // 4. Gestione Apertura Modifica
+  const openEdit = (task: Task) => {
+    setEditingTask(task);
+    setIsSheetOpen(true);
+  };
+
+  const openCreate = () => {
+    setEditingTask(null);
+    setIsSheetOpen(true);
+  };
+
   const toggle = (id: string) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
 
-  // 4. Logica Raggruppamento
+  // 5. Raggruppamento Dati
   const groupedData: ServiceGroup[] = Object.values(
     tasks.reduce((acc, task) => {
       const key = task.serviceName;
@@ -136,7 +159,7 @@ export default function DeliveryStatusPage() {
             <Button variant="outline" size="sm" onClick={loadTasks}>
                 <RefreshCw className="h-4 w-4 mr-2" /> Aggiorna
             </Button>
-            <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={() => setIsSheetOpen(true)}>
+            <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={openCreate}>
                 <Plus className="h-4 w-4 mr-2" /> Nuovo Task
             </Button>
         </div>
@@ -149,7 +172,7 @@ export default function DeliveryStatusPage() {
         ) : groupedData.length === 0 ? (
             <div className="text-center py-16 bg-slate-50 rounded-xl border border-dashed border-slate-300">
                 <p className="text-slate-500 font-medium">Nessun task attivo.</p>
-                <Button onClick={() => setIsSheetOpen(true)} variant="outline" className="mt-4">Crea Task</Button>
+                <Button onClick={openCreate} variant="outline" className="mt-4">Crea il primo Task</Button>
             </div>
         ) : (
             groupedData.map((group) => (
@@ -174,9 +197,16 @@ export default function DeliveryStatusPage() {
                         
                         {/* Selector Stato (sopra la card per accesso rapido) */}
                         <div className="flex items-center gap-2 mb-1">
-                           <Select value={task.status} onValueChange={(val) => updateStatus(task.id, val)}>
-                             <SelectTrigger className="h-7 w-[130px] text-xs bg-white border-slate-200">
-                               <SelectValue />
+                           <Select 
+                              value={task.status} 
+                              onValueChange={(val) => updateStatus(task.id, val)}
+                           >
+                             <SelectTrigger className={`h-7 w-[140px] text-xs border-slate-200 font-medium ${
+                                task.status === 'done' ? 'bg-green-50 text-green-700 border-green-200' : 
+                                task.status === 'inprogress' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                'bg-white text-slate-700'
+                             }`}>
+                               <SelectValue placeholder="Stato" />
                              </SelectTrigger>
                              <SelectContent>
                                <SelectItem value="todo">Da iniziare</SelectItem>
@@ -192,8 +222,13 @@ export default function DeliveryStatusPage() {
                                 
                                 {/* Task Name */}
                                 <div className="flex items-center gap-3">
-                                    <div className={`w-1 h-8 rounded-full ${task.status === 'done' ? 'bg-green-500' : 'bg-slate-300 group-hover/card:bg-indigo-400 transition-colors'}`}></div>
-                                    <span className={`font-medium text-base ${task.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                                    <div className={`w-1 h-8 rounded-full transition-colors ${
+                                        task.status === 'done' ? 'bg-green-500' : 
+                                        task.status === 'inprogress' ? 'bg-blue-500' :
+                                        task.status === 'review' ? 'bg-amber-500' :
+                                        'bg-slate-300'
+                                    }`}></div>
+                                    <span className={`font-medium text-base cursor-pointer hover:text-indigo-600 ${task.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-700'}`} onClick={() => openEdit(task)}>
                                         {task.name}
                                     </span>
                                 </div>
@@ -214,21 +249,29 @@ export default function DeliveryStatusPage() {
                                 </div>
 
                                 {/* Notes */}
-                                <div className="text-slate-500 truncate text-xs italic hidden md:block">
+                                <div className="text-slate-500 truncate text-xs italic hidden md:block max-w-[200px]">
                                     {task.notes}
                                 </div>
                             </div>
                             
                             {/* Footer azioni */}
-                            <div className="px-4 py-1.5 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center">
-                                <span className="text-[10px] text-slate-400 font-mono">ID: {task.id.split('-')[0]}</span>
+                            <div className="px-4 py-1.5 bg-slate-50/50 border-t border-slate-100 flex justify-end items-center gap-2">
                                 <Button 
                                     variant="ghost" 
                                     size="sm" 
-                                    className="h-6 text-[10px] text-slate-400 hover:text-red-600 px-2"
+                                    className="h-7 text-xs text-slate-500 hover:text-indigo-600 px-2"
+                                    onClick={() => openEdit(task)}
+                                >
+                                    <Edit className="h-3.5 w-3.5 mr-1" /> Modifica
+                                </Button>
+                                <div className="h-4 w-px bg-slate-200"></div>
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-7 text-xs text-slate-400 hover:text-red-600 px-2"
                                     onClick={() => deleteTask(task.id)}
                                 >
-                                    <Trash2 className="h-3 w-3 mr-1" /> Elimina
+                                    <Trash2 className="h-3.5 w-3.5 mr-1" /> Elimina
                                 </Button>
                             </div>
                         </Card>
@@ -241,10 +284,12 @@ export default function DeliveryStatusPage() {
         )}
       </div>
 
+      {/* Componente Sheet Unico per Create/Edit */}
       <TaskCreateSheet 
         isOpen={isSheetOpen} 
-        onClose={() => setIsSheetOpen(false)} 
+        onClose={() => { setIsSheetOpen(false); setEditingTask(null); }} 
         onSuccess={loadTasks} 
+        taskToEdit={editingTask}
       />
 
     </div>
