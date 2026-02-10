@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Search, Filter, Plus, Loader2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,19 +11,38 @@ import { InvoiceCreateSheet } from "../dashboard/components/InvoiceCreateSheet";
 import { ClientRow, ClientGroup } from "./components/ClientRow";
 import { Invoice } from "./components/InvoiceRow";
 
-export default function InvoicesPage() {
+// --- COMPONENTE INTERNO (Logica) ---
+function InvoicesContent() {
+  const searchParams = useSearchParams();
+  
+  // Dati
   const [rawInvoices, setRawInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Stati Modale
+  // Modali
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
-
-  // Filtri
+  
+  // Filtri (Inizializzati vuoti, poi popolati dall'URL)
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [initialized, setInitialized] = useState(false);
 
+  // 1. INIZIALIZZAZIONE DA URL (Eseguito una volta sola al mount)
+  useEffect(() => {
+    const querySearch = searchParams.get("search");
+    const queryStatus = searchParams.get("status");
+
+    if (querySearch) setSearch(querySearch);
+    if (queryStatus) setStatusFilter(queryStatus);
+    
+    setInitialized(true);
+  }, [searchParams]);
+
+  // 2. FETCH DATI (Eseguito quando cambiano i filtri o inizializzazione completata)
   const loadInvoices = async () => {
+    if (!initialized) return; // Aspetta che i parametri URL siano letti
+
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -38,12 +58,13 @@ export default function InvoicesPage() {
     }
   };
 
+  // Debounce sul fetch
   useEffect(() => {
     const timer = setTimeout(() => { loadInvoices(); }, 300);
     return () => clearTimeout(timer);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, initialized]);
 
-  // Gestori Azioni
+  // 3. GESTIONE AZIONI
   const openCreate = () => {
      setEditingInvoice(null);
      setIsSheetOpen(true);
@@ -58,20 +79,26 @@ export default function InvoicesPage() {
       if(!confirm("Sei sicuro di voler eliminare questa fattura?")) return;
       try {
           await apiFetch(`/superadmin/finance/invoices/${id}`, { method: "DELETE" });
-          loadInvoices(); // Ricarica dati
+          loadInvoices(); // Ricarica la lista
       } catch (e) {
           console.error("Errore eliminazione", e);
           alert("Impossibile eliminare la fattura.");
       }
   };
 
-  // Logica Raggruppamento
+  // 4. LOGICA RAGGRUPPAMENTO
   const groupedClients = useMemo(() => {
     const groups: Record<string, ClientGroup> = {};
     rawInvoices.forEach(inv => {
         const clientName = inv.clientName || "Sconosciuto";
         if (!groups[clientName]) {
-            groups[clientName] = { clientId: clientName, name: clientName, totalVolume: 0, invoices: [], status: "Attivo" };
+            groups[clientName] = { 
+                clientId: clientName, 
+                name: clientName, 
+                totalVolume: 0, 
+                invoices: [], 
+                status: "Attivo" 
+            };
         }
         groups[clientName].invoices.push(inv);
         groups[clientName].totalVolume += Number(inv.amount);
@@ -81,7 +108,9 @@ export default function InvoicesPage() {
 
   const handleExport = () => {
       if(rawInvoices.length === 0) return;
-      const csv = "Cliente,Numero,Data,Importo,Stato\n" + rawInvoices.map(i => `"${i.clientName}",${i.invoiceNumber},${i.issueDate},${i.amount},${i.status}`).join("\n");
+      const csv = "Cliente,Numero,Data,Importo,Stato\n" + 
+      rawInvoices.map(i => `"${i.clientName}",${i.invoiceNumber},${i.issueDate},${i.amount},${i.status}`).join("\n");
+      
       const blob = new Blob([csv], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -113,7 +142,12 @@ export default function InvoicesPage() {
       <div className="bg-white p-4 rounded-lg border shadow-sm flex flex-col sm:flex-row gap-4 items-center">
          <div className="relative flex-1 w-full">
              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-             <Input className="pl-9 bg-slate-50 border-slate-200" placeholder="Cerca cliente o n. fattura..." value={search} onChange={(e) => setSearch(e.target.value)} />
+             <Input 
+                className="pl-9 bg-slate-50 border-slate-200" 
+                placeholder="Cerca cliente o n. fattura..." 
+                value={search} 
+                onChange={(e) => setSearch(e.target.value)} 
+             />
          </div>
          <div className="flex items-center gap-2 w-full sm:w-auto">
              <Filter className="h-4 w-4 text-slate-500" />
@@ -156,12 +190,22 @@ export default function InvoicesPage() {
         )}
       </div>
 
+      {/* Sheet Creazione/Modifica */}
       <InvoiceCreateSheet 
          isOpen={isSheetOpen} 
          onClose={() => setIsSheetOpen(false)} 
          onSuccess={loadInvoices}
-         invoiceToEdit={editingInvoice} // <--- Passiamo la fattura da modificare
+         invoiceToEdit={editingInvoice} // Passiamo la fattura da modificare
       />
     </div>
+  );
+}
+
+// --- PAGINA PRINCIPALE CON SUSPENSE ---
+export default function InvoicesPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin h-10 w-10 text-indigo-600" /></div>}>
+      <InvoicesContent />
+    </Suspense>
   );
 }

@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation"; // <--- Importante per il reindirizzamento
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowUpRight, TrendingUp, AlertCircle, Clock, Loader2, Filter, ChevronRight, FileText } from "lucide-react";
+import { ArrowUpRight, TrendingUp, AlertCircle, Clock, Loader2, Filter, FileText } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from "recharts";
@@ -53,6 +53,17 @@ function DrillDownSheet({
     title: string; 
     invoices: Invoice[] 
 }) {
+    const router = useRouter();
+
+    // Funzione di navigazione alla pagina Invoices filtrata
+    const handleNavigateToInvoice = (clientName: string) => {
+        // Chiudiamo il sheet
+        onClose(); 
+        // Navighiamo alla pagina invoices pre-compilando la ricerca
+        // Codifichiamo il nome per sicurezza URL
+        router.push(`/superadmin/finance/invoices?search=${encodeURIComponent(clientName)}`);
+    };
+
     return (
         <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
@@ -62,7 +73,7 @@ function DrillDownSheet({
                         Dettaglio: {title}
                     </SheetTitle>
                     <SheetDescription>
-                        Elenco delle fatture che compongono questa voce.
+                        Clicca su una fattura per visualizzarla e gestirla nella sezione dedicata.
                     </SheetDescription>
                 </SheetHeader>
 
@@ -71,13 +82,19 @@ function DrillDownSheet({
                         <p className="text-center text-slate-500 py-10">Nessuna fattura in questa categoria.</p>
                     ) : (
                         invoices.map(inv => (
-                            <div key={inv.id} className="bg-white border rounded-lg p-3 shadow-sm hover:shadow-md transition-all flex items-center justify-between group">
+                            <div 
+                                key={inv.id} 
+                                className="bg-white border rounded-lg p-3 shadow-sm hover:shadow-md transition-all flex items-center justify-between group cursor-pointer hover:border-indigo-200"
+                                onClick={() => handleNavigateToInvoice(inv.clientName)}
+                            >
                                 <div className="flex items-center gap-3">
-                                    <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400">
+                                    <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 transition-colors">
                                         <FileText className="h-4 w-4" />
                                     </div>
                                     <div>
-                                        <div className="font-bold text-slate-700 text-sm">{inv.clientName}</div>
+                                        <div className="font-bold text-slate-700 text-sm group-hover:text-indigo-700 transition-colors">
+                                            {inv.clientName}
+                                        </div>
                                         <div className="text-xs text-slate-500">
                                             #{inv.invoiceNumber} • {new Date(inv.issueDate).toLocaleDateString()}
                                         </div>
@@ -87,7 +104,10 @@ function DrillDownSheet({
                                     <div className="font-mono font-bold text-slate-900">
                                         €{Number(inv.amount).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
                                     </div>
-                                    <Badge variant="outline" className="text-[10px] h-4 px-1">{inv.status}</Badge>
+                                    <div className="flex justify-end items-center gap-1">
+                                        <Badge variant="outline" className="text-[10px] h-4 px-1">{inv.status}</Badge>
+                                        <ArrowUpRight className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </div>
                                 </div>
                             </div>
                         ))
@@ -107,7 +127,7 @@ interface KpiProps {
   icon: React.ElementType;
   titleColorClass: string;
   hoverColorClass: string;
-  onClick: () => void; // Aggiunto onClick
+  onClick: () => void;
 }
 
 function FinanceKpiCard({ title, value, subtitle, icon: Icon, titleColorClass, hoverColorClass, onClick }: KpiProps) {
@@ -146,7 +166,7 @@ export default function FinanceDashboardPage() {
   const [loading, setLoading] = useState(true);
   
   // Stati Filtro e Drill-Down
-  const [yearFilter, setYearFilter] = useState("2026"); // Default anno corrente
+  const [yearFilter, setYearFilter] = useState("2026");
   const [drillState, setDrillState] = useState<{ isOpen: boolean; type: 'revenue' | 'pending' | 'overdue' | null }>({
       isOpen: false,
       type: null
@@ -193,6 +213,9 @@ export default function FinanceDashboardPage() {
               filtered = data.invoices.filter(i => i.status === 'overdue');
               break;
       }
+      // Ordiniamo per data più recente
+      filtered.sort((a,b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime());
+      
       return { title, list: filtered };
   };
 
