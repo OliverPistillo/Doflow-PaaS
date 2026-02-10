@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button"; // Assicurati di avere questo import
+import { Button } from "@/components/ui/button";
 import { ArrowUpRight, TrendingUp, AlertCircle, Clock, Loader2, Download, Plus } from "lucide-react";
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell
@@ -11,6 +11,16 @@ import { apiFetch } from "@/lib/api";
 import { InvoiceCreateSheet } from "./components/InvoiceCreateSheet";
 
 // --- TIPI ---
+interface Invoice {
+    id: string;
+    invoiceNumber: string;
+    clientName: string;
+    amount: number;
+    issueDate: string;
+    dueDate: string;
+    status: string;
+}
+
 interface DashboardData {
   kpi: {
     revenue: number;
@@ -20,16 +30,14 @@ interface DashboardData {
   trend: { month: string; revenue: number }[];
   statusDistribution: { name: string; value: number; color: string }[];
   topClients: { name: string; value: number }[];
+  invoices: Invoice[]; // <--- NUOVO CAMPO
 }
 
-// Helper formattazione valuta robusto
-// Accetta qualsiasi cosa Recharts possa lanciargli (number, string, array, undefined)
+// Helper formattazione valuta
 const formatCurrency = (value: any): string => {
   if (value === undefined || value === null) return "€0,00";
-  // Se è un array (succede raramente in grafici semplici, ma Recharts lo prevede), prendiamo il primo elemento
   const val = Array.isArray(value) ? value[0] : value;
   const num = typeof val === 'string' ? parseFloat(val) : val;
-  
   return isNaN(num) 
     ? "€0,00" 
     : new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(num);
@@ -75,7 +83,6 @@ export default function FinanceDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
-  // Funzione di caricamento dati
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -92,20 +99,40 @@ export default function FinanceDashboardPage() {
     fetchData();
   }, []);
 
-  // Funzione Export CSV
+  // --- FUNZIONE EXPORT CSV AGGIORNATA ---
   const handleExport = () => {
-    if (!data || data.trend.length === 0) {
-        alert("Nessun dato da esportare.");
+    if (!data || !data.invoices || data.invoices.length === 0) {
+        alert("Nessuna fattura da esportare.");
         return;
     }
+
+    // Definiamo le colonne del CSV
+    const headers = ["Numero Fattura", "Cliente", "Data Emissione", "Scadenza", "Importo", "Stato"];
+    
+    // Costruiamo le righe
+    const rows = data.invoices.map(inv => {
+        // Gestiamo eventuali virgole nei nomi mettendoli tra virgolette
+        const client = `"${inv.clientName.replace(/"/g, '""')}"`; 
+        return [
+            inv.invoiceNumber,
+            client,
+            inv.issueDate,
+            inv.dueDate,
+            inv.amount, // Excel lo leggerà come numero
+            inv.status
+        ].join(",");
+    });
+
     const csvContent = "data:text/csv;charset=utf-8," 
-        + "Mese,Ricavi\n"
-        + data.trend.map(e => `${e.month},${e.revenue}`).join("\n");
+        + headers.join(",") + "\n"
+        + rows.join("\n");
     
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "report_finanziario.csv");
+    // Data corrente nel nome file
+    const dateStr = new Date().toISOString().split('T')[0];
+    link.setAttribute("download", `report_fatture_${dateStr}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -115,12 +142,12 @@ export default function FinanceDashboardPage() {
     return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-indigo-600 h-10 w-10" /></div>;
   }
 
-  // Fallback se dati vuoti (o DB appena creato)
   const stats = data || {
       kpi: { revenue: 0, pending: 0, overdue: 0 },
       trend: [],
       statusDistribution: [],
-      topClients: []
+      topClients: [],
+      invoices: []
   };
 
   return (
@@ -140,7 +167,7 @@ export default function FinanceDashboardPage() {
         
         <div className="flex gap-2">
             <Button variant="outline" className="border-slate-200" onClick={handleExport}>
-                <Download className="mr-2 h-4 w-4" /> ESPORTA REPORT
+                <Download className="mr-2 h-4 w-4" /> ESPORTA REPORT CSV
             </Button>
             <Button className="bg-slate-900 hover:bg-slate-800 text-white" onClick={() => setIsSheetOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" /> NUOVA FATTURA
@@ -215,7 +242,6 @@ export default function FinanceDashboardPage() {
                   <div className="h-full flex items-center justify-center text-slate-400 text-sm">Nessuna fattura registrata</div>
                )}
 
-              {/* Legend overlay */}
               {stats.statusDistribution.length > 0 && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                      <div className="text-center">
@@ -266,7 +292,6 @@ export default function FinanceDashboardPage() {
                       />
                       <Tooltip 
                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                        // FIX TYPE: Usiamo 'any' per bypassare i check stretti di Recharts che causano errori
                         formatter={(value: any) => [formatCurrency(value), "Ricavi"]}
                       />
                       <Line 
@@ -314,7 +339,6 @@ export default function FinanceDashboardPage() {
                       <Tooltip 
                         cursor={{fill: '#f8fafc'}}
                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                        // FIX TYPE: Idem qui
                         formatter={(value: any) => [formatCurrency(value), "Fatturato"]}
                       />
                       <Bar 
@@ -340,7 +364,6 @@ export default function FinanceDashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Componente Sheet per Creazione Fattura */}
       <InvoiceCreateSheet 
          isOpen={isSheetOpen} 
          onClose={() => setIsSheetOpen(false)} 

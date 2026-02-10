@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DeepPartial } from 'typeorm'; // <--- AGGIUNTO QUI
+import { Repository, DeepPartial } from 'typeorm';
 import { Invoice, InvoiceStatus } from './entities/invoice.entity';
 
 @Injectable()
@@ -32,7 +32,6 @@ export class FinanceService {
     const overdueCount = await this.repo.count({ where: { status: InvoiceStatus.OVERDUE } });
 
     // 2. Trend Ricavi (Ultimi 6 mesi)
-    // Nota: TO_CHAR è specifico per PostgreSQL. Se usi MySQL usa DATE_FORMAT.
     const rawTrend = await this.repo.query(`
         SELECT TO_CHAR(issue_date, 'Mon') as month, SUM(amount) as revenue 
         FROM invoices 
@@ -60,6 +59,13 @@ export class FinanceService {
       .limit(5)
       .getRawMany();
 
+    // 5. LISTA FATTURE (Per Export CSV)
+    // Recuperiamo le ultime 500 fatture per l'export dettagliato
+    const invoices = await this.repo.find({
+        order: { issueDate: 'DESC' },
+        take: 500
+    });
+
     return {
       kpi: {
         revenue: totalRevenue || 0,
@@ -72,12 +78,8 @@ export class FinanceService {
         value: parseInt(s.value),
         color: s.name === 'paid' ? '#10B981' : s.name === 'pending' ? '#F59E0B' : '#EF4444'
       })),
-      topClients: topClients.map(c => ({ ...c, value: parseFloat(c.value) }))
+      topClients: topClients.map(c => ({ ...c, value: parseFloat(c.value) })),
+      invoices: invoices // <--- NUOVO CAMPO
     };
-  }
-  
-  async seed() {
-     const count = await this.repo.count();
-     if(count > 0) return;
   }
 }
