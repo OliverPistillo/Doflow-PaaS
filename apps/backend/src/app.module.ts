@@ -55,6 +55,9 @@ import { FedericaNeroneModule } from './federicanerone/federicanerone.module';
 import { BusinaroModule } from './businaro/businaro.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { RedisModule } from './redis/redis.module';
+import { CalendarEvent } from './superadmin/entities/calendar-event.entity';
+import { CalendarController } from './superadmin/calendar.controller';
+import { CalendarService } from './superadmin/calendar.service';
 
 @Module({
   imports: [
@@ -87,7 +90,8 @@ import { RedisModule } from './redis/redis.module';
     // ✅ REGISTRAZIONE ENTITY (Sales + Delivery)
     TypeOrmModule.forFeature([
       PlatformDeal, 
-      DeliveryTask // <--- NUOVO
+      DeliveryTask,
+      CalendarEvent
     ]),
 
     PassportModule,
@@ -123,7 +127,8 @@ import { RedisModule } from './redis/redis.module';
     SecurityPolicyController,
     AuthMfaController,
     SuperadminDashboardController,
-    DeliveryController, // <--- NUOVO
+    DeliveryController,
+    CalendarController,
   ],
 
   providers: [
@@ -139,7 +144,8 @@ import { RedisModule } from './redis/redis.module';
     AuthMfaService,
     JwtStrategy,
     SuperadminDashboardService,
-    DeliveryService, // <--- NUOVO
+    DeliveryService,
+    CalendarService,
   ],
 })
 export class AppModule implements NestModule {
