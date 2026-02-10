@@ -1,19 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
-export enum TaskPriority {
-  HIGH = 'Alta',
-  MEDIUM = 'Media',
-  LOW = 'Bassa',
-  URGENT = 'Urgente',
-}
-
-export enum TaskStatus {
-  TODO = 'todo',
-  IN_PROGRESS = 'inprogress',
-  REVIEW = 'review',
-  DONE = 'done',
-}
-
 @Entity('delivery_tasks')
 export class DeliveryTask {
   @PrimaryGeneratedColumn('uuid')
@@ -25,32 +11,27 @@ export class DeliveryTask {
   @Column({ name: 'service_name' }) 
   serviceName!: string;
 
-  @Column({ name: 'category' }) 
+  @Column() 
   category!: string;
 
+  // Accetta la data se c'è, altrimenti null
   @Column({ type: 'date', name: 'due_date', nullable: true })
-  dueDate!: Date; // TypeORM gestisce Date, ma nel DTO passeremo stringa
+  dueDate!: string | null; // Usiamo string per evitare problemi di parsing TS
 
-  @Column({
-    type: 'enum',
-    enum: TaskPriority,
-    default: TaskPriority.MEDIUM
-  })
-  priority!: TaskPriority;
+  // FIX: Usiamo stringa semplice invece di enum per evitare conflitti
+  @Column({ default: 'Media' })
+  priority!: string;
 
-  @Column({
-    type: 'enum',
-    enum: TaskStatus,
-    default: TaskStatus.TODO
-  })
-  status!: TaskStatus;
+  // FIX: Usiamo stringa semplice
+  @Column({ default: 'todo' })
+  status!: string;
 
   @Column({ type: 'text', nullable: true })
   notes!: string;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt!: Date;
 }

@@ -1,5 +1,4 @@
-import { IsString, IsEnum, IsDateString, IsOptional } from 'class-validator';
-import { TaskPriority, TaskStatus } from '../entities/delivery-task.entity';
+import { IsString, IsOptional } from 'class-validator';
 
 export class CreateTaskDto {
   @IsString()
@@ -12,12 +11,11 @@ export class CreateTaskDto {
   category!: string;
 
   @IsOptional()
-  @IsDateString()
-  dueDate?: string; // Opzionale col ? va bene, ma se serve forzare ! usa quello
+  dueDate?: string; // Accetta qualsiasi stringa o null
 
   @IsOptional()
-  @IsEnum(TaskPriority)
-  priority?: TaskPriority;
+  @IsString()
+  priority?: string; // Accetta "Alta", "Media", ecc. come testo semplice
 
   @IsOptional()
   @IsString()
@@ -30,12 +28,10 @@ export class UpdateTaskDto {
   name?: string;
 
   @IsOptional()
-  @IsEnum(TaskStatus)
-  status?: TaskStatus;
+  @IsString()
+  status?: string;
 
-  // Altri campi opzionali se necessario aggiornarli
   @IsOptional()
-  @IsDateString()
   dueDate?: string;
 
   @IsOptional()
