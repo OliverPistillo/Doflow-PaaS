@@ -1,6 +1,6 @@
-import { Controller, Get, Post, Body, UseGuards, Delete, Param, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Delete, Param } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
-// import { CreateTenantDto } from './dto/create-tenant.dto'; // Commentalo per ora
+import { CreateTenantDto } from './dto/create-tenant.dto'; // Importiamo il DTO vero
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('superadmin/tenants')
@@ -10,35 +10,16 @@ export class TenantsController {
 
   @Get()
   async getTenants() {
-    return { tenants: await this.tenantsService.findAll() };
+    // Restituisce la lista wrappata in un oggetto { tenants: [...] }
+    const tenants = await this.tenantsService.findAll();
+    return { tenants };
   }
 
-  // MODIFICA QUI: Usa 'any' al posto del DTO
   @Post()
-  async createTenant(@Body() body: any) { 
-    
-    // LOGGA TUTTO QUELLO CHE ARRIVA
-    console.log("🔥 DEBUG RAW BODY:", JSON.stringify(body, null, 2));
-
-    // Controllo manuale semplificato
-    if (!body || Object.keys(body).length === 0) {
-        throw new BadRequestException("Il Body è arrivato vuoto! Controlla Content-Type o il main.ts");
-    }
-
-    // Mappiamo a mano per essere sicuri
-    const dto = {
-        name: body.name,
-        slug: body.slug,
-        email: body.email,
-        plan: body.plan || 'STARTER'
-    };
-
-    if (!dto.name || !dto.slug || !dto.email) {
-        throw new BadRequestException(`Campi mancanti. Ricevuti: ${Object.keys(body).join(', ')}`);
-    }
-
-    // Passiamo il DTO "costruito a mano" al service
-    return this.tenantsService.create(dto as any);
+  async createTenant(@Body() body: CreateTenantDto) {
+    // Ora body è garantito essere valido e del tipo CreateTenantDto
+    // grazie alla ValidationPipe nel main.ts
+    return this.tenantsService.create(body);
   }
 
   @Delete(':id')

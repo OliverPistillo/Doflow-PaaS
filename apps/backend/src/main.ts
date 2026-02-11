@@ -4,7 +4,8 @@ import { AppModule } from './app.module';
 import { NotificationsService } from './realtime/notifications.service';
 import { WebSocketServer, WebSocket } from 'ws';
 import * as jwt from 'jsonwebtoken';
-import { ValidationPipe } from '@nestjs/common'; // <--- FONDAMENTALE
+import { ValidationPipe } from '@nestjs/common';
+import { json, urlencoded } from 'express'; // <--- 1. IMPORTA QUESTO PER LEGGERE IL JSON
 
 type ClientMeta = {
   userId: string;
@@ -48,11 +49,16 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
+  // 2. ABILITA IL PARSING DEL JSON (FONDAMENTALE PER I POST)
+  // Senza questo, il body arriva vuoto e causa "Missing fields"
+  app.use(json({ limit: '50mb' }));
+  app.use(urlencoded({ extended: true, limit: '50mb' }));
+
   app.setGlobalPrefix('api');
 
-  // 2. CORS (Configurazione permissiva per sviluppo, stringere in prod)
+  // 3. CORS (Configurazione permissiva per sviluppo)
   app.enableCors({
-    origin: true, // O specifica i domini come nel tuo codice precedente se preferisci
+    origin: true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
@@ -60,10 +66,14 @@ async function bootstrap() {
       'Authorization',
       'X-DOFLOW-TENANT-ID',
       'x-doflow-tenant-id',
+      'x-doflow-pathname',
+      'Accept'
     ],
+    exposedHeaders: ['Content-Length'],
+    maxAge: 86400,
   });
 
-  // 3. VALIDATION PIPE (QUESTO MANCAVA E ROMPEVA I DTO!)
+  // 4. VALIDATION PIPE (Attiva i DTO)
   app.useGlobalPipes(new ValidationPipe({
     transform: true, // Trasforma i JSON in istanze di Classe DTO
     whitelist: true, // Rimuove campi non definiti nel DTO (sicurezza)
@@ -74,7 +84,7 @@ async function bootstrap() {
   const port = Number(process.env.PORT ?? 4000);
   await app.listen(port, '0.0.0.0');
 
-  // 4. Configurazione WebSocket (Dopo app.listen)
+  // 5. Configurazione WebSocket (Dopo app.listen)
   const httpAdapter: any = (app as any).getHttpAdapter();
   const httpServer: any = httpAdapter.getHttpServer();
 
