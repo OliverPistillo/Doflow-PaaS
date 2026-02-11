@@ -3,7 +3,8 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { NotificationsService } from './realtime/notifications.service';
 import { WebSocketServer, WebSocket } from 'ws';
-import * as jwt from 'jsonwebtoken'; // 👈 FONDAMENTALE per la sicurezza
+import * as jwt from 'jsonwebtoken';
+import { ValidationPipe } from '@nestjs/common'; // <--- FONDAMENTALE
 
 type ClientMeta = {
   userId: string;
@@ -41,7 +42,7 @@ function pickTenantFromJwt(decoded: any): { tenantId: string; tenantSlug?: strin
 async function bootstrap() {
   // 1. Safety Check all'avvio
   if (!process.env.JWT_SECRET) {
-    console.error('❌ FATAL: JWT_SECRET is not defined. Exiting.');
+    console.error('❌ FATAL: JWT_SECRET is not defined in .env. Exiting.');
     process.exit(1);
   }
 
@@ -49,14 +50,9 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  // 2. CORS Blindato per Produzione
+  // 2. CORS (Configurazione permissiva per sviluppo, stringere in prod)
   app.enableCors({
-    // Permetti solo il tuo dominio e localhost (per debug locale se serve)
-    origin: [
-      'https://app.doflow.it', 
-      /\.doflow\.it$/, // Regex per tutti i sottodomini
-      'http://localhost:3000'
-    ], 
+    origin: true, // O specifica i domini come nel tuo codice precedente se preferisci
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
@@ -64,16 +60,21 @@ async function bootstrap() {
       'Authorization',
       'X-DOFLOW-TENANT-ID',
       'x-doflow-tenant-id',
-      'x-doflow-pathname',
-      'Accept'
     ],
-    exposedHeaders: ['Content-Length'],
-    maxAge: 86400,
   });
 
+  // 3. VALIDATION PIPE (QUESTO MANCAVA E ROMPEVA I DTO!)
+  app.useGlobalPipes(new ValidationPipe({
+    transform: true, // Trasforma i JSON in istanze di Classe DTO
+    whitelist: true, // Rimuove campi non definiti nel DTO (sicurezza)
+    forbidNonWhitelisted: false, // Non bloccare se ci sono campi extra, ignorali e basta
+  }));
+
+  // Avvio Server HTTP
   const port = Number(process.env.PORT ?? 4000);
   await app.listen(port, '0.0.0.0');
 
+  // 4. Configurazione WebSocket (Dopo app.listen)
   const httpAdapter: any = (app as any).getHttpAdapter();
   const httpServer: any = httpAdapter.getHttpServer();
 
@@ -87,8 +88,10 @@ async function bootstrap() {
   httpServer.on('upgrade', (req: any, socket: any, head: Buffer) => {
     try {
       const url = req.url ?? '/';
-      const fullUrl = new URL(url, 'http://localhost');
-      if (fullUrl.pathname !== wsPath) return;
+      // Gestione base URL per parsing sicuro
+      const fullUrl = new URL(url, `http://${req.headers.host || 'localhost'}`);
+      
+      if (fullUrl.pathname !== wsPath) return; // Ignora path non WS
 
       wss.handleUpgrade(req, socket, head, (ws) => {
         wss.emit('connection', ws, req);
@@ -103,7 +106,7 @@ async function bootstrap() {
   wss.on('connection', (socket: ClientWithMeta, req: any) => {
     try {
       const urlStr = req.url ?? '/';
-      const fullUrl = new URL(urlStr, 'http://localhost');
+      const fullUrl = new URL(urlStr, `http://${req.headers.host || 'localhost'}`);
       const token = fullUrl.searchParams.get('token');
 
       if (!token) {
@@ -111,10 +114,8 @@ async function bootstrap() {
         return;
       }
 
-      // 🔒 SECURITY FIX: Verifica la firma crittografica!
-      // Se il token è falso, questa riga lancerà un'eccezione e chiuderà la connessione.
+      // Verifica Token
       const decoded: any = jwt.verify(token, process.env.JWT_SECRET as string);
-
       const { tenantId, tenantSlug } = pickTenantFromJwt(decoded);
 
       const meta: ClientMeta = {
@@ -135,7 +136,7 @@ async function bootstrap() {
         }),
       );
 
-      // Ping/Pong Health Check
+      // Ping/Pong
       socket.on('message', (data: any) => {
         try {
           const raw = typeof data === 'string' ? data : data?.toString?.('utf8');
@@ -151,7 +152,7 @@ async function bootstrap() {
               }));
             }
           }
-        } catch { /* ignore garbage data */ }
+        } catch { /* ignore garbage */ }
       });
 
       socket.on('close', () => clients.delete(socket));
@@ -161,7 +162,6 @@ async function bootstrap() {
       });
 
     } catch (e) {
-      // Questo cattura jwt.verify errors (TokenExpiredError, JsonWebTokenError, etc.)
       console.error('[WS] Auth connection error:', (e as Error).message);
       socket.close(4002, 'Invalid or expired token');
     }
@@ -173,17 +173,16 @@ async function bootstrap() {
       const meta = socket.__meta;
       if (!meta) continue;
 
+      // Logica broadcast Tenant/User
       if (channel.startsWith('tenant:')) {
         const [, tenantId] = channel.split(':');
         if (meta.tenantId !== tenantId) continue;
-
         if (socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({ type: 'tenant_notification', channel, payload }));
         }
       } else if (channel.startsWith('user:')) {
         const [, userId] = channel.split(':');
         if (meta.userId !== userId) continue;
-
         if (socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({ type: 'user_notification', channel, payload }));
         }
@@ -191,7 +190,7 @@ async function bootstrap() {
     }
   });
 
-  console.log(`🚀 Production Backend running on port ${port} (Prefix: /api, WS: ${wsPath})`);
+  console.log(`🚀 Backend running on port ${port} (Prefix: /api, WS: ${wsPath})`);
 }
 
 bootstrap();

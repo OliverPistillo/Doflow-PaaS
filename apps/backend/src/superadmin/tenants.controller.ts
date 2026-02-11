@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, UseGuards, Delete, Param, BadRequestException } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
-import { CreateTenantDto } from './dto/create-tenant.dto';
+// import { CreateTenantDto } from './dto/create-tenant.dto'; // Commentalo per ora
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('superadmin/tenants')
@@ -13,18 +13,32 @@ export class TenantsController {
     return { tenants: await this.tenantsService.findAll() };
   }
 
+  // MODIFICA QUI: Usa 'any' al posto del DTO
   @Post()
-  async createTenant(@Body() body: CreateTenantDto) {
-    // --- DEBUG LOG ---
-    console.log("📥 [POST /tenants] Body ricevuto:", body);
+  async createTenant(@Body() body: any) { 
     
-    // Controllo manuale per capire se è questo che lancia l'errore
-    if (!body || !body.name || !body.slug || !body.email) {
-        console.error("❌ Body incompleto:", body);
-        throw new BadRequestException("Missing fields (Name, Slug or Email missing)");
+    // LOGGA TUTTO QUELLO CHE ARRIVA
+    console.log("🔥 DEBUG RAW BODY:", JSON.stringify(body, null, 2));
+
+    // Controllo manuale semplificato
+    if (!body || Object.keys(body).length === 0) {
+        throw new BadRequestException("Il Body è arrivato vuoto! Controlla Content-Type o il main.ts");
     }
 
-    return this.tenantsService.create(body);
+    // Mappiamo a mano per essere sicuri
+    const dto = {
+        name: body.name,
+        slug: body.slug,
+        email: body.email,
+        plan: body.plan || 'STARTER'
+    };
+
+    if (!dto.name || !dto.slug || !dto.email) {
+        throw new BadRequestException(`Campi mancanti. Ricevuti: ${Object.keys(body).join(', ')}`);
+    }
+
+    // Passiamo il DTO "costruito a mano" al service
+    return this.tenantsService.create(dto as any);
   }
 
   @Delete(':id')
