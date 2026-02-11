@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsNotEmpty, Matches, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsEmail, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class CreateTenantDto {
   @IsString()
@@ -7,15 +7,12 @@ export class CreateTenantDto {
 
   @IsString()
   @IsNotEmpty()
-  // Accetta lettere minuscole, numeri e trattini
-  @Matches(/^[a-z0-9-]+$/, { message: 'Lo slug può contenere solo lettere minuscole, numeri e trattini.' })
   slug!: string;
 
-  @IsEmail({}, { message: 'Inserisci una email valida' })
+  @IsString() // Cambiato temporaneamente da @IsEmail a @IsString per debug
   @IsNotEmpty()
   email!: string;
 
-  // Rendi opzionale o stringa semplice per evitare blocchi se il frontend manda qualcosa di diverso
   @IsString()
   @IsOptional()
   plan?: string;
