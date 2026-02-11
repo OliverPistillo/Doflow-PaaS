@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEmail } from 'class-validator';
 
 export class CreateTenantDto {
   @IsString()
@@ -9,7 +9,7 @@ export class CreateTenantDto {
   @IsNotEmpty()
   slug!: string;
 
-  @IsString() // Cambiato temporaneamente da @IsEmail a @IsString per debug
+  @IsEmail()
   @IsNotEmpty()
   email!: string;
 
