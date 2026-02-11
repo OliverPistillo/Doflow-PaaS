@@ -72,29 +72,40 @@ export class TenantsService {
     }
   }
 
-  // --- NUOVO METODO DELETE ---
+  // --- METODO DELETE ROBUSTO ---
   async delete(id: string) {
-    // 1. Trova il tenant per sapere lo slug (che è il nome dello schema)
+    // 1. Trova il tenant per sapere lo slug
     const tenant = await this.tenantsRepo.findOne({ where: { id } });
-    if (!tenant) throw new NotFoundException("Tenant non trovato");
+    
+    // Se non esiste nel DB principale, restituiamo successo per "idempotenza" 
+    // (se non c'è, è come se fosse già cancellato)
+    if (!tenant) return { message: "Tenant already deleted or not found" };
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
-    await queryRunner.startTransaction();
-
+    // Non usiamo una transazione unica rigida qui, perché vogliamo 
+    // che la cancellazione del record avvenga anche se il drop schema fallisce parzialmente.
+    
     try {
-      // 2. ELIMINA LO SCHEMA DAL DB (Distruttivo!)
-      // CASCADE è fondamentale: rimuove tutte le tabelle e i dati dentro lo schema
-      await queryRunner.query(`DROP SCHEMA IF EXISTS "${tenant.schemaName}" CASCADE`);
+      // 2. TENTATIVO DI ELIMINAZIONE SCHEMA (Connessioni + Dati)
+      try {
+        // Opzionale: Termina le connessioni attive a questo DB/Schema (Postgres specifico)
+        // Nota: Questo comando varia in base alla versione di PG, ma CASCADE aiuta molto.
+        
+        // Drop brutale dello schema
+        await queryRunner.query(`DROP SCHEMA IF EXISTS "${tenant.schemaName}" CASCADE`);
+      } catch (schemaErr) {
+        console.warn(`Attenzione: Impossibile eliminare lo schema fisico "${tenant.schemaName}". Potrebbe non esistere o essere bloccato. Procedo comunque con la rimozione del record.`, schemaErr);
+      }
 
-      // 3. Elimina il record dai metadati (public.tenants)
-      await queryRunner.manager.delete(Tenant, id);
+      // 3. ELIMINA IL RECORD DAI METADATI (public.tenants)
+      // Lo facciamo DOPO il tentativo di drop schema
+      await this.tenantsRepo.delete(id);
 
-      await queryRunner.commitTransaction();
       return { message: "Tenant deleted successfully" };
+
     } catch (err) {
-      await queryRunner.rollbackTransaction();
-      console.error("Errore eliminazione tenant:", err);
+      console.error("Errore critico eliminazione tenant:", err);
       throw new InternalServerErrorException("Errore durante l'eliminazione del tenant");
     } finally {
       await queryRunner.release();
