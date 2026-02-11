@@ -16,13 +16,14 @@ import {
   Database,
   Loader2,
   Globe,
-  Mail
+  Mail,
+  Trash2 // <--- Nuova Icona
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label"; // Assicurati di avere questo componente
+import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import {
   Dialog,
@@ -135,8 +136,6 @@ export default function TenantsPage() {
 
   // Auto-generate slug
   useEffect(() => {
-      // Solo se l'utente non ha modificato manualmente lo slug (o è vuoto)
-      // Per semplicità qui lo rigeneriamo sempre finché non è "toccato"
       if (newTenant.name) {
           setNewTenant(prev => ({ ...prev, slug: generateSlug(prev.name) }));
       }
@@ -201,9 +200,14 @@ export default function TenantsPage() {
           return;
       }
 
+      // Validazione base email
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newTenant.email)) {
+        toast({ title: "Email non valida", description: "Inserisci un indirizzo email corretto.", variant: "destructive" });
+        return;
+      }
+
       setIsCreating(true);
       try {
-          // CHIAMATA API REALE (da implementare nel backend)
           await apiFetch("/superadmin/tenants", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -218,12 +222,15 @@ export default function TenantsPage() {
           
           setIsCreateOpen(false);
           setNewTenant({ name: "", slug: "", email: "", plan: "STARTER" });
-          loadTenants(); // Ricarica la lista
+          loadTenants(); // Ricarica la lista per vedere il nuovo tenant
       } catch (e: any) {
           console.error(e);
+          let errorMessage = e.message || "Impossibile creare il tenant.";
+          if (e.message && Array.isArray(e.message)) errorMessage = e.message.join(", ");
+
           toast({ 
               title: "Errore creazione", 
-              description: e.message || "Impossibile creare il tenant.", 
+              description: errorMessage, 
               variant: "destructive" 
           });
       } finally {
@@ -281,6 +288,36 @@ export default function TenantsPage() {
         description: e?.message || "Reset fallito.",
         variant: "destructive",
       });
+    }
+  };
+
+  // --- NUOVA FUNZIONE: ELIMINAZIONE TENANT ---
+  const handleDeleteTenant = async (tenantId: string, tenantName: string) => {
+    const confirmMessage = `🚨 ATTENZIONE: ZONA PERICOLOSA 🚨\n\nStai per eliminare DEFINITIVAMENTE il tenant:\n\nnome: ${tenantName}\nid: ${tenantId}\n\nQuesta operazione cancellerà:\n1. Il record del cliente\n2. L'INTERO SCHEMA DATABASE associato e tutti i suoi dati.\n\nSei assolutamente sicuro?`;
+    
+    if (!window.confirm(confirmMessage)) return;
+    
+    // Doppia conferma per sicurezza
+    if (!window.confirm(`Ultima possibilità: Confermi l'eliminazione di ${tenantName}?`)) return;
+
+    try {
+        await apiFetch(`/superadmin/tenants/${tenantId}`, {
+            method: "DELETE",
+        });
+
+        toast({
+            title: "Tenant Eliminato",
+            description: "Il tenant e i suoi dati sono stati rimossi.",
+            variant: "destructive"
+        });
+        
+        loadTenants(); // Ricarica la lista
+    } catch (e: any) {
+        toast({
+            title: "Errore Eliminazione",
+            description: e?.message || "Impossibile eliminare il tenant.",
+            variant: "destructive",
+        });
     }
   };
 
@@ -506,11 +543,21 @@ export default function TenantsPage() {
                           <DropdownMenuSeparator />
 
                           <DropdownMenuItem
-                            className="text-rose-600 focus:text-rose-700 focus:bg-rose-50"
-                            onClick={() => toast({ title: "TODO", description: "Implementare logica sospensione DB" })}
+                            className="text-slate-600 focus:text-slate-700"
+                            onClick={() => toast({ title: "In Sviluppo", description: "La sospensione sarà presto disponibile." })}
                           >
                             <PauseCircle className="mr-2 h-4 w-4" />
                             Sospendi Accesso
+                          </DropdownMenuItem>
+
+                          <DropdownMenuSeparator />
+
+                          <DropdownMenuItem
+                            className="text-rose-600 focus:text-rose-700 focus:bg-rose-50 font-bold"
+                            onClick={() => handleDeleteTenant(t.id, t.name)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Elimina Definitivamente
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -551,7 +598,8 @@ export default function TenantsPage() {
                             <Input 
                                 id="slug" 
                                 value={newTenant.slug} 
-                                onChange={(e) => setNewTenant({...newTenant, slug: e.target.value})}
+                                // Modificato per permettere l'aggiornamento manuale ma "sanitizzato"
+                                onChange={(e) => setNewTenant({...newTenant, slug: generateSlug(e.target.value)})}
                                 className="pl-9 font-mono text-sm bg-slate-50" 
                             />
                         </div>

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Delete, Param } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -17,5 +17,10 @@ export class TenantsController {
   @Post()
   async createTenant(@Body() body: CreateTenantDto) {
     return this.tenantsService.create(body);
+  }
+
+  @Delete(':id')
+  async deleteTenant(@Param('id') id: string) {
+    return this.tenantsService.delete(id);
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, ConflictException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Tenant } from './entities/tenant.entity';
@@ -40,14 +40,9 @@ export class TenantsService {
       const savedTenant = await queryRunner.manager.save(newTenant);
 
       // 3. PROVISIONING: Creiamo lo Schema Postgres Fisico
-      // ATTENZIONE: Questo comando crea un "namespace" isolato nel database
       await queryRunner.query(`CREATE SCHEMA IF NOT EXISTS "${dto.slug}"`);
 
-      // 4. (Opzionale ma consigliato) Creiamo le tabelle base nel nuovo schema
-      // Qui dovresti lanciare le migrazioni. Per semplicità ora creiamo solo una tabella users dummy.
-      // In produzione useresti: await runMigrationsForSchema(dto.slug);
-      
-      // Esempio creazione tabella users minima nel nuovo schema
+      // 4. Esempio creazione tabella users minima nel nuovo schema
       await queryRunner.query(`
         CREATE TABLE "${dto.slug}"."users" (
             "id" uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -69,10 +64,38 @@ export class TenantsService {
       return savedTenant;
 
     } catch (err) {
-      // Se qualcosa va storto (es. schema già esiste ma tenant no), annulliamo tutto
       await queryRunner.rollbackTransaction();
       console.error("Errore creazione tenant:", err);
       throw new InternalServerErrorException("Errore durante il provisioning del tenant");
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  // --- NUOVO METODO DELETE ---
+  async delete(id: string) {
+    // 1. Trova il tenant per sapere lo slug (che è il nome dello schema)
+    const tenant = await this.tenantsRepo.findOne({ where: { id } });
+    if (!tenant) throw new NotFoundException("Tenant non trovato");
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 2. ELIMINA LO SCHEMA DAL DB (Distruttivo!)
+      // CASCADE è fondamentale: rimuove tutte le tabelle e i dati dentro lo schema
+      await queryRunner.query(`DROP SCHEMA IF EXISTS "${tenant.schemaName}" CASCADE`);
+
+      // 3. Elimina il record dai metadati (public.tenants)
+      await queryRunner.manager.delete(Tenant, id);
+
+      await queryRunner.commitTransaction();
+      return { message: "Tenant deleted successfully" };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      console.error("Errore eliminazione tenant:", err);
+      throw new InternalServerErrorException("Errore durante l'eliminazione del tenant");
     } finally {
       await queryRunner.release();
     }
