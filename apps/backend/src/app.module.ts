@@ -61,6 +61,9 @@ import { CalendarService } from './superadmin/calendar.service';
 import { Invoice } from './superadmin/entities/invoice.entity';
 import { FinanceController } from './superadmin/finance.controller';
 import { FinanceService } from './superadmin/finance.service';
+import { Tenant } from './superadmin/entities/tenant.entity';
+import { TenantsController } from './superadmin/tenants.controller';
+import { TenantsService } from './superadmin/tenants.service';
 
 @Module({
   imports: [
@@ -96,6 +99,7 @@ import { FinanceService } from './superadmin/finance.service';
       DeliveryTask,
       CalendarEvent,
       Invoice,
+      Tenant,
     ]),
 
     PassportModule,
@@ -134,6 +138,7 @@ import { FinanceService } from './superadmin/finance.service';
     DeliveryController,
     CalendarController,
     FinanceController,
+    TenantsController,
   ],
 
   providers: [
@@ -152,6 +157,7 @@ import { FinanceService } from './superadmin/finance.service';
     DeliveryService,
     CalendarService,
     FinanceService,
+    TenantsService,
   ],
 })
 export class AppModule implements NestModule {

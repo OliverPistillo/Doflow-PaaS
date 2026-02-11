@@ -13,11 +13,16 @@ import {
   AlertTriangle,
   CheckCircle2,
   PauseCircle,
+  Database,
+  Loader2,
+  Globe,
+  Mail
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label"; // Assicurati di avere questo componente
 import { Card } from "@/components/ui/card";
 import {
   Dialog,
@@ -25,6 +30,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -37,6 +43,7 @@ import {
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
+// --- TIPI ---
 type TenantRow = {
   id: string;
   slug: string;
@@ -64,6 +71,7 @@ type FetchState =
   | { status: "ok" }
   | { status: "degraded"; message: string };
 
+// --- UTILS ---
 function formatMbToGb(mb?: number | null): string {
   if (!mb || mb <= 0) return "0.00";
   return (mb / 1024).toFixed(2);
@@ -82,6 +90,16 @@ function formatDate(iso?: string | null): string {
   });
 }
 
+// Generatore Slug Semplice
+function generateSlug(name: string) {
+    return name
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9\s-]/g, "") // Rimuovi caratteri speciali
+        .replace(/\s+/g, "-"); // Spazi -> Trattini
+}
+
+// --- COMPONENTI UI ---
 const StatusPill = ({ isActive }: { isActive: boolean }) => {
   return isActive ? (
     <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
@@ -96,6 +114,7 @@ const StatusPill = ({ isActive }: { isActive: boolean }) => {
   );
 };
 
+// --- COMPONENTE PRINCIPALE ---
 export default function TenantsPage() {
   const { toast } = useToast();
 
@@ -108,6 +127,20 @@ export default function TenantsPage() {
 
   // Modali
   const [resetModal, setResetModal] = useState<ResetModalState | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+
+  // --- STATI CREAZIONE ---
+  const [newTenant, setNewTenant] = useState({ name: "", slug: "", email: "", plan: "STARTER" });
+  const [isCreating, setIsCreating] = useState(false);
+
+  // Auto-generate slug
+  useEffect(() => {
+      // Solo se l'utente non ha modificato manualmente lo slug (o è vuoto)
+      // Per semplicità qui lo rigeneriamo sempre finché non è "toccato"
+      if (newTenant.name) {
+          setNewTenant(prev => ({ ...prev, slug: generateSlug(prev.name) }));
+      }
+  }, [newTenant.name]);
 
   const filteredTenants = useMemo(() => {
     let res = tenants;
@@ -149,7 +182,7 @@ export default function TenantsPage() {
       setFetchState({ status: "degraded", message: msg });
 
       toast({
-        title: "Degraded",
+        title: "Errore caricamento",
         description: msg,
         variant: "destructive",
       });
@@ -158,8 +191,45 @@ export default function TenantsPage() {
 
   useEffect(() => {
     loadTenants();
-    // niente polling aggressivo qui: è pagina “gestionale”
   }, []);
+
+  // --- AZIONI ---
+
+  const handleCreateTenant = async () => {
+      if(!newTenant.name || !newTenant.slug || !newTenant.email) {
+          toast({ title: "Dati mancanti", description: "Compila tutti i campi obbligatori.", variant: "destructive" });
+          return;
+      }
+
+      setIsCreating(true);
+      try {
+          // CHIAMATA API REALE (da implementare nel backend)
+          await apiFetch("/superadmin/tenants", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(newTenant)
+          });
+
+          toast({ 
+              title: "Tenant Creato! 🚀", 
+              description: `Il database per ${newTenant.name} è stato provisionato.`,
+              className: "bg-emerald-50 border-emerald-200 text-emerald-800"
+          });
+          
+          setIsCreateOpen(false);
+          setNewTenant({ name: "", slug: "", email: "", plan: "STARTER" });
+          loadTenants(); // Ricarica la lista
+      } catch (e: any) {
+          console.error(e);
+          toast({ 
+              title: "Errore creazione", 
+              description: e.message || "Impossibile creare il tenant.", 
+              variant: "destructive" 
+          });
+      } finally {
+          setIsCreating(false);
+      }
+  };
 
   const handleImpersonate = async (tenantId: string) => {
     const adminEmail = prompt("Email admin da impersonare:", "admin@example.com");
@@ -219,6 +289,7 @@ export default function TenantsPage() {
 
   return (
     <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in">
+      
       {/* HEADER */}
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
@@ -236,12 +307,7 @@ export default function TenantsPage() {
 
           <Button
             className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200 font-bold"
-            onClick={() =>
-              toast({
-                title: "In arrivo",
-                description: "Creazione tenant da UI: prossimo step (ora usiamo provisioning).",
-              })
-            }
+            onClick={() => setIsCreateOpen(true)}
           >
             <Plus className="mr-2 h-4 w-4" />
             Nuovo Tenant
@@ -325,7 +391,10 @@ export default function TenantsPage() {
             {isLoading ? (
               <tr>
                 <td colSpan={7} className="p-10 text-center text-slate-400">
-                  Caricamento in corso...
+                  <div className="flex flex-col items-center gap-2">
+                      <Loader2 className="animate-spin h-6 w-6 text-indigo-600" />
+                      Caricamento in corso...
+                  </div>
                 </td>
               </tr>
             ) : filteredTenants.length === 0 ? (
@@ -346,8 +415,8 @@ export default function TenantsPage() {
                         <div className="font-black text-slate-900 text-base truncate">
                           {t.name}
                         </div>
-                        <div className="text-slate-400 text-xs font-mono truncate">
-                          /{t.slug}
+                        <div className="text-slate-400 text-xs font-mono truncate flex items-center gap-1">
+                          <Globe className="h-3 w-3" /> {t.slug}.tuodominio.it
                         </div>
                       </div>
                     </div>
@@ -366,7 +435,8 @@ export default function TenantsPage() {
                   </td>
 
                   <td className="px-6 py-4">
-                    <div className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-1 rounded w-fit border border-slate-200">
+                    <div className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-1 rounded w-fit border border-slate-200 flex items-center gap-1">
+                      <Database className="h-3 w-3" />
                       {t.schema_name}
                     </div>
                   </td>
@@ -436,16 +506,11 @@ export default function TenantsPage() {
                           <DropdownMenuSeparator />
 
                           <DropdownMenuItem
-                            className="text-slate-500"
-                            onClick={() =>
-                              toast({
-                                title: "Operazione non implementata",
-                                description:
-                                  "Sospensione tenant via UI: prossimo step (ora lo gestiamo lato DB/API).",
-                              })
-                            }
+                            className="text-rose-600 focus:text-rose-700 focus:bg-rose-50"
+                            onClick={() => toast({ title: "TODO", description: "Implementare logica sospensione DB" })}
                           >
-                            Sospendi / Riattiva
+                            <PauseCircle className="mr-2 h-4 w-4" />
+                            Sospendi Accesso
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -457,6 +522,89 @@ export default function TenantsPage() {
           </tbody>
         </table>
       </div>
+
+      {/* CREATE TENANT MODAL */}
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+                <DialogTitle>Nuovo Tenant</DialogTitle>
+                <DialogDescription>
+                    Configura un nuovo ambiente isolato. Verrà creato automaticamente uno schema DB dedicato.
+                </DialogDescription>
+            </DialogHeader>
+            
+            <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                    <Label htmlFor="name">Nome Azienda</Label>
+                    <Input 
+                        id="name" 
+                        value={newTenant.name} 
+                        onChange={(e) => setNewTenant({...newTenant, name: e.target.value})}
+                        placeholder="Es. Acme Corp" 
+                    />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="slug">URL Slug (Auto)</Label>
+                        <div className="relative">
+                            <Globe className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                            <Input 
+                                id="slug" 
+                                value={newTenant.slug} 
+                                onChange={(e) => setNewTenant({...newTenant, slug: e.target.value})}
+                                className="pl-9 font-mono text-sm bg-slate-50" 
+                            />
+                        </div>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="plan">Piano</Label>
+                        <select 
+                            id="plan"
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            value={newTenant.plan}
+                            onChange={(e) => setNewTenant({...newTenant, plan: e.target.value})}
+                        >
+                            <option value="STARTER">Starter</option>
+                            <option value="PRO">Pro</option>
+                            <option value="ENTERPRISE">Enterprise</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="grid gap-2">
+                    <Label htmlFor="email">Email Amministratore</Label>
+                    <div className="relative">
+                        <Mail className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                        <Input 
+                            id="email" 
+                            type="email"
+                            value={newTenant.email} 
+                            onChange={(e) => setNewTenant({...newTenant, email: e.target.value})}
+                            className="pl-9" 
+                            placeholder="admin@azienda.com" 
+                        />
+                    </div>
+                    <p className="text-[11px] text-slate-500">Invieremo un invito per impostare la password.</p>
+                </div>
+            </div>
+
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsCreateOpen(false)} disabled={isCreating}>Annulla</Button>
+                <Button onClick={handleCreateTenant} disabled={isCreating} className="bg-indigo-600 hover:bg-indigo-700">
+                    {isCreating ? (
+                        <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Provisioning DB...
+                        </>
+                    ) : (
+                        <>
+                            <Plus className="mr-2 h-4 w-4" />
+                            Crea Tenant
+                        </>
+                    )}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* RESET PASSWORD MODAL */}
       {resetModal && (
