@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, UseGuards, Delete, Param } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
-import { CreateTenantDto } from './dto/create-tenant.dto'; // Importiamo il DTO vero
+import { CreateTenantDto } from './dto/create-tenant.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('superadmin/tenants')
@@ -10,15 +10,13 @@ export class TenantsController {
 
   @Get()
   async getTenants() {
-    // Restituisce la lista wrappata in un oggetto { tenants: [...] }
     const tenants = await this.tenantsService.findAll();
     return { tenants };
   }
 
   @Post()
   async createTenant(@Body() body: CreateTenantDto) {
-    // Ora body è garantito essere valido e del tipo CreateTenantDto
-    // grazie alla ValidationPipe nel main.ts
+    // NestJS valida automaticamente 'body' usando il DTO
     return this.tenantsService.create(body);
   }
 
