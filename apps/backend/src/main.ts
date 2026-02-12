@@ -5,8 +5,8 @@ import { NotificationsService } from './realtime/notifications.service';
 import { WebSocketServer, WebSocket } from 'ws';
 import * as jwt from 'jsonwebtoken';
 import { ValidationPipe } from '@nestjs/common';
-import { NestExpressApplication } from '@nestjs/platform-express'; // <--- Importiamo il tipo corretto
-import { json, urlencoded } from 'express'; // <--- Leggiamo il JSON direttamente da Express
+import { NestExpressApplication } from '@nestjs/platform-express';
+import * as express from 'express'; // <--- Sintassi più sicura per TypeScript
 
 type ClientMeta = {
   userId: string;
@@ -49,15 +49,15 @@ async function bootstrap() {
   }
 
   // 2. Creazione App con configurazione specifica per il Body Parser
-  // Passiamo { bodyParser: false } per evitare conflitti tra NestJS e la tua versione di Express
+  // Disabilitiamo il parser automatico di Nest per configurarlo manualmente ed evitare conflitti
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false, 
   });
 
   // 3. ABILITA IL PARSING DEL JSON MANUALMENTE
-  // Questo risolve l'errore "Missing fields" leggendo forzatamente il body
-  app.use(json({ limit: '50mb' }));
-  app.use(urlencoded({ extended: true, limit: '50mb' }));
+  // Usiamo 'express.json' direttamente: questo risolve l'errore "Missing fields"
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   app.setGlobalPrefix('api');
 
