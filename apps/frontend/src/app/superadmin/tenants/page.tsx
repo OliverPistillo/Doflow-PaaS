@@ -17,7 +17,7 @@ import {
   Loader2,
   Globe,
   Mail,
-  Trash2 // <--- Nuova Icona
+  Trash2
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -44,19 +44,19 @@ import {
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
-// --- TIPI ---
+// --- TIPI (Allineati al Backend camelCase) ---
 type TenantRow = {
   id: string;
   slug: string;
   name: string;
-  schema_name: string;
-  is_active: boolean;
-  plan_tier?: string | null;
-  max_users?: number | null;
-  storage_used_mb?: number | null;
-  storage_limit_gb?: number | null;
-  created_at?: string | null;
-  updated_at?: string | null;
+  schemaName: string;
+  isActive: boolean;
+  planTier?: string | null;
+  maxUsers?: number | null;
+  storageUsedMb?: number | null;
+  storageLimitGb?: number | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 };
 
 type ResetModalState = {
@@ -91,13 +91,12 @@ function formatDate(iso?: string | null): string {
   });
 }
 
-// Generatore Slug Semplice
 function generateSlug(name: string) {
-    return name
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9\s-]/g, "") // Rimuovi caratteri speciali
-        .replace(/\s+/g, "-"); // Spazi -> Trattini
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-");
 }
 
 // --- COMPONENTI UI ---
@@ -115,30 +114,25 @@ const StatusPill = ({ isActive }: { isActive: boolean }) => {
   );
 };
 
-// --- COMPONENTE PRINCIPALE ---
 export default function TenantsPage() {
   const { toast } = useToast();
 
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [fetchState, setFetchState] = useState<FetchState>({ status: "idle" });
 
-  // Filtri
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "suspended">("all");
 
-  // Modali
   const [resetModal, setResetModal] = useState<ResetModalState | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-  // --- STATI CREAZIONE ---
   const [newTenant, setNewTenant] = useState({ name: "", slug: "", email: "", plan: "STARTER" });
   const [isCreating, setIsCreating] = useState(false);
 
-  // Auto-generate slug
   useEffect(() => {
-      if (newTenant.name) {
-          setNewTenant(prev => ({ ...prev, slug: generateSlug(prev.name) }));
-      }
+    if (newTenant.name) {
+      setNewTenant(prev => ({ ...prev, slug: generateSlug(prev.name) }));
+    }
   }, [newTenant.name]);
 
   const filteredTenants = useMemo(() => {
@@ -150,12 +144,12 @@ export default function TenantsPage() {
         (t) =>
           (t.name || "").toLowerCase().includes(q) ||
           (t.slug || "").toLowerCase().includes(q) ||
-          (t.schema_name || "").toLowerCase().includes(q),
+          (t.schemaName || "").toLowerCase().includes(q),
       );
     }
 
-    if (statusFilter === "active") res = res.filter((t) => !!t.is_active);
-    if (statusFilter === "suspended") res = res.filter((t) => !t.is_active);
+    if (statusFilter === "active") res = res.filter((t) => !!t.isActive);
+    if (statusFilter === "suspended") res = res.filter((t) => !t.isActive);
 
     return res;
   }, [tenants, search, statusFilter]);
@@ -163,7 +157,8 @@ export default function TenantsPage() {
   const loadTenants = async () => {
     setFetchState({ status: "loading" });
     try {
-    const data = await apiFetch<any>("/superadmin/v2/tenants");
+      // Usiamo la rotta V2 per bypassare cache residue
+      const data = await apiFetch<any>("/superadmin/v2/tenants");
       const list = Array.isArray(data?.tenants) ? data.tenants : [];
 
       setTenants(list);
@@ -192,50 +187,47 @@ export default function TenantsPage() {
     loadTenants();
   }, []);
 
-  // --- AZIONI ---
-
   const handleCreateTenant = async () => {
-      if(!newTenant.name || !newTenant.slug || !newTenant.email) {
-          toast({ title: "Dati mancanti", description: "Compila tutti i campi obbligatori.", variant: "destructive" });
-          return;
-      }
+    if (!newTenant.name || !newTenant.slug || !newTenant.email) {
+      toast({ title: "Dati mancanti", description: "Compila tutti i campi obbligatori.", variant: "destructive" });
+      return;
+    }
 
-      // Validazione base email
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newTenant.email)) {
-        toast({ title: "Email non valida", description: "Inserisci un indirizzo email corretto.", variant: "destructive" });
-        return;
-      }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newTenant.email)) {
+      toast({ title: "Email non valida", description: "Inserisci un indirizzo email corretto.", variant: "destructive" });
+      return;
+    }
 
-      setIsCreating(true);
-      try {
-          await apiFetch("/superadmin/v2/tenants", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(newTenant)
-          });
+    setIsCreating(true);
+    try {
+      await apiFetch("/superadmin/v2/tenants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newTenant)
+      });
 
-          toast({ 
-              title: "Tenant Creato! 🚀", 
-              description: `Il database per ${newTenant.name} è stato provisionato.`,
-              className: "bg-emerald-50 border-emerald-200 text-emerald-800"
-          });
-          
-          setIsCreateOpen(false);
-          setNewTenant({ name: "", slug: "", email: "", plan: "STARTER" });
-          loadTenants(); // Ricarica la lista per vedere il nuovo tenant
-      } catch (e: any) {
-          console.error(e);
-          let errorMessage = e.message || "Impossibile creare il tenant.";
-          if (e.message && Array.isArray(e.message)) errorMessage = e.message.join(", ");
+      toast({
+        title: "Tenant Creato! 🚀",
+        description: `Il database per ${newTenant.name} è stato provisionato.`,
+        className: "bg-emerald-50 border-emerald-200 text-emerald-800"
+      });
 
-          toast({ 
-              title: "Errore creazione", 
-              description: errorMessage, 
-              variant: "destructive" 
-          });
-      } finally {
-          setIsCreating(false);
-      }
+      setIsCreateOpen(false);
+      setNewTenant({ name: "", slug: "", email: "", plan: "STARTER" });
+      loadTenants();
+    } catch (e: any) {
+      console.error(e);
+      let errorMessage = e.message || "Impossibile creare il tenant.";
+      if (e.message && Array.isArray(e.message)) errorMessage = e.message.join(", ");
+
+      toast({
+        title: "Errore creazione",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const handleImpersonate = async (tenantId: string) => {
@@ -291,33 +283,30 @@ export default function TenantsPage() {
     }
   };
 
-  // --- NUOVA FUNZIONE: ELIMINAZIONE TENANT ---
   const handleDeleteTenant = async (tenantId: string, tenantName: string) => {
     const confirmMessage = `🚨 ATTENZIONE: ZONA PERICOLOSA 🚨\n\nStai per eliminare DEFINITIVAMENTE il tenant:\n\nnome: ${tenantName}\nid: ${tenantId}\n\nQuesta operazione cancellerà:\n1. Il record del cliente\n2. L'INTERO SCHEMA DATABASE associato e tutti i suoi dati.\n\nSei assolutamente sicuro?`;
-    
+
     if (!window.confirm(confirmMessage)) return;
-    
-    // Doppia conferma per sicurezza
     if (!window.confirm(`Ultima possibilità: Confermi l'eliminazione di ${tenantName}?`)) return;
 
     try {
-        await apiFetch(`/superadmin/v2/tenants/${tenantId}`, {
-            method: "DELETE",
-        });
+      await apiFetch(`/superadmin/v2/tenants/${tenantId}`, {
+        method: "DELETE",
+      });
 
-        toast({
-            title: "Tenant Eliminato",
-            description: "Il tenant e i suoi dati sono stati rimossi.",
-            variant: "destructive"
-        });
-        
-        loadTenants(); // Ricarica la lista
+      toast({
+        title: "Tenant Eliminato",
+        description: "Il tenant e i suoi dati sono stati rimossi.",
+        variant: "destructive"
+      });
+
+      loadTenants();
     } catch (e: any) {
-        toast({
-            title: "Errore Eliminazione",
-            description: e?.message || "Impossibile eliminare il tenant.",
-            variant: "destructive",
-        });
+      toast({
+        title: "Errore Eliminazione",
+        description: e?.message || "Impossibile eliminare il tenant.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -326,7 +315,7 @@ export default function TenantsPage() {
 
   return (
     <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in">
-      
+
       {/* HEADER */}
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
@@ -429,8 +418,8 @@ export default function TenantsPage() {
               <tr>
                 <td colSpan={7} className="p-10 text-center text-slate-400">
                   <div className="flex flex-col items-center gap-2">
-                      <Loader2 className="animate-spin h-6 w-6 text-indigo-600" />
-                      Caricamento in corso...
+                    <Loader2 className="animate-spin h-6 w-6 text-indigo-600" />
+                    Caricamento in corso...
                   </div>
                 </td>
               </tr>
@@ -464,39 +453,39 @@ export default function TenantsPage() {
                       variant="outline"
                       className="border-indigo-200 text-indigo-700 bg-indigo-50 font-bold px-3 py-1"
                     >
-                      {t.plan_tier || "STARTER"}
+                      {t.planTier || "STARTER"}
                     </Badge>
                     <div className="text-xs text-slate-400 mt-2 font-medium">
-                      Max users: <span className="font-mono">{t.max_users ?? "-"}</span>
+                      Max users: <span className="font-mono">{t.maxUsers ?? "-"}</span>
                     </div>
                   </td>
 
                   <td className="px-6 py-4">
                     <div className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-1 rounded w-fit border border-slate-200 flex items-center gap-1">
                       <Database className="h-3 w-3" />
-                      {t.schema_name}
+                      {t.schemaName}
                     </div>
                   </td>
 
                   <td className="px-6 py-4">
                     <div className="text-sm font-black text-slate-900">
-                      {formatMbToGb(t.storage_used_mb)} GB
+                      {formatMbToGb(t.storageUsedMb)} GB
                     </div>
                     <div className="text-xs text-slate-400 font-medium">
-                      Limit: <span className="font-mono">{t.storage_limit_gb ?? 0} GB</span>
+                      Limit: <span className="font-mono">{t.storageLimitGb ?? 0} GB</span>
                     </div>
                   </td>
 
                   <td className="px-6 py-4">
-                    <StatusPill isActive={!!t.is_active} />
+                    <StatusPill isActive={!!t.isActive} />
                   </td>
 
                   <td className="px-6 py-4">
                     <div className="text-sm font-bold text-slate-700">
-                      {formatDate(t.updated_at || t.created_at)}
+                      {formatDate(t.updatedAt || t.createdAt)}
                     </div>
                     <div className="text-xs text-slate-400 font-medium">
-                      Creato: {formatDate(t.created_at)}
+                      Creato: {formatDate(t.createdAt)}
                     </div>
                   </td>
 
@@ -573,84 +562,83 @@ export default function TenantsPage() {
       {/* CREATE TENANT MODAL */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-                <DialogTitle>Nuovo Tenant</DialogTitle>
-                <DialogDescription>
-                    Configura un nuovo ambiente isolato. Verrà creato automaticamente uno schema DB dedicato.
-                </DialogDescription>
-            </DialogHeader>
-            
-            <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                    <Label htmlFor="name">Nome Azienda</Label>
-                    <Input 
-                        id="name" 
-                        value={newTenant.name} 
-                        onChange={(e) => setNewTenant({...newTenant, name: e.target.value})}
-                        placeholder="Es. Acme Corp" 
-                    />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="slug">URL Slug (Auto)</Label>
-                        <div className="relative">
-                            <Globe className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-                            <Input 
-                                id="slug" 
-                                value={newTenant.slug} 
-                                // Modificato per permettere l'aggiornamento manuale ma "sanitizzato"
-                                onChange={(e) => setNewTenant({...newTenant, slug: generateSlug(e.target.value)})}
-                                className="pl-9 font-mono text-sm bg-slate-50" 
-                            />
-                        </div>
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="plan">Piano</Label>
-                        <select 
-                            id="plan"
-                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            value={newTenant.plan}
-                            onChange={(e) => setNewTenant({...newTenant, plan: e.target.value})}
-                        >
-                            <option value="STARTER">Starter</option>
-                            <option value="PRO">Pro</option>
-                            <option value="ENTERPRISE">Enterprise</option>
-                        </select>
-                    </div>
-                </div>
-                <div className="grid gap-2">
-                    <Label htmlFor="email">Email Amministratore</Label>
-                    <div className="relative">
-                        <Mail className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-                        <Input 
-                            id="email" 
-                            type="email"
-                            value={newTenant.email} 
-                            onChange={(e) => setNewTenant({...newTenant, email: e.target.value})}
-                            className="pl-9" 
-                            placeholder="admin@azienda.com" 
-                        />
-                    </div>
-                    <p className="text-[11px] text-slate-500">Invieremo un invito per impostare la password.</p>
-                </div>
-            </div>
+          <DialogHeader>
+            <DialogTitle>Nuovo Tenant</DialogTitle>
+            <DialogDescription>
+              Configura un nuovo ambiente isolato. Verrà creato automaticamente uno schema DB dedicato.
+            </DialogDescription>
+          </DialogHeader>
 
-            <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateOpen(false)} disabled={isCreating}>Annulla</Button>
-                <Button onClick={handleCreateTenant} disabled={isCreating} className="bg-indigo-600 hover:bg-indigo-700">
-                    {isCreating ? (
-                        <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Provisioning DB...
-                        </>
-                    ) : (
-                        <>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Crea Tenant
-                        </>
-                    )}
-                </Button>
-            </DialogFooter>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Nome Azienda</Label>
+              <Input
+                id="name"
+                value={newTenant.name}
+                onChange={(e) => setNewTenant({ ...newTenant, name: e.target.value })}
+                placeholder="Es. Acme Corp"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="slug">URL Slug (Auto)</Label>
+                <div className="relative">
+                  <Globe className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                  <Input
+                    id="slug"
+                    value={newTenant.slug}
+                    onChange={(e) => setNewTenant({ ...newTenant, slug: generateSlug(e.target.value) })}
+                    className="pl-9 font-mono text-sm bg-slate-50"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="plan">Piano</Label>
+                <select
+                  id="plan"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={newTenant.plan}
+                  onChange={(e) => setNewTenant({ ...newTenant, plan: e.target.value })}
+                >
+                  <option value="STARTER">Starter</option>
+                  <option value="PRO">Pro</option>
+                  <option value="ENTERPRISE">Enterprise</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email Amministratore</Label>
+              <div className="relative">
+                <Mail className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                <Input
+                  id="email"
+                  type="email"
+                  value={newTenant.email}
+                  onChange={(e) => setNewTenant({ ...newTenant, email: e.target.value })}
+                  className="pl-9"
+                  placeholder="admin@azienda.com"
+                />
+              </div>
+              <p className="text-[11px] text-slate-500">Invieremo un invito per impostare la password.</p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateOpen(false)} disabled={isCreating}>Annulla</Button>
+            <Button onClick={handleCreateTenant} disabled={isCreating} className="bg-indigo-600 hover:bg-indigo-700">
+              {isCreating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Provisioning DB...
+                </>
+              ) : (
+                <>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Crea Tenant
+                </>
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
