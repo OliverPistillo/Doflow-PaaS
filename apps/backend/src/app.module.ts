@@ -12,7 +12,6 @@ import { ProjectsController } from './projects.controller';
 import { FilesController } from './files.controller';
 import { NotificationsTestController } from './realtime/notifications-test.controller';
 import { AuthPasswordController } from './auth-password.controller';
-import { SuperadminTenantsController } from './superadmin/superadmin-tenants.controller';
 import { SuperadminUsersController } from './superadmin/superadmin-users.controller';
 import { SecurityPolicyController } from './superadmin/security-policy.controller';
 import { AuthMfaController } from './auth-mfa.controller';
@@ -64,6 +63,7 @@ import { FinanceService } from './superadmin/finance.service';
 import { Tenant } from './superadmin/entities/tenant.entity';
 import { TenantsController } from './superadmin/tenants.controller';
 import { TenantsService } from './superadmin/tenants.service';
+import { SystemController } from './superadmin/system.controller'; // <--- NUOVO IMPORT FONDAMENTALE
 
 @Module({
   imports: [
@@ -129,7 +129,7 @@ import { TenantsService } from './superadmin/tenants.service';
     FilesController,
     NotificationsTestController,
     AuthPasswordController,
-    // SuperadminTenantsController,
+    // SuperadminTenantsController, (Disattivato in favore di TenantsController V2)
     SuperadminAuditController,
     SuperadminUsersController,
     SecurityPolicyController,
@@ -138,7 +138,8 @@ import { TenantsService } from './superadmin/tenants.service';
     DeliveryController,
     CalendarController,
     FinanceController,
-    TenantsController,
+    TenantsController, // Gestione Tenant (Lista, Crea, Sospendi)
+    SystemController,  // <--- AGGIUNTO QUI: Gestione Control Tower (Stats)
   ],
 
   providers: [
@@ -164,7 +165,7 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(TenancyMiddleware, AuthMiddleware)
-      .exclude('api/superadmin/(.*)') // 2. ESCLUDI LE ROTTE SUPERADMIN DAL TENANCY MIDDLEWARE
+      .exclude('api/superadmin/(.*)') // ESCLUDI LE ROTTE SUPERADMIN DAL TENANCY MIDDLEWARE
       .forRoutes('*');
   }
 }

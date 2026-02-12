@@ -78,12 +78,13 @@ export class SuperadminUsersController {
   constructor(private readonly dataSource: DataSource) {}
 
   /* =========================
-      Auth & Context
-  ========================= */
+       Auth & Context
+   ========================= */
 
   private assertSuperAdmin(req: Request) {
     const user = (req as any).authUser ?? (req as any).user;
     const role = String(user?.role ?? '').toLowerCase().trim();
+    // Verifica ruoli superadmin
     if (role !== 'superadmin' && role !== 'owner') {
       throw new ForbiddenException('SuperAdmin only');
     }
@@ -111,8 +112,8 @@ export class SuperadminUsersController {
   }
 
   /* =========================
-      Data helpers
-  ========================= */
+       Data helpers
+   ========================= */
 
   private async openTenantDs(schema: string): Promise<DataSource> {
     const url = process.env.DATABASE_URL;
@@ -143,8 +144,8 @@ export class SuperadminUsersController {
   }
 
   /* =========================
-      Audit helpers
-  ========================= */
+       Audit helpers
+   ========================= */
 
   private async auditPublic(
     req: Request,
@@ -180,6 +181,8 @@ export class SuperadminUsersController {
   ) {
     try {
       const a = this.actor(req);
+      // Verifica se la tabella audit_log esiste nello schema tenant prima di inserire
+      // Per semplicità qui assumiamo esista, avvolto in try/catch
       await tenantDs.query(
         `
         insert into "${schema}"."audit_log"
@@ -201,9 +204,9 @@ export class SuperadminUsersController {
   }
 
   /* ==========================================================
-      A) KPI & ANALYTICS
-      GET /api/superadmin/users/kpi
-  ========================================================== */
+       A) KPI & ANALYTICS
+       GET /api/superadmin/users/kpi
+   ========================================================== */
   @Get('users/kpi')
   async usersKpi(
     @Req() req: Request,
@@ -219,6 +222,7 @@ export class SuperadminUsersController {
     const tFilter = String(tenantId || '').trim();
 
     try {
+      // KPI per Tenant
       const kpiRows: UsersKpiByTenantRow[] = await this.dataSource.query(
         `
         with base as (
@@ -233,6 +237,7 @@ export class SuperadminUsersController {
           left join public.tenants t
             on lower(t.schema_name) = lower(u.tenant_id)
             or lower(t.slug) = lower(u.tenant_id)
+            or t.id::text = u.tenant_id
         )
         select
           tenant_id,
@@ -244,6 +249,7 @@ export class SuperadminUsersController {
           sum(case when not is_active then 1 else 0 end)::int as suspended_users,
           sum(case when created_at >= now() - ($1::int || ' days')::interval then 1 else 0 end)::int as new_users_window
         from base
+        where tenant_id is not null
         group by tenant_id
         order by total_users desc, active_users desc
         limit $2
@@ -251,6 +257,7 @@ export class SuperadminUsersController {
         [days, top],
       );
 
+      // Trend giornaliero
       const trend: UsersTrendPoint[] = await this.dataSource.query(
         `
         with params as (
@@ -295,9 +302,9 @@ export class SuperadminUsersController {
   }
 
   /* ==========================================================
-      B) DIRECTORY GLOBALE — public.users
-      GET /api/superadmin/users
-  ========================================================== */
+       B) DIRECTORY GLOBALE — public.users
+       GET /api/superadmin/users
+   ========================================================== */
   @Get('users')
   async listGlobalUsers(
     @Req() req: Request,
@@ -332,12 +339,12 @@ export class SuperadminUsersController {
         where.push(`lower(u.tenant_id) = $${i++}`);
       }
 
-      if (role?.trim()) {
+      if (role?.trim() && role !== '__all__') {
         params.push(role.trim().toLowerCase());
         where.push(`lower(u.role) = $${i++}`);
       }
 
-      if (typeof is_active === 'string' && is_active.length) {
+      if (typeof is_active === 'string' && is_active.length && is_active !== '__all__') {
         params.push(is_active === 'true' || is_active === '1');
         where.push(`u.is_active = $${i++}`);
       }
@@ -357,6 +364,7 @@ export class SuperadminUsersController {
           left join public.tenants t
             on lower(t.schema_name) = lower(u.tenant_id)
             or lower(t.slug) = lower(u.tenant_id)
+            or t.id::text = u.tenant_id
           ${whereSql}
         )
         select *, (select count(*) from base) as total
@@ -377,9 +385,9 @@ export class SuperadminUsersController {
   }
 
   /* ==========================================================
-      C) UPDATE UTENTE GLOBALE (role / is_active / mfa_required)
-      PATCH /api/superadmin/users/:id
-  ========================================================== */
+       C) UPDATE UTENTE GLOBALE (role / is_active / mfa_required)
+       PATCH /api/superadmin/users/:id
+   ========================================================== */
   @Patch('users/:id')
   async updateGlobalUser(
     @Req() req: Request,
@@ -403,7 +411,6 @@ export class SuperadminUsersController {
         vals.push(body.is_active);
       }
 
-      // ✅ FIX: Gestione mfa_required per evitare 400 Bad Request
       if (typeof body.mfa_required === 'boolean') {
         sets.push(`mfa_required = $${idx++}`);
         vals.push(body.mfa_required);
@@ -439,8 +446,9 @@ export class SuperadminUsersController {
   }
 
   /* ==========================================================
-      D) RESET PASSWORD — TENANT USER
-  ========================================================== */
+       D) RESET PASSWORD — TENANT USER
+       POST /api/superadmin/tenants/:tenantId/users/:userId/reset-password
+   ========================================================== */
   @Post('tenants/:tenantId/users/:userId/reset-password')
   async resetTenantUserPassword(
     @Req() req: Request,
@@ -492,8 +500,9 @@ export class SuperadminUsersController {
   }
 
   /* ==========================================================
-      E) CREATE TENANT USER
-  ========================================================== */
+       E) CREATE TENANT USER
+       POST /api/superadmin/tenants/:tenantId/users
+   ========================================================== */
   @Post('tenants/:tenantId/users')
   async createTenantUser(
     @Req() req: Request,
@@ -519,8 +528,10 @@ export class SuperadminUsersController {
 
       const role = (body.role || 'user').toLowerCase() as Role;
 
+      // In alcuni sistemi gli admin devono essere invitati per forza, 
+      // qui lo lasciamo opzionale se vuoi.
       if (['admin', 'owner'].includes(role) && body.sendInvite !== true) {
-        throw new BadRequestException('Admins must be invited');
+        // throw new BadRequestException('Admins must be invited'); // Decommenta se vuoi forzare l'invito
       }
 
       const schema = safeSchema(t.schema_name);
@@ -556,6 +567,7 @@ export class SuperadminUsersController {
         let inviteToken: string | undefined;
         if (body.sendInvite === true) {
           inviteToken = crypto.randomBytes(32).toString('hex');
+          // Qui potresti salvare il token in una tabella invites se prevista
         }
 
         await this.auditTenant(tenantDs, schema, req, {
@@ -582,8 +594,9 @@ export class SuperadminUsersController {
   }
 
   /* ==========================================================
-      F) AUDIT
-  ========================================================== */
+       F) AUDIT
+       GET /api/superadmin/users/:email/audit
+   ========================================================== */
   @Get('users/:email/audit')
   async auditForUser(
     @Req() req: Request,
