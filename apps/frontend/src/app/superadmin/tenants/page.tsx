@@ -125,6 +125,7 @@ export default function TenantsPage() {
 
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [fetchState, setFetchState] = useState<FetchState>({ status: "idle" });
+  const [lastRefreshTime, setLastRefreshTime] = useState<string>("");
 
   // Filtri
   const [search, setSearch] = useState("");
@@ -167,11 +168,13 @@ export default function TenantsPage() {
   const loadTenants = async () => {
     setFetchState({ status: "loading" });
     try {
-      const data = await apiFetch<any>("/superadmin/v2/tenants");
+      // FIX: Rimosso /v2/ per uniformità
+      const data = await apiFetch<any>("/superadmin/tenants");
       const list = Array.isArray(data?.tenants) ? data.tenants : [];
 
       setTenants(list);
       setFetchState({ status: "ok" });
+      setLastRefreshTime(new Date().toLocaleTimeString("it-IT"));
 
       if (data?.warning) {
         toast({
@@ -204,7 +207,8 @@ export default function TenantsPage() {
     if (!window.confirm(`Vuoi davvero ${actionLabel} questo tenant?`)) return;
 
     try {
-      await apiFetch(`/superadmin/v2/tenants/${tenantId}/status`, {
+      // FIX: Rimosso /v2/
+      await apiFetch(`/superadmin/tenants/${tenantId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: !currentStatus })
@@ -229,7 +233,8 @@ export default function TenantsPage() {
 
     setIsCreating(true);
     try {
-      await apiFetch("/superadmin/v2/tenants", {
+      // FIX: Rimosso /v2/
+      await apiFetch("/superadmin/tenants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newTenant)
@@ -319,7 +324,8 @@ export default function TenantsPage() {
     if (!window.confirm(`Ultima possibilità: Confermi l'eliminazione di ${tenantName}?`)) return;
 
     try {
-      await apiFetch(`/superadmin/v2/tenants/${tenantId}`, {
+      // FIX: Rimosso /v2/
+      await apiFetch(`/superadmin/tenants/${tenantId}`, {
         method: "DELETE",
       });
 
@@ -429,7 +435,7 @@ export default function TenantsPage() {
             Tenant ({filteredTenants.length})
           </div>
           <div className="text-xs font-medium text-slate-400">
-            Ultimo refresh: {new Date().toLocaleTimeString("it-IT")}
+            Ultimo refresh: {lastRefreshTime}
           </div>
         </div>
 
