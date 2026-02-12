@@ -3,13 +3,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Tenant } from './entities/tenant.entity';
 import { CreateTenantDto } from './dto/create-tenant.dto';
+import { MailService } from '../mail/mail.service'; // <--- 1. Importiamo il MailService
 
 @Injectable()
 export class TenantsService {
   constructor(
     @InjectRepository(Tenant)
     private tenantsRepo: Repository<Tenant>,
-    private dataSource: DataSource, // Serve per eseguire SQL raw (CREATE/DROP SCHEMA)
+    private dataSource: DataSource, 
+    private mailService: MailService, // <--- 2. Iniettiamo il MailService
   ) {}
 
   // --- LISTA TENANTS ---
@@ -17,7 +19,7 @@ export class TenantsService {
     return this.tenantsRepo.find({ order: { createdAt: 'DESC' } });
   }
 
-  // --- NUOVO METODO: AGGIORNAMENTO STATO (Sospendi/Attiva) ---
+  // --- AGGIORNAMENTO STATO (Sospendi/Attiva) ---
   async updateStatus(id: string, isActive: boolean) {
     // 1. Verifichiamo che il tenant esista
     const tenant = await this.tenantsRepo.findOne({ where: { id } });
@@ -27,7 +29,6 @@ export class TenantsService {
     }
 
     // 2. Aggiorniamo solo il campo isActive
-    // Usiamo update invece di save per essere più efficienti e non toccare altri campi
     await this.tenantsRepo.update(id, { isActive });
 
     return { 
@@ -37,7 +38,7 @@ export class TenantsService {
     };
   }
 
-  // --- CREAZIONE (CON PROVISIONING) ---
+  // --- CREAZIONE (CON PROVISIONING E EMAIL) ---
   async create(dto: CreateTenantDto) {
     // 1. Controllo unicità slug
     const existing = await this.tenantsRepo.findOne({ where: { slug: dto.slug } });
@@ -49,25 +50,26 @@ export class TenantsService {
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
+    // Generiamo una password temporanea per l'admin
+    const tempPassword = Math.random().toString(36).slice(-8) + "Aa1!";
+
     try {
       // 2. Creiamo il record nel Public Schema (Metadata)
       const newTenant = this.tenantsRepo.create({
         name: dto.name,
         slug: dto.slug,
-        schemaName: dto.slug, // Lo schema avrà lo stesso nome dello slug
+        schemaName: dto.slug,
         adminEmail: dto.email,
         planTier: dto.plan || 'STARTER',
-        isActive: true, // Importante: nasce attivo!
+        isActive: true, 
       });
       
       const savedTenant = await queryRunner.manager.save(newTenant);
 
       // 3. PROVISIONING: Creiamo lo Schema Postgres Fisico
-      // ATTENZIONE: Questo comando crea un "namespace" isolato nel database
       await queryRunner.query(`CREATE SCHEMA IF NOT EXISTS "${dto.slug}"`);
 
       // 4. Creiamo le tabelle base nel nuovo schema
-      // Esempio creazione tabella users minima nel nuovo schema
       await queryRunner.query(`
         CREATE TABLE IF NOT EXISTS "${dto.slug}"."users" (
             "id" uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
@@ -78,18 +80,32 @@ export class TenantsService {
         );
       `);
 
-      // 5. Creiamo l'utente Admin iniziale nel nuovo schema
+      // 5. Creiamo l'utente Admin iniziale nel nuovo schema con la password temporanea
+      // NOTA: In produzione dovresti fare l'hash della password (es. bcrypt). 
+      // Qui la salviamo in chiaro o hashata a seconda di come gestisci il login.
       await queryRunner.query(`
-        INSERT INTO "${dto.slug}"."users" ("email", "role")
-        VALUES ($1, 'admin')
-      `, [dto.email]);
+        INSERT INTO "${dto.slug}"."users" ("email", "role", "password")
+        VALUES ($1, 'admin', $2)
+      `, [dto.email, tempPassword]);
 
       await queryRunner.commitTransaction();
+
+      // --- 6. INVIO EMAIL DI BENVENUTO (Fuori dalla transazione) ---
+      try {
+        await this.mailService.sendMail({
+          to: dto.email,
+          subject: 'Benvenuto in DoFlow - Il tuo spazio è pronto',
+          text: `Ciao! Il tuo tenant "${dto.name}" è stato creato con successo.\n\nAccedi qui: https://${dto.slug}.doflow.it\nUsername: ${dto.email}\nPassword Provvisoria: ${tempPassword}\n\nTi consigliamo di cambiare la password al primo accesso.`
+        });
+        console.log(`📧 Email inviata a ${dto.email}`);
+      } catch (mailErr) {
+        console.error("⚠️ Tenant creato ma errore invio email:", mailErr);
+        // Non lanciamo errore qui, il tenant è ormai creato.
+      }
       
       return savedTenant;
 
     } catch (err) {
-      // Se qualcosa va storto (es. schema già esiste ma tenant no), annulliamo tutto
       await queryRunner.rollbackTransaction();
       console.error("Errore creazione tenant:", err);
       throw new InternalServerErrorException("Errore durante il provisioning del tenant");
@@ -112,7 +128,6 @@ export class TenantsService {
     try {
       // 2. TENTATIVO DI ELIMINAZIONE SCHEMA (Connessioni + Dati)
       try {
-        // Tenta di eliminare lo schema fisico e tutti i suoi dati (CASCADE)
         await queryRunner.query(`DROP SCHEMA IF EXISTS "${tenant.schemaName}" CASCADE`);
       } catch (schemaErr) {
         console.warn(`Attenzione: Impossibile eliminare lo schema fisico "${tenant.schemaName}". Procedo comunque con la rimozione del record.`, schemaErr);
