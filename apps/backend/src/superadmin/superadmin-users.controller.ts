@@ -84,7 +84,6 @@ export class SuperadminUsersController {
   private assertSuperAdmin(req: Request) {
     const user = (req as any).authUser ?? (req as any).user;
     const role = String(user?.role ?? '').toLowerCase().trim();
-    // Verifica ruoli superadmin
     if (role !== 'superadmin' && role !== 'owner') {
       throw new ForbiddenException('SuperAdmin only');
     }
@@ -181,8 +180,6 @@ export class SuperadminUsersController {
   ) {
     try {
       const a = this.actor(req);
-      // Verifica se la tabella audit_log esiste nello schema tenant prima di inserire
-      // Per semplicità qui assumiamo esista, avvolto in try/catch
       await tenantDs.query(
         `
         insert into "${schema}"."audit_log"
@@ -222,7 +219,6 @@ export class SuperadminUsersController {
     const tFilter = String(tenantId || '').trim();
 
     try {
-      // KPI per Tenant
       const kpiRows: UsersKpiByTenantRow[] = await this.dataSource.query(
         `
         with base as (
@@ -257,7 +253,6 @@ export class SuperadminUsersController {
         [days, top],
       );
 
-      // Trend giornaliero
       const trend: UsersTrendPoint[] = await this.dataSource.query(
         `
         with params as (
@@ -385,7 +380,7 @@ export class SuperadminUsersController {
   }
 
   /* ==========================================================
-       C) UPDATE UTENTE GLOBALE (role / is_active / mfa_required)
+       C) UPDATE UTENTE GLOBALE
        PATCH /api/superadmin/users/:id
    ========================================================== */
   @Patch('users/:id')
@@ -528,10 +523,8 @@ export class SuperadminUsersController {
 
       const role = (body.role || 'user').toLowerCase() as Role;
 
-      // In alcuni sistemi gli admin devono essere invitati per forza, 
-      // qui lo lasciamo opzionale se vuoi.
       if (['admin', 'owner'].includes(role) && body.sendInvite !== true) {
-        // throw new BadRequestException('Admins must be invited'); // Decommenta se vuoi forzare l'invito
+        // throw new BadRequestException('Admins must be invited');
       }
 
       const schema = safeSchema(t.schema_name);
@@ -567,7 +560,6 @@ export class SuperadminUsersController {
         let inviteToken: string | undefined;
         if (body.sendInvite === true) {
           inviteToken = crypto.randomBytes(32).toString('hex');
-          // Qui potresti salvare il token in una tabella invites se prevista
         }
 
         await this.auditTenant(tenantDs, schema, req, {
@@ -618,6 +610,90 @@ export class SuperadminUsersController {
       return { logs: rows };
     } catch (e) {
       this.logAndThrow500('GET /superadmin/users/:email/audit', e);
+    }
+  }
+
+  /* ==========================================================
+       G) LIST TENANT USERS (Endpoint Mancante per fix 404)
+       GET /api/superadmin/tenants/:tenantId/users
+   ========================================================== */
+  @Get('tenants/:tenantId/users')
+  async listTenantUsers(
+    @Req() req: Request,
+    @Param('tenantId') tenantId: string,
+    @Query('q') q?: string,
+    @Query('role') role?: string,
+    @Query('is_active') is_active?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    this.assertSuperAdmin(req);
+
+    try {
+      const t = await this.getTenantById(tenantId);
+      if (!t) throw new BadRequestException('Tenant not found');
+
+      const schema = safeSchema(t.schema_name);
+      const tenantDs = await this.openTenantDs(schema);
+
+      try {
+        const p = clampInt(page, 1, 1, 100_000);
+        const ps = clampInt(pageSize, 25, 5, 200);
+        const offset = (p - 1) * ps;
+
+        const where: string[] = [];
+        const params: any[] = [];
+        let i = 1;
+
+        if (q?.trim()) {
+          const like = `%${safeLike(q.trim().toLowerCase())}%`;
+          params.push(like);
+          where.push(`(lower(email) like $${i++} escape '\\')`);
+        }
+
+        if (role?.trim() && role !== '__all__') {
+          params.push(role.trim().toLowerCase());
+          where.push(`lower(role) = $${i++}`);
+        }
+
+        if (typeof is_active === 'string' && is_active.length && is_active !== '__all__') {
+          params.push(is_active === 'true' || is_active === '1');
+          where.push(`is_active = $${i++}`);
+        }
+
+        const whereSql = where.length ? `where ${where.join(' and ')}` : '';
+
+        const rows = await tenantDs.query(
+          `
+          select id, email, role, is_active, created_at, updated_at,
+                 count(*) over() as total
+          from "${schema}"."users"
+          ${whereSql}
+          order by created_at desc
+          limit ${ps} offset ${offset}
+          `,
+          params,
+        );
+
+        const total = rows.length > 0 ? Number(rows[0].total) : 0;
+        
+        // Mappiamo i dati per uniformarli a GlobalUser
+        const users = rows.map(({ total: _t, ...u }: any) => ({
+          ...u,
+          tenant_id: t.id,
+          tenant_name: t.name,
+          tenant_slug: t.slug,
+          tenant_schema: t.schema_name,
+        }));
+
+        return { page: p, pageSize: ps, total, users };
+
+      } finally {
+        if (tenantDs.isInitialized) await tenantDs.destroy();
+      }
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e;
+      this.logAndThrow500(`GET /superadmin/tenants/${tenantId}/users`, e);
     }
   }
 }
