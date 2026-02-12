@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   PauseCircle,
+  PlayCircle, // Icona per riattivazione
   Database,
   Loader2,
   Globe,
@@ -114,21 +115,30 @@ const StatusPill = ({ isActive }: { isActive: boolean }) => {
   );
 };
 
+// --- COMPONENTE PRINCIPALE ---
 export default function TenantsPage() {
   const { toast } = useToast();
+
+  // --- FIX HYDRATION ---
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [fetchState, setFetchState] = useState<FetchState>({ status: "idle" });
 
+  // Filtri
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "suspended">("all");
 
+  // Modali
   const [resetModal, setResetModal] = useState<ResetModalState | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
+  // --- STATI CREAZIONE ---
   const [newTenant, setNewTenant] = useState({ name: "", slug: "", email: "", plan: "STARTER" });
   const [isCreating, setIsCreating] = useState(false);
 
+  // Auto-generate slug
   useEffect(() => {
     if (newTenant.name) {
       setNewTenant(prev => ({ ...prev, slug: generateSlug(prev.name) }));
@@ -157,7 +167,6 @@ export default function TenantsPage() {
   const loadTenants = async () => {
     setFetchState({ status: "loading" });
     try {
-      // Usiamo la rotta V2 per bypassare cache residue
       const data = await apiFetch<any>("/superadmin/v2/tenants");
       const list = Array.isArray(data?.tenants) ? data.tenants : [];
 
@@ -186,6 +195,26 @@ export default function TenantsPage() {
   useEffect(() => {
     loadTenants();
   }, []);
+
+  // --- AZIONI ---
+
+  // NUOVA AZIONE: Sospensione/Riattivazione Reale
+  const handleToggleStatus = async (tenantId: string, currentStatus: boolean) => {
+    const actionLabel = currentStatus ? "sospendere" : "riattivare";
+    if (!window.confirm(`Vuoi davvero ${actionLabel} questo tenant?`)) return;
+
+    try {
+      await apiFetch(`/superadmin/v2/tenants/${tenantId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: !currentStatus })
+      });
+      toast({ title: "Aggiornato", description: `Tenant ${!currentStatus ? 'attivato' : 'sospeso'}.` });
+      loadTenants();
+    } catch (e: any) {
+      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    }
+  };
 
   const handleCreateTenant = async () => {
     if (!newTenant.name || !newTenant.slug || !newTenant.email) {
@@ -310,8 +339,12 @@ export default function TenantsPage() {
     }
   };
 
+  // --- VARIABILI DI STATO DERIVATE ---
   const isLoading = fetchState.status === "loading";
   const isDegraded = fetchState.status === "degraded";
+
+  // Se non siamo ancora montati sul client (Hydration check)
+  if (!mounted) return <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin h-8 w-8 text-indigo-600" /></div>;
 
   return (
     <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in">
@@ -531,12 +564,16 @@ export default function TenantsPage() {
 
                           <DropdownMenuSeparator />
 
+                          {/* IMPLEMENTAZIONE REALE SOSPENDI/RIATTIVA */}
                           <DropdownMenuItem
-                            className="text-slate-600 focus:text-slate-700"
-                            onClick={() => toast({ title: "In Sviluppo", description: "La sospensione sarà presto disponibile." })}
+                            className={t.isActive ? "text-amber-600 focus:text-amber-700" : "text-emerald-600 focus:text-emerald-700"}
+                            onClick={() => handleToggleStatus(t.id, t.isActive)}
                           >
-                            <PauseCircle className="mr-2 h-4 w-4" />
-                            Sospendi Accesso
+                            {t.isActive ? (
+                                <><PauseCircle className="mr-2 h-4 w-4" /> Sospendi Accesso</>
+                            ) : (
+                                <><PlayCircle className="mr-2 h-4 w-4" /> Riattiva Accesso</>
+                            )}
                           </DropdownMenuItem>
 
                           <DropdownMenuSeparator />
