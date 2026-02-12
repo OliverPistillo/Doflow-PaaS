@@ -129,7 +129,7 @@ import { TenantsService } from './superadmin/tenants.service';
     FilesController,
     NotificationsTestController,
     AuthPasswordController,
-    SuperadminTenantsController,
+    // SuperadminTenantsController,
     SuperadminAuditController,
     SuperadminUsersController,
     SecurityPolicyController,
@@ -162,6 +162,9 @@ import { TenantsService } from './superadmin/tenants.service';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(TenancyMiddleware, AuthMiddleware).forRoutes('*');
+    consumer
+      .apply(TenancyMiddleware, AuthMiddleware)
+      .exclude('api/superadmin/(.*)') // 2. ESCLUDI LE ROTTE SUPERADMIN DAL TENANCY MIDDLEWARE
+      .forRoutes('*');
   }
 }

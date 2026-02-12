@@ -163,7 +163,7 @@ export default function TenantsPage() {
   const loadTenants = async () => {
     setFetchState({ status: "loading" });
     try {
-      const data = await apiFetch<{ tenants: TenantRow[]; warning?: string }>("/superadmin/tenants");
+    const data = await apiFetch<any>("/superadmin/v2/tenants");
       const list = Array.isArray(data?.tenants) ? data.tenants : [];
 
       setTenants(list);
@@ -208,7 +208,7 @@ export default function TenantsPage() {
 
       setIsCreating(true);
       try {
-          await apiFetch("/superadmin/tenants", {
+          await apiFetch("/superadmin/v2/tenants", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(newTenant)
@@ -301,7 +301,7 @@ export default function TenantsPage() {
     if (!window.confirm(`Ultima possibilità: Confermi l'eliminazione di ${tenantName}?`)) return;
 
     try {
-        await apiFetch(`/superadmin/tenants/${tenantId}`, {
+        await apiFetch(`/superadmin/v2/tenants/${tenantId}`, {
             method: "DELETE",
         });
 

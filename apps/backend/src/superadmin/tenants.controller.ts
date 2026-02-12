@@ -3,21 +3,21 @@ import { TenantsService } from './tenants.service';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
-@Controller('superadmin/tenants')
+@Controller('superadmin/v2/tenants') // 3. CAMBIAMO ROTTA IN V2 PER TEST
 @UseGuards(JwtAuthGuard)
 export class TenantsController {
   constructor(private readonly tenantsService: TenantsService) {}
 
-  @Get()
-  async getTenants() {
-    const tenants = await this.tenantsService.findAll();
-    return { tenants };
-  }
-
   @Post()
   async createTenant(@Body() body: CreateTenantDto) {
-    // NestJS valida automaticamente 'body' usando il DTO
+    // Aggiungiamo un log che vedrai SICURAMENTE se il codice è nuovo
+    console.log("🚀 CHIAMATA V2 RICEVUTA CON BODY:", JSON.stringify(body));
     return this.tenantsService.create(body);
+  }
+  
+  @Get()
+  async getTenants() {
+    return { tenants: await this.tenantsService.findAll() };
   }
 
   @Delete(':id')
