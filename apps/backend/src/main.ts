@@ -5,7 +5,8 @@ import { NotificationsService } from './realtime/notifications.service';
 import { WebSocketServer, WebSocket } from 'ws';
 import * as jwt from 'jsonwebtoken';
 import { ValidationPipe } from '@nestjs/common';
-import { json, urlencoded } from 'express'; // <--- 1. IMPORTA QUESTO PER LEGGERE IL JSON
+import { NestExpressApplication } from '@nestjs/platform-express'; // <--- Importiamo il tipo corretto
+import { json, urlencoded } from 'express'; // <--- Leggiamo il JSON direttamente da Express
 
 type ClientMeta = {
   userId: string;
@@ -47,16 +48,20 @@ async function bootstrap() {
     process.exit(1);
   }
 
-  const app = await NestFactory.create(AppModule);
+  // 2. Creazione App con configurazione specifica per il Body Parser
+  // Passiamo { bodyParser: false } per evitare conflitti tra NestJS e la tua versione di Express
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bodyParser: false, 
+  });
 
-  // 2. ABILITA IL PARSING DEL JSON (FONDAMENTALE PER I POST)
-  // Senza questo, il body arriva vuoto e causa "Missing fields"
+  // 3. ABILITA IL PARSING DEL JSON MANUALMENTE
+  // Questo risolve l'errore "Missing fields" leggendo forzatamente il body
   app.use(json({ limit: '50mb' }));
   app.use(urlencoded({ extended: true, limit: '50mb' }));
 
   app.setGlobalPrefix('api');
 
-  // 3. CORS (Configurazione permissiva per sviluppo)
+  // 4. CORS (Configurazione permissiva)
   app.enableCors({
     origin: true,
     credentials: true,
@@ -73,18 +78,19 @@ async function bootstrap() {
     maxAge: 86400,
   });
 
-  // 4. VALIDATION PIPE (Attiva i DTO)
+  // 5. VALIDATION PIPE (Attiva i DTO)
   app.useGlobalPipes(new ValidationPipe({
     transform: true, // Trasforma i JSON in istanze di Classe DTO
     whitelist: true, // Rimuove campi non definiti nel DTO (sicurezza)
-    forbidNonWhitelisted: false, // Non bloccare se ci sono campi extra, ignorali e basta
+    forbidNonWhitelisted: false, // Non bloccare se ci sono campi extra
   }));
 
   // Avvio Server HTTP
   const port = Number(process.env.PORT ?? 4000);
   await app.listen(port, '0.0.0.0');
 
-  // 5. Configurazione WebSocket (Dopo app.listen)
+  // 6. Configurazione WebSocket (Dopo app.listen)
+  // Manteniamo intatta tutta la tua logica WebSocket e Redis
   const httpAdapter: any = (app as any).getHttpAdapter();
   const httpServer: any = httpAdapter.getHttpServer();
 
