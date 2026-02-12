@@ -17,6 +17,26 @@ export class TenantsService {
     return this.tenantsRepo.find({ order: { createdAt: 'DESC' } });
   }
 
+  // --- NUOVO METODO: AGGIORNAMENTO STATO (Sospendi/Attiva) ---
+  async updateStatus(id: string, isActive: boolean) {
+    // 1. Verifichiamo che il tenant esista
+    const tenant = await this.tenantsRepo.findOne({ where: { id } });
+    
+    if (!tenant) {
+      throw new NotFoundException(`Tenant con ID ${id} non trovato.`);
+    }
+
+    // 2. Aggiorniamo solo il campo isActive
+    // Usiamo update invece di save per essere più efficienti e non toccare altri campi
+    await this.tenantsRepo.update(id, { isActive });
+
+    return { 
+      message: `Tenant ${isActive ? 'riattivato' : 'sospeso'} con successo`, 
+      id, 
+      isActive 
+    };
+  }
+
   // --- CREAZIONE (CON PROVISIONING) ---
   async create(dto: CreateTenantDto) {
     // 1. Controllo unicità slug
@@ -36,7 +56,8 @@ export class TenantsService {
         slug: dto.slug,
         schemaName: dto.slug, // Lo schema avrà lo stesso nome dello slug
         adminEmail: dto.email,
-        planTier: dto.plan || 'STARTER', // Default se il frontend non lo manda
+        planTier: dto.plan || 'STARTER',
+        isActive: true, // Importante: nasce attivo!
       });
       
       const savedTenant = await queryRunner.manager.save(newTenant);
@@ -45,17 +66,15 @@ export class TenantsService {
       // ATTENZIONE: Questo comando crea un "namespace" isolato nel database
       await queryRunner.query(`CREATE SCHEMA IF NOT EXISTS "${dto.slug}"`);
 
-      // 4. (Opzionale ma consigliato) Creiamo le tabelle base nel nuovo schema
-      // Qui dovresti lanciare le migrazioni. Per semplicità ora creiamo solo una tabella users dummy.
-      
+      // 4. Creiamo le tabelle base nel nuovo schema
       // Esempio creazione tabella users minima nel nuovo schema
       await queryRunner.query(`
-        CREATE TABLE "${dto.slug}"."users" (
+        CREATE TABLE IF NOT EXISTS "${dto.slug}"."users" (
             "id" uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
-            "email" varchar NOT NULL,
-            "password" varchar,
-            "role" varchar DEFAULT 'admin',
-            "created_at" timestamp DEFAULT now()
+            "email" character varying NOT NULL,
+            "password" character varying,
+            "role" character varying DEFAULT 'admin',
+            "created_at" timestamp without time zone DEFAULT now()
         );
       `);
 
@@ -85,15 +104,10 @@ export class TenantsService {
     const tenant = await this.tenantsRepo.findOne({ where: { id } });
     
     // Se non esiste nel DB principale, restituiamo successo per "idempotenza" 
-    // (significa che è già stato cancellato, quindi va bene così)
     if (!tenant) return { message: "Tenant already deleted or not found" };
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
-    
-    // Non usiamo una transazione SQL unica qui ("startTransaction"), 
-    // perché vogliamo che l'eliminazione del record avvenga 
-    // ANCHE SE il drop dello schema fallisce (es. lo schema era già stato cancellato a mano).
     
     try {
       // 2. TENTATIVO DI ELIMINAZIONE SCHEMA (Connessioni + Dati)
@@ -101,13 +115,10 @@ export class TenantsService {
         // Tenta di eliminare lo schema fisico e tutti i suoi dati (CASCADE)
         await queryRunner.query(`DROP SCHEMA IF EXISTS "${tenant.schemaName}" CASCADE`);
       } catch (schemaErr) {
-        // Logghiamo solo un warning, non blocchiamo l'operazione.
-        // Magari lo schema non esisteva o c'erano connessioni appese.
         console.warn(`Attenzione: Impossibile eliminare lo schema fisico "${tenant.schemaName}". Procedo comunque con la rimozione del record.`, schemaErr);
       }
 
       // 3. ELIMINA IL RECORD DAI METADATI (public.tenants)
-      // Usiamo il manager per coerenza
       await queryRunner.manager.delete(Tenant, id);
 
       return { message: "Tenant deleted successfully" };
