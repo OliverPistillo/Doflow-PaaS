@@ -6,7 +6,7 @@ import * as path from 'path';
 
 // --- MODULI CORE & INFRA ---
 import { RedisModule } from './redis/redis.module';
-import { TelemetryModule } from './telemetry/telemetry.module'; // <--- Nuovo modulo v3.5
+import { TelemetryModule } from './telemetry/telemetry.module';
 import { TrafficControlModule } from './traffic-control/traffic-control.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { MailModule } from './mail/mail.module';
@@ -49,6 +49,7 @@ import { NotificationsService } from './realtime/notifications.service';
 import { ProjectsEventsService } from './realtime/projects-events.service';
 import { TenantBootstrapService } from './tenancy/tenant-bootstrap.service';
 import { AuthMfaService } from './auth-mfa.service';
+import { SystemStatsService } from './superadmin/telemetry.service'; // <--- ASSICURATI CHE SIA IMPORTATO
 
 // --- ENTITIES & SECURITY ---
 import { PlatformDeal } from './superadmin/entities/platform-deal.entity';
@@ -77,10 +78,9 @@ import { BusinaroModule } from './businaro/businaro.module';
       envFilePath: path.join(__dirname, '..', '.env'),
     }),
 
-    // Infra Modules
     RedisModule,
-    TelemetryModule,      // <--- v3.5 Shadow Logging incapsulato qui
-    TrafficControlModule, // <--- v3.5 Gatekeeper
+    TelemetryModule,
+    TrafficControlModule,
     TenancyModule,
 
     TypeOrmModule.forRootAsync({
@@ -141,7 +141,7 @@ import { BusinaroModule } from './businaro/businaro.module';
   ],
 
   providers: [
-    // Nota: TelemetryService è ora fornito dal TelemetryModule
+    SystemStatsService, // <--- ECCOLO! RIAGGIUNGI QUESTO
     AuthService,
     AuditService,
     LoginGuardService,
@@ -158,7 +158,7 @@ import { BusinaroModule } from './businaro/businaro.module';
     TenantsService,
     {
       provide: APP_GUARD,
-      useClass: TrafficGuard, // <--- Protezione attiva su ogni rotta
+      useClass: TrafficGuard,
     },
   ],
 })
