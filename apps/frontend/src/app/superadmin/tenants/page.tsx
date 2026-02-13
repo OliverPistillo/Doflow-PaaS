@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { ActivityFeed } from "@/components/dashboard/activity-feed"; // <--- NUOVO IMPORT
 
 // --- TIPI (Allineati al Backend camelCase) ---
 type TenantRow = {
@@ -353,7 +354,7 @@ export default function TenantsPage() {
   if (!mounted) return <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin h-8 w-8 text-indigo-600" /></div>;
 
   return (
-    <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in">
+    <div className="space-y-8 max-w-[1800px] mx-auto animate-in fade-in">
 
       {/* HEADER */}
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -402,204 +403,226 @@ export default function TenantsPage() {
         </Card>
       )}
 
-      {/* TOOLBAR */}
-      <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input
-            placeholder="Cerca azienda, slug o schema DB..."
-            className="pl-9 border-slate-200"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+      {/* --- LAYOUT A GRIGLIA: TABELLA (SX) + ACTIVITY FEED (DX) --- */}
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
+        
+        {/* COLONNA SINISTRA: TUTTA LA GESTIONE TENANT (3/4 SPAN) */}
+        <div className="xl:col-span-3 space-y-6">
+            
+            {/* TOOLBAR */}
+            <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                    placeholder="Cerca azienda, slug o schema DB..."
+                    className="pl-9 border-slate-200"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                />
+                </div>
 
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-slate-400" />
-          <select
-            className="h-10 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
-          >
-            <option value="all">Tutti gli stati</option>
-            <option value="active">Solo attivi</option>
-            <option value="suspended">Sospesi</option>
-          </select>
-        </div>
-      </div>
+                <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-slate-400" />
+                <select
+                    className="h-10 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as any)}
+                >
+                    <option value="all">Tutti gli stati</option>
+                    <option value="active">Solo attivi</option>
+                    <option value="suspended">Sospesi</option>
+                </select>
+                </div>
+            </div>
 
-      {/* TABLE */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-          <div className="text-sm font-black text-slate-900">
-            Tenant ({filteredTenants.length})
-          </div>
-          <div className="text-xs font-medium text-slate-400">
-            Ultimo refresh: {lastRefreshTime}
-          </div>
-        </div>
+            {/* TABLE */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                <div className="text-sm font-black text-slate-900">
+                    Tenant ({filteredTenants.length})
+                </div>
+                <div className="text-xs font-medium text-slate-400">
+                    Ultimo refresh: {lastRefreshTime}
+                </div>
+                </div>
 
-        <table className="w-full text-sm text-left">
-          <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-xs border-b border-slate-100">
-            <tr>
-              <th className="px-6 py-4">Azienda</th>
-              <th className="px-6 py-4">Piano</th>
-              <th className="px-6 py-4">Schema</th>
-              <th className="px-6 py-4">Storage</th>
-              <th className="px-6 py-4">Stato</th>
-              <th className="px-6 py-4">Aggiornato</th>
-              <th className="px-6 py-4 text-right">Azioni</th>
-            </tr>
-          </thead>
+                <table className="w-full text-sm text-left">
+                <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-xs border-b border-slate-100">
+                    <tr>
+                    <th className="px-6 py-4">Azienda</th>
+                    <th className="px-6 py-4">Piano</th>
+                    <th className="px-6 py-4">Schema</th>
+                    <th className="px-6 py-4">Storage</th>
+                    <th className="px-6 py-4">Stato</th>
+                    <th className="px-6 py-4">Aggiornato</th>
+                    <th className="px-6 py-4 text-right">Azioni</th>
+                    </tr>
+                </thead>
 
-          <tbody className="divide-y divide-slate-100">
-            {isLoading ? (
-              <tr>
-                <td colSpan={7} className="p-10 text-center text-slate-400">
-                  <div className="flex flex-col items-center gap-2">
-                    <Loader2 className="animate-spin h-6 w-6 text-indigo-600" />
-                    Caricamento in corso...
-                  </div>
-                </td>
-              </tr>
-            ) : filteredTenants.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="p-10 text-center text-slate-400">
-                  Nessun tenant trovato.
-                </td>
-              </tr>
-            ) : (
-              filteredTenants.map((t) => (
-                <tr key={t.id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0 border border-indigo-100">
-                        <Building2 className="h-5 w-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="font-black text-slate-900 text-base truncate">
-                          {t.name}
+                <tbody className="divide-y divide-slate-100">
+                    {isLoading ? (
+                    <tr>
+                        <td colSpan={7} className="p-10 text-center text-slate-400">
+                        <div className="flex flex-col items-center gap-2">
+                            <Loader2 className="animate-spin h-6 w-6 text-indigo-600" />
+                            Caricamento in corso...
                         </div>
-                        <div className="text-slate-400 text-xs font-mono truncate flex items-center gap-1">
-                          <Globe className="h-3 w-3" /> {t.slug}.tuodominio.it
-                        </div>
-                      </div>
-                    </div>
-                  </td>
+                        </td>
+                    </tr>
+                    ) : filteredTenants.length === 0 ? (
+                    <tr>
+                        <td colSpan={7} className="p-10 text-center text-slate-400">
+                        Nessun tenant trovato.
+                        </td>
+                    </tr>
+                    ) : (
+                    filteredTenants.map((t) => (
+                        <tr key={t.id} className="hover:bg-slate-50 transition-colors group">
+                        <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0 border border-indigo-100">
+                                <Building2 className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0">
+                                <div className="font-black text-slate-900 text-base truncate">
+                                {t.name}
+                                </div>
+                                <div className="text-slate-400 text-xs font-mono truncate flex items-center gap-1">
+                                <Globe className="h-3 w-3" /> {t.slug}.tuodominio.it
+                                </div>
+                            </div>
+                            </div>
+                        </td>
 
-                  <td className="px-6 py-4">
-                    <Badge
-                      variant="outline"
-                      className="border-indigo-200 text-indigo-700 bg-indigo-50 font-bold px-3 py-1"
-                    >
-                      {t.planTier || "STARTER"}
-                    </Badge>
-                    <div className="text-xs text-slate-400 mt-2 font-medium">
-                      Max users: <span className="font-mono">{t.maxUsers ?? "-"}</span>
-                    </div>
-                  </td>
+                        <td className="px-6 py-4">
+                            <Badge
+                            variant="outline"
+                            className="border-indigo-200 text-indigo-700 bg-indigo-50 font-bold px-3 py-1"
+                            >
+                            {t.planTier || "STARTER"}
+                            </Badge>
+                            <div className="text-xs text-slate-400 mt-2 font-medium">
+                            Max users: <span className="font-mono">{t.maxUsers ?? "-"}</span>
+                            </div>
+                        </td>
 
-                  <td className="px-6 py-4">
-                    <div className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-1 rounded w-fit border border-slate-200 flex items-center gap-1">
-                      <Database className="h-3 w-3" />
-                      {t.schemaName}
-                    </div>
-                  </td>
+                        <td className="px-6 py-4">
+                            <div className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-1 rounded w-fit border border-slate-200 flex items-center gap-1">
+                            <Database className="h-3 w-3" />
+                            {t.schemaName}
+                            </div>
+                        </td>
 
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-black text-slate-900">
-                      {formatMbToGb(t.storageUsedMb)} GB
-                    </div>
-                    <div className="text-xs text-slate-400 font-medium">
-                      Limit: <span className="font-mono">{t.storageLimitGb ?? 0} GB</span>
-                    </div>
-                  </td>
+                        <td className="px-6 py-4">
+                            <div className="text-sm font-black text-slate-900">
+                            {formatMbToGb(t.storageUsedMb)} GB
+                            </div>
+                            <div className="text-xs text-slate-400 font-medium">
+                            Limit: <span className="font-mono">{t.storageLimitGb ?? 0} GB</span>
+                            </div>
+                        </td>
 
-                  <td className="px-6 py-4">
-                    <StatusPill isActive={!!t.isActive} />
-                  </td>
+                        <td className="px-6 py-4">
+                            <StatusPill isActive={!!t.isActive} />
+                        </td>
 
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-bold text-slate-700">
-                      {formatDate(t.updatedAt || t.createdAt)}
-                    </div>
-                    <div className="text-xs text-slate-400 font-medium">
-                      Creato: {formatDate(t.createdAt)}
-                    </div>
-                  </td>
+                        <td className="px-6 py-4">
+                            <div className="text-sm font-bold text-slate-700">
+                            {formatDate(t.updatedAt || t.createdAt)}
+                            </div>
+                            <div className="text-xs text-slate-400 font-medium">
+                            Creato: {formatDate(t.createdAt)}
+                            </div>
+                        </td>
 
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleImpersonate(t.id)}
-                        className="hidden group-hover:flex h-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                      >
-                        <Eye className="h-4 w-4 mr-2" />
-                        Entra
-                      </Button>
+                        <td className="px-6 py-4 text-right">
+                            <div className="flex justify-end items-center gap-2">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleImpersonate(t.id)}
+                                className="hidden group-hover:flex h-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                            >
+                                <Eye className="h-4 w-4 mr-2" />
+                                Entra
+                            </Button>
 
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                                </DropdownMenuTrigger>
 
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Azioni Tenant</DropdownMenuLabel>
+                                <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Azioni Tenant</DropdownMenuLabel>
 
-                          <DropdownMenuItem onClick={() => handleImpersonate(t.id)}>
-                            <Eye className="mr-2 h-4 w-4" />
-                            Impersona Admin
-                          </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleImpersonate(t.id)}>
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    Impersona Admin
+                                </DropdownMenuItem>
 
-                          <DropdownMenuItem
-                            onClick={() =>
-                              setResetModal({
-                                open: true,
-                                tenantId: t.id,
-                                email: "admin@example.com",
-                              })
-                            }
-                          >
-                            <KeyRound className="mr-2 h-4 w-4" />
-                            Reset Password
-                          </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() =>
+                                    setResetModal({
+                                        open: true,
+                                        tenantId: t.id,
+                                        email: "admin@example.com",
+                                    })
+                                    }
+                                >
+                                    <KeyRound className="mr-2 h-4 w-4" />
+                                    Reset Password
+                                </DropdownMenuItem>
 
-                          <DropdownMenuSeparator />
+                                <DropdownMenuSeparator />
 
-                          {/* IMPLEMENTAZIONE REALE SOSPENDI/RIATTIVA */}
-                          <DropdownMenuItem
-                            className={t.isActive ? "text-amber-600 focus:text-amber-700" : "text-emerald-600 focus:text-emerald-700"}
-                            onClick={() => handleToggleStatus(t.id, t.isActive)}
-                          >
-                            {t.isActive ? (
-                                <><PauseCircle className="mr-2 h-4 w-4" /> Sospendi Accesso</>
-                            ) : (
-                                <><PlayCircle className="mr-2 h-4 w-4" /> Riattiva Accesso</>
-                            )}
-                          </DropdownMenuItem>
+                                {/* IMPLEMENTAZIONE REALE SOSPENDI/RIATTIVA */}
+                                <DropdownMenuItem
+                                    className={t.isActive ? "text-amber-600 focus:text-amber-700" : "text-emerald-600 focus:text-emerald-700"}
+                                    onClick={() => handleToggleStatus(t.id, t.isActive)}
+                                >
+                                    {t.isActive ? (
+                                        <><PauseCircle className="mr-2 h-4 w-4" /> Sospendi Accesso</>
+                                    ) : (
+                                        <><PlayCircle className="mr-2 h-4 w-4" /> Riattiva Accesso</>
+                                    )}
+                                </DropdownMenuItem>
 
-                          <DropdownMenuSeparator />
+                                <DropdownMenuSeparator />
 
-                          <DropdownMenuItem
-                            className="text-rose-600 focus:text-rose-700 focus:bg-rose-50 font-bold"
-                            onClick={() => handleDeleteTenant(t.id, t.name)}
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Elimina Definitivamente
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                                <DropdownMenuItem
+                                    className="text-rose-600 focus:text-rose-700 focus:bg-rose-50 font-bold"
+                                    onClick={() => handleDeleteTenant(t.id, t.name)}
+                                >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Elimina Definitivamente
+                                </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            </div>
+                        </td>
+                        </tr>
+                    ))
+                    )}
+                </tbody>
+                </table>
+            </div>
+        </div>
+
+        {/* COLONNA DESTRA: ACTIVITY FEED (1/4 SPAN) */}
+        <div className="xl:col-span-1 space-y-6">
+            <ActivityFeed />
+            
+            {/* Box informativo (opzionale) */}
+            <Card className="p-4 bg-indigo-50 border-indigo-100 text-indigo-900">
+              <h3 className="font-bold flex items-center gap-2 text-sm"><Database className="h-4 w-4" /> System Stats</h3>
+              <p className="text-xs mt-2 opacity-80">
+                I tenant attivi sono caricati nella Redis Whitelist per il Fast-Path routing.
+              </p>
+           </Card>
+        </div>
+
       </div>
 
       {/* CREATE TENANT MODAL */}

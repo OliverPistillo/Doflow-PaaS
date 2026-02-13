@@ -19,15 +19,30 @@ export class TenantsController {
     return this.tenantsService.create(body);
   }
 
-  // 👇👇👇 AGGIUNGI QUESTO METODO 👇👇👇
   @Patch(':id/status')
   async updateStatus(@Param('id') id: string, @Body() body: { isActive: boolean }) {
     return this.tenantsService.updateStatus(id, body.isActive);
   }
-  // 👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆
 
   @Delete(':id')
   async deleteTenant(@Param('id') id: string) {
     return this.tenantsService.delete(id);
+  }
+
+  // --- ENDPOINT AGGIUNTIVI PER SUPPORTO COMPLETO FRONTEND ---
+
+  @Post(':id/reset-admin-password')
+  async resetPassword(@Param('id') id: string, @Body() body: { email: string }) {
+    return this.tenantsService.resetAdminPassword(id, body.email);
+  }
+
+  @Post(':id/impersonate')
+  async impersonate(@Param('id') id: string) {
+      // Mock Implementation per la v3.5
+      // Qui in futuro genereremo un JWT "impersonation token"
+      return { 
+          token: "mock_impersonation_token", 
+          redirectUrl: "https://app.doflow.it" 
+      };
   }
 }

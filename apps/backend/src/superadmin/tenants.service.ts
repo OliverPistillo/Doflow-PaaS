@@ -3,15 +3,21 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Tenant } from './entities/tenant.entity';
 import { CreateTenantDto } from './dto/create-tenant.dto';
-import { MailService } from '../mail/mail.service'; // <--- 1. Importiamo il MailService
+import { MailService } from '../mail/mail.service';
+import { RedisService } from '../redis/redis.service'; // <--- v3.5: Redis
+import { TenantBootstrapService } from '../tenancy/tenant-bootstrap.service'; // <--- v3.5: Bootstrap
 
 @Injectable()
 export class TenantsService {
+  private readonly WHITELIST_KEY = 'df:sys:tenant_whitelist';
+
   constructor(
     @InjectRepository(Tenant)
     private tenantsRepo: Repository<Tenant>,
     private dataSource: DataSource, 
-    private mailService: MailService, // <--- 2. Iniettiamo il MailService
+    private mailService: MailService,
+    private redisService: RedisService, // Iniezione Redis
+    private bootstrap: TenantBootstrapService // Iniezione Bootstrap
   ) {}
 
   // --- LISTA TENANTS ---
@@ -19,7 +25,7 @@ export class TenantsService {
     return this.tenantsRepo.find({ order: { createdAt: 'DESC' } });
   }
 
-  // --- AGGIORNAMENTO STATO (Sospendi/Attiva) ---
+  // --- AGGIORNAMENTO STATO (Sospendi/Attiva + Redis) ---
   async updateStatus(id: string, isActive: boolean) {
     // 1. Verifichiamo che il tenant esista
     const tenant = await this.tenantsRepo.findOne({ where: { id } });
@@ -28,8 +34,17 @@ export class TenantsService {
       throw new NotFoundException(`Tenant con ID ${id} non trovato.`);
     }
 
-    // 2. Aggiorniamo solo il campo isActive
+    // 2. Aggiorniamo solo il campo isActive nel DB
     await this.tenantsRepo.update(id, { isActive });
+
+    // 3. AGGIORNAMENTO REDIS (v3.5)
+    // Aggiorniamo la whitelist per il Fast-Path routing
+    const client = this.redisService.getClient();
+    if (isActive) {
+        await client.sadd(this.WHITELIST_KEY, tenant.slug);
+    } else {
+        await client.srem(this.WHITELIST_KEY, tenant.slug);
+    }
 
     return { 
       message: `Tenant ${isActive ? 'riattivato' : 'sospeso'} con successo`, 
@@ -38,7 +53,7 @@ export class TenantsService {
     };
   }
 
-  // --- CREAZIONE (CON PROVISIONING E EMAIL) ---
+  // --- CREAZIONE (CON PROVISIONING, FILES, EMAIL E REDIS) ---
   async create(dto: CreateTenantDto) {
     // 1. Controllo unicità slug
     const existing = await this.tenantsRepo.findOne({ where: { slug: dto.slug } });
@@ -66,29 +81,22 @@ export class TenantsService {
       
       const savedTenant = await queryRunner.manager.save(newTenant);
 
-      // 3. PROVISIONING: Creiamo lo Schema Postgres Fisico
-      await queryRunner.query(`CREATE SCHEMA IF NOT EXISTS "${dto.slug}"`);
+      // 3. PROVISIONING v3.5: Usiamo il Bootstrap Service per creare Schema + Tabelle Standard (inclusa "files")
+      // Questo sostituisce la CREATE SCHEMA manuale e garantisce che abbiamo tutte le tabelle necessarie (users, audits, files)
+      await this.bootstrap.ensureTenantTables(queryRunner.manager.connection, dto.slug);
 
-      // 4. Creiamo le tabelle base nel nuovo schema
-      await queryRunner.query(`
-        CREATE TABLE IF NOT EXISTS "${dto.slug}"."users" (
-            "id" uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
-            "email" character varying NOT NULL,
-            "password" character varying,
-            "role" character varying DEFAULT 'admin',
-            "created_at" timestamp without time zone DEFAULT now()
-        );
-      `);
-
-      // 5. Creiamo l'utente Admin iniziale nel nuovo schema con la password temporanea
-      // NOTA: In produzione dovresti fare l'hash della password (es. bcrypt). 
-      // Qui la salviamo in chiaro o hashata a seconda di come gestisci il login.
+      // 4. Creiamo l'utente Admin iniziale (Mantenendo la tua logica specifica)
+      // Usiamo una query diretta come nel tuo codice originale
       await queryRunner.query(`
         INSERT INTO "${dto.slug}"."users" ("email", "role", "password")
         VALUES ($1, 'admin', $2)
       `, [dto.email, tempPassword]);
 
       await queryRunner.commitTransaction();
+
+      // 5. AGGIORNAMENTO REDIS (v3.5)
+      // Aggiungiamo il nuovo slug alla whitelist così è subito raggiungibile
+      await this.bootstrap.addTenantToCache(dto.slug);
 
       // --- 6. INVIO EMAIL DI BENVENUTO (Fuori dalla transazione) ---
       try {
@@ -100,7 +108,6 @@ export class TenantsService {
         console.log(`📧 Email inviata a ${dto.email}`);
       } catch (mailErr) {
         console.error("⚠️ Tenant creato ma errore invio email:", mailErr);
-        // Non lanciamo errore qui, il tenant è ormai creato.
       }
       
       return savedTenant;
@@ -114,7 +121,7 @@ export class TenantsService {
     }
   }
 
-  // --- METODO DELETE ROBUSTO ---
+  // --- METODO DELETE ROBUSTO (DB + REDIS) ---
   async delete(id: string) {
     // 1. Trova il tenant per sapere lo slug
     const tenant = await this.tenantsRepo.findOne({ where: { id } });
@@ -136,6 +143,11 @@ export class TenantsService {
       // 3. ELIMINA IL RECORD DAI METADATI (public.tenants)
       await queryRunner.manager.delete(Tenant, id);
 
+      // 4. RIMOZIONE DA REDIS (v3.5)
+      // Rimuoviamo lo slug dalla whitelist per bloccare subito il traffico
+      const client = this.redisService.getClient();
+      await client.srem(this.WHITELIST_KEY, tenant.slug);
+
       return { message: "Tenant deleted successfully" };
 
     } catch (err) {
@@ -144,5 +156,22 @@ export class TenantsService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  // --- NUOVO: RESET PASSWORD ADMIN (Per il modale del frontend) ---
+  async resetAdminPassword(id: string, email: string) {
+      const tenant = await this.tenantsRepo.findOne({ where: { id } });
+      if (!tenant) throw new NotFoundException();
+
+      const newPass = Math.random().toString(36).slice(-10) + "!!";
+      
+      // Aggiorna user nel tenant (assumendo password in chiaro come da tuo codice precedente, o hash se usi bcrypt)
+      // Se nel tuo sistema usi bcrypt, qui dovresti fare l'hash. Mantengo la logica coerente con la create() sopra.
+      await this.dataSource.query(
+          `UPDATE "${tenant.schemaName}".users SET password = $1 WHERE email = $2`,
+          [newPass, email]
+      );
+
+      return { tempPassword: newPass };
   }
 }
