@@ -11,10 +11,9 @@ import {
   Zap,
   ShieldCheck,
   ShieldAlert,
-  Search,
   Lock,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api";
@@ -133,20 +132,14 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Caricamento Dati Parallelo
   const loadData = async () => {
     try {
-      // 1. Statistiche Hardware (Se il backend le espone, altrimenti gestiamo il 404 silentemente)
-      // Nota: assumo che /system/stats esista o sia stato creato in precedenza. 
-      // Se non esiste, questo blocco potrebbe fallire, quindi lo gestiamo.
       const statsPromise = apiFetch<StatsResponse>("/superadmin/system/health").catch(() => null);
-      
-      // 2. Traffic Logs (Nuova endpoint v3.5)
       const logsPromise = apiFetch<LogsResponse>("/superadmin/system/traffic-logs?limit=20").catch(() => null);
 
       const [statsData, logsData] = await Promise.all([statsPromise, logsPromise]);
 
-      if (statsData) setStats(statsData as any); // Adatta il tipo se health ritorna formato diverso
+      if (statsData) setStats(statsData as any);
       if (logsData?.data) setLogs(logsData.data);
       
       setErrorMsg(null);
@@ -160,7 +153,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 3000); // Polling rapido per security monitoring
+    const interval = setInterval(loadData, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -208,7 +201,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* --- SEZIONE 1: INFRASTRUTTURA (Se disponibile) --- */}
+      {/* --- SEZIONE 1: INFRASTRUTTURA --- */}
       {stats && (
         <>
           <div className="space-y-3">
@@ -236,18 +229,30 @@ export default function DashboardPage() {
                   <Cpu className="text-slate-400" />
                 </div>
                 <Progress value={clamp(stats.hardware.cpu.load)} className="mt-4 h-2" />
+                <div className="mt-3 text-xs text-slate-500 flex justify-between font-medium">
+                  {/* Per la CPU mostriamo i dettagli dei Core invece dei GB */}
+                  <span>{stats.hardware.cpu.cores} Cores</span>
+                  <span className="truncate max-w-[150px]">{stats.hardware.cpu.brand}</span>
+                </div>
              </Card>
+
              {/* RAM */}
              <Card className="p-6 rounded-2xl border bg-white shadow-sm">
                 <div className="flex justify-between items-start">
                   <div>
-                    <div className="text-[11px] font-semibold uppercase text-slate-500">RAM Usage</div>
+                    <div className="text-[11px] font-semibold uppercase text-slate-500">Memory Usage</div>
                     <div className="text-3xl font-semibold mt-2">{clamp(stats.hardware.memory.percent)}%</div>
                   </div>
                   <Server className="text-slate-400" />
                 </div>
                 <Progress value={clamp(stats.hardware.memory.percent)} className="mt-4 h-2" />
+                {/* Visualizzazione numerica richiesta */}
+                <div className="mt-3 text-xs text-slate-500 font-medium flex justify-between">
+                   <span>Used: {stats.hardware.memory.usedGb} GB</span>
+                   <span className="text-slate-400">Total: {stats.hardware.memory.totalGb} GB</span>
+                </div>
              </Card>
+
              {/* DISK */}
              <Card className="p-6 rounded-2xl border bg-white shadow-sm">
                 <div className="flex justify-between items-start">
@@ -258,12 +263,17 @@ export default function DashboardPage() {
                   <HardDrive className="text-slate-400" />
                 </div>
                 <Progress value={clamp(stats.hardware.disk.percent)} className="mt-4 h-2" />
+                {/* Visualizzazione numerica richiesta */}
+                <div className="mt-3 text-xs text-slate-500 font-medium flex justify-between">
+                   <span>Used: {stats.hardware.disk.usedGb} GB</span>
+                   <span className="text-slate-400">Total: {stats.hardware.disk.totalGb} GB</span>
+                </div>
              </Card>
           </div>
         </>
       )}
 
-      {/* --- SEZIONE 2: SHADOW LOGS (Nuova v3.5) --- */}
+      {/* --- SEZIONE 2: SHADOW LOGS --- */}
       <div className="space-y-4 pt-6 border-t">
         <div className="flex items-center justify-between">
            <div>
