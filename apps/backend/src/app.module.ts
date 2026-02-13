@@ -31,6 +31,10 @@ import { NotificationsService } from './realtime/notifications.service';
 import { ProjectsEventsService } from './realtime/projects-events.service';
 import { TenantBootstrapService } from './tenancy/tenant-bootstrap.service';
 import { SuperadminAuditController } from './audit.controller';
+import { TrafficControlModule } from './traffic-control/traffic-control.module';
+import { TrafficGuard } from './traffic-control/traffic.guard';
+import { APP_GUARD } from '@nestjs/core';
+import * as path from 'path';
 
 // --- DASHBOARD SUPERADMIN ---
 import { SuperadminDashboardController } from './superadmin/superadmin-dashboard.controller';
@@ -63,7 +67,7 @@ import { FinanceService } from './superadmin/finance.service';
 import { Tenant } from './superadmin/entities/tenant.entity';
 import { TenantsController } from './superadmin/tenants.controller';
 import { TenantsService } from './superadmin/tenants.service';
-import { SystemController } from './superadmin/system.controller'; // <--- NUOVO IMPORT FONDAMENTALE
+import { SystemController } from './superadmin/system.controller';
 
 @Module({
   imports: [
@@ -71,10 +75,12 @@ import { SystemController } from './superadmin/system.controller'; // <--- NUOVO
 
     ConfigModule.forRoot({
       isGlobal: true,
-      ignoreEnvFile: true,
+      ignoreEnvFile: false,
+      envFilePath: path.join(__dirname, '..', '.env'),
     }),
 
     RedisModule,
+    TrafficControlModule,
     TenancyModule,
 
     TypeOrmModule.forRootAsync({
@@ -129,7 +135,6 @@ import { SystemController } from './superadmin/system.controller'; // <--- NUOVO
     FilesController,
     NotificationsTestController,
     AuthPasswordController,
-    // SuperadminTenantsController, (Disattivato in favore di TenantsController V2)
     SuperadminAuditController,
     SuperadminUsersController,
     SecurityPolicyController,
@@ -138,8 +143,8 @@ import { SystemController } from './superadmin/system.controller'; // <--- NUOVO
     DeliveryController,
     CalendarController,
     FinanceController,
-    TenantsController, // Gestione Tenant (Lista, Crea, Sospendi)
-    SystemController,  // <--- AGGIUNTO QUI: Gestione Control Tower (Stats)
+    TenantsController,
+    SystemController,
   ],
 
   providers: [
@@ -159,6 +164,10 @@ import { SystemController } from './superadmin/system.controller'; // <--- NUOVO
     CalendarService,
     FinanceService,
     TenantsService,
+    {
+      provide: APP_GUARD,
+      useClass: TrafficGuard,
+    }
   ],
 })
 export class AppModule implements NestModule {

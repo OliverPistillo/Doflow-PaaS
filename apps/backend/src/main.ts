@@ -6,7 +6,11 @@ import { WebSocketServer, WebSocket } from 'ws';
 import * as jwt from 'jsonwebtoken';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import * as express from 'express'; // <--- Sintassi più sicura per TypeScript
+import * as express from 'express';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 type ClientMeta = {
   userId: string;
