@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { Activity, Search, RefreshCw, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
+import { Activity, Search, RefreshCw, AlertTriangle, ChevronDown, ChevronUp, Zap } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
+import { useNotifications } from "@/hooks/useNotifications"; // <--- 1. Import Hook
+import { Badge } from "@/components/ui/badge";
 
 type AuditRow = {
   id: string;
@@ -37,7 +39,7 @@ function severityOf(action: string): "ok" | "warn" | "danger" | "info" {
   if (a.includes("SUSPEND") || a.includes("DISABLE") || a.includes("REVOKE")) return "warn";
 
   // OK
-  if (a.includes("SUCCESS") || a.includes("CREATED") || a.includes("UPDATED")) return "ok";
+  if (a.includes("SUCCESS") || a.includes("CREATED") || a.includes("UPDATED") || a.includes("UPLOAD")) return "ok";
 
   return "info";
 }
@@ -88,6 +90,9 @@ export default function AuditPage() {
   const [q, setQ] = useState("");
   const [openMeta, setOpenMeta] = useState<Record<string, boolean>>({});
 
+  // 2. Hook WebSocket
+  const { events, connected } = useNotifications();
+
   const load = async () => {
     setLoading(true);
     setDegraded(null);
@@ -106,6 +111,20 @@ export default function AuditPage() {
   useEffect(() => {
     load();
   }, []);
+
+  // 3. Ascolto Eventi Real-time e aggiornamento tabella
+  useEffect(() => {
+    const lastEvent = events[events.length - 1];
+    if (lastEvent?.type === 'tenant_notification' && (lastEvent.payload as any).type === 'activity_feed_update') {
+        const newLog = (lastEvent.payload as any).payload as AuditRow;
+        
+        // Aggiungi in cima alla lista (senza duplicati)
+        setLogs((prev) => {
+            if (prev.find(l => l.id === newLog.id)) return prev;
+            return [newLog, ...prev];
+        });
+    }
+  }, [events]);
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -131,7 +150,15 @@ export default function AuditPage() {
     <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Audit Log Globale</h1>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+             Audit Log Globale
+             {/* Indicatore Live */}
+             {connected && (
+                <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 gap-1 animate-pulse">
+                    <Zap className="h-3 w-3 fill-current" /> Live
+                </Badge>
+             )}
+          </h1>
           <p className="text-slate-500 font-medium">Sicurezza, operazioni critiche e mutazioni di sistema.</p>
         </div>
 

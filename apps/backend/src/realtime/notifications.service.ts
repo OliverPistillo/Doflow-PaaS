@@ -1,59 +1,66 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import Redis, { Redis as RedisClient } from 'ioredis';
-
-type ChannelHandler = (channel: string, payload: any) => void;
+import { Injectable, Logger } from '@nestjs/common';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
-export class NotificationsService implements OnModuleInit, OnModuleDestroy {
-  private pub: RedisClient;
-  private sub: RedisClient;
-  private handlers: ChannelHandler[] = [];
+export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
+  private subscriberClient: any;
+  private publisherClient: any;
 
-  constructor() {
-    const redisUrl = process.env.REDIS_URL ?? 'redis://redis:6379';
-
-    this.pub = new Redis(redisUrl, {
-      maxRetriesPerRequest: null,
-    });
-
-    this.sub = new Redis(redisUrl, {
-      maxRetriesPerRequest: null,
-    });
+  constructor(private readonly redisService: RedisService) {
+    this.init();
   }
 
-  async onModuleInit() {
-    // Pattern-matching per canali tenant/user
-    await this.sub.psubscribe('tenant:*:notifications', 'user:*:notifications');
+  private init() {
+    // Client dedicato alla pubblicazione
+    this.publisherClient = this.redisService.getClient().duplicate();
+    // Client dedicato alla sottoscrizione
+    this.subscriberClient = this.redisService.getClient().duplicate();
+  }
 
-    this.sub.on('pmessage', (_pattern, channel, message) => {
-      let payload: any = message;
+  async registerHandler(callback: (channel: string, payload: any) => void) {
+    await this.subscriberClient.psubscribe('tenant:*');
+    await this.subscriberClient.psubscribe('user:*');
+
+    this.subscriberClient.on('pmessage', (_pattern: string, channel: string, message: string) => {
       try {
-        payload = JSON.parse(message);
-      } catch {
-        // se non è JSON, passa stringa raw
-      }
-      for (const handler of this.handlers) {
-        handler(channel, payload);
+        const payload = JSON.parse(message);
+        callback(channel, payload);
+      } catch (e) {
+        this.logger.error('Failed to parse Redis message', e);
       }
     });
+
+    this.logger.log('📡 Redis Pub/Sub listeners registered');
   }
 
-  async onModuleDestroy() {
-    await this.sub.quit();
-    await this.pub.quit();
+  /**
+   * Invia un messaggio a tutti gli utenti di un Tenant specifico.
+   * Pubblica su Redis canale "tenant:{tenantId}"
+   */
+  async broadcastToTenant(tenantId: string, message: any) {
+    try {
+      const channel = `tenant:${tenantId}`;
+      const payload = JSON.stringify(message);
+      
+      // Pubblica su Redis. main.ts lo intercetterà e lo manderà ai WebSocket
+      await this.publisherClient.publish(channel, payload);
+      
+    } catch (e) {
+      this.logger.error(`Failed to broadcast to tenant ${tenantId}`, e);
+    }
   }
 
-  registerHandler(handler: ChannelHandler) {
-    this.handlers.push(handler);
-  }
-
-  async notifyTenant(tenantId: string, event: any) {
-    const channel = `tenant:${tenantId}:notifications`;
-    await this.pub.publish(channel, JSON.stringify(event));
-  }
-
-  async notifyUser(userId: string, event: any) {
-    const channel = `user:${userId}:notifications`;
-    await this.pub.publish(channel, JSON.stringify(event));
+  /**
+   * Invia un messaggio a un singolo utente specifico.
+   */
+  async notifyUser(userId: string, message: any) {
+    try {
+      const channel = `user:${userId}`;
+      const payload = JSON.stringify(message);
+      await this.publisherClient.publish(channel, payload);
+    } catch (e) {
+      this.logger.error(`Failed to notify user ${userId}`, e);
+    }
   }
 }

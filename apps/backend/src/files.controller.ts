@@ -14,10 +14,15 @@ import {
 import { Request, Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FileStorageService } from './file-storage.service';
+import { AuditService } from './audit.service'; // <--- Import AuditService
 
 @Controller('files')
 export class FilesController {
-  constructor(private readonly fileStorage: FileStorageService) {}
+  // Iniettiamo AuditService
+  constructor(
+    private readonly fileStorage: FileStorageService,
+    private readonly auditService: AuditService 
+  ) {}
 
   @Get()
   async list(@Req() req: Request, @Res() res: Response) {
@@ -30,42 +35,38 @@ export class FilesController {
     return res.json({ files });
   }
 
-  /**
-   * --- NUOVO ENDPOINT v3.5: Secure Download ---
-   * Esempio: GET /api/files/download?key=tenant_x/file.pdf
-   */
   @Get('download')
   async download(
     @Req() req: Request,
     @Query('key') key: string,
     @Res({ passthrough: true }) res: Response,
   ) {
-    // 1. Auth Check
     const authUser = (req as any).authUser;
     if (!authUser) {
-       // O lascia gestire al AuthMiddleware se applicato globalmente
-       // qui per sicurezza esplicita:
        res.status(401);
        return; 
     }
 
-    // 2. Tenant Context (dal middleware)
     const tenantId = (req as any).tenantId;
     if (!tenantId) throw new BadRequestException('No tenant context');
     if (!key) throw new BadRequestException('Missing file key');
 
-    // 3. Recupera Stream da S3 (Secure Proxy)
     const { stream, contentType, contentLength } = await this.fileStorage.downloadFileStream(tenantId, key);
 
-    // 4. Imposta Headers
+    // Opzionale: Logghiamo anche il download? Spesso genera troppo rumore, 
+    // ma per file sensibili si potrebbe fare. Per ora lo lascio commentato.
+    /*
+    await this.auditService.log(req, {
+        action: 'FILE_DOWNLOAD',
+        metadata: { key }
+    });
+    */
+
     res.set({
       'Content-Type': contentType || 'application/octet-stream',
       'Content-Length': contentLength,
-      // Se vuoi forzare il download invece della visualizzazione browser:
-      // 'Content-Disposition': `attachment; filename="${key.split('/').pop()}"`,
     });
 
-    // 5. Pipe diretto (efficienza massima, poca RAM usata)
     return new StreamableFile(stream);
   }
 
@@ -93,6 +94,19 @@ export class FilesController {
 
     try {
       const stored = await this.fileStorage.uploadFile(req, file);
+
+      // --- AUDIT LOGGING ---
+      await this.auditService.log(req, {
+        action: 'FILE_UPLOAD',
+        metadata: {
+            fileId: stored.id,
+            fileName: stored.original_name,
+            size: stored.size,
+            key: stored.key
+        }
+      });
+      // ---------------------
+
       return res.json({ file: stored });
     } catch (e) {
       if (e instanceof Error) {
