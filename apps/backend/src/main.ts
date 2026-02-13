@@ -10,6 +10,11 @@ import * as express from 'express';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
+// --- AGGIUNTE v3.5 (Monitoring) ---
+import { TelemetryService } from './telemetry/telemetry.service';
+import { TelemetryInterceptor } from './telemetry/telemetry.interceptor';
+import { GlobalExceptionFilter } from './telemetry/global-exception.filter';
+
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 type ClientMeta = {
@@ -53,13 +58,11 @@ async function bootstrap() {
   }
 
   // 2. Creazione App con configurazione specifica per il Body Parser
-  // Disabilitiamo il parser automatico di Nest per configurarlo manualmente ed evitare conflitti
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false, 
   });
 
   // 3. ABILITA IL PARSING DEL JSON MANUALMENTE
-  // Usiamo 'express.json' direttamente: questo risolve l'errore "Missing fields"
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -78,16 +81,23 @@ async function bootstrap() {
       'x-doflow-pathname',
       'Accept'
     ],
-    exposedHeaders: ['Content-Length'],
+    exposedHeaders: ['Content-Length', 'X-RateLimit-Remaining', 'Retry-After'], // Aggiunto per Traffic Control
     maxAge: 86400,
   });
 
   // 5. VALIDATION PIPE (Attiva i DTO)
   app.useGlobalPipes(new ValidationPipe({
-    transform: true, // Trasforma i JSON in istanze di Classe DTO
-    whitelist: true, // Rimuove campi non definiti nel DTO (sicurezza)
-    forbidNonWhitelisted: false, // Non bloccare se ci sono campi extra
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: false,
   }));
+
+  // --- v3.5: ATTIVAZIONE GLOBAL MONITORING ---
+  // Iniettiamo i servizi necessari per il monitoring passivo
+  const telemetryService = app.get(TelemetryService);
+  app.useGlobalInterceptors(new TelemetryInterceptor(telemetryService));
+  app.useGlobalFilters(new GlobalExceptionFilter(telemetryService));
+  // -------------------------------------------
 
   // Avvio Server HTTP
   const port = Number(process.env.PORT ?? 4000);
@@ -108,7 +118,6 @@ async function bootstrap() {
   httpServer.on('upgrade', (req: any, socket: any, head: Buffer) => {
     try {
       const url = req.url ?? '/';
-      // Gestione base URL per parsing sicuro
       const fullUrl = new URL(url, `http://${req.headers.host || 'localhost'}`);
       
       if (fullUrl.pathname !== wsPath) return; // Ignora path non WS
@@ -196,7 +205,9 @@ async function bootstrap() {
       // Logica broadcast Tenant/User
       if (channel.startsWith('tenant:')) {
         const [, tenantId] = channel.split(':');
-        if (meta.tenantId !== tenantId) continue;
+        // Supporto per canale 'global' (per superadmin) o tenant specifico
+        if (tenantId !== 'global' && meta.tenantId !== tenantId) continue;
+        
         if (socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({ type: 'tenant_notification', channel, payload }));
         }

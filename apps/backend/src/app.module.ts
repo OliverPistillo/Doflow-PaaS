@@ -11,6 +11,7 @@ import { TrafficControlModule } from './traffic-control/traffic-control.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { MailModule } from './mail/mail.module';
 import { HealthModule } from './health/health.module';
+import { NotificationsModule } from './realtime/notifications.module'; // <--- NUOVO IMPORT MODULO
 
 // --- CONTROLLERS ---
 import { AppController } from './app.controller';
@@ -45,11 +46,11 @@ import { AuthService } from './auth.service';
 import { AuditService } from './audit.service';
 import { LoginGuardService } from './login-guard.service';
 import { FileStorageService } from './file-storage.service';
-import { NotificationsService } from './realtime/notifications.service';
+// import { NotificationsService } from './realtime/notifications.service'; <--- RIMOSSO (Ora usiamo il modulo)
 import { ProjectsEventsService } from './realtime/projects-events.service';
 import { TenantBootstrapService } from './tenancy/tenant-bootstrap.service';
 import { AuthMfaService } from './auth-mfa.service';
-import { SystemStatsService } from './superadmin/telemetry.service'; // <--- ASSICURATI CHE SIA IMPORTATO
+import { SystemStatsService } from './superadmin/telemetry.service';
 
 // --- ENTITIES & SECURITY ---
 import { PlatformDeal } from './superadmin/entities/platform-deal.entity';
@@ -82,6 +83,7 @@ import { BusinaroModule } from './businaro/businaro.module';
     TelemetryModule,
     TrafficControlModule,
     TenancyModule,
+    NotificationsModule, // <--- AGGIUNTO IL MODULO QUI
 
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -141,12 +143,12 @@ import { BusinaroModule } from './businaro/businaro.module';
   ],
 
   providers: [
-    SystemStatsService, // <--- ECCOLO! RIAGGIUNGI QUESTO
+    SystemStatsService,
     AuthService,
     AuditService,
     LoginGuardService,
     FileStorageService,
-    NotificationsService,
+    // NotificationsService, <--- RIMOSSO (Service Providers)
     ProjectsEventsService,
     TenantBootstrapService,
     AuthMfaService,

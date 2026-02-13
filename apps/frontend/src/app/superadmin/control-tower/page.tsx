@@ -12,11 +12,13 @@ import {
   ShieldCheck,
   ShieldAlert,
   Lock,
+  Terminal, // Aggiunto per icona console
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api";
+import { useNotifications } from "@/hooks/useNotifications"; // <--- 1. Import Hook
 import {
   Table,
   TableBody,
@@ -50,7 +52,7 @@ type TrafficLog = {
   path: string;
   tenantId: string;
   timestamp: string;
-  metadata?: { reason?: string };
+  metadata?: { reason?: string; durationMs?: number; message?: string }; // Esteso per supportare dati extra v3.5
 };
 
 type LogsResponse = {
@@ -127,11 +129,13 @@ function clamp(n: number) {
 
 // --- PAGE COMPONENT ---
 export default function DashboardPage() {
+  const { events, connected } = useNotifications(); // <--- 2. WebSocket Hook
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [logs, setLogs] = useState<TrafficLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Caricamento Iniziale (Polling come fallback e inizializzazione)
   const loadData = async () => {
     try {
       const statsPromise = apiFetch<StatsResponse>("/superadmin/system/health").catch(() => null);
@@ -153,9 +157,32 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 3000);
+    const interval = setInterval(loadData, 5000); // Rallentiamo il polling a 5s dato che abbiamo WS
     return () => clearInterval(interval);
   }, []);
+
+  // --- 3. GESTIONE REAL-TIME WEBSOCKET ---
+  useEffect(() => {
+    const lastEvent = events[events.length - 1];
+    if (!lastEvent) return;
+
+    if (lastEvent.type === 'tenant_notification') {
+        const payload: any = lastEvent.payload;
+        
+        // Intercetta i messaggi "system_alert" dal TelemetryService
+        if (payload.type === 'system_alert' && payload.channel === 'control_tower') {
+            const newLog = payload.payload as TrafficLog;
+            
+            // Aggiungiamo in cima alla lista (Animation-ready)
+            setLogs(prev => {
+                // Evita duplicati se arrivano burst veloci
+                const exists = prev.some(l => l.timestamp === newLog.timestamp && l.path === newLog.path);
+                if(exists) return prev;
+                return [newLog, ...prev].slice(0, 50); // Manteniamo max 50 log in UI
+            });
+        }
+    }
+  }, [events]);
 
   const uptimeHours = useMemo(() => {
     const u = stats?.hardware?.uptime ?? 0;
@@ -172,7 +199,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8 max-w-[1600px] mx-auto p-6">
+    <div className="space-y-8 max-w-[1600px] mx-auto p-6 animate-in fade-in">
       {/* HEADER */}
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div className="space-y-1">
@@ -185,14 +212,20 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {stats && (
-           <div className="flex items-center gap-3">
-             <div className="rounded-xl border bg-white px-4 py-3 shadow-sm">
-               <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">System Uptime</div>
-               <div className="mt-1 text-xl font-mono font-semibold text-slate-900">{uptimeHours}h</div>
-             </div>
-           </div>
-        )}
+        <div className="flex items-center gap-3">
+           {/* Badge di Connessione WebSocket */}
+           <Badge variant="outline" className={`gap-1.5 px-3 py-1 ${connected ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"}`}>
+                <span className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-600 animate-pulse" : "bg-rose-600"}`} />
+                {connected ? "Uplink Secure" : "Offline"}
+           </Badge>
+
+           {stats && (
+              <div className="rounded-xl border bg-white px-4 py-3 shadow-sm hidden md:block">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">System Uptime</div>
+                <div className="mt-1 text-xl font-mono font-semibold text-slate-900">{uptimeHours}h</div>
+              </div>
+           )}
+        </div>
       </div>
 
       {errorMsg && (
@@ -273,7 +306,7 @@ export default function DashboardPage() {
         </>
       )}
 
-      {/* --- SEZIONE 2: SHADOW LOGS --- */}
+      {/* --- SEZIONE 2: SHADOW LOGS (Live Console) --- */}
       <div className="space-y-4 pt-6 border-t">
         <div className="flex items-center justify-between">
            <div>
@@ -281,11 +314,20 @@ export default function DashboardPage() {
                <ShieldAlert className="h-5 w-5 text-amber-600" />
                Gatekeeper Logs
              </h2>
-             <p className="text-sm text-slate-500">Richieste bloccate o limitate dal Traffic Control (Live from Redis)</p>
+             <p className="text-sm text-slate-500">Richieste bloccate o errori di sistema (Live Telemetry)</p>
            </div>
-           <Badge variant="outline" className="font-mono">
-             Live Sync (3s)
-           </Badge>
+           
+           <div className="flex items-center gap-2">
+             {connected ? (
+                <Badge variant="outline" className="font-mono text-emerald-600 bg-emerald-50 border-emerald-200 gap-1">
+                    <Activity className="h-3 w-3 animate-pulse" /> Live Stream
+                </Badge>
+             ) : (
+                <Badge variant="outline" className="font-mono text-slate-500">
+                    Sync (5s)
+                </Badge>
+             )}
+           </div>
         </div>
 
         <Card className="overflow-hidden border-slate-200 shadow-sm">
@@ -297,7 +339,7 @@ export default function DashboardPage() {
                 <TableHead>IP Address</TableHead>
                 <TableHead>Target</TableHead>
                 <TableHead>Tenant Context</TableHead>
-                <TableHead className="text-right">Reason</TableHead>
+                <TableHead className="text-right">Detail</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -309,17 +351,19 @@ export default function DashboardPage() {
                 </TableRow>
               ) : (
                 logs.map((log, i) => (
-                  <TableRow key={i} className="hover:bg-slate-50">
-                    <TableCell className="font-mono text-xs text-slate-500">
+                  <TableRow key={i} className="hover:bg-slate-50 transition-colors">
+                    <TableCell className="font-mono text-xs text-slate-500 whitespace-nowrap">
                       {new Date(log.timestamp).toLocaleTimeString()}
                     </TableCell>
                     <TableCell>
                       <Badge 
                         variant="secondary" 
                         className={
-                          log.type.includes('BLACKLIST') 
+                          log.type.includes('BLACKLIST') || log.type === 'SYSTEM_ERROR'
                             ? "bg-red-100 text-red-700 border-red-200" 
-                            : "bg-amber-100 text-amber-700 border-amber-200"
+                            : log.type === 'API_PERFORMANCE' 
+                                ? "bg-blue-50 text-blue-700 border-blue-100"
+                                : "bg-amber-100 text-amber-700 border-amber-200"
                         }
                       >
                         {log.type}
@@ -339,7 +383,14 @@ export default function DashboardPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right font-mono text-xs text-slate-500">
-                      {log.metadata?.reason || '-'}
+                      {/* Gestione polimorfica dei metadati */}
+                      {log.metadata?.reason || log.metadata?.message ? (
+                          <span className="text-rose-600 font-medium">
+                              {log.metadata.reason || log.metadata.message}
+                          </span>
+                      ) : log.metadata?.durationMs ? (
+                          <span>{log.metadata.durationMs}ms</span>
+                      ) : '-'}
                     </TableCell>
                   </TableRow>
                 ))

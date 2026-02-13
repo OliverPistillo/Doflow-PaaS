@@ -40,9 +40,9 @@ export class TenantsController {
   async impersonate(@Param('id') id: string) {
       // Mock Implementation per la v3.5
       // Qui in futuro genereremo un JWT "impersonation token"
-      return { 
-          token: "mock_impersonation_token", 
-          redirectUrl: "https://app.doflow.it" 
+      return {
+          token: "mock_impersonation_token",
+          redirectUrl: "https://app.doflow.it"
       };
   }
 }

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '../redis/redis.service';
+import { NotificationsService } from '../realtime/notifications.service'; // <--- AGGIUNTA v3.5
 
 export type TelemetryEvent = {
   type: string;
@@ -15,7 +16,10 @@ export class TelemetryService {
   private readonly logger = new Logger(TelemetryService.name);
   private readonly SHADOW_LOG_KEY = 'df:telemetry:shadow_queue';
 
-  constructor(private readonly redisService: RedisService) {}
+  constructor(
+    private readonly redisService: RedisService,
+    private readonly notifications: NotificationsService // <--- AGGIUNTA v3.5
+  ) {}
 
   /**
    * Esegue lo Shadow Logging: spara l'evento su Redis e prosegue immediatamente.
@@ -36,9 +40,25 @@ export class TelemetryService {
       await client.lpush(this.SHADOW_LOG_KEY, JSON.stringify(enriched));
       // Manteniamo la coda snella (ultimi 2000 eventi di sistema)
       await client.ltrim(this.SHADOW_LOG_KEY, 0, 1999);
+
+      // --- NUOVO v3.5: Broadcast Real-time alla Control Tower ---
+      // Se è un errore o un evento di sicurezza, lo mandiamo subito al frontend superadmin
+      if (enriched.type === 'SYSTEM_ERROR' || enriched.type.includes('SECURITY')) {
+          await this.notifications.broadcastToTenant('global', {
+              type: 'system_alert',
+              channel: 'control_tower',
+              payload: enriched
+          });
+      }
+
     } catch (err) {
       this.logger.error('Shadow Logging failed to push to Redis', err);
     }
+  }
+
+  // ALIAS PER COMPATIBILITÀ CON I FILTER/INTERCEPTOR
+  async logRequest(event: TelemetryEvent) {
+      return this.log(event);
   }
 
   /**
