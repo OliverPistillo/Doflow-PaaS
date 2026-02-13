@@ -75,6 +75,21 @@ export async function apiFetch<T = unknown>(
     cache: "no-store",
   });
 
+  // --- v3.5 TRAFFIC CONTROL AWARENESS ---
+  // Leggiamo lo stato del Rate Limit dagli headers
+  const remaining = res.headers.get('X-RateLimit-Remaining');
+  if (remaining && parseInt(remaining) < 10) {
+    // Warning lato console (o potremmo emettere un evento globale per UI toast)
+    console.warn(`⚠️ API Rate Limit Warning: ${remaining} richieste rimanenti.`);
+  }
+
+  // Gestione Specifica 429 (Too Many Requests)
+  if (res.status === 429) {
+    const retryAfter = res.headers.get('Retry-After') || '60';
+    throw new Error(`Traffic Control: Troppe richieste. Riprova tra ${retryAfter} secondi.`);
+  }
+  // -------------------------------------
+
   const text = await res.text();
 
   let json: any = null;

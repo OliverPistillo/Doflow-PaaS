@@ -1,16 +1,17 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
 export type HelloEvent = {
   type: 'hello';
   payload: { tenantId: string; userId: string };
 };
 
+// --- AGGIORNAMENTO v3.5: Supporto 'system_alert' ---
 export type NotificationEvent = {
-  type: 'tenant_notification' | 'user_notification';
+  type: 'tenant_notification' | 'user_notification' | 'system_alert';
   channel: string;
-  payload: unknown;
+  payload: any;
 };
 
 export type RealtimeEvent = HelloEvent | NotificationEvent;
@@ -29,72 +30,99 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    if (!enabled) return;
+    // Safety check: esegui solo lato client e se abilitato
+    if (!enabled || typeof window === 'undefined') return;
 
-    const token =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem('doflow_token')
-        : null;
+    const token = window.localStorage.getItem('doflow_token');
 
-    // 🚫 niente setState qui: se non c'è token, semplicemente non connettiamo il WS
+    // 🚫 Zero Trust: Senza token non tentiamo nemmeno la connessione
     if (!token) {
-      console.warn(
-        '[WS hook] nessun token JWT trovato (doflow_token). WebSocket disattivato.',
-      );
+      console.warn('[WS Hook] Token mancante. Connessione realtime saltata.');
       return;
     }
 
-    const wsBase =
-      process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:3001/ws';
-    const url = `${wsBase}?token=${encodeURIComponent(token)}`;
+    // Costruzione URL dinamica e sicura
+    const wsBase = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:3001/ws';
+    // Se l'URL base è relativo o non ha protocollo, lo aggiustiamo
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    let finalUrl = wsBase;
+    
+    if (!wsBase.startsWith('ws')) {
+        finalUrl = `${protocol}//${window.location.hostname}${wsBase.startsWith(':') ? wsBase : ':3001/ws'}`;
+    }
 
-    console.log('[WS hook] stored token from localStorage =', token);
-    console.log('[WS hook] connecting to', url);
+    const url = `${finalUrl}?token=${encodeURIComponent(token)}`;
+    
+    console.log(`[WS Hook] Connecting to ${finalUrl}...`);
 
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log('[WS hook] WebSocket open');
+      console.log('[WS Hook] Connected 🟢');
       setConnected(true);
       setError(null);
     };
 
     ws.onclose = (ev) => {
-      console.log('[WS hook] WebSocket close', ev.code, ev.reason);
+      console.log('[WS Hook] Disconnected 🔴', ev.code, ev.reason);
       setConnected(false);
+      // Codici 4xxx sono errori applicativi (es. Token scaduto)
       if (ev.code >= 4000) {
-        setError(`Connessione chiusa (${ev.code}): ${ev.reason}`);
+        setError(`Disconnesso: ${ev.reason || 'Sessione scaduta'}`);
       }
     };
 
     ws.onerror = (ev) => {
-      console.error('[WS hook] WebSocket error', ev);
-      setError('Errore WebSocket');
+      console.error('[WS Hook] Error ⚠️', ev);
+      setError('Errore di connessione WebSocket');
     };
 
     ws.onmessage = (msg) => {
       try {
         const data = JSON.parse(msg.data as string) as RealtimeEvent;
-        console.log('[WS hook] message', data);
-        setEvents((prev) => [...prev.slice(-99), data]);
+        
+        // In Dev logghiamo tutto, in Prod solo errori
+        if (process.env.NODE_ENV === 'development') {
+            console.log('[WS] <', data.type);
+        }
+
+        setEvents((prev) => {
+            // Manteniamo solo gli ultimi 50 eventi per non saturare la memoria del browser
+            const newEvents = [...prev, data];
+            return newEvents.slice(-50);
+        });
+
         if (onEvent) {
           onEvent(data);
         }
       } catch (e) {
-        console.warn('[WS hook] non-JSON message', msg.data, e);
+        console.warn('[WS Hook] Received non-JSON message', msg.data);
       }
     };
 
+    // Cleanup alla distruzione del componente
     return () => {
-      ws.close();
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
       wsRef.current = null;
     };
   }, [enabled, onEvent]);
+
+  // Utility per inviare messaggi (es. Ping manuale)
+  const sendMessage = useCallback((data: any) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify(data));
+    } else {
+        console.warn('[WS Hook] Impossibile inviare: Socket non connesso');
+    }
+  }, []);
 
   return {
     events,
     connected,
     error,
+    sendMessage
   };
 }

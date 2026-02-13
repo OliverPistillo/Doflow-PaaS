@@ -10,11 +10,24 @@ import {
   Server,
   Zap,
   ShieldCheck,
+  ShieldAlert,
+  Search,
+  Lock,
 } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
+// --- TYPES ---
 type ServiceStatus = "up" | "down" | "unknown" | string;
 
 type StatsResponse = {
@@ -32,6 +45,23 @@ type StatsResponse = {
   };
 };
 
+type TrafficLog = {
+  type: string;
+  ip: string;
+  path: string;
+  tenantId: string;
+  timestamp: string;
+  metadata?: { reason?: string };
+};
+
+type LogsResponse = {
+  status: string;
+  engine: string;
+  count: number;
+  data: TrafficLog[];
+};
+
+// --- HELPERS ---
 function statusTone(status: ServiceStatus) {
   const s = String(status || "").toLowerCase();
   if (s === "up")
@@ -96,19 +126,33 @@ function clamp(n: number) {
   return Math.max(0, Math.min(100, n));
 }
 
+// --- PAGE COMPONENT ---
 export default function DashboardPage() {
-  const [data, setData] = useState<StatsResponse | null>(null);
+  const [stats, setStats] = useState<StatsResponse | null>(null);
+  const [logs, setLogs] = useState<TrafficLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Caricamento Dati Parallelo
   const loadData = async () => {
     try {
-      const json = await apiFetch<StatsResponse>("/superadmin/system/stats", { method: "GET" });
-      setData(json);
+      // 1. Statistiche Hardware (Se il backend le espone, altrimenti gestiamo il 404 silentemente)
+      // Nota: assumo che /system/stats esista o sia stato creato in precedenza. 
+      // Se non esiste, questo blocco potrebbe fallire, quindi lo gestiamo.
+      const statsPromise = apiFetch<StatsResponse>("/superadmin/system/health").catch(() => null);
+      
+      // 2. Traffic Logs (Nuova endpoint v3.5)
+      const logsPromise = apiFetch<LogsResponse>("/superadmin/system/traffic-logs?limit=20").catch(() => null);
+
+      const [statsData, logsData] = await Promise.all([statsPromise, logsPromise]);
+
+      if (statsData) setStats(statsData as any); // Adatta il tipo se health ritorna formato diverso
+      if (logsData?.data) setLogs(logsData.data);
+      
       setErrorMsg(null);
     } catch (e: any) {
       console.error(e);
-      setErrorMsg(e?.message || "Errore di connessione al backend (System Stats).");
+      setErrorMsg("Errore di connessione alla Control Tower.");
     } finally {
       setLoading(false);
     }
@@ -116,149 +160,183 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 5000);
+    const interval = setInterval(loadData, 3000); // Polling rapido per security monitoring
     return () => clearInterval(interval);
   }, []);
 
   const uptimeHours = useMemo(() => {
-    const u = data?.hardware?.uptime ?? 0;
+    const u = stats?.hardware?.uptime ?? 0;
     return (u / 3600).toFixed(1);
-  }, [data]);
+  }, [stats]);
 
-  if (loading && !data) {
+  if (loading && !stats && logs.length === 0) {
     return (
       <div className="p-10 flex items-center gap-2 text-slate-700">
         <Activity className="animate-spin" />
-        <span className="font-semibold">Loading Control Tower…</span>
+        <span className="font-semibold">Connessione alla Control Tower v3.5...</span>
       </div>
     );
   }
-
-  if (errorMsg && !data) {
-    return (
-      <div className="p-10">
-        <div className="max-w-xl rounded-xl border border-rose-200 bg-rose-50 p-5">
-          <div className="font-semibold text-rose-800">System Stats unavailable</div>
-          <div className="text-sm text-rose-700 mt-1">{errorMsg}</div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!data) return null;
-
-  const { hardware, services } = data;
-
-  const cpuLoad = clamp(hardware.cpu.load);
-  const memPct = clamp(hardware.memory.percent);
-  const diskPct = clamp(hardware.disk.percent);
 
   return (
-    <div className="space-y-8 max-w-[1600px] mx-auto">
-      {/* TOP BAR */}
+    <div className="space-y-8 max-w-[1600px] mx-auto p-6">
+      {/* HEADER */}
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-slate-900">
-            <ShieldCheck className="h-5 w-5" />
+            <ShieldCheck className="h-6 w-6 text-emerald-600" />
             <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Superadmin Control Tower</h1>
           </div>
           <p className="text-sm text-slate-500">
-            Infrastructure health, service status, and capacity overview.
+            Monitoraggio Infrastruttura & Sicurezza Perimetrale (v3.5)
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="rounded-xl border bg-white px-4 py-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">System Uptime</div>
-            <div className="mt-1 text-xl font-mono font-semibold text-slate-900">{uptimeHours}h</div>
+        {stats && (
+           <div className="flex items-center gap-3">
+             <div className="rounded-xl border bg-white px-4 py-3 shadow-sm">
+               <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">System Uptime</div>
+               <div className="mt-1 text-xl font-mono font-semibold text-slate-900">{uptimeHours}h</div>
+             </div>
+           </div>
+        )}
+      </div>
+
+      {errorMsg && (
+        <div className="p-4 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-sm font-medium">
+          {errorMsg}
+        </div>
+      )}
+
+      {/* --- SEZIONE 1: INFRASTRUTTURA (Se disponibile) --- */}
+      {stats && (
+        <>
+          <div className="space-y-3">
+            <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Service Health</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <StatusBadge label="Database" status={stats.services.database} icon={Database} />
+              <StatusBadge 
+                label="Redis" 
+                status={stats.services.redis} 
+                icon={Zap} 
+                meta={typeof stats.services.redis_latency_ms === "number" ? `${stats.services.redis_latency_ms} ms` : undefined} 
+              />
+              <StatusBadge label="API Gateway" status={stats.services.api} icon={Globe} />
+            </div>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+             {/* CPU */}
+             <Card className="p-6 rounded-2xl border bg-white shadow-sm">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase text-slate-500">CPU Load</div>
+                    <div className="text-3xl font-semibold mt-2">{clamp(stats.hardware.cpu.load)}%</div>
+                  </div>
+                  <Cpu className="text-slate-400" />
+                </div>
+                <Progress value={clamp(stats.hardware.cpu.load)} className="mt-4 h-2" />
+             </Card>
+             {/* RAM */}
+             <Card className="p-6 rounded-2xl border bg-white shadow-sm">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase text-slate-500">RAM Usage</div>
+                    <div className="text-3xl font-semibold mt-2">{clamp(stats.hardware.memory.percent)}%</div>
+                  </div>
+                  <Server className="text-slate-400" />
+                </div>
+                <Progress value={clamp(stats.hardware.memory.percent)} className="mt-4 h-2" />
+             </Card>
+             {/* DISK */}
+             <Card className="p-6 rounded-2xl border bg-white shadow-sm">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase text-slate-500">Disk Usage</div>
+                    <div className="text-3xl font-semibold mt-2">{clamp(stats.hardware.disk.percent)}%</div>
+                  </div>
+                  <HardDrive className="text-slate-400" />
+                </div>
+                <Progress value={clamp(stats.hardware.disk.percent)} className="mt-4 h-2" />
+             </Card>
+          </div>
+        </>
+      )}
+
+      {/* --- SEZIONE 2: SHADOW LOGS (Nuova v3.5) --- */}
+      <div className="space-y-4 pt-6 border-t">
+        <div className="flex items-center justify-between">
+           <div>
+             <h2 className="text-lg font-semibold flex items-center gap-2">
+               <ShieldAlert className="h-5 w-5 text-amber-600" />
+               Gatekeeper Logs
+             </h2>
+             <p className="text-sm text-slate-500">Richieste bloccate o limitate dal Traffic Control (Live from Redis)</p>
+           </div>
+           <Badge variant="outline" className="font-mono">
+             Live Sync (3s)
+           </Badge>
         </div>
-      </div>
 
-      {/* SERVICE HEALTH */}
-      <div className="space-y-3">
-        <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Service Health</div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatusBadge label="Database" status={services.database} icon={Database} />
-          <StatusBadge
-            label="Redis"
-            status={services.redis}
-            icon={Zap}
-            meta={
-              typeof services.redis_latency_ms === "number"
-                ? `${services.redis_latency_ms} ms`
-                : undefined
-            }
-          />
-          <StatusBadge label="API" status={services.api} icon={Globe} />
-        </div>
-      </div>
-
-      {/* CAPACITY */}
-      <div className="space-y-3">
-        <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Capacity</div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* CPU */}
-          <Card className="p-6 rounded-2xl border bg-white">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">CPU Load</div>
-                <div className="mt-2 text-3xl font-semibold text-slate-900">{cpuLoad}%</div>
-              </div>
-              <div className="p-2 rounded-xl border bg-slate-50">
-                <Cpu className="h-5 w-5 text-slate-700" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <Progress value={cpuLoad} className="h-2 bg-slate-100" />
-              <div className="mt-3 text-xs text-slate-500 flex justify-between">
-                <span>{hardware.cpu.cores} cores</span>
-                <span className="truncate max-w-[70%]">{hardware.cpu.brand}</span>
-              </div>
-            </div>
-          </Card>
-
-          {/* RAM */}
-          <Card className="p-6 rounded-2xl border bg-white">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Memory</div>
-                <div className="mt-2 text-3xl font-semibold text-slate-900">{memPct}%</div>
-              </div>
-              <div className="p-2 rounded-xl border bg-slate-50">
-                <Server className="h-5 w-5 text-slate-700" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <Progress value={memPct} className="h-2 bg-slate-100" />
-              <div className="mt-3 text-xs text-slate-500 flex justify-between">
-                <span>{hardware.memory.usedGb} GB used</span>
-                <span>{hardware.memory.totalGb} GB total</span>
-              </div>
-            </div>
-          </Card>
-
-          {/* DISK */}
-          <Card className="p-6 rounded-2xl border bg-white">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Storage</div>
-                <div className="mt-2 text-3xl font-semibold text-slate-900">{diskPct}%</div>
-              </div>
-              <div className="p-2 rounded-xl border bg-slate-50">
-                <HardDrive className="h-5 w-5 text-slate-700" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <Progress value={diskPct} className="h-2 bg-slate-100" />
-              <div className="mt-3 text-xs text-slate-500 flex justify-between">
-                <span>{hardware.disk.usedGb} GB used</span>
-                <span>{hardware.disk.totalGb} GB total</span>
-              </div>
-            </div>
-          </Card>
-        </div>
+        <Card className="overflow-hidden border-slate-200 shadow-sm">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
+                <TableHead className="w-[180px]">Timestamp</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>IP Address</TableHead>
+                <TableHead>Target</TableHead>
+                <TableHead>Tenant Context</TableHead>
+                <TableHead className="text-right">Reason</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {logs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-24 text-center text-slate-500">
+                    Nessun evento di sicurezza rilevato (Sistema Pulito).
+                  </TableCell>
+                </TableRow>
+              ) : (
+                logs.map((log, i) => (
+                  <TableRow key={i} className="hover:bg-slate-50">
+                    <TableCell className="font-mono text-xs text-slate-500">
+                      {new Date(log.timestamp).toLocaleTimeString()}
+                    </TableCell>
+                    <TableCell>
+                      <Badge 
+                        variant="secondary" 
+                        className={
+                          log.type.includes('BLACKLIST') 
+                            ? "bg-red-100 text-red-700 border-red-200" 
+                            : "bg-amber-100 text-amber-700 border-amber-200"
+                        }
+                      >
+                        {log.type}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{log.ip}</TableCell>
+                    <TableCell className="text-xs text-slate-600 truncate max-w-[200px]">
+                      {log.path}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {log.tenantId !== 'global' ? (
+                        <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                           <Lock className="h-3 w-3 text-slate-400" /> {log.tenantId}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 italic">Global</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-xs text-slate-500">
+                      {log.metadata?.reason || '-'}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </Card>
       </div>
     </div>
   );

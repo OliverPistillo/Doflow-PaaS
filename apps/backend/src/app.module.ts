@@ -1,10 +1,20 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { APP_GUARD } from '@nestjs/core';
+import * as path from 'path';
 
+// --- MODULI CORE & INFRA ---
+import { RedisModule } from './redis/redis.module';
+import { TelemetryModule } from './telemetry/telemetry.module'; // <--- Nuovo modulo v3.5
+import { TrafficControlModule } from './traffic-control/traffic-control.module';
+import { TenancyModule } from './tenancy/tenancy.module';
+import { MailModule } from './mail/mail.module';
+import { HealthModule } from './health/health.module';
+
+// --- CONTROLLERS ---
 import { AppController } from './app.controller';
 import { BloomController } from './bloom.controller';
-import { TelemetryController } from './telemetry/telemetry.controller';
 import { TenantUsersController } from './tenant-users.controller';
 import { AuthController } from './auth.controller';
 import { TenantAdminController } from './tenant-admin.controller';
@@ -12,17 +22,25 @@ import { ProjectsController } from './projects.controller';
 import { FilesController } from './files.controller';
 import { NotificationsTestController } from './realtime/notifications-test.controller';
 import { AuthPasswordController } from './auth-password.controller';
+import { AuthMfaController } from './auth-mfa.controller';
+import { SuperadminAuditController } from './audit.controller';
+
+// --- SUPERADMIN CONTROLLERS & SERVICES ---
 import { SuperadminUsersController } from './superadmin/superadmin-users.controller';
 import { SecurityPolicyController } from './superadmin/security-policy.controller';
-import { AuthMfaController } from './auth-mfa.controller';
-import { AuthMfaService } from './auth-mfa.service';
-import { PassportModule } from '@nestjs/passport';
-import { JwtModule } from '@nestjs/jwt';
-import { JwtStrategy } from './auth/jwt.strategy';
+import { SuperadminDashboardController } from './superadmin/superadmin-dashboard.controller';
+import { SuperadminDashboardService } from './superadmin/superadmin-dashboard.service';
+import { DeliveryController } from './superadmin/delivery.controller';
+import { DeliveryService } from './superadmin/delivery.service';
+import { CalendarController } from './superadmin/calendar.controller';
+import { CalendarService } from './superadmin/calendar.service';
+import { FinanceController } from './superadmin/finance.controller';
+import { FinanceService } from './superadmin/finance.service';
+import { TenantsController } from './superadmin/tenants.controller';
+import { TenantsService } from './superadmin/tenants.service';
+import { SystemController } from './superadmin/system.controller';
 
 // --- SERVIZI ---
-import { SystemStatsService } from './superadmin/telemetry.service';
-import { TelemetryService } from './telemetry/telemetry.service';
 import { AuthService } from './auth.service';
 import { AuditService } from './audit.service';
 import { LoginGuardService } from './login-guard.service';
@@ -30,76 +48,52 @@ import { FileStorageService } from './file-storage.service';
 import { NotificationsService } from './realtime/notifications.service';
 import { ProjectsEventsService } from './realtime/projects-events.service';
 import { TenantBootstrapService } from './tenancy/tenant-bootstrap.service';
-import { SuperadminAuditController } from './audit.controller';
-import { TrafficControlModule } from './traffic-control/traffic-control.module';
-import { TrafficGuard } from './traffic-control/traffic.guard';
-import { APP_GUARD } from '@nestjs/core';
-import * as path from 'path';
+import { AuthMfaService } from './auth-mfa.service';
 
-// --- DASHBOARD SUPERADMIN ---
-import { SuperadminDashboardController } from './superadmin/superadmin-dashboard.controller';
-import { SuperadminDashboardService } from './superadmin/superadmin-dashboard.service';
+// --- ENTITIES & SECURITY ---
 import { PlatformDeal } from './superadmin/entities/platform-deal.entity';
-
-// --- DELIVERY SUPERADMIN (NUOVI) ---
-import { DeliveryController } from './superadmin/delivery.controller';
-import { DeliveryService } from './superadmin/delivery.service';
 import { DeliveryTask } from './superadmin/entities/delivery-task.entity';
+import { CalendarEvent } from './superadmin/entities/calendar-event.entity';
+import { Invoice } from './superadmin/entities/invoice.entity';
+import { Tenant } from './superadmin/entities/tenant.entity';
+import { PassportModule } from '@nestjs/passport';
+import { JwtModule } from '@nestjs/jwt';
+import { JwtStrategy } from './auth/jwt.strategy';
+import { TrafficGuard } from './traffic-control/traffic.guard';
 
-// --- MIDDLEWARE & GUARD ---
+// --- MIDDLEWARE ---
 import { TenancyMiddleware } from './tenancy/tenancy.middleware';
 import { AuthMiddleware } from './auth.middleware';
-
-// --- MODULI ---
 import { TenantModule } from './tenant/tenant.module';
-import { MailModule } from './mail/mail.module';
-import { HealthModule } from './health/health.module';
 import { FedericaNeroneModule } from './federicanerone/federicanerone.module';
 import { BusinaroModule } from './businaro/businaro.module';
-import { TenancyModule } from './tenancy/tenancy.module';
-import { RedisModule } from './redis/redis.module';
-import { CalendarEvent } from './superadmin/entities/calendar-event.entity';
-import { CalendarController } from './superadmin/calendar.controller';
-import { CalendarService } from './superadmin/calendar.service';
-import { Invoice } from './superadmin/entities/invoice.entity';
-import { FinanceController } from './superadmin/finance.controller';
-import { FinanceService } from './superadmin/finance.service';
-import { Tenant } from './superadmin/entities/tenant.entity';
-import { TenantsController } from './superadmin/tenants.controller';
-import { TenantsService } from './superadmin/tenants.service';
-import { SystemController } from './superadmin/system.controller';
 
 @Module({
   imports: [
     HealthModule,
-
     ConfigModule.forRoot({
       isGlobal: true,
       ignoreEnvFile: false,
       envFilePath: path.join(__dirname, '..', '.env'),
     }),
 
+    // Infra Modules
     RedisModule,
-    TrafficControlModule,
+    TelemetryModule,      // <--- v3.5 Shadow Logging incapsulato qui
+    TrafficControlModule, // <--- v3.5 Gatekeeper
     TenancyModule,
 
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (cfg: ConfigService) => {
-        const url = cfg.get<string>('DATABASE_URL');
-        if (!url) throw new Error('Missing DATABASE_URL');
-
-        return {
-          type: 'postgres' as const,
-          url,
-          autoLoadEntities: true,
-          synchronize: false,
-        };
-      },
+      useFactory: (cfg: ConfigService) => ({
+        type: 'postgres' as const,
+        url: cfg.get<string>('DATABASE_URL'),
+        autoLoadEntities: true,
+        synchronize: false,
+      }),
     }),
 
-    // ✅ REGISTRAZIONE ENTITY (Sales + Delivery)
     TypeOrmModule.forFeature([
       PlatformDeal,
       DeliveryTask,
@@ -127,7 +121,6 @@ import { SystemController } from './superadmin/system.controller';
   controllers: [
     AppController,
     BloomController,
-    TelemetryController,
     TenantUsersController,
     AuthController,
     TenantAdminController,
@@ -148,8 +141,7 @@ import { SystemController } from './superadmin/system.controller';
   ],
 
   providers: [
-    TelemetryService,
-    SystemStatsService,
+    // Nota: TelemetryService è ora fornito dal TelemetryModule
     AuthService,
     AuditService,
     LoginGuardService,
@@ -166,15 +158,15 @@ import { SystemController } from './superadmin/system.controller';
     TenantsService,
     {
       provide: APP_GUARD,
-      useClass: TrafficGuard,
-    }
+      useClass: TrafficGuard, // <--- Protezione attiva su ogni rotta
+    },
   ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(TenancyMiddleware, AuthMiddleware)
-      .exclude('api/superadmin/(.*)') // ESCLUDI LE ROTTE SUPERADMIN DAL TENANCY MIDDLEWARE
+      .exclude('api/superadmin/(.*)')
       .forRoutes('*');
   }
 }
