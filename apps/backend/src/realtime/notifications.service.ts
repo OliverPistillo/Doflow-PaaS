@@ -52,6 +52,13 @@ export class NotificationsService {
   }
 
   /**
+   * ALIAS per compatibilità con il codice esistente (projects-events, etc.)
+   */
+  async notifyTenant(tenantId: string, message: any) {
+    return this.broadcastToTenant(tenantId, message);
+  }
+
+  /**
    * Invia un messaggio a un singolo utente specifico.
    */
   async notifyUser(userId: string, message: any) {
