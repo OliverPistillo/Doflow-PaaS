@@ -92,13 +92,21 @@ export class TenantsService {
         VALUES ($1, 'admin', $2)
       `, [dto.email, tempPassword]);
 
+      // 5. FIX: Inseriamo l'Admin anche in PUBLIC.USERS (Directory Globale)
+      // Questo rende l'utente visibile nella pagina Superadmin Users e permette il routing corretto al login
+      await queryRunner.query(`
+        INSERT INTO public.users ("email", "role", "tenant_id", "is_active", "created_at", "updated_at")
+        VALUES ($1, 'admin', $2, true, now(), now())
+        ON CONFLICT (email) DO UPDATE SET tenant_id = EXCLUDED.tenant_id
+      `, [dto.email, dto.slug]);
+
       await queryRunner.commitTransaction();
 
-      // 5. AGGIORNAMENTO REDIS (v3.5)
+      // 6. AGGIORNAMENTO REDIS (v3.5)
       // Aggiungiamo il nuovo slug alla whitelist così è subito raggiungibile
       await this.bootstrap.addTenantToCache(dto.slug);
 
-      // --- 6. INVIO EMAIL DI BENVENUTO (Fuori dalla transazione) ---
+      // --- 7. INVIO EMAIL DI BENVENUTO (Fuori dalla transazione) ---
       try {
         await this.mailService.sendMail({
           to: dto.email,
@@ -110,7 +118,11 @@ export class TenantsService {
         console.error("⚠️ Tenant creato ma errore invio email:", mailErr);
       }
       
-      return savedTenant;
+      // Restituiamo anche la password temporanea così il controller può passarla al frontend
+      return { 
+        ...savedTenant, 
+        tempPassword 
+      };
 
     } catch (err) {
       await queryRunner.rollbackTransaction();

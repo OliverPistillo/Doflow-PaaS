@@ -234,8 +234,8 @@ export default function TenantsPage() {
 
     setIsCreating(true);
     try {
-      // FIX: Rimosso /v2/
-      await apiFetch("/superadmin/tenants", {
+      // FIX: Rimosso /v2/ e aggiunto il tipo per intercettare la password
+      const res = await apiFetch<{ tempPassword?: string; name: string }>("/superadmin/tenants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newTenant)
@@ -246,6 +246,17 @@ export default function TenantsPage() {
         description: `Il database per ${newTenant.name} è stato provisionato.`,
         className: "bg-emerald-50 border-emerald-200 text-emerald-800"
       });
+
+      // --- FIX: Mostra la password se restituita dal backend ---
+      if (res?.tempPassword) {
+        alert(
+          `✅ TENANT CREATO CON SUCCESSO!\n\n` +
+          `Ecco le credenziali Admin per ${res.name || newTenant.name}:\n\n` +
+          `Email: ${newTenant.email}\n` +
+          `Password: ${res.tempPassword}\n\n` +
+          `⚠️ COPIA QUESTA PASSWORD ORA. Non sarà più visibile.\n(È stata inviata anche via email)`
+        );
+      }
 
       setIsCreateOpen(false);
       setNewTenant({ name: "", slug: "", email: "", plan: "STARTER" });
@@ -620,7 +631,7 @@ export default function TenantsPage() {
               <p className="text-xs mt-2 opacity-80">
                 I tenant attivi sono caricati nella Redis Whitelist per il Fast-Path routing.
               </p>
-           </Card>
+            </Card>
         </div>
 
       </div>
