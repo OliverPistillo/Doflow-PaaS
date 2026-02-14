@@ -70,6 +70,10 @@ import { TenantModule } from './tenant/tenant.module';
 import { FedericaNeroneModule } from './federicanerone/federicanerone.module';
 import { BusinaroModule } from './businaro/businaro.module';
 
+// --- Piattaforma odoo-style ---
+import { PlatformModule } from './superadmin/entities/platform-module.entity';
+import { TenantSubscription } from './superadmin/entities/tenant-subscription.entity';
+
 @Module({
   imports: [
     HealthModule,
@@ -102,6 +106,8 @@ import { BusinaroModule } from './businaro/businaro.module';
       CalendarEvent,
       Invoice,
       Tenant,
+      PlatformModule,
+      TenantSubscription,
     ]),
 
     PassportModule,

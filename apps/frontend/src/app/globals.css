@@ -5,7 +5,6 @@
 @layer base {
   /* --- DEFAULT STANDARD (Non toccare) --- */
   :root {
-    /* ... (lascia invariato il root standard) ... */
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
@@ -37,7 +36,6 @@
   }
 
   .dark {
-    /* ... (lascia invariato il dark standard) ... */
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
     --card: 240 10% 3.9%;
@@ -68,39 +66,28 @@
   }
 
   /* --- NUOVO TEMA BUSINARO (Modern Aurora Glass) --- */
-  
   .theme-businaro {
     /* LIGHT MODE: Soft Aurora */
     --background: 210 20% 98%;
     --foreground: 222 47% 11%;
-    
-    /* Card semitrasparenti per effetto vetro */
     --card: 0 0% 100% / 0.7; 
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100% / 0.8;
     --popover-foreground: 222 47% 11%;
-    
-    /* Gradienti Principali (Blu/Viola/Verde) */
-    --primary: 221 83% 53%; /* Blu brillante */
+    --primary: 221 83% 53%; 
     --primary-foreground: 210 40% 98%;
-
     --secondary: 210 40% 96.1% / 0.5;
     --secondary-foreground: 222 47% 11%;
     --muted: 210 40% 96.1% / 0.5;
     --muted-foreground: 215.4 16.3% 46.9%;
     --accent: 210 40% 96.1% / 0.8;
     --accent-foreground: 222 47% 11%;
-    
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    
     --border: 214.3 31.8% 91.4% / 0.4;
     --input: 214.3 31.8% 91.4% / 0.5;
     --ring: 221 83% 53%;
-    
     --radius: 1.75rem; 
-
-    /* Sidebar Glass */
     --sidebar-background: 0 0% 100% / 0.6;
     --sidebar-foreground: 222 47% 11%;
     --sidebar-primary: 221 83% 53%;
@@ -109,44 +96,32 @@
     --sidebar-accent-foreground: 222 47% 11%;
     --sidebar-border: 214.3 31.8% 91.4% / 0.2;
     --sidebar-ring: 221 83% 53%;
-
-    /* Sfondo Aurora Light */
     --aurora-bg: radial-gradient(at 0% 0%, hsla(253,100%,85%,0.3) 0px, transparent 50%),
                  radial-gradient(at 100% 0%, hsla(189,100%,85%,0.3) 0px, transparent 50%),
                  radial-gradient(at 100% 100%, hsla(309,100%,85%,0.3) 0px, transparent 50%),
                  radial-gradient(at 0% 100%, hsla(221,100%,85%,0.3) 0px, transparent 50%);
   }
 
-  /* DARK MODE BUSINARO: Deep Aurora */
   .dark .theme-businaro {
     --background: 222 47% 11%;
     --foreground: 210 40% 98%;
-    
-    /* Card scure semitrasparenti */
     --card: 222 47% 11% / 0.7;
     --card-foreground: 210 40% 98%;
     --popover: 222 47% 11% / 0.8;
     --popover-foreground: 210 40% 98%;
-    
-    /* Primary più luminoso per contrasto */
     --primary: 217 91% 60%;
     --primary-foreground: 222 47% 11%;
-
     --secondary: 217 19% 27% / 0.6;
     --secondary-foreground: 210 40% 98%;
     --muted: 217 19% 27% / 0.6;
     --muted-foreground: 215 20.2% 65.1%;
     --accent: 217 19% 27% / 0.8;
     --accent-foreground: 210 40% 98%;
-    
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    
     --border: 217 19% 27% / 0.4;
     --input: 217 19% 27% / 0.5;
     --ring: 217 91% 60%;
-
-    /* Sidebar Dark Glass */
     --sidebar-background: 222 47% 11% / 0.6;
     --sidebar-foreground: 210 40% 98%;
     --sidebar-primary: 217 91% 60%;
@@ -155,28 +130,23 @@
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 217 19% 27% / 0.2;
     --sidebar-ring: 217 91% 60%;
-
-    /* Sfondo Aurora Dark */
     --aurora-bg: radial-gradient(at 0% 0%, hsla(253,100%,20%,0.5) 0px, transparent 50%),
                  radial-gradient(at 100% 0%, hsla(189,100%,20%,0.5) 0px, transparent 50%),
                  radial-gradient(at 100% 100%, hsla(309,100%,20%,0.5) 0px, transparent 50%),
                  radial-gradient(at 0% 100%, hsla(221,100%,20%,0.5) 0px, transparent 50%);
   }
 
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground transition-colors duration-300;
-  }
-  
-  /* Classe di utilità per l'effetto vetro */
-  .glass {
-    @apply bg-card backdrop-blur-xl border border-white/10 dark:border-white/5 shadow-lg;
-  }
-  
-  /* Classe di utilità per gradienti attivi */
-  .bg-gradient-primary {
-      @apply bg-gradient-to-br from-blue-500 to-violet-500 text-white border-none;
-  }
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground transition-colors duration-300; }
+  .glass { @apply bg-card backdrop-blur-xl border border-white/10 dark:border-white/5 shadow-lg; }
+  .bg-gradient-primary { @apply bg-gradient-to-br from-blue-500 to-violet-500 text-white border-none; }
+
+  /* --- STILI REACT-GRID-LAYOUT (Aggiunti per far funzionare la dashboard) --- */
+  .react-grid-layout { position: relative; transition: height 200ms ease; }
+  .react-grid-item { transition: all 200ms ease; transition-property: left, top; }
+  .react-grid-item.cssTransforms { transition-property: transform; }
+  .react-grid-item.resizing { z-index: 100; box-shadow: 0 0 10px rgba(0,0,0,0.2); opacity: 0.9; }
+  .react-grid-placeholder { background: rgba(0,0,0,0.1) !important; border-radius: 0.75rem; opacity: 0.5; }
+  .react-resizable-handle { position: absolute; width: 20px; height: 20px; bottom: 0; right: 0; cursor: se-resize; }
+  .react-resizable-handle::after { content: ""; position: absolute; right: 3px; bottom: 3px; width: 5px; height: 5px; border-right: 2px solid rgba(0,0,0,0.4); border-bottom: 2px solid rgba(0,0,0,0.4); }
 }
