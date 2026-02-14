@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-// FIX: Usiamo 'any' per bypassare i problemi di definizione dei tipi della libreria
-import RGL, { Layout } from "react-grid-layout";
+// 1. IMPORTA SOLO IL DEFAULT (Evita l'errore ts(2614) sui named exports)
+import RGL from "react-grid-layout";
+
+// CSS necessari
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
@@ -12,13 +14,18 @@ import { Pencil, Save, X, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
-// FIX NUCLEARE: Estrazione manuale con casting
-// Questo risolve al 100% l'errore "WidthProvider does not exist"
+// 2. ESTRAZIONE MANUALE (Bypassiamo TypeScript con 'any')
+// Questo codice controlla se la libreria è stata caricata come modulo ES6 o CommonJS
+// e recupera i componenti necessari senza che TS si lamenti.
 const ReactGridLayout = RGL as any;
-const Responsive = ReactGridLayout.Responsive || ReactGridLayout.default?.Responsive;
+const Responsive = ReactGridLayout.Responsive || ReactGridLayout.default?.Responsive || ReactGridLayout;
 const WidthProvider = ReactGridLayout.WidthProvider || ReactGridLayout.default?.WidthProvider;
-const ResponsiveGridLayout = WidthProvider(Responsive);
 
+// 3. CREAZIONE COMPONENTE SICURA
+// Se WidthProvider esiste, lo usiamo. Altrimenti usiamo Responsive liscio (fallback).
+const ResponsiveGrid = WidthProvider ? WidthProvider(Responsive) : Responsive;
+
+// Definiamo il tipo manualmente perché non possiamo importarlo
 export type WidgetItem = {
   i: string;
   x: number;
@@ -35,12 +42,16 @@ interface DashboardGridProps {
 }
 
 export function DashboardGrid({ initialLayout, onSave }: DashboardGridProps) {
+  const [mounted, setMounted] = useState(false);
   const [layout, setLayout] = useState<WidgetItem[]>(initialLayout || []);
   const [isEditing, setIsEditing] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    if (initialLayout) setLayout(initialLayout);
+    setMounted(true);
+    if (initialLayout && initialLayout.length > 0) {
+      setLayout(initialLayout);
+    }
   }, [initialLayout]);
 
   const handleSave = () => {
@@ -50,6 +61,7 @@ export function DashboardGrid({ initialLayout, onSave }: DashboardGridProps) {
   };
 
   const handleLayoutChange = (currentLayout: any) => {
+    if (!mounted) return;
     const newLayout: WidgetItem[] = currentLayout.map((l: any) => {
       const original = layout.find((o) => o.i === l.i);
       return {
@@ -65,8 +77,14 @@ export function DashboardGrid({ initialLayout, onSave }: DashboardGridProps) {
     setLayout(newLayout);
   };
 
+  // Preveniamo il rendering lato server per evitare errori di idratazione con RGL
+  if (!mounted) {
+    return <div className="min-h-[500px] w-full bg-slate-50/50 rounded-xl animate-pulse flex items-center justify-center text-slate-400">Caricamento Dashboard...</div>;
+  }
+
   return (
     <div className="space-y-4">
+      {/* TOOLBAR */}
       <div className="flex justify-end items-center gap-2">
         {isEditing ? (
           <>
@@ -84,11 +102,12 @@ export function DashboardGrid({ initialLayout, onSave }: DashboardGridProps) {
         )}
       </div>
 
+      {/* GRID */}
       <div className={cn(
         "min-h-[500px] transition-all rounded-xl",
         isEditing && "bg-slate-50 border-2 border-dashed border-slate-300 p-4"
       )}>
-        <ResponsiveGridLayout
+        <ResponsiveGrid
           className="layout"
           layouts={{ lg: layout }}
           breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
@@ -99,6 +118,8 @@ export function DashboardGrid({ initialLayout, onSave }: DashboardGridProps) {
           draggableHandle=".drag-handle"
           onLayoutChange={handleLayoutChange}
           margin={[16, 16]}
+          // Importante: useCSSTransforms true solo dopo il mount
+          useCSSTransforms={mounted}
         >
           {layout.map((item) => (
             <div key={item.i} className="relative group h-full">
@@ -111,14 +132,14 @@ export function DashboardGrid({ initialLayout, onSave }: DashboardGridProps) {
                 <div className="flex-1 w-full overflow-hidden">
                     {COMPONENT_MAP[item.moduleKey] || (
                         <div className="h-full flex items-center justify-center text-slate-400 bg-slate-50 text-sm">
-                            Widget: {item.moduleKey}
+                            Widget non trovato: {item.moduleKey}
                         </div>
                     )}
                 </div>
               </div>
             </div>
           ))}
-        </ResponsiveGridLayout>
+        </ResponsiveGrid>
       </div>
     </div>
   );
