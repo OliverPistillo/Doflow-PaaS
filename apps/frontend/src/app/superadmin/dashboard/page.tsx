@@ -216,10 +216,11 @@ export default function SalesDashboardPage() {
                             tickLine={false} 
                             axisLine={false} 
                           />
-                          <Tooltip 
-                            cursor={{fill: '#F1F5F9'}}
-                            contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}
-                            formatter={(val: number | undefined) => [formatCurrency(val || 0), 'Valore']} 
+                          <Tooltip
+                            cursor={{ fill: '#F1F5F9' }}
+                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                            // FIX: Cambia il tipo di 'val' in 'any' e usa Number() per sicurezza
+                            formatter={(val: any) => [formatCurrency(Number(val) || 0), 'Valore']}
                           />
                           <Bar dataKey="value" fill="#6366f1" radius={[4,4,0,0]} barSize={50} />
                       </BarChart>
@@ -266,7 +267,7 @@ export default function SalesDashboardPage() {
                   
                   {/* Legenda Custom */}
                   <div className="w-full md:w-1/3 flex flex-col justify-center gap-3 p-4 text-right">
-                     {data.pipeline.map((d, i) => {
+                      {data.pipeline.map((d, i) => {
                         const color = STAGE_CONFIG[d.stage]?.color || '#cbd5e1';
                         return (
                           <div key={i} className="flex items-center justify-end gap-2">
@@ -275,7 +276,7 @@ export default function SalesDashboardPage() {
                             <span className="text-xs font-bold text-slate-900">({d.count})</span>
                           </div>
                         );
-                     })}
+                      })}
                   </div>
               </div>
             </CardContent>
@@ -313,7 +314,8 @@ export default function SalesDashboardPage() {
                   <Tooltip 
                     cursor={{fill: '#F8FAFC'}}
                     contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}}
-                    formatter={(val: number | undefined) => [formatCurrency(val || 0), 'Valore']}
+                    // FIX APPLICATO QUI:
+                    formatter={(val: any) => [formatCurrency(Number(val) || 0), 'Valore']}
                   />
                   <Bar dataKey="value" fill="#5a7bd4" radius={[4, 4, 0, 0]} barSize={40} />
                 </BarChart>
