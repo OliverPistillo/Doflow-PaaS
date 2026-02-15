@@ -65,7 +65,7 @@ export class TenantsService {
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
     try {
-      // 1. Creazione Metadata Tenant
+      // 1. Creazione Metadata Tenant (Public)
       const newTenant = this.tenantsRepo.create({
         name: dto.name,
         slug: dto.slug,
@@ -77,32 +77,33 @@ export class TenantsService {
       
       const savedTenant = await queryRunner.manager.save(newTenant);
 
-      // 2. Provisioning DB
+      // 2. Provisioning DB (Schema Tenant)
       await this.bootstrap.ensureTenantTables(queryRunner.manager.connection, dto.slug);
 
-      // 3. Creazione Admin nel Tenant Schema (Accesso locale/isolato)
+      // 3. Creazione Admin nel Tenant Schema (Usa lo slug come nome schema)
       await queryRunner.query(`
         INSERT INTO "${dto.slug}"."users" ("email", "role", "password_hash", "is_active", "created_at", "updated_at")
         VALUES ($1, 'admin', $2, true, now(), now())
       `, [dto.email, hashedPassword]);
 
-      // 4. Creazione Admin nel Public Schema (Accesso Globale da app.doflow.it)
+      // 4. Creazione Admin nel Public Schema (Directory Globale)
+      // FIX CRITICO: Usiamo savedTenant.id (UUID) invece di dto.slug per il tenant_id.
+      // Questo garantisce che il Login riesca a fare la JOIN corretta con la tabella tenants.
       await queryRunner.query(`
         INSERT INTO public.users ("email", "role", "password_hash", "tenant_id", "is_active", "created_at", "updated_at")
         VALUES ($1, 'admin', $2, $3, true, now(), now())
         ON CONFLICT (email) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, password_hash = EXCLUDED.password_hash
-      `, [dto.email, hashedPassword, dto.slug]);
+      `, [dto.email, hashedPassword, savedTenant.id]); // <--- QUI USIAMO L'UUID
 
       await queryRunner.commitTransaction();
 
       // 5. Aggiornamento Cache
       await this.bootstrap.addTenantToCache(dto.slug);
 
-      // --- 6. INVIO EMAIL (Versione Migliorata) ---
+      // --- 6. INVIO EMAIL (Formattata e corretta) ---
       try {
-        const loginUrl = "https://app.doflow.it/login"; // Puntiamo al dominio principale
+        const loginUrl = "https://app.doflow.it/login";
         
-        // Usiamo HTML per una formattazione decente
         const htmlContent = `
           <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
             <h2 style="color: #4f46e5;">Benvenuto in DoFlow! 🚀</h2>
@@ -127,8 +128,8 @@ export class TenantsService {
         await this.mailService.sendMail({
           to: dto.email,
           subject: `Benvenuto in DoFlow - Accesso per ${dto.name}`,
-          html: htmlContent, // Usiamo la proprietà html se il mail service la supporta (altrimenti usa text)
-          text: `Benvenuto! Il tuo tenant ${dto.name} è pronto.\nAccedi su: ${loginUrl}\nUser: ${dto.email}\nPass: ${tempPassword}` // Fallback testuale
+          html: htmlContent,
+          text: `Benvenuto! Il tuo tenant ${dto.name} è pronto.\nAccedi su: ${loginUrl}\nUser: ${dto.email}\nPass: ${tempPassword}`
         });
         
         console.log(`📧 Email inviata a ${dto.email}`);
@@ -194,7 +195,7 @@ export class TenantsService {
           [hash, email]
       );
 
-      // Aggiorna nel globale (per login da app.doflow.it)
+      // Aggiorna nel globale
       await this.dataSource.query(
           `UPDATE public.users SET password_hash = $1 WHERE email = $2`,
           [hash, email]
