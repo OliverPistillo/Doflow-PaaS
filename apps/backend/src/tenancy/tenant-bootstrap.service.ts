@@ -53,19 +53,20 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
       await client.sadd(this.WHITELIST_KEY, slug);
   }
 
-  // --- I tuoi metodi esistenti (Invariati o adattati) ---
+  // --- I tuoi metodi esistenti (Adattati con QUOTING per fixare il bug del trattino) ---
   async ensureTenantTables(ds: DataSource, schema: string) {
-    await ds.query(`create schema if not exists ${schema}`);
+    // FIX: Aggiunti doppi apici "${schema}" per supportare nomi con trattini (es. oliver-pistillo)
+    await ds.query(`create schema if not exists "${schema}"`);
     
     // Tabelle standard clonate da public
-    await ds.query(`create table if not exists ${schema}.users (like public.users including all)`);
-    await ds.query(`create table if not exists ${schema}.invites (like public.invites including all)`);
-    await ds.query(`create table if not exists ${schema}.audit_log (like public.audit_log including all)`);
+    await ds.query(`create table if not exists "${schema}".users (like public.users including all)`);
+    await ds.query(`create table if not exists "${schema}".invites (like public.invites including all)`);
+    await ds.query(`create table if not exists "${schema}".audit_log (like public.audit_log including all)`);
 
     // --- NUOVA TABELLA FILES (v3.5 Secure Storage) ---
     // Questa tabella traccia i metadati dei file su S3
     await ds.query(`
-      CREATE TABLE IF NOT EXISTS ${schema}.files (
+      CREATE TABLE IF NOT EXISTS "${schema}".files (
         id SERIAL PRIMARY KEY,
         key TEXT NOT NULL,
         original_name TEXT,
@@ -79,7 +80,7 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
     // --- NUOVO v4.0: CONFIGURAZIONE DASHBOARD MODULARE ---
     // Questa tabella salva la posizione dei "blocchi" per ogni utente
     await ds.query(`
-      CREATE TABLE IF NOT EXISTS ${schema}.dashboard_widgets (
+      CREATE TABLE IF NOT EXISTS "${schema}".dashboard_widgets (
         id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
         user_id UUID NOT NULL, 
         module_key TEXT NOT NULL, -- es: 'crm_chart_sales'
@@ -93,12 +94,13 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
     `);
     
     // Creiamo un indice per recuperare velocemente la dashboard al login
-    await ds.query(`CREATE INDEX IF NOT EXISTS idx_widgets_user ON ${schema}.dashboard_widgets(user_id)`);
+    await ds.query(`CREATE INDEX IF NOT EXISTS idx_widgets_user ON "${schema}".dashboard_widgets(user_id)`);
   }
 
   async seedFirstAdmin(ds: DataSource, schema: string, email: string, password: string) {
+    // FIX: Aggiunti doppi apici "${schema}"
     const existing = await ds.query(
-      `select id from ${schema}.users where email = $1 limit 1`,
+      `select id from "${schema}".users where email = $1 limit 1`,
       [email],
     );
     if (existing.length > 0) return;
@@ -107,7 +109,7 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
     const role: Role = 'owner' as any; 
 
     await ds.query(
-      `insert into ${schema}.users (email, password_hash, role) values ($1, $2, $3)`,
+      `insert into "${schema}".users (email, password_hash, role) values ($1, $2, $3)`,
       [email, passwordHash, role],
     );
   }
