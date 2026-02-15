@@ -4,8 +4,9 @@ import { Repository, DataSource } from 'typeorm';
 import { Tenant } from './entities/tenant.entity';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import { MailService } from '../mail/mail.service';
-import { RedisService } from '../redis/redis.service'; // <--- v3.5: Redis
-import { TenantBootstrapService } from '../tenancy/tenant-bootstrap.service'; // <--- v3.5: Bootstrap
+import { RedisService } from '../redis/redis.service';
+import { TenantBootstrapService } from '../tenancy/tenant-bootstrap.service';
+import * as bcrypt from 'bcryptjs'; // Import necessario per hashing
 
 @Injectable()
 export class TenantsService {
@@ -16,8 +17,8 @@ export class TenantsService {
     private tenantsRepo: Repository<Tenant>,
     private dataSource: DataSource, 
     private mailService: MailService,
-    private redisService: RedisService, // Iniezione Redis
-    private bootstrap: TenantBootstrapService // Iniezione Bootstrap
+    private redisService: RedisService,
+    private bootstrap: TenantBootstrapService
   ) {}
 
   // --- LISTA TENANTS ---
@@ -67,6 +68,9 @@ export class TenantsService {
 
     // Generiamo una password temporanea per l'admin
     const tempPassword = Math.random().toString(36).slice(-8) + "Aa1!";
+    
+    // FIX: Hash della password per sicurezza e consistenza con il DB
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
     try {
       // 2. Creiamo il record nel Public Schema (Metadata)
@@ -81,19 +85,17 @@ export class TenantsService {
       
       const savedTenant = await queryRunner.manager.save(newTenant);
 
-      // 3. PROVISIONING v3.5: Usiamo il Bootstrap Service per creare Schema + Tabelle Standard (inclusa "files")
-      // Questo sostituisce la CREATE SCHEMA manuale e garantisce che abbiamo tutte le tabelle necessarie (users, audits, files)
+      // 3. PROVISIONING v3.5: Usiamo il Bootstrap Service per creare Schema + Tabelle Standard
       await this.bootstrap.ensureTenantTables(queryRunner.manager.connection, dto.slug);
 
       // 4. Creiamo l'utente Admin iniziale (Mantenendo la tua logica specifica)
-      // Usiamo una query diretta come nel tuo codice originale
+      // FIX: Uso di 'password_hash' invece di 'password' e inserimento dell'hash
       await queryRunner.query(`
-        INSERT INTO "${dto.slug}"."users" ("email", "role", "password")
-        VALUES ($1, 'admin', $2)
-      `, [dto.email, tempPassword]);
+        INSERT INTO "${dto.slug}"."users" ("email", "role", "password_hash", "is_active", "created_at", "updated_at")
+        VALUES ($1, 'admin', $2, true, now(), now())
+      `, [dto.email, hashedPassword]);
 
       // 5. FIX: Inseriamo l'Admin anche in PUBLIC.USERS (Directory Globale)
-      // Questo rende l'utente visibile nella pagina Superadmin Users e permette il routing corretto al login
       await queryRunner.query(`
         INSERT INTO public.users ("email", "role", "tenant_id", "is_active", "created_at", "updated_at")
         VALUES ($1, 'admin', $2, true, now(), now())
@@ -103,7 +105,6 @@ export class TenantsService {
       await queryRunner.commitTransaction();
 
       // 6. AGGIORNAMENTO REDIS (v3.5)
-      // Aggiungiamo il nuovo slug alla whitelist così è subito raggiungibile
       await this.bootstrap.addTenantToCache(dto.slug);
 
       // --- 7. INVIO EMAIL DI BENVENUTO (Fuori dalla transazione) ---
@@ -118,7 +119,7 @@ export class TenantsService {
         console.error("⚠️ Tenant creato ma errore invio email:", mailErr);
       }
       
-      // Restituiamo anche la password temporanea così il controller può passarla al frontend
+      // Restituiamo la password in chiaro (tempPassword) solo qui per il frontend popup
       return { 
         ...savedTenant, 
         tempPassword 
@@ -135,10 +136,7 @@ export class TenantsService {
 
   // --- METODO DELETE ROBUSTO (DB + REDIS) ---
   async delete(id: string) {
-    // 1. Trova il tenant per sapere lo slug
     const tenant = await this.tenantsRepo.findOne({ where: { id } });
-    
-    // Se non esiste nel DB principale, restituiamo successo per "idempotenza" 
     if (!tenant) return { message: "Tenant already deleted or not found" };
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -156,7 +154,6 @@ export class TenantsService {
       await queryRunner.manager.delete(Tenant, id);
 
       // 4. RIMOZIONE DA REDIS (v3.5)
-      // Rimuoviamo lo slug dalla whitelist per bloccare subito il traffico
       const client = this.redisService.getClient();
       await client.srem(this.WHITELIST_KEY, tenant.slug);
 
@@ -177,11 +174,12 @@ export class TenantsService {
 
       const newPass = Math.random().toString(36).slice(-10) + "!!";
       
-      // Aggiorna user nel tenant (assumendo password in chiaro come da tuo codice precedente, o hash se usi bcrypt)
-      // Se nel tuo sistema usi bcrypt, qui dovresti fare l'hash. Mantengo la logica coerente con la create() sopra.
+      // FIX: Hash della password e uso colonna password_hash
+      const hash = await bcrypt.hash(newPass, 10);
+      
       await this.dataSource.query(
-          `UPDATE "${tenant.schemaName}".users SET password = $1 WHERE email = $2`,
-          [newPass, email]
+          `UPDATE "${tenant.schemaName}".users SET password_hash = $1 WHERE email = $2`,
+          [hash, email]
       );
 
       return { tempPassword: newPass };
