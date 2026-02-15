@@ -1,21 +1,32 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
-@Entity({ name: 'tenants', schema: 'public' }) // Importante: sta sempre nello schema public
+@Entity({ name: 'tenants', schema: 'public' })
+@Index(['slug'], { unique: true })
 export class Tenant {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
   @Column({ unique: true })
-  slug!: string; // Es: "pizzeria-da-mario" (diventerà il nome dello schema DB)
+  slug!: string;
 
   @Column()
-  name!: string; // Es: "Pizzeria Da Mario"
-
-  @Column({ name: 'admin_email' })
-  adminEmail!: string;
+  name!: string;
 
   @Column({ name: 'schema_name' })
-  schemaName!: string; // Solitamente uguale allo slug
+  schemaName!: string;
+
+  // --- Campi aggiunti per fixare l'errore 500 ---
+  
+  @Column({ name: 'contact_email', nullable: true })
+  contactEmail!: string;
+
+  @Column({ name: 'vat_number', nullable: true })
+  vatNumber!: string;
+
+  @Column({ name: 'admin_email', nullable: true })
+  adminEmail!: string;
+
+  // ----------------------------------------------
 
   @Column({ name: 'plan_tier', default: 'STARTER' })
   planTier!: string;
