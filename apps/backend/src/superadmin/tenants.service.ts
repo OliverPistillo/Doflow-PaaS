@@ -26,20 +26,16 @@ export class TenantsService {
     return this.tenantsRepo.find({ order: { createdAt: 'DESC' } });
   }
 
-  // --- AGGIORNAMENTO STATO (Sospendi/Attiva + Redis) ---
+  // --- AGGIORNAMENTO STATO ---
   async updateStatus(id: string, isActive: boolean) {
-    // 1. Verifichiamo che il tenant esista
     const tenant = await this.tenantsRepo.findOne({ where: { id } });
     
     if (!tenant) {
       throw new NotFoundException(`Tenant con ID ${id} non trovato.`);
     }
 
-    // 2. Aggiorniamo solo il campo isActive nel DB
     await this.tenantsRepo.update(id, { isActive });
 
-    // 3. AGGIORNAMENTO REDIS (v3.5)
-    // Aggiorniamo la whitelist per il Fast-Path routing
     const client = this.redisService.getClient();
     if (isActive) {
         await client.sadd(this.WHITELIST_KEY, tenant.slug);
@@ -54,9 +50,8 @@ export class TenantsService {
     };
   }
 
-  // --- CREAZIONE (CON PROVISIONING, FILES, EMAIL E REDIS) ---
+  // --- CREAZIONE ---
   async create(dto: CreateTenantDto) {
-    // 1. Controllo unicità slug
     const existing = await this.tenantsRepo.findOne({ where: { slug: dto.slug } });
     if (existing) {
       throw new ConflictException(`Lo slug '${dto.slug}' è già in uso.`);
@@ -66,14 +61,11 @@ export class TenantsService {
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
-    // Generiamo una password temporanea per l'admin
     const tempPassword = Math.random().toString(36).slice(-8) + "Aa1!";
-    
-    // Hash della password
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
     try {
-      // 2. Creiamo il record nel Public Schema (Metadata)
+      // 1. Creazione Metadata Tenant
       const newTenant = this.tenantsRepo.create({
         name: dto.name,
         slug: dto.slug,
@@ -85,17 +77,16 @@ export class TenantsService {
       
       const savedTenant = await queryRunner.manager.save(newTenant);
 
-      // 3. PROVISIONING v3.5: Usiamo il Bootstrap Service per creare Schema + Tabelle Standard (inclusa "files")
+      // 2. Provisioning DB
       await this.bootstrap.ensureTenantTables(queryRunner.manager.connection, dto.slug);
 
-      // 4. Creiamo l'utente Admin iniziale (Schema del Tenant)
+      // 3. Creazione Admin nel Tenant Schema (Accesso locale/isolato)
       await queryRunner.query(`
         INSERT INTO "${dto.slug}"."users" ("email", "role", "password_hash", "is_active", "created_at", "updated_at")
         VALUES ($1, 'admin', $2, true, now(), now())
       `, [dto.email, hashedPassword]);
 
-      // 5. FIX: Inseriamo l'Admin anche in PUBLIC.USERS (Directory Globale)
-      // !!! AGGIUNTO IL CAMPO password_hash ANCHE QUI PER EVITARE L'ERRORE NOT NULL !!!
+      // 4. Creazione Admin nel Public Schema (Accesso Globale da app.doflow.it)
       await queryRunner.query(`
         INSERT INTO public.users ("email", "role", "password_hash", "tenant_id", "is_active", "created_at", "updated_at")
         VALUES ($1, 'admin', $2, $3, true, now(), now())
@@ -104,22 +95,47 @@ export class TenantsService {
 
       await queryRunner.commitTransaction();
 
-      // 6. AGGIORNAMENTO REDIS (v3.5)
+      // 5. Aggiornamento Cache
       await this.bootstrap.addTenantToCache(dto.slug);
 
-      // --- 7. INVIO EMAIL DI BENVENUTO (Fuori dalla transazione) ---
+      // --- 6. INVIO EMAIL (Versione Migliorata) ---
       try {
+        const loginUrl = "https://app.doflow.it/login"; // Puntiamo al dominio principale
+        
+        // Usiamo HTML per una formattazione decente
+        const htmlContent = `
+          <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+            <h2 style="color: #4f46e5;">Benvenuto in DoFlow! 🚀</h2>
+            <p>Ciao,</p>
+            <p>Il tuo spazio di lavoro <strong>${dto.name}</strong> è stato configurato con successo.</p>
+            
+            <div style="background-color: #f9fafb; padding: 15px; border-radius: 6px; margin: 20px 0;">
+              <p style="margin: 5px 0;"><strong>URL Accesso:</strong> <a href="${loginUrl}" style="color: #4f46e5;">${loginUrl}</a></p>
+              <p style="margin: 5px 0;"><strong>Username:</strong> ${dto.email}</p>
+              <p style="margin: 5px 0;"><strong>Password Provvisoria:</strong> <code style="background: #eef2ff; padding: 2px 5px; border-radius: 4px; color: #4338ca;">${tempPassword}</code></p>
+            </div>
+
+            <p style="font-size: 13px; color: #666;">
+              ⚠️ Per la tua sicurezza, ti chiediamo di modificare la password al primo accesso.
+            </p>
+            
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+            <p style="font-size: 12px; color: #999; text-align: center;">Team DoFlow</p>
+          </div>
+        `;
+
         await this.mailService.sendMail({
           to: dto.email,
-          subject: 'Benvenuto in DoFlow - Il tuo spazio è pronto',
-          text: `Ciao! Il tuo tenant "${dto.name}" è stato creato con successo.\n\nAccedi qui: https://${dto.slug}.doflow.it\nUsername: ${dto.email}\nPassword Provvisoria: ${tempPassword}\n\nTi consigliamo di cambiare la password al primo accesso.`
+          subject: `Benvenuto in DoFlow - Accesso per ${dto.name}`,
+          html: htmlContent, // Usiamo la proprietà html se il mail service la supporta (altrimenti usa text)
+          text: `Benvenuto! Il tuo tenant ${dto.name} è pronto.\nAccedi su: ${loginUrl}\nUser: ${dto.email}\nPass: ${tempPassword}` // Fallback testuale
         });
+        
         console.log(`📧 Email inviata a ${dto.email}`);
       } catch (mailErr) {
         console.error("⚠️ Tenant creato ma errore invio email:", mailErr);
       }
       
-      // Restituiamo anche la password temporanea così il controller può passarla al frontend
       return { 
         ...savedTenant, 
         tempPassword 
@@ -134,58 +150,51 @@ export class TenantsService {
     }
   }
 
-  // --- METODO DELETE ROBUSTO (DB + REDIS) ---
+  // --- DELETE ---
   async delete(id: string) {
-    // 1. Trova il tenant per sapere lo slug
     const tenant = await this.tenantsRepo.findOne({ where: { id } });
-    
-    // Se non esiste nel DB principale, restituiamo successo per "idempotenza" 
     if (!tenant) return { message: "Tenant already deleted or not found" };
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     
     try {
-      // 2. TENTATIVO DI ELIMINAZIONE SCHEMA (Connessioni + Dati)
       try {
         await queryRunner.query(`DROP SCHEMA IF EXISTS "${tenant.schemaName}" CASCADE`);
       } catch (schemaErr) {
-        console.warn(`Attenzione: Impossibile eliminare lo schema fisico "${tenant.schemaName}". Procedo comunque con la rimozione del record.`, schemaErr);
+        console.warn(`Attenzione: Impossibile eliminare schema "${tenant.schemaName}".`, schemaErr);
       }
 
-      // 3. ELIMINA IL RECORD DAI METADATI (public.tenants)
       await queryRunner.manager.delete(Tenant, id);
 
-      // 4. RIMOZIONE DA REDIS (v3.5)
-      // Rimuoviamo lo slug dalla whitelist per bloccare subito il traffico
       const client = this.redisService.getClient();
       await client.srem(this.WHITELIST_KEY, tenant.slug);
 
       return { message: "Tenant deleted successfully" };
 
     } catch (err) {
-      console.error("Errore critico eliminazione tenant:", err);
-      throw new InternalServerErrorException("Errore durante l'eliminazione del record tenant");
+      console.error("Errore eliminazione tenant:", err);
+      throw new InternalServerErrorException("Errore durante l'eliminazione");
     } finally {
       await queryRunner.release();
     }
   }
 
-  // --- NUOVO: RESET PASSWORD ADMIN (Per il modale del frontend) ---
+  // --- RESET PASSWORD ---
   async resetAdminPassword(id: string, email: string) {
       const tenant = await this.tenantsRepo.findOne({ where: { id } });
       if (!tenant) throw new NotFoundException();
 
       const newPass = Math.random().toString(36).slice(-10) + "!!";
-      
       const hash = await bcrypt.hash(newPass, 10);
       
+      // Aggiorna nel tenant
       await this.dataSource.query(
           `UPDATE "${tenant.schemaName}".users SET password_hash = $1 WHERE email = $2`,
           [hash, email]
       );
 
-      // Opzionale: sincronizza anche la password dell'utente globale se serve
+      // Aggiorna nel globale (per login da app.doflow.it)
       await this.dataSource.query(
           `UPDATE public.users SET password_hash = $1 WHERE email = $2`,
           [hash, email]
