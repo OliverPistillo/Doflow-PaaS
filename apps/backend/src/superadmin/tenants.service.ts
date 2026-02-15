@@ -6,7 +6,7 @@ import { CreateTenantDto } from './dto/create-tenant.dto';
 import { MailService } from '../mail/mail.service';
 import { RedisService } from '../redis/redis.service';
 import { TenantBootstrapService } from '../tenancy/tenant-bootstrap.service';
-import * as bcrypt from 'bcryptjs'; // Import necessario per hashing
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class TenantsService {
@@ -69,7 +69,7 @@ export class TenantsService {
     // Generiamo una password temporanea per l'admin
     const tempPassword = Math.random().toString(36).slice(-8) + "Aa1!";
     
-    // FIX: Hash della password per sicurezza e consistenza con il DB
+    // Hash della password
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
     try {
@@ -85,22 +85,22 @@ export class TenantsService {
       
       const savedTenant = await queryRunner.manager.save(newTenant);
 
-      // 3. PROVISIONING v3.5: Usiamo il Bootstrap Service per creare Schema + Tabelle Standard
+      // 3. PROVISIONING v3.5: Usiamo il Bootstrap Service per creare Schema + Tabelle Standard (inclusa "files")
       await this.bootstrap.ensureTenantTables(queryRunner.manager.connection, dto.slug);
 
-      // 4. Creiamo l'utente Admin iniziale (Mantenendo la tua logica specifica)
-      // FIX: Uso di 'password_hash' invece di 'password' e inserimento dell'hash
+      // 4. Creiamo l'utente Admin iniziale (Schema del Tenant)
       await queryRunner.query(`
         INSERT INTO "${dto.slug}"."users" ("email", "role", "password_hash", "is_active", "created_at", "updated_at")
         VALUES ($1, 'admin', $2, true, now(), now())
       `, [dto.email, hashedPassword]);
 
       // 5. FIX: Inseriamo l'Admin anche in PUBLIC.USERS (Directory Globale)
+      // !!! AGGIUNTO IL CAMPO password_hash ANCHE QUI PER EVITARE L'ERRORE NOT NULL !!!
       await queryRunner.query(`
-        INSERT INTO public.users ("email", "role", "tenant_id", "is_active", "created_at", "updated_at")
-        VALUES ($1, 'admin', $2, true, now(), now())
-        ON CONFLICT (email) DO UPDATE SET tenant_id = EXCLUDED.tenant_id
-      `, [dto.email, dto.slug]);
+        INSERT INTO public.users ("email", "role", "password_hash", "tenant_id", "is_active", "created_at", "updated_at")
+        VALUES ($1, 'admin', $2, $3, true, now(), now())
+        ON CONFLICT (email) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, password_hash = EXCLUDED.password_hash
+      `, [dto.email, hashedPassword, dto.slug]);
 
       await queryRunner.commitTransaction();
 
@@ -119,7 +119,7 @@ export class TenantsService {
         console.error("⚠️ Tenant creato ma errore invio email:", mailErr);
       }
       
-      // Restituiamo la password in chiaro (tempPassword) solo qui per il frontend popup
+      // Restituiamo anche la password temporanea così il controller può passarla al frontend
       return { 
         ...savedTenant, 
         tempPassword 
@@ -136,7 +136,10 @@ export class TenantsService {
 
   // --- METODO DELETE ROBUSTO (DB + REDIS) ---
   async delete(id: string) {
+    // 1. Trova il tenant per sapere lo slug
     const tenant = await this.tenantsRepo.findOne({ where: { id } });
+    
+    // Se non esiste nel DB principale, restituiamo successo per "idempotenza" 
     if (!tenant) return { message: "Tenant already deleted or not found" };
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -154,6 +157,7 @@ export class TenantsService {
       await queryRunner.manager.delete(Tenant, id);
 
       // 4. RIMOZIONE DA REDIS (v3.5)
+      // Rimuoviamo lo slug dalla whitelist per bloccare subito il traffico
       const client = this.redisService.getClient();
       await client.srem(this.WHITELIST_KEY, tenant.slug);
 
@@ -174,11 +178,16 @@ export class TenantsService {
 
       const newPass = Math.random().toString(36).slice(-10) + "!!";
       
-      // FIX: Hash della password e uso colonna password_hash
       const hash = await bcrypt.hash(newPass, 10);
       
       await this.dataSource.query(
           `UPDATE "${tenant.schemaName}".users SET password_hash = $1 WHERE email = $2`,
+          [hash, email]
+      );
+
+      // Opzionale: sincronizza anche la password dell'utente globale se serve
+      await this.dataSource.query(
+          `UPDATE public.users SET password_hash = $1 WHERE email = $2`,
           [hash, email]
       );
 
