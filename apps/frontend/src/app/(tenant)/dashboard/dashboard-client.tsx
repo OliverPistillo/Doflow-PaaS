@@ -2,38 +2,40 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuLabel, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Download, Plus, Loader2 } from "lucide-react";
-import { DashboardGrid } from "@/components/dashboard/dashboard-grid";
+import { Download, Plus, Loader2, Settings2, Pencil, Save, X, RotateCcw } from "lucide-react";
+import { DashboardGrid, WidgetItem } from "@/components/dashboard/dashboard-grid";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 // --- LAYOUT STANDARD A 3 COLONNE ---
-// w: 1 = 1/3 di pagina
-// w: 2 = 2/3 di pagina
-// w: 3 = Tutta la larghezza
-const DEFAULT_LAYOUT = [
-  // Riga 1: Tre KPI (Revenue, Users, Sales)
+const DEFAULT_LAYOUT: WidgetItem[] = [
   { i: "stat_revenue", x: 0, y: 0, w: 1, h: 1, moduleKey: "stat_revenue" },
   { i: "stat_users",   x: 1, y: 0, w: 1, h: 1, moduleKey: "stat_users" },
   { i: "stat_sales",   x: 2, y: 0, w: 1, h: 1, moduleKey: "stat_sales" },
-  
-  // Riga 2: Grafico Grande (2/3) + Statistica Attivi (1/3)
   { i: "chart_main",   x: 0, y: 1, w: 2, h: 2, moduleKey: "chart_overview" },
   { i: "stat_active",  x: 2, y: 1, w: 1, h: 1, moduleKey: "stat_active" },
-  
-  // Riga 2 (continua sotto stat_active): Lista vendite (1/3)
   { i: "list_sales",   x: 2, y: 2, w: 1, h: 1, moduleKey: "list_recent_sales" },
 ];
 
 export default function DashboardClient() {
-  const [layout, setLayout] = useState<any[] | null>(null);
+  // Usiamo WidgetItem[] per tipizzare correttamente lo stato
+  const [layout, setLayout] = useState<WidgetItem[] | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     const fetchLayout = async () => {
       try {
-        const data = await apiFetch<any[]>("/tenant/dashboard");
+        const data = await apiFetch<WidgetItem[]>("/tenant/dashboard");
         if (data && data.length > 0) {
           setLayout(data);
         } else {
@@ -47,9 +49,10 @@ export default function DashboardClient() {
     fetchLayout();
   }, []);
 
-  const handleSaveLayout = async (newLayout: any[]) => {
+  const handleSaveLayout = async () => {
+    if (!layout) return;
     try {
-      const payload = newLayout.map(item => ({
+      const payload = layout.map(item => ({
         i: item.i,
         moduleKey: item.moduleKey,
         x: item.x,
@@ -64,14 +67,28 @@ export default function DashboardClient() {
         body: JSON.stringify({ widgets: payload }),
       });
 
-      setLayout(newLayout);
+      setIsEditing(false);
+      toast({ title: "Layout salvato", description: "La dashboard è stata aggiornata." });
     } catch (e) {
       toast({ 
         title: "Errore salvataggio", 
-        description: "Impossibile salvare la posizione dei widget.", 
+        description: "Impossibile salvare la configurazione.", 
         variant: "destructive" 
       });
     }
+  };
+
+  const handleReset = () => {
+      if(confirm("Vuoi ripristinare il layout originale?")) {
+          setLayout(DEFAULT_LAYOUT);
+          setIsEditing(false);
+          // Opzionale: salva subito il reset o lascia che l'utente salvi
+      }
+  }
+
+  // Wrapper per gestire il set state tipizzato
+  const handleLayoutUpdate = (newLayout: WidgetItem[]) => {
+      setLayout(newLayout);
   };
 
   if (!layout) {
@@ -84,15 +101,51 @@ export default function DashboardClient() {
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6 animate-in fade-in duration-500">
+      
+      {/* HEADER */}
       <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight text-slate-900">Dashboard</h2>
+        <div>
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900">Dashboard</h2>
+            {isEditing && <p className="text-sm text-indigo-600 font-medium animate-pulse">Modalità modifica attiva</p>}
+        </div>
+        
         <div className="flex items-center space-x-2">
-          <Button variant="outline">
-             <Download className="mr-2 h-4 w-4" /> Export
-          </Button>
-          <Button className="bg-indigo-600 hover:bg-indigo-700 text-white">
-             <Plus className="mr-2 h-4 w-4" /> Nuovo Ordine
-          </Button>
+          {/* Pulsanti visibili solo in EDIT MODE */}
+          {isEditing ? (
+              <>
+                <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
+                    <X className="mr-2 h-4 w-4" /> Annulla
+                </Button>
+                <Button size="sm" onClick={handleSaveLayout} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                    <Save className="mr-2 h-4 w-4" /> Salva Layout
+                </Button>
+              </>
+          ) : (
+              <>
+                {/* MENU OPZIONI */}
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="icon">
+                            <Settings2 className="h-4 w-4" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Opzioni Vista</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => setIsEditing(true)}>
+                            <Pencil className="mr-2 h-4 w-4" /> Personalizza Layout
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={handleReset} className="text-red-600">
+                            <RotateCcw className="mr-2 h-4 w-4" /> Ripristina Default
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Button className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                    <Plus className="mr-2 h-4 w-4" /> Nuovo Ordine
+                </Button>
+              </>
+          )}
         </div>
       </div>
 
@@ -105,8 +158,9 @@ export default function DashboardClient() {
         
         <TabsContent value="overview" className="space-y-4">
            <DashboardGrid 
-              initialLayout={layout} 
-              onSave={handleSaveLayout} 
+              layout={layout} 
+              isEditing={isEditing}
+              onLayoutChange={handleLayoutUpdate} 
            />
         </TabsContent>
       </Tabs>
