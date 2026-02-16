@@ -346,11 +346,13 @@ export class SuperadminUsersController {
 
       const whereSql = where.length ? `where ${where.join(' and ')}` : '';
 
+      // FIX: Select mfa_enabled (che esiste), non mfa_required
       const rows = await this.dataSource.query(
         `
         with base as (
           select
-            u.id, u.email, u.role, u.tenant_id, u.is_active, u.mfa_required,
+            u.id, u.email, u.role, u.tenant_id, u.is_active, 
+            coalesce(u.mfa_enabled, false) as mfa_enabled,
             u.created_at, u.updated_at,
             t.name as tenant_name,
             t.slug as tenant_slug,
@@ -387,7 +389,7 @@ export class SuperadminUsersController {
   async updateGlobalUser(
     @Req() req: Request,
     @Param('id') id: string,
-    @Body() body: { role?: Role; is_active?: boolean; mfa_required?: boolean },
+    @Body() body: { role?: Role; is_active?: boolean; mfa_enabled?: boolean }, // FIX: mfa_enabled
   ) {
     this.assertSuperAdmin(req);
 
@@ -406,9 +408,16 @@ export class SuperadminUsersController {
         vals.push(body.is_active);
       }
 
-      if (typeof body.mfa_required === 'boolean') {
-        sets.push(`mfa_required = $${idx++}`);
-        vals.push(body.mfa_required);
+      // FIX: Uso mfa_enabled invece di mfa_required
+      if (typeof body.mfa_enabled === 'boolean') {
+        sets.push(`mfa_enabled = $${idx++}`);
+        vals.push(body.mfa_enabled);
+
+        // Se disabilitiamo MFA, puliamo anche il segreto per permettere un nuovo setup pulito
+        if (body.mfa_enabled === false) {
+           sets.push(`mfa_secret = NULL`);
+           sets.push(`mfa_verified_at = NULL`);
+        }
       }
 
       if (!sets.length) throw new BadRequestException('Nothing to update');
@@ -508,6 +517,7 @@ export class SuperadminUsersController {
       role?: Role;
       password?: string;
       sendInvite?: boolean;
+      mfa_enabled?: boolean; // FIX: supporta flag creazione
     },
   ) {
     this.assertSuperAdmin(req);
@@ -522,10 +532,7 @@ export class SuperadminUsersController {
       }
 
       const role = (body.role || 'user').toLowerCase() as Role;
-
-      if (['admin', 'owner'].includes(role) && body.sendInvite !== true) {
-        // throw new BadRequestException('Admins must be invited');
-      }
+      const mfaEnabled = body.mfa_enabled !== false; // Default true se non specificato
 
       const schema = safeSchema(t.schema_name);
       const tenantDs = await this.openTenantDs(schema);
@@ -550,11 +557,11 @@ export class SuperadminUsersController {
         const rows = await tenantDs.query(
           `
           insert into "${schema}"."users"
-            (email, password_hash, role, is_active, created_at, updated_at)
-          values ($1, $2, $3, true, now(), now())
+            (email, password_hash, role, is_active, mfa_enabled, created_at, updated_at)
+          values ($1, $2, $3, true, $4, now(), now())
           returning id, email, role
           `,
-          [email, hash, role],
+          [email, hash, role, mfaEnabled],
         );
 
         let inviteToken: string | undefined;
@@ -565,7 +572,7 @@ export class SuperadminUsersController {
         await this.auditTenant(tenantDs, schema, req, {
           action: 'TENANT_USER_CREATED',
           targetEmail: email,
-          metadata: { role, invite: body.sendInvite === true },
+          metadata: { role, invite: body.sendInvite === true, mfa: mfaEnabled },
         });
 
         return {
@@ -614,7 +621,7 @@ export class SuperadminUsersController {
   }
 
   /* ==========================================================
-       G) LIST TENANT USERS (Endpoint Mancante per fix 404)
+       G) LIST TENANT USERS
        GET /api/superadmin/tenants/:tenantId/users
    ========================================================== */
   @Get('tenants/:tenantId/users')
@@ -666,6 +673,7 @@ export class SuperadminUsersController {
         const rows = await tenantDs.query(
           `
           select id, email, role, is_active, created_at, updated_at,
+                 coalesce(mfa_enabled, false) as mfa_enabled,
                  count(*) over() as total
           from "${schema}"."users"
           ${whereSql}
