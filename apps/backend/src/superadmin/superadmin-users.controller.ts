@@ -346,7 +346,6 @@ export class SuperadminUsersController {
 
       const whereSql = where.length ? `where ${where.join(' and ')}` : '';
 
-      // FIX: Select mfa_enabled (che esiste), non mfa_required
       const rows = await this.dataSource.query(
         `
         with base as (
@@ -389,7 +388,7 @@ export class SuperadminUsersController {
   async updateGlobalUser(
     @Req() req: Request,
     @Param('id') id: string,
-    @Body() body: { role?: Role; is_active?: boolean; mfa_enabled?: boolean }, // FIX: mfa_enabled
+    @Body() body: { role?: Role; is_active?: boolean; mfa_enabled?: boolean },
   ) {
     this.assertSuperAdmin(req);
 
@@ -408,12 +407,10 @@ export class SuperadminUsersController {
         vals.push(body.is_active);
       }
 
-      // FIX: Uso mfa_enabled invece di mfa_required
       if (typeof body.mfa_enabled === 'boolean') {
         sets.push(`mfa_enabled = $${idx++}`);
         vals.push(body.mfa_enabled);
 
-        // Se disabilitiamo MFA, puliamo anche il segreto per permettere un nuovo setup pulito
         if (body.mfa_enabled === false) {
            sets.push(`mfa_secret = NULL`);
            sets.push(`mfa_verified_at = NULL`);
@@ -485,6 +482,12 @@ export class SuperadminUsersController {
 
         if (!rows.length) throw new BadRequestException('User not found');
 
+        // Sync con global se esiste (opzionale)
+        await this.dataSource.query(
+            `UPDATE public.users SET password_hash = $1 WHERE email = $2`,
+            [hash, rows[0].email]
+        );
+
         await this.auditTenant(tenantDs, schema, req, {
           action: 'RESET_PASSWORD',
           targetEmail: rows[0].email,
@@ -517,7 +520,7 @@ export class SuperadminUsersController {
       role?: Role;
       password?: string;
       sendInvite?: boolean;
-      mfa_enabled?: boolean; // FIX: supporta flag creazione
+      mfa_enabled?: boolean;
     },
   ) {
     this.assertSuperAdmin(req);
@@ -532,7 +535,7 @@ export class SuperadminUsersController {
       }
 
       const role = (body.role || 'user').toLowerCase() as Role;
-      const mfaEnabled = body.mfa_enabled !== false; // Default true se non specificato
+      const mfaEnabled = body.mfa_enabled !== false; 
 
       const schema = safeSchema(t.schema_name);
       const tenantDs = await this.openTenantDs(schema);
@@ -685,7 +688,6 @@ export class SuperadminUsersController {
 
         const total = rows.length > 0 ? Number(rows[0].total) : 0;
         
-        // Mappiamo i dati per uniformarli a GlobalUser
         const users = rows.map(({ total: _t, ...u }: any) => ({
           ...u,
           tenant_id: t.id,
@@ -702,6 +704,73 @@ export class SuperadminUsersController {
     } catch (e) {
       if (e instanceof BadRequestException) throw e;
       this.logAndThrow500(`GET /superadmin/tenants/${tenantId}/users`, e);
+    }
+  }
+
+  /* ==========================================================
+       H) PATCH TENANT USER (MFA/Active) - **FIX 404**
+       PATCH /api/superadmin/tenants/:tenantId/users/:userId
+   ========================================================== */
+  @Patch('tenants/:tenantId/users/:userId')
+  async patchTenantUser(
+    @Req() req: Request,
+    @Param('tenantId') tenantId: string,
+    @Param('userId') userId: string,
+    @Body() body: { is_active?: boolean; mfa_enabled?: boolean },
+  ) {
+    this.assertSuperAdmin(req);
+
+    const t = await this.getTenantById(tenantId);
+    if (!t) throw new BadRequestException('Tenant not found');
+
+    const schema = safeSchema(t.schema_name);
+    const tenantDs = await this.openTenantDs(schema);
+
+    try {
+      const sets: string[] = [];
+      const vals: any[] = [];
+      let idx = 1;
+
+      if (typeof body.is_active === 'boolean') {
+        sets.push(`is_active = $${idx++}`);
+        vals.push(body.is_active);
+      }
+
+      if (typeof body.mfa_enabled === 'boolean') {
+        sets.push(`mfa_enabled = $${idx++}`);
+        vals.push(body.mfa_enabled);
+
+        if (body.mfa_enabled === false) {
+            sets.push(`mfa_secret = NULL`);
+            sets.push(`mfa_verified_at = NULL`);
+        }
+      }
+
+      if (!sets.length) throw new BadRequestException('Nothing to update');
+
+      vals.push(userId);
+
+      const rows = await tenantDs.query(
+        `
+        update "${schema}"."users"
+        set ${sets.join(', ')}, updated_at = now()
+        where id = $${idx}
+        returning id, email, role, is_active, mfa_enabled
+        `,
+        vals,
+      );
+
+      if (!rows.length) throw new BadRequestException('User not found');
+
+      await this.auditTenant(tenantDs, schema, req, {
+        action: 'TENANT_USER_UPDATED',
+        targetEmail: rows[0].email,
+        metadata: body,
+      });
+
+      return { user: rows[0] };
+    } finally {
+      if (tenantDs.isInitialized) await tenantDs.destroy();
     }
   }
 }
