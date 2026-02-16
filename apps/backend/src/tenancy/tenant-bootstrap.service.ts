@@ -78,16 +78,17 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
     `);
 
     // --- NUOVO v4.0: CONFIGURAZIONE DASHBOARD MODULARE ---
-    // Questa tabella salva la posizione dei "blocchi" per ogni utente
+    // Questa tabella salva la posizione dei "blocchi" per ogni utente.
+    // NOTA: Usiamo x, y, w, h per standardizzare con React-Grid-Layout e il Controller.
     await ds.query(`
       CREATE TABLE IF NOT EXISTS "${schema}".dashboard_widgets (
         id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
         user_id UUID NOT NULL, 
         module_key TEXT NOT NULL, -- es: 'crm_chart_sales'
-        position_x INT DEFAULT 0,
-        position_y INT DEFAULT 0,
-        width INT DEFAULT 1, -- 1 = 1/3, 2 = 2/3, 3 = 3/3
-        height INT DEFAULT 1,
+        x INT DEFAULT 0,
+        y INT DEFAULT 0,
+        w INT DEFAULT 1, -- 1 = 1/3, 2 = 2/3, 3 = 3/3
+        h INT DEFAULT 1,
         settings JSONB DEFAULT '{}'::jsonb, -- Config extra (colore, filtri)
         created_at TIMESTAMP DEFAULT NOW()
       )

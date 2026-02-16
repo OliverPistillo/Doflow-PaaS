@@ -73,6 +73,8 @@ import { BusinaroModule } from './businaro/businaro.module';
 // --- Piattaforma odoo-style ---
 import { PlatformModule } from './superadmin/entities/platform-module.entity';
 import { TenantSubscription } from './superadmin/entities/tenant-subscription.entity';
+import { TenantDashboardController } from './tenant/dashboard/tenant-dashboard.controller';
+import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.service';
 
 @Module({
   imports: [
@@ -146,6 +148,7 @@ import { TenantSubscription } from './superadmin/entities/tenant-subscription.en
     FinanceController,
     TenantsController,
     SystemController,
+    TenantDashboardController,
   ],
 
   providers: [
@@ -164,6 +167,7 @@ import { TenantSubscription } from './superadmin/entities/tenant-subscription.en
     CalendarService,
     FinanceService,
     TenantsService,
+    TenantDashboardService,
     {
       provide: APP_GUARD,
       useClass: TrafficGuard,
