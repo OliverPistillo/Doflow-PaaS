@@ -35,14 +35,19 @@ export default function DashboardClient() {
   useEffect(() => {
     const fetchLayout = async () => {
       try {
+        // Chiamata GET
         const data = await apiFetch<WidgetItem[]>("/tenant/dashboard");
-        if (data && data.length > 0) {
+        // Se ci sono dati salvati, usali
+        if (data && Array.isArray(data) && data.length > 0) {
           setLayout(data);
         } else {
+          // Se non c'è nulla nel DB (o array vuoto), usa il default
+          console.log("Nessun layout salvato trovato, carico default.");
           setLayout(DEFAULT_LAYOUT);
         }
       } catch (e) {
-        console.error("Errore caricamento dashboard:", e);
+        console.error("Errore API dashboard:", e);
+        // Fallback in caso di errore di rete/500
         setLayout(DEFAULT_LAYOUT);
       }
     };
