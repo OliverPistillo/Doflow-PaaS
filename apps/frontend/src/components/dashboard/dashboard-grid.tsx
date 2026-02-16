@@ -10,19 +10,16 @@ import "react-resizable/css/styles.css";
 
 import { COMPONENT_MAP } from "./dashboard-widgets";
 import { Button } from "@/components/ui/button";
-import { Pencil, Save, X, GripVertical } from "lucide-react";
+import { Pencil, Save, X, GripHorizontal } from "lucide-react"; // GripHorizontal è più "Odoo" per le header
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
 // 2. ESTRAZIONE MANUALE (Bypassiamo TypeScript con 'any')
-// Questo codice controlla se la libreria è stata caricata come modulo ES6 o CommonJS
-// e recupera i componenti necessari senza che TS si lamenti.
 const ReactGridLayout = RGL as any;
 const Responsive = ReactGridLayout.Responsive || ReactGridLayout.default?.Responsive || ReactGridLayout;
 const WidthProvider = ReactGridLayout.WidthProvider || ReactGridLayout.default?.WidthProvider;
 
 // 3. CREAZIONE COMPONENTE SICURA
-// Se WidthProvider esiste, lo usiamo. Altrimenti usiamo Responsive liscio (fallback).
 const ResponsiveGrid = WidthProvider ? WidthProvider(Responsive) : Responsive;
 
 // Definiamo il tipo manualmente perché non possiamo importarlo
@@ -57,7 +54,7 @@ export function DashboardGrid({ initialLayout, onSave }: DashboardGridProps) {
   const handleSave = () => {
     onSave(layout);
     setIsEditing(false);
-    toast({ title: "Layout Salvato", description: "La tua dashboard è stata aggiornata." });
+    toast({ title: "Layout Salvato", description: "La configurazione della dashboard è stata aggiornata." });
   };
 
   const handleLayoutChange = (currentLayout: any) => {
@@ -85,57 +82,82 @@ export function DashboardGrid({ initialLayout, onSave }: DashboardGridProps) {
   return (
     <div className="space-y-4">
       {/* TOOLBAR */}
-      <div className="flex justify-end items-center gap-2">
-        {isEditing ? (
-          <>
-            <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)}>
-              <X className="h-4 w-4 mr-2" /> Annulla
+      <div className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-100 shadow-sm">
+        <div className="text-sm font-medium text-slate-500 pl-2">
+            {isEditing ? "Modalità Modifica: Trascina i blocchi per riordinarli" : "Panoramica"}
+        </div>
+        <div className="flex items-center gap-2">
+            {isEditing ? (
+            <>
+                <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)}>
+                    <X className="h-4 w-4 mr-2" /> Annulla
+                </Button>
+                <Button size="sm" onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700">
+                    <Save className="h-4 w-4 mr-2" /> Salva Layout
+                </Button>
+            </>
+            ) : (
+            <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
+                <Pencil className="h-4 w-4 mr-2" /> Personalizza
             </Button>
-            <Button size="sm" onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700">
-              <Save className="h-4 w-4 mr-2" /> Salva Modifiche
-            </Button>
-          </>
-        ) : (
-          <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
-            <Pencil className="h-4 w-4 mr-2" /> Personalizza Dashboard
-          </Button>
-        )}
+            )}
+        </div>
       </div>
 
       {/* GRID */}
       <div className={cn(
-        "min-h-[500px] transition-all rounded-xl",
-        isEditing && "bg-slate-50 border-2 border-dashed border-slate-300 p-4"
+        "min-h-[600px] transition-all rounded-xl",
+        isEditing && "bg-slate-50/50 ring-2 ring-indigo-100 ring-offset-2 p-4"
       )}>
         <ResponsiveGrid
           className="layout"
           layouts={{ lg: layout }}
+          
+          // --- CONFIGURAZIONE "ODOO-STYLE" ---
+          // 1. Tre colonne su desktop (lg, md)
+          // 2. Una colonna su mobile (xs, xxs) -> Stack verticale forzato
+          cols={{ lg: 3, md: 3, sm: 2, xs: 1, xxs: 1 }}
+          
           breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-          cols={{ lg: 4, md: 4, sm: 2, xs: 1, xxs: 1 }}
-          rowHeight={100}
+          
+          // Altezza riga standardizzata (es. 140px per blocco)
+          rowHeight={140}
+          
+          // Margini puliti
+          margin={[24, 24]}
+          
           isDraggable={isEditing}
           isResizable={isEditing}
           draggableHandle=".drag-handle"
+          
           onLayoutChange={handleLayoutChange}
-          margin={[16, 16]}
-          // Importante: useCSSTransforms true solo dopo il mount
           useCSSTransforms={mounted}
+          
+          // --- VINCOLI DI MOVIMENTO ---
+          // I widget "galleggiano" verso l'alto per riempire i buchi (stile Tetris/Odoo)
+          compactType="vertical" 
+          preventCollision={false}
         >
           {layout.map((item) => (
-            <div key={item.i} className="relative group h-full">
-              <div className="h-full w-full overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow hover:shadow-md flex flex-col">
-                {isEditing && (
-                  <div className="drag-handle absolute top-2 right-2 z-50 cursor-grab active:cursor-grabbing p-1.5 bg-white/90 backdrop-blur rounded-md shadow-sm border hover:bg-slate-100 text-slate-500">
-                    <GripVertical className="h-4 w-4" />
-                  </div>
-                )}
-                <div className="flex-1 w-full overflow-hidden">
-                    {COMPONENT_MAP[item.moduleKey] || (
-                        <div className="h-full flex items-center justify-center text-slate-400 bg-slate-50 text-sm">
-                            Widget non trovato: {item.moduleKey}
-                        </div>
-                    )}
+            <div key={item.i} className={cn(
+                "relative group flex flex-col h-full rounded-xl overflow-hidden transition-shadow duration-200",
+                isEditing ? "shadow-lg ring-1 ring-indigo-200 bg-white" : "",
+                !isEditing && "hover:shadow-sm"
+            )}>
+              {isEditing && (
+                <div className="drag-handle h-6 bg-indigo-50 border-b border-indigo-100 flex items-center justify-center cursor-grab active:cursor-grabbing hover:bg-indigo-100 transition-colors z-50">
+                  <GripHorizontal className="h-4 w-4 text-indigo-400" />
                 </div>
+              )}
+              
+              <div className="flex-1 w-full overflow-hidden relative">
+                  {COMPONENT_MAP[item.moduleKey] || (
+                      <div className="h-full flex items-center justify-center text-slate-400 bg-slate-50 text-sm border-2 border-dashed">
+                          Widget: {item.moduleKey}
+                      </div>
+                  )}
+                  {/* Overlay per bloccare i click sui grafici durante l'edit */}
+                  {isEditing && <div className="absolute inset-0 z-10 bg-transparent" />}
               </div>
             </div>
           ))}

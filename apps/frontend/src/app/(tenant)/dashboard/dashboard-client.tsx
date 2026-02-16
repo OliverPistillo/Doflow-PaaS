@@ -8,13 +8,22 @@ import { DashboardGrid } from "@/components/dashboard/dashboard-grid";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
+// --- LAYOUT STANDARD A 3 COLONNE ---
+// w: 1 = 1/3 di pagina
+// w: 2 = 2/3 di pagina
+// w: 3 = Tutta la larghezza
 const DEFAULT_LAYOUT = [
-  { i: "stat_revenue", x: 0, y: 0, w: 1, h: 1.3, moduleKey: "stat_revenue" },
-  { i: "stat_users", x: 1, y: 0, w: 1, h: 1.3, moduleKey: "stat_users" },
-  { i: "stat_sales", x: 2, y: 0, w: 1, h: 1.3, moduleKey: "stat_sales" },
-  { i: "stat_active", x: 3, y: 0, w: 1, h: 1.3, moduleKey: "stat_active" },
-  { i: "chart_main", x: 0, y: 1, w: 2, h: 4, moduleKey: "chart_overview" },
-  { i: "list_sales", x: 2, y: 1, w: 2, h: 4, moduleKey: "list_recent_sales" },
+  // Riga 1: Tre KPI (Revenue, Users, Sales)
+  { i: "stat_revenue", x: 0, y: 0, w: 1, h: 1, moduleKey: "stat_revenue" },
+  { i: "stat_users",   x: 1, y: 0, w: 1, h: 1, moduleKey: "stat_users" },
+  { i: "stat_sales",   x: 2, y: 0, w: 1, h: 1, moduleKey: "stat_sales" },
+  
+  // Riga 2: Grafico Grande (2/3) + Statistica Attivi (1/3)
+  { i: "chart_main",   x: 0, y: 1, w: 2, h: 2, moduleKey: "chart_overview" },
+  { i: "stat_active",  x: 2, y: 1, w: 1, h: 1, moduleKey: "stat_active" },
+  
+  // Riga 2 (continua sotto stat_active): Lista vendite (1/3)
+  { i: "list_sales",   x: 2, y: 2, w: 1, h: 1, moduleKey: "list_recent_sales" },
 ];
 
 export default function DashboardClient() {
@@ -74,14 +83,14 @@ export default function DashboardClient() {
   }
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6">
+    <div className="flex-1 space-y-4 p-8 pt-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+        <h2 className="text-3xl font-bold tracking-tight text-slate-900">Dashboard</h2>
         <div className="flex items-center space-x-2">
           <Button variant="outline">
-             <Download className="mr-2 h-4 w-4" /> Download
+             <Download className="mr-2 h-4 w-4" /> Export
           </Button>
-          <Button className="bg-indigo-600 hover:bg-indigo-700">
+          <Button className="bg-indigo-600 hover:bg-indigo-700 text-white">
              <Plus className="mr-2 h-4 w-4" /> Nuovo Ordine
           </Button>
         </div>
