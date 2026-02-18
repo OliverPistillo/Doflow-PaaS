@@ -123,7 +123,7 @@ export class TenantDashboardService {
 
 // ─── Tipi locali ────────────────────────────────────────────────
 
-interface WidgetRow {
+export interface WidgetRow {
   i: string;
   moduleKey: string;
   x: number;
@@ -132,7 +132,7 @@ interface WidgetRow {
   h: number;
 }
 
-interface WidgetInput {
+export interface WidgetInput {
   i?: string;
   moduleKey?: string;
   x?: number;
