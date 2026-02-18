@@ -20,6 +20,11 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
       router.push("/login");
       return;
     }
+    // Superadmin ha la propria area — non deve vedere la tenant dashboard
+    if (["superadmin", "owner"].includes(user.role ?? "")) {
+      router.push("/superadmin");
+      return;
+    }
     setReady(true);
   }, [router]);
 
