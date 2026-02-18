@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+// 1. Aggiungiamo usePathname per capire su che pagina siamo attualmente
+import { useRouter, usePathname } from "next/navigation"; 
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { TenantSidebar } from "@/components/layout/tenant-sidebar";
 import { UserNav } from "@/components/layout/user-nav";
@@ -12,33 +13,40 @@ import { PlanProvider } from "@/contexts/PlanContext";
 
 export default function TenantLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname(); // 2. Recuperiamo il percorso attuale (es. "/dashboard")
   const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
     const user = getDoFlowUser();
     
-    // 1. Se non c'è utente, vai al login
+    // Se non c'è utente...
     if (!user) {
-      router.replace("/login");
+      // Vai al login SOLO se non sei già sulla pagina di login
+      if (pathname !== "/login") {
+        router.replace("/login");
+      } else {
+        setReady(true);
+      }
       return;
     }
     
-    // 2. Normalizziamo i dati per evitare problemi di maiuscole/minuscole
     const role = String(user.role || "").toLowerCase().trim();
-    
-    // FIX TYPESCRIPT: usiamo solo user.tenantId (camelCase), come definito in jwt.ts
     const tenantId = String(user.tenantId || "").toLowerCase().trim();
 
-    // 3. Controllo Blindato: Se sei un amministratore o appartieni al DB "public",
-    // NON devi stare nel layout dei clienti, ma nel pannello di controllo.
+    // Se l'utente è un Superadmin o fa parte della directory globale...
     if (["superadmin", "super_admin", "owner"].includes(role) || tenantId === "public") {
-      router.replace("/superadmin");
+      // 3. IL FRENO A MANO: Vai al superadmin SOLO se non sei già lì
+      if (!pathname.startsWith("/superadmin")) {
+        router.replace("/superadmin");
+      } else {
+        setReady(true);
+      }
       return;
     }
     
-    // 4. Se arriviamo qui, è un utente cliente legittimo
+    // Utente tenant legittimo
     setReady(true);
-  }, [router]);
+  }, [router, pathname]);
 
   if (!ready) {
     return (
