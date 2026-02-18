@@ -16,22 +16,34 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
 
   React.useEffect(() => {
     const user = getDoFlowUser();
+    
+    // 1. Se non c'è utente, vai al login
     if (!user) {
-      router.push("/login");
+      router.replace("/login");
       return;
     }
-    // Superadmin ha la propria area — non deve vedere la tenant dashboard
-    if (["superadmin", "owner"].includes(user.role ?? "")) {
-      router.push("/superadmin");
+    
+    // 2. Normalizziamo i dati per evitare problemi di maiuscole/minuscole
+    const role = String(user.role || "").toLowerCase().trim();
+    
+    // FIX TYPESCRIPT: usiamo solo user.tenantId (camelCase), come definito in jwt.ts
+    const tenantId = String(user.tenantId || "").toLowerCase().trim();
+
+    // 3. Controllo Blindato: Se sei un amministratore o appartieni al DB "public",
+    // NON devi stare nel layout dei clienti, ma nel pannello di controllo.
+    if (["superadmin", "super_admin", "owner"].includes(role) || tenantId === "public") {
+      router.replace("/superadmin");
       return;
     }
+    
+    // 4. Se arriviamo qui, è un utente cliente legittimo
     setReady(true);
   }, [router]);
 
   if (!ready) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <p className="text-sm text-muted-foreground animate-pulse">Caricamento&hellip;</p>
+        <p className="text-sm text-muted-foreground animate-pulse">Caricamento spazio di lavoro&hellip;</p>
       </div>
     );
   }
