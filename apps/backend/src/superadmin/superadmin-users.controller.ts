@@ -466,9 +466,8 @@ export class SuperadminUsersController {
       const tenantDs = await this.openTenantDs(schema);
 
       try {
-        const tempPassword =
-          Math.random().toString(36).slice(-8) + 'Aa1!';
-        const hash = await bcrypt.hash(tempPassword, 10);
+        const tempPassword = generateSecurePassword();
+        const hash = await bcrypt.hash(tempPassword, 12);
 
         const rows = await tenantDs.query(
           `
@@ -550,7 +549,7 @@ export class SuperadminUsersController {
         const tempPassword =
           body.sendInvite === true
             ? null
-            : body.password || Math.random().toString(36).slice(-10) + 'Aa1!';
+            : body.password || generateSecurePassword();
 
         const hash =
           tempPassword !== null
@@ -773,4 +772,11 @@ export class SuperadminUsersController {
       if (tenantDs.isInitialized) await tenantDs.destroy();
     }
   }
+}
+
+// ─── Helper ─────────────────────────────────────────────────────────────────
+
+/** FIX 🔴: Genera password sicura con crypto.randomBytes (non Math.random). */
+function generateSecurePassword(): string {
+  return crypto.randomBytes(16).toString('base64url').slice(0, 16) + 'A1!';
 }

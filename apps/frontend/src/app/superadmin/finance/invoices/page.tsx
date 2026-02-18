@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
+import { useConfirm } from "@/hooks/useConfirm";
 import { InvoiceCreateSheet } from "../dashboard/components/InvoiceCreateSheet";
 import { ClientRow, ClientGroup } from "./components/ClientRow";
 import { Invoice } from "./components/InvoiceRow";
@@ -18,6 +19,7 @@ function InvoicesContent() {
   // Dati
   const [rawInvoices, setRawInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const { ConfirmDialog, confirm } = useConfirm();
   
   // Modali
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -76,10 +78,16 @@ function InvoicesContent() {
   };
 
   const handleDelete = async (id: string) => {
-      if(!confirm("Sei sicuro di voler eliminare questa fattura?")) return;
+      const ok = await confirm({
+        title: "Eliminare questa fattura?",
+        description: "L'operazione è irreversibile.",
+        confirmLabel: "Elimina",
+        variant: "destructive",
+      });
+      if (!ok) return;
       try {
           await apiFetch(`/superadmin/finance/invoices/${id}`, { method: "DELETE" });
-          loadInvoices(); // Ricarica la lista
+          loadInvoices();
       } catch (e) {
           console.error("Errore eliminazione", e);
           alert("Impossibile eliminare la fattura.");
@@ -121,7 +129,7 @@ function InvoicesContent() {
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
-      
+      <ConfirmDialog />
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between gap-4 items-end">
         <div>

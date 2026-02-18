@@ -1,71 +1,74 @@
-// C:\Doflow\apps\backend\src\auth.middleware.ts
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import * as jwt from 'jsonwebtoken';
+
+/**
+ * Path consentiti quando il JWT è in stato MFA parziale.
+ * NOTA: include sia MFA_PENDING (utente ha già il secret, deve inserire OTP)
+ *        sia MFA_SETUP_NEEDED (utente non ha ancora il secret, deve scansionare QR)
+ */
+const MFA_PARTIAL_STAGES = new Set(['MFA_PENDING', 'MFA_SETUP_NEEDED']);
+
+const MFA_ALLOWED_PATH_PREFIXES = [
+  '/auth/',
+  '/api/auth/',
+  '/health',
+  '/api/health',
+] as const;
 
 @Injectable()
 export class AuthMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
     const authHeader = req.headers['authorization'];
 
-    if (authHeader && authHeader.startsWith('Bearer ')) {
+    if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.slice(7);
 
       try {
         const secret = process.env.JWT_SECRET;
-        if (secret) {
-          const payload = jwt.verify(token, secret) as any;
+        if (!secret) throw new Error('JWT_SECRET not configured');
 
-          // payload creato in AuthService.login:
-          // { sub, email, tenantId, tenantSlug, role, authStage?, mfaRequired?, iat, exp }
-          const authUser = {
-            id: payload.sub,
-            email: payload.email,
-            role: payload.role,
-            tenantId: payload.tenantId,
-            ...payload,
-          };
+        const payload = jwt.verify(token, secret) as Record<string, any>;
 
-          // Metti l’utente su entrambe le proprietà, per compatibilità
-          (req as any).user = authUser;
-          (req as any).authUser = authUser;
+        const authUser = {
+          id:       payload.sub,
+          email:    payload.email,
+          role:     payload.role,
+          tenantId: payload.tenantId,
+          ...payload,
+        };
 
-          // =========================================================
-          // ✅ MFA GATE (enterprise-safe)
-          // Se il token è "MFA_PENDING" blocchiamo tutto tranne:
-          // - auth endpoints (login, accept-invite, forgot/reset password, me)
-          // - endpoint MFA (che aggiungeremo)
-          // - health
-          // =========================================================
-          const authStage = String(payload?.authStage ?? 'FULL').toUpperCase();
+        (req as any).user     = authUser;
+        (req as any).authUser = authUser;
 
-          if (authStage === 'MFA_PENDING') {
-            const path = String((req as any).originalUrl || req.url || '').toLowerCase();
+        // ── MFA Gate ──────────────────────────────────────────────────────────
+        // FIX 🟠: Gate attivo sia per MFA_PENDING che per MFA_SETUP_NEEDED.
+        // In precedenza MFA_SETUP_NEEDED non era bloccato → bypass del flusso MFA.
+        const authStage = String(payload?.authStage ?? 'FULL').toUpperCase();
 
-            const allowWhilePending =
-              path.startsWith('/auth/') || // login/accept-invite/forgot/reset/me ecc.
-              path.startsWith('/api/auth/') ||
-              path.startsWith('/health') ||
-              path.startsWith('/api/health') ||
-              path.startsWith('/auth/mfa') ||
-              path.startsWith('/api/auth/mfa');
+        if (MFA_PARTIAL_STAGES.has(authStage)) {
+          const path = String((req as any).originalUrl ?? req.url ?? '').toLowerCase();
 
-            if (!allowWhilePending) {
-              return res.status(403).json({
-                error: 'MFA_REQUIRED',
-                message: 'MFA required to access this resource',
-              });
-            }
+          const isAllowed = MFA_ALLOWED_PATH_PREFIXES.some((prefix) =>
+            path.startsWith(prefix),
+          );
+
+          if (!isAllowed) {
+            return res.status(403).json({
+              error:   'MFA_REQUIRED',
+              stage:   authStage,
+              message: 'Complete MFA authentication to access this resource.',
+            });
           }
         }
+        // ── Fine MFA Gate ─────────────────────────────────────────────────────
+
       } catch {
-        // Token invalido / scaduto: NON blocchiamo qui,
-        // semplicemente non impostiamo req.user
+        // Token invalido o scaduto: non impostiamo req.user.
+        // Gli endpoint protetti gestiranno l'assenza del payload.
       }
     }
 
-    // in ogni caso proseguiamo: gli endpoint che richiedono auth
-    // controlleranno (req as any).user
     next();
   }
 }

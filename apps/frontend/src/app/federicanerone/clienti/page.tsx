@@ -3,6 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
+import { useConfirm } from '@/hooks/useConfirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -76,6 +77,7 @@ const BAR_COLORS = ['#10B981', '#34D399', '#6EE7B7', '#A7F3D0', '#D1FAE5'];
 export default function FedericaClientiPage() {
   const [clients, setClients] = React.useState<Cliente[]>([]);
   const [stats, setStats] = React.useState<StatsData | null>(null);
+  const { ConfirmDialog, confirm } = useConfirm();
   
   const [loading, setLoading] = React.useState(false);
   const [search, setSearch] = React.useState('');
@@ -143,7 +145,13 @@ export default function FedericaClientiPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Eliminare cliente?')) return;
+    const ok = await confirm({
+      title: "Eliminare questo cliente?",
+      description: "Tutti i dati associati verranno rimossi.",
+      confirmLabel: "Elimina",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       await apiFetch(`/clienti/${id}`, { method: 'DELETE' });
       void loadData();
@@ -160,7 +168,7 @@ export default function FedericaClientiPage() {
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-transparent space-y-8 pb-20">
-        
+        <ConfirmDialog />
         {/* HEADER */}
         <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 border-b border-border/40 pb-6">
           <div>

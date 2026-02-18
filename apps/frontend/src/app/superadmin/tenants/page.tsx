@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/useConfirm";
 import { ActivityFeed } from "@/components/dashboard/activity-feed"; // <--- NUOVO IMPORT
 
 // --- TIPI (Allineati al Backend camelCase) ---
@@ -119,6 +120,7 @@ const StatusPill = ({ isActive }: { isActive: boolean }) => {
 // --- COMPONENTE PRINCIPALE ---
 export default function TenantsPage() {
   const { toast } = useToast();
+  const { ConfirmDialog, confirm } = useConfirm();
 
   // --- FIX HYDRATION ---
   const [mounted, setMounted] = useState(false);
@@ -205,10 +207,14 @@ export default function TenantsPage() {
   // NUOVA AZIONE: Sospensione/Riattivazione Reale
   const handleToggleStatus = async (tenantId: string, currentStatus: boolean) => {
     const actionLabel = currentStatus ? "sospendere" : "riattivare";
-    if (!window.confirm(`Vuoi davvero ${actionLabel} questo tenant?`)) return;
+    const ok = await confirm({
+      title: `Vuoi davvero ${actionLabel} questo tenant?`,
+      confirmLabel: currentStatus ? "Sospendi" : "Riattiva",
+      variant: currentStatus ? "destructive" : "default",
+    });
+    if (!ok) return;
 
     try {
-      // FIX: Rimosso /v2/
       await apiFetch(`/superadmin/tenants/${tenantId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -330,23 +336,33 @@ export default function TenantsPage() {
   };
 
   const handleDeleteTenant = async (tenantId: string, tenantName: string) => {
-    const confirmMessage = `🚨 ATTENZIONE: ZONA PERICOLOSA 🚨\n\nStai per eliminare DEFINITIVAMENTE il tenant:\n\nnome: ${tenantName}\nid: ${tenantId}\n\nQuesta operazione cancellerà:\n1. Il record del cliente\n2. L'INTERO SCHEMA DATABASE associato e tutti i suoi dati.\n\nSei assolutamente sicuro?`;
+    // Primo confirm — avviso completo
+    const step1 = await confirm({
+      title: "🚨 Zona Pericolosa — Eliminazione Tenant",
+      description: `Stai per eliminare DEFINITIVAMENTE il tenant "${tenantName}" (id: ${tenantId}). Questa operazione cancellerà: il record del cliente e l'INTERO SCHEMA DATABASE con tutti i suoi dati. Sei assolutamente sicuro?`,
+      confirmLabel: "Sì, procedi",
+      cancelLabel: "Annulla",
+      variant: "destructive",
+    });
+    if (!step1) return;
 
-    if (!window.confirm(confirmMessage)) return;
-    if (!window.confirm(`Ultima possibilità: Confermi l'eliminazione di ${tenantName}?`)) return;
+    // Secondo confirm — ultima possibilità (intenzionale per operazione irreversibile)
+    const step2 = await confirm({
+      title: `Ultima conferma: eliminare "${tenantName}"?`,
+      description: "Questa è l'ultima possibilità per annullare. L'operazione non può essere annullata.",
+      confirmLabel: "Elimina definitivamente",
+      cancelLabel: "Annulla",
+      variant: "destructive",
+    });
+    if (!step2) return;
 
     try {
-      // FIX: Rimosso /v2/
-      await apiFetch(`/superadmin/tenants/${tenantId}`, {
-        method: "DELETE",
-      });
-
+      await apiFetch(`/superadmin/tenants/${tenantId}`, { method: "DELETE" });
       toast({
         title: "Tenant Eliminato",
         description: "Il tenant e i suoi dati sono stati rimossi.",
         variant: "destructive"
       });
-
       loadTenants();
     } catch (e: any) {
       toast({
@@ -366,7 +382,7 @@ export default function TenantsPage() {
 
   return (
     <div className="space-y-8 max-w-[1800px] mx-auto animate-in fade-in">
-
+      <ConfirmDialog />
       {/* HEADER */}
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>

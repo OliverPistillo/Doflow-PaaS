@@ -2,98 +2,75 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuLabel, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Download, Plus, Loader2, Settings2, Pencil, Save, X, RotateCcw } from "lucide-react";
+import { Plus, Loader2, Settings2, Pencil, Save, X, RotateCcw } from "lucide-react";
 import { DashboardGrid, WidgetItem } from "@/components/dashboard/dashboard-grid";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
-// --- LAYOUT STANDARD A 3 COLONNE ---
 const DEFAULT_LAYOUT: WidgetItem[] = [
   { i: "stat_revenue", x: 0, y: 0, w: 1, h: 1, moduleKey: "stat_revenue" },
-  { i: "stat_users",   x: 1, y: 0, w: 1, h: 1, moduleKey: "stat_users" },
-  { i: "stat_sales",   x: 2, y: 0, w: 1, h: 1, moduleKey: "stat_sales" },
-  { i: "chart_main",   x: 0, y: 1, w: 2, h: 2, moduleKey: "chart_overview" },
-  { i: "stat_active",  x: 2, y: 1, w: 1, h: 1, moduleKey: "stat_active" },
+  { i: "stat_users",   x: 1, y: 0, w: 1, h: 1, moduleKey: "stat_users"   },
+  { i: "stat_sales",   x: 2, y: 0, w: 1, h: 1, moduleKey: "stat_sales"   },
+  { i: "chart_main",   x: 0, y: 1, w: 2, h: 2, moduleKey: "chart_overview"},
+  { i: "stat_active",  x: 2, y: 1, w: 1, h: 1, moduleKey: "stat_active"  },
   { i: "list_sales",   x: 2, y: 2, w: 1, h: 1, moduleKey: "list_recent_sales" },
 ];
 
 export default function DashboardClient() {
-  // Usiamo WidgetItem[] per tipizzare correttamente lo stato
-  const [layout, setLayout] = useState<WidgetItem[] | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
+  const [layout, setLayout]                   = useState<WidgetItem[] | null>(null);
+  const [isEditing, setIsEditing]             = useState(false);
+  const [isSaving, setIsSaving]               = useState(false);
+  const [showResetDialog, setShowResetDialog] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    const fetchLayout = async () => {
-      try {
-        // Chiamata GET
-        const data = await apiFetch<WidgetItem[]>("/tenant/dashboard");
-        // Se ci sono dati salvati, usali
-        if (data && Array.isArray(data) && data.length > 0) {
-          setLayout(data);
-        } else {
-          // Se non c'è nulla nel DB (o array vuoto), usa il default
-          console.log("Nessun layout salvato trovato, carico default.");
-          setLayout(DEFAULT_LAYOUT);
-        }
-      } catch (e) {
-        console.error("Errore API dashboard:", e);
-        // Fallback in caso di errore di rete/500
-        setLayout(DEFAULT_LAYOUT);
-      }
-    };
-    fetchLayout();
+    apiFetch<WidgetItem[]>("/tenant/dashboard")
+      .then((data) => setLayout(data?.length ? data : DEFAULT_LAYOUT))
+      .catch(() => setLayout(DEFAULT_LAYOUT));
   }, []);
 
   const handleSaveLayout = async () => {
     if (!layout) return;
+    setIsSaving(true);
     try {
-      const payload = layout.map(item => ({
-        i: item.i,
-        moduleKey: item.moduleKey,
-        x: item.x,
-        y: item.y,
-        w: item.w,
-        h: item.h
-      }));
-
       await apiFetch("/tenant/dashboard", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ widgets: payload }),
+        body: JSON.stringify({
+          widgets: layout.map(({ i, moduleKey, x, y, w, h }) => ({ i, moduleKey, x, y, w, h })),
+        }),
       });
-
       setIsEditing(false);
-      toast({ title: "Layout salvato", description: "La dashboard è stata aggiornata." });
-    } catch (e) {
-      toast({ 
-        title: "Errore salvataggio", 
-        description: "Impossibile salvare la configurazione.", 
-        variant: "destructive" 
-      });
+      toast({ title: "Layout salvato", description: "La dashboard e stata aggiornata." });
+    } catch {
+      toast({ title: "Errore salvataggio", description: "Impossibile salvare.", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleReset = () => {
-      if(confirm("Vuoi ripristinare il layout originale?")) {
-          setLayout(DEFAULT_LAYOUT);
-          setIsEditing(false);
-          // Opzionale: salva subito il reset o lascia che l'utente salvi
-      }
-  }
-
-  // Wrapper per gestire il set state tipizzato
-  const handleLayoutUpdate = (newLayout: WidgetItem[]) => {
-      setLayout(newLayout);
+  const handleConfirmReset = () => {
+    setLayout(DEFAULT_LAYOUT);
+    setIsEditing(false);
+    setShowResetDialog(false);
   };
 
   if (!layout) {
@@ -106,50 +83,62 @@ export default function DashboardClient() {
 
   return (
     <div className="flex-1 space-y-4 p-8 pt-6 animate-in fade-in duration-500">
-      
-      {/* HEADER */}
-      <div className="flex items-center justify-between space-y-2">
-        <div>
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900">Dashboard</h2>
-            {isEditing && <p className="text-sm text-indigo-600 font-medium animate-pulse">Modalità modifica attiva</p>}
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          {/* Pulsanti visibili solo in EDIT MODE */}
-          {isEditing ? (
-              <>
-                <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>
-                    <X className="mr-2 h-4 w-4" /> Annulla
-                </Button>
-                <Button size="sm" onClick={handleSaveLayout} className="bg-indigo-600 hover:bg-indigo-700 text-white">
-                    <Save className="mr-2 h-4 w-4" /> Salva Layout
-                </Button>
-              </>
-          ) : (
-              <>
-                {/* MENU OPZIONI */}
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="icon">
-                            <Settings2 className="h-4 w-4" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Opzioni Vista</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => setIsEditing(true)}>
-                            <Pencil className="mr-2 h-4 w-4" /> Personalizza Layout
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={handleReset} className="text-red-600">
-                            <RotateCcw className="mr-2 h-4 w-4" /> Ripristina Default
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
 
-                <Button className="bg-indigo-600 hover:bg-indigo-700 text-white">
-                    <Plus className="mr-2 h-4 w-4" /> Nuovo Ordine
-                </Button>
-              </>
+      <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ripristinare il layout originale?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tutte le personalizzazioni andranno perse finche non salvi di nuovo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annulla</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmReset} className="bg-red-600 hover:bg-red-700 text-white">
+              Ripristina
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900">Dashboard</h2>
+          {isEditing && <p className="text-sm text-indigo-600 font-medium animate-pulse">Modalita modifica attiva</p>}
+        </div>
+
+        <div className="flex items-center space-x-2">
+          {isEditing ? (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)} disabled={isSaving}>
+                <X className="mr-2 h-4 w-4" /> Annulla
+              </Button>
+              <Button size="sm" onClick={handleSaveLayout} disabled={isSaving} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                {isSaving ? "Salvataggio..." : "Salva Layout"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon"><Settings2 className="h-4 w-4" /></Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Opzioni Vista</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => setIsEditing(true)}>
+                    <Pencil className="mr-2 h-4 w-4" /> Personalizza Layout
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setShowResetDialog(true)} className="text-red-600">
+                    <RotateCcw className="mr-2 h-4 w-4" /> Ripristina Default
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                <Plus className="mr-2 h-4 w-4" /> Nuovo Ordine
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -160,13 +149,8 @@ export default function DashboardClient() {
           <TabsTrigger value="analytics">Analisi</TabsTrigger>
           <TabsTrigger value="reports">Report</TabsTrigger>
         </TabsList>
-        
         <TabsContent value="overview" className="space-y-4">
-           <DashboardGrid 
-              layout={layout} 
-              isEditing={isEditing}
-              onLayoutChange={handleLayoutUpdate} 
-           />
+          <DashboardGrid layout={layout} isEditing={isEditing} onLayoutChange={setLayout} />
         </TabsContent>
       </Tabs>
     </div>

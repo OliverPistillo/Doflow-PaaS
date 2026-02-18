@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, CalendarDays, Plus, Loader2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiFetch } from "@/lib/api";
+import { useConfirm } from "@/hooks/useConfirm";
 import { EventCreateDialog } from './components/EventCreateDialog';
 import {
   Tooltip,
@@ -41,6 +42,7 @@ export default function ProjectCalendarPage() {
   const [selectedDay, setSelectedDay] = React.useState<Date>(new Date());
   const [events, setEvents] = React.useState<ProjectEvent[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const { ConfirmDialog, confirm } = useConfirm();
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
 
   // Caricamento Eventi
@@ -62,8 +64,13 @@ export default function ProjectCalendarPage() {
   }, []);
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
-      e.stopPropagation(); // Evita di selezionare il giorno
-      if(!confirm("Eliminare evento?")) return;
+      e.stopPropagation();
+      const ok = await confirm({
+        title: "Eliminare questo evento?",
+        confirmLabel: "Elimina",
+        variant: "destructive",
+      });
+      if (!ok) return;
       try {
           await apiFetch(`/superadmin/calendar/events/${id}`, { method: "DELETE" });
           loadEvents();
@@ -87,7 +94,7 @@ export default function ProjectCalendarPage() {
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto h-[calc(100vh-140px)] flex flex-col animate-in fade-in">
-      
+      <ConfirmDialog />
       {/* HEADER PAGINA */}
       <div className="flex items-center justify-between">
         <div>

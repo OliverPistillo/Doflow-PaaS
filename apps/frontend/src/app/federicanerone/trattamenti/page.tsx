@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { apiFetch } from '@/lib/api';
+import { useConfirm } from '@/hooks/useConfirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -91,6 +92,7 @@ export default function FedericaTrattamentiPage() {
   const [items, setItems] = React.useState<Trattamento[]>([]);
   const [historyItems, setHistoryItems] = React.useState<HistoryItem[]>([]);
   const [stats, setStats] = React.useState<StatsData | null>(null);
+  const { ConfirmDialog, confirm } = useConfirm();
   
   const [loading, setLoading] = React.useState(false);
   const [search, setSearch] = React.useState('');
@@ -184,7 +186,13 @@ export default function FedericaTrattamentiPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if(!confirm("Sei sicuro? Questa azione è irreversibile.")) return;
+    const ok = await confirm({
+      title: "Eliminare questo trattamento?",
+      description: "L'operazione è irreversibile. Non sarà possibile eliminarlo se ha appuntamenti collegati.",
+      confirmLabel: "Elimina",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       await apiFetch(`/trattamenti/${id}`, { method: 'DELETE' });
       void loadData();
@@ -207,7 +215,7 @@ export default function FedericaTrattamentiPage() {
 
   return (
     <div className="min-h-screen bg-transparent space-y-8 pb-20">
-      
+      <ConfirmDialog />
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-border/40 pb-6">
         <div>

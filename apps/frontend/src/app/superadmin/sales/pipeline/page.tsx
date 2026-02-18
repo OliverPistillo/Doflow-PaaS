@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { apiFetch } from "@/lib/api";
+import { useConfirm } from "@/hooks/useConfirm";
 import { STAGE_CONFIG, formatCurrency } from "../../dashboard/utils"; // Riutilizziamo le utility della dashboard
 import { DealEditForm } from "../../dashboard/components/DealEditForm";
 
@@ -55,6 +56,7 @@ const ORDERED_STAGES = [
 export default function PipelinePage() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
+  const { ConfirmDialog, confirm } = useConfirm();
   
   // Stato Accordion (Espanso/Collassato)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
@@ -87,10 +89,16 @@ export default function PipelinePage() {
   }, []);
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Sei sicuro di voler eliminare questa offerta?")) return;
+    const ok = await confirm({
+      title: "Eliminare questa offerta?",
+      description: "L'operazione è irreversibile.",
+      confirmLabel: "Elimina",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       await apiFetch(`/superadmin/dashboard/deals/${id}`, { method: "DELETE" });
-      loadDeals(); // Ricarica
+      loadDeals();
     } catch (e) {
       console.error(e);
       alert("Errore durante l'eliminazione");
@@ -153,8 +161,7 @@ export default function PipelinePage() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      
-      {/* Header Pagina */}
+      <ConfirmDialog />
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Gestione offerte</h1>

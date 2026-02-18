@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
+import { useConfirm } from "@/hooks/useConfirm";
 import { TaskCreateSheet } from "./components/TaskCreateSheet";
 
 // --- Tipi ---
@@ -57,6 +58,7 @@ export default function DeliveryStatusPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const { ConfirmDialog, confirm } = useConfirm();
   
   // Stati per la modale (Sheet)
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -104,10 +106,15 @@ export default function DeliveryStatusPage() {
 
   // 3. Gestione Eliminazione
   const deleteTask = async (taskId: string) => {
-    if(!confirm("Sei sicuro di voler eliminare questo task?")) return;
+    const ok = await confirm({
+      title: "Eliminare questo task?",
+      description: "L'operazione è irreversibile.",
+      confirmLabel: "Elimina",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
         await apiFetch(`/superadmin/delivery/tasks/${taskId}`, { method: "DELETE" });
-        // Rimuoviamo localmente per velocità
         setTasks(prev => prev.filter(t => t.id !== taskId));
     } catch(e) {
         console.error(e);
@@ -148,7 +155,7 @@ export default function DeliveryStatusPage() {
 
   return (
     <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in duration-500">
-      
+      <ConfirmDialog />
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>

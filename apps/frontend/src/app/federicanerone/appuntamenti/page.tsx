@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { apiFetch } from '@/lib/api';
+import { useConfirm } from '@/hooks/useConfirm';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -121,6 +122,7 @@ export default function FedericaAppuntamentiPage() {
   const [clienti, setClienti] = React.useState<Cliente[]>([]);
   const [trattamenti, setTrattamenti] = React.useState<Trattamento[]>([]);
   const [loading, setLoading] = React.useState(false);
+  const { ConfirmDialog, confirm } = useConfirm();
   
   const [month, setMonth] = React.useState<Date>(() => startOfMonth(new Date()));
   const [selectedDay, setSelectedDay] = React.useState<Date>(() => new Date());
@@ -277,7 +279,13 @@ export default function FedericaAppuntamentiPage() {
   }
 
   async function handleDelete(id: string) {
-    if(!confirm("Eliminare appuntamento definitivamente?")) return;
+    const ok = await confirm({
+      title: "Eliminare questo appuntamento?",
+      description: "L'operazione è definitiva e irreversibile.",
+      confirmLabel: "Elimina",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       setLoading(true);
       await apiFetch<{ ok: boolean }>(`/appuntamenti/${id}`, { method: 'DELETE' });
@@ -323,7 +331,7 @@ export default function FedericaAppuntamentiPage() {
 
   return (
     <div className="min-h-screen bg-transparent space-y-8 pb-20">
-      
+      <ConfirmDialog />
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-border/40 pb-6">
         <div>

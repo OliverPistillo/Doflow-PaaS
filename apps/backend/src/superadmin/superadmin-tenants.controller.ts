@@ -19,6 +19,7 @@ import { Request } from 'express';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
+import * as crypto from 'crypto';
 import { TenantBootstrapService } from '../tenancy/tenant-bootstrap.service';
 import { SystemStatsService } from './telemetry.service';
 
@@ -628,8 +629,8 @@ export class SuperadminTenantsController {
 
       const schema = safeSchema(tRows[0].schema_name);
 
-      const password = body.newPassword || Math.random().toString(36).slice(-8) + 'Aa1!';
-      const hash = await bcrypt.hash(password, 10);
+      const password = body.newPassword || generateSecurePassword();
+      const hash = await bcrypt.hash(password, 12);
 
       const tenantDs = await this.openTenantDs(schema);
       try {
@@ -646,4 +647,11 @@ export class SuperadminTenantsController {
       this.logAndThrow500('POST /superadmin/tenants/:id/reset-admin-password', e);
     }
   }
+}
+
+// ─── Helper ─────────────────────────────────────────────────────────────────
+
+/** FIX 🔴: Genera password sicura con crypto.randomBytes (non Math.random). */
+function generateSecurePassword(): string {
+  return crypto.randomBytes(16).toString('base64url').slice(0, 16) + 'A1!';
 }
