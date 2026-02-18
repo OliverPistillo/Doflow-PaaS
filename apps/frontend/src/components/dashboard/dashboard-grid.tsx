@@ -34,12 +34,17 @@ export type WidgetItem = {
 };
 
 interface DashboardGridProps {
-  layout: WidgetItem[]; // CAMBIATO DA initialLayout A layout
-  isEditing: boolean;   // AGGIUNTO
-  onLayoutChange: (layout: WidgetItem[]) => void; // AGGIUNTO
+  layout:         WidgetItem[];
+  isEditing:      boolean;
+  // Functions as props are valid between Client Components — not a serialization issue at runtime.
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  onLayoutChange: (layout: WidgetItem[]) => void;
+  /** Se fornito, sostituisce COMPONENT_MAP per il rendering dei widget */
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  renderWidget?:  (moduleKey: string) => React.ReactNode;
 }
 
-export function DashboardGrid({ layout, isEditing, onLayoutChange }: DashboardGridProps) {
+export function DashboardGrid({ layout, isEditing, onLayoutChange, renderWidget }: DashboardGridProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -115,11 +120,14 @@ export function DashboardGrid({ layout, isEditing, onLayoutChange }: DashboardGr
             )}
             
             <div className="flex-1 w-full overflow-hidden relative">
-                {COMPONENT_MAP[item.moduleKey] || (
+                {renderWidget
+                  ? renderWidget(item.moduleKey)
+                  : (COMPONENT_MAP[item.moduleKey] || (
                     <div className="h-full flex items-center justify-center text-slate-400 bg-slate-50 text-sm border-2 border-dashed">
                         Widget: {item.moduleKey}
                     </div>
-                )}
+                  ))
+                }
                 {/* Overlay per bloccare i click sui grafici durante l'edit */}
                 {isEditing && <div className="absolute inset-0 z-10 bg-transparent" />}
             </div>

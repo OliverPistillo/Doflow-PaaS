@@ -1,18 +1,56 @@
-import React from "react";
-import { SuperAdminSidebar } from "./components/super-admin-sidebar"; // ✅ Importa il nuovo componente
+"use client";
+
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
+import { SuperAdminSidebar } from "./components/super-admin-sidebar";
+import { getDoFlowUser } from "@/lib/jwt";
 
 export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen bg-slate-50 flex font-sans">
-      {/* 1. SIDEBAR DEDICATA */}
-      <SuperAdminSidebar />
+  const router = useRouter();
+  const [ready, setReady] = React.useState(false);
 
-      {/* 2. CONTENUTO PRINCIPALE */}
-      <main className="flex-1 ml-64 p-8 overflow-y-auto h-screen bg-slate-50">
-        <div className="max-w-[1600px] mx-auto animate-in fade-in duration-500">
-           {children}
-        </div>
-      </main>
-    </div>
+  React.useEffect(() => {
+    const user = getDoFlowUser();
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+    // Verifica ruolo superadmin/owner
+    if (!["superadmin", "owner"].includes(user.role ?? "")) {
+      router.push("/dashboard");
+      return;
+    }
+    setReady(true);
+  }, [router]);
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground animate-pulse">Caricamento&hellip;</p>
+      </div>
+    );
+  }
+
+  return (
+    <SidebarProvider>
+      <SuperAdminSidebar />
+      <SidebarInset>
+        {/* HEADER */}
+        <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-background/95 backdrop-blur px-4 sticky top-0 z-10">
+          <SidebarTrigger className="-ml-1" />
+          <div className="h-5 w-px bg-border" />
+          <span className="text-sm font-semibold text-muted-foreground">DoFlow OPS</span>
+          <div className="flex-1" />
+        </header>
+
+        {/* CONTENUTO */}
+        <main className="flex-1 overflow-y-auto p-6 md:p-8">
+          <div className="max-w-[1600px] mx-auto animate-in fade-in duration-500">
+            {children}
+          </div>
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

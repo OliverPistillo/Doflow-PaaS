@@ -12,13 +12,16 @@ import { safeSchema, safeSchemaOrPublic } from './common/schema.utils';
 
 type AuthStage = 'FULL' | 'MFA_PENDING' | 'MFA_SETUP_NEEDED';
 
+type PlanTier = 'STARTER' | 'PRO' | 'ENTERPRISE';
+
 type JwtPayload = {
-  sub:         string;   // FIX 🟡: era `any`, ora `string` (UUID)
-  email:       string;
-  tenantId:    string;
-  tenantSlug:  string;
-  role:        Role;
-  authStage?:  AuthStage;
+  sub:          string;
+  email:        string;
+  tenantId:     string;
+  tenantSlug:   string;
+  role:         Role;
+  planTier:     PlanTier;
+  authStage?:   AuthStage;
   mfa_required?: boolean;
 };
 
@@ -30,6 +33,19 @@ export class AuthService {
   constructor(private readonly dataSource: DataSource) {}
 
   // ── Helpers privati ──────────────────────────────────────────────────────
+
+  private async getPlanTier(conn: DataSource, schema: string): Promise<PlanTier> {
+    if (schema === 'public') return 'STARTER';
+    try {
+      const rows = await conn.query(
+        `SELECT plan_tier FROM public.tenants WHERE schema_name = $1 LIMIT 1`,
+        [schema],
+      );
+      const tier = rows[0]?.plan_tier as string | undefined;
+      if (tier === 'PRO' || tier === 'ENTERPRISE') return tier;
+    } catch { /* fallback silenzioso */ }
+    return 'STARTER';
+  }
 
   private getConn(req: Request): DataSource {
     return ((req as any).tenantConnection as DataSource | undefined) ?? this.dataSource;
@@ -58,6 +74,7 @@ export class AuthService {
     tenantId: string,
     tenantSlug: string,
     role: Role,
+    planTier: PlanTier = 'STARTER',
     opts?: {
       authStage?:  AuthStage;
       mfaRequired?: boolean;
@@ -76,6 +93,7 @@ export class AuthService {
       tenantId,
       tenantSlug,
       role,
+      planTier,
       authStage,
       ...(typeof opts?.mfaRequired === 'boolean' ? { mfa_required: opts.mfaRequired } : {}),
     };
@@ -90,9 +108,10 @@ export class AuthService {
     tenantId: string,
     tenantSlug: string,
     role: Role,
-    opts?: Parameters<AuthService['signToken']>[5],
+    planTier: PlanTier = 'STARTER',
+    opts?: Parameters<AuthService['signToken']>[6],
   ): string {
-    return this.signToken(userId, email, tenantId, tenantSlug, role, opts);
+    return this.signToken(userId, email, tenantId, tenantSlug, role, planTier, opts);
   }
 
   // ── Login ────────────────────────────────────────────────────────────────
@@ -106,12 +125,15 @@ export class AuthService {
     const t = safeSchema(tenantSchema, 'AuthService.loginInTenant');
 
     let realSlug = t;
+    let planTier: PlanTier = 'STARTER';
+
     if (t !== 'public') {
       const row = await conn.query(
-        `SELECT slug FROM public.tenants WHERE schema_name = $1 LIMIT 1`,
+        `SELECT slug, plan_tier FROM public.tenants WHERE schema_name = $1 LIMIT 1`,
         [t],
       );
       if (row[0]?.slug) realSlug = row[0].slug;
+      if (row[0]?.plan_tier) planTier = row[0].plan_tier as PlanTier;
     }
 
     await this.assertTenantActive(conn, t);
@@ -138,7 +160,7 @@ export class AuthService {
       authStage = hasSecret ? 'MFA_PENDING' : 'MFA_SETUP_NEEDED';
     }
 
-    const token = this.signToken(user.id, user.email, t, realSlug, user.role as Role, {
+    const token = this.signToken(user.id, user.email, t, realSlug, user.role as Role, planTier, {
       authStage,
       mfaRequired: mfaEnabled,
     });
@@ -228,8 +250,11 @@ export class AuthService {
       [secret, userPayload.sub],
     );
 
+    const planTier = await this.getPlanTier(conn, t);
+
     const token = this.signToken(
       userPayload.sub, userPayload.email, t, userPayload.tenantSlug, userPayload.role,
+      planTier,
       { authStage: 'FULL', mfaRequired: true },
     );
     return { status: 'ok', token };
@@ -262,7 +287,9 @@ export class AuthService {
       if (tr[0]) realSlug = tr[0].slug;
     }
 
-    const token = this.signToken(userId, user.email, t, realSlug, user.role as Role, {
+    const planTier = await this.getPlanTier(conn, t);
+
+    const token = this.signToken(userId, user.email, t, realSlug, user.role as Role, planTier, {
       authStage: 'FULL',
       mfaRequired: true,
     });
@@ -304,7 +331,8 @@ export class AuthService {
       [email, passwordHash, role],
     );
     const user = rows[0];
-    const token = this.signToken(user.id, user.email, schema, realSlug, user.role as Role);
+    const planTier = await this.getPlanTier(conn, schema);
+    const token = this.signToken(user.id, user.email, schema, realSlug, user.role as Role, planTier);
     return { user: { ...user, tenantId: schema, tenantSlug: realSlug }, token };
   }
 
@@ -355,7 +383,8 @@ export class AuthService {
       [invite.id],
     );
 
-    const jwtToken = this.signToken(user.id, user.email, schema, realSlug, user.role as Role);
+    const planTier = await this.getPlanTier(conn, schema);
+    const jwtToken = this.signToken(user.id, user.email, schema, realSlug, user.role as Role, planTier);
     return { user: { ...user, tenantId: schema, tenantSlug: realSlug }, token: jwtToken };
   }
 }
