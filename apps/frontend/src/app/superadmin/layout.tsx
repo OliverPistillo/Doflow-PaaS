@@ -1,33 +1,53 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+// 1. Aggiungiamo usePathname
+import { useRouter, usePathname } from "next/navigation"; 
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { SuperAdminSidebar } from "./components/super-admin-sidebar";
 import { getDoFlowUser } from "@/lib/jwt";
 
 export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname(); // Freno a mano
   const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
     const user = getDoFlowUser();
+    
+    // Se non loggato
     if (!user) {
-      router.push("/login");
+      if (pathname !== "/login") {
+        router.replace("/login");
+      }
       return;
     }
-    // Verifica ruolo superadmin/owner
-    if (!["superadmin", "owner"].includes(user.role ?? "")) {
-      router.push("/dashboard");
+
+    // Normalizziamo ruolo e tenantId come fatto dall'altra parte
+    const role = String(user.role || "").toLowerCase().trim();
+    const tenantId = String(user.tenantId || "").toLowerCase().trim();
+
+    // REGOLA DI ACCESSO SUPERADMIN:
+    // Deve essere superadmin/owner OPPURE appartenere al tenant "public"
+    const isSuperAdmin = ["superadmin", "super_admin", "owner"].includes(role) || tenantId === "public";
+
+    if (!isSuperAdmin) {
+      // Non è autorizzato qui, mandiamolo alla SUA dashboard tenant
+      // Solo se non è già lì (evitiamo ping pong)
+      if (!pathname.startsWith("/dashboard")) {
+        router.replace("/dashboard");
+      }
       return;
     }
+    
+    // Se arriviamo qui, è un vero superadmin
     setReady(true);
-  }, [router]);
+  }, [router, pathname]);
 
   if (!ready) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <p className="text-sm text-muted-foreground animate-pulse">Caricamento&hellip;</p>
+        <p className="text-sm text-muted-foreground animate-pulse">Caricamento OPS&hellip;</p>
       </div>
     );
   }
