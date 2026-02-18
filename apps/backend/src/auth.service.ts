@@ -200,7 +200,8 @@ export class AuthService {
       const userMap = directoryRows[0];
 
       // Superadmin / owner senza tenant
-      if (!userMap.tenant_id || ['superadmin', 'owner'].includes(userMap.role)) {
+      const isPublicTenant = !userMap.tenant_id || userMap.tenant_id === 'public';
+      if (isPublicTenant || ['superadmin', 'owner'].includes(userMap.role)) {
         return this.loginInTenant(conn, 'public', email, password);
       }
 
