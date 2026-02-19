@@ -1,32 +1,11 @@
-/**
- * plans.ts — Definizione commerciale dei piani DoFlow.
- *
- * REGOLA: Questa è l'unica fonte di verità per:
- *  - quali moduli (voci sidebar) sono inclusi in ogni piano
- *  - quali widget dashboard sono disponibili per piano
- *  - i metadati di upselling (nome piano superiore, messaggio)
- *
- * Il backend valida i piani a livello di API (gating per endpoint).
- * Il frontend usa questa config SOLO per UI (mostrare/bloccare elementi).
- * Non usare mai questa config come security gate lato client.
- */
+// ─── Tipi base ────────────────────────────────────────────────────────────────
 
-import {
-  LayoutDashboard,
-  BarChart3,
-  Users,
-  ShoppingCart,
-  Package,
-  FileText,
-  Truck,
-  Layers,
-  Settings,
-  CreditCard,
-  Shield,
-} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-
-// ─── Tipi ────────────────────────────────────────────────────────────────────
+import {
+  BarChart3, Package, ShoppingCart, FileText,
+  Users, Settings, LayoutDashboard, CreditCard,
+  Truck, Layers, Shield,
+} from "lucide-react";
 
 export type PlanTier = "STARTER" | "PRO" | "ENTERPRISE";
 
@@ -61,14 +40,216 @@ export function planIncludes(active: PlanTier, required: PlanTier): boolean {
   return PLAN_ORDER[active] >= PLAN_ORDER[required];
 }
 
-// ─── Moduli Sidebar ───────────────────────────────────────────────────────────
+// ─── LayoutItem — coordinata sulla griglia a 12 colonne ──────────────────────
+//
+//  rowHeight = 80px  →  h=2 = 160px (KPI tile),  h=5 = 400px (lista/grafico)
+//  cols = 12         →  w=4 = 1/3,  w=6 = metà,  w=8 = 2/3,  w=12 = pieno
+
+export type LayoutItem = {
+  i: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
+// ─── Definizione widget con vincoli griglia ───────────────────────────────────
+
+export type WidgetDefinition = {
+  id:       WidgetId;
+  label:    string;
+  defaultW: number;
+  defaultH: number;
+  /** Vincoli che react-grid-layout rispetta durante drag/resize */
+  minW:     number;
+  maxW:     number;
+  minH:     number;
+  maxH:     number;
+  minPlan:  PlanTier;
+  lockMsg?: string;
+};
+
+export const WIDGET_DEFINITIONS: Record<WidgetId, WidgetDefinition> = {
+  // ── STARTER ─────────────────────────────────────────────────────────────
+  kpi_new_leads: {
+    id: "kpi_new_leads", label: "Nuovi Lead",
+    defaultW: 4, defaultH: 2,
+    minW: 3, maxW: 6, minH: 2, maxH: 2,
+    minPlan: "STARTER",
+  },
+  kpi_open_orders: {
+    id: "kpi_open_orders", label: "Ordini Aperti",
+    defaultW: 4, defaultH: 2,
+    minW: 3, maxW: 6, minH: 2, maxH: 2,
+    minPlan: "STARTER",
+  },
+  kpi_quote_value: {
+    id: "kpi_quote_value", label: "Valore Preventivi",
+    defaultW: 4, defaultH: 2,
+    minW: 3, maxW: 6, minH: 2, maxH: 2,
+    minPlan: "STARTER",
+  },
+  list_recent_quotes: {
+    id: "list_recent_quotes", label: "Ultimi Preventivi",
+    defaultW: 8, defaultH: 5,
+    minW: 4, maxW: 12, minH: 3, maxH: 8,
+    minPlan: "STARTER",
+  },
+  chart_orders_trend: {
+    id: "chart_orders_trend", label: "Trend Ordini (30gg)",
+    defaultW: 4, defaultH: 5,
+    minW: 3, maxW: 12, minH: 3, maxH: 8,
+    minPlan: "STARTER",
+  },
+
+  // ── PRO ──────────────────────────────────────────────────────────────────
+  kpi_revenue_month: {
+    id: "kpi_revenue_month", label: "Fatturato del Mese",
+    defaultW: 4, defaultH: 2,
+    minW: 3, maxW: 6, minH: 2, maxH: 2,
+    minPlan: "PRO",
+    lockMsg: "Disponibile con Piano Pro.",
+  },
+  kpi_cashflow_overdue: {
+    id: "kpi_cashflow_overdue", label: "Scaduto da Incassare",
+    defaultW: 4, defaultH: 2,
+    minW: 3, maxW: 6, minH: 2, maxH: 2,
+    minPlan: "PRO",
+    lockMsg: "Disponibile con Piano Pro.",
+  },
+  kpi_low_stock: {
+    id: "kpi_low_stock", label: "Prodotti Sotto Scorta",
+    defaultW: 4, defaultH: 2,
+    minW: 3, maxW: 6, minH: 2, maxH: 2,
+    minPlan: "PRO",
+    lockMsg: "Disponibile con Piano Pro.",
+  },
+  list_unpaid_invoices: {
+    id: "list_unpaid_invoices", label: "Fatture Non Pagate",
+    defaultW: 8, defaultH: 5,
+    minW: 4, maxW: 12, minH: 3, maxH: 8,
+    minPlan: "PRO",
+    lockMsg: "Disponibile con Piano Pro.",
+  },
+  chart_income_vs_expenses: {
+    id: "chart_income_vs_expenses", label: "Entrate vs Uscite",
+    defaultW: 4, defaultH: 5,
+    minW: 3, maxW: 12, minH: 3, maxH: 8,
+    minPlan: "PRO",
+    lockMsg: "Disponibile con Piano Pro.",
+  },
+
+  // ── ENTERPRISE ────────────────────────────────────────────────────────────
+  chart_market_share: {
+    id: "chart_market_share", label: "Quote di Mercato",
+    defaultW: 4, defaultH: 5,
+    minW: 3, maxW: 8, minH: 3, maxH: 8,
+    minPlan: "ENTERPRISE",
+    lockMsg: "Disponibile con Piano Enterprise.",
+  },
+  chart_sales_heatmap: {
+    id: "chart_sales_heatmap", label: "Heatmap Vendite",
+    defaultW: 8, defaultH: 5,
+    minW: 4, maxW: 12, minH: 3, maxH: 8,
+    minPlan: "ENTERPRISE",
+    lockMsg: "Disponibile con Piano Enterprise.",
+  },
+  leaderboard_sellers: {
+    id: "leaderboard_sellers", label: "Top Venditori",
+    defaultW: 4, defaultH: 5,
+    minW: 3, maxW: 8, minH: 3, maxH: 8,
+    minPlan: "ENTERPRISE",
+    lockMsg: "Disponibile con Piano Enterprise.",
+  },
+};
+
+// ─── Layout di default per piano (griglia 12 colonne, rowHeight=80) ──────────
+//
+//  Riga y=0: 3 KPI tile affiancati (w=4, h=2 = 160px ciascuno)
+//  Riga y=2: lista grande (w=8, h=5) + grafico laterale (w=4, h=5)
+//  Riga y=7: (solo Enterprise) leaderboard + lista fatture
+
+export const DEFAULT_LAYOUTS: Record<PlanTier, LayoutItem[]> = {
+  STARTER: [
+    { i: "kpi_new_leads",      x: 0, y: 0, w: 4, h: 2 },
+    { i: "kpi_open_orders",    x: 4, y: 0, w: 4, h: 2 },
+    { i: "kpi_quote_value",    x: 8, y: 0, w: 4, h: 2 },
+    { i: "list_recent_quotes", x: 0, y: 2, w: 8, h: 5 },
+    { i: "chart_orders_trend", x: 8, y: 2, w: 4, h: 5 },
+  ],
+  PRO: [
+    { i: "kpi_revenue_month",        x: 0, y: 0, w: 4, h: 2 },
+    { i: "kpi_cashflow_overdue",     x: 4, y: 0, w: 4, h: 2 },
+    { i: "kpi_low_stock",            x: 8, y: 0, w: 4, h: 2 },
+    { i: "list_unpaid_invoices",     x: 0, y: 2, w: 8, h: 5 },
+    { i: "chart_income_vs_expenses", x: 8, y: 2, w: 4, h: 5 },
+  ],
+  ENTERPRISE: [
+    { i: "kpi_revenue_month",        x: 0, y: 0, w: 4, h: 2 },
+    { i: "kpi_cashflow_overdue",     x: 4, y: 0, w: 4, h: 2 },
+    { i: "kpi_low_stock",            x: 8, y: 0, w: 4, h: 2 },
+    { i: "chart_market_share",       x: 0, y: 2, w: 4, h: 5 },
+    { i: "chart_sales_heatmap",      x: 4, y: 2, w: 8, h: 5 },
+    { i: "leaderboard_sellers",      x: 0, y: 7, w: 4, h: 5 },
+    { i: "list_unpaid_invoices",     x: 4, y: 7, w: 8, h: 5 },
+  ],
+};
+
+// ─── Badge e colori per il piano ──────────────────────────────────────────────
+
+export const PLAN_META: Record<PlanTier, {
+  label: string;
+  color: string;
+  textColor: string;
+  nextPlan?: PlanTier;
+  upgradeLabel?: string;
+}> = {
+  STARTER: {
+    label:        "Starter",
+    color:        "bg-slate-100",
+    textColor:    "text-slate-700",
+    nextPlan:     "PRO",
+    upgradeLabel: "Passa a Pro",
+  },
+  PRO: {
+    label:        "Pro",
+    color:        "bg-indigo-100",
+    textColor:    "text-indigo-700",
+    nextPlan:     "ENTERPRISE",
+    upgradeLabel: "Passa a Enterprise",
+  },
+  ENTERPRISE: {
+    label:     "Enterprise",
+    color:     "bg-amber-100",
+    textColor: "text-amber-700",
+  },
+};
+
+// ─── Tipi navigazione sidebar (usati da tenant-sidebar.tsx) ──────────────────
+
+export type NavItem = {
+  label:    string;
+  href:     string;
+  icon:     LucideIcon;
+  minPlan:  PlanTier;
+  lockMsg?: string;
+};
+
+export type NavGroup = {
+  label: string;
+  items: NavItem[];
+};
+
+
+// ─── Navigazione sidebar — compatibilità con tenant-sidebar.tsx ──────────────
+
+
 
 export interface SidebarModule {
   label:    string;
   href:     string;
   icon:     LucideIcon;
   minPlan:  PlanTier;
-  /** Messaggio mostrato nel tooltip del lucchetto */
   lockMsg?: string;
 }
 
@@ -176,146 +357,3 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
     ],
   },
 ];
-
-// ─── Widget Dashboard ─────────────────────────────────────────────────────────
-
-export interface WidgetDefinition {
-  id:       WidgetId;
-  label:    string;
-  /** Dimensione default nella griglia (w max 3) */
-  defaultW: number;
-  defaultH: number;
-  minPlan:  PlanTier;
-  lockMsg?: string;
-}
-
-export const WIDGET_DEFINITIONS: Record<WidgetId, WidgetDefinition> = {
-  // ── STARTER ─────────────────────────────────────────────────────────────
-  kpi_new_leads: {
-    id: "kpi_new_leads", label: "Nuovi Lead",
-    defaultW: 1, defaultH: 1, minPlan: "STARTER",
-  },
-  kpi_open_orders: {
-    id: "kpi_open_orders", label: "Ordini Aperti",
-    defaultW: 1, defaultH: 1, minPlan: "STARTER",
-  },
-  kpi_quote_value: {
-    id: "kpi_quote_value", label: "Valore Preventivi",
-    defaultW: 1, defaultH: 1, minPlan: "STARTER",
-  },
-  list_recent_quotes: {
-    id: "list_recent_quotes", label: "Ultimi Preventivi",
-    defaultW: 2, defaultH: 2, minPlan: "STARTER",
-  },
-  chart_orders_trend: {
-    id: "chart_orders_trend", label: "Trend Ordini (30gg)",
-    defaultW: 1, defaultH: 2, minPlan: "STARTER",
-  },
-
-  // ── PRO ──────────────────────────────────────────────────────────────────
-  kpi_revenue_month: {
-    id: "kpi_revenue_month", label: "Fatturato del Mese",
-    defaultW: 1, defaultH: 1, minPlan: "PRO",
-    lockMsg: "Disponibile con Piano Pro.",
-  },
-  kpi_cashflow_overdue: {
-    id: "kpi_cashflow_overdue", label: "Scaduto da Incassare",
-    defaultW: 1, defaultH: 1, minPlan: "PRO",
-    lockMsg: "Disponibile con Piano Pro.",
-  },
-  kpi_low_stock: {
-    id: "kpi_low_stock", label: "Prodotti Sotto Scorta",
-    defaultW: 1, defaultH: 1, minPlan: "PRO",
-    lockMsg: "Disponibile con Piano Pro.",
-  },
-  list_unpaid_invoices: {
-    id: "list_unpaid_invoices", label: "Fatture Non Pagate",
-    defaultW: 2, defaultH: 2, minPlan: "PRO",
-    lockMsg: "Disponibile con Piano Pro.",
-  },
-  chart_income_vs_expenses: {
-    id: "chart_income_vs_expenses", label: "Entrate vs Uscite",
-    defaultW: 1, defaultH: 2, minPlan: "PRO",
-    lockMsg: "Disponibile con Piano Pro.",
-  },
-
-  // ── ENTERPRISE ────────────────────────────────────────────────────────────
-  chart_market_share: {
-    id: "chart_market_share", label: "Quote di Mercato",
-    defaultW: 1, defaultH: 2, minPlan: "ENTERPRISE",
-    lockMsg: "Disponibile con Piano Enterprise.",
-  },
-  chart_sales_heatmap: {
-    id: "chart_sales_heatmap", label: "Heatmap Vendite",
-    defaultW: 2, defaultH: 2, minPlan: "ENTERPRISE",
-    lockMsg: "Disponibile con Piano Enterprise.",
-  },
-  leaderboard_sellers: {
-    id: "leaderboard_sellers", label: "Classifica Venditori",
-    defaultW: 1, defaultH: 2, minPlan: "ENTERPRISE",
-    lockMsg: "Disponibile con Piano Enterprise.",
-  },
-};
-
-// ─── Layout di default per piano ──────────────────────────────────────────────
-
-export type LayoutItem = {
-  i: WidgetId; x: number; y: number; w: number; h: number;
-  minW?: number; maxW?: number; minH?: number;
-};
-
-export const DEFAULT_LAYOUTS: Record<PlanTier, LayoutItem[]> = {
-  STARTER: [
-    { i: "kpi_new_leads",       x: 0, y: 0, w: 1, h: 1 },
-    { i: "kpi_open_orders",     x: 1, y: 0, w: 1, h: 1 },
-    { i: "kpi_quote_value",     x: 2, y: 0, w: 1, h: 1 },
-    { i: "list_recent_quotes",  x: 0, y: 1, w: 2, h: 2 },
-    { i: "chart_orders_trend",  x: 2, y: 1, w: 1, h: 2 },
-  ],
-  PRO: [
-    { i: "kpi_revenue_month",        x: 0, y: 0, w: 1, h: 1 },
-    { i: "kpi_cashflow_overdue",     x: 1, y: 0, w: 1, h: 1 },
-    { i: "kpi_low_stock",            x: 2, y: 0, w: 1, h: 1 },
-    { i: "list_unpaid_invoices",     x: 0, y: 1, w: 2, h: 2 },
-    { i: "chart_income_vs_expenses", x: 2, y: 1, w: 1, h: 2 },
-  ],
-  ENTERPRISE: [
-    { i: "kpi_revenue_month",        x: 0, y: 0, w: 1, h: 1 },
-    { i: "kpi_cashflow_overdue",     x: 1, y: 0, w: 1, h: 1 },
-    { i: "kpi_low_stock",            x: 2, y: 0, w: 1, h: 1 },
-    { i: "chart_market_share",       x: 0, y: 1, w: 1, h: 2 },
-    { i: "chart_sales_heatmap",      x: 1, y: 1, w: 2, h: 2 },
-    { i: "leaderboard_sellers",      x: 0, y: 3, w: 1, h: 2 },
-    { i: "list_unpaid_invoices",     x: 1, y: 3, w: 2, h: 2 },
-  ],
-};
-
-// ─── Badge e colori per il piano ──────────────────────────────────────────────
-
-export const PLAN_META: Record<PlanTier, {
-  label: string;
-  color: string;       // Tailwind bg class
-  textColor: string;   // Tailwind text class
-  nextPlan?: PlanTier;
-  upgradeLabel?: string;
-}> = {
-  STARTER: {
-    label:         "Starter",
-    color:         "bg-slate-100",
-    textColor:     "text-slate-700",
-    nextPlan:      "PRO",
-    upgradeLabel:  "Passa a Pro",
-  },
-  PRO: {
-    label:         "Pro",
-    color:         "bg-indigo-100",
-    textColor:     "text-indigo-700",
-    nextPlan:      "ENTERPRISE",
-    upgradeLabel:  "Passa a Enterprise",
-  },
-  ENTERPRISE: {
-    label:         "Enterprise",
-    color:         "bg-amber-100",
-    textColor:     "text-amber-700",
-  },
-};
