@@ -4,7 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   BarChart3, Package, ShoppingCart, FileText,
   Users, Settings, LayoutDashboard, CreditCard,
-  Truck, Layers, Shield,
+  Truck, Layers, Shield, CheckSquare, UserPlus,
 } from "lucide-react";
 
 export type PlanTier = "STARTER" | "PRO" | "ENTERPRISE";
@@ -322,6 +322,12 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
   {
     label: "Operazioni",
     modules: [
+      {
+        label:   "Task",
+        href:    "/tasks",
+        icon:    CheckSquare,
+        minPlan: "STARTER",
+      },
       {
         label:   "Logistica",
         href:    "/logistics",
