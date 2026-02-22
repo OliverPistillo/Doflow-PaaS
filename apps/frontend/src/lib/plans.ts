@@ -2,9 +2,14 @@
 
 import type { LucideIcon } from "lucide-react";
 import {
-  BarChart3, Package, ShoppingCart, FileText,
-  Users, Settings, LayoutDashboard, CreditCard,
-  Truck, Layers, Shield, CheckSquare, UserPlus,
+  BarChart3, Package, ShoppingCart, FileText, Users, Settings,
+  LayoutDashboard, CreditCard, Truck, Layers, Shield, CheckSquare,
+  KanbanSquare, Building2, Contact, GitFork, Receipt, Wallet,
+  Calendar, Clock, Mail, BookTemplate, Megaphone, FormInput,
+  Warehouse, PackageSearch, Factory, ClipboardList,
+  FolderOpen, PenLine, UsersRound, UserCog, Activity,
+  Banknote, TrendingUp, BarChart2, Building, FileSpreadsheet,
+  Zap, Plug, Bell, ShieldCheck, Download, Timer,
 } from "lucide-react";
 
 export type PlanTier = "STARTER" | "PRO" | "ENTERPRISE";
@@ -41,10 +46,6 @@ export function planIncludes(active: PlanTier, required: PlanTier): boolean {
 }
 
 // ─── LayoutItem — coordinata sulla griglia a 12 colonne ──────────────────────
-//
-//  rowHeight = 80px  →  h=2 = 160px (KPI tile),  h=5 = 400px (lista/grafico)
-//  cols = 12         →  w=4 = 1/3,  w=6 = metà,  w=8 = 2/3,  w=12 = pieno
-
 export type LayoutItem = {
   i: string;
   x: number;
@@ -60,7 +61,6 @@ export type WidgetDefinition = {
   label:    string;
   defaultW: number;
   defaultH: number;
-  /** Vincoli che react-grid-layout rispetta durante drag/resize */
   minW:     number;
   maxW:     number;
   minH:     number;
@@ -70,7 +70,6 @@ export type WidgetDefinition = {
 };
 
 export const WIDGET_DEFINITIONS: Record<WidgetId, WidgetDefinition> = {
-  // ── STARTER ─────────────────────────────────────────────────────────────
   kpi_new_leads: {
     id: "kpi_new_leads", label: "Nuovi Lead",
     defaultW: 4, defaultH: 2,
@@ -101,8 +100,6 @@ export const WIDGET_DEFINITIONS: Record<WidgetId, WidgetDefinition> = {
     minW: 3, maxW: 12, minH: 3, maxH: 8,
     minPlan: "STARTER",
   },
-
-  // ── PRO ──────────────────────────────────────────────────────────────────
   kpi_revenue_month: {
     id: "kpi_revenue_month", label: "Fatturato del Mese",
     defaultW: 4, defaultH: 2,
@@ -138,8 +135,6 @@ export const WIDGET_DEFINITIONS: Record<WidgetId, WidgetDefinition> = {
     minPlan: "PRO",
     lockMsg: "Disponibile con Piano Pro.",
   },
-
-  // ── ENTERPRISE ────────────────────────────────────────────────────────────
   chart_market_share: {
     id: "chart_market_share", label: "Quote di Mercato",
     defaultW: 4, defaultH: 5,
@@ -163,11 +158,7 @@ export const WIDGET_DEFINITIONS: Record<WidgetId, WidgetDefinition> = {
   },
 };
 
-// ─── Layout di default per piano (griglia 12 colonne, rowHeight=80) ──────────
-//
-//  Riga y=0: 3 KPI tile affiancati (w=4, h=2 = 160px ciascuno)
-//  Riga y=2: lista grande (w=8, h=5) + grafico laterale (w=4, h=5)
-//  Riga y=7: (solo Enterprise) leaderboard + lista fatture
+// ─── Layout di default per piano ─────────────────────────────────────────────
 
 export const DEFAULT_LAYOUTS: Record<PlanTier, LayoutItem[]> = {
   STARTER: [
@@ -225,7 +216,7 @@ export const PLAN_META: Record<PlanTier, {
   },
 };
 
-// ─── Tipi navigazione sidebar (usati da tenant-sidebar.tsx) ──────────────────
+// ─── Tipi navigazione sidebar ─────────────────────────────────────────────────
 
 export type NavItem = {
   label:    string;
@@ -240,11 +231,6 @@ export type NavGroup = {
   items: NavItem[];
 };
 
-
-// ─── Navigazione sidebar — compatibilità con tenant-sidebar.tsx ──────────────
-
-
-
 export interface SidebarModule {
   label:    string;
   href:     string;
@@ -258,6 +244,8 @@ export interface SidebarGroup {
   modules: SidebarModule[];
 }
 
+// ─── Sidebar groups completi ──────────────────────────────────────────────────
+
 export const SIDEBAR_GROUPS: SidebarGroup[] = [
   {
     label: "Panoramica",
@@ -269,16 +257,22 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
         minPlan: "STARTER",
       },
       {
+        label:   "Feed Attività",
+        href:    "/activity",
+        icon:    Activity,
+        minPlan: "STARTER",
+      },
+      {
         label:   "Analytics Avanzata",
         href:    "/analytics",
         icon:    BarChart3,
         minPlan: "ENTERPRISE",
-        lockMsg: "Disponibile con il piano Enterprise. Passa a Enterprise per accedere a Business Intelligence, report incrociati e heatmap.",
+        lockMsg: "Disponibile con il piano Enterprise. Report incrociati, Business Intelligence e heatmap.",
       },
     ],
   },
   {
-    label: "Gestione Commerciale",
+    label: "CRM & Vendite",
     modules: [
       {
         label:   "CRM & Clienti",
@@ -287,13 +281,42 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
         minPlan: "STARTER",
       },
       {
-        label:   "Catalogo",
+        label:   "Contatti",
+        href:    "/contacts",
+        icon:    Contact,
+        minPlan: "STARTER",
+      },
+      {
+        label:   "Aziende",
+        href:    "/companies",
+        icon:    Building2,
+        minPlan: "STARTER",
+      },
+      {
+        label:   "Pipeline Vendite",
+        href:    "/deals",
+        icon:    GitFork,
+        minPlan: "STARTER",
+      },
+      {
+        label:   "Preventivi",
+        href:    "/quotes",
+        icon:    FileSpreadsheet,
+        minPlan: "STARTER",
+      },
+    ],
+  },
+  {
+    label: "Catalogo & Ordini",
+    modules: [
+      {
+        label:   "Catalogo Prodotti",
         href:    "/products",
         icon:    Package,
         minPlan: "STARTER",
       },
       {
-        label:   "Vendite & Preventivi",
+        label:   "Ordini",
         href:    "/orders",
         icon:    ShoppingCart,
         minPlan: "STARTER",
@@ -308,7 +331,14 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
         href:    "/invoices",
         icon:    FileText,
         minPlan: "PRO",
-        lockMsg: "Disponibile con il piano Pro. Genera fatture dagli ordini, gestisci lo scadenziario e invia PDF ai clienti.",
+        lockMsg: "Disponibile con il piano Pro. Genera fatture dagli ordini, gestisci scadenziario e invia PDF.",
+      },
+      {
+        label:   "Note Spese",
+        href:    "/expenses",
+        icon:    Receipt,
+        minPlan: "PRO",
+        lockMsg: "Disponibile con il piano Pro. Registra spese, allega ricevute e genera report mensili.",
       },
       {
         label:   "Abbonamento",
@@ -316,6 +346,13 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
         icon:    CreditCard,
         minPlan: "PRO",
         lockMsg: "Disponibile con il piano Pro.",
+      },
+      {
+        label:   "Riconciliazione",
+        href:    "/payments",
+        icon:    Banknote,
+        minPlan: "ENTERPRISE",
+        lockMsg: "Disponibile con il piano Enterprise. Riconciliazione bancaria e cash flow avanzato.",
       },
     ],
   },
@@ -329,16 +366,130 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
         minPlan: "STARTER",
       },
       {
-        label:   "Logistica",
-        href:    "/logistics",
-        icon:    Truck,
-        minPlan: "PRO",
-        lockMsg: "Disponibile con il piano Pro. Gestisci giacenze di magazzino, DDT e tracciamento spedizioni.",
+        label:   "Task Board",
+        href:    "/tasks/board",
+        icon:    KanbanSquare,
+        minPlan: "STARTER",
+      },
+      {
+        label:   "Calendario",
+        href:    "/calendar",
+        icon:    Calendar,
+        minPlan: "STARTER",
       },
       {
         label:   "Progetti",
         href:    "/projects",
         icon:    Layers,
+        minPlan: "PRO",
+        lockMsg: "Disponibile con il piano Pro.",
+      },
+      {
+        label:   "Foglio Ore",
+        href:    "/timesheet",
+        icon:    Timer,
+        minPlan: "PRO",
+        lockMsg: "Disponibile con il piano Pro. Traccia ore per progetto, approva e genera report.",
+      },
+    ],
+  },
+  {
+    label: "Comunicazione",
+    modules: [
+      {
+        label:   "Posta Condivisa",
+        href:    "/inbox",
+        icon:    Mail,
+        minPlan: "PRO",
+        lockMsg: "Disponibile con il piano Pro. Inbox condivisa del team con email collegate a deal.",
+      },
+      {
+        label:   "Template Email",
+        href:    "/email-templates",
+        icon:    BookTemplate,
+        minPlan: "STARTER",
+      },
+      {
+        label:   "Campagne Email",
+        href:    "/campaigns",
+        icon:    Megaphone,
+        minPlan: "PRO",
+        lockMsg: "Disponibile con il piano Pro. Campagne email con A/B test e report di performance.",
+      },
+      {
+        label:   "Form & Landing",
+        href:    "/forms",
+        icon:    FormInput,
+        minPlan: "PRO",
+        lockMsg: "Disponibile con il piano Pro. Form builder per cattura lead con mapping CRM.",
+      },
+    ],
+  },
+  {
+    label: "Logistica & Magazzino",
+    modules: [
+      {
+        label:   "Logistica",
+        href:    "/logistics",
+        icon:    Truck,
+        minPlan: "PRO",
+        lockMsg: "Disponibile con il piano Pro. Gestione spedizioni, DDT e tracking corrieri.",
+      },
+      {
+        label:   "Magazzino",
+        href:    "/inventory",
+        icon:    Warehouse,
+        minPlan: "PRO",
+        lockMsg: "Disponibile con il piano Pro. Giacenze in tempo reale, movimenti e alert scorta.",
+      },
+      {
+        label:   "Fornitori",
+        href:    "/suppliers",
+        icon:    Factory,
+        minPlan: "PRO",
+        lockMsg: "Disponibile con il piano Pro.",
+      },
+      {
+        label:   "Ordini Acquisto",
+        href:    "/purchase-orders",
+        icon:    ClipboardList,
+        minPlan: "PRO",
+        lockMsg: "Disponibile con il piano Pro.",
+      },
+    ],
+  },
+  {
+    label: "Documenti & File",
+    modules: [
+      {
+        label:   "Documenti",
+        href:    "/documents",
+        icon:    FolderOpen,
+        minPlan: "STARTER",
+      },
+      {
+        label:   "Firma Digitale",
+        href:    "/signatures",
+        icon:    PenLine,
+        minPlan: "ENTERPRISE",
+        lockMsg: "Disponibile con il piano Enterprise. Firma elettronica con validità legale.",
+      },
+    ],
+  },
+  {
+    label: "HR & Team",
+    modules: [
+      {
+        label:   "Team",
+        href:    "/team",
+        icon:    UsersRound,
+        minPlan: "PRO",
+        lockMsg: "Disponibile con il piano Pro. Organigramma, profili e calendario ferie.",
+      },
+      {
+        label:   "Ruoli & Permessi",
+        href:    "/team/roles",
+        icon:    UserCog,
         minPlan: "PRO",
         lockMsg: "Disponibile con il piano Pro.",
       },
@@ -354,11 +505,43 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
         minPlan: "STARTER",
       },
       {
+        label:   "Azienda",
+        href:    "/settings/company",
+        icon:    Building,
+        minPlan: "STARTER",
+      },
+      {
+        label:   "Notifiche",
+        href:    "/settings/notifications",
+        icon:    Bell,
+        minPlan: "STARTER",
+      },
+      {
+        label:   "Import/Export",
+        href:    "/settings/import-export",
+        icon:    Download,
+        minPlan: "STARTER",
+      },
+      {
+        label:   "Automazioni",
+        href:    "/settings/automations",
+        icon:    Zap,
+        minPlan: "PRO",
+        lockMsg: "Disponibile con il piano Pro. Workflow builder visuale con trigger e azioni automatiche.",
+      },
+      {
+        label:   "Integrazioni",
+        href:    "/settings/integrations",
+        icon:    Plug,
+        minPlan: "PRO",
+        lockMsg: "Disponibile con il piano Pro. Collega Google Workspace, Stripe, Zapier e altro.",
+      },
+      {
         label:   "Sicurezza Avanzata",
         href:    "/settings/security",
-        icon:    Shield,
+        icon:    ShieldCheck,
         minPlan: "ENTERPRISE",
-        lockMsg: "Disponibile con il piano Enterprise. Audit log tenant, ruoli granulari e obbligo MFA per tutto il team.",
+        lockMsg: "Disponibile con il piano Enterprise. Audit log, ruoli granulari e IP whitelist.",
       },
     ],
   },
