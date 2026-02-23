@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -10,7 +11,11 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Settings2, Pencil, Save, X, RotateCcw, Plus, Sparkles } from "lucide-react";
+import {
+  Loader2, Settings2, Pencil, Save, X, RotateCcw, Plus, Sparkles,
+  TrendingUp, Users, ShoppingCart, FileText,
+  CalendarDays, Bell, ChevronRight,
+} from "lucide-react";
 import { DashboardGrid, type WidgetItem } from "@/components/dashboard/dashboard-grid";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -24,8 +29,117 @@ import { LockedFeature } from "@/components/ui/locked-feature";
 import { COMPONENT_MAP } from "@/components/dashboard/dashboard-widgets";
 import { cn } from "@/lib/utils";
 
-// ─── Converte LayoutItem (da DEFAULT_LAYOUTS o DB) → WidgetItem ──────────────
-//  Aggiunge moduleKey = i (la chiave del widget)
+// ─── Helper: orario del saluto ────────────────────────────────────────────────
+
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Buongiorno";
+  if (h < 18) return "Buon pomeriggio";
+  return "Buonasera";
+}
+
+// ─── Quick KPI Strip ──────────────────────────────────────────────────────────
+
+const QUICK_KPIS = [
+  { label: "Nuovi lead oggi",    value: "7",        delta: "+3",   icon: Users,        color: "text-indigo-600",  bg: "bg-indigo-50 dark:bg-indigo-950/30" },
+  { label: "Ordini in corso",    value: "23",       delta: "+5",   icon: ShoppingCart, color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
+  { label: "Preventivi aperti", value: "€ 84.200", delta: "+12%", icon: FileText,     color: "text-amber-600",   bg: "bg-amber-50 dark:bg-amber-950/30" },
+  { label: "Fatturato mensile", value: "€ 41.600", delta: "+8%",  icon: TrendingUp,   color: "text-violet-600",  bg: "bg-violet-50 dark:bg-violet-950/30" },
+];
+
+function QuickKpiStrip() {
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {QUICK_KPIS.map((kpi) => (
+        <div
+          key={kpi.label}
+          className="flex items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 shadow-xs hover:shadow-sm transition-shadow"
+        >
+          <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center shrink-0", kpi.bg)}>
+            <kpi.icon className={cn("h-4 w-4", kpi.color)} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] text-muted-foreground truncate leading-tight">{kpi.label}</p>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="text-base font-bold tabular-nums tracking-tight">{kpi.value}</span>
+              <span className="text-[10px] font-medium text-emerald-600">{kpi.delta}</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Notifiche urgenti ────────────────────────────────────────────────────────
+
+const NOTIFS = [
+  { text: "Preventivo PRV-2026-008 accettato da Luxor Media", time: "2 min fa",  dot: "bg-emerald-500" },
+  { text: "Nuovo lead: Roberta Silvestri (Tech Solutions)",   time: "18 min fa", dot: "bg-indigo-500" },
+  { text: "Fattura FT-2026-031 in scadenza domani",           time: "1 ora fa",  dot: "bg-amber-500" },
+];
+
+function AlertStrip() {
+  const [visible, setVisible] = useState(true);
+  if (!visible) return null;
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800/40 px-4 py-3 flex items-start justify-between gap-3">
+      <div className="flex items-start gap-3 min-w-0">
+        <Bell className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+        <div className="flex flex-col gap-1.5 min-w-0">
+          {NOTIFS.map((n, i) => (
+            <div key={i} className="flex items-center gap-2 text-sm min-w-0">
+              <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", n.dot)} />
+              <span className="text-amber-900 dark:text-amber-200 truncate">{n.text}</span>
+              <span className="text-amber-600/70 text-xs shrink-0">{n.time}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <button
+        onClick={() => setVisible(false)}
+        className="text-amber-600 hover:text-amber-800 shrink-0 mt-0.5"
+        aria-label="Chiudi"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+// ─── Prossimi appuntamenti ────────────────────────────────────────────────────
+
+const UPCOMING = [
+  { title: "Call con Marco Bianchi",    time: "14:00", tag: "Meeting",  tagColor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300" },
+  { title: "Demo Luxor Media",          time: "16:30", tag: "Demo",     tagColor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" },
+  { title: "Review Q2 pipeline",        time: "18:00", tag: "Interno",  tagColor: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" },
+];
+
+function UpcomingStrip() {
+  const today = new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+  return (
+    <div className="rounded-xl border border-border/60 bg-card px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
+        <CalendarDays className="h-4 w-4" />
+        <span className="capitalize font-medium text-foreground">{today}</span>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        {UPCOMING.map((ev, i) => (
+          <span key={i} className="flex items-center gap-1.5 text-xs bg-muted/60 rounded-lg px-2.5 py-1.5 border border-border/50">
+            <span className="font-semibold tabular-nums text-foreground">{ev.time}</span>
+            <span className="text-muted-foreground">{ev.title}</span>
+            <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold", ev.tagColor)}>{ev.tag}</span>
+          </span>
+        ))}
+        <a href="/calendar" className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-0.5 font-medium">
+          Vedi tutto <ChevronRight className="h-3 w-3" />
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// ─── Converte LayoutItem → WidgetItem ─────────────────────────────────────────
 
 function toWidgetItems(items: LayoutItem[]): WidgetItem[] {
   return items.map((item) => ({
@@ -34,7 +148,7 @@ function toWidgetItems(items: LayoutItem[]): WidgetItem[] {
     y:         item.y,
     w:         item.w,
     h:         item.h,
-    moduleKey: item.i,   // il DB salva module_key = i
+    moduleKey: item.i,
   }));
 }
 
@@ -126,14 +240,12 @@ export default function DashboardClient() {
   const [showAddWidget, setShowAddWidget] = useState(false);
   const { toast } = useToast();
 
-  // ── Carica layout dal backend, fallback al default del piano ──────────────
   useEffect(() => {
     apiFetch<LayoutItem[]>("/tenant/dashboard")
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
           setLayout(toWidgetItems(data));
         } else {
-          // Nessun layout salvato → usa default del piano
           setLayout(toWidgetItems(DEFAULT_LAYOUTS[plan]));
         }
       })
@@ -143,7 +255,6 @@ export default function DashboardClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan]);
 
-  // ── Salva layout sul backend ───────────────────────────────────────────────
   const handleSave = async () => {
     if (!layout) return;
     setIsSaving(true);
@@ -151,14 +262,7 @@ export default function DashboardClient() {
       await apiFetch("/tenant/dashboard", {
         method: "POST",
         body: JSON.stringify({
-          widgets: layout.map(({ i, moduleKey, x, y, w, h }) => ({
-            i,
-            moduleKey,
-            x,
-            y,
-            w,
-            h,
-          })),
+          widgets: layout.map(({ i, moduleKey, x, y, w, h }) => ({ i, moduleKey, x, y, w, h })),
         }),
       });
       setIsEditing(false);
@@ -170,62 +274,41 @@ export default function DashboardClient() {
     }
   };
 
-  // ── Annulla modifiche: ricarica dal backend ────────────────────────────────
   const handleCancel = useCallback(() => {
     setIsEditing(false);
-    // Ricarica il layout salvato per annullare le modifiche non salvate
     apiFetch<LayoutItem[]>("/tenant/dashboard")
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setLayout(toWidgetItems(data));
-        }
+        if (Array.isArray(data) && data.length > 0) setLayout(toWidgetItems(data));
       })
-      .catch(() => {}); // se fallisce teniamo il layout in memoria
+      .catch(() => {});
   }, []);
 
-  // ── Reset al default del piano ─────────────────────────────────────────────
   const handleReset = async () => {
     const defaultLayout = toWidgetItems(DEFAULT_LAYOUTS[plan]);
     setLayout(defaultLayout);
     setIsEditing(false);
     setShowReset(false);
-    // Salva subito il default in modo che persista al prossimo login
     try {
       await apiFetch("/tenant/dashboard", {
         method: "POST",
         body: JSON.stringify({
-          widgets: defaultLayout.map(({ i, moduleKey, x, y, w, h }) => ({
-            i, moduleKey, x, y, w, h,
-          })),
+          widgets: defaultLayout.map(({ i, moduleKey, x, y, w, h }) => ({ i, moduleKey, x, y, w, h })),
         }),
       });
     } catch {}
     toast({ title: "Layout ripristinato", description: "Ripristinato il layout di default." });
   };
 
-  // ── Aggiungi widget ────────────────────────────────────────────────────────
   const handleAddWidget = (id: WidgetId) => {
     const def = WIDGET_DEFINITIONS[id];
     if (!def || !layout) return;
-
-    // Calcola la y massima occupata e metti il nuovo widget in fondo
     const maxY = layout.reduce((acc, item) => Math.max(acc, item.y + item.h), 0);
-
     setLayout((prev) => [
       ...(prev ?? []),
-      {
-        i:         id,
-        x:         0,
-        y:         maxY,
-        w:         def.defaultW,
-        h:         def.defaultH,
-        moduleKey: id,
-      },
+      { i: id, x: 0, y: maxY, w: def.defaultW, h: def.defaultH, moduleKey: id },
     ]);
     setShowAddWidget(false);
   };
-
-  // ─── Render ───────────────────────────────────────────────────────────────
 
   if (!layout) {
     return (
@@ -260,25 +343,34 @@ export default function DashboardClient() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* ── Greeting header ─────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
+          <div className="flex items-center gap-2 mb-0.5">
+            <h2 className="text-2xl font-bold tracking-tight">
+              {getGreeting()}, Luca 👋
+            </h2>
+            <Badge
+              variant="outline"
+              className="text-[10px] font-semibold px-2 py-0.5 text-indigo-700 border-indigo-200 bg-indigo-50 dark:bg-indigo-950/30 dark:text-indigo-300"
+            >
+              {meta.label}
+            </Badge>
+          </div>
           {isEditing ? (
             <p className="text-sm text-indigo-600 font-medium animate-pulse mt-0.5">
               Modalità modifica — trascina i widget per riorganizzarli, ridimensionali dagli angoli
             </p>
           ) : (
             <p className="text-sm text-muted-foreground mt-0.5">
-              Piano <span className="font-semibold">{meta.label}</span>
+              Ecco il riepilogo di oggi. Buon lavoro.
             </p>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {isEditing ? (
             <>
-              {/* Aggiungi widget */}
               <DropdownMenu open={showAddWidget} onOpenChange={setShowAddWidget}>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm">
@@ -295,12 +387,7 @@ export default function DashboardClient() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCancel}
-                disabled={isSaving}
-              >
+              <Button variant="ghost" size="sm" onClick={handleCancel} disabled={isSaving}>
                 <X className="mr-1.5 h-4 w-4" /> Annulla
               </Button>
               <Button
@@ -311,8 +398,7 @@ export default function DashboardClient() {
               >
                 {isSaving
                   ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  : <Save className="mr-1.5 h-4 w-4" />
-                }
+                  : <Save className="mr-1.5 h-4 w-4" />}
                 {isSaving ? "Salvataggio…" : "Salva"}
               </Button>
             </>
@@ -321,7 +407,7 @@ export default function DashboardClient() {
               {meta.nextPlan && (
                 <a
                   href="/billing"
-                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors"
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors dark:bg-indigo-950/30 dark:text-indigo-300 dark:hover:bg-indigo-950/50"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
                   {meta.upgradeLabel}
@@ -352,7 +438,24 @@ export default function DashboardClient() {
         </div>
       </div>
 
-      {/* Griglia */}
+      {/* ── Notifiche urgenti ────────────────────────────────────────────────── */}
+      {!isEditing && <AlertStrip />}
+
+      {/* ── Quick KPI Strip ──────────────────────────────────────────────────── */}
+      {!isEditing && <QuickKpiStrip />}
+
+      {/* ── Agenda del giorno ────────────────────────────────────────────────── */}
+      {!isEditing && <UpcomingStrip />}
+
+      {/* ── Separatore sezione widget ────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 pt-1">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">
+          Widget Dashboard
+        </p>
+        <div className="flex-1 border-t border-border/40" />
+      </div>
+
+      {/* ── Griglia widget ───────────────────────────────────────────────────── */}
       <DashboardGrid
         layout={layout}
         isEditing={isEditing}
