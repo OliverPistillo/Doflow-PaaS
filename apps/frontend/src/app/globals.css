@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 @layer base {
-  /* --- DEFAULT STANDARD (Non toccare) --- */
+  /* --- DEFAULT STANDARD (Neutro/Grigio) --- */
   :root {
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
@@ -24,7 +24,7 @@
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
     --ring: 240 10% 3.9%;
-    --radius: 0.5rem;
+    --radius: 0.75rem;
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
     --sidebar-primary: 240 5.9% 10%;
@@ -33,6 +33,13 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+    
+    /* Chart Colors - Base Palette */
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
   }
 
   .dark {
@@ -65,88 +72,74 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
-  /* --- NUOVO TEMA BUSINARO (Modern Aurora Glass) --- */
-  .theme-businaro {
-    /* LIGHT MODE: Soft Aurora */
-    --background: 210 20% 98%;
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100% / 0.7; 
-    --card-foreground: 222 47% 11%;
-    --popover: 0 0% 100% / 0.8;
-    --popover-foreground: 222 47% 11%;
-    --primary: 221 83% 53%; 
+  /* --- TEMA OCEAN (Blu/Verde) --- */
+  :root[data-color-theme="ocean"] {
+    --primary: 221 83% 53%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1% / 0.5;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96.1% / 0.5;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1% / 0.8;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4% / 0.4;
-    --input: 214.3 31.8% 91.4% / 0.5;
-    --ring: 221 83% 53%;
-    --radius: 1.75rem; 
-    --sidebar-background: 0 0% 100% / 0.6;
-    --sidebar-foreground: 222 47% 11%;
     --sidebar-primary: 221 83% 53%;
-    --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 210 40% 96.1% / 0.6;
-    --sidebar-accent-foreground: 222 47% 11%;
-    --sidebar-border: 214.3 31.8% 91.4% / 0.2;
-    --sidebar-ring: 221 83% 53%;
-    --aurora-bg: radial-gradient(at 0% 0%, hsla(253,100%,85%,0.3) 0px, transparent 50%),
-                 radial-gradient(at 100% 0%, hsla(189,100%,85%,0.3) 0px, transparent 50%),
-                 radial-gradient(at 100% 100%, hsla(309,100%,85%,0.3) 0px, transparent 50%),
-                 radial-gradient(at 0% 100%, hsla(221,100%,85%,0.3) 0px, transparent 50%);
+    --chart-1: 221 83% 53%;
+    --chart-2: 160 84% 39%;
+    --chart-3: 199 89% 48%;
+    --chart-4: 215 25% 27%;
+  }
+  .dark[data-color-theme="ocean"] {
+    --primary: 217 91% 60%;
+    --sidebar-primary: 217 91% 60%;
+    --chart-1: 217 91% 60%;
+    --chart-2: 160 84% 45%;
+    --chart-3: 199 89% 55%;
+    --chart-4: 215 25% 40%;
   }
 
-  .dark .theme-businaro {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
-    --card: 222 47% 11% / 0.7;
-    --card-foreground: 210 40% 98%;
-    --popover: 222 47% 11% / 0.8;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 11%;
-    --secondary: 217 19% 27% / 0.6;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217 19% 27% / 0.6;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217 19% 27% / 0.8;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217 19% 27% / 0.4;
-    --input: 217 19% 27% / 0.5;
-    --ring: 217 91% 60%;
-    --sidebar-background: 222 47% 11% / 0.6;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 222 47% 11%;
-    --sidebar-accent: 217 19% 27% / 0.6;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217 19% 27% / 0.2;
-    --sidebar-ring: 217 91% 60%;
-    --aurora-bg: radial-gradient(at 0% 0%, hsla(253,100%,20%,0.5) 0px, transparent 50%),
-                 radial-gradient(at 100% 0%, hsla(189,100%,20%,0.5) 0px, transparent 50%),
-                 radial-gradient(at 100% 100%, hsla(309,100%,20%,0.5) 0px, transparent 50%),
-                 radial-gradient(at 0% 100%, hsla(221,100%,20%,0.5) 0px, transparent 50%);
+  /* --- TEMA SUNSET (Giallo/Arancione) --- */
+  :root[data-color-theme="sunset"] {
+    --primary: 28 95% 55%; 
+    --primary-foreground: 0 0% 100%;
+    --sidebar-primary: 28 95% 55%;
+    --chart-1: 28 95% 55%;
+    --chart-2: 42 90% 50%;
+    --chart-3: 12 85% 58%;
+    --chart-4: 35 25% 45%;
+  }
+  .dark[data-color-theme="sunset"] {
+    --primary: 28 95% 62%;
+    --sidebar-primary: 28 95% 62%;
+    --chart-1: 28 95% 62%;
+    --chart-2: 42 90% 58%;
+    --chart-3: 12 85% 65%;
+    --chart-4: 35 25% 55%;
   }
 
   * { @apply border-border; }
-  body { @apply bg-background text-foreground transition-colors duration-300; }
-  .glass { @apply bg-card backdrop-blur-xl border border-white/10 dark:border-white/5 shadow-lg; }
-  .bg-gradient-primary { @apply bg-gradient-to-br from-blue-500 to-violet-500 text-white border-none; }
+  
+  body { 
+    @apply bg-background text-foreground transition-colors duration-500 ease-in-out font-sans; 
+    /* Soft Background Gradient basato sul tema primario */
+    background-image: radial-gradient(at top left, hsla(var(--primary)/0.15) 0%, transparent 60%),
+                      radial-gradient(at bottom right, hsla(var(--chart-2)/0.1) 0%, transparent 60%);
+    background-attachment: fixed;
+    background-size: cover;
+  }
 
-  /* --- STILI REACT-GRID-LAYOUT (Aggiunti per far funzionare la dashboard) --- */
+  /* Glassmorphism Classes */
+  .glass-card { 
+    @apply bg-card/70 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-xl shadow-black/5; 
+  }
+  .glass-sidebar {
+    @apply bg-sidebar/85 backdrop-blur-2xl border-r border-sidebar-border shadow-2xl supports-[backdrop-filter]:bg-sidebar/60;
+  }
+
+  /* Smooth Sidebar Transitions */
+  .sidebar-hover-expand {
+    @apply transition-[width,padding] duration-300 ease-[cubic-bezier(0.2,0,0,1)];
+  }
+
+  /* --- STILI REACT-GRID-LAYOUT (Per il drag & drop della dashboard se in uso) --- */
   .react-grid-layout { position: relative; transition: height 200ms ease; }
   .react-grid-item { transition: all 200ms ease; transition-property: left, top; }
   .react-grid-item.cssTransforms { transition-property: transform; }
-  .react-grid-item.resizing { z-index: 100; box-shadow: 0 0 10px rgba(0,0,0,0.2); opacity: 0.9; }
-  .react-grid-placeholder { background: rgba(0,0,0,0.1) !important; border-radius: 0.75rem; opacity: 0.5; }
+  .react-grid-item.resizing { z-index: 100; box-shadow: 0 0 20px rgba(0,0,0,0.15); opacity: 0.9; }
+  .react-grid-placeholder { @apply bg-primary/20 rounded-xl opacity-50 backdrop-blur-sm !important; border: 2px dashed hsl(var(--primary)); }
   .react-resizable-handle { position: absolute; width: 20px; height: 20px; bottom: 0; right: 0; cursor: se-resize; }
-  .react-resizable-handle::after { content: ""; position: absolute; right: 3px; bottom: 3px; width: 5px; height: 5px; border-right: 2px solid rgba(0,0,0,0.4); border-bottom: 2px solid rgba(0,0,0,0.4); }
+  .react-resizable-handle::after { content: ""; position: absolute; right: 5px; bottom: 5px; width: 6px; height: 6px; border-right: 2px solid hsl(var(--muted-foreground)); border-bottom: 2px solid hsl(var(--muted-foreground)); opacity: 0.5; }
 }
