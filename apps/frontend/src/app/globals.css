@@ -129,12 +129,12 @@
     @apply bg-sidebar/85 backdrop-blur-2xl border-r border-sidebar-border shadow-2xl supports-[backdrop-filter]:bg-sidebar/60;
   }
 
-  /* Smooth Sidebar Transitions */
+  /* Smooth Sidebar Transitions - FIX APPLICATO QUI: Rimosso tailwind ambiguo */
   .sidebar-hover-expand {
-    @apply transition-[width,padding] duration-300 ease-[cubic-bezier(0.2,0,0,1)];
+    @apply transition-[width,padding] duration-300 ease-out;
   }
 
-  /* --- STILI REACT-GRID-LAYOUT (Per il drag & drop della dashboard se in uso) --- */
+  /* --- STILI REACT-GRID-LAYOUT --- */
   .react-grid-layout { position: relative; transition: height 200ms ease; }
   .react-grid-item { transition: all 200ms ease; transition-property: left, top; }
   .react-grid-item.cssTransforms { transition-property: transform; }

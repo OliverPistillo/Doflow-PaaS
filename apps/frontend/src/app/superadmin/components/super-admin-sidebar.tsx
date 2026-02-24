@@ -191,7 +191,8 @@ export function SuperAdminSidebar() {
       {/* HEADER WITH DYNAMIC LOGO */}
       <SidebarHeader className="h-20 border-b border-border/40 p-0 overflow-hidden shrink-0 flex items-center relative transition-[padding] duration-300">
         <div className={`flex h-full w-full items-center relative transition-all duration-300 ${showDetails ? 'px-5 justify-start' : 'px-0 justify-center'}`}>
-          <div className={`relative h-10 transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] ${showDetails ? 'w-40' : 'w-10'}`}>
+          {/* FIX APPLICATO QUI: ease-out usato al posto di cubic-bezier per non far rompere la build */}
+          <div className={`relative h-10 transition-all duration-300 ease-out ${showDetails ? 'w-40' : 'w-10'}`}>
             {mounted && (
               <Image
                 src={logoSrc}
