@@ -1,145 +1,337 @@
+@import url('https://fonts.googleapis.com/css2?family=Urbanist:ital,wght@0,100..900;1,100..900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  /* --- DEFAULT STANDARD (Neutro/Grigio) --- */
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     DOFLOW DESIGN SYSTEM — Urbanist + Glassmorphism + Multi‑Theme
+     ═══════════════════════════════════════════════════════════════════════════ */
+
+  /* ── DEFAULT (Neutro / Grigio) ─────────────────────────────────────────── */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --font-sans: 'Urbanist', ui-sans-serif, system-ui, sans-serif;
+
+    --background: 30 15% 96%;
+    --foreground: 30 10% 8%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 30 10% 8%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
+    --popover-foreground: 30 10% 8%;
+    --primary: 30 8% 18%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
+    --secondary: 30 6% 93%;
+    --secondary-foreground: 30 8% 18%;
+    --muted: 30 6% 93%;
+    --muted-foreground: 30 4% 50%;
+    --accent: 30 6% 93%;
+    --accent-foreground: 30 8% 18%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 10% 3.9%;
-    --radius: 0.75rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
+    --border: 30 8% 88%;
+    --input: 30 8% 88%;
+    --ring: 30 8% 18%;
+    --radius: 1rem;
+
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 30 6% 30%;
+    --sidebar-primary: 30 8% 18%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-    
-    /* Chart Colors - Base Palette */
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --sidebar-accent: 30 6% 95%;
+    --sidebar-accent-foreground: 30 8% 18%;
+    --sidebar-border: 30 8% 90%;
+    --sidebar-ring: 30 8% 18%;
+    --sidebar-width: 260px;
+    --sidebar-width-icon: 60px;
+
+    /* Charts */
+    --chart-1: 30 6% 40%;
+    --chart-2: 150 20% 45%;
+    --chart-3: 200 15% 50%;
+    --chart-4: 30 8% 60%;
+    --chart-5: 0 10% 55%;
+
+    /* Theme Gradient */
+    --theme-gradient-from: 30 15% 96%;
+    --theme-gradient-to: 30 10% 92%;
+    --kpi-gradient-from: 30 6% 93%;
+    --kpi-gradient-to: 30 6% 88%;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --background: 30 8% 5%;
+    --foreground: 30 6% 95%;
+    --card: 30 6% 8%;
+    --card-foreground: 30 6% 95%;
+    --popover: 30 6% 8%;
+    --popover-foreground: 30 6% 95%;
+    --primary: 30 6% 90%;
+    --primary-foreground: 30 8% 8%;
+    --secondary: 30 4% 14%;
+    --secondary-foreground: 30 6% 95%;
+    --muted: 30 4% 14%;
+    --muted-foreground: 30 4% 60%;
+    --accent: 30 4% 14%;
+    --accent-foreground: 30 6% 95%;
+    --destructive: 0 63% 31%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --border: 30 4% 16%;
+    --input: 30 4% 16%;
+    --ring: 30 6% 80%;
+    --sidebar-background: 30 6% 6%;
+    --sidebar-foreground: 30 4% 90%;
+    --sidebar-primary: 30 6% 80%;
+    --sidebar-primary-foreground: 30 8% 5%;
+    --sidebar-accent: 30 4% 12%;
+    --sidebar-accent-foreground: 30 4% 90%;
+    --sidebar-border: 30 4% 14%;
+    --sidebar-ring: 30 6% 80%;
+    --theme-gradient-from: 30 8% 5%;
+    --theme-gradient-to: 30 6% 8%;
+    --kpi-gradient-from: 30 4% 12%;
+    --kpi-gradient-to: 30 4% 16%;
   }
 
-  /* --- TEMA OCEAN (Blu/Verde) --- */
+  /* ── TEMA OCEAN (Blu / Verde) ──────────────────────────────────────────── */
   :root[data-color-theme="ocean"] {
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
-    --sidebar-primary: 221 83% 53%;
-    --chart-1: 221 83% 53%;
-    --chart-2: 160 84% 39%;
-    --chart-3: 199 89% 48%;
-    --chart-4: 215 25% 27%;
+    --primary: 215 72% 48%;
+    --primary-foreground: 0 0% 100%;
+    --sidebar-primary: 215 72% 48%;
+    --ring: 215 72% 48%;
+    --chart-1: 215 72% 48%;
+    --chart-2: 155 60% 40%;
+    --chart-3: 195 70% 45%;
+    --chart-4: 215 25% 60%;
+    --chart-5: 175 50% 42%;
+    --theme-gradient-from: 210 40% 96%;
+    --theme-gradient-to: 195 30% 92%;
+    --kpi-gradient-from: 215 72% 48%;
+    --kpi-gradient-to: 195 60% 55%;
   }
   .dark[data-color-theme="ocean"] {
-    --primary: 217 91% 60%;
-    --sidebar-primary: 217 91% 60%;
-    --chart-1: 217 91% 60%;
-    --chart-2: 160 84% 45%;
-    --chart-3: 199 89% 55%;
-    --chart-4: 215 25% 40%;
+    --primary: 215 80% 58%;
+    --sidebar-primary: 215 80% 58%;
+    --ring: 215 80% 58%;
+    --chart-1: 215 80% 58%;
+    --chart-2: 155 60% 48%;
+    --chart-3: 195 70% 52%;
+    --chart-4: 215 25% 50%;
+    --chart-5: 175 50% 48%;
+    --theme-gradient-from: 215 30% 6%;
+    --theme-gradient-to: 200 20% 8%;
+    --kpi-gradient-from: 215 72% 35%;
+    --kpi-gradient-to: 195 60% 40%;
   }
 
-  /* --- TEMA SUNSET (Giallo/Arancione) --- */
+  /* ── TEMA SUNSET (Giallo / Arancione) ──────────────────────────────────── */
   :root[data-color-theme="sunset"] {
-    --primary: 28 95% 55%; 
-    --primary-foreground: 0 0% 100%;
-    --sidebar-primary: 28 95% 55%;
-    --chart-1: 28 95% 55%;
-    --chart-2: 42 90% 50%;
-    --chart-3: 12 85% 58%;
-    --chart-4: 35 25% 45%;
+    --primary: 38 95% 52%;
+    --primary-foreground: 30 10% 8%;
+    --sidebar-primary: 38 95% 52%;
+    --ring: 38 95% 52%;
+    --chart-1: 38 95% 52%;
+    --chart-2: 24 90% 55%;
+    --chart-3: 48 90% 50%;
+    --chart-4: 12 75% 55%;
+    --chart-5: 30 80% 48%;
+    --theme-gradient-from: 35 60% 95%;
+    --theme-gradient-to: 20 50% 90%;
+    --kpi-gradient-from: 48 95% 58%;
+    --kpi-gradient-to: 24 90% 55%;
   }
   .dark[data-color-theme="sunset"] {
-    --primary: 28 95% 62%;
-    --sidebar-primary: 28 95% 62%;
-    --chart-1: 28 95% 62%;
-    --chart-2: 42 90% 58%;
-    --chart-3: 12 85% 65%;
-    --chart-4: 35 25% 55%;
+    --primary: 38 92% 58%;
+    --primary-foreground: 30 10% 8%;
+    --sidebar-primary: 38 92% 58%;
+    --ring: 38 92% 58%;
+    --chart-1: 38 92% 58%;
+    --chart-2: 24 85% 55%;
+    --chart-3: 48 88% 52%;
+    --chart-4: 12 70% 50%;
+    --chart-5: 30 75% 50%;
+    --theme-gradient-from: 30 30% 6%;
+    --theme-gradient-to: 24 25% 8%;
+    --kpi-gradient-from: 38 90% 38%;
+    --kpi-gradient-to: 24 80% 42%;
   }
 
-  * { @apply border-border; }
-  
-  body { 
-    @apply bg-background text-foreground transition-colors duration-500 ease-in-out font-sans; 
-    /* Soft Background Gradient basato sul tema primario */
-    background-image: radial-gradient(at top left, hsla(var(--primary)/0.15) 0%, transparent 60%),
-                      radial-gradient(at bottom right, hsla(var(--chart-2)/0.1) 0%, transparent 60%);
+  /* ── TEMA EMERALD (Verde / Smeraldo) ───────────────────────────────────── */
+  :root[data-color-theme="emerald"] {
+    --primary: 155 65% 38%;
+    --primary-foreground: 0 0% 100%;
+    --sidebar-primary: 155 65% 38%;
+    --ring: 155 65% 38%;
+    --chart-1: 155 65% 38%;
+    --chart-2: 175 55% 42%;
+    --chart-3: 135 50% 45%;
+    --chart-4: 195 40% 50%;
+    --chart-5: 145 45% 50%;
+    --theme-gradient-from: 150 30% 95%;
+    --theme-gradient-to: 140 20% 92%;
+    --kpi-gradient-from: 155 65% 38%;
+    --kpi-gradient-to: 175 50% 45%;
+  }
+  .dark[data-color-theme="emerald"] {
+    --primary: 155 65% 48%;
+    --sidebar-primary: 155 65% 48%;
+    --ring: 155 65% 48%;
+    --chart-1: 155 65% 48%;
+    --chart-2: 175 55% 48%;
+    --chart-3: 135 50% 50%;
+    --chart-4: 195 40% 45%;
+    --chart-5: 145 45% 52%;
+    --theme-gradient-from: 155 25% 6%;
+    --theme-gradient-to: 150 20% 8%;
+    --kpi-gradient-from: 155 60% 28%;
+    --kpi-gradient-to: 175 45% 32%;
+  }
+
+  /* ── BASE STYLES ───────────────────────────────────────────────────────── */
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground transition-colors duration-500 ease-in-out;
+    font-family: var(--font-sans);
+    background-color: hsl(var(--theme-gradient-from));
+    background-image:
+      radial-gradient(ellipse 80% 60% at 15% 10%, hsla(var(--kpi-gradient-from) / 0.15) 0%, transparent 60%),
+      radial-gradient(ellipse 70% 50% at 85% 80%, hsla(var(--chart-2) / 0.08) 0%, transparent 50%),
+      linear-gradient(180deg, hsl(var(--theme-gradient-from)) 0%, hsl(var(--theme-gradient-to)) 100%);
     background-attachment: fixed;
     background-size: cover;
+    min-height: 100vh;
   }
 
-  /* Glassmorphism Classes */
-  .glass-card { 
-    @apply bg-card/70 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-xl shadow-black/5; 
+  /* ── Glassmorphism ─────────────────────────────────────────────────────── */
+
+  .glass-card {
+    background: hsla(var(--card) / 0.65);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    border: 1px solid hsla(var(--border) / 0.5);
+    box-shadow:
+      0 1px 3px hsla(var(--foreground) / 0.04),
+      0 8px 24px hsla(var(--foreground) / 0.06);
+    transition: box-shadow 0.3s ease, transform 0.3s ease;
   }
+  .glass-card:hover {
+    box-shadow:
+      0 2px 6px hsla(var(--foreground) / 0.05),
+      0 12px 32px hsla(var(--foreground) / 0.08);
+  }
+
   .glass-sidebar {
-    @apply bg-sidebar/85 backdrop-blur-2xl border-r border-sidebar-border shadow-2xl supports-[backdrop-filter]:bg-sidebar/60;
+    background: hsla(var(--sidebar-background) / 0.82);
+    backdrop-filter: blur(32px) saturate(1.5);
+    -webkit-backdrop-filter: blur(32px) saturate(1.5);
+    border-right: 1px solid hsla(var(--sidebar-border) / 0.5);
+    box-shadow: 4px 0 24px hsla(var(--foreground) / 0.04);
   }
 
-  /* Smooth Sidebar Transitions - FIX APPLICATO QUI: Rimosso tailwind ambiguo */
+  .glass-filter-bar {
+    background: hsla(var(--card) / 0.5);
+    backdrop-filter: blur(16px) saturate(1.3);
+    -webkit-backdrop-filter: blur(16px) saturate(1.3);
+    border: 1px solid hsla(var(--border) / 0.4);
+  }
+
+  /* ── KPI Hero Card (first card with gradient) ──────────────────────────── */
+
+  .kpi-hero-gradient {
+    background: linear-gradient(135deg, hsl(var(--kpi-gradient-from)) 0%, hsl(var(--kpi-gradient-to)) 100%);
+    color: hsl(var(--primary-foreground));
+    border: 1px solid hsla(0 0% 100% / 0.2);
+    box-shadow:
+      0 4px 16px hsla(var(--kpi-gradient-from) / 0.25),
+      inset 0 1px 0 hsla(0 0% 100% / 0.15);
+  }
+  .kpi-hero-gradient .kpi-label {
+    color: hsla(var(--primary-foreground) / 0.8);
+  }
+  .kpi-hero-gradient .kpi-value {
+    color: hsl(var(--primary-foreground));
+  }
+
+  /* ── Sidebar Transitions ───────────────────────────────────────────────── */
+
   .sidebar-hover-expand {
-    @apply transition-[width,padding] duration-300 ease-out;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  /* --- STILI REACT-GRID-LAYOUT --- */
+  /* Active sidebar indicator */
+  .sidebar-active-indicator {
+    position: relative;
+  }
+  .sidebar-active-indicator::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 24px;
+    border-radius: 0 4px 4px 0;
+    background: hsl(var(--sidebar-primary));
+    transition: opacity 0.2s ease;
+  }
+
+  /* ── Scrollbar ─────────────────────────────────────────────────────────── */
+
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+  .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+
+  .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsla(var(--muted-foreground) / 0.2);
+    border-radius: 4px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: hsla(var(--muted-foreground) / 0.35);
+  }
+
+  /* ── React Grid Layout ─────────────────────────────────────────────────── */
+
   .react-grid-layout { position: relative; transition: height 200ms ease; }
   .react-grid-item { transition: all 200ms ease; transition-property: left, top; }
   .react-grid-item.cssTransforms { transition-property: transform; }
   .react-grid-item.resizing { z-index: 100; box-shadow: 0 0 20px rgba(0,0,0,0.15); opacity: 0.9; }
-  .react-grid-placeholder { @apply bg-primary/20 rounded-xl opacity-50 backdrop-blur-sm !important; border: 2px dashed hsl(var(--primary)); }
+  .react-grid-placeholder {
+    background: hsla(var(--primary) / 0.15) !important;
+    border-radius: 1rem !important;
+    opacity: 0.6 !important;
+    backdrop-filter: blur(6px);
+    border: 2px dashed hsl(var(--primary)) !important;
+  }
   .react-resizable-handle { position: absolute; width: 20px; height: 20px; bottom: 0; right: 0; cursor: se-resize; }
-  .react-resizable-handle::after { content: ""; position: absolute; right: 5px; bottom: 5px; width: 6px; height: 6px; border-right: 2px solid hsl(var(--muted-foreground)); border-bottom: 2px solid hsl(var(--muted-foreground)); opacity: 0.5; }
+  .react-resizable-handle::after {
+    content: "";
+    position: absolute;
+    right: 5px; bottom: 5px;
+    width: 6px; height: 6px;
+    border-right: 2px solid hsl(var(--muted-foreground));
+    border-bottom: 2px solid hsl(var(--muted-foreground));
+    opacity: 0.4;
+  }
+
+  /* ── Animations ────────────────────────────────────────────────────────── */
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-in-up {
+    animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+  .animate-delay-100 { animation-delay: 0.1s; }
+  .animate-delay-200 { animation-delay: 0.2s; }
+  .animate-delay-300 { animation-delay: 0.3s; }
+  .animate-delay-400 { animation-delay: 0.4s; }
 }
