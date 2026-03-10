@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
-import { Search, Filter, Plus, Loader2, Download, Receipt } from "lucide-react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { Search, Filter, Plus, Loader2, Download, Receipt, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -18,6 +18,7 @@ import { Invoice } from "./components/InvoiceRow";
 
 function InvoicesContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   const [rawInvoices, setRawInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading]         = useState(true);
@@ -62,8 +63,11 @@ function InvoicesContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, statusFilter, initialized]);
 
-  const openCreate = () => { setEditingInvoice(null); setIsSheetOpen(true); };
-  const openEdit   = (inv: Invoice) => { setEditingInvoice(inv); setIsSheetOpen(true); };
+  const openCreate = () => {
+    router.push("/superadmin/finance/invoices/new");
+  };
+
+  const openEdit = (invoice: Invoice) => { setEditingInvoice(invoice); setIsSheetOpen(true); };
 
   const handleDelete = async (id: string) => {
     const ok = await confirm({

@@ -12,6 +12,24 @@ export class FinanceService {
 
   // CREAZIONE
   async create(data: DeepPartial<Invoice>) {
+    // Generazione numero fattura automatico (es. INV-2024-001)
+    if (!data.invoiceNumber) {
+      const year = new Date().getFullYear();
+      const lastInvoice = await this.repo.createQueryBuilder('i')
+        .where('i.invoiceNumber LIKE :pattern', { pattern: `INV-${year}-%` })
+        .orderBy('i.createdAt', 'DESC')
+        .getOne();
+      
+      let nextNum = 1;
+      if (lastInvoice && lastInvoice.invoiceNumber) {
+        const parts = lastInvoice.invoiceNumber.split('-');
+        if (parts.length === 3) {
+          nextNum = parseInt(parts[2], 10) + 1;
+        }
+      }
+      data.invoiceNumber = `INV-${year}-${nextNum.toString().padStart(3, '0')}`;
+    }
+
     const invoice = this.repo.create(data);
     return this.repo.save(invoice);
   }
