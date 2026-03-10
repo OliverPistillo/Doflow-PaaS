@@ -151,70 +151,71 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
   const breadcrumbs = crumbs(pathname);
 
   return (
-    <SidebarProvider>
-      <SuperAdminSidebar />
+    <div data-superadmin className="flex min-h-svh">
+      <SidebarProvider>
+        <SuperAdminSidebar />
 
-      <SidebarInset>
-        {/* ── HEADER ─────────────────────────────────────────────────────── */}
-        <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-border/60 bg-background/95 backdrop-blur-sm px-4">
+        <SidebarInset className="flex flex-col min-h-svh bg-transparent">
+          {/* ── HEADER glass ──────────────────────────────────────────── */}
+          <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 px-4
+            glass-panel-sm rounded-none border-0 border-b border-white/[0.06]">
 
-          <SidebarTrigger className="-ml-1 text-muted-foreground hover:text-foreground" />
-          <div className="h-5 w-px bg-border/60" />
+            <SidebarTrigger className="-ml-1 text-slate-400 hover:text-white transition-colors" />
+            <div className="h-5 w-px bg-white/10" />
 
-          {/* OPS Badge */}
-          <Badge
-            variant="outline"
-            className="hidden sm:flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 text-primary border-primary/30 bg-primary/5"
-          >
-            <Zap className="h-2.5 w-2.5" />
-            OPS
-          </Badge>
+            {/* OPS Badge */}
+            <Badge
+              variant="outline"
+              className="hidden sm:flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5
+                text-blue-400 border-blue-500/30 bg-blue-500/10"
+            >
+              <Zap className="h-2.5 w-2.5" />
+              OPS
+            </Badge>
 
-          {/* Breadcrumb */}
-          <nav className="hidden md:flex items-center gap-1 text-xs text-muted-foreground min-w-0">
-            {breadcrumbs.map((c, idx) => (
-              <React.Fragment key={c.href}>
-                {idx > 0 && <ChevronRight className="h-3 w-3 shrink-0 text-border" />}
-                <Link
-                  href={c.href}
-                  className={
-                    idx === breadcrumbs.length - 1
-                      ? "font-semibold text-foreground truncate"
-                      : "hover:text-foreground transition-colors truncate"
-                  }
-                >
-                  {c.label}
-                </Link>
-              </React.Fragment>
-            ))}
-          </nav>
+            {/* Breadcrumb */}
+            <nav className="hidden md:flex items-center gap-1 text-xs text-slate-400 min-w-0">
+              {breadcrumbs.map((c, idx) => (
+                <React.Fragment key={c.href}>
+                  {idx > 0 && <ChevronRight className="h-3 w-3 shrink-0 text-white/20" />}
+                  <Link
+                    href={c.href}
+                    className={
+                      idx === breadcrumbs.length - 1
+                        ? "font-semibold text-white/90 truncate"
+                        : "hover:text-white/80 transition-colors truncate"
+                    }
+                  >
+                    {c.label}
+                  </Link>
+                </React.Fragment>
+              ))}
+            </nav>
 
-          <div className="flex-1" />
+            <div className="flex-1" />
 
-          {/* Notifications placeholder */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative h-9 w-9 text-muted-foreground hover:text-foreground"
-          >
-            <Bell className="h-4 w-4" />
-            <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-rose-500 rounded-full" />
-          </Button>
+            {/* Notifications */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative h-9 w-9 text-slate-400 hover:text-white hover:bg-white/5"
+            >
+              <Bell className="h-4 w-4" />
+              <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-rose-500 rounded-full ring-1 ring-[#09090b]" />
+            </Button>
 
-          {/* Theme Toggle */}
-          <ThemeToggle />
+            <ThemeToggle />
+            <UserNav />
+          </header>
 
-          {/* User Nav */}
-          <UserNav />
-        </header>
-
-        {/* ── CONTENUTO ──────────────────────────────────────────────────── */}
-        <main className="flex-1 overflow-y-auto p-6 md:p-8">
-          <div className="max-w-[1600px] mx-auto animate-in fade-in duration-500">
-            {children}
-          </div>
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+          {/* ── CONTENUTO ───────────────────────────────────────────────── */}
+          <main className="flex-1 overflow-y-auto p-5 md:p-7">
+            <div className="max-w-[1600px] mx-auto animate-in fade-in duration-500">
+              {children}
+            </div>
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </div>
   );
 }
