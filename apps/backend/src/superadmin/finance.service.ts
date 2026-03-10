@@ -95,8 +95,16 @@ export class FinanceService {
     };
   }
 
-  // RICERCA E FILTRI
-  async findAll(search?: string, status?: string) {
+  // TROVA SINGOLA (con line items)
+  async findOneWithItems(id: string) {
+    return this.repo.findOne({
+      where: { id },
+      relations: ['lineItems', 'template']
+    });
+  }
+
+  // LETTURA TUTTE
+  async findAll(search?: string, statusFilter?: string) {
     const qb = this.repo.createQueryBuilder('invoice');
 
     // 1. Filtro Ricerca

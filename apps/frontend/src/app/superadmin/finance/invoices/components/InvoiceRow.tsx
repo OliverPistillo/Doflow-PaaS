@@ -1,5 +1,5 @@
 import React from "react";
-import { Edit2, Trash2, FileText } from "lucide-react"; // Icone Edit/Delete
+import { Edit2, Trash2, FileText, Download } from "lucide-react"; // Icone Edit/Delete
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -33,9 +33,10 @@ interface InvoiceRowProps {
     invoice: Invoice;
     onEdit: (inv: Invoice) => void;
     onDelete: (id: string) => void;
+    onDownload: (id: string, number: string) => void;
 }
 
-export function InvoiceRow({ invoice, onEdit, onDelete }: InvoiceRowProps) {
+export function InvoiceRow({ invoice, onEdit, onDelete, onDownload }: InvoiceRowProps) {
   return (
     <div className="bg-white border rounded-md p-4 text-sm shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between group">
       {/* Info Sinistra */}
@@ -66,6 +67,9 @@ export function InvoiceRow({ invoice, onEdit, onDelete }: InvoiceRowProps) {
         </div>
         
         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary/80" onClick={() => onDownload(invoice.id, invoice.invoiceNumber)}>
+               <Download className="h-4 w-4" />
+            </Button>
             <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-indigo-600" onClick={() => onEdit(invoice)}>
                <Edit2 className="h-4 w-4" />
             </Button>

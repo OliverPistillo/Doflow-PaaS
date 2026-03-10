@@ -15,11 +15,12 @@ export type ClientGroup = {
 interface ClientRowProps {
   client: ClientGroup;
   onAddInvoice: () => void;
-  onEditInvoice: (inv: Invoice) => void; // <--- NUOVO
-  onDeleteInvoice: (id: string) => void; // <--- NUOVO
+  onEditInvoice: (inv: Invoice) => void;
+  onDeleteInvoice: (id: string) => void;
+  onDownloadInvoice: (id: string, number: string) => void;
 }
 
-export function ClientRow({ client, onAddInvoice, onEditInvoice, onDeleteInvoice }: ClientRowProps) {
+export function ClientRow({ client, onAddInvoice, onEditInvoice, onDeleteInvoice, onDownloadInvoice }: ClientRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
@@ -47,6 +48,7 @@ export function ClientRow({ client, onAddInvoice, onEditInvoice, onDeleteInvoice
                  invoice={inv} 
                  onEdit={onEditInvoice} 
                  onDelete={onDeleteInvoice} 
+                 onDownload={onDownloadInvoice}
               />
             ))}
           </div>

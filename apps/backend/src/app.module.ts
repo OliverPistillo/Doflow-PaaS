@@ -41,6 +41,7 @@ import { TenantsController } from './superadmin/tenants.controller';
 import { TenantsService } from './superadmin/tenants.service';
 import { SystemController } from './superadmin/system.controller';
 import { MetricsController } from './superadmin/metrics.controller';
+import { InvoicePdfService } from './superadmin/invoice-pdf.service';
 
 // --- SERVIZI ---
 import { AuthService } from './auth.service';
@@ -59,6 +60,8 @@ import { PlatformDeal } from './superadmin/entities/platform-deal.entity';
 import { DeliveryTask } from './superadmin/entities/delivery-task.entity';
 import { CalendarEvent } from './superadmin/entities/calendar-event.entity';
 import { Invoice } from './superadmin/entities/invoice.entity';
+import { InvoiceLineItem } from './superadmin/entities/invoice-line-item.entity';
+import { InvoiceTemplate } from './superadmin/entities/invoice-template.entity';
 import { Tenant } from './superadmin/entities/tenant.entity';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
@@ -109,6 +112,8 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
       DeliveryTask,
       CalendarEvent,
       Invoice,
+      InvoiceLineItem,
+      InvoiceTemplate,
       Tenant,
       PlatformModule,
       TenantSubscription,
@@ -169,6 +174,7 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
     DeliveryService,
     CalendarService,
     FinanceService,
+    InvoicePdfService,
     TenantsService,
     MetricsService,
     TenantDashboardService,

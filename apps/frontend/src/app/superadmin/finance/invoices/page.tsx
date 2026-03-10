@@ -81,6 +81,32 @@ function InvoicesContent() {
     }
   };
 
+  const handleDownloadInvoice = async (id: string, invoiceNumber: string) => {
+    // Direct fetch is safer for blobs since apiFetch probably expects JSON
+    try {
+      const token = localStorage.getItem("doflow_token");
+      const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/superadmin/finance/invoices/${id}/pdf`;
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) throw new Error("Errore download PDF");
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `Fattura_${invoiceNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (e) {
+      console.error("Errore download", e);
+    }
+  };
+
   // Group by client
   const groupedClients = useMemo(() => {
     const groups: Record<string, ClientGroup> = {};
@@ -232,6 +258,7 @@ function InvoicesContent() {
               onAddInvoice={openCreate}
               onEditInvoice={openEdit}
               onDeleteInvoice={handleDelete}
+              onDownloadInvoice={handleDownloadInvoice}
             />
           ))
         )}

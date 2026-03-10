@@ -1,4 +1,6 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, OneToMany, ManyToOne, JoinColumn } from 'typeorm';
+import { InvoiceLineItem } from './invoice-line-item.entity';
+import { InvoiceTemplate } from './invoice-template.entity';
 
 export enum InvoiceStatus {
   PAID = 'paid',       // Pagata
@@ -33,6 +35,19 @@ export class Invoice {
     default: InvoiceStatus.PENDING
   })
   status!: InvoiceStatus;
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 22.00 })
+  taxRate!: number;
+
+  @Column({ type: 'text', nullable: true })
+  notes!: string;
+
+  @OneToMany(() => InvoiceLineItem, lineItem => lineItem.invoice, { cascade: true })
+  lineItems!: InvoiceLineItem[];
+
+  @ManyToOne(() => InvoiceTemplate, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'template_id' })
+  template!: InvoiceTemplate;
 
   @CreateDateColumn()
   createdAt!: Date;
