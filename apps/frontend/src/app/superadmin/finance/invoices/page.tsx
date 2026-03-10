@@ -107,6 +107,22 @@ function InvoicesContent() {
     }
   };
 
+  const handleSendEmail = async (id: string, invoiceNumber: string) => {
+    const email = prompt(`A quale indirizzo email vuoi inviare la fattura N. ${invoiceNumber}?`, "cliente@example.com");
+    if (!email) return;
+
+    try {
+      await apiFetch(`/superadmin/finance/invoices/${id}/send`, {
+        method: "POST",
+        body: JSON.stringify({ email })
+      });
+      alert(`Fattura inviata con successo a ${email}!`);
+    } catch (e) {
+      console.error("Errore invio email", e);
+      alert("Errore durante l'invio dell'email.");
+    }
+  };
+
   // Group by client
   const groupedClients = useMemo(() => {
     const groups: Record<string, ClientGroup> = {};
@@ -259,6 +275,7 @@ function InvoicesContent() {
               onEditInvoice={openEdit}
               onDeleteInvoice={handleDelete}
               onDownloadInvoice={handleDownloadInvoice}
+              onSendInvoice={handleSendEmail}
             />
           ))
         )}
