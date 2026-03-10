@@ -125,13 +125,26 @@ export default function SalesDashboardPage() {
     setLoading(true);
     setError(null);
     try {
+      // Mappa DashboardFilters sui parametri del backend SuperadminDashboardService
       const params = new URLSearchParams();
-      if (filters.stage)      params.append("stage",      filters.stage);
-      if (filters.month)      params.append("month",      filters.month);
-      if (filters.clientName) params.append("clientName", filters.clientName);
-      const res = await apiFetch<DashboardData>(`/superadmin/dashboard?${params}`);
+      if (filters.stage)      params.append("stages",               filters.stage);
+      if (filters.month)      params.append("expectedCloseMonth",   filters.month);
+      if (filters.clientName) params.append("clientName",            filters.clientName);
+
+      // Endpoint corretto: GET /superadmin/dashboard/stats
+      const res = await apiFetch<DashboardData>(`/superadmin/dashboard/stats?${params}`);
       if (res && res.kpi && Array.isArray(res.pipeline)) {
-        setData(res);
+        setData({
+          kpi: {
+            leadsCount:            Number(res.kpi?.leadsCount)            || 0,
+            totalValue:            Number(res.kpi?.totalValue)            || 0,
+            winRate:               Number(res.kpi?.winRate)               || 0,
+            avgDealValue:          Number(res.kpi?.avgDealValue)          || 0,
+            dealsClosingThisMonth: Number(res.kpi?.dealsClosingThisMonth) || 0,
+          },
+          pipeline: res.pipeline,
+          topDeals: Array.isArray(res.topDeals) ? res.topDeals : [],
+        });
       } else {
         setData({ kpi: { leadsCount: 0, totalValue: 0, winRate: 0, avgDealValue: 0, dealsClosingThisMonth: 0 }, pipeline: [], topDeals: [] });
       }
