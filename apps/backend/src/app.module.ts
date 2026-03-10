@@ -104,7 +104,7 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
         type: 'postgres' as const,
         url: cfg.get<string>('DATABASE_URL'),
         autoLoadEntities: true,
-        synchronize: false,
+        synchronize: process.env.DB_SYNC === 'true', // Permette di forzare la sync da variabile ambiente
       }),
     }),
 

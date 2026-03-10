@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards, Query, Param, Patch, Delete, Res, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Query, Param, Patch, Delete, Res, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { FinanceService } from './finance.service';
 import { InvoicePdfService } from './invoice-pdf.service';
 import { InvoiceMailService } from './invoice-mail.service';
@@ -16,33 +16,58 @@ export class FinanceController {
   ) {}
 
   @Get('invoices')
-  getAllInvoices(
+  async getAllInvoices(
     @Query('search') search?: string,
     @Query('status') status?: string
   ) {
-    return this.service.findAll(search, status);
+    try {
+      return await this.service.findAll(search, status);
+    } catch (error) {
+      console.error('[FinanceController] Error fetching invoices:', error);
+      throw new InternalServerErrorException('Impossibile recuperare le fatture');
+    }
   }
 
   @Get('dashboard')
-  getDashboard() {
-    return this.service.getDashboardStats();
+  async getDashboard() {
+    try {
+      return await this.service.getDashboardStats();
+    } catch (error) {
+      console.error('[FinanceController] Error fetching dashboard stats:', error);
+      throw new InternalServerErrorException('Impossibile recuperare le statistiche');
+    }
   }
 
   @Post('invoices')
-  createInvoice(@Body() body: Partial<Invoice>) {
-    return this.service.create(body);
+  async createInvoice(@Body() body: Partial<Invoice>) {
+    try {
+      return await this.service.create(body);
+    } catch (error) {
+      console.error('[FinanceController] Error creating invoice:', error);
+      throw new InternalServerErrorException('Impossibile creare la fattura. Verifica i dati o lo schema DB.');
+    }
   }
 
   // AGGIORNA FATTURA
   @Patch('invoices/:id')
-  updateInvoice(@Param('id') id: string, @Body() body: Partial<Invoice>) {
-     return this.service.update(id, body);
+  async updateInvoice(@Param('id') id: string, @Body() body: Partial<Invoice>) {
+    try {
+      return await this.service.update(id, body);
+    } catch (error) {
+      console.error(`[FinanceController] Error updating invoice ${id}:`, error);
+      throw new InternalServerErrorException('Impossibile aggiornare la fattura');
+    }
   }
 
   // ELIMINA FATTURA
   @Delete('invoices/:id')
-  deleteInvoice(@Param('id') id: string) {
-     return this.service.delete(id);
+  async deleteInvoice(@Param('id') id: string) {
+    try {
+      return await this.service.delete(id);
+    } catch (error) {
+      console.error(`[FinanceController] Error deleting invoice ${id}:`, error);
+      throw new InternalServerErrorException('Impossibile eliminare la fattura');
+    }
   }
 
   // DOWNLOAD PDF

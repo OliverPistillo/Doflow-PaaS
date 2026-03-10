@@ -133,8 +133,8 @@ export class FinanceService {
     }
 
     // 2. Filtro Stato
-    if (status && status !== 'all') {
-      qb.andWhere('invoice.status = :status', { status });
+    if (statusFilter && statusFilter !== 'all') {
+      qb.andWhere('invoice.status = :status', { status: statusFilter });
     }
 
     // Ordina per data emissione decrescente

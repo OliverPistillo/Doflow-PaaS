@@ -49,9 +49,17 @@ function InvoicesContent() {
       if (search) params.append("search", search);
       if (statusFilter && statusFilter !== "all") params.append("status", statusFilter);
       const res = await apiFetch<Invoice[]>(`/superadmin/finance/invoices?${params.toString()}`);
-      setRawInvoices(res);
+      
+      // Protezione: Assicuriamo che res sia un array
+      if (Array.isArray(res)) {
+        setRawInvoices(res);
+      } else {
+        console.error("API non ha ritornato un array per le fatture:", res);
+        setRawInvoices([]);
+      }
     } catch (e) {
       console.error("Errore caricamento fatture", e);
+      setRawInvoices([]);
     } finally {
       setLoading(false);
     }
@@ -127,8 +135,10 @@ function InvoicesContent() {
     }
   };
 
-  // Group by client
+  // Group by client (protetto)
   const groupedClients = useMemo(() => {
+    if (!Array.isArray(rawInvoices)) return [];
+    
     const groups: Record<string, ClientGroup> = {};
     rawInvoices.forEach((inv) => {
       const name = inv.clientName || "Sconosciuto";
@@ -136,7 +146,7 @@ function InvoicesContent() {
         groups[name] = { clientId: name, name, totalVolume: 0, invoices: [], status: "Attivo" };
       }
       groups[name].invoices.push(inv);
-      groups[name].totalVolume += Number(inv.amount);
+      groups[name].totalVolume += Number(inv.amount) || 0;
     });
     return Object.values(groups).sort((a, b) => b.totalVolume - a.totalVolume);
   }, [rawInvoices]);
@@ -157,7 +167,9 @@ function InvoicesContent() {
 
   // ── Summary counts ──────────────────────────────────────────────────────────
   const summary = useMemo(() => {
-    const paid    = rawInvoices.filter((i) => i.status === "paid").reduce((s, i) => s + Number(i.amount), 0);
+    if (!Array.isArray(rawInvoices)) return { paid: 0, pending: 0, overdue: 0, total: 0 };
+
+    const paid    = rawInvoices.filter((i) => i.status === "paid").reduce((s, i) => s + (Number(i.amount) || 0), 0);
     const pending = rawInvoices.filter((i) => i.status === "pending").length;
     const overdue = rawInvoices.filter((i) => i.status === "overdue").length;
     return { paid, pending, overdue, total: rawInvoices.length };

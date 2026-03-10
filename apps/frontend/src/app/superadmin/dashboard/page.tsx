@@ -143,7 +143,25 @@ export default function SalesDashboardPage() {
     );
   }
 
-  if (!data) return null;
+  // Fallback UI in caso di errore 500 o dati non validi
+  if (!data || !data.kpi || !Array.isArray(data.pipeline) || !Array.isArray(data.topDeals)) {
+    return (
+      <div className="space-y-6 p-4 md:p-6 max-w-[1800px] mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="flex flex-col justify-center items-center py-20 bg-card border border-dashed border-border/60 rounded-xl shadow-sm">
+          <div className="h-16 w-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-4">
+            <TrendingDown className="h-8 w-8" />
+          </div>
+          <h2 className="text-xl font-bold text-foreground">Impossibile caricare le statistiche</h2>
+          <p className="text-muted-foreground mt-2 max-w-md text-center">
+            Il server ha riscontrato un errore (es. database non sincronizzato) o i dati ricevuti non sono validi.
+          </p>
+          <Button onClick={loadData} variant="outline" className="mt-6 gap-2">
+            <RefreshCw className="h-4 w-4" /> Riprova
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-4 md:p-6 max-w-[1800px] mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
