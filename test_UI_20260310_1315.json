@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-03-10T12:40:14.582Z",
+  "testId": "test_UI_20260310_1315",
+  "devServer": "http://localhost:3000",
+  "route": "/dashboard",
+  "mockJwtPayload": {
+    "email": "luca.test@doflow.it",
+    "role": "ADMIN",
+    "tenantSlug": "demo",
+    "authStage": "FULL",
+    "planTier": "STARTER"
+  },
+  "verification": {
+    "tscNoEmit": "PASSED",
+    "widgetsFile": "ALL 12 CHECKS PASSED",
+    "plansFile": "ALL 8 CHECKS PASSED",
+    "dashboardClient": "ALL 4 CHECKS PASSED",
+    "devServerReachable": true,
+    "browserAgentStatus": "UNAVAILABLE (server capacity 503)"
+  },
+  "newWidgets": [
+    {
+      "key": "kpi_lead_conversion",
+      "label": "Tasso Conversione Lead",
+      "plan": "STARTER",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "key": "chart_lead_funnel",
+      "label": "Funnel Pipeline",
+      "plan": "STARTER",
+      "status": "IMPLEMENTED"
+    },
+    {
+      "key": "list_top_deals",
+      "label": "Top Deal Pipeline",
+      "plan": "PRO",
+      "status": "IMPLEMENTED"
+    }
+  ],
+  "fixes": [
+    {
+      "description": "Dynamic JWT greeting",
+      "detail": "Greeting now reads email from JWT; no more hardcoded \"Luca\""
+    }
+  ]
+}

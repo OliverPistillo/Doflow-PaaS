@@ -28,6 +28,7 @@ import {
 import { LockedFeature } from "@/components/ui/locked-feature";
 import { COMPONENT_MAP } from "@/components/dashboard/dashboard-widgets";
 import { cn } from "@/lib/utils";
+import { getDoFlowUser } from "@/lib/jwt";
 
 // ─── Helper: orario del saluto ────────────────────────────────────────────────
 
@@ -36,6 +37,19 @@ function getGreeting(): string {
   if (h < 12) return "Buongiorno";
   if (h < 18) return "Buon pomeriggio";
   return "Buonasera";
+}
+
+/** Ricava un nome visualizzabile dal JWT (email o sub). */
+function getDisplayName(): string {
+  if (typeof window === "undefined") return "";
+  const user = getDoFlowUser();
+  if (!user) return "";
+  if (user.email) {
+    // es. "mario.rossi@doflow.it" → "mario.rossi"
+    return user.email.split("@")[0];
+  }
+  if (user.tenantSlug) return user.tenantSlug;
+  return "";
 }
 
 // ─── Quick KPI Strip ──────────────────────────────────────────────────────────
@@ -239,6 +253,7 @@ export default function DashboardClient() {
   const [showReset, setShowReset]         = useState(false);
   const [showAddWidget, setShowAddWidget] = useState(false);
   const { toast } = useToast();
+  const displayName = getDisplayName();
 
   useEffect(() => {
     apiFetch<LayoutItem[]>("/tenant/dashboard")
@@ -348,7 +363,7 @@ export default function DashboardClient() {
         <div>
           <div className="flex items-center gap-2 mb-0.5">
             <h2 className="text-2xl font-bold tracking-tight">
-              {getGreeting()}, Luca 👋
+              {getGreeting()}{displayName ? `, ${displayName}` : ""} 👋
             </h2>
             <Badge
               variant="outline"

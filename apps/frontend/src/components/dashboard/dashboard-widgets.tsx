@@ -13,13 +13,14 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   TrendingUp, TrendingDown, DollarSign, Users, ShoppingCart,
-  FileText, Package, AlertTriangle, Trophy,
+  FileText, Package, AlertTriangle, Trophy, Target, GitFork,
 } from "lucide-react";
 import {
   Area, AreaChart, Bar, BarChart, Line, LineChart,
   Pie, PieChart, Cell, ResponsiveContainer,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
+
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
@@ -340,6 +341,129 @@ export function W_LeaderboardSellers() {
   );
 }
 
+// ─── CRM WIDGETS ──────────────────────────────────────────────────────────────
+
+export function W_KpiLeadConversionRate() {
+  return (
+    <KpiCard
+      title="Tasso Conversione Lead"
+      value="18.4%"
+      delta="+2.1pp"
+      up
+      icon={Target}
+      sub="Lead → Chiuso (ultimi 30gg)"
+    />
+  );
+}
+
+const funnelData = [
+  { stage: "Chiuso",    count: 18,  fill: "#4f46e5" },
+  { stage: "Trattativa",count: 31,  fill: "#6366f1" },
+  { stage: "Proposta",  count: 54,  fill: "#818cf8" },
+  { stage: "Qualificato",count: 79, fill: "#a5b4fc" },
+  { stage: "Nuovo",     count: 148, fill: "#c7d2fe" },
+];
+
+export function W_ChartLeadFunnel() {
+  return (
+    <Card className="h-full flex flex-col">
+      <CardHeader className="pb-0">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <GitFork className="h-4 w-4 text-indigo-500" />
+          Funnel Pipeline
+        </CardTitle>
+        <CardDescription className="text-xs">Lead per fase — ultimi 30gg</CardDescription>
+      </CardHeader>
+      <CardContent className="flex-1 pt-2 pb-3">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={funnelData}
+            layout="vertical"
+            margin={{ top: 4, right: 40, left: 8, bottom: 0 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+            <XAxis type="number" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+            <YAxis
+              type="category" dataKey="stage"
+              tick={{ fontSize: 10 }} tickLine={false} axisLine={false}
+              width={72}
+            />
+            <Tooltip
+              contentStyle={{ borderRadius: "8px", fontSize: 12, border: "1px solid hsl(var(--border))" }}
+              formatter={(v: number) => [`${v} lead`, ""]}
+            />
+            <Bar dataKey="count" name="Lead" radius={[0, 4, 4, 0]} maxBarSize={22}>
+              {funnelData.map((entry, i) => (
+                <Cell key={i} fill={entry.fill} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+}
+
+const TOP_DEALS = [
+  { name: "Luxor Media SRL",      contact: "M. Bianchi",  value: "€ 42.000", stage: "Trattativa", stageColor: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" },
+  { name: "TechHub Napoli",       contact: "R. Silvestri", value: "€ 28.500", stage: "Proposta",   stageColor: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" },
+  { name: "Verde Costruzioni",    contact: "L. Rossi",    value: "€ 19.800", stage: "Proposta",   stageColor: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" },
+  { name: "Alfa Capital Holding", contact: "S. Ferrari",  value: "€ 15.200", stage: "Qualificato",stageColor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300" },
+  { name: "Neri Logistica SpA",   contact: "A. Conti",    value: "€ 11.400", stage: "Trattativa", stageColor: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" },
+];
+
+export function W_ListTopDeals() {
+  return (
+    <Card className="h-full flex flex-col">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <GitFork className="h-4 w-4 text-indigo-500" />
+          Top Deal Pipeline
+        </CardTitle>
+        <CardDescription className="text-xs">Trattative attive per valore</CardDescription>
+      </CardHeader>
+      <CardContent className="flex-1 p-0 overflow-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border/50">
+              <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Deal</th>
+              <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground hidden sm:table-cell">Fase</th>
+              <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Valore</th>
+            </tr>
+          </thead>
+          <tbody>
+            {TOP_DEALS.map((deal, i) => (
+              <tr key={i} className="border-b border-border/30 last:border-0 hover:bg-muted/30 transition-colors">
+                <td className="px-4 py-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <Avatar className="h-7 w-7 shrink-0">
+                      <AvatarFallback className="bg-indigo-100 text-indigo-700 font-bold text-[10px] dark:bg-indigo-950/50 dark:text-indigo-300">
+                        {deal.contact.split(" ").map((p) => p[0]).join("")}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="font-medium truncate text-sm">{deal.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{deal.contact}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-4 py-2.5 text-right hidden sm:table-cell">
+                  <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium", deal.stageColor)}>
+                    {deal.stage}
+                  </span>
+                </td>
+                <td className="px-4 py-2.5 text-right font-bold tabular-nums text-indigo-600">
+                  {deal.value}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── COMPONENT_MAP ────────────────────────────────────────────────────────────
 
 export const COMPONENT_MAP: Record<string, React.ReactNode> = {
@@ -349,12 +473,17 @@ export const COMPONENT_MAP: Record<string, React.ReactNode> = {
   "kpi_quote_value":        <W_KpiQuoteValue />,
   "chart_orders_trend":     <W_ChartOrdersTrend />,
   "list_recent_quotes":     <W_ListRecentQuotes />,
+  // Starter — CRM
+  "kpi_lead_conversion":    <W_KpiLeadConversionRate />,
+  "chart_lead_funnel":      <W_ChartLeadFunnel />,
   // Pro
   "kpi_revenue_month":         <W_KpiRevenueMonth />,
   "kpi_cashflow_overdue":      <W_KpiCashflowOverdue />,
   "kpi_low_stock":             <W_KpiLowStock />,
   "chart_income_vs_expenses":  <W_ChartIncomeVsExpenses />,
   "list_unpaid_invoices":      <W_ListUnpaidInvoices />,
+  // Pro — CRM
+  "list_top_deals":            <W_ListTopDeals />,
   // Enterprise
   "chart_market_share":    <W_ChartMarketShare />,
   "chart_sales_heatmap":   <W_ChartSalesHeatmap />,

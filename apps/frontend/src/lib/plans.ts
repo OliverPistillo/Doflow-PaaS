@@ -22,12 +22,15 @@ export type WidgetId =
   | "kpi_quote_value"
   | "list_recent_quotes"
   | "chart_orders_trend"
+  | "kpi_lead_conversion"
+  | "chart_lead_funnel"
   // PRO
   | "kpi_revenue_month"
   | "kpi_cashflow_overdue"
   | "kpi_low_stock"
   | "list_unpaid_invoices"
   | "chart_income_vs_expenses"
+  | "list_top_deals"
   // ENTERPRISE
   | "chart_market_share"
   | "chart_sales_heatmap"
@@ -156,24 +159,50 @@ export const WIDGET_DEFINITIONS: Record<WidgetId, WidgetDefinition> = {
     minPlan: "ENTERPRISE",
     lockMsg: "Disponibile con Piano Enterprise.",
   },
+  // ─── CRM WIDGETS ───────────────────────────────────────────────────────────
+  kpi_lead_conversion: {
+    id: "kpi_lead_conversion", label: "Tasso Conversione Lead",
+    defaultW: 4, defaultH: 2,
+    minW: 3, maxW: 6, minH: 2, maxH: 2,
+    minPlan: "STARTER",
+  },
+  chart_lead_funnel: {
+    id: "chart_lead_funnel", label: "Funnel Pipeline",
+    defaultW: 8, defaultH: 5,
+    minW: 4, maxW: 12, minH: 3, maxH: 8,
+    minPlan: "STARTER",
+  },
+  list_top_deals: {
+    id: "list_top_deals", label: "Top Deal Pipeline",
+    defaultW: 8, defaultH: 5,
+    minW: 4, maxW: 12, minH: 3, maxH: 8,
+    minPlan: "PRO",
+    lockMsg: "Disponibile con Piano Pro.",
+  },
 };
 
 // ─── Layout di default per piano ─────────────────────────────────────────────
 
 export const DEFAULT_LAYOUTS: Record<PlanTier, LayoutItem[]> = {
   STARTER: [
-    { i: "kpi_new_leads",      x: 0, y: 0, w: 4, h: 2 },
-    { i: "kpi_open_orders",    x: 4, y: 0, w: 4, h: 2 },
-    { i: "kpi_quote_value",    x: 8, y: 0, w: 4, h: 2 },
-    { i: "list_recent_quotes", x: 0, y: 2, w: 8, h: 5 },
-    { i: "chart_orders_trend", x: 8, y: 2, w: 4, h: 5 },
+    { i: "kpi_new_leads",       x: 0, y: 0, w: 4, h: 2 },
+    { i: "kpi_open_orders",     x: 4, y: 0, w: 4, h: 2 },
+    { i: "kpi_lead_conversion", x: 8, y: 0, w: 4, h: 2 },
+    { i: "chart_lead_funnel",   x: 0, y: 2, w: 8, h: 5 },
+    { i: "chart_orders_trend",  x: 8, y: 2, w: 4, h: 5 },
+    { i: "list_recent_quotes",  x: 0, y: 7, w: 8, h: 5 },
+    { i: "kpi_quote_value",     x: 8, y: 7, w: 4, h: 2 },
   ],
   PRO: [
     { i: "kpi_revenue_month",        x: 0, y: 0, w: 4, h: 2 },
     { i: "kpi_cashflow_overdue",     x: 4, y: 0, w: 4, h: 2 },
-    { i: "kpi_low_stock",            x: 8, y: 0, w: 4, h: 2 },
-    { i: "list_unpaid_invoices",     x: 0, y: 2, w: 8, h: 5 },
+    { i: "kpi_lead_conversion",      x: 8, y: 0, w: 4, h: 2 },
+    { i: "chart_lead_funnel",        x: 0, y: 2, w: 8, h: 5 },
     { i: "chart_income_vs_expenses", x: 8, y: 2, w: 4, h: 5 },
+    { i: "list_top_deals",           x: 0, y: 7, w: 8, h: 5 },
+    { i: "kpi_low_stock",            x: 8, y: 7, w: 4, h: 2 },
+    { i: "list_unpaid_invoices",     x: 0, y: 10, w: 8, h: 5 },
+    { i: "kpi_quote_value",          x: 8, y: 10, w: 4, h: 2 },
   ],
   ENTERPRISE: [
     { i: "kpi_revenue_month",        x: 0, y: 0, w: 4, h: 2 },
