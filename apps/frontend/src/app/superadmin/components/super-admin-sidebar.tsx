@@ -22,7 +22,8 @@ import {
   BadgeCheck,
   User,
   Settings,
-  Palette
+  Palette,
+  TrendingUp,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -62,31 +63,37 @@ const MENU_GROUPS = [
   {
     label: "Performance commerciali",
     items: [
-      { label: "Sales Dashboard",  href: "/superadmin/dashboard",      icon: BarChart3  },
-      { label: "Gestione offerte", href: "/superadmin/sales/pipeline", icon: ListTodo   },
+      { label: "Sales Dashboard",  href: "/superadmin/dashboard",      icon: BarChart3,   badge: undefined },
+      { label: "Gestione offerte", href: "/superadmin/sales/pipeline", icon: ListTodo,    badge: undefined },
+    ],
+  },
+  {
+    label: "Metriche Platform",
+    items: [
+      { label: "Metriche SaaS",    href: "/superadmin/metrics",        icon: TrendingUp,  badge: undefined },
+      { label: "Control Tower",    href: "/superadmin/control-tower",  icon: ShieldAlert, badge: undefined },
     ],
   },
   {
     label: "Consegna del servizio",
     items: [
-      { label: "Stato del servizio",      href: "/superadmin/delivery/status",   icon: Truck      },
-      { label: "Calendario del progetto", href: "/superadmin/delivery/calendar", icon: CalendarDays },
+      { label: "Stato del servizio",      href: "/superadmin/delivery/status",   icon: Truck,        badge: undefined },
+      { label: "Calendario del progetto", href: "/superadmin/delivery/calendar", icon: CalendarDays,  badge: undefined },
     ],
   },
   {
     label: "Fatturazione",
     items: [
-      { label: "Dashboard finanziario",    href: "/superadmin/finance/dashboard", icon: Wallet  },
-      { label: "Gestione fatture",         href: "/superadmin/finance/invoices",  icon: Receipt },
+      { label: "Dashboard finanziario", href: "/superadmin/finance/dashboard", icon: Wallet,  badge: undefined },
+      { label: "Gestione fatture",      href: "/superadmin/finance/invoices",  icon: Receipt, badge: undefined },
     ],
   },
   {
     label: "Platform Admin",
     items: [
-      { label: "Control Tower",    href: "/superadmin/control-tower", icon: ShieldAlert },
-      { label: "Gestione Tenant",  href: "/superadmin/tenants",       icon: Building2   },
-      { label: "Gestione Utenti",  href: "/superadmin/users",         icon: Users       },
-      { label: "Audit Log",        href: "/superadmin/audit",         icon: Activity    },
+      { label: "Gestione Tenant", href: "/superadmin/tenants", icon: Building2, badge: undefined },
+      { label: "Gestione Utenti", href: "/superadmin/users",   icon: Users,     badge: undefined },
+      { label: "Audit Log",       href: "/superadmin/audit",   icon: Activity,  badge: undefined },
     ],
   },
 ];
@@ -112,15 +119,17 @@ function Item({
   href,
   label,
   icon: Icon,
-  isHovered
+  badge,
+  isHovered,
 }: {
-  href: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  href:      string;
+  label:     string;
+  icon:      React.ComponentType<{ className?: string }>;
+  badge?:    number;
   isHovered: boolean;
 }) {
   const pathname = usePathname();
-  const active = pathname === href || pathname.startsWith(href + "/");
+  const active   = pathname === href || pathname.startsWith(href + "/");
 
   return (
     <SidebarMenuItem>
@@ -128,17 +137,26 @@ function Item({
         asChild
         isActive={active}
         tooltip={label}
-        className={`gap-3 pl-3 mb-1 transition-all duration-200 overflow-hidden ${
+        className={`gap-3 pl-3 mb-1 transition-all duration-200 ${
           active
-            ? "font-semibold bg-primary/10 text-primary border-l-4 border-primary rounded-l-none"
+            ? "font-semibold bg-primary/10 text-primary"
             : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
         }`}
       >
         <Link href={href} className="flex items-center w-full">
           <Icon className={`h-5 w-5 shrink-0 ${active ? "text-primary" : ""}`} />
-          <span className={`ml-2 whitespace-nowrap transition-all duration-300 ${isHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2'}`}>
+          <span
+            className={`ml-2 flex-1 whitespace-nowrap transition-all duration-300 ${
+              isHovered ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2"
+            }`}
+          >
             {label}
           </span>
+          {badge !== undefined && badge > 0 && isHovered && (
+            <span className="ml-auto text-[10px] font-bold bg-rose-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none">
+              {badge > 99 ? "99+" : badge}
+            </span>
+          )}
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>
@@ -216,7 +234,14 @@ export function SuperAdminSidebar() {
             <SidebarGroupContent>
               <SidebarMenu className="gap-1">
                 {group.items.map((item) => (
-                  <Item key={item.href} href={item.href} label={item.label} icon={item.icon} isHovered={showDetails} />
+                  <Item
+                    key={item.href}
+                    href={item.href}
+                    label={item.label}
+                    icon={item.icon}
+                    badge={item.badge}
+                    isHovered={showDetails}
+                  />
                 ))}
               </SidebarMenu>
             </SidebarGroupContent>

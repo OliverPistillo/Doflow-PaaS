@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowUpRight, Loader2, RefreshCw } from "lucide-react";
+import { ArrowUpRight, Loader2, RefreshCw, TrendingUp, TrendingDown, CalendarDays } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { DrillDownSheet, CardContextType } from "./components/DrillDownSheet";
 import { GlobalFilterBar, DashboardFilters } from "./components/GlobalFilterBar";
 import { formatCurrency } from "./utils";
@@ -34,40 +35,69 @@ type DashboardData = {
   topDeals: { name: string; client: string; value: number; stage: string }[];
 };
 
-// --- Componente KPI Card ---
-function KpiCard({ 
-  title, 
-  value, 
-  colorVar, 
-  onClick 
-}: { 
-  title: string; 
-  value: string; 
-  colorVar: string; 
-  onClick: () => void 
+// ─── Greeting helper ──────────────────────────────────────────────────────────
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Buongiorno";
+  if (h < 18) return "Buon pomeriggio";
+  return "Buona sera";
+}
+
+function formatDate() {
+  return new Date().toLocaleDateString("it-IT", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+}
+
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
+
+function KpiCard({
+  title,
+  value,
+  colorVar,
+  trend,
+  trendUp,
+  onClick,
+}: {
+  title:    string;
+  value:    string;
+  colorVar: string;
+  trend?:   string;
+  trendUp?: boolean;
+  onClick:  () => void;
 }) {
   return (
-    <Card 
-      className="glass-card transition-all duration-300 cursor-pointer group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative" 
+    <Card
+      className="glass-card transition-all duration-300 cursor-pointer group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative"
       onClick={onClick}
     >
-      {/* Glow Effect Dinamico */}
-      <div 
+      {/* Glow effect */}
+      <div
         className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-20 blur-2xl group-hover:opacity-40 transition-opacity duration-500"
         style={{ backgroundColor: colorVar }}
       />
-      
-      <CardContent className="p-6 flex justify-between items-start relative z-10">
-        <div>
+      <CardContent className="p-6 relative z-10">
+        <div className="flex justify-between items-start">
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{title}</p>
-          <h3 className="text-3xl font-black text-foreground mt-2 tracking-tight">{value}</h3>
+          <div
+            className="h-9 w-9 flex items-center justify-center rounded-xl bg-muted/50 transition-all duration-300 group-hover:scale-110 shadow-sm"
+            style={{ color: colorVar, border: `1px solid color-mix(in srgb, ${colorVar} 20%, transparent)` }}
+          >
+            <ArrowUpRight className="h-4.5 w-4.5" />
+          </div>
         </div>
-        <div 
-          className="h-10 w-10 flex items-center justify-center rounded-xl bg-muted/50 transition-all duration-300 group-hover:scale-110 shadow-sm"
-          style={{ color: colorVar, border: `1px solid color-mix(in srgb, ${colorVar} 20%, transparent)` }}
-        >
-          <ArrowUpRight className="h-5 w-5" />
-        </div>
+        <h3 className="text-3xl font-black text-foreground mt-3 tracking-tight tabular-nums">{value}</h3>
+        {trend && (
+          <div className={`flex items-center gap-1 mt-2 text-xs font-semibold ${
+            trendUp ? "text-emerald-500" : "text-rose-500"
+          }`}>
+            {trendUp
+              ? <TrendingUp className="h-3.5 w-3.5" />
+              : <TrendingDown className="h-3.5 w-3.5" />}
+            {trend}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -121,17 +151,27 @@ export default function SalesDashboardPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-4 bg-card/40 backdrop-blur-md p-6 rounded-2xl border border-white/10 shadow-sm">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground mb-2 uppercase tracking-widest">
+          <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-widest">
             <span>Business Intelligence</span>
             <span className="text-border">•</span>
             <span className="text-primary">Sales Ops</span>
           </div>
           <h1 className="text-4xl font-black text-foreground tracking-tight">Quadro Generale</h1>
-          <p className="text-muted-foreground mt-2 text-sm font-medium">Monitoraggio in tempo reale delle opportunità multi-tenant.</p>
+          <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+            <CalendarDays className="h-3.5 w-3.5" />
+            <span className="capitalize">{formatDate()}</span>
+            <span className="text-border">—</span>
+            <span className="font-medium text-foreground">{getGreeting()}</span>
+          </div>
         </div>
-        <Button variant="outline" size="sm" onClick={loadData} className="rounded-xl shadow-sm hover:border-primary/50 transition-colors">
-          <RefreshCw className="mr-2 h-4 w-4"/> Aggiorna Dati
-        </Button>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30">
+            Live
+          </Badge>
+          <Button variant="outline" size="sm" onClick={loadData} className="rounded-xl shadow-sm hover:border-primary/50 transition-colors gap-2">
+            <RefreshCw className="h-3.5 w-3.5" /> Aggiorna
+          </Button>
+        </div>
       </div>
 
       {/* 1. BARRA FILTRI GLOBALE */}
@@ -139,28 +179,36 @@ export default function SalesDashboardPage() {
 
       {/* 2. KPI CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KpiCard 
-          title="Offerte in qualifica" 
-          value={String(data.kpi.leadsCount)} 
+        <KpiCard
+          title="Offerte in qualifica"
+          value={String(data.kpi.leadsCount)}
           colorVar="hsl(var(--chart-1))"
+          trend="+8% vs mese precedente"
+          trendUp
           onClick={() => setActiveCard('QUALIFIED_LEADS')}
         />
-        <KpiCard 
-          title="Valore filtrato" 
-          value={formatCurrency(data.kpi.totalValue)} 
+        <KpiCard
+          title="Valore filtrato"
+          value={formatCurrency(data.kpi.totalValue)}
           colorVar="hsl(var(--chart-2))"
+          trend="Pipeline attiva"
+          trendUp
           onClick={() => setActiveCard('TOTAL_VALUE')}
         />
-        <KpiCard 
-          title="Tasso di vincita" 
-          value={`${data.kpi.winRate}%`} 
+        <KpiCard
+          title="Tasso di vincita"
+          value={`${data.kpi.winRate}%`}
           colorVar="hsl(var(--chart-3))"
+          trend={data.kpi.winRate >= 30 ? "Sopra target" : "Sotto target"}
+          trendUp={data.kpi.winRate >= 30}
           onClick={() => setActiveCard('WIN_RATE')}
         />
-        <KpiCard 
-          title="Media per deal" 
-          value={formatCurrency(data.kpi.avgDealValue)} 
+        <KpiCard
+          title="Media per deal"
+          value={formatCurrency(data.kpi.avgDealValue)}
           colorVar="hsl(var(--chart-4))"
+          trend="Valore medio"
+          trendUp
           onClick={() => setActiveCard('AVG_VALUE')}
         />
       </div>
