@@ -35,6 +35,18 @@ function buildApiUrl(pathNoApi: string): string {
   return `${origin}${apiPrefix}${cleanPath}`;
 }
 
+/**
+ * Restituisce la base URL dell'API con prefisso /api già incluso.
+ * Utile per costruire URL manualmente (es. fetch di blob/binary).
+ * Esempio: "https://api.doflow.it/api"
+ */
+export function getApiBaseUrl(): string {
+  const envBase = getEnvBase();
+  if (!envBase) return "/api";
+  const origin = envBase.endsWith("/api") ? envBase.slice(0, -4) : envBase;
+  return `${origin}/api`;
+}
+
 function isNoTenantHeaderPath(pathNoApi: string): boolean {
   // auth routes: MAI tenant header
   if (pathNoApi === "/auth/login") return true;

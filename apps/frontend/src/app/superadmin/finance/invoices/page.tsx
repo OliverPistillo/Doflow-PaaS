@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getApiBaseUrl } from "@/lib/api";
 import { useConfirm } from "@/hooks/useConfirm";
 import { InvoiceCreateSheet } from "../dashboard/components/InvoiceCreateSheet";
 import { ClientRow, ClientGroup } from "./components/ClientRow";
@@ -94,17 +94,22 @@ function InvoicesContent() {
   };
 
   const handleDownloadInvoice = async (id: string, invoiceNumber: string) => {
-    // Direct fetch is safer for blobs since apiFetch probably expects JSON
     try {
       const token = localStorage.getItem("doflow_token");
-      const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/superadmin/finance/invoices/${id}/pdf`;
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      // getApiBaseUrl() garantisce sempre la base corretta con /api incluso
+      // Es. in prod: "https://api.doflow.it/api", in locale: "/api"
+      const baseUrl = getApiBaseUrl();
+      const url = `${baseUrl}/superadmin/finance/invoices/${id}/pdf`;
       
-      if (!response.ok) throw new Error("Errore download PDF");
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        throw new Error(`Errore download PDF (${response.status}): ${errText}`);
+      }
+      
       const blob = await response.blob();
       const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -114,8 +119,9 @@ function InvoicesContent() {
       a.click();
       a.remove();
       URL.revokeObjectURL(objectUrl);
-    } catch (e) {
-      console.error("Errore download", e);
+    } catch (e: any) {
+      console.error("Errore download PDF:", e);
+      alert(`Impossibile scaricare il PDF: ${e?.message || "Errore sconosciuto"}`);
     }
   };
 
