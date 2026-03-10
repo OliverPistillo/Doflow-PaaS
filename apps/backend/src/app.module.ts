@@ -40,6 +40,7 @@ import { FinanceService } from './superadmin/finance.service';
 import { TenantsController } from './superadmin/tenants.controller';
 import { TenantsService } from './superadmin/tenants.service';
 import { SystemController } from './superadmin/system.controller';
+import { MetricsController } from './superadmin/metrics.controller';
 
 // --- SERVIZI ---
 import { AuthService } from './auth.service';
@@ -51,6 +52,7 @@ import { ProjectsEventsService } from './realtime/projects-events.service';
 import { TenantBootstrapService } from './tenancy/tenant-bootstrap.service';
 import { AuthMfaService } from './auth-mfa.service';
 import { SystemStatsService } from './superadmin/telemetry.service';
+import { MetricsService } from './superadmin/metrics.service';
 
 // --- ENTITIES & SECURITY ---
 import { PlatformDeal } from './superadmin/entities/platform-deal.entity';
@@ -148,6 +150,7 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
     FinanceController,
     TenantsController,
     SystemController,
+    MetricsController,
     TenantDashboardController,
   ],
 
@@ -167,6 +170,7 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
     CalendarService,
     FinanceService,
     TenantsService,
+    MetricsService,
     TenantDashboardService,
     {
       provide: APP_GUARD,
