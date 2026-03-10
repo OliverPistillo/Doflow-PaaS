@@ -68,13 +68,23 @@ export default function NewInvoicePage() {
 
   useEffect(() => {
     apiFetch<Tenant[]>("/superadmin/tenants")
-      .then((data) => setTenants(data))
-      .catch(console.error)
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setTenants(data.filter(t => t && t.id && t.name));
+        } else {
+          setTenants([]);
+        }
+      })
+      .catch((e) => {
+        console.error("Errore caricamento tenants:", e);
+        setTenants([]);
+      })
       .finally(() => setLoadingTenants(false));
   }, []);
 
-  // Compute Subtotal, Tax, and Total
-  const subtotal = watchLineItems.reduce((acc, item) => acc + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), 0);
+  // Calcolo totali con protezione null-safety
+  const safeItems = Array.isArray(watchLineItems) ? watchLineItems : [];
+  const subtotal = safeItems.reduce((acc, item) => acc + (Number(item?.quantity) || 0) * (Number(item?.unitPrice) || 0), 0);
   const taxAmount = subtotal * ((Number(watchTaxRate) || 0) / 100);
   const total = subtotal + taxAmount;
 
@@ -251,8 +261,8 @@ export default function NewInvoicePage() {
             </div>
 
             {fields.map((field, index) => {
-              const rowQty = Number(watchLineItems[index]?.quantity) || 0;
-              const rowPrice = Number(watchLineItems[index]?.unitPrice) || 0;
+              const rowQty = Number(safeItems[index]?.quantity) || 0;
+              const rowPrice = Number(safeItems[index]?.unitPrice) || 0;
               const rowTotal = rowQty * rowPrice;
 
               return (
