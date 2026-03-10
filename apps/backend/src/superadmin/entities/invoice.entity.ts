@@ -8,7 +8,7 @@ export enum InvoiceStatus {
   OVERDUE = 'overdue', // Scaduta
 }
 
-@Entity('invoices')
+@Entity({ name: 'invoices', schema: 'public' })
 export class Invoice {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

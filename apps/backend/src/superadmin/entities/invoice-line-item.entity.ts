@@ -1,7 +1,7 @@
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Invoice } from './invoice.entity';
 
-@Entity('invoice_line_items')
+@Entity({ name: 'invoice_line_items', schema: 'public' })
 export class InvoiceLineItem {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

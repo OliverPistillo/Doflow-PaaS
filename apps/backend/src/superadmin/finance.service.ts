@@ -65,7 +65,7 @@ export class FinanceService {
     // 2. Trend Ricavi (Ultimi 6 mesi)
     const rawTrend = await this.repo.query(`
         SELECT TO_CHAR(issue_date, 'Mon') as month, SUM(amount) as revenue 
-        FROM invoices 
+        FROM public.invoices 
         WHERE status = 'paid' 
         GROUP BY month, issue_date 
         ORDER BY issue_date ASC 

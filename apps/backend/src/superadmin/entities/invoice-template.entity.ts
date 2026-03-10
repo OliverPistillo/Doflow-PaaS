@@ -1,6 +1,6 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 
-@Entity('invoice_templates')
+@Entity({ name: 'invoice_templates', schema: 'public' })
 export class InvoiceTemplate {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
