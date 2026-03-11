@@ -1,14 +1,16 @@
+// Percorso: C:\Doflow\apps\frontend\src\app\layout.tsx
 import type { Metadata } from 'next';
 import './globals.css';
 
-import { Inter, JetBrains_Mono } from 'next/font/google';
+import { Urbanist, JetBrains_Mono } from 'next/font/google';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { Toaster } from "@/components/ui/toaster";
 
-const inter = Inter({
+const urbanist = Urbanist({
   subsets: ['latin'],
   variable: '--font-sans',
   display: 'swap',
+  weight: ['300', '400', '500', '600', '700', '800', '900'],
 });
 
 const mono = JetBrains_Mono({
@@ -25,12 +27,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="it" suppressHydrationWarning>
-      <body className={`${inter.variable} ${mono.variable} antialiased`}>
+      <body className={`${urbanist.variable} ${mono.variable} antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
-          disableTransitionOnChange
         >
           {children}
           <Toaster />

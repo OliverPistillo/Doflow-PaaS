@@ -1,82 +1,236 @@
+/* Percorso: C:\Doflow\apps\frontend\src\app\globals.css */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@300;400;500;600;700;800;900&display=swap');
+
 @layer base {
-  /* --- DEFAULT STANDARD (Neutro/Grigio) --- */
+
+  /* ═══════════════════════════════════════════════════════════════════
+     LIGHT THEME — DoFlow Warm Palette (Default / Neutro)
+     ─────────────────────────────────────────────────────────────────
+     Layer 1: DoFlow native tokens  (--bg-*, --text-*, --icon-*, …)
+     Layer 2: shadcn/ui HSL bridge  (--background, --card, --primary…)
+  ═══════════════════════════════════════════════════════════════════ */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 10% 3.9%;
-    --radius: 0.75rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-    
-    /* Chart Colors - Base Palette */
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-  }
+    /* ── DoFlow Brand ─────────────────────────────────────────────── */
+    --yellow:  #F5ED31;
+    --orange:  #FF934F;
+    --dark:    #0D0C0B;
 
-  .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    /* ── DoFlow Surface tokens ────────────────────────────────────── */
+    --bg-body:              linear-gradient(145deg, #ece8e1 0%, #e0dbd3 40%, #d8d2c8 100%);
+    --bg-sidebar:           transparent;
+    --bg-sidebar-open:      rgba(255, 255, 255, 0.72);
+    --bg-surface:           #ffffff;
+    --bg-surface-2:         rgba(255, 255, 255, 0.55);
+    --bg-input:             #ffffff;
+    --bg-hover:             rgba(255, 255, 255, 0.65);
+    --bg-thumb:             #f0f0f0;
+
+    /* ── DoFlow Text ──────────────────────────────────────────────── */
+    --text-primary:         #1a1a1a;
+    --text-secondary:       #6b6b6b;
+    --text-placeholder:     #bbbbbb;
+
+    /* ── DoFlow Borders ───────────────────────────────────────────── */
+    --border-sidebar:       transparent;
+    --border-sidebar-open:  rgba(255, 255, 255, 0.50);
+    --border-card:          rgba(255, 255, 255, 0.30);
+    --border-divider:       #eeeeee;
+    --border-table:         #f0f0f0;
+    --border-row:           #f8f8f8;
+    --border-checkbox:      #dddddd;
+
+    /* ── DoFlow Sidebar icons ─────────────────────────────────────── */
+    --icon-color:           #9b9b9b;
+    --icon-active-bg:       #ffffff;
+    --icon-active-color:    #1a1a1a;
+    --icon-active-shadow:   0 2px 10px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06);
+
+    /* ── DoFlow Card variants ─────────────────────────────────────── */
+    --card-logistics-bg:    linear-gradient(135deg, rgba(245,237,49,0.25) 0%, rgba(255,147,79,0.15) 100%);
+    --delay-time-bg:        rgba(255, 255, 255, 0.70);
+    --demand-high-bg:       #fff0e6;
+    --demand-high-color:    #e8722a;
+    --demand-low-bg:        #e6f9ee;
+    --demand-low-color:     #2aad5a;
+
+    /* ── DoFlow Filter / table ────────────────────────────────────── */
+    --filters-bg:           #ffffff;
+    --filter-divider:       #eeeeee;
+    --filter-btn-hover:     #f5f5f5;
+    --table-bg:             #ffffff;
+
+    /* ── DoFlow Shadows ───────────────────────────────────────────── */
+    --shadow-sm:            0 1px 4px rgba(0,0,0,0.06);
+    --shadow-md:            0 2px 10px rgba(0,0,0,0.10);
+    --shadow-sidebar:       none;
+    --shadow-sidebar-open:  4px 0 24px rgba(0,0,0,0.07);
+
+    /* ── DoFlow Misc ──────────────────────────────────────────────── */
+    --logo-color:           #0D0C0B;
+    --scrollbar-thumb:      #cccccc;
+    --toggle-bg:            #1a1a1a;
+    --toggle-color:         #ffffff;
+
+    /* ── shadcn/ui HSL Bridge (light) ─────────────────────────────── */
+    --background:           38 25% 90%;
+    --foreground:           0 0% 10%;
+
+    --card:                 0 0% 100%;
+    --card-foreground:      0 0% 10%;
+
+    --popover:              0 0% 100%;
+    --popover-foreground:   0 0% 10%;
+
+    --primary:              244 76% 58%;
+    --primary-foreground:   0 0% 100%;
+
+    --secondary:            38 20% 94%;
+    --secondary-foreground: 0 0% 20%;
+
+    --muted:                38 16% 93%;
+    --muted-foreground:     0 0% 42%;
+
+    --accent:               44 90% 56%;
+    --accent-foreground:    0 0% 7%;
+
+    --destructive:          0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border:               38 12% 88%;
+    --input:                0 0% 100%;
+    --ring:                 244 76% 58%;
+    --radius:               0.75rem;
+
+    --sidebar-background:   38 25% 96%;
+    --sidebar-foreground:   0 0% 26%;
+    --sidebar-primary:      244 76% 58%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent:       38 16% 93%;
+    --sidebar-accent-foreground: 0 0% 10%;
+    --sidebar-border:       38 12% 91%;
+    --sidebar-ring:         244 76% 58%;
+
+    /* ── Chart Palette ────────────────────────────────────────────── */
+    --chart-1:              244 76% 60%;
+    --chart-2:              28  90% 58%;
+    --chart-3:              152 60% 42%;
+    --chart-4:              339 80% 55%;
+    --chart-5:              54  90% 52%;
   }
 
-  /* --- TEMA OCEAN (Blu/Verde) --- */
+  /* ═══════════════════════════════════════════════════════════════════
+     DARK THEME — DoFlow Warm Olive-Black
+     body  → warm olive-black  #1b1a10
+     card  → #252418 / #2e2c1c
+     text  → warm white #f0eedf
+  ═══════════════════════════════════════════════════════════════════ */
+  .dark {
+    --bg-body:              linear-gradient(145deg, #1e1d12 0%, #1a1910 50%, #171610 100%);
+    --bg-sidebar:           transparent;
+    --bg-sidebar-open:      rgba(22, 21, 12, 0.88);
+    --bg-surface:           #252418;
+    --bg-surface-2:         #2e2c1c;
+    --bg-input:             #2a2918;
+    --bg-hover:             rgba(255, 255, 255, 0.07);
+    --bg-thumb:             #32301f;
+
+    --text-primary:         #f0eedf;
+    --text-secondary:       #7e7c6a;
+    --text-placeholder:     #4e4d3d;
+
+    --border-sidebar:       transparent;
+    --border-sidebar-open:  rgba(255, 255, 255, 0.06);
+    --border-card:          rgba(255, 255, 255, 0.06);
+    --border-divider:       rgba(255, 255, 255, 0.08);
+    --border-table:         rgba(255, 255, 255, 0.06);
+    --border-row:           rgba(255, 255, 255, 0.04);
+    --border-checkbox:      rgba(255, 255, 255, 0.18);
+
+    --icon-color:           #585644;
+    --icon-active-bg:       #F5ED31;
+    --icon-active-color:    #0D0C0B;
+    --icon-active-shadow:   0 2px 14px rgba(245,237,49,0.28), 0 1px 4px rgba(0,0,0,0.30);
+
+    --card-logistics-bg:    linear-gradient(135deg, rgba(245,237,49,0.10) 0%, rgba(255,147,79,0.08) 100%);
+    --delay-time-bg:        rgba(255, 255, 255, 0.08);
+    --demand-high-bg:       rgba(255, 147, 79, 0.15);
+    --demand-high-color:    #ffa060;
+    --demand-low-bg:        rgba(42, 173, 90, 0.15);
+    --demand-low-color:     #4dd68a;
+
+    --filters-bg:           #252418;
+    --filter-divider:       rgba(255, 255, 255, 0.08);
+    --filter-btn-hover:     rgba(255, 255, 255, 0.06);
+    --table-bg:             #252418;
+
+    --shadow-sm:            0 1px 4px rgba(0,0,0,0.35);
+    --shadow-md:            0 2px 12px rgba(0,0,0,0.50);
+    --shadow-sidebar:       none;
+    --shadow-sidebar-open:  4px 0 28px rgba(0,0,0,0.50);
+
+    --logo-color:           #f0eedf;
+    --scrollbar-thumb:      #3a3928;
+    --toggle-bg:            #F5ED31;
+    --toggle-color:         #0D0C0B;
+
+    /* ── shadcn/ui HSL bridge (dark) ──────────────────────────────── */
+    --background:           44 30% 9%;
+    --foreground:           44 20% 94%;
+
+    --card:                 44 22% 14%;
+    --card-foreground:      44 20% 94%;
+
+    --popover:              44 22% 14%;
+    --popover-foreground:   44 20% 94%;
+
+    --primary:              244 76% 65%;
+    --primary-foreground:   0 0% 100%;
+
+    --secondary:            44 18% 20%;
+    --secondary-foreground: 44 15% 75%;
+
+    --muted:                44 18% 18%;
+    --muted-foreground:     44 12% 52%;
+
+    --accent:               54 90% 56%;
+    --accent-foreground:    0 0% 7%;
+
+    --destructive:          0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border:               44 14% 20%;
+    --input:                44 22% 18%;
+    --ring:                 244 76% 65%;
+
+    --sidebar-background:   44 30% 9%;
+    --sidebar-foreground:   44 20% 90%;
+    --sidebar-primary:      244 76% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent:       44 18% 18%;
+    --sidebar-accent-foreground: 44 20% 90%;
+    --sidebar-border:       44 14% 20%;
+    --sidebar-ring:         244 76% 65%;
+
+    --chart-1:              244 80% 68%;
+    --chart-2:              28  95% 62%;
+    --chart-3:              152 65% 50%;
+    --chart-4:              339 85% 62%;
+    --chart-5:              54  95% 58%;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     TEMA OCEAN (Blu/Verde)
+  ═══════════════════════════════════════════════════════════════════ */
   :root[data-color-theme="ocean"] {
     --primary: 221 83% 53%;
     --primary-foreground: 210 40% 98%;
     --sidebar-primary: 221 83% 53%;
+    --ring: 221 83% 53%;
     --chart-1: 221 83% 53%;
     --chart-2: 160 84% 39%;
     --chart-3: 199 89% 48%;
@@ -85,17 +239,21 @@
   .dark[data-color-theme="ocean"] {
     --primary: 217 91% 60%;
     --sidebar-primary: 217 91% 60%;
+    --ring: 217 91% 60%;
     --chart-1: 217 91% 60%;
     --chart-2: 160 84% 45%;
     --chart-3: 199 89% 55%;
     --chart-4: 215 25% 40%;
   }
 
-  /* --- TEMA SUNSET (Giallo/Arancione) --- */
+  /* ═══════════════════════════════════════════════════════════════════
+     TEMA SUNSET (Giallo/Arancione)
+  ═══════════════════════════════════════════════════════════════════ */
   :root[data-color-theme="sunset"] {
-    --primary: 28 95% 55%; 
+    --primary: 28 95% 55%;
     --primary-foreground: 0 0% 100%;
     --sidebar-primary: 28 95% 55%;
+    --ring: 28 95% 55%;
     --chart-1: 28 95% 55%;
     --chart-2: 42 90% 50%;
     --chart-3: 12 85% 58%;
@@ -104,37 +262,306 @@
   .dark[data-color-theme="sunset"] {
     --primary: 28 95% 62%;
     --sidebar-primary: 28 95% 62%;
+    --ring: 28 95% 62%;
     --chart-1: 28 95% 62%;
     --chart-2: 42 90% 58%;
     --chart-3: 12 85% 65%;
     --chart-4: 35 25% 55%;
   }
 
+  /* ═══════════════════════════════════════════════════════════════════
+     TEMA EMERALD (Verde Smeraldo)
+  ═══════════════════════════════════════════════════════════════════ */
+  :root[data-color-theme="emerald"] {
+    --primary: 152 60% 42%;
+    --primary-foreground: 0 0% 100%;
+    --sidebar-primary: 152 60% 42%;
+    --ring: 152 60% 42%;
+    --chart-1: 152 60% 42%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 71% 52%;
+    --chart-4: 43 74% 49%;
+  }
+  .dark[data-color-theme="emerald"] {
+    --primary: 152 65% 50%;
+    --sidebar-primary: 152 65% 50%;
+    --ring: 152 65% 50%;
+    --chart-1: 152 65% 50%;
+    --chart-2: 173 62% 48%;
+    --chart-3: 197 75% 58%;
+    --chart-4: 43 78% 56%;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BASE STYLES
+  ═══════════════════════════════════════════════════════════════════ */
   * { @apply border-border; }
-  
-  body { 
-    @apply bg-background text-foreground transition-colors duration-500 ease-in-out font-sans; 
-    /* Soft Background Gradient basato sul tema primario */
-    background-image: radial-gradient(at top left, hsla(var(--primary)/0.15) 0%, transparent 60%),
-                      radial-gradient(at bottom right, hsla(var(--chart-2)/0.1) 0%, transparent 60%);
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Urbanist', var(--font-sans, system-ui), sans-serif;
+    background: var(--bg-body);
     background-attachment: fixed;
-    background-size: cover;
+    min-height: 100vh;
+    overflow-x: hidden;
+    transition: background 0.4s ease, color 0.4s ease;
   }
 
-  /* Glassmorphism Classes */
-  .glass-card { 
-    @apply bg-card/70 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-xl shadow-black/5; 
+  /* ═══════════════════════════════════════════════════════════════════
+     GLASSMORPHISM UTILITIES
+  ═══════════════════════════════════════════════════════════════════ */
+  .glass-card {
+    background: hsl(var(--card) / 0.85);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    transition:
+      background-color 0.32s ease,
+      border-color      0.32s ease,
+      box-shadow        0.32s ease,
+      opacity           0.5s  ease,
+      transform         0.5s  ease;
   }
+
+  .dark .glass-card {
+    background: hsl(var(--card) / 0.75);
+    border-color: hsl(var(--border) / 0.8);
+    box-shadow: var(--shadow-md), 0 0 0 1px rgba(255,255,255,0.03);
+  }
+
   .glass-sidebar {
-    @apply bg-sidebar/85 backdrop-blur-2xl border-r border-sidebar-border shadow-2xl supports-[backdrop-filter]:bg-sidebar/60;
+    @apply backdrop-blur-2xl border-r shadow-2xl;
+    background: hsl(var(--sidebar-background) / 0.85);
+    border-color: hsl(var(--sidebar-border));
+    transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+                background 0.32s ease,
+                border-color 0.32s ease;
   }
 
-  /* Smooth Sidebar Transitions - FIX APPLICATO QUI: Rimosso tailwind ambiguo */
+  @supports (backdrop-filter: blur(1px)) {
+    .glass-sidebar {
+      background: hsl(var(--sidebar-background) / 0.60);
+    }
+  }
+
+  .dark .glass-sidebar {
+    background: hsl(var(--sidebar-background) / 0.90);
+    border-color: rgba(255,255,255,0.06);
+  }
+
   .sidebar-hover-expand {
     @apply transition-[width,padding] duration-300 ease-out;
   }
 
-  /* --- STILI REACT-GRID-LAYOUT --- */
+  /* ═══════════════════════════════════════════════════════════════════
+     SUPERADMIN DASHBOARD — Layout Classes
+  ═══════════════════════════════════════════════════════════════════ */
+
+  .dashboard-content {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    max-width: 1800px;
+  }
+
+  .dashboard-hero {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: hsl(var(--card) / 0.40);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 24px;
+    border-radius: 20px;
+    border: 1px solid hsl(var(--border) / 0.4);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .dashboard-hero-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: hsl(var(--muted-foreground));
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .dashboard-hero-meta .accent { color: hsl(var(--primary)); }
+  .dashboard-hero-meta .dot    { color: hsl(var(--border)); }
+
+  .dashboard-hero-title {
+    font-size: 38px;
+    font-weight: 900;
+    color: hsl(var(--foreground));
+    letter-spacing: -1px;
+    line-height: 1.1;
+    font-family: 'Urbanist', sans-serif;
+  }
+
+  .dashboard-hero-sub {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 13px;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .dashboard-hero-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 16px;
+  }
+  @media (min-width: 768px)  { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1280px) { .kpi-grid { grid-template-columns: repeat(4, 1fr); } }
+
+  .closing-alert {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid hsl(var(--primary) / 0.20);
+    border-radius: 20px;
+    padding: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.3s ease, transform 0.2s ease;
+  }
+  .closing-alert:hover {
+    box-shadow: var(--shadow-md), 0 0 0 1px hsl(var(--primary) / 0.15);
+    transform: translateY(-1px);
+  }
+
+  .closing-alert-bg {
+    position: absolute; inset: 0; z-index: 0;
+    background: linear-gradient(to right, hsl(var(--primary) / 0.08), transparent);
+  }
+  .dark .closing-alert-bg {
+    background: linear-gradient(to right, hsl(var(--primary) / 0.12), transparent);
+  }
+
+  .closing-alert-content { position: relative; z-index: 1; }
+
+  .closing-alert-label {
+    font-size: 11px; font-weight: 700;
+    color: hsl(var(--primary));
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 8px;
+  }
+  .closing-alert-value {
+    font-size: 38px; font-weight: 900;
+    color: hsl(var(--foreground));
+    letter-spacing: -1.5px; line-height: 1;
+    font-family: 'Urbanist', sans-serif;
+  }
+  .closing-alert-sub {
+    font-size: 15px; font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    letter-spacing: 0;
+  }
+
+  .closing-alert-icon {
+    position: relative; z-index: 1;
+    width: 48px; height: 48px;
+    border-radius: 14px;
+    border: 1px solid hsl(var(--primary) / 0.30);
+    background: hsl(var(--background));
+    display: flex; align-items: center; justify-content: center;
+    color: hsl(var(--primary));
+    flex-shrink: 0;
+    transition: background 0.3s ease, color 0.3s ease;
+  }
+  .closing-alert:hover .closing-alert-icon {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  @media (min-width: 1024px) { .charts-grid { grid-template-columns: 1fr 1fr; } }
+
+  /* ── Loading / Error states ── */
+  .loading-state {
+    height: 70vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 16px;
+  }
+  .error-state { padding: 24px; max-width: 1800px; margin: 0 auto; }
+  .error-box {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 80px 24px;
+    background: hsl(var(--card));
+    border: 1px dashed hsl(var(--border));
+    border-radius: 20px;
+    box-shadow: var(--shadow-sm);
+  }
+  .error-icon {
+    width: 64px; height: 64px;
+    background: hsl(0 84% 95%); color: hsl(0 84% 60%);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 16px;
+  }
+  .dark .error-icon {
+    background: hsl(0 50% 15%); color: hsl(0 72% 55%);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     ENTRY ANIMATIONS
+  ═══════════════════════════════════════════════════════════════════ */
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0);    }
+  }
+
+  .dashboard-content { animation: fadeInUp 0.55s cubic-bezier(0.22,1,0.36,1) both; }
+  .kpi-grid > *:nth-child(1) { animation: fadeInUp 0.45s 0.08s cubic-bezier(0.22,1,0.36,1) both; }
+  .kpi-grid > *:nth-child(2) { animation: fadeInUp 0.45s 0.14s cubic-bezier(0.22,1,0.36,1) both; }
+  .kpi-grid > *:nth-child(3) { animation: fadeInUp 0.45s 0.20s cubic-bezier(0.22,1,0.36,1) both; }
+  .kpi-grid > *:nth-child(4) { animation: fadeInUp 0.45s 0.26s cubic-bezier(0.22,1,0.36,1) both; }
+  .closing-alert  { animation: fadeInUp 0.45s 0.30s cubic-bezier(0.22,1,0.36,1) both; }
+  .charts-grid    { animation: fadeInUp 0.45s 0.36s cubic-bezier(0.22,1,0.36,1) both; }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     RECHARTS — Tooltip styling
+  ═══════════════════════════════════════════════════════════════════ */
+  .recharts-tooltip-wrapper .recharts-default-tooltip {
+    background-color: hsl(var(--card)) !important;
+    border: 1px solid hsl(var(--border)) !important;
+    border-radius: 12px !important;
+    box-shadow: var(--shadow-md) !important;
+    font-family: 'Urbanist', sans-serif !important;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     SCROLLBAR
+  ═══════════════════════════════════════════════════════════════════ */
+  ::-webkit-scrollbar       { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     REACT-GRID-LAYOUT
+  ═══════════════════════════════════════════════════════════════════ */
   .react-grid-layout { position: relative; transition: height 200ms ease; }
   .react-grid-item { transition: all 200ms ease; transition-property: left, top; }
   .react-grid-item.cssTransforms { transition-property: transform; }

@@ -1,3 +1,4 @@
+// Percorso: C:\Doflow\apps\frontend\src\app\superadmin\layout.tsx
 "use client";
 
 import * as React from "react";
@@ -72,29 +73,29 @@ function UserNav() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0">
-          <Avatar className="h-9 w-9 border-2 border-primary/20">
+          <Avatar className="h-9 w-9 border-2 border-primary/20 shadow-md">
             <AvatarFallback className="bg-primary/10 text-primary font-bold text-sm">
               {user?.initials ?? "SA"}
             </AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56 rounded-xl">
+      <DropdownMenuContent align="end" className="w-56 rounded-xl glass-card">
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col gap-1">
-            <p className="text-sm font-semibold truncate">{user?.email ?? "Superadmin"}</p>
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <p className="text-sm font-semibold truncate text-[var(--text-primary)]">{user?.email ?? "Superadmin"}</p>
+            <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
               <Shield className="h-3 w-3 text-primary" /> Control Plane
             </p>
           </div>
         </DropdownMenuLabel>
-        <DropdownMenuSeparator />
+        <DropdownMenuSeparator className="bg-[var(--border-divider)]" />
         <DropdownMenuItem asChild>
           <Link href="/superadmin/users" className="cursor-pointer">
-            <User className="mr-2 h-4 w-4" /> Il mio Account
+            <User className="mr-2 h-4 w-4 text-[var(--icon-color)]" /> Il mio Account
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
+        <DropdownMenuSeparator className="bg-[var(--border-divider)]" />
         <DropdownMenuItem
           onClick={logout}
           className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
@@ -137,10 +138,10 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
 
   if (!ready) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg-body)" }}>
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-          <p className="text-sm text-muted-foreground font-medium animate-pulse">
+          <p className="text-sm text-[var(--text-secondary)] font-medium animate-pulse">
             Accesso Control Plane…
           </p>
         </div>
@@ -156,10 +157,10 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
 
       <SidebarInset>
         {/* ── HEADER ─────────────────────────────────────────────────────── */}
-        <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-border/60 bg-background/95 backdrop-blur-sm px-4">
+        <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-[var(--border-divider)] px-4" style={{ background: "var(--bg-surface)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", boxShadow: "var(--shadow-sm)" }}>
 
-          <SidebarTrigger className="-ml-1 text-muted-foreground hover:text-foreground" />
-          <div className="h-5 w-px bg-border/60" />
+          <SidebarTrigger className="-ml-1 text-[var(--icon-color)] hover:text-[var(--text-primary)] transition-colors" />
+          <div className="h-5 w-px bg-[var(--border-divider)]" />
 
           {/* OPS Badge */}
           <Badge
@@ -171,16 +172,16 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
           </Badge>
 
           {/* Breadcrumb */}
-          <nav className="hidden md:flex items-center gap-1 text-xs text-muted-foreground min-w-0">
+          <nav className="hidden md:flex items-center gap-1 text-xs text-[var(--text-secondary)] min-w-0">
             {breadcrumbs.map((c, idx) => (
               <React.Fragment key={c.href}>
-                {idx > 0 && <ChevronRight className="h-3 w-3 shrink-0 text-border" />}
+                {idx > 0 && <ChevronRight className="h-3 w-3 shrink-0 text-[var(--border-divider)]" />}
                 <Link
                   href={c.href}
                   className={
                     idx === breadcrumbs.length - 1
-                      ? "font-semibold text-foreground truncate"
-                      : "hover:text-foreground transition-colors truncate"
+                      ? "font-semibold text-[var(--text-primary)] truncate"
+                      : "hover:text-[var(--text-primary)] transition-colors truncate"
                   }
                 >
                   {c.label}
@@ -195,7 +196,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
           <Button
             variant="ghost"
             size="icon"
-            className="relative h-9 w-9 text-muted-foreground hover:text-foreground"
+            className="relative h-9 w-9 text-[var(--icon-color)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
           >
             <Bell className="h-4 w-4" />
             <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-rose-500 rounded-full" />
