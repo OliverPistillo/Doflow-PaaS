@@ -1,387 +1,427 @@
-// Percorso: C:\Doflow\apps\frontend\src\app\superadmin\components\super-admin-sidebar.tsx
+// Percorso: C:\Doflow\apps\frontend\src\app\superadmin\dashboard\page.tsx
 "use client";
 
-import * as React from "react";
-import Link from "next/link";
-import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import React, { useEffect, useState, useCallback } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowUpRight, Loader2, RefreshCw, TrendingUp, TrendingDown, CalendarDays } from "lucide-react";
+import { apiFetch } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { DrillDownSheet, CardContextType } from "./components/DrillDownSheet";
+import { GlobalFilterBar, DashboardFilters } from "./components/GlobalFilterBar";
+import { formatCurrency } from "./utils";
 import {
-  Building2,
-  Users,
-  Activity,
-  ShieldAlert,
-  LogOut,
-  BarChart3,
-  ListTodo,
-  Truck,
-  CalendarDays,
-  Wallet,
-  Receipt,
-  Moon,
-  Sun,
-  ChevronsUpDown,
-  BadgeCheck,
-  User,
-  Settings,
-  Palette,
-  TrendingUp,
-} from "lucide-react";
-import { useTheme } from "next-themes";
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
 
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarRail,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarGroupContent,
-  useSidebar,
-} from "@/components/ui/sidebar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuPortal,
-} from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { getDoFlowUser, getInitials } from "@/lib/jwt";
+// --- TIPI Dati Backend ---
+type DashboardData = {
+  kpi: {
+    leadsCount: number;
+    totalValue: number;
+    winRate: number;
+    avgDealValue: number;
+    dealsClosingThisMonth: number;
+  };
+  pipeline: { stage: string; value: number; count: number }[];
+  topDeals: { name: string; client: string; value: number; stage: string }[];
+};
 
-// ─── Menu ─────────────────────────────────────────────────────────────────────
+// ─── Greeting helper ──────────────────────────────────────────────────────────
 
-const MENU_GROUPS = [
-  {
-    label: "Performance commerciali",
-    items: [
-      { label: "Sales Dashboard",  href: "/superadmin/dashboard",      icon: BarChart3,   badge: undefined },
-      { label: "Gestione offerte", href: "/superadmin/sales/pipeline", icon: ListTodo,    badge: undefined },
-    ],
-  },
-  {
-    label: "Metriche Platform",
-    items: [
-      { label: "Metriche SaaS",    href: "/superadmin/metrics",        icon: TrendingUp,  badge: undefined },
-      { label: "Control Tower",    href: "/superadmin/control-tower",  icon: ShieldAlert, badge: undefined },
-    ],
-  },
-  {
-    label: "Consegna del servizio",
-    items: [
-      { label: "Stato del servizio",      href: "/superadmin/delivery/status",   icon: Truck,        badge: undefined },
-      { label: "Calendario del progetto", href: "/superadmin/delivery/calendar", icon: CalendarDays,  badge: undefined },
-    ],
-  },
-  {
-    label: "Fatturazione",
-    items: [
-      { label: "Dashboard finanziario", href: "/superadmin/finance/dashboard", icon: Wallet,  badge: undefined },
-      { label: "Gestione fatture",      href: "/superadmin/finance/invoices",  icon: Receipt, badge: undefined },
-    ],
-  },
-  {
-    label: "Platform Admin",
-    items: [
-      { label: "Gestione Tenant", href: "/superadmin/tenants", icon: Building2, badge: undefined },
-      { label: "Gestione Utenti", href: "/superadmin/users",   icon: Users,     badge: undefined },
-      { label: "Audit Log",       href: "/superadmin/audit",   icon: Activity,  badge: undefined },
-    ],
-  },
-];
-
-// ─── Theming Logic ─────────────────────────────────────────────────────────────
-
-const COLOR_THEMES = [
-  { id: "default", label: "Neutro (Default)", colorClass: "bg-slate-500" },
-  { id: "ocean",   label: "Ocean (Blu/Verde)", colorClass: "bg-blue-500" },
-  { id: "sunset",  label: "Sunset (Giallo/Arancio)", colorClass: "bg-orange-500" },
-  { id: "emerald", label: "Emerald (Verde Smeraldo)", colorClass: "bg-emerald-500" },
-];
-
-function setColorTheme(themeId: string) {
-  if (typeof window !== "undefined") {
-    document.documentElement.setAttribute("data-color-theme", themeId);
-    localStorage.setItem("doflow_color_theme", themeId);
-  }
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Buongiorno";
+  if (h < 18) return "Buon pomeriggio";
+  return "Buona sera";
 }
 
-// ─── Item ─────────────────────────────────────────────────────────────────────
+function formatDate() {
+  return new Date().toLocaleDateString("it-IT", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+}
 
-function Item({
-  href,
-  label,
-  icon: Icon,
-  badge,
-  isHovered,
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
+
+function KpiCard({
+  title,
+  value,
+  colorVar,
+  trend,
+  trendUp,
+  onClick,
 }: {
-  href:      string;
-  label:     string;
-  icon:      React.ComponentType<{ className?: string }>;
-  badge?:    number;
-  isHovered: boolean;
+  title:    string;
+  value:    string;
+  colorVar: string;
+  trend?:   string;
+  trendUp?: boolean;
+  onClick:  () => void;
 }) {
-  const pathname = usePathname();
-  const active   = pathname === href || pathname.startsWith(href + "/");
-
   return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
-        asChild
-        isActive={active}
-        tooltip={label}
-        className={`gap-3 pl-3 mb-0.5 rounded-[13px] transition-all duration-200 ${
-          active
-            ? "font-semibold text-[var(--icon-active-color)] shadow-[var(--icon-active-shadow)]"
-            : "text-[var(--icon-color)] hover:text-[var(--text-primary)]"
-        }`}
-        style={active ? { background: "var(--icon-active-bg)" } : undefined}
-      >
-        <Link href={href} className="flex items-center w-full">
-          <Icon className={`h-[19px] w-[19px] shrink-0 transition-colors duration-200 ${active ? "text-[var(--icon-active-color)]" : ""}`} />
-          <span
-            className={`ml-2 flex-1 whitespace-nowrap text-[13px] font-medium tracking-[0.01em] transition-all duration-300 ${
-              isHovered ? "opacity-100 translate-x-0 max-w-[120px]" : "opacity-0 -translate-x-2 max-w-0"
-            } overflow-hidden`}
+    <Card
+      className="glass-card transition-all duration-300 cursor-pointer group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative"
+      onClick={onClick}
+    >
+      {/* Glow effect */}
+      <div
+        className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-20 blur-2xl group-hover:opacity-40 transition-opacity duration-500 pointer-events-none"
+        style={{ backgroundColor: colorVar }}
+      />
+      <CardContent className="p-6 relative z-10">
+        <div className="flex justify-between items-start">
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{title}</p>
+          <div
+            className="h-9 w-9 flex items-center justify-center rounded-xl bg-muted/50 transition-all duration-300 group-hover:scale-110 shadow-sm"
+            style={{ color: colorVar, border: `1px solid color-mix(in srgb, ${colorVar} 20%, transparent)` }}
           >
-            {label}
-          </span>
-          {badge !== undefined && badge > 0 && isHovered && (
-            <span className="ml-auto text-[10px] font-bold bg-rose-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none">
-              {badge > 99 ? "99+" : badge}
-            </span>
-          )}
-        </Link>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
+            <ArrowUpRight className="h-4 w-4" />
+          </div>
+        </div>
+        <h3 className="text-3xl font-black text-foreground mt-3 tracking-tight tabular-nums" style={{ fontFamily: "'Urbanist', sans-serif" }}>
+          {value}
+        </h3>
+        {trend && (
+          <div className={`flex items-center gap-1 mt-2 text-xs font-semibold ${
+            trendUp ? "text-emerald-500" : "text-rose-500"
+          }`}>
+            {trendUp
+              ? <TrendingUp className="h-3.5 w-3.5" />
+              : <TrendingDown className="h-3.5 w-3.5" />}
+            {trend}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
-// ─── Main sidebar ─────────────────────────────────────────────────────────────
+export default function SalesDashboardPage() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
 
-export function SuperAdminSidebar() {
-  const router = useRouter();
-  const { setTheme, theme, resolvedTheme } = useTheme();
-  const { state } = useSidebar();
+  // STATO GLOBALE FILTRI
+  const [filters, setFilters] = useState<DashboardFilters>({});
 
-  const [mounted, setMounted] = React.useState(false);
-  const [user, setUser] = React.useState<{ email: string; role: string; initials: string } | null>(null);
-  const [isHovered, setIsHovered] = React.useState(false);
+  // STATO CARD ATTIVA (Drill-down Context)
+  const [activeCard, setActiveCard] = useState<CardContextType>(null);
 
-  React.useEffect(() => {
-    setMounted(true);
-    const savedColorTheme = localStorage.getItem("doflow_color_theme") || "default";
-    setColorTheme(savedColorTheme);
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filters.stage) params.append("stages", filters.stage);
+      if (filters.month) params.append("expectedCloseMonth", filters.month);
+      if (filters.clientName) params.append("clientName", filters.clientName);
 
-    const payload = getDoFlowUser();
-    if (payload) {
-      setUser({
-        email:    payload.email ?? "superadmin",
-        role:     payload.role  ?? "superadmin",
-        initials: getInitials(payload.email),
-      });
+      const res = await apiFetch<DashboardData>(`/superadmin/dashboard/stats?${params.toString()}`);
+      setData(res);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [filters]);
 
-  const logout = React.useCallback(() => {
-    window.localStorage.removeItem("doflow_token");
-    router.push("/login");
-  }, [router]);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
-  const showDetails = state === "expanded" || isHovered;
-  const logoSrc = mounted && resolvedTheme === 'light' ? '/logo_doflow_nero.png' : '/logo_doflow_bianco.png';
+  // ─── LOADING STATE ──────────────────────────────────────────────────────────
+
+  if (loading && !data) {
+    return (
+      <div className="loading-state">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="text-muted-foreground font-medium animate-pulse">Sincronizzazione metriche globali…</p>
+      </div>
+    );
+  }
+
+  // ─── ERROR STATE ────────────────────────────────────────────────────────────
+
+  if (!data || !data.kpi || !Array.isArray(data.pipeline) || !Array.isArray(data.topDeals)) {
+    return (
+      <div className="error-state animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="error-box">
+          <div className="error-icon">
+            <TrendingDown className="h-8 w-8" />
+          </div>
+          <h2 className="text-xl font-bold text-foreground">Impossibile caricare le statistiche</h2>
+          <p className="text-muted-foreground mt-2 max-w-md text-center">
+            Il server ha riscontrato un errore (es. database non sincronizzato) o i dati ricevuti non sono validi.
+          </p>
+          <Button onClick={loadData} variant="outline" className="mt-6 gap-2">
+            <RefreshCw className="h-4 w-4" /> Riprova
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── MAIN RENDER ────────────────────────────────────────────────────────────
 
   return (
-    <Sidebar
-      collapsible="icon"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className={`glass-sidebar border-r border-[var(--border-sidebar)] z-50 sidebar-hover-expand ${
-        state === "collapsed" && isHovered ? "w-[--sidebar-width]" : ""
-      }`}
-      style={{
-        transition: "width 0.28s cubic-bezier(0.4, 0, 0.2, 1), background 0.32s ease, border-color 0.32s ease",
-      }}
-    >
-      {/* HEADER WITH DYNAMIC LOGO */}
-      <SidebarHeader className="h-20 border-b border-[var(--border-divider)] p-0 overflow-hidden shrink-0 flex items-center relative transition-[padding] duration-300">
-        <div className={`flex h-full w-full items-center relative transition-all duration-300 ${showDetails ? 'px-5 justify-start' : 'px-0 justify-center'}`}>
-          <div className={`relative h-10 transition-all duration-300 ease-out ${showDetails ? 'w-40' : 'w-10'}`}>
-            {mounted && (
-              <Image
-                src={logoSrc}
-                alt="DoFlow Logo"
-                fill
-                priority
-                className={`object-contain object-left transition-opacity duration-300 ${showDetails ? 'opacity-100' : 'opacity-90'}`}
-              />
-            )}
+    <div className="dashboard-content">
+
+      {/* ── 1. Hero / Greeting card ──────────────────────────────────── */}
+      <div className="dashboard-hero" style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '16px' }}>
+        <div>
+          <div className="dashboard-hero-meta">
+            <span>Business Intelligence</span>
+            <span className="dot">•</span>
+            <span className="accent">Sales Ops</span>
           </div>
-          {showDetails && (
-            <span className="ml-2 text-[15px] font-bold tracking-[-0.3px] text-[var(--text-primary)] whitespace-nowrap transition-opacity duration-200 opacity-100">
-              DoFlow
-            </span>
-          )}
+          <h1 className="dashboard-hero-title">Quadro Generale</h1>
+          <div className="dashboard-hero-sub">
+            <CalendarDays className="h-3.5 w-3.5" />
+            <span className="capitalize">{formatDate()}</span>
+            <span style={{ color: 'hsl(var(--border))' }}>—</span>
+            <span className="font-medium" style={{ color: 'hsl(var(--foreground))' }}>{getGreeting()}</span>
+          </div>
         </div>
-      </SidebarHeader>
+        <div className="dashboard-hero-actions">
+          <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30">
+            Live
+          </Badge>
+          <Button variant="outline" size="sm" onClick={loadData} className="rounded-xl shadow-sm hover:border-primary/50 transition-colors gap-2">
+            <RefreshCw className="h-3.5 w-3.5" /> Aggiorna
+          </Button>
+        </div>
+      </div>
 
-      {/* CONTENT */}
-      <SidebarContent className="pt-4 scrollbar-none px-3">
-        {MENU_GROUPS.map((group) => (
-          <SidebarGroup key={group.label} className="mb-2">
-            <SidebarGroupLabel
-              className={`text-[var(--text-secondary)] text-[10px] uppercase tracking-widest font-bold transition-all duration-300 whitespace-nowrap overflow-hidden ${
-                showDetails ? "opacity-100 px-2" : "opacity-0 h-0 p-0"
-              }`}
-            >
-              {group.label}
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu className="gap-0.5">
-                {group.items.map((item) => (
-                  <Item
-                    key={item.href}
-                    href={item.href}
-                    label={item.label}
-                    icon={item.icon}
-                    badge={item.badge}
-                    isHovered={showDetails}
+      {/* ── 2. BARRA FILTRI GLOBALE ──────────────────────────────────── */}
+      <GlobalFilterBar filters={filters} onFilterChange={setFilters} />
+
+      {/* ── 3. KPI CARDS ──────────────────────────────────────────────── */}
+      <div className="kpi-grid">
+        <KpiCard
+          title="Offerte in qualifica"
+          value={String(data.kpi.leadsCount)}
+          colorVar="hsl(var(--chart-1))"
+          trend="+8% vs mese precedente"
+          trendUp
+          onClick={() => setActiveCard('QUALIFIED_LEADS')}
+        />
+        <KpiCard
+          title="Valore filtrato"
+          value={formatCurrency(data.kpi.totalValue)}
+          colorVar="hsl(var(--chart-2))"
+          trend="Pipeline attiva"
+          trendUp
+          onClick={() => setActiveCard('TOTAL_VALUE')}
+        />
+        <KpiCard
+          title="Tasso di vincita"
+          value={`${data.kpi.winRate}%`}
+          colorVar="hsl(var(--chart-3))"
+          trend={data.kpi.winRate >= 30 ? "Sopra target" : "Sotto target"}
+          trendUp={data.kpi.winRate >= 30}
+          onClick={() => setActiveCard('WIN_RATE')}
+        />
+        <KpiCard
+          title="Media per deal"
+          value={formatCurrency(data.kpi.avgDealValue)}
+          colorVar="hsl(var(--chart-4))"
+          trend="Valore medio"
+          trendUp
+          onClick={() => setActiveCard('AVG_VALUE')}
+        />
+      </div>
+
+      {/* ── 4. Alert Row (Chiusura Mese) ──────────────────────────────── */}
+      <div
+        className="closing-alert"
+        onClick={() => setActiveCard('CLOSING_THIS_MONTH')}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === 'Enter' && setActiveCard('CLOSING_THIS_MONTH')}
+        aria-label="Vedi deals in chiusura"
+      >
+        <div className="closing-alert-bg" />
+        <div className="closing-alert-content">
+          <p className="closing-alert-label">
+            In chiusura (Mese corrente o selezionato)
+          </p>
+          <p className="closing-alert-value">
+            {data.kpi.dealsClosingThisMonth}{' '}
+            <span className="closing-alert-sub">deals critici</span>
+          </p>
+        </div>
+        <div className="closing-alert-icon">
+          <ArrowUpRight className="h-6 w-6" />
+        </div>
+      </div>
+
+      {/* ── 5. Charts Area ────────────────────────────────────────────── */}
+      <div className="charts-grid">
+
+        {/* Pipeline Bar Chart */}
+        <Card className="glass-card">
+          <CardHeader className="pb-2">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
+                Valore pipeline per fase
+              </CardTitle>
+              <div className="h-8 w-8 bg-muted/50 rounded flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer transition-colors">
+                <ArrowUpRight className="h-4 w-4" />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[320px] mt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data.pipeline}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis
+                    dataKey="stage"
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    interval={0}
+                    tickLine={false}
+                    axisLine={false}
+                    dy={10}
                   />
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
-      </SidebarContent>
+                  <YAxis
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    tickFormatter={(v) => `€${v / 1000}k`}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip
+                    cursor={{ fill: 'hsl(var(--muted) / 0.5)' }}
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card))',
+                      borderRadius: '12px',
+                      border: '1px solid hsl(var(--border))',
+                      boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+                      fontFamily: "'Urbanist', sans-serif",
+                    }}
+                    formatter={(val: unknown) => [formatCurrency(Number(val) || 0), 'Valore']}
+                  />
+                  <Bar dataKey="value" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} barSize={45} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* FOOTER */}
-      <SidebarFooter className="border-t border-[var(--border-divider)] p-3">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  size="lg"
-                  className="data-[state=open]:bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] transition-colors rounded-xl h-12"
-                >
-                  <Avatar className="h-9 w-9 rounded-lg border-2 border-primary/20 shrink-0 shadow-md">
-                    <AvatarFallback
-                      className="rounded-lg font-bold text-sm"
-                      style={{
-                        background: "var(--icon-active-bg)",
-                        color: "var(--icon-active-color)",
-                      }}
+        {/* Pie Chart */}
+        <Card className="glass-card">
+          <CardHeader className="pb-2">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
+                Distribuzione offerte (Quantità)
+              </CardTitle>
+              <div className="h-8 w-8 bg-muted/50 rounded flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer transition-colors">
+                <ArrowUpRight className="h-4 w-4" />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[320px] mt-4 flex flex-col md:flex-row items-center">
+              <div className="h-full w-full md:w-2/3">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={data.pipeline}
+                      dataKey="count"
+                      innerRadius={70}
+                      outerRadius={110}
+                      paddingAngle={3}
+                      stroke="none"
                     >
-                      {user?.initials ?? "SA"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className={`grid flex-1 text-left text-sm leading-tight ml-2 transition-all duration-300 overflow-hidden whitespace-nowrap ${showDetails ? "w-[120px] opacity-100 translate-x-0" : "w-0 opacity-0 -translate-x-2"}`}>
-                    <span className="truncate font-semibold text-[var(--text-primary)] text-[13px]">{user?.email ?? "Superadmin"}</span>
-                    <span className="truncate text-[10px] text-[var(--text-secondary)] font-bold flex items-center gap-1 uppercase">
-                      <BadgeCheck className="h-3 w-3 text-primary" />
-                      {user?.role}
-                    </span>
+                      {data.pipeline.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={`hsl(var(--chart-${(index % 5) + 1}))`} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: '8px',
+                        border: '1px solid hsl(var(--border))',
+                        backgroundColor: 'hsl(var(--card))',
+                        fontFamily: "'Urbanist', sans-serif",
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Legenda Autogenerata */}
+              <div className="w-full md:w-1/3 flex flex-col justify-center gap-4 p-4 text-right">
+                {data.pipeline.map((d, i) => (
+                  <div key={i} className="flex items-center justify-end gap-3 group">
+                    <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: `hsl(var(--chart-${(i % 5) + 1}))` }} />
+                    <span className="text-xs text-muted-foreground font-medium group-hover:text-foreground transition-colors">{d.stage}</span>
+                    <span className="text-sm font-black text-foreground">({d.count})</span>
                   </div>
-                  {showDetails && <ChevronsUpDown className="ml-auto size-4 text-[var(--text-secondary)] shrink-0" />}
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-              <DropdownMenuContent
-                className="w-[240px] rounded-xl shadow-2xl border-[var(--border-card)] glass-card"
-                side={state === "collapsed" && !isHovered ? "right" : "bottom"}
-                align="end"
-                sideOffset={10}
-              >
-                <DropdownMenuLabel className="p-2 font-normal">
-                  <div className="flex items-center gap-3 text-left text-sm">
-                    <Avatar className="h-10 w-10 rounded-lg shadow-md">
-                      <AvatarFallback
-                        className="rounded-lg font-bold"
-                        style={{
-                          background: "var(--icon-active-bg)",
-                          color: "var(--icon-active-color)",
-                        }}
-                      >
-                        {user?.initials ?? "SA"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-bold text-[var(--text-primary)]">{user?.email}</span>
-                      <span className="truncate text-xs text-[var(--text-secondary)]">{user?.role}</span>
-                    </div>
-                  </div>
-                </DropdownMenuLabel>
+      {/* ── 6. Top Deals Chart ────────────────────────────────────────── */}
+      <Card className="glass-card">
+        <CardHeader className="pb-2">
+          <div className="flex justify-between items-center">
+            <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
+              Le migliori offerte per valore
+            </CardTitle>
+            <div className="h-8 w-8 bg-muted/50 rounded flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer transition-colors">
+              <ArrowUpRight className="h-4 w-4" />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[280px] w-full mt-6">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data.topDeals} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  interval={0}
+                  angle={-30}
+                  textAnchor="end"
+                  height={70}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip
+                  cursor={{ fill: 'hsl(var(--muted) / 0.5)' }}
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    borderRadius: '12px',
+                    border: '1px solid hsl(var(--border))',
+                    fontFamily: "'Urbanist', sans-serif",
+                  }}
+                  formatter={(val: unknown) => [formatCurrency(Number(val) || 0), 'Valore']}
+                />
+                <Bar dataKey="value" fill="hsl(var(--chart-2))" radius={[6, 6, 0, 0]} barSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
 
-                <DropdownMenuSeparator className="bg-[var(--border-divider)]" />
+      {/* ── 7. DRILL DOWN SHEET ───────────────────────────────────────── */}
+      <DrillDownSheet
+        cardType={activeCard}
+        globalFilters={filters}
+        onClose={() => setActiveCard(null)}
+      />
 
-                <DropdownMenuGroup>
-                  <DropdownMenuItem asChild>
-                    <Link href="/superadmin/users" className="cursor-pointer py-2 rounded-lg">
-                      <User className="mr-2 h-4 w-4 text-[var(--text-secondary)]" />
-                      Il mio Account
-                    </Link>
-                  </DropdownMenuItem>
-
-                  {/* Opzioni: Tema Chiaro/Scuro */}
-                  <DropdownMenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")} className="cursor-pointer py-2 rounded-lg">
-                    {resolvedTheme === "dark" ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
-                    Passa a {resolvedTheme === "dark" ? "Light Mode" : "Dark Mode"}
-                  </DropdownMenuItem>
-
-                  {/* Opzioni: Colori Primari */}
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger className="py-2 rounded-lg cursor-pointer">
-                      <Palette className="mr-2 h-4 w-4 text-[var(--text-secondary)]" />
-                      Stile e Colori
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuPortal>
-                      <DropdownMenuSubContent className="glass-card rounded-xl border-[var(--border-card)] ml-2">
-                        {COLOR_THEMES.map((ct) => (
-                          <DropdownMenuItem
-                            key={ct.id}
-                            onClick={() => setColorTheme(ct.id)}
-                            className="cursor-pointer py-2 flex items-center gap-2"
-                          >
-                            <div className={`h-3 w-3 rounded-full ${ct.colorClass} ring-1 ring-offset-1 ring-offset-card ring-black/10`} />
-                            {ct.label}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuPortal>
-                  </DropdownMenuSub>
-
-                  <DropdownMenuItem asChild>
-                    <Link href="/superadmin/settings" className="cursor-pointer py-2 rounded-lg">
-                      <Settings className="mr-2 h-4 w-4 text-[var(--text-secondary)]" />
-                      Impostazioni Globali
-                    </Link>
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-
-                <DropdownMenuSeparator className="bg-[var(--border-divider)]" />
-
-                <DropdownMenuItem
-                  onClick={logout}
-                  className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer py-2 mt-1 rounded-lg font-medium"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Disconnetti in sicurezza
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
-      <SidebarRail />
-    </Sidebar>
+    </div>
   );
 }
