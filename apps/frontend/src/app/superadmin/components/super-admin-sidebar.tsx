@@ -218,7 +218,7 @@ export function SuperAdminSidebar() {
       </SidebarHeader>
 
       {/* ── CONTENT: Nav Groups ──────────────────────────────────── */}
-      <SidebarContent className={`pt-2 overflow-y-auto scrollbar-none transition-all duration-300 ${isOpen ? "px-3" : "px-[14px]"}`}>
+      <SidebarContent className={`pt-2 overflow-y-auto overflow-x-visible scrollbar-none transition-all duration-300 ${isOpen ? "px-3" : "px-[14px]"}`}>
         {MENU_GROUPS.map((group) => (
           <div key={group.label} className="sa-nav-group mb-3">
             <div className={`transition-all duration-200 text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 ${isOpen ? "opacity-100 h-auto" : "opacity-0 h-0 overflow-hidden"}`}>

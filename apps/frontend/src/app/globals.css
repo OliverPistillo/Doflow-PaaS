@@ -632,6 +632,11 @@
   box-shadow: var(--shadow-sidebar-open) !important;
 }
 
+/* Allow tooltips to escape collapsed sidebar */
+.superadmin-theme [data-sidebar="sidebar"]:not(.sa-sidebar-open) [data-sidebar="content"] {
+  overflow: visible !important;
+}
+
 /* Allow scrolling ONLY when expanded */
 .superadmin-theme [data-sidebar="sidebar"].sa-sidebar-open > div {
   overflow: visible !important;
@@ -836,12 +841,18 @@
               max-width 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-/* ── Header identico alla demo ──────────────────────────────────────────── */
+/* ── Header unificato (sticky, fuori dal main) ───────────────────────── */
 .superadmin-theme .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  padding: 0 32px;
+  height: 72px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: transparent;
 }
 
 .superadmin-theme .header-left {
@@ -851,13 +862,14 @@
 }
 
 .superadmin-theme .header h1 {
-  font-size: 36px;
+  font-size: 32px;
   font-weight: 700;
   letter-spacing: -0.5px;
   color: var(--text-primary);
   margin-left: 8px;
   line-height: 1;
 }
+
 
 .superadmin-theme .header-right {
   display: flex;
@@ -926,6 +938,47 @@
 .superadmin-theme .header-btn:hover {
   box-shadow: var(--shadow-md);
   color: var(--text-primary);
+}
+
+/* Notifica bell dot */
+.superadmin-theme .header-btn-bell {
+  position: relative;
+}
+.superadmin-theme .header-bell-dot {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 6px;
+  height: 6px;
+  background: #ef4444;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Avatar button (mostra iniziali utente) */
+.superadmin-theme .header-avatar-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--icon-active-bg);
+  color: var(--icon-active-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: none;
+  box-shadow: var(--shadow-sm);
+  outline: none;
+  transition: box-shadow 0.18s ease;
+}
+.superadmin-theme .header-avatar-btn:hover {
+  box-shadow: var(--shadow-md);
+}
+.superadmin-theme .header-avatar-initials {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
 }
 
 .superadmin-theme .theme-toggle {

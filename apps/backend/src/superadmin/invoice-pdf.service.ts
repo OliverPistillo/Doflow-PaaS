@@ -31,9 +31,9 @@ export class InvoicePdfService {
   private getLogoPath(): string | null {
     // Il logo si trova in apps/frontend/public/ mentre il backend è in apps/backend/
     const candidates = [
-      path.resolve(process.cwd(), '..', 'frontend', 'public', 'logo_doflow_nero.png'),
-      path.resolve(process.cwd(), '..', '..', 'apps', 'frontend', 'public', 'logo_doflow_nero.png'),
-      path.resolve(__dirname, '..', '..', '..', '..', 'frontend', 'public', 'logo_doflow_nero.png'),
+      path.resolve(process.cwd(), '..', 'frontend', 'public', 'logo_doflow_bianco.png'),
+      path.resolve(process.cwd(), '..', '..', 'apps', 'frontend', 'public', 'logo_doflow_bianco.png'),
+      path.resolve(__dirname, '..', '..', '..', '..', 'frontend', 'public', 'logo_doflow_bianco.png'),
     ];
     for (const p of candidates) {
       if (fs.existsSync(p)) return p;

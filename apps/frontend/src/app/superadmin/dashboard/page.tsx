@@ -3,15 +3,13 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowUpRight, Loader2, RefreshCw, TrendingUp, TrendingDown, CalendarDays, Package, Users, MapPin, Calendar, LayoutGrid, MoreHorizontal } from "lucide-react";
+import { ArrowUpRight, Loader2, RefreshCw, TrendingUp, TrendingDown, CalendarDays } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DrillDownSheet, CardContextType } from "./components/DrillDownSheet";
 import { GlobalFilterBar, DashboardFilters } from "./components/GlobalFilterBar";
 import { formatCurrency } from "./utils";
-import { useSidebar } from "@/components/ui/sidebar";
-import { useTheme } from "next-themes";
 import {
   BarChart,
   Bar,
@@ -98,10 +96,6 @@ function KpiCard({
 }
 
 export default function SalesDashboardPage() {
-  const { state, toggleSidebar } = useSidebar();
-  const { setTheme, resolvedTheme } = useTheme();
-  const isOpen = state === "expanded";
-
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -169,54 +163,7 @@ export default function SalesDashboardPage() {
   return (
     <div className="dashboard-content animate-fadeIn">
 
-      {/* ── HEADER IDENTICO ALLA DEMO ───────────────────────────────────── */}
-      <header className="header">
-        <div className="header-left">
-          {/* Pulsante Trigger Animato */}
-          <button onClick={toggleSidebar} className={`sidebar-trigger ${isOpen ? "active" : ""}`}>
-            <svg className="icon-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
-              <rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
-            </svg>
-            <svg className="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-              <line x1="9" y1="3" x2="9" y2="21"/><polyline points="14 8 11 12 14 16"/>
-            </svg>
-          </button>
-          <h1>Quadro Generale</h1>
-        </div>
-
-        <div className="header-right">
-          <div className="storage-badge">
-            <MapPin className="w-4 h-4" />
-            Storage: 51 Port Terminal Blvd
-          </div>
-          <div className="month-badge">
-            <Calendar className="w-4 h-4" />
-            Month
-          </div>
-          <div className="header-btn"><LayoutGrid className="w-4 h-4" /></div>
-          <div className="header-btn"><MoreHorizontal className="w-4 h-4" /></div>
-
-          {/* Toggle Tema Animato */}
-          <button
-            onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-            className="theme-toggle"
-          >
-            <svg className="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-              <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-            </svg>
-            <svg className="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-            </svg>
-          </button>
-        </div>
-      </header>
-
-      {/* ── 2. BARRA FILTRI GLOBALE ──────────────────────────────────── */}
+      {/* ── 1. BARRA FILTRI GLOBALE ──────────────────────────────────── */}
       <div className="animate-fadeInUp" style={{ animationDelay: "0.1s" }}>
         <GlobalFilterBar filters={filters} onFilterChange={setFilters} />
       </div>

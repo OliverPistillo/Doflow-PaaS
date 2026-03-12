@@ -5,53 +5,100 @@ import * as React from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
-  SidebarProvider, SidebarTrigger, SidebarInset,
+  SidebarProvider,
+  SidebarInset,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { SuperAdminSidebar } from "./components/super-admin-sidebar";
-import { ThemeToggle } from "@/components/theme/theme-toggle";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getDoFlowUser, getInitials } from "@/lib/jwt";
-import { ChevronRight, Shield, LogOut, User, Bell, Zap } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Shield, LogOut, User, Bell } from "lucide-react";
+import { useTheme } from "next-themes";
 
-// ─── Breadcrumb helper ────────────────────────────────────────────────────────
+// ─── Mappa pathname → Titolo pagina ───────────────────────────────────────────
 
-const LABEL_MAP: Record<string, string> = {
-  superadmin:    "OPS",
-  dashboard:     "Sales Dashboard",
-  finance:       "Fatturazione",
-  invoices:      "Fatture",
-  templates:     "Template",
-  tenants:       "Tenant",
-  users:         "Utenti",
-  audit:         "Audit Log",
-  sales:         "Vendite",
-  pipeline:      "Pipeline",
-  delivery:      "Servizio",
-  status:        "Stato",
-  calendar:      "Calendario",
-  "control-tower": "Control Tower",
-  metrics:       "Metriche SaaS",
+const PAGE_TITLE_MAP: Record<string, string> = {
+  "/superadmin/dashboard":            "Sales Dashboard",
+  "/superadmin/sales/pipeline":       "Gestione Offerte",
+  "/superadmin/metrics":              "Metriche SaaS",
+  "/superadmin/control-tower":        "Control Tower",
+  "/superadmin/delivery/status":      "Stato del Servizio",
+  "/superadmin/delivery/calendar":    "Calendario Progetto",
+  "/superadmin/finance/dashboard":    "Dashboard Finanziario",
+  "/superadmin/finance/invoices/new": "Nuova Fattura",
+  "/superadmin/finance/invoices":     "Gestione Fatture",
+  "/superadmin/tenants":              "Gestione Tenant",
+  "/superadmin/users":                "Gestione Utenti",
+  "/superadmin/audit":                "Audit Log",
+  "/superadmin/settings":             "Impostazioni Globali",
 };
 
-function crumbs(pathname: string | null) {
-  if (!pathname) return [];
-  const parts = pathname.split("/").filter(Boolean);
-  const acc: { label: string; href: string }[] = [];
-  let href = "";
-  for (const p of parts) {
-    href += `/${p}`;
-    acc.push({ label: LABEL_MAP[p] ?? (p.charAt(0).toUpperCase() + p.slice(1)), href });
-  }
-  return acc;
+function getPageTitle(pathname: string | null): string {
+  if (!pathname) return "DoFlow";
+  if (PAGE_TITLE_MAP[pathname]) return PAGE_TITLE_MAP[pathname];
+  // Corrispondenza prefisso (route nested)
+  const match = Object.keys(PAGE_TITLE_MAP)
+    .filter((k) => pathname.startsWith(k))
+    .sort((a, b) => b.length - a.length)[0];
+  return match ? PAGE_TITLE_MAP[match] : "DoFlow";
 }
 
-// ─── User Nav ─────────────────────────────────────────────────────────────────
+// ─── Pulsante Trigger Animato ─────────────────────────────────────────────────
+
+function AnimatedTrigger() {
+  const { state, toggleSidebar } = useSidebar();
+  const isOpen = state === "expanded";
+  return (
+    <button
+      onClick={toggleSidebar}
+      className={`sidebar-trigger ${isOpen ? "active" : ""}`}
+      aria-label="Toggle sidebar"
+    >
+      <svg className="icon-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3"  y="3"  width="7" height="7" rx="1.5"/>
+        <rect x="14" y="3"  width="7" height="7" rx="1.5"/>
+        <rect x="3"  y="14" width="7" height="7" rx="1.5"/>
+        <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+      </svg>
+      <svg className="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <line x1="9" y1="3"  x2="9"  y2="21"/>
+        <polyline points="14 8 11 12 14 16"/>
+      </svg>
+    </button>
+  );
+}
+
+// ─── Theme Toggle Animato ─────────────────────────────────────────────────────
+
+function AnimatedThemeToggle() {
+  const { setTheme, resolvedTheme } = useTheme();
+  return (
+    <button
+      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+      className="theme-toggle"
+      aria-label="Toggle theme"
+    >
+      <svg className="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="1"  x2="12" y2="3"/>   <line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22"  y1="4.22"  x2="5.64"  y2="5.64"/>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1"  y1="12" x2="3"  y2="12"/>   <line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22"  y1="19.78" x2="5.64"  y2="18.36"/>
+        <line x1="18.36" y1="5.64"  x2="19.78" y2="4.22"/>
+      </svg>
+      <svg className="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    </button>
+  );
+}
+
+// ─── User Avatar Dropdown ─────────────────────────────────────────────────────
 
 function UserNav() {
   const router = useRouter();
@@ -72,30 +119,34 @@ function UserNav() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0">
-          <Avatar className="h-9 w-9 border-2 border-primary/20 shadow-md">
-            <AvatarFallback className="bg-primary/10 text-primary font-bold text-sm">
-              {user?.initials ?? "SA"}
-            </AvatarFallback>
-          </Avatar>
-        </Button>
+        <button
+          className="header-avatar-btn"
+          aria-label="User menu"
+        >
+          <span className="header-avatar-initials">
+            {user?.initials ?? "SA"}
+          </span>
+        </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56 rounded-xl glass-card">
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col gap-1">
-            <p className="text-sm font-semibold truncate text-[var(--text-primary)]">{user?.email ?? "Superadmin"}</p>
-            <p className="text-xs text-[var(--text-secondary)] flex items-center gap-1">
+            <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+              {user?.email ?? "Superadmin"}
+            </p>
+            <p className="text-xs flex items-center gap-1" style={{ color: "var(--text-secondary)" }}>
               <Shield className="h-3 w-3 text-primary" /> Control Plane
             </p>
           </div>
         </DropdownMenuLabel>
-        <DropdownMenuSeparator className="bg-[var(--border-divider)]" />
+        <DropdownMenuSeparator style={{ background: "var(--border-divider)" }} />
         <DropdownMenuItem asChild>
           <Link href="/superadmin/users" className="cursor-pointer">
-            <User className="mr-2 h-4 w-4 text-[var(--icon-color)]" /> Il mio Account
+            <User className="mr-2 h-4 w-4" style={{ color: "var(--icon-color)" }} />
+            Il mio Account
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuSeparator className="bg-[var(--border-divider)]" />
+        <DropdownMenuSeparator style={{ background: "var(--border-divider)" }} />
         <DropdownMenuItem
           onClick={logout}
           className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
@@ -104,6 +155,35 @@ function UserNav() {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+// ─── Header Unificato (usa useSidebar quindi deve stare dentro SidebarProvider)
+
+function SuperAdminHeader() {
+  const pathname = usePathname();
+  const title = getPageTitle(pathname);
+
+  return (
+    <header className="header">
+      <div className="header-left">
+        <AnimatedTrigger />
+        <h1>{title}</h1>
+      </div>
+      <div className="header-right">
+        {/* Notifiche */}
+        <button className="header-btn header-btn-bell" aria-label="Notifiche">
+          <Bell style={{ width: 18, height: 18 }} />
+          <span className="header-bell-dot" />
+        </button>
+
+        {/* Theme Toggle animato */}
+        <AnimatedThemeToggle />
+
+        {/* User Avatar */}
+        <UserNav />
+      </div>
+    </header>
   );
 }
 
@@ -116,23 +196,19 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
 
   React.useEffect(() => {
     const user = getDoFlowUser();
-
     if (!user) {
       if (pathname !== "/login") router.replace("/login");
       else setReady(true);
       return;
     }
-
     const role     = String(user.role     ?? "").toLowerCase().trim();
     const tenantId = String(user.tenantId ?? "").toLowerCase().trim();
     const isSuperAdmin =
       ["superadmin", "super_admin", "owner"].includes(role) || tenantId === "public";
-
     if (!isSuperAdmin) {
       if (!pathname.startsWith("/dashboard")) router.replace("/dashboard");
       return;
     }
-
     setReady(true);
   }, [router, pathname]);
 
@@ -141,7 +217,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
       <div className="superadmin-theme min-h-screen flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-          <p className="text-sm text-[var(--text-secondary)] font-medium animate-pulse">
+          <p className="text-sm animate-pulse" style={{ color: "var(--text-secondary)" }}>
             Accesso Control Plane…
           </p>
         </div>
@@ -149,70 +225,16 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     );
   }
 
-  const breadcrumbs = crumbs(pathname);
-
   return (
     <div className="superadmin-theme">
       <SidebarProvider>
         <SuperAdminSidebar />
-
         <SidebarInset>
-          {/* ── HEADER ─────────────────────────────────────────────────── */}
-          <header
-            className="sa-header sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 px-4"
-          >
-            <SidebarTrigger className="-ml-1 text-[var(--icon-color)] hover:text-[var(--text-primary)] transition-colors" />
-            <div className="h-5 w-px bg-[var(--border-divider)]" />
+          {/* ── HEADER UNICO PER TUTTE LE PAGINE ───────────────────── */}
+          <SuperAdminHeader />
 
-            {/* OPS Badge */}
-            <Badge
-              variant="outline"
-              className="hidden sm:flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 text-primary border-primary/30 bg-primary/5"
-            >
-              <Zap className="h-2.5 w-2.5" />
-              OPS
-            </Badge>
-
-            {/* Breadcrumb */}
-            <nav className="hidden md:flex items-center gap-1 text-xs text-[var(--text-secondary)] min-w-0">
-              {breadcrumbs.map((c, idx) => (
-                <React.Fragment key={c.href}>
-                  {idx > 0 && <ChevronRight className="h-3 w-3 shrink-0 text-[var(--border-divider)]" />}
-                  <Link
-                    href={c.href}
-                    className={
-                      idx === breadcrumbs.length - 1
-                        ? "font-semibold text-[var(--text-primary)] truncate"
-                        : "hover:text-[var(--text-primary)] transition-colors truncate"
-                    }
-                  >
-                    {c.label}
-                  </Link>
-                </React.Fragment>
-              ))}
-            </nav>
-
-            <div className="flex-1" />
-
-            {/* Notifications placeholder */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative h-9 w-9 text-[var(--icon-color)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)]"
-            >
-              <Bell className="h-4 w-4" />
-              <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-rose-500 rounded-full" />
-            </Button>
-
-            {/* Theme Toggle — matches demo's .theme-toggle */}
-            <ThemeToggle />
-
-            {/* User Nav */}
-            <UserNav />
-          </header>
-
-          {/* ── CONTENUTO ────────────────────────────────────────────── */}
-          <main className="sa-main-content flex-1 overflow-y-auto p-6 md:p-8">
+          {/* ── CONTENUTO ───────────────────────────────────────────── */}
+          <main className="sa-main-content flex-1 overflow-y-auto">
             <div className="max-w-[1600px] mx-auto animate-in fade-in duration-500">
               {children}
             </div>
