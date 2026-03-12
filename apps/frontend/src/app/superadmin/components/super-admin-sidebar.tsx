@@ -148,7 +148,7 @@ function NavItem({
 
       {/* Tooltip Fluttuante: visibile SOLO se la sidebar è chiusa e c'è l'hover */}
       {!isOpen && (
-        <div className="absolute left-full ml-4 px-2.5 py-1.5 bg-popover text-popover-foreground text-xs font-medium rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[100] whitespace-nowrap shadow-lg border border-border">
+        <div className="absolute left-full ml-4 px-2.5 py-1.5 bg-[#1a1a1a] dark:bg-white text-white dark:text-[#1a1a1a] text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[9999] whitespace-nowrap shadow-lg">
           {label}
         </div>
       )}
@@ -163,9 +163,8 @@ export function SuperAdminSidebar() {
   const { setTheme, theme, resolvedTheme } = useTheme();
   const { state } = useSidebar();
 
-  const [mounted, setMounted]     = React.useState(false);
-  const [user, setUser]           = React.useState<{ email: string; role: string; initials: string } | null>(null);
-  const [isHovered, setIsHovered] = React.useState(false);
+  const [mounted, setMounted] = React.useState(false);
+  const [user, setUser]       = React.useState<{ email: string; role: string; initials: string } | null>(null);
 
   React.useEffect(() => {
     setMounted(true);
@@ -187,14 +186,12 @@ export function SuperAdminSidebar() {
     router.push("/login");
   }, [router]);
 
-  const isOpen   = state === "expanded" || isHovered;
-  const logoSrc  = mounted && resolvedTheme === "light" ? "/logo_doflow_nero.png" : "/logo_doflow_bianco.png";
+  const isOpen  = state === "expanded";
+  const logoSrc = mounted && resolvedTheme === "light" ? "/logo_doflow_nero.png" : "/logo_doflow_bianco.png";
 
   return (
     <Sidebar
       collapsible="icon"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       className={`z-50 border-none ${isOpen ? "sa-sidebar-open" : ""}`}
       style={{
         ["--sidebar-width" as string]: "220px",
@@ -276,7 +273,7 @@ export function SuperAdminSidebar() {
 
           <DropdownMenuContent
             className="w-[240px] rounded-xl shadow-2xl border-[var(--border-card)] glass-card"
-            side={state === "collapsed" && !isHovered ? "right" : "bottom"}
+            side={state === "collapsed" ? "right" : "bottom"}
             align="end"
             sideOffset={10}
           >

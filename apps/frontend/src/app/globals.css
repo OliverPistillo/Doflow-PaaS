@@ -836,7 +836,125 @@
               max-width 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-/* ── Header inside superadmin ───────────────────────────────────────────── */
+/* ── Header identico alla demo ──────────────────────────────────────────── */
+.superadmin-theme .header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.superadmin-theme .header-left {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.superadmin-theme .header h1 {
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--text-primary);
+  margin-left: 8px;
+  line-height: 1;
+}
+
+.superadmin-theme .header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.superadmin-theme .sidebar-trigger {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  margin-right: 4px;
+  position: relative;
+}
+.superadmin-theme .sidebar-trigger:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.superadmin-theme .sidebar-trigger svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2;
+  position: absolute;
+  transition: opacity 0.2s ease, transform 0.25s ease;
+}
+.superadmin-theme .sidebar-trigger .icon-open  { opacity: 1; transform: scale(1); }
+.superadmin-theme .sidebar-trigger .icon-close { opacity: 0; transform: scale(0.75); }
+.superadmin-theme .sidebar-trigger.active .icon-open  { opacity: 0; transform: scale(0.75); }
+.superadmin-theme .sidebar-trigger.active .icon-close { opacity: 1; transform: scale(1); }
+
+.superadmin-theme .storage-badge,
+.superadmin-theme .month-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-surface);
+  border-radius: 40px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.superadmin-theme .header-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--bg-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  color: var(--text-secondary);
+}
+.superadmin-theme .header-btn:hover {
+  box-shadow: var(--shadow-md);
+  color: var(--text-primary);
+}
+
+.superadmin-theme .theme-toggle {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--toggle-bg);
+  color: var(--toggle-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: none;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+.superadmin-theme .theme-toggle svg {
+  width: 18px;
+  height: 18px;
+  position: absolute;
+  transition: opacity 0.25s ease, transform 0.35s ease;
+}
+.superadmin-theme .theme-toggle .icon-sun  { opacity: 1; transform: rotate(0deg) scale(1); }
+.superadmin-theme .theme-toggle .icon-moon { opacity: 0; transform: rotate(-30deg) scale(0.7); }
+.dark .superadmin-theme .theme-toggle .icon-sun  { opacity: 0; transform: rotate(30deg) scale(0.7); }
+.dark .superadmin-theme .theme-toggle .icon-moon { opacity: 1; transform: rotate(0deg) scale(1); }
+
+/* ── sa-header legacy (kept for backward compat) ────────────────────────── */
 .superadmin-theme .sa-header {
   background: var(--bg-surface);
   backdrop-filter: blur(16px);

@@ -3,13 +3,15 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowUpRight, Loader2, RefreshCw, TrendingUp, TrendingDown, CalendarDays, Package, Users } from "lucide-react";
+import { ArrowUpRight, Loader2, RefreshCw, TrendingUp, TrendingDown, CalendarDays, Package, Users, MapPin, Calendar, LayoutGrid, MoreHorizontal } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DrillDownSheet, CardContextType } from "./components/DrillDownSheet";
 import { GlobalFilterBar, DashboardFilters } from "./components/GlobalFilterBar";
 import { formatCurrency } from "./utils";
+import { useSidebar } from "@/components/ui/sidebar";
+import { useTheme } from "next-themes";
 import {
   BarChart,
   Bar,
@@ -35,21 +37,6 @@ type DashboardData = {
   pipeline: { stage: string; value: number; count: number }[];
   topDeals: { name: string; client: string; value: number; stage: string }[];
 };
-
-// ─── Greeting helper ──────────────────────────────────────────────────────────
-
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 12) return "Buongiorno";
-  if (h < 18) return "Buon pomeriggio";
-  return "Buona sera";
-}
-
-function formatDate() {
-  return new Date().toLocaleDateString("it-IT", {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
-  });
-}
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
@@ -111,6 +98,10 @@ function KpiCard({
 }
 
 export default function SalesDashboardPage() {
+  const { state, toggleSidebar } = useSidebar();
+  const { setTheme, resolvedTheme } = useTheme();
+  const isOpen = state === "expanded";
+
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -178,31 +169,52 @@ export default function SalesDashboardPage() {
   return (
     <div className="dashboard-content animate-fadeIn">
 
-      {/* ── 1. Hero / Greeting card ──────────────────────────────────── */}
-      <div className="dashboard-hero flex flex-row justify-between items-end flex-wrap gap-4">
-        <div>
-          <div className="dashboard-hero-meta">
-            <span>Business Intelligence</span>
-            <span className="dot">•</span>
-            <span className="accent">Sales Ops</span>
-          </div>
-          <h1 className="dashboard-hero-title">Quadro Generale</h1>
-          <div className="dashboard-hero-sub">
-            <CalendarDays className="h-3.5 w-3.5" />
-            <span className="capitalize">{formatDate()}</span>
-            <span className="text-border">—</span>
-            <span className="font-medium text-foreground">{getGreeting()}</span>
-          </div>
+      {/* ── HEADER IDENTICO ALLA DEMO ───────────────────────────────────── */}
+      <header className="header">
+        <div className="header-left">
+          {/* Pulsante Trigger Animato */}
+          <button onClick={toggleSidebar} className={`sidebar-trigger ${isOpen ? "active" : ""}`}>
+            <svg className="icon-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
+              <rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+            </svg>
+            <svg className="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <line x1="9" y1="3" x2="9" y2="21"/><polyline points="14 8 11 12 14 16"/>
+            </svg>
+          </button>
+          <h1>Quadro Generale</h1>
         </div>
-        <div className="dashboard-hero-actions">
-          <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800">
-            Live
-          </Badge>
-          <Button variant="outline" size="sm" onClick={loadData} className="rounded-xl shadow-sm hover:border-primary/50 transition-colors gap-2">
-            <RefreshCw className="h-3.5 w-3.5" /> Aggiorna
-          </Button>
+
+        <div className="header-right">
+          <div className="storage-badge">
+            <MapPin className="w-4 h-4" />
+            Storage: 51 Port Terminal Blvd
+          </div>
+          <div className="month-badge">
+            <Calendar className="w-4 h-4" />
+            Month
+          </div>
+          <div className="header-btn"><LayoutGrid className="w-4 h-4" /></div>
+          <div className="header-btn"><MoreHorizontal className="w-4 h-4" /></div>
+
+          {/* Toggle Tema Animato */}
+          <button
+            onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+            className="theme-toggle"
+          >
+            <svg className="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+              <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+            <svg className="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+          </button>
         </div>
-      </div>
+      </header>
 
       {/* ── 2. BARRA FILTRI GLOBALE ──────────────────────────────────── */}
       <div className="animate-fadeInUp" style={{ animationDelay: "0.1s" }}>
