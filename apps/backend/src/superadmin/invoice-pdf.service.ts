@@ -59,15 +59,11 @@ export class InvoicePdfService {
   private drawHeader(doc: PDFKit.PDFDocument, W: number, invoice: Invoice) {
     const HEADER_H = 148; // altezza totale banda header
 
-    // 1. Sfondo navy pieno
-    doc.save().rect(0, 0, W, HEADER_H).fill(NAVY).restore();
-
-    // 2. Onda in basso — colore #052136, altezza contenuta come nello screenshot.
-    //    Il picco arriva circa al 55% dell'header (non oltre metà).
+    // 1. Sfondo navy sagomato con onda in basso (taglio bianco)
     doc.save();
-    doc.moveTo(0, HEADER_H)
-       .lineTo(0, HEADER_H * 0.74)
-       .bezierCurveTo(
+    doc.moveTo(0, 0)                          // Partenza: angolo in alto a sinistra
+       .lineTo(0, HEADER_H * 0.74)            // Scende lungo il bordo sinistro
+       .bezierCurveTo(                        // Disegna la curva
          W * 0.10, HEADER_H * 0.44,
          W * 0.28, HEADER_H * 0.40,
          W * 0.48, HEADER_H * 0.54,
@@ -77,12 +73,12 @@ export class InvoicePdfService {
          W * 0.84, HEADER_H * 0.76,
          W,        HEADER_H * 0.72,
        )
-       .lineTo(W, HEADER_H)
-       .closePath()
-       .fill('#052136');
+       .lineTo(W, 0)                          // Risale lungo il bordo destro
+       .closePath()                           // Chiude il tracciato in alto
+       .fill(NAVY);                           // Riempie tutto di NAVY
     doc.restore();
 
-    // 3. Logo "doflow~" — testo bianco (oppure immagine se disponibile)
+    // 2. Logo "doflow~" — testo bianco (oppure immagine se disponibile)
     const MARGIN = 45;
     const logoPath = this.getLogoPath();
     if (logoPath) {
@@ -95,7 +91,7 @@ export class InvoicePdfService {
       this.drawLogoText(doc, MARGIN, 24);
     }
 
-    // 4. "FATTURA" + dettagli — in alto a destra
+    // 3. "FATTURA" + dettagli — in alto a destra
     doc.font('Helvetica-Bold').fontSize(26).fillColor('#ffffff')
        .text('FATTURA', 0, 20, { align: 'right', width: W - MARGIN });
 
