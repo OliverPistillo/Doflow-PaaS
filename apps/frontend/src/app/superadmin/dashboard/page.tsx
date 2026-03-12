@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowUpRight, Loader2, RefreshCw, TrendingUp, TrendingDown, CalendarDays } from "lucide-react";
+import { ArrowUpRight, Loader2, RefreshCw, TrendingUp, TrendingDown, CalendarDays, Package, Users } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -60,6 +60,7 @@ function KpiCard({
   trend,
   trendUp,
   onClick,
+  className = "glass-card bg-card text-card-foreground", // Default si adatta al tema Dark/Light
 }: {
   title:    string;
   value:    string;
@@ -67,10 +68,11 @@ function KpiCard({
   trend?:   string;
   trendUp?: boolean;
   onClick:  () => void;
+  className?: string;
 }) {
   return (
     <Card
-      className="glass-card transition-all duration-300 cursor-pointer group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative"
+      className={`${className} transition-all duration-300 cursor-pointer group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative border-none`}
       onClick={onClick}
     >
       {/* Glow effect */}
@@ -80,15 +82,21 @@ function KpiCard({
       />
       <CardContent className="p-6 relative z-10">
         <div className="flex justify-between items-start">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{title}</p>
+          {/* Sostituito text-muted-foreground con opacity-70 per ereditare correttamente il colore padre */}
+          <p className="text-xs font-bold opacity-70 uppercase tracking-widest">{title}</p>
           <div
-            className="h-9 w-9 flex items-center justify-center rounded-xl bg-muted/50 transition-all duration-300 group-hover:scale-110 shadow-sm"
-            style={{ color: colorVar, border: `1px solid color-mix(in srgb, ${colorVar} 20%, transparent)` }}
+            className="h-9 w-9 flex items-center justify-center rounded-xl transition-all duration-300 group-hover:scale-110 shadow-sm"
+            style={{ 
+              backgroundColor: `color-mix(in srgb, ${colorVar} 15%, transparent)`,
+              color: colorVar, 
+              border: `1px solid color-mix(in srgb, ${colorVar} 30%, transparent)` 
+            }}
           >
             <ArrowUpRight className="h-4 w-4" />
           </div>
         </div>
-        <h3 className="text-3xl font-black text-foreground mt-3 tracking-tight tabular-nums" style={{ fontFamily: "'Urbanist', sans-serif" }}>
+        {/* Rimosso text-foreground per permettere alle card custom (es. sa-card-dark) di imporre il bianco */}
+        <h3 className="text-3xl font-black mt-3 tracking-tight tabular-nums" style={{ fontFamily: "'Urbanist', sans-serif" }}>
           {value}
         </h3>
         {trend && (
@@ -172,7 +180,7 @@ export default function SalesDashboardPage() {
   // ─── MAIN RENDER ────────────────────────────────────────────────────────────
 
   return (
-    <div className="dashboard-content">
+    <div className="dashboard-content animate-fadeIn">
 
       {/* ── 1. Hero / Greeting card ──────────────────────────────────── */}
       <div className="dashboard-hero" style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '16px' }}>
@@ -191,7 +199,7 @@ export default function SalesDashboardPage() {
           </div>
         </div>
         <div className="dashboard-hero-actions">
-          <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30">
+          <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800">
             Live
           </Badge>
           <Button variant="outline" size="sm" onClick={loadData} className="rounded-xl shadow-sm hover:border-primary/50 transition-colors gap-2">
@@ -201,25 +209,29 @@ export default function SalesDashboardPage() {
       </div>
 
       {/* ── 2. BARRA FILTRI GLOBALE ──────────────────────────────────── */}
-      <GlobalFilterBar filters={filters} onFilterChange={setFilters} />
+      <div className="animate-fadeInUp" style={{ animationDelay: "0.1s" }}>
+        <GlobalFilterBar filters={filters} onFilterChange={setFilters} />
+      </div>
 
       {/* ── 3. KPI CARDS ──────────────────────────────────────────────── */}
-      <div className="kpi-grid">
+      <div className="kpi-grid animate-fadeInUp" style={{ animationDelay: "0.2s" }}>
         <KpiCard
           title="Offerte in qualifica"
           value={String(data.kpi.leadsCount)}
-          colorVar="hsl(var(--chart-1))"
+          colorVar="#3b82f6" // Azzurro acceso visibile su sfondo scuro
           trend="+8% vs mese precedente"
           trendUp
           onClick={() => setActiveCard('QUALIFIED_LEADS')}
+          className="sa-card-logistics text-white" // Stile custom della demo
         />
         <KpiCard
           title="Valore filtrato"
           value={formatCurrency(data.kpi.totalValue)}
-          colorVar="hsl(var(--chart-2))"
+          colorVar="#a78bfa" // Viola acceso
           trend="Pipeline attiva"
           trendUp
           onClick={() => setActiveCard('TOTAL_VALUE')}
+          className="sa-card-dark text-white" // Stile dark minimale della demo
         />
         <KpiCard
           title="Tasso di vincita"
@@ -228,6 +240,7 @@ export default function SalesDashboardPage() {
           trend={data.kpi.winRate >= 30 ? "Sopra target" : "Sotto target"}
           trendUp={data.kpi.winRate >= 30}
           onClick={() => setActiveCard('WIN_RATE')}
+          className="glass-card bg-card text-card-foreground" // Stile standard adattivo (Light/Dark)
         />
         <KpiCard
           title="Media per deal"
@@ -236,38 +249,39 @@ export default function SalesDashboardPage() {
           trend="Valore medio"
           trendUp
           onClick={() => setActiveCard('AVG_VALUE')}
+          className="glass-card bg-card text-card-foreground" // Stile standard adattivo (Light/Dark)
         />
       </div>
 
       {/* ── 4. Alert Row (Chiusura Mese) ──────────────────────────────── */}
-      <div
-        className="closing-alert"
-        onClick={() => setActiveCard('CLOSING_THIS_MONTH')}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => e.key === 'Enter' && setActiveCard('CLOSING_THIS_MONTH')}
-        aria-label="Vedi deals in chiusura"
-      >
-        <div className="closing-alert-bg" />
-        <div className="closing-alert-content">
-          <p className="closing-alert-label">
-            In chiusura (Mese corrente o selezionato)
-          </p>
-          <p className="closing-alert-value">
-            {data.kpi.dealsClosingThisMonth}{' '}
-            <span className="closing-alert-sub">deals critici</span>
-          </p>
-        </div>
-        <div className="closing-alert-icon">
-          <ArrowUpRight className="h-6 w-6" />
-        </div>
+      <div className="animate-fadeInUp" style={{ animationDelay: "0.3s" }}>
+        <Card
+          className="sa-card-yellow border-none cursor-pointer hover:shadow-lg transition-all mb-6 group"
+          onClick={() => setActiveCard('CLOSING_THIS_MONTH')}
+        >
+          <CardContent className="flex items-center justify-between p-6">
+            <div>
+              {/* Il testo nero/scuro è forzato perché la card gialla lo richiede sempre */}
+              <p className="text-sm font-bold uppercase tracking-wider text-yellow-950/60">
+                In chiusura (Mese corrente o selezionato)
+              </p>
+              <p className="text-3xl font-black text-yellow-950 mt-1" style={{ fontFamily: "'Urbanist', sans-serif" }}>
+                {data.kpi.dealsClosingThisMonth}{' '}
+                <span className="text-lg font-medium text-yellow-950/70">deals critici</span>
+              </p>
+            </div>
+            <div className="h-12 w-12 bg-yellow-950/10 rounded-full flex items-center justify-center text-yellow-950 transition-transform group-hover:scale-110">
+              <ArrowUpRight className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* ── 5. Charts Area ────────────────────────────────────────────── */}
-      <div className="charts-grid">
+      <div className="charts-grid animate-fadeInUp" style={{ animationDelay: "0.4s" }}>
 
         {/* Pipeline Bar Chart */}
-        <Card className="glass-card">
+        <Card className="glass-card bg-card text-card-foreground border-none">
           <CardHeader className="pb-2">
             <div className="flex justify-between items-center">
               <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
@@ -305,6 +319,7 @@ export default function SalesDashboardPage() {
                       border: '1px solid hsl(var(--border))',
                       boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
                       fontFamily: "'Urbanist', sans-serif",
+                      color: 'hsl(var(--foreground))' // <-- RISOLVE IL PROBLEMA DEL TESTO IN DARK MODE
                     }}
                     formatter={(val: unknown) => [formatCurrency(Number(val) || 0), 'Valore']}
                   />
@@ -316,7 +331,7 @@ export default function SalesDashboardPage() {
         </Card>
 
         {/* Pie Chart */}
-        <Card className="glass-card">
+        <Card className="glass-card bg-card text-card-foreground border-none">
           <CardHeader className="pb-2">
             <div className="flex justify-between items-center">
               <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
@@ -350,6 +365,7 @@ export default function SalesDashboardPage() {
                         border: '1px solid hsl(var(--border))',
                         backgroundColor: 'hsl(var(--card))',
                         fontFamily: "'Urbanist', sans-serif",
+                        color: 'hsl(var(--foreground))' // <-- RISOLVE IL PROBLEMA DEL TESTO IN DARK MODE
                       }}
                     />
                   </PieChart>
@@ -372,48 +388,51 @@ export default function SalesDashboardPage() {
       </div>
 
       {/* ── 6. Top Deals Chart ────────────────────────────────────────── */}
-      <Card className="glass-card">
-        <CardHeader className="pb-2">
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
-              Le migliori offerte per valore
-            </CardTitle>
-            <div className="h-8 w-8 bg-muted/50 rounded flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer transition-colors">
-              <ArrowUpRight className="h-4 w-4" />
+      <div className="animate-fadeInUp" style={{ animationDelay: "0.5s" }}>
+        <Card className="glass-card bg-card text-card-foreground border-none">
+          <CardHeader className="pb-2">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
+                Le migliori offerte per valore
+              </CardTitle>
+              <div className="h-8 w-8 bg-muted/50 rounded flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer transition-colors">
+                <ArrowUpRight className="h-4 w-4" />
+              </div>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[280px] w-full mt-6">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.topDeals} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                  interval={0}
-                  angle={-30}
-                  textAnchor="end"
-                  height={70}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <Tooltip
-                  cursor={{ fill: 'hsl(var(--muted) / 0.5)' }}
-                  contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    borderRadius: '12px',
-                    border: '1px solid hsl(var(--border))',
-                    fontFamily: "'Urbanist', sans-serif",
-                  }}
-                  formatter={(val: unknown) => [formatCurrency(Number(val) || 0), 'Valore']}
-                />
-                <Bar dataKey="value" fill="hsl(var(--chart-2))" radius={[6, 6, 0, 0]} barSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[280px] w-full mt-6">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data.topDeals} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    interval={0}
+                    angle={-30}
+                    textAnchor="end"
+                    height={70}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip
+                    cursor={{ fill: 'hsl(var(--muted) / 0.5)' }}
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card))',
+                      borderRadius: '12px',
+                      border: '1px solid hsl(var(--border))',
+                      fontFamily: "'Urbanist', sans-serif",
+                      color: 'hsl(var(--foreground))' // <-- RISOLVE IL PROBLEMA DEL TESTO IN DARK MODE
+                    }}
+                    formatter={(val: unknown) => [formatCurrency(Number(val) || 0), 'Valore']}
+                  />
+                  <Bar dataKey="value" fill="hsl(var(--chart-2))" radius={[6, 6, 0, 0]} barSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* ── 7. DRILL DOWN SHEET ───────────────────────────────────────── */}
       <DrillDownSheet
