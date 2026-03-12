@@ -2,12 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
 import { Invoice, InvoiceStatus } from './entities/invoice.entity';
+import { InvoiceClient } from './entities/invoice-client.entity';
 
 @Injectable()
 export class FinanceService {
   constructor(
     @InjectRepository(Invoice)
     private repo: Repository<Invoice>,
+    @InjectRepository(InvoiceClient)
+    private clientRepo: Repository<InvoiceClient>,
   ) {}
 
   // CREAZIONE
@@ -146,5 +149,35 @@ export class FinanceService {
   async seed() {
      const count = await this.repo.count();
      if(count > 0) return;
+  }
+
+  // ── Anagrafica Clienti ────────────────────────────────────────────────────
+
+  /** Restituisce tutti i clienti ordinati per data aggiornamento (più recenti prima) */
+  async findAllClients(): Promise<InvoiceClient[]> {
+    return this.clientRepo.find({ order: { updatedAt: 'DESC' } });
+  }
+
+  /**
+   * Inserisce un cliente se non esiste, altrimenti aggiorna i suoi dati.
+   * Chiave univoca: clientName.
+   * invoiceCount viene incrementato ad ogni upsert.
+   */
+  async upsertClient(data: Partial<InvoiceClient>): Promise<InvoiceClient> {
+    const existing = await this.clientRepo.findOne({
+      where: { clientName: data.clientName },
+    });
+
+    if (existing) {
+      // Aggiorna tutti i campi presenti nel payload, incrementa il contatore
+      const updated = this.clientRepo.merge(existing, {
+        ...data,
+        invoiceCount: existing.invoiceCount + 1,
+      });
+      return this.clientRepo.save(updated);
+    }
+
+    const newClient = this.clientRepo.create({ ...data, invoiceCount: 1 });
+    return this.clientRepo.save(newClient);
   }
 }

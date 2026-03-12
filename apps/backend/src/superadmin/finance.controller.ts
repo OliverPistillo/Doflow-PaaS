@@ -95,10 +95,51 @@ export class FinanceController {
 
     const pdfBuffer = await this.pdfService.generateInvoicePdf(invoice);
     
-    // Se targetEmail non è passato, potremmo prendere l'adminEmail del tenant se l'avessimo caricato
-    // Per ora usiamo `targetEmail` o un fallback dummy se manca per non fallire malamente (oppure diamo errore).
     if (!targetEmail) throw new Error('Email destination required');
 
     return this.mailService.sendInvoiceEmail(targetEmail, invoice.clientName, invoice.invoiceNumber, pdfBuffer);
+  }
+
+  // ── Anagrafica Clienti ────────────────────────────────────────────────────
+
+  /** GET /api/superadmin/finance/clients — lista clienti salvati */
+  @Get('clients')
+  async getClients() {
+    try {
+      return await this.service.findAllClients();
+    } catch (error) {
+      console.error('[FinanceController] Error fetching clients:', error);
+      throw new InternalServerErrorException('Impossibile recuperare i clienti');
+    }
+  }
+
+  /**
+   * POST /api/superadmin/finance/clients/upsert
+   * Inserisce un nuovo cliente o aggiorna i dati se già esiste (chiave: clientName).
+   * Chiamato automaticamente al salvataggio di ogni fattura.
+   */
+  @Post('clients/upsert')
+  async upsertClient(@Body() body: {
+    clientName: string;
+    contactName?: string;
+    clientVat?: string;
+    clientFiscalCode?: string;
+    clientSdi?: string;
+    clientPec?: string;
+    clientAddress?: string;
+    clientCity?: string;
+    clientZip?: string;
+    paymentMethod?: string;
+    notes?: string;
+  }) {
+    try {
+      if (!body.clientName?.trim()) {
+        throw new Error('clientName è obbligatorio');
+      }
+      return await this.service.upsertClient(body);
+    } catch (error) {
+      console.error('[FinanceController] Error upserting client:', error);
+      throw new InternalServerErrorException('Impossibile salvare il cliente');
+    }
   }
 }

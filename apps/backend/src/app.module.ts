@@ -63,6 +63,7 @@ import { CalendarEvent } from './superadmin/entities/calendar-event.entity';
 import { Invoice } from './superadmin/entities/invoice.entity';
 import { InvoiceLineItem } from './superadmin/entities/invoice-line-item.entity';
 import { InvoiceTemplate } from './superadmin/entities/invoice-template.entity';
+import { InvoiceClient } from './superadmin/entities/invoice-client.entity';
 import { Tenant } from './superadmin/entities/tenant.entity';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
@@ -115,6 +116,7 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
       Invoice,
       InvoiceLineItem,
       InvoiceTemplate,
+      InvoiceClient,
       Tenant,
       PlatformModule,
       TenantSubscription,
