@@ -33,7 +33,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
 import {
@@ -109,7 +108,7 @@ function setColorTheme(themeId: string) {
   }
 }
 
-// ─── Nav Item ──────────────────────────────────────────────────────────────────
+// ─── Nav Item Modificato per rimuovere "pillola" e aggiungere tooltip ───────────
 
 function NavItem({
   href,
@@ -130,15 +129,28 @@ function NavItem({
   return (
     <Link
       href={href}
-      title={label}
-      className={`sa-nav-item ${active ? "active" : ""}`}
+      className={`group relative flex items-center gap-3 py-2 px-3 my-0.5 rounded-none transition-colors 
+        ${active ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"}`}
     >
       <Icon className="h-[19px] w-[19px] shrink-0" />
-      <span className="sa-nav-label">{label}</span>
+      
+      {/* Testo visibile solo se espansa */}
+      <span className={`transition-all duration-200 whitespace-nowrap ${isOpen ? "opacity-100 w-auto" : "opacity-0 w-0 overflow-hidden"}`}>
+        {label}
+      </span>
+
+      {/* Badge (se presente) */}
       {badge !== undefined && badge > 0 && isOpen && (
         <span className="ml-auto text-[10px] font-bold bg-rose-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none">
           {badge > 99 ? "99+" : badge}
         </span>
+      )}
+
+      {/* Tooltip Fluttuante: visibile SOLO se la sidebar è chiusa e c'è l'hover */}
+      {!isOpen && (
+        <div className="absolute left-full ml-4 px-2.5 py-1.5 bg-popover text-popover-foreground text-xs font-medium rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[100] whitespace-nowrap shadow-lg border border-border">
+          {label}
+        </div>
       )}
     </Link>
   );
@@ -183,7 +195,7 @@ export function SuperAdminSidebar() {
       collapsible="icon"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className={`z-50 ${isOpen ? "sa-sidebar-open" : ""}`}
+      className={`z-50 border-none ${isOpen ? "sa-sidebar-open" : ""}`}
       style={{
         ["--sidebar-width" as string]: "220px",
         ["--sidebar-width-icon" as string]: "72px",
@@ -212,7 +224,9 @@ export function SuperAdminSidebar() {
       <SidebarContent className={`pt-2 overflow-y-auto scrollbar-none transition-all duration-300 ${isOpen ? "px-3" : "px-[14px]"}`}>
         {MENU_GROUPS.map((group) => (
           <div key={group.label} className="sa-nav-group mb-3">
-            <div className="sa-group-label">{group.label}</div>
+            <div className={`transition-all duration-200 text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 ${isOpen ? "opacity-100 h-auto" : "opacity-0 h-0 overflow-hidden"}`}>
+              {group.label}
+            </div>
             <div className="flex flex-col gap-[2px]">
               {group.items.map((item) => (
                 <NavItem
@@ -344,7 +358,7 @@ export function SuperAdminSidebar() {
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarFooter>
-      <SidebarRail />
+      {/* Rimosso SidebarRail per eliminare la linea laterale */}
     </Sidebar>
   );
 }

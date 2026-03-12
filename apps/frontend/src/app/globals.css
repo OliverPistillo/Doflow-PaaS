@@ -1,26 +1,20 @@
 /* Percorso: C:\Doflow\apps\frontend\src\app\globals.css */
+@import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@300;400;500;600;700;800;900&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@300;400;500;600;700;800;900&display=swap');
-
 @layer base {
 
   /* ═══════════════════════════════════════════════════════════════════
      LIGHT THEME — DoFlow Warm Palette (Default / Neutro)
-     ─────────────────────────────────────────────────────────────────
-     Layer 1: DoFlow native tokens  (--bg-*, --text-*, --icon-*, …)
-     Layer 2: shadcn/ui HSL bridge  (--background, --card, --primary…)
   ═══════════════════════════════════════════════════════════════════ */
   :root {
-    /* ── DoFlow Brand ─────────────────────────────────────────────── */
     --yellow:  #F5ED31;
     --orange:  #FF934F;
     --dark:    #0D0C0B;
 
-    /* ── DoFlow Surface tokens ────────────────────────────────────── */
     --bg-body:              linear-gradient(145deg, #ece8e1 0%, #e0dbd3 40%, #d8d2c8 100%);
     --bg-sidebar:           transparent;
     --bg-sidebar-open:      rgba(255, 255, 255, 0.72);
@@ -30,12 +24,10 @@
     --bg-hover:             rgba(255, 255, 255, 0.65);
     --bg-thumb:             #f0f0f0;
 
-    /* ── DoFlow Text ──────────────────────────────────────────────── */
     --text-primary:         #1a1a1a;
     --text-secondary:       #6b6b6b;
     --text-placeholder:     #bbbbbb;
 
-    /* ── DoFlow Borders ───────────────────────────────────────────── */
     --border-sidebar:       transparent;
     --border-sidebar-open:  rgba(255, 255, 255, 0.50);
     --border-card:          rgba(255, 255, 255, 0.30);
@@ -44,13 +36,11 @@
     --border-row:           #f8f8f8;
     --border-checkbox:      #dddddd;
 
-    /* ── DoFlow Sidebar icons ─────────────────────────────────────── */
     --icon-color:           #9b9b9b;
     --icon-active-bg:       #ffffff;
     --icon-active-color:    #1a1a1a;
     --icon-active-shadow:   0 2px 10px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06);
 
-    /* ── DoFlow Card variants ─────────────────────────────────────── */
     --card-logistics-bg:    linear-gradient(135deg, rgba(245,237,49,0.25) 0%, rgba(255,147,79,0.15) 100%);
     --delay-time-bg:        rgba(255, 255, 255, 0.70);
     --demand-high-bg:       #fff0e6;
@@ -58,25 +48,21 @@
     --demand-low-bg:        #e6f9ee;
     --demand-low-color:     #2aad5a;
 
-    /* ── DoFlow Filter / table ────────────────────────────────────── */
     --filters-bg:           #ffffff;
     --filter-divider:       #eeeeee;
     --filter-btn-hover:     #f5f5f5;
     --table-bg:             #ffffff;
 
-    /* ── DoFlow Shadows ───────────────────────────────────────────── */
     --shadow-sm:            0 1px 4px rgba(0,0,0,0.06);
     --shadow-md:            0 2px 10px rgba(0,0,0,0.10);
     --shadow-sidebar:       none;
     --shadow-sidebar-open:  4px 0 24px rgba(0,0,0,0.07);
 
-    /* ── DoFlow Misc ──────────────────────────────────────────────── */
     --logo-color:           #0D0C0B;
     --scrollbar-thumb:      #cccccc;
     --toggle-bg:            #1a1a1a;
     --toggle-color:         #ffffff;
 
-    /* ── shadcn/ui HSL Bridge (light) ─────────────────────────────── */
     --background:           38 25% 90%;
     --foreground:           0 0% 10%;
 
@@ -115,7 +101,6 @@
     --sidebar-border:       38 12% 91%;
     --sidebar-ring:         244 76% 58%;
 
-    /* ── Chart Palette ────────────────────────────────────────────── */
     --chart-1:              244 76% 60%;
     --chart-2:              28  90% 58%;
     --chart-3:              152 60% 42%;
@@ -125,9 +110,6 @@
 
   /* ═══════════════════════════════════════════════════════════════════
      DARK THEME — DoFlow Warm Olive-Black
-     body  → warm olive-black  #1b1a10
-     card  → #252418 / #2e2c1c
-     text  → warm white #f0eedf
   ═══════════════════════════════════════════════════════════════════ */
   .dark {
     --bg-body:              linear-gradient(145deg, #1e1d12 0%, #1a1910 50%, #171610 100%);
@@ -178,7 +160,6 @@
     --toggle-bg:            #F5ED31;
     --toggle-color:         #0D0C0B;
 
-    /* ── shadcn/ui HSL bridge (dark) ──────────────────────────────── */
     --background:           44 30% 9%;
     --foreground:           44 20% 94%;
 
@@ -569,6 +550,7 @@
   .react-grid-placeholder { @apply bg-primary/20 rounded-xl opacity-50 backdrop-blur-sm !important; border: 2px dashed hsl(var(--primary)); }
   .react-resizable-handle { position: absolute; width: 20px; height: 20px; bottom: 0; right: 0; cursor: se-resize; }
   .react-resizable-handle::after { content: ""; position: absolute; right: 5px; bottom: 5px; width: 6px; height: 6px; border-right: 2px solid hsl(var(--muted-foreground)); border-bottom: 2px solid hsl(var(--muted-foreground)); opacity: 0.5; }
+
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
@@ -627,8 +609,8 @@
   background: var(--bg-sidebar) !important;
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border-right: 1px solid var(--border-sidebar) !important;
-  box-shadow: var(--shadow-sidebar);
+  border-right: none !important; /* FORZATURA RIMOZIONE BORDO LATERALE */
+  box-shadow: none !important; /* RIMOSSA OMBRA STATICA */
   overflow: hidden;
   transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
               background 0.32s ease,
@@ -646,8 +628,8 @@
   background: var(--bg-sidebar-open) !important;
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
-  border-right: 1px solid var(--border-sidebar-open) !important;
-  box-shadow: var(--shadow-sidebar-open);
+  border-right: none !important; /* NESSUN BORDO NEMMENO APERTA */
+  box-shadow: var(--shadow-sidebar-open) !important;
 }
 
 /* Allow scrolling ONLY when expanded */
@@ -709,10 +691,12 @@
   color: var(--text-primary);
 }
 
+/* Fix attivo: Nessuna "pillola", solo colore testo accentato e grassetto */
 .superadmin-theme .sa-nav-item.active {
-  background: var(--icon-active-bg);
-  color: var(--icon-active-color);
-  box-shadow: var(--icon-active-shadow);
+  background: transparent !important;
+  color: hsl(var(--primary)) !important;
+  box-shadow: none !important;
+  font-weight: 700;
 }
 
 /* Expanded: stretch to full width with left-aligned icon + label */
@@ -861,33 +845,6 @@
   border-bottom: 1px solid var(--border-divider);
 }
 
-/* ── Demo Card Gradient Variants ────────────────────────────────────────── */
-.superadmin-theme .sa-card-yellow {
-  background: linear-gradient(135deg, #f7f06e 0%, #f5ed31 50%, #e8df20 100%) !important;
-  color: var(--dark) !important;
-  border: none !important;
-}
-.superadmin-theme .sa-card-orange {
-  background: linear-gradient(135deg, #ff934f 0%, #ffb07a 60%, #ffa060 100%) !important;
-  color: var(--dark) !important;
-  border: none !important;
-}
-.superadmin-theme .sa-card-dark {
-  background: var(--dark) !important;
-  color: #ffffff !important;
-  border: none !important;
-}
-.superadmin-theme .sa-card-logistics {
-  background: var(--card-logistics-bg) !important;
-  backdrop-filter: blur(10px) !important;
-  border: 1px solid var(--border-card) !important;
-}
-
-.dark .superadmin-theme .sa-card-dark {
-  background: #1e1d12 !important;
-  box-shadow: 0 0 40px rgba(245, 237, 49, 0.04), 0 4px 24px rgba(0,0,0,0.5);
-}
-
 /* ── Demo-accurate Card Geometry ────────────────────────────────────────── */
 .superadmin-theme .sa-card-base {
   border-radius: 20px;
@@ -926,3 +883,26 @@
 .superadmin-theme ::-webkit-scrollbar-track { background: transparent; }
 .superadmin-theme ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
 .superadmin-theme ::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+@layer components {
+  /* DARK CARD: In Light Mode è scura, in Dark Mode si adatta al tema */
+  .superadmin-theme .sa-card-dark {
+    @apply bg-slate-900 text-white dark:bg-card dark:text-card-foreground border border-transparent dark:border-border transition-colors duration-300;
+  }
+  
+  /* LOGISTICS CARD: Mantiene i gradienti caldi in light mode, si smorza in dark mode */
+  .superadmin-theme .sa-card-logistics {
+    @apply text-white dark:text-primary-foreground border border-transparent dark:border-primary/30 transition-colors duration-300;
+    background: var(--card-logistics-bg);
+  }
+
+  /* YELLOW CARD: Pieno contrasto in Light, contrasto morbido in Dark */
+  .superadmin-theme .sa-card-yellow {
+    @apply bg-[#fef08a] text-yellow-950 dark:bg-yellow-500/10 dark:text-yellow-500 dark:border dark:border-yellow-500/20 transition-colors duration-300;
+  }
+
+  /* ORANGE CARD */
+  .superadmin-theme .sa-card-orange {
+    @apply bg-[#ff934f] text-orange-950 dark:bg-orange-500/10 dark:text-orange-500 dark:border dark:border-orange-500/20 transition-colors duration-300;
+  }
+}

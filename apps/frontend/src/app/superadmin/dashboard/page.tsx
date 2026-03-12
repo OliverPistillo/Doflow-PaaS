@@ -60,7 +60,7 @@ function KpiCard({
   trend,
   trendUp,
   onClick,
-  className = "glass-card bg-card text-card-foreground", // Default si adatta al tema Dark/Light
+  className = "glass-card", // Default fallback
 }: {
   title:    string;
   value:    string;
@@ -72,20 +72,15 @@ function KpiCard({
 }) {
   return (
     <Card
-      className={`${className} transition-all duration-300 cursor-pointer group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative border-none`}
+      className={`${className} transition-all duration-300 cursor-pointer group hover:-translate-y-1 hover:shadow-xl overflow-hidden relative`}
       onClick={onClick}
     >
-      {/* Glow effect */}
-      <div
-        className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-20 blur-2xl group-hover:opacity-40 transition-opacity duration-500 pointer-events-none"
-        style={{ backgroundColor: colorVar }}
-      />
       <CardContent className="p-6 relative z-10">
         <div className="flex justify-between items-start">
-          {/* Sostituito text-muted-foreground con opacity-70 per ereditare correttamente il colore padre */}
+          {/* Opacità per ereditare correttamente il colore di testo dalla card padre */}
           <p className="text-xs font-bold opacity-70 uppercase tracking-widest">{title}</p>
           <div
-            className="h-9 w-9 flex items-center justify-center rounded-xl transition-all duration-300 group-hover:scale-110 shadow-sm"
+            className="h-9 w-9 flex items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110 shadow-sm"
             style={{ 
               backgroundColor: `color-mix(in srgb, ${colorVar} 15%, transparent)`,
               color: colorVar, 
@@ -95,10 +90,11 @@ function KpiCard({
             <ArrowUpRight className="h-4 w-4" />
           </div>
         </div>
-        {/* Rimosso text-foreground per permettere alle card custom (es. sa-card-dark) di imporre il bianco */}
+        
         <h3 className="text-3xl font-black mt-3 tracking-tight tabular-nums" style={{ fontFamily: "'Urbanist', sans-serif" }}>
           {value}
         </h3>
+        
         {trend && (
           <div className={`flex items-center gap-1 mt-2 text-xs font-semibold ${
             trendUp ? "text-emerald-500" : "text-rose-500"
@@ -183,7 +179,7 @@ export default function SalesDashboardPage() {
     <div className="dashboard-content animate-fadeIn">
 
       {/* ── 1. Hero / Greeting card ──────────────────────────────────── */}
-      <div className="dashboard-hero" style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '16px' }}>
+      <div className="dashboard-hero flex flex-row justify-between items-end flex-wrap gap-4">
         <div>
           <div className="dashboard-hero-meta">
             <span>Business Intelligence</span>
@@ -194,8 +190,8 @@ export default function SalesDashboardPage() {
           <div className="dashboard-hero-sub">
             <CalendarDays className="h-3.5 w-3.5" />
             <span className="capitalize">{formatDate()}</span>
-            <span style={{ color: 'hsl(var(--border))' }}>—</span>
-            <span className="font-medium" style={{ color: 'hsl(var(--foreground))' }}>{getGreeting()}</span>
+            <span className="text-border">—</span>
+            <span className="font-medium text-foreground">{getGreeting()}</span>
           </div>
         </div>
         <div className="dashboard-hero-actions">
@@ -218,20 +214,20 @@ export default function SalesDashboardPage() {
         <KpiCard
           title="Offerte in qualifica"
           value={String(data.kpi.leadsCount)}
-          colorVar="#3b82f6" // Azzurro acceso visibile su sfondo scuro
+          colorVar="#3b82f6"
           trend="+8% vs mese precedente"
           trendUp
           onClick={() => setActiveCard('QUALIFIED_LEADS')}
-          className="sa-card-logistics text-white" // Stile custom della demo
+          className="sa-card-logistics" // Adattivo via CSS globale
         />
         <KpiCard
           title="Valore filtrato"
           value={formatCurrency(data.kpi.totalValue)}
-          colorVar="#a78bfa" // Viola acceso
+          colorVar="#a78bfa"
           trend="Pipeline attiva"
           trendUp
           onClick={() => setActiveCard('TOTAL_VALUE')}
-          className="sa-card-dark text-white" // Stile dark minimale della demo
+          className="sa-card-dark" // Adattivo via CSS globale
         />
         <KpiCard
           title="Tasso di vincita"
@@ -240,7 +236,7 @@ export default function SalesDashboardPage() {
           trend={data.kpi.winRate >= 30 ? "Sopra target" : "Sotto target"}
           trendUp={data.kpi.winRate >= 30}
           onClick={() => setActiveCard('WIN_RATE')}
-          className="glass-card bg-card text-card-foreground" // Stile standard adattivo (Light/Dark)
+          className="glass-card"
         />
         <KpiCard
           title="Media per deal"
@@ -249,28 +245,27 @@ export default function SalesDashboardPage() {
           trend="Valore medio"
           trendUp
           onClick={() => setActiveCard('AVG_VALUE')}
-          className="glass-card bg-card text-card-foreground" // Stile standard adattivo (Light/Dark)
+          className="glass-card"
         />
       </div>
 
       {/* ── 4. Alert Row (Chiusura Mese) ──────────────────────────────── */}
       <div className="animate-fadeInUp" style={{ animationDelay: "0.3s" }}>
         <Card
-          className="sa-card-yellow border-none cursor-pointer hover:shadow-lg transition-all mb-6 group"
+          className="sa-card-yellow cursor-pointer hover:shadow-lg transition-all mb-6 group"
           onClick={() => setActiveCard('CLOSING_THIS_MONTH')}
         >
           <CardContent className="flex items-center justify-between p-6">
             <div>
-              {/* Il testo nero/scuro è forzato perché la card gialla lo richiede sempre */}
-              <p className="text-sm font-bold uppercase tracking-wider text-yellow-950/60">
+              <p className="text-sm font-bold uppercase tracking-wider opacity-70">
                 In chiusura (Mese corrente o selezionato)
               </p>
-              <p className="text-3xl font-black text-yellow-950 mt-1" style={{ fontFamily: "'Urbanist', sans-serif" }}>
+              <p className="text-3xl font-black mt-1" style={{ fontFamily: "'Urbanist', sans-serif" }}>
                 {data.kpi.dealsClosingThisMonth}{' '}
-                <span className="text-lg font-medium text-yellow-950/70">deals critici</span>
+                <span className="text-lg font-medium opacity-80">deals critici</span>
               </p>
             </div>
-            <div className="h-12 w-12 bg-yellow-950/10 rounded-full flex items-center justify-center text-yellow-950 transition-transform group-hover:scale-110">
+            <div className="h-12 w-12 bg-current/10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110">
               <ArrowUpRight className="h-6 w-6" />
             </div>
           </CardContent>
@@ -281,15 +276,12 @@ export default function SalesDashboardPage() {
       <div className="charts-grid animate-fadeInUp" style={{ animationDelay: "0.4s" }}>
 
         {/* Pipeline Bar Chart */}
-        <Card className="glass-card bg-card text-card-foreground border-none">
+        <Card className="glass-card border-none">
           <CardHeader className="pb-2">
             <div className="flex justify-between items-center">
               <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
                 Valore pipeline per fase
               </CardTitle>
-              <div className="h-8 w-8 bg-muted/50 rounded flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer transition-colors">
-                <ArrowUpRight className="h-4 w-4" />
-              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -319,7 +311,7 @@ export default function SalesDashboardPage() {
                       border: '1px solid hsl(var(--border))',
                       boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
                       fontFamily: "'Urbanist', sans-serif",
-                      color: 'hsl(var(--foreground))' // <-- RISOLVE IL PROBLEMA DEL TESTO IN DARK MODE
+                      color: 'hsl(var(--foreground))'
                     }}
                     formatter={(val: unknown) => [formatCurrency(Number(val) || 0), 'Valore']}
                   />
@@ -331,15 +323,12 @@ export default function SalesDashboardPage() {
         </Card>
 
         {/* Pie Chart */}
-        <Card className="glass-card bg-card text-card-foreground border-none">
+        <Card className="glass-card border-none">
           <CardHeader className="pb-2">
             <div className="flex justify-between items-center">
               <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
                 Distribuzione offerte (Quantità)
               </CardTitle>
-              <div className="h-8 w-8 bg-muted/50 rounded flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer transition-colors">
-                <ArrowUpRight className="h-4 w-4" />
-              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -365,7 +354,7 @@ export default function SalesDashboardPage() {
                         border: '1px solid hsl(var(--border))',
                         backgroundColor: 'hsl(var(--card))',
                         fontFamily: "'Urbanist', sans-serif",
-                        color: 'hsl(var(--foreground))' // <-- RISOLVE IL PROBLEMA DEL TESTO IN DARK MODE
+                        color: 'hsl(var(--foreground))'
                       }}
                     />
                   </PieChart>
@@ -378,7 +367,7 @@ export default function SalesDashboardPage() {
                   <div key={i} className="flex items-center justify-end gap-3 group">
                     <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: `hsl(var(--chart-${(i % 5) + 1}))` }} />
                     <span className="text-xs text-muted-foreground font-medium group-hover:text-foreground transition-colors">{d.stage}</span>
-                    <span className="text-sm font-black text-foreground">({d.count})</span>
+                    <span className="text-sm font-black">({d.count})</span>
                   </div>
                 ))}
               </div>
@@ -389,15 +378,12 @@ export default function SalesDashboardPage() {
 
       {/* ── 6. Top Deals Chart ────────────────────────────────────────── */}
       <div className="animate-fadeInUp" style={{ animationDelay: "0.5s" }}>
-        <Card className="glass-card bg-card text-card-foreground border-none">
+        <Card className="glass-card border-none">
           <CardHeader className="pb-2">
             <div className="flex justify-between items-center">
               <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
                 Le migliori offerte per valore
               </CardTitle>
-              <div className="h-8 w-8 bg-muted/50 rounded flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer transition-colors">
-                <ArrowUpRight className="h-4 w-4" />
-              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -422,7 +408,7 @@ export default function SalesDashboardPage() {
                       borderRadius: '12px',
                       border: '1px solid hsl(var(--border))',
                       fontFamily: "'Urbanist', sans-serif",
-                      color: 'hsl(var(--foreground))' // <-- RISOLVE IL PROBLEMA DEL TESTO IN DARK MODE
+                      color: 'hsl(var(--foreground))'
                     }}
                     formatter={(val: unknown) => [formatCurrency(Number(val) || 0), 'Valore']}
                   />
