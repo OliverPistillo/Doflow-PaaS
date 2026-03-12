@@ -3,7 +3,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
-import { Loader2, ArrowLeft, Plus, Trash2, Receipt, AlertTriangle } from "lucide-react";
+import { Loader2, ArrowLeft, Plus, Trash2, Receipt, AlertTriangle, UserPlus, Sparkles } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input }  from "@/components/ui/input";
 import {
@@ -49,15 +53,33 @@ type InvoiceFormValues = {
 
 type Tenant = { id: string; name: string; contactEmail?: string };
 
+interface InvoiceClient {
+  id: string;
+  clientName: string;
+  clientVat?: string;
+  clientFiscalCode?: string;
+  clientSdi?: string;
+  clientPec?: string;
+  clientAddress?: string;
+  clientCity?: string;
+  clientZip?: string;
+  invoiceCount: number;
+}
+
 const STAMP_THRESHOLD = 77.47;
 
 // ─── Componente ──────────────────────────────────────────────────────────────
 
 export default function NewInvoicePage() {
   const router = useRouter();
-  const [tenants, setTenants]         = useState<Tenant[]>([]);
-  const [loadingTenants, setLoading]  = useState(true);
-  const [isSubmitting, setSubmitting] = useState(false);
+  const [tenants, setTenants]             = useState<Tenant[]>([]);
+  const [loadingTenants, setLoading]      = useState(true);
+  const [isSubmitting, setSubmitting]     = useState(false);
+  const [savedClients, setSavedClients]   = useState<InvoiceClient[]>([]);
+  const [clientMode, setClientMode]       = useState<"tenant"|"saved"|"nuovo">("nuovo");
+  const [autofilled, setAutofilled]       = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [pendingData, setPendingData]     = useState<any>(null);
 
   const today = new Date().toISOString().split("T")[0];
   const nextMonth = (() => {
@@ -121,44 +143,117 @@ export default function NewInvoicePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isForfettario, imponibile]);
 
-  // Load tenants
+  // Load tenants + saved clients
   useEffect(() => {
     apiFetch<Tenant[]>("/superadmin/tenants")
       .then((d) => setTenants(Array.isArray(d) ? d.filter(t => t?.id && t?.name) : []))
       .catch(() => setTenants([]))
       .finally(() => setLoading(false));
+    apiFetch<InvoiceClient[]>("/superadmin/finance/clients")
+      .then(d => setSavedClients(Array.isArray(d) ? d : []))
+      .catch(() => setSavedClients([]));
   }, []);
 
-  const handleTenantSelect = useCallback((id: string) => {
-    const t = tenants.find(t => t.id === id);
-    if (t) { setValue("tenantId", id); setValue("clientName", t.name); }
-  }, [tenants, setValue]);
+  const handleClientSelect = useCallback((value: string) => {
+    if (value === "__nuovo__") {
+      setClientMode("nuovo");
+      setValue("tenantId", "");
+      setValue("clientName", ""); setValue("clientAddress", ""); setValue("clientCity", "");
+      setValue("clientZip", ""); setValue("clientVat", ""); setValue("clientFiscalCode", "");
+      setValue("clientSdi", ""); setValue("clientPec", "");
+      return;
+    }
+    // Tenant
+    const tenant = tenants.find(t => t.id === value);
+    if (tenant) {
+      setClientMode("tenant");
+      setValue("tenantId", value);
+      setValue("clientName", tenant.name);
+      return;
+    }
+    // Saved client
+    const sc = savedClients.find(c => c.id === value);
+    if (sc) {
+      setClientMode("saved");
+      setValue("tenantId", "");
+      setValue("clientName",       sc.clientName);
+      setValue("clientAddress",    sc.clientAddress    ?? "");
+      setValue("clientCity",       sc.clientCity       ?? "");
+      setValue("clientZip",        sc.clientZip        ?? "");
+      setValue("clientVat",        sc.clientVat        ?? "");
+      setValue("clientFiscalCode", sc.clientFiscalCode ?? "");
+      setValue("clientSdi",        sc.clientSdi        ?? "");
+      setValue("clientPec",        sc.clientPec        ?? "");
+      setAutofilled(true);
+      setTimeout(() => setAutofilled(false), 2500);
+    }
+  }, [tenants, savedClients, setValue]);
+
+  // Current select value for controlled Select
+  const selectValue = (() => {
+    const tid = (document?.querySelector?.('[name="tenantId"]') as any)?.value ?? "";
+    if (clientMode === "nuovo") return "__nuovo__";
+    if (clientMode === "tenant") {
+      const t = tenants.find(t => t.name === (document?.querySelector?.('[name="clientName"]') as any)?.value);
+      return t?.id ?? "";
+    }
+    const sc = savedClients.find(c => c.clientName === (document?.querySelector?.('[name="clientName"]') as any)?.value);
+    return sc?.id ?? "";
+  })();
+
+  const buildPayload = (data: InvoiceFormValues) => ({
+    ...data,
+    amount:    imponibile,
+    taxRate:   isForfettario ? 0 : Number(data.taxRate),
+    stampDuty: data.stampDuty || autoStamp,
+    lineItems: data.lineItems.map(i => ({
+      description: i.description,
+      quantity:    i.quantity,
+      unitPrice:   i.unitPrice,
+      total:       Number(i.quantity) * Number(i.unitPrice),
+    })),
+  });
 
   const onSubmit = async (data: InvoiceFormValues) => {
     setSubmitting(true);
     try {
-      const payload = {
-        ...data,
-        amount:    imponibile,
-        taxRate:   isForfettario ? 0 : Number(data.taxRate),
-        stampDuty: data.stampDuty || autoStamp,
-        lineItems: data.lineItems.map(i => ({
-          description: i.description,
-          quantity:    i.quantity,
-          unitPrice:   i.unitPrice,
-          total:       Number(i.quantity) * Number(i.unitPrice),
-        })),
-      };
       await apiFetch("/superadmin/finance/invoices", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(buildPayload(data)),
       });
-      router.push("/superadmin/finance/invoices");
+      // Nuovo cliente → chiedi se salvare
+      if (clientMode === "nuovo" && data.clientName?.trim()) {
+        setPendingData(data);
+        setShowSaveDialog(true);
+      } else {
+        router.push("/superadmin/finance/invoices");
+      }
     } catch (e: any) {
       alert(`Errore: ${e?.message || "Errore sconosciuto"}`);
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleConfirmSaveClient = async () => {
+    if (pendingData) {
+      try {
+        await apiFetch("/superadmin/finance/clients/upsert", {
+          method: "POST",
+          body: JSON.stringify({
+            clientName:       pendingData.clientName,
+            clientAddress:    pendingData.clientAddress    || undefined,
+            clientCity:       pendingData.clientCity       || undefined,
+            clientZip:        pendingData.clientZip        || undefined,
+            clientVat:        pendingData.clientVat        || undefined,
+            clientFiscalCode: pendingData.clientFiscalCode || undefined,
+            clientSdi:        pendingData.clientSdi        || undefined,
+            clientPec:        pendingData.clientPec        || undefined,
+          }),
+        });
+      } catch (e) { console.error("Errore salvataggio cliente", e); }
+    }
+    router.push("/superadmin/finance/invoices");
   };
 
   const fmtCurrency = (v: number) =>
@@ -167,6 +262,30 @@ export default function NewInvoicePage() {
   // ─── JSX ──────────────────────────────────────────────────────────────────
 
   return (
+    <>
+    {/* Dialog conferma salvataggio nuovo cliente */}
+    <Dialog open={showSaveDialog} onOpenChange={v => { if (!v) router.push("/superadmin/finance/invoices"); }}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Salvare il cliente?</DialogTitle>
+          <DialogDescription>
+            Vuoi aggiungere <strong>{pendingData?.clientName}</strong> all&apos;anagrafica clienti?
+            La prossima volta apparirà nel menu a tendina.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2">
+          <button type="button" onClick={() => router.push("/superadmin/finance/invoices")}
+            className="text-sm text-muted-foreground hover:text-foreground px-4 py-2 rounded-lg border hover:bg-muted transition-colors">
+            No, continua
+          </button>
+          <button type="button" onClick={handleConfirmSaveClient}
+            className="text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors">
+            Sì, salva cliente
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
     <div className="max-w-5xl mx-auto py-8 px-4">
       {/* Header */}
       <div className="flex items-center gap-4 mb-8">
@@ -251,23 +370,52 @@ export default function NewInvoicePage() {
             <h2 className="text-base font-bold border-b pb-2">Dati Documento</h2>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-muted-foreground uppercase">Seleziona Tenant / Cliente</label>
-              <Select onValueChange={handleTenantSelect} value={watch("tenantId")}>
+              <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-2">
+                Seleziona Cliente
+                {autofilled && (
+                  <span className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                    <Sparkles className="h-2.5 w-2.5" /> Compilato automaticamente
+                  </span>
+                )}
+              </label>
+              <Select onValueChange={handleClientSelect} value={clientMode === "nuovo" ? "__nuovo__" : ""}>
                 <SelectTrigger>
                   <SelectValue placeholder={loadingTenants ? "Caricamento..." : "Scegli cliente..."} />
                 </SelectTrigger>
                 <SelectContent>
-                  {tenants.map(t => (
-                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                  ))}
-                  <SelectItem value="custom">Cliente Esterno (Personalizzato)</SelectItem>
+                  {tenants.length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Tenant</div>
+                      {tenants.map(t => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                      ))}
+                    </>
+                  )}
+                  {savedClients.length > 0 && (
+                    <>
+                      <Separator className="my-1" />
+                      <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Clienti Salvati</div>
+                      {savedClients.map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                          <span className="font-medium">{c.clientName}</span>
+                          {c.clientVat && <span className="text-muted-foreground text-xs ml-2">{c.clientVat}</span>}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                  <Separator className="my-1" />
+                  <SelectItem value="__nuovo__">
+                    <span className="flex items-center gap-2 text-indigo-600 font-semibold">
+                      <UserPlus className="h-3.5 w-3.5" /> Nuovo cliente…
+                    </span>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
               <label className="text-xs font-bold text-muted-foreground uppercase">Ragione Sociale *</label>
-              <Input {...register("clientName", { required: true })} placeholder="Mario Rossi S.r.l." />
+              <Input {...register("clientName", { required: true })} placeholder="Mario Rossi S.r.l." readOnly={clientMode !== "nuovo"} className={clientMode !== "nuovo" ? "bg-muted/50 cursor-default" : ""} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -432,5 +580,6 @@ export default function NewInvoicePage() {
         </div>
       </form>
     </div>
+    </>
   );
 }
