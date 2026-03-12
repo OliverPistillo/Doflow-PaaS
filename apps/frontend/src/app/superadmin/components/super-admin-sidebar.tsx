@@ -209,9 +209,9 @@ export function SuperAdminSidebar() {
       </SidebarHeader>
 
       {/* ── CONTENT: Nav Groups ──────────────────────────────────── */}
-      <SidebarContent className="pt-2 px-3 overflow-y-auto scrollbar-none">
+      <SidebarContent className={`pt-2 overflow-y-auto scrollbar-none transition-all duration-300 ${isOpen ? "px-3" : "px-[14px]"}`}>
         {MENU_GROUPS.map((group) => (
-          <div key={group.label} className="mb-3">
+          <div key={group.label} className="sa-nav-group mb-3">
             <div className="sa-group-label">{group.label}</div>
             <div className="flex flex-col gap-[2px]">
               {group.items.map((item) => (
@@ -230,7 +230,7 @@ export function SuperAdminSidebar() {
       </SidebarContent>
 
       {/* ── FOOTER: Avatar + Dropdown ────────────────────────────── */}
-      <SidebarFooter className="border-t border-[var(--border-divider)] p-3">
+      <SidebarFooter className={`border-t border-[var(--border-divider)] transition-all duration-300 ${isOpen ? "p-3" : "p-2 flex items-center justify-center"}`}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button

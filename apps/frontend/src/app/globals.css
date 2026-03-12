@@ -629,10 +629,16 @@
   -webkit-backdrop-filter: blur(24px);
   border-right: 1px solid var(--border-sidebar) !important;
   box-shadow: var(--shadow-sidebar);
+  overflow: hidden;
   transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
               background 0.32s ease,
               border-color 0.32s ease,
               box-shadow 0.28s ease !important;
+}
+
+/* Force overflow containment on all sidebar inner wrappers */
+.superadmin-theme [data-sidebar="sidebar"] > div {
+  overflow: hidden !important;
 }
 
 /* When sidebar is hovered/expanded → open state tokens */
@@ -644,11 +650,34 @@
   box-shadow: var(--shadow-sidebar-open);
 }
 
+/* Allow scrolling ONLY when expanded */
+.superadmin-theme [data-sidebar="sidebar"].sa-sidebar-open > div {
+  overflow: visible !important;
+}
+.superadmin-theme [data-sidebar="sidebar"].sa-sidebar-open [data-sidebar="content"] {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
 /* Remove default shadcn sidebar bg and borders that conflict */
 .superadmin-theme [data-sidebar="sidebar"] [data-sidebar="header"],
 .superadmin-theme [data-sidebar="sidebar"] [data-sidebar="content"],
 .superadmin-theme [data-sidebar="sidebar"] [data-sidebar="footer"] {
   background: transparent !important;
+}
+
+/* Collapsed content: center items, clip text overflow */
+.superadmin-theme [data-sidebar="sidebar"]:not(.sa-sidebar-open) [data-sidebar="content"] {
+  overflow: hidden !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.superadmin-theme [data-sidebar="sidebar"]:not(.sa-sidebar-open) [data-sidebar="footer"] {
+  overflow: hidden !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* ── Sidebar Nav Icons — Demo-accurate styling ──────────────────────────── */
@@ -665,11 +694,14 @@
   flex-shrink: 0;
   overflow: hidden;
   white-space: nowrap;
+  text-decoration: none;
+  margin: 0 auto; /* center within collapsed sidebar */
   transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
               background 0.18s ease,
               color 0.18s ease,
               box-shadow 0.18s ease,
-              padding 0.28s ease !important;
+              padding 0.28s ease,
+              margin 0.28s ease !important;
 }
 
 .superadmin-theme .sa-nav-item:hover {
@@ -686,6 +718,7 @@
 /* Expanded: stretch to full width with left-aligned icon + label */
 .superadmin-theme .sa-sidebar-open .sa-nav-item {
   width: 100%;
+  margin: 0; /* reset auto-centering */
   padding-left: 12px;
   justify-content: flex-start;
   gap: 12px;
@@ -722,30 +755,40 @@
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--text-secondary);
-  padding: 8px 12px 4px;
+  padding: 0;
+  margin: 0;
+  line-height: 0;
+  height: 0;
   opacity: 0;
-  max-height: 0;
   overflow: hidden;
-  transition: opacity 0.2s ease, max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  white-space: nowrap;
+  transition: opacity 0.2s ease,
+              height 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              padding 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              line-height 0.28s ease !important;
 }
 
 .superadmin-theme .sa-sidebar-open .sa-group-label {
   opacity: 1;
-  max-height: 32px;
+  height: auto;
+  line-height: 1.4;
+  padding: 8px 12px 4px;
 }
 
 /* ── Sidebar Logo/Brand ─────────────────────────────────────────────────── */
 .superadmin-theme .sa-logo-wrapper {
   display: flex;
   align-items: center;
-  padding: 28px 14px 20px;
-  width: 100%;
-  transition: padding 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-.superadmin-theme:not(.sa-sidebar-open) .sa-logo-wrapper {
   padding: 28px 0 20px;
   justify-content: center;
+  width: 100%;
+  transition: padding 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              justify-content 0.28s ease !important;
+}
+
+.superadmin-theme .sa-sidebar-open .sa-logo-wrapper {
+  padding: 28px 14px 20px;
+  justify-content: flex-start;
 }
 
 .superadmin-theme .sa-brand-name {
@@ -780,6 +823,26 @@
 .superadmin-theme .sa-sidebar-open .sa-avatar-info {
   opacity: 1;
   max-width: 120px;
+}
+
+/* Footer trigger button: contain within collapsed width */
+.superadmin-theme [data-sidebar="sidebar"]:not(.sa-sidebar-open) [data-sidebar="footer"] button {
+  width: 44px;
+  padding: 4px;
+  justify-content: center;
+  overflow: hidden;
+}
+.superadmin-theme [data-sidebar="sidebar"]:not(.sa-sidebar-open) [data-sidebar="footer"] button > .sa-avatar-info,
+.superadmin-theme [data-sidebar="sidebar"]:not(.sa-sidebar-open) [data-sidebar="footer"] button > svg {
+  display: none;
+}
+
+/* Collapsed nav groups: center the items column */
+.superadmin-theme [data-sidebar="sidebar"]:not(.sa-sidebar-open) .sa-nav-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
 }
 
 /* ── Main Content area ──────────────────────────────────────────────────── */
