@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from "@/components/ui/sheet";
@@ -10,13 +10,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, Building2, Sparkles, X, ChevronDown, ChevronUp, UserPlus, Save } from "lucide-react";
+import { Loader2, Building2, Sparkles, ChevronDown, ChevronUp, Save, UserPlus } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
 type Invoice = {
   id: string;
@@ -56,108 +57,10 @@ interface InvoiceSheetProps {
   invoiceToEdit?: Invoice | null;
 }
 
-// ─── Client Autocomplete ──────────────────────────────────────────────────────
-
-function ClientAutocomplete({
-  value, onChange, onSelect, clients,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onSelect: (c: InvoiceClient) => void;
-  clients: InvoiceClient[];
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  // Mostra clienti salvati quando c'è testo, oppure tutti se si digita "nuovo" (lascia campo libero)
-  const suggestions = useMemo(() => {
-    if (!value.trim()) return [];
-    const q = value.toLowerCase();
-    // "nuovo" → non suggerire nulla, l'utente sta inserendo un cliente nuovo
-    if (q === "nuovo") return [];
-    return clients.filter(c => c.clientName.toLowerCase().includes(q)).slice(0, 8);
-  }, [value, clients]);
-
-  useEffect(() => {
-    const fn = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", fn);
-    return () => document.removeEventListener("mousedown", fn);
-  }, []);
-
-  const isNew = value.trim().length > 0 && suggestions.length === 0 && value.toLowerCase() !== "nuovo";
-
-  return (
-    <div ref={ref} className="relative">
-      <div className="relative">
-        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          required
-          value={value}
-          onChange={e => { onChange(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-          placeholder="Cerca cliente salvato o digita nuovo nome..."
-          className="pl-9 pr-8"
-        />
-        {value && (
-          <button type="button" onClick={() => { onChange(""); setOpen(false); }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
-            <X className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
-
-      {/* Suggerimenti clienti salvati */}
-      {open && suggestions.length > 0 && (
-        <div className="absolute z-50 top-full mt-1.5 w-full bg-popover border border-border rounded-xl shadow-2xl overflow-hidden">
-          <div className="px-3 py-1.5 flex items-center gap-1.5 bg-muted/40 border-b border-border/50">
-            <Sparkles className="h-3 w-3 text-indigo-500" />
-            <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-              Clienti salvati — click per compilare automaticamente
-            </span>
-          </div>
-          {suggestions.map(client => (
-            <button key={client.id} type="button"
-              className="w-full text-left px-3 py-2.5 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors flex items-center gap-3 group border-b border-border/20 last:border-0"
-              onMouseDown={e => { e.preventDefault(); onSelect(client); setOpen(false); }}>
-              <div className="h-7 w-7 rounded-lg bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center shrink-0">
-                <Building2 className="h-3.5 w-3.5 text-indigo-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate group-hover:text-indigo-700 dark:group-hover:text-indigo-300">
-                  {client.clientName}
-                </p>
-                <p className="text-[11px] text-muted-foreground truncate">
-                  {[client.clientVat, client.clientCity].filter(Boolean).join(" · ")}
-                </p>
-              </div>
-              <Badge variant="outline" className="text-[10px] shrink-0 border-indigo-200 dark:border-indigo-800 text-indigo-600">
-                {client.invoiceCount} fatt.
-              </Badge>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Indicatore "nuovo cliente" */}
-      {isNew && value.length > 2 && (
-        <p className="text-[11px] text-emerald-600 flex items-center gap-1 mt-1">
-          <UserPlus className="h-3 w-3" />
-          Nuovo cliente — al salvataggio ti verrà chiesto se vuoi aggiungerlo all'anagrafica
-        </p>
-      )}
-    </div>
-  );
-}
-
-// ─── Dialog conferma salvataggio cliente ──────────────────────────────────────
+// ─── Dialog conferma salvataggio cliente ────────────────────────────────────────
 
 function SaveClientDialog({
-  open,
-  clientName,
-  onSave,
-  onSkip,
+  open, clientName, onSave, onSkip,
 }: {
   open: boolean;
   clientName: string;
@@ -165,13 +68,6 @@ function SaveClientDialog({
   onSkip: () => void;
 }) {
   const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    setSaving(true);
-    await onSave();
-    setSaving(false);
-  };
-
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onSkip(); }}>
       <DialogContent className="sm:max-w-sm">
@@ -183,16 +79,17 @@ function SaveClientDialog({
             <DialogTitle>Salvare il cliente?</DialogTitle>
           </div>
           <DialogDescription>
-            Vuoi salvare <strong>{clientName}</strong> nell'anagrafica clienti? La prossima volta che
-            crei una fattura, i dati verranno compilati automaticamente.
+            Vuoi salvare <strong>{clientName}</strong> nell&apos;anagrafica clienti?
+            La prossima volta comparirà nel menu a tendina.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" size="sm" onClick={onSkip} disabled={saving}>
-            No, continua senza salvare
+            No, continua
           </Button>
-          <Button size="sm" onClick={handleSave} disabled={saving}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white">
+          <Button size="sm" disabled={saving}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+            onClick={async () => { setSaving(true); await onSave(); setSaving(false); }}>
             {saving && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
             Sì, salva cliente
           </Button>
@@ -202,37 +99,43 @@ function SaveClientDialog({
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Empty form ─────────────────────────────────────────────────────────────────
+
+const emptyForm = () => ({
+  invoiceNumber: `INV-${new Date().getFullYear()}-${Math.floor(Math.random() * 900) + 100}`,
+  clientName: "",
+  clientAddress: "",
+  clientCity: "",
+  clientZip: "",
+  clientVat: "",
+  clientFiscalCode: "",
+  clientSdi: "",
+  clientPec: "",
+  amount: "",
+  issueDate: new Date().toISOString().split("T")[0],
+  dueDate: "",
+  status: "pending",
+});
+
+// ─── Main Component ──────────────────────────────────────────────────────────────
 
 export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }: InvoiceSheetProps) {
-  const [loading,    setLoading]    = useState(false);
-  const [clients,    setClients]    = useState<InvoiceClient[]>([]);
-  const [autofilled, setAutofilled] = useState(false);
-  const [showExtra,  setShowExtra]  = useState(false);
+  const [loading,       setLoading]       = useState(false);
+  const [clients,       setClients]       = useState<InvoiceClient[]>([]);
+  const [showExtra,     setShowExtra]     = useState(false);
+  const [autofilled,    setAutofilled]    = useState(false);
 
-  // Stato per il dialog "vuoi salvare il cliente?"
-  const [showSaveDialog,   setShowSaveDialog]   = useState(false);
-  const [pendingFormData,  setPendingFormData]   = useState<typeof formData | null>(null);
-  // true = il cliente selezionato è già nell'anagrafica (quindi non chiediamo)
-  const [clientAlreadySaved, setClientAlreadySaved] = useState(false);
+  // "nuovo" = utente sta inserendo un cliente che non è in anagrafica
+  const [clientMode,    setClientMode]    = useState<"select" | "nuovo">("select");
+  const [selectedId,    setSelectedId]    = useState<string>("");     // id cliente selezionato dal menu
 
-  const [formData, setFormData] = useState({
-    invoiceNumber:    "",
-    clientName:       "",
-    clientAddress:    "",
-    clientCity:       "",
-    clientZip:        "",
-    clientVat:        "",
-    clientFiscalCode: "",
-    clientSdi:        "",
-    clientPec:        "",
-    amount:           "",
-    issueDate:        "",
-    dueDate:          "",
-    status:           "pending",
-  });
+  // Dialog conferma salvataggio nuovo cliente
+  const [showSaveDialog,  setShowSaveDialog]  = useState(false);
+  const [pendingFormData, setPendingFormData] = useState<ReturnType<typeof emptyForm> | null>(null);
 
-  // Carica clienti all'apertura
+  const [formData, setFormData] = useState(emptyForm());
+
+  // Carica clienti salvati
   useEffect(() => {
     if (!isOpen) return;
     apiFetch<InvoiceClient[]>("/superadmin/finance/clients")
@@ -240,13 +143,14 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
       .catch(() => setClients([]));
   }, [isOpen]);
 
-  // Reset / popola form
+  // Reset / popola al (ri)apertura
   useEffect(() => {
     if (!isOpen) return;
-    setClientAlreadySaved(false);
     setShowExtra(false);
+    setAutofilled(false);
+    setClientMode("select");
+    setSelectedId("");
     if (invoiceToEdit) {
-      setClientAlreadySaved(true); // in modifica non chiediamo
       setFormData({
         invoiceNumber:    invoiceToEdit.invoiceNumber,
         clientName:       invoiceToEdit.clientName,
@@ -263,39 +167,37 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
         status:           invoiceToEdit.status,
       });
     } else {
-      const year = new Date().getFullYear();
-      setFormData({
-        invoiceNumber:    `INV-${year}-${Math.floor(Math.random() * 900) + 100}`,
-        clientName:       "",
-        clientAddress:    "",
-        clientCity:       "",
-        clientZip:        "",
-        clientVat:        "",
-        clientFiscalCode: "",
-        clientSdi:        "",
-        clientPec:        "",
-        amount:           "",
-        issueDate:        new Date().toISOString().split("T")[0],
-        dueDate:          "",
-        status:           "pending",
-      });
+      setFormData(emptyForm());
     }
   }, [isOpen, invoiceToEdit]);
 
-  // Selezione cliente dall'autocomplete
-  function handleClientSelect(client: InvoiceClient) {
+  // Selezione cliente dal menu a tendina
+  function handleClientSelect(value: string) {
+    if (value === "__nuovo__") {
+      setClientMode("nuovo");
+      setSelectedId("");
+      setFormData(prev => ({
+        ...prev,
+        clientName: "", clientAddress: "", clientCity: "", clientZip: "",
+        clientVat: "", clientFiscalCode: "", clientSdi: "", clientPec: "",
+      }));
+      return;
+    }
+    const client = clients.find(c => c.id === value);
+    if (!client) return;
+    setSelectedId(value);
+    setClientMode("select");
     setFormData(prev => ({
       ...prev,
       clientName:       client.clientName,
-      clientAddress:    client.clientAddress    ?? prev.clientAddress,
-      clientCity:       client.clientCity       ?? prev.clientCity,
-      clientZip:        client.clientZip        ?? prev.clientZip,
-      clientVat:        client.clientVat        ?? prev.clientVat,
-      clientFiscalCode: client.clientFiscalCode ?? prev.clientFiscalCode,
-      clientSdi:        client.clientSdi        ?? prev.clientSdi,
-      clientPec:        client.clientPec        ?? prev.clientPec,
+      clientAddress:    client.clientAddress    ?? "",
+      clientCity:       client.clientCity       ?? "",
+      clientZip:        client.clientZip        ?? "",
+      clientVat:        client.clientVat        ?? "",
+      clientFiscalCode: client.clientFiscalCode ?? "",
+      clientSdi:        client.clientSdi        ?? "",
+      clientPec:        client.clientPec        ?? "",
     }));
-    setClientAlreadySaved(true); // già in anagrafica, non chiedere di nuovo
     if (client.clientVat || client.clientSdi || client.clientPec) setShowExtra(true);
     setAutofilled(true);
     setTimeout(() => setAutofilled(false), 2500);
@@ -304,23 +206,19 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
   const set = (field: keyof typeof formData) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setFormData(prev => ({ ...prev, [field]: e.target.value }));
 
-  // Salva la fattura nel DB
   async function persistInvoice(data: typeof formData) {
     const payload = { ...data, amount: parseFloat(data.amount) };
     if (invoiceToEdit) {
       await apiFetch(`/superadmin/finance/invoices/${invoiceToEdit.id}`, {
-        method: "PATCH",
-        body: JSON.stringify(payload),
+        method: "PATCH", body: JSON.stringify(payload),
       });
     } else {
       await apiFetch("/superadmin/finance/invoices", {
-        method: "POST",
-        body: JSON.stringify(payload),
+        method: "POST", body: JSON.stringify(payload),
       });
     }
   }
 
-  // Salva il cliente nell'anagrafica
   async function persistClient(data: typeof formData) {
     await apiFetch("/superadmin/finance/clients/upsert", {
       method: "POST",
@@ -343,14 +241,13 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
     try {
       await persistInvoice(formData);
       onSuccess();
-
-      // Se il cliente è già in anagrafica (o stiamo modificando) → chiudi subito
-      if (clientAlreadySaved || invoiceToEdit) {
-        onClose();
-      } else {
-        // Nuovo cliente → mostra dialog di conferma salvataggio
+      // Se è un cliente nuovo (non era in anagrafica), chiedi se salvarlo
+      const isNewClient = clientMode === "nuovo" && formData.clientName.trim();
+      if (isNewClient && !invoiceToEdit) {
         setPendingFormData({ ...formData });
         setShowSaveDialog(true);
+      } else {
+        onClose();
       }
     } catch (err) {
       console.error(err);
@@ -360,28 +257,27 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
     }
   };
 
-  // Conferma salvataggio cliente dal dialog
-  const handleConfirmSaveClient = async () => {
-    if (pendingFormData) {
-      await persistClient(pendingFormData).catch(console.error);
-    }
+  const handleConfirmSave = async () => {
+    if (pendingFormData) await persistClient(pendingFormData).catch(console.error);
     setShowSaveDialog(false);
     onClose();
   };
 
-  // Skip salvataggio cliente
-  const handleSkipSaveClient = () => {
+  const handleSkipSave = () => {
     setShowSaveDialog(false);
     onClose();
   };
+
+  // Il cliente selezionato dal menu (per mostrare "Compilato automaticamente")
+  const selectedClient = clients.find(c => c.id === selectedId);
 
   return (
     <>
       <SaveClientDialog
         open={showSaveDialog}
         clientName={pendingFormData?.clientName ?? ""}
-        onSave={handleConfirmSaveClient}
-        onSkip={handleSkipSaveClient}
+        onSave={handleConfirmSave}
+        onSkip={handleSkipSave}
       />
 
       <Sheet open={isOpen && !showSaveDialog} onOpenChange={open => !open && onClose()}>
@@ -391,7 +287,7 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
             <SheetDescription>
               {invoiceToEdit
                 ? "Aggiorna i dati della fattura esistente."
-                : "I clienti nuovi vengono salvati in anagrafica solo su tua richiesta."}
+                : "Seleziona un cliente salvato oppure scegli \"Nuovo\" per inserirne uno."}
             </SheetDescription>
           </SheetHeader>
 
@@ -405,11 +301,13 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
 
             <Separator />
 
-            {/* ── Cliente ── */}
+            {/* ── Selezione cliente ── */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Building2 className="h-3.5 w-3.5 text-indigo-600" />
-                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/70">Dati Cliente</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/70">
+                  Cliente
+                </span>
                 {autofilled && (
                   <span className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full animate-in fade-in">
                     <Sparkles className="h-2.5 w-2.5" /> Compilato automaticamente
@@ -417,70 +315,122 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
                 )}
               </div>
 
+              {/* Menu a tendina principale */}
               <div className="grid gap-1.5">
                 <Label className="text-xs">Ragione Sociale *</Label>
-                <ClientAutocomplete
-                  value={formData.clientName}
-                  onChange={v => {
-                    setFormData(prev => ({ ...prev, clientName: v }));
-                    setClientAlreadySaved(false); // reset se l'utente modifica a mano
-                  }}
-                  onSelect={handleClientSelect}
-                  clients={clients}
-                />
-                {!formData.clientName && clients.length > 0 && (
+                <Select
+                  value={clientMode === "nuovo" ? "__nuovo__" : selectedId}
+                  onValueChange={handleClientSelect}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={
+                      clients.length > 0
+                        ? "Seleziona cliente o scegli Nuovo…"
+                        : "Seleziona Nuovo per inserire un cliente…"
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map(c => (
+                      <SelectItem key={c.id} value={c.id}>
+                        <span className="font-medium">{c.clientName}</span>
+                        {c.clientVat && (
+                          <span className="text-muted-foreground text-xs ml-2">{c.clientVat}</span>
+                        )}
+                      </SelectItem>
+                    ))}
+                    {clients.length > 0 && <Separator className="my-1" />}
+                    <SelectItem value="__nuovo__">
+                      <span className="flex items-center gap-2 text-indigo-600 font-semibold">
+                        <UserPlus className="h-3.5 w-3.5" />
+                        Nuovo cliente…
+                      </span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Se clienti esistono e nessuno è selezionato, mostra hint */}
+                {!selectedId && clientMode === "select" && clients.length > 0 && (
                   <p className="text-[11px] text-muted-foreground/60 flex items-center gap-1">
                     <Sparkles className="h-3 w-3 text-indigo-400" />
-                    {clients.length} client{clients.length === 1 ? "e salvato" : "i salvati"} — inizia a digitare la ragione sociale per i suggerimenti
+                    {clients.length} client{clients.length === 1 ? "e salvato" : "i salvati"} disponibili
                   </p>
                 )}
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
-                <div className="grid gap-1.5 col-span-2">
-                  <Label className="text-xs">Indirizzo</Label>
-                  <Input value={formData.clientAddress} onChange={set("clientAddress")} placeholder="Via Roma 1" />
+              {/* Se selezionato da menu, mostra nome in sola lettura */}
+              {clientMode === "select" && selectedClient && (
+                <div className="rounded-lg border border-indigo-100 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20 px-3 py-2">
+                  <p className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">
+                    {selectedClient.clientName}
+                  </p>
+                  {(selectedClient.clientAddress || selectedClient.clientCity) && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {[selectedClient.clientAddress, selectedClient.clientCity].filter(Boolean).join(", ")}
+                    </p>
+                  )}
                 </div>
-                <div className="grid gap-1.5">
-                  <Label className="text-xs">CAP</Label>
-                  <Input value={formData.clientZip} onChange={set("clientZip")} placeholder="20100" className="font-mono" />
-                </div>
-              </div>
+              )}
 
-              <div className="grid gap-1.5">
-                <Label className="text-xs">Città</Label>
-                <Input value={formData.clientCity} onChange={set("clientCity")} placeholder="Milano" />
-              </div>
+              {/* Form campi clienti — visibile se "Nuovo" o se si vuole modificare il selezionato */}
+              {clientMode === "nuovo" && (
+                <div className="space-y-3 pl-3 border-l-2 border-indigo-200 dark:border-indigo-800">
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs">Ragione Sociale (nome cliente) *</Label>
+                    <Input
+                      required
+                      placeholder="Es. Rossi Srl"
+                      value={formData.clientName}
+                      onChange={set("clientName")}
+                    />
+                  </div>
 
-              {/* Dati fiscali espandibili */}
-              <button type="button" onClick={() => setShowExtra(v => !v)}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                {showExtra ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                {showExtra ? "Nascondi" : "Mostra"} dati fiscali (P.IVA, C.F., SDI, PEC)
-              </button>
-
-              {showExtra && (
-                <div className="space-y-2 pl-3 border-l-2 border-indigo-100 dark:border-indigo-900">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="grid gap-1.5">
-                      <Label className="text-xs">Partita IVA</Label>
-                      <Input value={formData.clientVat} onChange={set("clientVat")} placeholder="IT00000000000" className="font-mono text-xs" />
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="grid gap-1.5 col-span-2">
+                      <Label className="text-xs">Indirizzo</Label>
+                      <Input value={formData.clientAddress} onChange={set("clientAddress")} placeholder="Via Roma 1" />
                     </div>
                     <div className="grid gap-1.5">
-                      <Label className="text-xs">Codice Fiscale</Label>
-                      <Input value={formData.clientFiscalCode} onChange={set("clientFiscalCode")} placeholder="RSSMRA..." className="font-mono text-xs" />
+                      <Label className="text-xs">CAP</Label>
+                      <Input value={formData.clientZip} onChange={set("clientZip")} placeholder="20100" className="font-mono" />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="grid gap-1.5">
-                      <Label className="text-xs">Codice SDI</Label>
-                      <Input value={formData.clientSdi} onChange={set("clientSdi")} placeholder="0000000" className="font-mono text-xs" maxLength={7} />
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label className="text-xs">PEC</Label>
-                      <Input value={formData.clientPec} onChange={set("clientPec")} placeholder="azienda@pec.it" type="email" />
-                    </div>
+
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs">Città</Label>
+                    <Input value={formData.clientCity} onChange={set("clientCity")} placeholder="Milano" />
                   </div>
+
+                  {/* Dati fiscali espandibili */}
+                  <button type="button" onClick={() => setShowExtra(v => !v)}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                    {showExtra ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    {showExtra ? "Nascondi" : "Aggiungi"} dati fiscali (P.IVA, C.F., SDI, PEC)
+                  </button>
+
+                  {showExtra && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="grid gap-1.5">
+                          <Label className="text-xs">Partita IVA</Label>
+                          <Input value={formData.clientVat} onChange={set("clientVat")} placeholder="IT00000000000" className="font-mono text-xs" />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label className="text-xs">Codice Fiscale</Label>
+                          <Input value={formData.clientFiscalCode} onChange={set("clientFiscalCode")} placeholder="RSSMRA…" className="font-mono text-xs" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="grid gap-1.5">
+                          <Label className="text-xs">Codice SDI</Label>
+                          <Input value={formData.clientSdi} onChange={set("clientSdi")} placeholder="0000000" className="font-mono text-xs" maxLength={7} />
+                        </div>
+                        <div className="grid gap-1.5">
+                          <Label className="text-xs">PEC</Label>
+                          <Input value={formData.clientPec} onChange={set("clientPec")} placeholder="azienda@pec.it" type="email" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -513,7 +463,7 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
                 <Select value={formData.status} onValueChange={v => setFormData(prev => ({ ...prev, status: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="pending">In Scadenza (Pending)</SelectItem>
+                    <SelectItem value="pending">In Scadenza</SelectItem>
                     <SelectItem value="paid">Pagata</SelectItem>
                     <SelectItem value="overdue">Scaduta</SelectItem>
                   </SelectContent>
@@ -522,7 +472,11 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
             </div>
 
             <div className="pt-2 flex justify-end">
-              <Button type="submit" disabled={loading} className="bg-slate-900 hover:bg-slate-800 text-white">
+              <Button
+                type="submit"
+                disabled={loading || (!selectedId && clientMode === "select" && !invoiceToEdit)}
+                className="bg-slate-900 hover:bg-slate-800 text-white"
+              >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {invoiceToEdit ? "Salva Modifiche" : "Registra Fattura"}
               </Button>

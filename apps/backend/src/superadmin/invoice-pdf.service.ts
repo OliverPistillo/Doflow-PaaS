@@ -55,32 +55,31 @@ export class InvoicePdfService {
     } catch { return dateStr; }
   }
 
-  // ── Disegna header con onda — uguale allo screenshot ─────────────────────
+  // ── Disegna header con onda ─────────────────────────────────────────────
   private drawHeader(doc: PDFKit.PDFDocument, W: number, invoice: Invoice) {
     const HEADER_H = 148; // altezza totale banda header
 
     // 1. Sfondo navy pieno
     doc.save().rect(0, 0, W, HEADER_H).fill(NAVY).restore();
 
-    // 2. Forma ad onda bianca in basso a sinistra
-    //    Riproduce l'onda dello screenshot: parte dal basso-sinistra,
-    //    sale con una curva ampia verso destra e torna giù.
+    // 2. Onda in basso — colore #052136, altezza contenuta come nello screenshot.
+    //    Il picco arriva circa al 55% dell'header (non oltre metà).
     doc.save();
-    doc.moveTo(0, HEADER_H)                                            // angolo basso-sx
-       .lineTo(0, HEADER_H * 0.62)                                     // sale lungo il bordo sx
+    doc.moveTo(0, HEADER_H)
+       .lineTo(0, HEADER_H * 0.74)
        .bezierCurveTo(
-         W * 0.08, HEADER_H * 0.18,   // cp1 — decolla verso l'alto
-         W * 0.30, HEADER_H * 0.08,   // cp2 — picco sinistro
-         W * 0.50, HEADER_H * 0.22,   // punto medio curva
+         W * 0.10, HEADER_H * 0.44,
+         W * 0.28, HEADER_H * 0.40,
+         W * 0.48, HEADER_H * 0.54,
        )
        .bezierCurveTo(
-         W * 0.70, HEADER_H * 0.38,   // cp1 — discesa verso destra
-         W * 0.88, HEADER_H * 0.60,   // cp2
-         W,        HEADER_H * 0.55,   // bordo destro
+         W * 0.66, HEADER_H * 0.67,
+         W * 0.84, HEADER_H * 0.76,
+         W,        HEADER_H * 0.72,
        )
-       .lineTo(W, HEADER_H)           // angolo basso-dx
+       .lineTo(W, HEADER_H)
        .closePath()
-       .fill('#ffffff');
+       .fill('#052136');
     doc.restore();
 
     // 3. Logo "doflow~" — testo bianco (oppure immagine se disponibile)

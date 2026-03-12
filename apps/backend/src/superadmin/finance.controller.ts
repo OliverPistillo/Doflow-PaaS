@@ -106,7 +106,10 @@ export class FinanceController {
   @Get('clients')
   async getClients() {
     try {
-      return await this.service.findAllClients();
+      console.log('[FinanceController] GET clients');
+      const result = await this.service.findAllClients();
+      console.log(`[FinanceController] GET clients → ${result.length} records`);
+      return result;
     } catch (error) {
       console.error('[FinanceController] Error fetching clients:', error);
       throw new InternalServerErrorException('Impossibile recuperare i clienti');
@@ -116,7 +119,6 @@ export class FinanceController {
   /**
    * POST /api/superadmin/finance/clients/upsert
    * Inserisce un nuovo cliente o aggiorna i dati se già esiste (chiave: clientName).
-   * Chiamato automaticamente al salvataggio di ogni fattura.
    */
   @Post('clients/upsert')
   async upsertClient(@Body() body: {
@@ -133,10 +135,13 @@ export class FinanceController {
     notes?: string;
   }) {
     try {
+      console.log('[FinanceController] POST clients/upsert →', body.clientName);
       if (!body.clientName?.trim()) {
         throw new Error('clientName è obbligatorio');
       }
-      return await this.service.upsertClient(body);
+      const result = await this.service.upsertClient(body);
+      console.log('[FinanceController] upsert OK → id:', result.id);
+      return result;
     } catch (error) {
       console.error('[FinanceController] Error upserting client:', error);
       throw new InternalServerErrorException('Impossibile salvare il cliente');

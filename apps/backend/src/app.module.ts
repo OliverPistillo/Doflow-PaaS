@@ -43,6 +43,7 @@ import { SystemController } from './superadmin/system.controller';
 import { MetricsController } from './superadmin/metrics.controller';
 import { InvoicePdfService } from './superadmin/invoice-pdf.service';
 import { InvoiceMailService } from './superadmin/invoice-mail.service';
+import { PublicSchemaBootstrapService } from './superadmin/public-schema-bootstrap.service';
 
 // --- SERVIZI ---
 import { AuthService } from './auth.service';
@@ -182,6 +183,7 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
     TenantsService,
     MetricsService,
     TenantDashboardService,
+    PublicSchemaBootstrapService,
     {
       provide: APP_GUARD,
       useClass: TrafficGuard,
