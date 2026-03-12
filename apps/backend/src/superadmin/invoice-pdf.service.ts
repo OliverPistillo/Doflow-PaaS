@@ -150,6 +150,7 @@ export class InvoicePdfService {
           `P.IVA: ${EMITTENTE.piva}`,
           `C.F.: ${EMITTENTE.cf}`,
           EMITTENTE.email,
+          EMITTENTE.iban ? `IBAN: ${EMITTENTE.iban}` : '',
         ];
 
         const clienteLines = [
