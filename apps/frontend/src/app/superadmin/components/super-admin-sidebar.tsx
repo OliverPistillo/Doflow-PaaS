@@ -33,13 +33,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
   SidebarRail,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarGroupContent,
   useSidebar,
 } from "@/components/ui/sidebar";
 import {
@@ -115,66 +109,50 @@ function setColorTheme(themeId: string) {
   }
 }
 
-// ─── Item ─────────────────────────────────────────────────────────────────────
+// ─── Nav Item ──────────────────────────────────────────────────────────────────
 
-function Item({
+function NavItem({
   href,
   label,
   icon: Icon,
   badge,
-  isHovered,
+  isOpen,
 }: {
-  href:      string;
-  label:     string;
-  icon:      React.ComponentType<{ className?: string }>;
-  badge?:    number;
-  isHovered: boolean;
+  href:   string;
+  label:  string;
+  icon:   React.ComponentType<{ className?: string }>;
+  badge?: number;
+  isOpen: boolean;
 }) {
   const pathname = usePathname();
   const active   = pathname === href || pathname.startsWith(href + "/");
 
   return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
-        asChild
-        isActive={active}
-        tooltip={label}
-        className={`gap-3 pl-3 mb-0.5 rounded-[13px] transition-all duration-200 ${
-          active
-            ? "font-semibold text-[var(--icon-active-color)] shadow-[var(--icon-active-shadow)]"
-            : "text-[var(--icon-color)] hover:text-[var(--text-primary)]"
-        }`}
-        style={active ? { background: "var(--icon-active-bg)" } : undefined}
-      >
-        <Link href={href} className="flex items-center w-full">
-          <Icon className={`h-[19px] w-[19px] shrink-0 transition-colors duration-200 ${active ? "text-[var(--icon-active-color)]" : ""}`} />
-          <span
-            className={`ml-2 flex-1 whitespace-nowrap text-[13px] font-medium tracking-[0.01em] transition-all duration-300 ${
-              isHovered ? "opacity-100 translate-x-0 max-w-[120px]" : "opacity-0 -translate-x-2 max-w-0"
-            } overflow-hidden`}
-          >
-            {label}
-          </span>
-          {badge !== undefined && badge > 0 && isHovered && (
-            <span className="ml-auto text-[10px] font-bold bg-rose-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none">
-              {badge > 99 ? "99+" : badge}
-            </span>
-          )}
-        </Link>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
+    <Link
+      href={href}
+      title={label}
+      className={`sa-nav-item ${active ? "active" : ""}`}
+    >
+      <Icon className="h-[19px] w-[19px] shrink-0" />
+      <span className="sa-nav-label">{label}</span>
+      {badge !== undefined && badge > 0 && isOpen && (
+        <span className="ml-auto text-[10px] font-bold bg-rose-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none">
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
+    </Link>
   );
 }
 
-// ─── Main sidebar ─────────────────────────────────────────────────────────────
+// ─── Main sidebar ──────────────────────────────────────────────────────────────
 
 export function SuperAdminSidebar() {
   const router = useRouter();
   const { setTheme, theme, resolvedTheme } = useTheme();
   const { state } = useSidebar();
 
-  const [mounted, setMounted] = React.useState(false);
-  const [user, setUser] = React.useState<{ email: string; role: string; initials: string } | null>(null);
+  const [mounted, setMounted]     = React.useState(false);
+  const [user, setUser]           = React.useState<{ email: string; role: string; initials: string } | null>(null);
   const [isHovered, setIsHovered] = React.useState(false);
 
   React.useEffect(() => {
@@ -197,189 +175,174 @@ export function SuperAdminSidebar() {
     router.push("/login");
   }, [router]);
 
-  const showDetails = state === "expanded" || isHovered;
-  const logoSrc = mounted && resolvedTheme === 'light' ? '/logo_doflow_nero.png' : '/logo_doflow_bianco.png';
+  const isOpen   = state === "expanded" || isHovered;
+  const logoSrc  = mounted && resolvedTheme === "light" ? "/logo_doflow_nero.png" : "/logo_doflow_bianco.png";
 
   return (
     <Sidebar
       collapsible="icon"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className={`glass-sidebar border-r border-[var(--border-sidebar)] z-50 sidebar-hover-expand ${
-        state === "collapsed" && isHovered ? "w-[--sidebar-width]" : ""
-      }`}
+      className={`z-50 ${isOpen ? "sa-sidebar-open" : ""}`}
       style={{
-        transition: "width 0.28s cubic-bezier(0.4, 0, 0.2, 1), background 0.32s ease, border-color 0.32s ease",
+        ["--sidebar-width" as string]: "220px",
+        ["--sidebar-width-icon" as string]: "72px",
+        transition: "width 0.28s cubic-bezier(0.4, 0, 0.2, 1)",
       }}
     >
-      {/* HEADER WITH DYNAMIC LOGO */}
-      <SidebarHeader className="h-20 border-b border-[var(--border-divider)] p-0 overflow-hidden shrink-0 flex items-center relative transition-[padding] duration-300">
-        <div className={`flex h-full w-full items-center relative transition-all duration-300 ${showDetails ? 'px-5 justify-start' : 'px-0 justify-center'}`}>
-          <div className={`relative h-10 transition-all duration-300 ease-out ${showDetails ? 'w-40' : 'w-10'}`}>
+      {/* ── HEADER: Logo + Brand ─────────────────────────────────── */}
+      <SidebarHeader className="border-b-0 p-0 overflow-hidden shrink-0">
+        <div className="sa-logo-wrapper">
+          <div className={`relative h-10 shrink-0 transition-all duration-300 ease-out ${isOpen ? "w-10" : "w-10"}`}>
             {mounted && (
               <Image
                 src={logoSrc}
                 alt="DoFlow Logo"
                 fill
                 priority
-                className={`object-contain object-left transition-opacity duration-300 ${showDetails ? 'opacity-100' : 'opacity-90'}`}
+                className={`object-contain object-left transition-opacity duration-300 ${isOpen ? "opacity-100" : "opacity-90"}`}
               />
             )}
           </div>
-          {showDetails && (
-            <span className="ml-2 text-[15px] font-bold tracking-[-0.3px] text-[var(--text-primary)] whitespace-nowrap transition-opacity duration-200 opacity-100">
-              DoFlow
-            </span>
-          )}
+          <span className="sa-brand-name">DoFlow</span>
         </div>
       </SidebarHeader>
 
-      {/* CONTENT */}
-      <SidebarContent className="pt-4 scrollbar-none px-3">
+      {/* ── CONTENT: Nav Groups ──────────────────────────────────── */}
+      <SidebarContent className="pt-2 px-3 overflow-y-auto scrollbar-none">
         {MENU_GROUPS.map((group) => (
-          <SidebarGroup key={group.label} className="mb-2">
-            <SidebarGroupLabel
-              className={`text-[var(--text-secondary)] text-[10px] uppercase tracking-widest font-bold transition-all duration-300 whitespace-nowrap overflow-hidden ${
-                showDetails ? "opacity-100 px-2" : "opacity-0 h-0 p-0"
-              }`}
-            >
-              {group.label}
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu className="gap-0.5">
-                {group.items.map((item) => (
-                  <Item
-                    key={item.href}
-                    href={item.href}
-                    label={item.label}
-                    icon={item.icon}
-                    badge={item.badge}
-                    isHovered={showDetails}
-                  />
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          <div key={group.label} className="mb-3">
+            <div className="sa-group-label">{group.label}</div>
+            <div className="flex flex-col gap-[2px]">
+              {group.items.map((item) => (
+                <NavItem
+                  key={item.href}
+                  href={item.href}
+                  label={item.label}
+                  icon={item.icon}
+                  badge={item.badge}
+                  isOpen={isOpen}
+                />
+              ))}
+            </div>
+          </div>
         ))}
       </SidebarContent>
 
-      {/* FOOTER */}
+      {/* ── FOOTER: Avatar + Dropdown ────────────────────────────── */}
       <SidebarFooter className="border-t border-[var(--border-divider)] p-3">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  size="lg"
-                  className="data-[state=open]:bg-[var(--bg-hover)] hover:bg-[var(--bg-hover)] transition-colors rounded-xl h-12"
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="flex items-center gap-2.5 w-full rounded-xl p-2 hover:bg-[var(--bg-hover)] transition-colors outline-none"
+            >
+              <Avatar className="h-9 w-9 rounded-lg border-2 border-primary/20 shrink-0 shadow-md">
+                <AvatarFallback
+                  className="rounded-lg font-bold text-sm"
+                  style={{
+                    background: "var(--icon-active-bg)",
+                    color: "var(--icon-active-color)",
+                  }}
                 >
-                  <Avatar className="h-9 w-9 rounded-lg border-2 border-primary/20 shrink-0 shadow-md">
-                    <AvatarFallback
-                      className="rounded-lg font-bold text-sm"
-                      style={{
-                        background: "var(--icon-active-bg)",
-                        color: "var(--icon-active-color)",
-                      }}
-                    >
-                      {user?.initials ?? "SA"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className={`grid flex-1 text-left text-sm leading-tight ml-2 transition-all duration-300 overflow-hidden whitespace-nowrap ${showDetails ? "w-[120px] opacity-100 translate-x-0" : "w-0 opacity-0 -translate-x-2"}`}>
-                    <span className="truncate font-semibold text-[var(--text-primary)] text-[13px]">{user?.email ?? "Superadmin"}</span>
-                    <span className="truncate text-[10px] text-[var(--text-secondary)] font-bold flex items-center gap-1 uppercase">
-                      <BadgeCheck className="h-3 w-3 text-primary" />
-                      {user?.role}
-                    </span>
-                  </div>
-                  {showDetails && <ChevronsUpDown className="ml-auto size-4 text-[var(--text-secondary)] shrink-0" />}
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
+                  {user?.initials ?? "SA"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="sa-avatar-info">
+                <span className="text-[13px] font-semibold text-[var(--text-primary)] whitespace-nowrap">
+                  {user?.email ?? "Superadmin"}
+                </span>
+                <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase flex items-center gap-1 whitespace-nowrap">
+                  <BadgeCheck className="h-3 w-3 text-primary" />
+                  {user?.role}
+                </span>
+              </div>
+              {isOpen && <ChevronsUpDown className="ml-auto h-4 w-4 text-[var(--text-secondary)] shrink-0" />}
+            </button>
+          </DropdownMenuTrigger>
 
-              <DropdownMenuContent
-                className="w-[240px] rounded-xl shadow-2xl border-[var(--border-card)] glass-card"
-                side={state === "collapsed" && !isHovered ? "right" : "bottom"}
-                align="end"
-                sideOffset={10}
-              >
-                <DropdownMenuLabel className="p-2 font-normal">
-                  <div className="flex items-center gap-3 text-left text-sm">
-                    <Avatar className="h-10 w-10 rounded-lg shadow-md">
-                      <AvatarFallback
-                        className="rounded-lg font-bold"
-                        style={{
-                          background: "var(--icon-active-bg)",
-                          color: "var(--icon-active-color)",
-                        }}
+          <DropdownMenuContent
+            className="w-[240px] rounded-xl shadow-2xl border-[var(--border-card)] glass-card"
+            side={state === "collapsed" && !isHovered ? "right" : "bottom"}
+            align="end"
+            sideOffset={10}
+          >
+            <DropdownMenuLabel className="p-2 font-normal">
+              <div className="flex items-center gap-3 text-left text-sm">
+                <Avatar className="h-10 w-10 rounded-lg shadow-md">
+                  <AvatarFallback
+                    className="rounded-lg font-bold"
+                    style={{
+                      background: "var(--icon-active-bg)",
+                      color: "var(--icon-active-color)",
+                    }}
+                  >
+                    {user?.initials ?? "SA"}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-bold text-[var(--text-primary)]">{user?.email}</span>
+                  <span className="truncate text-xs text-[var(--text-secondary)]">{user?.role}</span>
+                </div>
+              </div>
+            </DropdownMenuLabel>
+
+            <DropdownMenuSeparator className="bg-[var(--border-divider)]" />
+
+            <DropdownMenuGroup>
+              <DropdownMenuItem asChild>
+                <Link href="/superadmin/users" className="cursor-pointer py-2 rounded-lg">
+                  <User className="mr-2 h-4 w-4 text-[var(--text-secondary)]" />
+                  Il mio Account
+                </Link>
+              </DropdownMenuItem>
+
+              {/* Tema Chiaro/Scuro */}
+              <DropdownMenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")} className="cursor-pointer py-2 rounded-lg">
+                {resolvedTheme === "dark" ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
+                Passa a {resolvedTheme === "dark" ? "Light Mode" : "Dark Mode"}
+              </DropdownMenuItem>
+
+              {/* Colori Primari */}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="py-2 rounded-lg cursor-pointer">
+                  <Palette className="mr-2 h-4 w-4 text-[var(--text-secondary)]" />
+                  Stile e Colori
+                </DropdownMenuSubTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuSubContent className="glass-card rounded-xl border-[var(--border-card)] ml-2">
+                    {COLOR_THEMES.map((ct) => (
+                      <DropdownMenuItem
+                        key={ct.id}
+                        onClick={() => setColorTheme(ct.id)}
+                        className="cursor-pointer py-2 flex items-center gap-2"
                       >
-                        {user?.initials ?? "SA"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-bold text-[var(--text-primary)]">{user?.email}</span>
-                      <span className="truncate text-xs text-[var(--text-secondary)]">{user?.role}</span>
-                    </div>
-                  </div>
-                </DropdownMenuLabel>
+                        <div className={`h-3 w-3 rounded-full ${ct.colorClass} ring-1 ring-offset-1 ring-offset-card ring-black/10`} />
+                        {ct.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+              </DropdownMenuSub>
 
-                <DropdownMenuSeparator className="bg-[var(--border-divider)]" />
+              <DropdownMenuItem asChild>
+                <Link href="/superadmin/settings" className="cursor-pointer py-2 rounded-lg">
+                  <Settings className="mr-2 h-4 w-4 text-[var(--text-secondary)]" />
+                  Impostazioni Globali
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
 
-                <DropdownMenuGroup>
-                  <DropdownMenuItem asChild>
-                    <Link href="/superadmin/users" className="cursor-pointer py-2 rounded-lg">
-                      <User className="mr-2 h-4 w-4 text-[var(--text-secondary)]" />
-                      Il mio Account
-                    </Link>
-                  </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-[var(--border-divider)]" />
 
-                  {/* Opzioni: Tema Chiaro/Scuro */}
-                  <DropdownMenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")} className="cursor-pointer py-2 rounded-lg">
-                    {resolvedTheme === "dark" ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
-                    Passa a {resolvedTheme === "dark" ? "Light Mode" : "Dark Mode"}
-                  </DropdownMenuItem>
-
-                  {/* Opzioni: Colori Primari */}
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger className="py-2 rounded-lg cursor-pointer">
-                      <Palette className="mr-2 h-4 w-4 text-[var(--text-secondary)]" />
-                      Stile e Colori
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuPortal>
-                      <DropdownMenuSubContent className="glass-card rounded-xl border-[var(--border-card)] ml-2">
-                        {COLOR_THEMES.map((ct) => (
-                          <DropdownMenuItem
-                            key={ct.id}
-                            onClick={() => setColorTheme(ct.id)}
-                            className="cursor-pointer py-2 flex items-center gap-2"
-                          >
-                            <div className={`h-3 w-3 rounded-full ${ct.colorClass} ring-1 ring-offset-1 ring-offset-card ring-black/10`} />
-                            {ct.label}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuPortal>
-                  </DropdownMenuSub>
-
-                  <DropdownMenuItem asChild>
-                    <Link href="/superadmin/settings" className="cursor-pointer py-2 rounded-lg">
-                      <Settings className="mr-2 h-4 w-4 text-[var(--text-secondary)]" />
-                      Impostazioni Globali
-                    </Link>
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-
-                <DropdownMenuSeparator className="bg-[var(--border-divider)]" />
-
-                <DropdownMenuItem
-                  onClick={logout}
-                  className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer py-2 mt-1 rounded-lg font-medium"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Disconnetti in sicurezza
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
+            <DropdownMenuItem
+              onClick={logout}
+              className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer py-2 mt-1 rounded-lg font-medium"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Disconnetti in sicurezza
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

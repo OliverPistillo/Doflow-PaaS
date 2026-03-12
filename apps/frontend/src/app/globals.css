@@ -570,3 +570,296 @@
   .react-resizable-handle { position: absolute; width: 20px; height: 20px; bottom: 0; right: 0; cursor: se-resize; }
   .react-resizable-handle::after { content: ""; position: absolute; right: 5px; bottom: 5px; width: 6px; height: 6px; border-right: 2px solid hsl(var(--muted-foreground)); border-bottom: 2px solid hsl(var(--muted-foreground)); opacity: 0.5; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   SUPERADMIN THEME — Scoped Isolation
+   ─────────────────────────────────────────────────────────────────────────────
+   All demo-specific styling is scoped under .superadmin-theme so that the
+   rest of the app (tenant dashboards, login, etc.) is never affected.
+═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Theme Toggle Button (shared between header & sidebar dropdown) ──────── */
+.doflow-theme-toggle {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--toggle-bg);
+  color: var(--toggle-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: none;
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.25s ease, transform 0.2s ease,
+              background-color 0.32s ease, color 0.32s ease;
+}
+.doflow-theme-toggle:hover {
+  box-shadow: var(--shadow-md);
+  transform: scale(1.05);
+}
+
+/* ── Superadmin-scoped layout overrides ─────────────────────────────────── */
+.superadmin-theme {
+  font-family: 'Urbanist', var(--font-sans, system-ui), sans-serif;
+  min-height: 100vh;
+  background: var(--bg-body);
+  background-attachment: fixed;
+  color: var(--text-primary);
+}
+
+/* Smooth theme transitions inside superadmin */
+.superadmin-theme *,
+.superadmin-theme *::before,
+.superadmin-theme *::after {
+  transition-property: background-color, background, border-color, color, box-shadow;
+  transition-duration: 0.32s;
+  transition-timing-function: ease;
+}
+
+/* ── Override shadcn/ui Sidebar inside superadmin ────────────────────────── */
+.superadmin-theme [data-sidebar="sidebar"] {
+  --sidebar-width: 220px;
+  --sidebar-width-icon: 72px;
+  background: var(--bg-sidebar) !important;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-right: 1px solid var(--border-sidebar) !important;
+  box-shadow: var(--shadow-sidebar);
+  transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.32s ease,
+              border-color 0.32s ease,
+              box-shadow 0.28s ease !important;
+}
+
+/* When sidebar is hovered/expanded → open state tokens */
+.superadmin-theme [data-sidebar="sidebar"].sa-sidebar-open {
+  background: var(--bg-sidebar-open) !important;
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-right: 1px solid var(--border-sidebar-open) !important;
+  box-shadow: var(--shadow-sidebar-open);
+}
+
+/* Remove default shadcn sidebar bg and borders that conflict */
+.superadmin-theme [data-sidebar="sidebar"] [data-sidebar="header"],
+.superadmin-theme [data-sidebar="sidebar"] [data-sidebar="content"],
+.superadmin-theme [data-sidebar="sidebar"] [data-sidebar="footer"] {
+  background: transparent !important;
+}
+
+/* ── Sidebar Nav Icons — Demo-accurate styling ──────────────────────────── */
+.superadmin-theme .sa-nav-item {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--icon-color);
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.18s ease,
+              color 0.18s ease,
+              box-shadow 0.18s ease,
+              padding 0.28s ease !important;
+}
+
+.superadmin-theme .sa-nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.superadmin-theme .sa-nav-item.active {
+  background: var(--icon-active-bg);
+  color: var(--icon-active-color);
+  box-shadow: var(--icon-active-shadow);
+}
+
+/* Expanded: stretch to full width with left-aligned icon + label */
+.superadmin-theme .sa-sidebar-open .sa-nav-item {
+  width: 100%;
+  padding-left: 12px;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.superadmin-theme .sa-nav-item svg {
+  width: 19px;
+  height: 19px;
+  stroke-width: 1.75;
+  flex-shrink: 0;
+}
+
+/* ── Nav Labels — hidden when collapsed ─────────────────────────────────── */
+.superadmin-theme .sa-nav-label {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+  transition: opacity 0.15s ease, max-width 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  pointer-events: none;
+}
+
+.superadmin-theme .sa-sidebar-open .sa-nav-label {
+  opacity: 1;
+  max-width: 140px;
+}
+
+/* ── Sidebar Group Labels ───────────────────────────────────────────────── */
+.superadmin-theme .sa-group-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+  padding: 8px 12px 4px;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: opacity 0.2s ease, max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.superadmin-theme .sa-sidebar-open .sa-group-label {
+  opacity: 1;
+  max-height: 32px;
+}
+
+/* ── Sidebar Logo/Brand ─────────────────────────────────────────────────── */
+.superadmin-theme .sa-logo-wrapper {
+  display: flex;
+  align-items: center;
+  padding: 28px 14px 20px;
+  width: 100%;
+  transition: padding 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.superadmin-theme:not(.sa-sidebar-open) .sa-logo-wrapper {
+  padding: 28px 0 20px;
+  justify-content: center;
+}
+
+.superadmin-theme .sa-brand-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+  transition: opacity 0.18s ease, width 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  margin-left: 8px;
+}
+
+.superadmin-theme .sa-sidebar-open .sa-brand-name {
+  opacity: 1;
+  width: 90px;
+}
+
+/* ── Sidebar Bottom (avatar row) ────────────────────────────────────────── */
+.superadmin-theme .sa-avatar-info {
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+  transition: opacity 0.15s ease, max-width 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.superadmin-theme .sa-sidebar-open .sa-avatar-info {
+  opacity: 1;
+  max-width: 120px;
+}
+
+/* ── Main Content area ──────────────────────────────────────────────────── */
+.superadmin-theme .sa-main-content {
+  padding: 28px 32px;
+  transition: margin-left 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              max-width 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* ── Header inside superadmin ───────────────────────────────────────────── */
+.superadmin-theme .sa-header {
+  background: var(--bg-surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-sm);
+  border-bottom: 1px solid var(--border-divider);
+}
+
+/* ── Demo Card Gradient Variants ────────────────────────────────────────── */
+.superadmin-theme .sa-card-yellow {
+  background: linear-gradient(135deg, #f7f06e 0%, #f5ed31 50%, #e8df20 100%) !important;
+  color: var(--dark) !important;
+  border: none !important;
+}
+.superadmin-theme .sa-card-orange {
+  background: linear-gradient(135deg, #ff934f 0%, #ffb07a 60%, #ffa060 100%) !important;
+  color: var(--dark) !important;
+  border: none !important;
+}
+.superadmin-theme .sa-card-dark {
+  background: var(--dark) !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+.superadmin-theme .sa-card-logistics {
+  background: var(--card-logistics-bg) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid var(--border-card) !important;
+}
+
+.dark .superadmin-theme .sa-card-dark {
+  background: #1e1d12 !important;
+  box-shadow: 0 0 40px rgba(245, 237, 49, 0.04), 0 4px 24px rgba(0,0,0,0.5);
+}
+
+/* ── Demo-accurate Card Geometry ────────────────────────────────────────── */
+.superadmin-theme .sa-card-base {
+  border-radius: 20px;
+  padding: 22px;
+  position: relative;
+  overflow: hidden;
+  animation: fadeInUp 0.5s ease forwards;
+  opacity: 0;
+}
+.superadmin-theme .sa-card-base:nth-child(1) { animation-delay: 0.05s; }
+.superadmin-theme .sa-card-base:nth-child(2) { animation-delay: 0.10s; }
+.superadmin-theme .sa-card-base:nth-child(3) { animation-delay: 0.15s; }
+.superadmin-theme .sa-card-base:nth-child(4) { animation-delay: 0.20s; }
+
+/* ── Sidebar Expand Button ──────────────────────────────────────────────── */
+.superadmin-theme .sa-expand-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  transition: background 0.2s ease, color 0.2s ease !important;
+}
+.superadmin-theme .sa-expand-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ── Scrollbar inside superadmin ────────────────────────────────────────── */
+.superadmin-theme ::-webkit-scrollbar { width: 6px; }
+.superadmin-theme ::-webkit-scrollbar-track { background: transparent; }
+.superadmin-theme ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+.superadmin-theme ::-webkit-scrollbar-thumb:hover { background: #aaa; }
