@@ -1,3 +1,5 @@
+// Percorso: C:\Doflow\apps\frontend\src\app\superadmin\audit\page.tsx
+
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -147,19 +149,19 @@ export default function AuditPage() {
   }, [logs, q]);
 
   return (
-    <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-             Audit Log Globale
-             {/* Indicatore Live */}
-             {connected && (
-                <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 gap-1 animate-pulse">
-                    <Zap className="h-3 w-3 fill-current" /> Live
-                </Badge>
-             )}
-          </h1>
-          <p className="text-slate-500 font-medium">Sicurezza, operazioni critiche e mutazioni di sistema.</p>
+    <div className="dashboard-content animate-fadeIn">
+
+      {/* ── Action bar ─────────────────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          {connected && (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 rounded-full text-emerald-700 bg-emerald-50 border border-emerald-200 animate-pulse">
+              <Zap className="h-3 w-3 fill-current" /> Live
+            </span>
+          )}
+          <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+            {loading ? "Caricamento…" : `${filtered.length} record`}
+          </span>
         </div>
 
         <Button variant="outline" onClick={load} disabled={loading}>
@@ -170,19 +172,19 @@ export default function AuditPage() {
 
       {degraded && <DegradedBanner message={degraded} onRetry={load} />}
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
+      <div className="glass-card rounded-2xl overflow-hidden">
+        <div className="p-4 border-b flex flex-col md:flex-row gap-3 md:items-center md:justify-between" style={{ borderColor: "var(--border-divider)" }}>
           <div className="relative flex-1 max-w-xl">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: "var(--text-secondary)" }} />
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Cerca azione, email, ruolo, IP, meta..."
-              className="pl-9 bg-slate-50 border-slate-200"
+              className="pl-9"
             />
           </div>
 
-          <div className="text-xs text-slate-400 font-medium">
+          <div className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
             {loading ? (
               <span className="inline-flex items-center gap-2">
                 <Activity className="h-4 w-4 animate-spin" /> Caricamento...
@@ -194,7 +196,7 @@ export default function AuditPage() {
         </div>
 
         <table className="w-full text-sm text-left">
-          <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-xs border-b border-slate-100">
+          <thead className="text-xs font-bold uppercase" style={{ background: "var(--bg-surface-2)", color: "var(--text-secondary)", borderBottom: "1px solid var(--border-table)" }}>
             <tr>
               <th className="px-6 py-4">Timestamp</th>
               <th className="px-6 py-4">Azione</th>
@@ -206,10 +208,10 @@ export default function AuditPage() {
             </tr>
           </thead>
 
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="p-10 text-center text-slate-400">
+                <td colSpan={7} className="p-10 text-center" style={{ color: "var(--text-secondary)" }}>
                   <span className="inline-flex items-center gap-2">
                     <Activity className="h-4 w-4 animate-spin" /> Caricamento log...
                   </span>
@@ -217,7 +219,7 @@ export default function AuditPage() {
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-10 text-center text-slate-400">
+                <td colSpan={7} className="p-10 text-center" style={{ color: "var(--text-secondary)" }}>
                   Nessun log trovato.
                 </td>
               </tr>
@@ -227,8 +229,8 @@ export default function AuditPage() {
                 const metaStr = JSON.stringify(r.metadata ?? {}, null, 2);
 
                 return (
-                  <tr key={r.id} className="hover:bg-slate-50 transition-colors align-top">
-                    <td className="px-6 py-4 text-slate-500 font-mono text-xs whitespace-nowrap">
+                  <tr key={r.id} className="transition-colors align-top" style={{ borderBottom: "1px solid var(--border-row)" }}>
+                    <td className="px-6 py-4 font-mono text-xs whitespace-nowrap" style={{ color: "var(--text-secondary)" }}>
                       {formatTs(r.created_at)}
                     </td>
 
@@ -236,25 +238,26 @@ export default function AuditPage() {
                       <ActionBadge action={r.action} />
                     </td>
 
-                    <td className="px-6 py-4 font-medium text-indigo-700">
+                    <td className="px-6 py-4 font-medium text-primary">
                       {r.actor_email || "—"}
                     </td>
 
-                    <td className="px-6 py-4 text-slate-600 font-mono text-xs">
+                    <td className="px-6 py-4 font-mono text-xs" style={{ color: "var(--text-secondary)" }}>
                       {r.actor_role || "—"}
                     </td>
 
-                    <td className="px-6 py-4 text-slate-600">
+                    <td className="px-6 py-4" style={{ color: "var(--text-secondary)" }}>
                       {r.target_email || "—"}
                     </td>
 
-                    <td className="px-6 py-4 text-slate-400 font-mono text-xs whitespace-nowrap">
+                    <td className="px-6 py-4 font-mono text-xs whitespace-nowrap" style={{ color: "var(--text-secondary)" }}>
                       {r.ip || "—"}
                     </td>
 
                     <td className="px-6 py-4">
                       <button
-                        className="text-xs font-bold text-slate-700 hover:text-slate-900 inline-flex items-center gap-2 px-2 py-1 rounded-md border border-slate-200 bg-white hover:bg-slate-50"
+                        className="text-xs font-bold inline-flex items-center gap-2 px-2 py-1 rounded-md border transition-colors"
+                        style={{ borderColor: "var(--border-divider)", color: "var(--text-primary)", background: "var(--bg-surface)" }}
                         onClick={() => setOpenMeta((p) => ({ ...p, [r.id]: !p[r.id] }))}
                         title="Visualizza metadata"
                       >

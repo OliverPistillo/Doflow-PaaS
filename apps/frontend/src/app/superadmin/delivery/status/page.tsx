@@ -1,3 +1,5 @@
+// Percorso: C:\Doflow\apps\frontend\src\app\superadmin\delivery\status\page.tsx
+
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -36,7 +38,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Digital Services": "bg-blue-100 text-blue-700",
   "Technical Services": "bg-sky-100 text-sky-700",
   "Content Creation": "bg-teal-100 text-teal-700",
-  "Default": "bg-slate-100 text-slate-700"
+  "Default": "bg-muted text-muted-foreground"
 };
 
 // Mapping visivo degli stati
@@ -50,7 +52,7 @@ const STATUS_LABELS: Record<string, string> = {
 const PRIORITY_STYLES: Record<string, string> = {
   Alta: "bg-orange-50 text-orange-700 border-orange-200",
   Media: "bg-yellow-50 text-yellow-700 border-yellow-200",
-  Bassa: "bg-slate-50 text-slate-700 border-slate-200",
+  Bassa: "bg-muted/40 text-muted-foreground border-border",
   Urgente: "bg-red-50 text-red-700 border-red-200 font-bold",
 };
 
@@ -154,31 +156,26 @@ export default function DeliveryStatusPage() {
   );
 
   return (
-    <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in duration-500">
+    <div className="dashboard-content animate-fadeIn">
       <ConfirmDialog />
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Stato del servizio</h1>
-          <p className="text-slate-500 text-sm">Monitoraggio avanzamento task per categoria di servizio.</p>
-        </div>
-        <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={loadTasks}>
-                <RefreshCw className="h-4 w-4 mr-2" /> Aggiorna
-            </Button>
-            <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={openCreate}>
-                <Plus className="h-4 w-4 mr-2" /> Nuovo Task
-            </Button>
-        </div>
+
+      {/* ── Action bar ─────────────────────────────────────────────── */}
+      <div className="flex justify-end gap-2 mb-6">
+        <Button variant="outline" size="sm" onClick={loadTasks}>
+          <RefreshCw className="h-4 w-4 mr-2" /> Aggiorna
+        </Button>
+        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={openCreate}>
+          <Plus className="h-4 w-4 mr-2" /> Nuovo Task
+        </Button>
       </div>
 
       {/* Content */}
       <div className="space-y-8">
         {loading && tasks.length === 0 ? (
-             <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-600 h-8 w-8" /></div>
+             <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary h-8 w-8" /></div>
         ) : groupedData.length === 0 ? (
-            <div className="text-center py-16 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                <p className="text-slate-500 font-medium">Nessun task attivo.</p>
+            <div className="text-center py-16 bg-muted/40 rounded-xl border border-dashed border-slate-300">
+                <p className="text-muted-foreground font-medium">Nessun task attivo.</p>
                 <Button onClick={openCreate} variant="outline" className="mt-4">Crea il primo Task</Button>
             </div>
         ) : (
@@ -186,19 +183,19 @@ export default function DeliveryStatusPage() {
             <div key={group.id} className="space-y-3">
                 {/* Header Gruppo Servizio */}
                 <div className="flex items-center gap-3 select-none group/header" onClick={() => toggle(group.id)}>
-                    <button className="p-1 hover:bg-slate-200 rounded-md transition-colors text-slate-400 group-hover/header:text-slate-700">
+                    <button className="p-1 hover:bg-slate-200 rounded-md transition-colors text-muted-foreground group-hover/header:text-muted-foreground">
                         {expanded[group.id] ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
                     </button>
-                    <h3 className="font-bold text-lg text-slate-800 cursor-pointer">{group.name}</h3>
+                    <h3 className="font-bold text-lg text-foreground cursor-pointer">{group.name}</h3>
                     <Badge variant="secondary" className={`rounded-full px-2.5 py-0.5 text-xs font-medium border-0 ${group.categoryColor}`}>
                         {group.category}
                     </Badge>
-                    <span className="text-xs text-slate-400 ml-auto mr-4">{group.tasks.length} task</span>
+                    <span className="text-xs text-muted-foreground ml-auto mr-4">{group.tasks.length} task</span>
                 </div>
 
                 {/* Lista Task */}
                 {expanded[group.id] && (
-                <div className="ml-9 pl-4 border-l-2 border-slate-200 space-y-4 animate-in slide-in-from-top-1 duration-300">
+                <div className="ml-9 pl-4 border-l-2 border-border space-y-4 animate-in slide-in-from-top-1 duration-300">
                     {group.tasks.map((task) => (
                     <div key={task.id} className="space-y-2">
                         
@@ -208,10 +205,10 @@ export default function DeliveryStatusPage() {
                               value={task.status} 
                               onValueChange={(val) => updateStatus(task.id, val)}
                            >
-                             <SelectTrigger className={`h-7 w-[140px] text-xs border-slate-200 font-medium ${
+                             <SelectTrigger className={`h-7 w-[140px] text-xs border-border font-medium ${
                                 task.status === 'done' ? 'bg-green-50 text-green-700 border-green-200' : 
                                 task.status === 'inprogress' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                'bg-white text-slate-700'
+                                'bg-card text-muted-foreground'
                              }`}>
                                <SelectValue placeholder="Stato" />
                              </SelectTrigger>
@@ -224,7 +221,7 @@ export default function DeliveryStatusPage() {
                            </Select>
                         </div>
                         
-                        <Card className="p-0 overflow-hidden border-slate-200 shadow-sm hover:shadow-md transition-shadow group/card">
+                        <Card className="p-0 overflow-hidden border-border shadow-sm hover:shadow-md transition-shadow group/card">
                             <div className="grid grid-cols-[1fr_auto_auto] md:grid-cols-[1fr_150px_120px_1fr] items-center gap-4 p-4 text-sm">
                                 
                                 {/* Task Name */}
@@ -235,13 +232,13 @@ export default function DeliveryStatusPage() {
                                         task.status === 'review' ? 'bg-amber-500' :
                                         'bg-slate-300'
                                     }`}></div>
-                                    <span className={`font-medium text-base cursor-pointer hover:text-indigo-600 ${task.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-700'}`} onClick={() => openEdit(task)}>
+                                    <span className={`font-medium text-base cursor-pointer hover:text-primary ${task.status === 'done' ? 'text-muted-foreground line-through' : 'text-muted-foreground'}`} onClick={() => openEdit(task)}>
                                         {task.name}
                                     </span>
                                 </div>
                                 
                                 {/* Date */}
-                                <div className="flex items-center gap-2 text-slate-500">
+                                <div className="flex items-center gap-2 text-muted-foreground">
                                     <Clock className="h-3.5 w-3.5" />
                                     <span className="font-mono text-xs">
                                         {task.dueDate ? new Date(task.dueDate).toLocaleDateString('it-IT') : '-'}
@@ -256,17 +253,17 @@ export default function DeliveryStatusPage() {
                                 </div>
 
                                 {/* Notes */}
-                                <div className="text-slate-500 truncate text-xs italic hidden md:block max-w-[200px]">
+                                <div className="text-muted-foreground truncate text-xs italic hidden md:block max-w-[200px]">
                                     {task.notes}
                                 </div>
                             </div>
                             
                             {/* Footer azioni */}
-                            <div className="px-4 py-1.5 bg-slate-50/50 border-t border-slate-100 flex justify-end items-center gap-2">
+                            <div className="px-4 py-1.5 bg-muted/40/50 border-t border-border/50 flex justify-end items-center gap-2">
                                 <Button 
                                     variant="ghost" 
                                     size="sm" 
-                                    className="h-7 text-xs text-slate-500 hover:text-indigo-600 px-2"
+                                    className="h-7 text-xs text-muted-foreground hover:text-primary px-2"
                                     onClick={() => openEdit(task)}
                                 >
                                     <Edit className="h-3.5 w-3.5 mr-1" /> Modifica
@@ -275,7 +272,7 @@ export default function DeliveryStatusPage() {
                                 <Button 
                                     variant="ghost" 
                                     size="sm" 
-                                    className="h-7 text-xs text-slate-400 hover:text-red-600 px-2"
+                                    className="h-7 text-xs text-muted-foreground hover:text-red-600 px-2"
                                     onClick={() => deleteTask(task.id)}
                                 >
                                     <Trash2 className="h-3.5 w-3.5 mr-1" /> Elimina

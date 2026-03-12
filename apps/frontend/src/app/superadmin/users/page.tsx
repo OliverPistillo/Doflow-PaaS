@@ -1,3 +1,5 @@
+// Percorso: C:\Doflow\apps\frontend\src\app\superadmin\users\page.tsx
+
 "use client";
 
 /* ======================================================
@@ -123,7 +125,7 @@ const AUDIT_COLOR: Record<string, string> = {
   GLOBAL_USER_UPDATED: "bg-purple-100 text-purple-800 border-purple-200",
   USER_SUSPENDED: "bg-red-100 text-red-800 border-red-200",
   MFA_ENABLED: "bg-sky-100 text-sky-800 border-sky-200",
-  MFA_DISABLED: "bg-slate-100 text-slate-700 border-slate-200",
+  MFA_DISABLED: "bg-muted text-muted-foreground border-border",
 };
 
 function RoleBadge({ role }: { role: string }) {
@@ -132,10 +134,10 @@ function RoleBadge({ role }: { role: string }) {
     r === "superadmin" || r === "owner"
       ? "bg-red-50 text-red-700 border-red-200"
       : r === "admin"
-      ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+      ? "bg-indigo-50 text-primary border-indigo-200"
       : r === "manager"
       ? "bg-amber-50 text-amber-800 border-amber-200"
-      : "bg-slate-100 text-slate-700 border-slate-200";
+      : "bg-muted text-muted-foreground border-border";
 
   return (
     <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${cls}`}>
@@ -546,26 +548,16 @@ export default function SuperadminUsersPage() {
    ======================================================= */
 
   return (
-    <div className="space-y-8 max-w-[1600px] mx-auto">
-      {/* HEADER */}
-      <div className="flex justify-between items-end">
-        <div>
-          <h1 className="text-3xl font-black text-slate-900">Gestione Utenti</h1>
-          <p className="text-slate-500 font-medium">
-            Identity &amp; Access Control – livello enterprise.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={loadTenants} disabled={loadingTenants}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${loadingTenants ? "animate-spin" : ""}`} />
-            Tenant
-          </Button>
-
-          <Button className="bg-indigo-600 text-white" onClick={() => setShowCreate(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Crea Utente
-          </Button>
-        </div>
+    <div className="dashboard-content animate-fadeIn">
+      {/* ── Action bar ─────────────────────────────────────────────── */}
+      <div className="flex justify-end gap-2 mb-6">
+        <Button variant="outline" onClick={loadTenants} disabled={loadingTenants}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${loadingTenants ? "animate-spin" : ""}`} />
+          Tenant
+        </Button>
+        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setShowCreate(true)}>
+          <Plus className="mr-2 h-4 w-4" /> Crea Utente
+        </Button>
       </div>
 
       {/* TABS */}
@@ -619,7 +611,7 @@ export default function SuperadminUsersPage() {
           )}
 
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               className="pl-9"
               placeholder="Cerca email..."
@@ -667,13 +659,13 @@ export default function SuperadminUsersPage() {
         </Card>
 
         {/* ================= KPI SECTION ================= */}
-        <Card className="p-5 border-slate-200 rounded-2xl shadow-sm bg-white mt-4">
+        <Card className="p-5 border-border rounded-2xl shadow-sm bg-card mt-4">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+              <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
                 KPI Utenti — ultimi {kpi?.windowDays ?? 30} giorni
               </div>
-              <div className="text-lg font-black text-slate-900 mt-1">{scopeLabel}</div>
+              <div className="text-lg font-black text-foreground mt-1">{scopeLabel}</div>
             </div>
 
             <Button
@@ -725,12 +717,12 @@ export default function SuperadminUsersPage() {
                 value: string;
                 hint?: string;
               }) => (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/40 p-4">
-                  <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+                <div className="rounded-2xl border border-border bg-muted/40/40 p-4">
+                  <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
                     {label}
                   </div>
-                  <div className="text-2xl font-black text-slate-900 mt-2">{value}</div>
-                  {hint ? <div className="text-xs text-slate-500 mt-2">{hint}</div> : null}
+                  <div className="text-2xl font-black text-foreground mt-2">{value}</div>
+                  {hint ? <div className="text-xs text-muted-foreground mt-2">{hint}</div> : null}
                 </div>
               );
 
@@ -748,13 +740,13 @@ export default function SuperadminUsersPage() {
           {/* Trend */}
           <div className="mt-6">
             <div className="flex items-center justify-between">
-              <div className="font-bold text-slate-800">Trend: nuovi utenti / giorno</div>
-              <Badge variant="outline" className="border-slate-200 text-slate-700 bg-white">
+              <div className="font-bold text-foreground">Trend: nuovi utenti / giorno</div>
+              <Badge variant="outline" className="border-border text-muted-foreground bg-card">
                 {activeTab === "tenant" ? "Tenant scope" : "Global scope"}
               </Badge>
             </div>
 
-            <div className="mt-3 w-full rounded-xl border border-slate-200 bg-white">
+            <div className="mt-3 w-full rounded-xl border border-border bg-card">
               <div style={{ width: "100%", height: 220 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart
@@ -774,11 +766,11 @@ export default function SuperadminUsersPage() {
 
           {/* Top tenants */}
           <div className="mt-6">
-            <div className="font-bold text-slate-800 mb-2">Top tenant (per totale utenti)</div>
+            <div className="font-bold text-foreground mb-2">Top tenant (per totale utenti)</div>
 
-            <div className="rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="rounded-2xl border border-border overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 border-b text-xs uppercase font-bold text-slate-500">
+                <thead className="bg-muted/40 border-b text-xs uppercase font-bold text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3 text-left">Tenant</th>
                     <th className="px-4 py-3 text-left">Slug</th>
@@ -792,7 +784,7 @@ export default function SuperadminUsersPage() {
                   {(kpi?.kpiByTenant || []).map((t) => (
                     <tr
                       key={t.tenant_id}
-                      className="hover:bg-slate-50 cursor-pointer"
+                      className="hover:bg-muted/40 cursor-pointer"
                       onClick={() => {
                         const found = tenants.find(
                           local => local.slug === t.tenant_slug || local.schema_name === t.tenant_schema
@@ -805,21 +797,21 @@ export default function SuperadminUsersPage() {
                       }}
                       title="Click per aprire questo tenant"
                     >
-                      <td className="px-4 py-3 font-medium text-slate-900">
+                      <td className="px-4 py-3 font-medium text-foreground">
                         {t.tenant_name || t.tenant_slug || "—"}
                       </td>
-                      <td className="px-4 py-3 text-slate-500 font-mono text-xs">
+                      <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
                         {t.tenant_slug || "—"}
                       </td>
                       <td className="px-4 py-3 text-right font-bold">{t.total_users}</td>
-                      <td className="px-4 py-3 text-right text-slate-700">{t.active_users}</td>
-                      <td className="px-4 py-3 text-right text-slate-700">{t.suspended_users}</td>
-                      <td className="px-4 py-3 text-right text-slate-700">{t.new_users_window}</td>
+                      <td className="px-4 py-3 text-right text-muted-foreground">{t.active_users}</td>
+                      <td className="px-4 py-3 text-right text-muted-foreground">{t.suspended_users}</td>
+                      <td className="px-4 py-3 text-right text-muted-foreground">{t.new_users_window}</td>
                     </tr>
                   ))}
                   {!kpiLoading && (kpi?.kpiByTenant?.length ?? 0) === 0 && (
                     <tr>
-                      <td colSpan={6} className="p-6 text-center text-slate-400">
+                      <td colSpan={6} className="p-6 text-center text-muted-foreground">
                         Nessun dato KPI disponibile.
                       </td>
                     </tr>
@@ -833,7 +825,7 @@ export default function SuperadminUsersPage() {
         {/* TABLE */}
         <Card className="overflow-hidden mt-4">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b text-xs uppercase font-bold text-slate-500">
+            <thead className="bg-muted/40 border-b text-xs uppercase font-bold text-muted-foreground">
               <tr>
                 <th className="px-6 py-4">Email</th>
                 <th className="px-6 py-4">Ruolo</th>
@@ -846,26 +838,26 @@ export default function SuperadminUsersPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="p-10 text-center text-slate-400">
+                  <td colSpan={6} className="p-10 text-center text-muted-foreground">
                     Caricamento…
                   </td>
                 </tr>
               ) : activeTab === "tenant" && (targetTenantId === "__all__" || !targetTenantId) ? (
                 <tr>
-                  <td colSpan={6} className="p-10 text-center text-slate-400">
+                  <td colSpan={6} className="p-10 text-center text-muted-foreground">
                     Seleziona un tenant per vedere gli utenti.
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-10 text-center text-slate-400">
+                  <td colSpan={6} className="p-10 text-center text-muted-foreground">
                     Nessun utente trovato
                   </td>
                 </tr>
               ) : (
                 users.map((u) => (
-                  <tr key={u.id} className="border-b hover:bg-slate-50">
-                    <td className="px-6 py-4 font-medium text-indigo-700">{u.email}</td>
+                  <tr key={u.id} className="border-b hover:bg-muted/40">
+                    <td className="px-6 py-4 font-medium text-primary">{u.email}</td>
                     <td className="px-6 py-4">
                       <RoleBadge role={u.role} />
                     </td>
@@ -875,7 +867,7 @@ export default function SuperadminUsersPage() {
                         onCheckedChange={() => toggleMfa(u)} 
                       />
                     </td>
-                    <td className="px-6 py-4 text-slate-600">
+                    <td className="px-6 py-4 text-muted-foreground">
                       {u.tenant_name || u.tenant_slug || u.tenant_id}
                     </td>
                     <td className="px-6 py-4">
@@ -925,8 +917,8 @@ export default function SuperadminUsersPage() {
 
         {/* Pagination */}
         <div className="flex items-center justify-between mt-4">
-          <div className="text-sm text-slate-500">
-            Totale: <span className="font-semibold text-slate-700">{total}</span>
+          <div className="text-sm text-muted-foreground">
+            Totale: <span className="font-semibold text-muted-foreground">{total}</span>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -936,7 +928,7 @@ export default function SuperadminUsersPage() {
             >
               Prev
             </Button>
-            <div className="text-sm font-medium text-slate-700 px-2">
+            <div className="text-sm font-medium text-muted-foreground px-2">
               Pagina {page}
             </div>
             <Button
@@ -967,12 +959,12 @@ export default function SuperadminUsersPage() {
 
             <div className="space-y-3 max-h-[400px] overflow-y-auto">
               {auditLoading ? (
-                <div className="p-6 text-center text-slate-400">
+                <div className="p-6 text-center text-muted-foreground">
                   <RefreshCw className="inline-block h-4 w-4 mr-2 animate-spin" />
                   Caricamento audit…
                 </div>
               ) : audit.length === 0 ? (
-                <p className="text-slate-400 text-sm p-4">Nessun evento registrato.</p>
+                <p className="text-muted-foreground text-sm p-4">Nessun evento registrato.</p>
               ) : (
                 audit.map((a) => (
                   <div key={a.id} className="border rounded-md p-3 text-sm">
@@ -980,18 +972,18 @@ export default function SuperadminUsersPage() {
                       <span
                         className={`px-2 py-1 rounded text-xs font-bold border ${
                           AUDIT_COLOR[a.action] ||
-                          "bg-slate-100 text-slate-700 border-slate-200"
+                          "bg-muted text-muted-foreground border-border"
                         }`}
                       >
                         {a.action}
                       </span>
-                      <span className="text-xs text-slate-400">{fmtDate(a.created_at)}</span>
+                      <span className="text-xs text-muted-foreground">{fmtDate(a.created_at)}</span>
                     </div>
-                    <div className="text-xs text-slate-500 mt-1">
+                    <div className="text-xs text-muted-foreground mt-1">
                       Actor: <span className="font-semibold">{a.actor_email || "—"}</span>
                     </div>
                     {a.metadata && (
-                      <pre className="mt-2 text-[10px] bg-slate-50 p-2 rounded overflow-x-auto">
+                      <pre className="mt-2 text-[10px] bg-muted/40 p-2 rounded overflow-x-auto">
                         {JSON.stringify(a.metadata, null, 2)}
                       </pre>
                     )}
@@ -1028,7 +1020,7 @@ export default function SuperadminUsersPage() {
 
             <div className="space-y-4">
               <div>
-                <div className="text-sm font-bold text-slate-600">Email</div>
+                <div className="text-sm font-bold text-muted-foreground">Email</div>
                 <Input
                   placeholder="utente@azienda.it"
                   value={createEmail}
@@ -1037,7 +1029,7 @@ export default function SuperadminUsersPage() {
               </div>
 
               <div>
-                <div className="text-sm font-bold text-slate-600">Tenant</div>
+                <div className="text-sm font-bold text-muted-foreground">Tenant</div>
                 <Select
                   value={createTenantId}
                   onValueChange={(v) => setCreateTenantId(v)}
@@ -1058,7 +1050,7 @@ export default function SuperadminUsersPage() {
               </div>
 
               <div>
-                <div className="text-sm font-bold text-slate-600">Ruolo</div>
+                <div className="text-sm font-bold text-muted-foreground">Ruolo</div>
                 <Select value={createRole} onValueChange={setCreateRole}>
                   <SelectTrigger>
                     <SelectValue />
@@ -1072,7 +1064,7 @@ export default function SuperadminUsersPage() {
               </div>
 
               <div>
-                <div className="text-sm font-bold text-slate-600">Metodo di accesso</div>
+                <div className="text-sm font-bold text-muted-foreground">Metodo di accesso</div>
                 <Select value={accessMode} onValueChange={(v) => setAccessMode(v as any)}>
                   <SelectTrigger>
                     <SelectValue />
@@ -1090,9 +1082,9 @@ export default function SuperadminUsersPage() {
                 )}
               </div>
 
-              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/40 p-3">
+              <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40/40 p-3">
                 <div className="flex items-center gap-2">
-                  <Lock className="h-4 w-4 text-slate-500" />
+                  <Lock className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm font-medium">MFA obbligatorio</span>
                 </div>
                 <Switch checked={createMfa} onCheckedChange={setCreateMfa} />
@@ -1106,7 +1098,7 @@ export default function SuperadminUsersPage() {
               <Button
                 onClick={submitCreateUser}
                 disabled={creating}
-                className="bg-indigo-600 text-white"
+                className="bg-primary text-white"
               >
                 {creating ? "Creazione…" : "Crea Utente"}
               </Button>
@@ -1133,7 +1125,7 @@ export default function SuperadminUsersPage() {
             </DialogHeader>
 
             {!resetResult ? (
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-muted-foreground">
                 Vuoi rigenerare la password per <b>{resetUser.email}</b>?
               </p>
             ) : (
@@ -1141,7 +1133,7 @@ export default function SuperadminUsersPage() {
                 <div className="bg-slate-900 text-green-400 font-mono p-4 rounded text-center text-lg select-all">
                   {resetResult}
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-muted-foreground">
                   Copia ora. Non verrà mostrata di nuovo.
                 </p>
               </div>

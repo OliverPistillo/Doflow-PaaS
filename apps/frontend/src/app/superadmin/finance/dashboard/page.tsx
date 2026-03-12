@@ -1,3 +1,5 @@
+// Percorso: C:\Doflow\apps\frontend\src\app\superadmin\finance\dashboard\page.tsx
+
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -69,7 +71,7 @@ function DrillDownSheet({
             <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
                 <SheetHeader className="mb-6">
                     <SheetTitle className="text-xl flex items-center gap-2">
-                        <TrendingUp className="h-5 w-5 text-indigo-600" />
+                        <TrendingUp className="h-5 w-5 text-primary" />
                         Dettaglio: {title}
                     </SheetTitle>
                     <SheetDescription>
@@ -79,34 +81,34 @@ function DrillDownSheet({
 
                 <div className="space-y-3">
                     {invoices.length === 0 ? (
-                        <p className="text-center text-slate-500 py-10">Nessuna fattura in questa categoria.</p>
+                        <p className="text-center text-muted-foreground py-10">Nessuna fattura in questa categoria.</p>
                     ) : (
                         invoices.map(inv => (
                             <div 
                                 key={inv.id} 
-                                className="bg-white border rounded-lg p-3 shadow-sm hover:shadow-md transition-all flex items-center justify-between group cursor-pointer hover:border-indigo-200"
+                                className="bg-card border rounded-lg p-3 shadow-sm hover:shadow-md transition-all flex items-center justify-between group cursor-pointer hover:border-indigo-200"
                                 onClick={() => handleNavigateToInvoice(inv.clientName)}
                             >
                                 <div className="flex items-center gap-3">
-                                    <div className="h-8 w-8 bg-slate-50 rounded flex items-center justify-center text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 transition-colors">
+                                    <div className="h-8 w-8 bg-muted/40 rounded flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:bg-indigo-50 transition-colors">
                                         <FileText className="h-4 w-4" />
                                     </div>
                                     <div>
-                                        <div className="font-bold text-slate-700 text-sm group-hover:text-indigo-700 transition-colors">
+                                        <div className="font-bold text-muted-foreground text-sm group-hover:text-primary transition-colors">
                                             {inv.clientName}
                                         </div>
-                                        <div className="text-xs text-slate-500">
+                                        <div className="text-xs text-muted-foreground">
                                             #{inv.invoiceNumber} • {new Date(inv.issueDate).toLocaleDateString()}
                                         </div>
                                     </div>
                                 </div>
                                 <div className="text-right">
-                                    <div className="font-mono font-bold text-slate-900">
+                                    <div className="font-mono font-bold text-foreground">
                                         €{Number(inv.amount).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
                                     </div>
                                     <div className="flex justify-end items-center gap-1">
                                         <Badge variant="outline" className="text-[10px] h-4 px-1">{inv.status}</Badge>
-                                        <ArrowUpRight className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        <ArrowUpRight className="h-3 w-3 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
                                     </div>
                                 </div>
                             </div>
@@ -133,7 +135,7 @@ interface KpiProps {
 function FinanceKpiCard({ title, value, subtitle, icon: Icon, titleColorClass, hoverColorClass, onClick }: KpiProps) {
   return (
     <Card 
-        className="shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 border-slate-200 group cursor-pointer relative overflow-hidden"
+        className="shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 border-border group cursor-pointer relative overflow-hidden"
         onClick={onClick}
     >
       <div className={`absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity`}>
@@ -146,13 +148,13 @@ function FinanceKpiCard({ title, value, subtitle, icon: Icon, titleColorClass, h
               {title}
             </p>
             <div className="flex flex-col">
-              <h3 className="text-3xl font-black text-slate-900 tracking-tight">
+              <h3 className="text-3xl font-black text-foreground tracking-tight">
                 {value}
               </h3>
-              <p className="text-xs text-slate-500 font-medium mt-1">{subtitle}</p>
+              <p className="text-xs text-muted-foreground font-medium mt-1">{subtitle}</p>
             </div>
           </div>
-          <div className={`h-10 w-10 flex items-center justify-center rounded-xl bg-slate-50 text-slate-400 transition-colors duration-300 ${hoverColorClass}`}>
+          <div className={`h-10 w-10 flex items-center justify-center rounded-xl bg-muted/40 text-muted-foreground transition-colors duration-300 ${hoverColorClass}`}>
             <Icon className="h-5 w-5" />
           </div>
         </div>
@@ -220,7 +222,7 @@ export default function FinanceDashboardPage() {
   };
 
   if (loading && !data) {
-    return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-indigo-600 h-10 w-10" /></div>;
+    return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-primary h-10 w-10" /></div>;
   }
 
   const stats = data || {
@@ -234,35 +236,25 @@ export default function FinanceDashboardPage() {
   const drillContent = getDrillData();
 
   return (
-    <div className="space-y-8 max-w-[1800px] mx-auto animate-in fade-in duration-500 p-4 md:p-0">
-      
-      {/* Header Pulito con Filtri */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-100 pb-6">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-medium text-slate-500 mb-2">
-            <span>Amministrazione</span>
-            <span className="text-slate-300">/</span>
-            <span className="font-bold text-slate-900 uppercase tracking-tighter">Finance</span>
+    <div className="dashboard-content animate-fadeIn">
+
+      {/* ── Year filter ──────────────────────────────────────────────── */}
+      <div className="flex justify-end mb-6">
+        <div className="flex items-center gap-2 glass-card p-1 rounded-xl border shadow-sm">
+          <div className="px-3 flex items-center gap-2 text-sm font-bold text-muted-foreground border-r border-border/50">
+            <Filter className="h-4 w-4" />
+            Filtra:
           </div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight">Dashboard Finanziaria</h1>
-          <p className="text-slate-500 mt-1 text-sm font-medium">Panoramica delle performance finanziarie.</p>
-        </div>
-        
-        <div className="flex items-center gap-2 bg-white p-1 rounded-lg border shadow-sm">
-             <div className="px-3 flex items-center gap-2 text-sm font-bold text-slate-600 border-r border-slate-100">
-                 <Filter className="h-4 w-4 text-slate-400" />
-                 Filtra:
-             </div>
-             <Select value={yearFilter} onValueChange={setYearFilter}>
-                <SelectTrigger className="w-[120px] border-0 focus:ring-0 font-medium">
-                    <SelectValue placeholder="Anno" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="2026">2026</SelectItem>
-                    <SelectItem value="2025">2025</SelectItem>
-                    <SelectItem value="2024">2024</SelectItem>
-                </SelectContent>
-             </Select>
+          <Select value={yearFilter} onValueChange={setYearFilter}>
+            <SelectTrigger className="w-[120px] border-0 focus:ring-0 font-medium">
+              <SelectValue placeholder="Anno" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="2026">2026</SelectItem>
+              <SelectItem value="2025">2025</SelectItem>
+              <SelectItem value="2024">2024</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -301,13 +293,13 @@ export default function FinanceDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Invoice Status Pie */}
-        <Card className="shadow-sm border-slate-200 overflow-hidden">
-          <CardHeader className="border-b border-slate-50 bg-slate-50/30">
+        <Card className="shadow-sm border-border overflow-hidden">
+          <CardHeader className="border-b border-slate-50 bg-muted/40/30">
             <div className="flex justify-between items-center">
-               <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+               <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
                  Stato Pagamenti
                </CardTitle>
-               <ArrowUpRight className="h-4 w-4 text-slate-300" />
+               <ArrowUpRight className="h-4 w-4 text-muted-foreground/50" />
             </div>
           </CardHeader>
           <CardContent className="pt-6 relative">
@@ -334,20 +326,20 @@ export default function FinanceDashboardPage() {
                     </PieChart>
                   </ResponsiveContainer>
                ) : (
-                  <div className="h-full flex items-center justify-center text-slate-400 text-sm">Nessun dato disponibile</div>
+                  <div className="h-full flex items-center justify-center text-muted-foreground text-sm">Nessun dato disponibile</div>
                )}
               {stats.statusDistribution.length > 0 && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                      <div className="text-center">
-                        <p className="text-2xl font-black text-slate-900">100%</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase">Totale</p>
+                        <p className="text-2xl font-black text-foreground">100%</p>
+                        <p className="text-[10px] text-muted-foreground font-bold uppercase">Totale</p>
                      </div>
                   </div>
               )}
             </div>
             <div className="flex justify-center gap-6 mt-4">
                 {stats.statusDistribution.map((s, i) => (
-                    <div key={i} className="flex items-center gap-2 text-[11px] font-bold text-slate-600 uppercase tracking-tighter">
+                    <div key={i} className="flex items-center gap-2 text-[11px] font-bold text-muted-foreground uppercase tracking-tighter">
                         <div className="w-3 h-3 rounded-full" style={{backgroundColor: s.color}} />
                         {s.name}
                     </div>
@@ -357,13 +349,13 @@ export default function FinanceDashboardPage() {
         </Card>
 
         {/* Revenue Line Chart */}
-        <Card className="shadow-sm border-slate-200 overflow-hidden">
-          <CardHeader className="border-b border-slate-50 bg-slate-50/30">
+        <Card className="shadow-sm border-border overflow-hidden">
+          <CardHeader className="border-b border-slate-50 bg-muted/40/30">
             <div className="flex justify-between items-center">
-               <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+               <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
                  Trend Mensile Ricavi
                </CardTitle>
-               <ArrowUpRight className="h-4 w-4 text-slate-300" />
+               <ArrowUpRight className="h-4 w-4 text-muted-foreground/50" />
             </div>
           </CardHeader>
           <CardContent className="pt-6">
@@ -399,7 +391,7 @@ export default function FinanceDashboardPage() {
                     </LineChart>
                   </ResponsiveContainer>
               ) : (
-                 <div className="h-full flex items-center justify-center text-slate-400 text-sm">Nessun trend disponibile</div>
+                 <div className="h-full flex items-center justify-center text-muted-foreground text-sm">Nessun trend disponibile</div>
               )}
             </div>
           </CardContent>
@@ -407,10 +399,10 @@ export default function FinanceDashboardPage() {
       </div>
 
       {/* Bottom Row - Top Clients */}
-      <Card className="shadow-sm border-slate-200 overflow-hidden">
-        <CardHeader className="border-b border-slate-50 bg-slate-50/30">
+      <Card className="shadow-sm border-border overflow-hidden">
+        <CardHeader className="border-b border-slate-50 bg-muted/40/30">
           <div className="flex justify-between items-center">
-             <CardTitle className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+             <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
                Top Clienti per Volume d'Affari
              </CardTitle>
              <button className="text-[10px] font-black text-blue-600 hover:underline">VEDI TUTTI</button>
@@ -452,7 +444,7 @@ export default function FinanceDashboardPage() {
                     </BarChart>
                   </ResponsiveContainer>
               ) : (
-                 <div className="h-full flex items-center justify-center text-slate-400 text-sm">Nessun dato clienti</div>
+                 <div className="h-full flex items-center justify-center text-muted-foreground text-sm">Nessun dato clienti</div>
               )}
             </div>
         </CardContent>

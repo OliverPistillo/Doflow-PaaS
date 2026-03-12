@@ -1,3 +1,5 @@
+// Percorso: C:\Doflow\apps\frontend\src\app\superadmin\sales\pipeline\page.tsx
+
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -160,26 +162,22 @@ export default function PipelinePage() {
   });
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="dashboard-content animate-fadeIn">
       <ConfirmDialog />
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Gestione offerte</h1>
-          <p className="text-slate-500 text-sm">Gestisci le opportunità di vendita e monitora le conversioni.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={loadDeals}>
-            <Filter className="h-4 w-4 mr-2" /> Aggiorna
-          </Button>
-          <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700" onClick={handleCreateNew}>
-            <Plus className="h-4 w-4 mr-2" /> Nuova Offerta
-          </Button>
-        </div>
+
+      {/* ── Action bar ─────────────────────────────────────────────── */}
+      <div className="flex justify-end gap-2 mb-6">
+        <Button variant="outline" size="sm" onClick={loadDeals}>
+          <Filter className="h-4 w-4 mr-2" /> Aggiorna
+        </Button>
+        <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={handleCreateNew}>
+          <Plus className="h-4 w-4 mr-2" /> Nuova Offerta
+        </Button>
       </div>
 
       {/* Loading State */}
       {loading && deals.length === 0 ? (
-         <div className="flex justify-center py-10"><Loader2 className="animate-spin text-indigo-600"/></div>
+         <div className="flex justify-center py-10"><Loader2 className="animate-spin text-primary"/></div>
       ) : (
         <div className="space-y-6">
           {groupedStages.map((stage) => (
@@ -191,16 +189,16 @@ export default function PipelinePage() {
                 onClick={() => toggleStage(stage.id)}
               >
                 <div className="p-1 rounded-md hover:bg-slate-200 transition-colors">
-                  {expanded[stage.id] ? <ChevronDown className="h-4 w-4 text-slate-500" /> : <ChevronRight className="h-4 w-4 text-slate-500" />}
+                  {expanded[stage.id] ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                 </div>
                 <Badge variant="outline" className={`px-2 py-1 text-xs font-semibold rounded-md border-0 ${stage.badgeClass}`}>
                   {stage.label}
                 </Badge>
-                <span className="text-xs text-slate-400 font-medium ml-1">
+                <span className="text-xs text-muted-foreground font-medium ml-1">
                     {stage.items.length} {stage.items.length === 1 ? 'offerta' : 'offerte'}
                 </span>
                 {stage.items.length > 0 && (
-                    <span className="text-xs text-slate-400 font-medium ml-2 border-l pl-3">
+                    <span className="text-xs text-muted-foreground font-medium ml-2 border-l pl-3">
                         Tot: {formatCurrency(stage.items.reduce((acc, i) => acc + i.value, 0))}
                     </span>
                 )}
@@ -208,12 +206,12 @@ export default function PipelinePage() {
 
               {/* Tabella Fase */}
               {expanded[stage.id] && (
-                <div className="border rounded-lg bg-white shadow-sm overflow-hidden animate-in slide-in-from-top-1 duration-200">
+                <div className="border rounded-lg bg-card shadow-sm overflow-hidden animate-in slide-in-from-top-1 duration-200">
                   {stage.items.length === 0 ? (
-                      <div className="p-4 text-xs text-slate-400 italic text-center bg-slate-50/30">Nessuna offerta in questa fase</div>
+                      <div className="p-4 text-xs text-muted-foreground italic text-center bg-muted/40/30">Nessuna offerta in questa fase</div>
                   ) : (
                     <table className="w-full text-sm text-left">
-                      <thead className="text-xs text-slate-500 uppercase bg-slate-50/50 border-b">
+                      <thead className="text-xs text-muted-foreground uppercase bg-muted/40/50 border-b">
                         <tr>
                           <th className="px-4 py-3 font-medium w-1/3">Nome dell'offerta</th>
                           <th className="px-4 py-3 font-medium">Cliente</th>
@@ -225,34 +223,34 @@ export default function PipelinePage() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {stage.items.map((deal) => (
-                          <tr key={deal.id} className="hover:bg-slate-50/50 group transition-colors">
-                            <td className="px-4 py-3 font-medium text-slate-700">
+                          <tr key={deal.id} className="hover:bg-muted/40/50 group transition-colors">
+                            <td className="px-4 py-3 font-medium text-muted-foreground">
                                 {deal.name}
                             </td>
-                            <td className="px-4 py-3 text-slate-600">
+                            <td className="px-4 py-3 text-muted-foreground">
                                 {deal.clientName || '-'}
                             </td>
-                            <td className="px-4 py-3 font-mono text-slate-700 font-medium">
+                            <td className="px-4 py-3 font-mono text-muted-foreground font-medium">
                               {formatCurrency(deal.value)}
                             </td>
-                            <td className="px-4 py-3 text-slate-600">
+                            <td className="px-4 py-3 text-muted-foreground">
                               {/* Barra visuale probabilità */}
                               <div className="flex items-center gap-2">
-                                <div className="w-12 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
                                     <div className="h-full bg-indigo-500" style={{ width: `${deal.winProbability * 100}%` }}></div>
                                 </div>
                                 <span className="text-xs">{Math.round(deal.winProbability * 100)}%</span>
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-slate-500 flex items-center gap-2">
-                              <Calendar className="h-3 w-3 text-slate-400" /> 
+                            <td className="px-4 py-3 text-muted-foreground flex items-center gap-2">
+                              <Calendar className="h-3 w-3 text-muted-foreground" /> 
                               {deal.expectedCloseDate ? new Date(deal.expectedCloseDate).toLocaleDateString('it-IT') : '-'}
                             </td>
                             <td className="px-4 py-3 text-right">
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <MoreHorizontal className="h-4 w-4 text-slate-500" />
+                                    <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
@@ -274,11 +272,11 @@ export default function PipelinePage() {
                     </table>
                   )}
                   {/* Quick Add Button (Opzionale) */}
-                  <div className="px-4 py-2 border-t bg-slate-50/30">
+                  <div className="px-4 py-2 border-t bg-muted/40/30">
                     <Button 
                         variant="ghost" 
                         size="sm" 
-                        className="text-xs text-slate-500 hover:text-indigo-600 h-7"
+                        className="text-xs text-muted-foreground hover:text-primary h-7"
                         onClick={() => {
                             setEditingDeal({
                                 id: "", 

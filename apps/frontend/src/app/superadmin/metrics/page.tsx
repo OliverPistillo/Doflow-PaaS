@@ -1,3 +1,5 @@
+// Percorso: C:\Doflow\apps\frontend\src\app\superadmin\metrics\page.tsx
+
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -111,27 +113,13 @@ export default function MetricsPage() {
   const safeData = data!;
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-end gap-4 bg-card/40 backdrop-blur-md p-6 rounded-2xl border border-white/10 shadow-sm">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-widest">
-            <Activity className="h-3.5 w-3.5 text-primary" />
-            <span>Metriche Platform</span>
-            <span className="text-border">•</span>
-            <span className="text-primary">SaaS KPIs</span>
-          </div>
-          <h1 className="text-4xl font-black text-foreground tracking-tight">Metriche SaaS</h1>
-          <p className="text-muted-foreground mt-2 text-sm font-medium">Monitoraggio MRR, ARR e adozione della piattaforma.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-[10px] font-bold px-2 py-0.5 text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30">
-            Live
-          </Badge>
-          <Button variant="outline" size="sm" onClick={loadMetrics} className="rounded-xl shadow-sm hover:border-primary/50 transition-colors gap-2">
-            <RefreshCw className="h-3.5 w-3.5" /> Aggiorna
-          </Button>
-        </div>
+    <div className="dashboard-content animate-fadeIn">
+
+      {/* ── Action bar ─────────────────────────────────────────────── */}
+      <div className="flex justify-end mb-6">
+        <Button variant="outline" size="sm" onClick={loadMetrics} className="rounded-xl shadow-sm gap-2">
+          <RefreshCw className="h-3.5 w-3.5" /> Aggiorna
+        </Button>
       </div>
 
       {/* KPI Cards */}

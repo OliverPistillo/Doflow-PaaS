@@ -15,12 +15,13 @@ const TEXT_GRAY     = '#6b7280';
 
 // Dati emittente — in futuro leggere da tabella settings
 const EMITTENTE = {
-  nome:        'DoFlow PaaS S.r.l.',
-  indirizzo:   'Via della Innovazione, 1',
-  cap_citta:   '20121 Milano MI',
-  piva:        'IT12345678901',
-  cf:          '12345678901',
+  nome:        'Oliver Pistillo',
+  indirizzo:   'Via Alberto De Falco, 17',
+  cap_citta:   '71016 San Severo FG',
+  piva:        'IT04558810711',
+  cf:          'PSTLVR92R21I158I',
   email:       'fatture@doflow.it',
+  iban:        'IT63E0338501601100080304679',
 };
 
 @Injectable()

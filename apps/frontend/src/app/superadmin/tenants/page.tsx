@@ -1,3 +1,5 @@
+// Percorso: C:\Doflow\apps\frontend\src\app\superadmin\tenants\page.tsx
+
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -378,34 +380,25 @@ export default function TenantsPage() {
   const isDegraded = fetchState.status === "degraded";
 
   // Se non siamo ancora montati sul client (Hydration check)
-  if (!mounted) return <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin h-8 w-8 text-indigo-600" /></div>;
+  if (!mounted) return <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 
   return (
-    <div className="space-y-8 max-w-[1800px] mx-auto animate-in fade-in">
+    <div className="dashboard-content animate-fadeIn">
       <ConfirmDialog />
-      {/* HEADER */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Clienti & Tenant</h1>
-          <p className="text-slate-500 font-medium">
-            Gestione aziende, contratti, schemi DB e accessi amministrativi.
-          </p>
-        </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-          <Button variant="outline" onClick={loadTenants} disabled={isLoading}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-            Aggiorna
-          </Button>
-
-          <Button
-            className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200 font-bold"
-            onClick={() => setIsCreateOpen(true)}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Nuovo Tenant
-          </Button>
-        </div>
+      {/* ── Action bar ─────────────────────────────────────────────── */}
+      <div className="flex justify-end gap-2 mb-6">
+        <Button variant="outline" onClick={loadTenants} disabled={isLoading}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+          Aggiorna
+        </Button>
+        <Button
+          className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
+          onClick={() => setIsCreateOpen(true)}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Nuovo Tenant
+        </Button>
       </div>
 
       {/* STATUS BANNER */}
@@ -437,21 +430,21 @@ export default function TenantsPage() {
         <div className="xl:col-span-3 space-y-6">
             
             {/* TOOLBAR */}
-            <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div className="flex flex-col md:flex-row gap-4 bg-card p-4 rounded-2xl border border-border shadow-sm">
                 <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                     placeholder="Cerca azienda, slug o schema DB..."
-                    className="pl-9 border-slate-200"
+                    className="pl-9 border-border"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                 />
                 </div>
 
                 <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 text-slate-400" />
+                <Filter className="h-4 w-4 text-muted-foreground" />
                 <select
-                    className="h-10 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="h-10 rounded-md border border-border bg-card px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value as any)}
                 >
@@ -463,18 +456,18 @@ export default function TenantsPage() {
             </div>
 
             {/* TABLE */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                <div className="text-sm font-black text-slate-900">
+            <div className="bg-card rounded-2xl border border-border shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-border/50 flex items-center justify-between">
+                <div className="text-sm font-black text-foreground">
                     Tenant ({filteredTenants.length})
                 </div>
-                <div className="text-xs font-medium text-slate-400">
+                <div className="text-xs font-medium text-muted-foreground">
                     Ultimo refresh: {lastRefreshTime}
                 </div>
                 </div>
 
                 <table className="w-full text-sm text-left">
-                <thead className="bg-slate-50 text-slate-500 uppercase font-bold text-xs border-b border-slate-100">
+                <thead className="bg-muted/40 text-muted-foreground uppercase font-bold text-xs border-b border-border/50">
                     <tr>
                     <th className="px-6 py-4">Azienda</th>
                     <th className="px-6 py-4">Piano</th>
@@ -489,32 +482,32 @@ export default function TenantsPage() {
                 <tbody className="divide-y divide-slate-100">
                     {isLoading ? (
                     <tr>
-                        <td colSpan={7} className="p-10 text-center text-slate-400">
+                        <td colSpan={7} className="p-10 text-center text-muted-foreground">
                         <div className="flex flex-col items-center gap-2">
-                            <Loader2 className="animate-spin h-6 w-6 text-indigo-600" />
+                            <Loader2 className="animate-spin h-6 w-6 text-primary" />
                             Caricamento in corso...
                         </div>
                         </td>
                     </tr>
                     ) : filteredTenants.length === 0 ? (
                     <tr>
-                        <td colSpan={7} className="p-10 text-center text-slate-400">
+                        <td colSpan={7} className="p-10 text-center text-muted-foreground">
                         Nessun tenant trovato.
                         </td>
                     </tr>
                     ) : (
                     filteredTenants.map((t) => (
-                        <tr key={t.id} className="hover:bg-slate-50 transition-colors group">
+                        <tr key={t.id} className="hover:bg-muted/40 transition-colors group">
                         <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0 border border-indigo-100">
+                            <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center text-primary shrink-0 border border-indigo-100">
                                 <Building2 className="h-5 w-5" />
                             </div>
                             <div className="min-w-0">
-                                <div className="font-black text-slate-900 text-base truncate">
+                                <div className="font-black text-foreground text-base truncate">
                                 {t.name}
                                 </div>
-                                <div className="text-slate-400 text-xs font-mono truncate flex items-center gap-1">
+                                <div className="text-muted-foreground text-xs font-mono truncate flex items-center gap-1">
                                 <Globe className="h-3 w-3" /> {t.slug}.tuodominio.it
                                 </div>
                             </div>
@@ -524,27 +517,27 @@ export default function TenantsPage() {
                         <td className="px-6 py-4">
                             <Badge
                             variant="outline"
-                            className="border-indigo-200 text-indigo-700 bg-indigo-50 font-bold px-3 py-1"
+                            className="border-indigo-200 text-primary bg-indigo-50 font-bold px-3 py-1"
                             >
                             {t.planTier || "STARTER"}
                             </Badge>
-                            <div className="text-xs text-slate-400 mt-2 font-medium">
+                            <div className="text-xs text-muted-foreground mt-2 font-medium">
                             Max users: <span className="font-mono">{t.maxUsers ?? "-"}</span>
                             </div>
                         </td>
 
                         <td className="px-6 py-4">
-                            <div className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-1 rounded w-fit border border-slate-200 flex items-center gap-1">
+                            <div className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded w-fit border border-border flex items-center gap-1">
                             <Database className="h-3 w-3" />
                             {t.schemaName}
                             </div>
                         </td>
 
                         <td className="px-6 py-4">
-                            <div className="text-sm font-black text-slate-900">
+                            <div className="text-sm font-black text-foreground">
                             {formatMbToGb(t.storageUsedMb)} GB
                             </div>
-                            <div className="text-xs text-slate-400 font-medium">
+                            <div className="text-xs text-muted-foreground font-medium">
                             Limit: <span className="font-mono">{t.storageLimitGb ?? 0} GB</span>
                             </div>
                         </td>
@@ -554,10 +547,10 @@ export default function TenantsPage() {
                         </td>
 
                         <td className="px-6 py-4">
-                            <div className="text-sm font-bold text-slate-700">
+                            <div className="text-sm font-bold text-muted-foreground">
                             {formatDate(t.updatedAt || t.createdAt)}
                             </div>
-                            <div className="text-xs text-slate-400 font-medium">
+                            <div className="text-xs text-muted-foreground font-medium">
                             Creato: {formatDate(t.createdAt)}
                             </div>
                         </td>
@@ -568,7 +561,7 @@ export default function TenantsPage() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleImpersonate(t.id)}
-                                className="hidden group-hover:flex h-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                                className="hidden group-hover:flex h-8 text-primary hover:text-primary hover:bg-indigo-50"
                             >
                                 <Eye className="h-4 w-4 mr-2" />
                                 Entra
@@ -676,12 +669,12 @@ export default function TenantsPage() {
               <div className="grid gap-2">
                 <Label htmlFor="slug">URL Slug (Auto)</Label>
                 <div className="relative">
-                  <Globe className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                  <Globe className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="slug"
                     value={newTenant.slug}
                     onChange={(e) => setNewTenant({ ...newTenant, slug: generateSlug(e.target.value) })}
-                    className="pl-9 font-mono text-sm bg-slate-50"
+                    className="pl-9 font-mono text-sm bg-muted/40"
                   />
                 </div>
               </div>
@@ -702,7 +695,7 @@ export default function TenantsPage() {
             <div className="grid gap-2">
               <Label htmlFor="email">Email Amministratore</Label>
               <div className="relative">
-                <Mail className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                <Mail className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="email"
                   type="email"
@@ -712,13 +705,13 @@ export default function TenantsPage() {
                   placeholder="admin@azienda.com"
                 />
               </div>
-              <p className="text-[11px] text-slate-500">Invieremo un invito per impostare la password.</p>
+              <p className="text-[11px] text-muted-foreground">Invieremo un invito per impostare la password.</p>
             </div>
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsCreateOpen(false)} disabled={isCreating}>Annulla</Button>
-            <Button onClick={handleCreateTenant} disabled={isCreating} className="bg-indigo-600 hover:bg-indigo-700">
+            <Button onClick={handleCreateTenant} disabled={isCreating} className="bg-primary hover:bg-primary/90">
               {isCreating ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -757,13 +750,13 @@ export default function TenantsPage() {
               </div>
             ) : (
               <div className="mt-4 bg-slate-900 text-white p-6 rounded-2xl text-center shadow-lg">
-                <div className="text-xs text-slate-400 mb-2 uppercase tracking-widest font-bold">
+                <div className="text-xs text-muted-foreground mb-2 uppercase tracking-widest font-bold">
                   Credenziali
                 </div>
                 <div className="text-3xl font-mono font-black tracking-wider select-all cursor-text text-emerald-400">
                   {resetModal.result}
                 </div>
-                <div className="text-xs text-slate-500 mt-4">
+                <div className="text-xs text-muted-foreground mt-4">
                   Copia la password ora. Dopo chiudo la porta e butto via la chiave.
                 </div>
               </div>

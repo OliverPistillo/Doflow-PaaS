@@ -1,3 +1,5 @@
+// Percorso: C:\Doflow\apps\frontend\src\app\superadmin\finance\invoices\page.tsx
+
 "use client";
 
 import React, { useState, useEffect, useMemo, Suspense } from "react";
@@ -185,36 +187,17 @@ function InvoicesContent() {
     new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
+    <div className="dashboard-content animate-fadeIn">
       <ConfirmDialog />
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row justify-between gap-4 items-end">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground mb-1.5 uppercase tracking-widest">
-            <Receipt className="h-3.5 w-3.5 text-primary" />
-            <span>Fatturazione</span>
-            <span className="text-border">•</span>
-            <span className="text-primary">Finance</span>
-          </div>
-          <h1 className="text-3xl font-black text-foreground tracking-tight">
-            Clienti &amp; Fatture
-          </h1>
-          <p className="text-muted-foreground text-sm mt-0.5">
-            Gestisci clienti, visualizza fatture e pagamenti.
-          </p>
-        </div>
-        <div className="flex gap-2 w-full sm:w-auto">
-          <Button variant="outline" onClick={handleExport} className="gap-2">
-            <Download className="h-4 w-4" /> Export CSV
-          </Button>
-          <Button
-            onClick={openCreate}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
-          >
-            <Plus className="h-4 w-4" /> Nuova Fattura
-          </Button>
-        </div>
+      {/* ── Action bar ─────────────────────────────────────────────── */}
+      <div className="flex justify-end gap-2 mb-6">
+        <Button variant="outline" onClick={handleExport} className="gap-2">
+          <Download className="h-4 w-4" /> Export CSV
+        </Button>
+        <Button onClick={openCreate} className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
+          <Plus className="h-4 w-4" /> Nuova Fattura
+        </Button>
       </div>
 
       {/* ── Summary Strip ──────────────────────────────────────────────────── */}

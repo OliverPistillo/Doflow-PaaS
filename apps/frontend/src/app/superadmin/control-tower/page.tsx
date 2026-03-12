@@ -1,3 +1,5 @@
+// Percorso: C:\Doflow\apps\frontend\src\app\superadmin\control-tower\page.tsx
+
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -110,10 +112,10 @@ const StatusBadge = ({
           <Icon className="h-5 w-5" />
         </div>
         <div className="min-w-0">
-          <div className="font-semibold text-slate-900 truncate">{label}</div>
+          <div className="font-semibold text-foreground truncate">{label}</div>
           <div className={`text-xs font-semibold uppercase tracking-wide ${tone.text}`}>
             {tone.label}
-            {meta ? <span className="ml-2 normal-case font-medium text-slate-500">• {meta}</span> : null}
+            {meta ? <span className="ml-2 normal-case font-medium text-muted-foreground">• {meta}</span> : null}
           </div>
         </div>
       </div>
@@ -199,33 +201,21 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8 max-w-[1600px] mx-auto p-6 animate-in fade-in">
-      {/* HEADER */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-slate-900">
-            <ShieldCheck className="h-6 w-6 text-emerald-600" />
-            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Superadmin Control Tower</h1>
+    <div className="dashboard-content animate-fadeIn">
+
+      {/* ── Connection badge ─────────────────────────────────────── */}
+      <div className="flex justify-between items-center mb-6">
+        <Badge variant="outline" className={`gap-1.5 px-3 py-1 ${connected ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"}`}>
+          <span className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-600 animate-pulse" : "bg-rose-600"}`} />
+          {connected ? "Uplink Secure" : "Offline"}
+        </Badge>
+
+        {stats && (
+          <div className="glass-card rounded-xl px-4 py-3 hidden md:block">
+            <div className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-secondary)" }}>System Uptime</div>
+            <div className="mt-1 text-xl font-mono font-semibold" style={{ color: "var(--text-primary)" }}>{uptimeHours}h</div>
           </div>
-          <p className="text-sm text-slate-500">
-            Monitoraggio Infrastruttura & Sicurezza Perimetrale (v3.5)
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-           {/* Badge di Connessione WebSocket */}
-           <Badge variant="outline" className={`gap-1.5 px-3 py-1 ${connected ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"}`}>
-                <span className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-600 animate-pulse" : "bg-rose-600"}`} />
-                {connected ? "Uplink Secure" : "Offline"}
-           </Badge>
-
-           {stats && (
-              <div className="rounded-xl border bg-white px-4 py-3 shadow-sm hidden md:block">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">System Uptime</div>
-                <div className="mt-1 text-xl font-mono font-semibold text-slate-900">{uptimeHours}h</div>
-              </div>
-           )}
-        </div>
+        )}
       </div>
 
       {errorMsg && (
@@ -238,7 +228,7 @@ export default function DashboardPage() {
       {stats && (
         <>
           <div className="space-y-3">
-            <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Service Health</div>
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Service Health</div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <StatusBadge label="Database" status={stats.services.database} icon={Database} />
               <StatusBadge 
@@ -253,16 +243,16 @@ export default function DashboardPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
              {/* CPU */}
-             <Card className="p-6 rounded-2xl border bg-white shadow-sm">
+             <Card className="p-6 rounded-2xl border bg-card shadow-sm">
                 <div className="flex justify-between items-start">
                   <div>
-                    <div className="text-[11px] font-semibold uppercase text-slate-500">CPU Load</div>
+                    <div className="text-[11px] font-semibold uppercase text-muted-foreground">CPU Load</div>
                     <div className="text-3xl font-semibold mt-2">{clamp(stats.hardware.cpu.load)}%</div>
                   </div>
-                  <Cpu className="text-slate-400" />
+                  <Cpu className="text-muted-foreground" />
                 </div>
                 <Progress value={clamp(stats.hardware.cpu.load)} className="mt-4 h-2" />
-                <div className="mt-3 text-xs text-slate-500 flex justify-between font-medium">
+                <div className="mt-3 text-xs text-muted-foreground flex justify-between font-medium">
                   {/* Per la CPU mostriamo i dettagli dei Core invece dei GB */}
                   <span>{stats.hardware.cpu.cores} Cores</span>
                   <span className="truncate max-w-[150px]">{stats.hardware.cpu.brand}</span>
@@ -270,36 +260,36 @@ export default function DashboardPage() {
              </Card>
 
              {/* RAM */}
-             <Card className="p-6 rounded-2xl border bg-white shadow-sm">
+             <Card className="p-6 rounded-2xl border bg-card shadow-sm">
                 <div className="flex justify-between items-start">
                   <div>
-                    <div className="text-[11px] font-semibold uppercase text-slate-500">Memory Usage</div>
+                    <div className="text-[11px] font-semibold uppercase text-muted-foreground">Memory Usage</div>
                     <div className="text-3xl font-semibold mt-2">{clamp(stats.hardware.memory.percent)}%</div>
                   </div>
-                  <Server className="text-slate-400" />
+                  <Server className="text-muted-foreground" />
                 </div>
                 <Progress value={clamp(stats.hardware.memory.percent)} className="mt-4 h-2" />
                 {/* Visualizzazione numerica richiesta */}
-                <div className="mt-3 text-xs text-slate-500 font-medium flex justify-between">
+                <div className="mt-3 text-xs text-muted-foreground font-medium flex justify-between">
                    <span>Used: {stats.hardware.memory.usedGb} GB</span>
-                   <span className="text-slate-400">Total: {stats.hardware.memory.totalGb} GB</span>
+                   <span className="text-muted-foreground">Total: {stats.hardware.memory.totalGb} GB</span>
                 </div>
              </Card>
 
              {/* DISK */}
-             <Card className="p-6 rounded-2xl border bg-white shadow-sm">
+             <Card className="p-6 rounded-2xl border bg-card shadow-sm">
                 <div className="flex justify-between items-start">
                   <div>
-                    <div className="text-[11px] font-semibold uppercase text-slate-500">Disk Usage</div>
+                    <div className="text-[11px] font-semibold uppercase text-muted-foreground">Disk Usage</div>
                     <div className="text-3xl font-semibold mt-2">{clamp(stats.hardware.disk.percent)}%</div>
                   </div>
-                  <HardDrive className="text-slate-400" />
+                  <HardDrive className="text-muted-foreground" />
                 </div>
                 <Progress value={clamp(stats.hardware.disk.percent)} className="mt-4 h-2" />
                 {/* Visualizzazione numerica richiesta */}
-                <div className="mt-3 text-xs text-slate-500 font-medium flex justify-between">
+                <div className="mt-3 text-xs text-muted-foreground font-medium flex justify-between">
                    <span>Used: {stats.hardware.disk.usedGb} GB</span>
-                   <span className="text-slate-400">Total: {stats.hardware.disk.totalGb} GB</span>
+                   <span className="text-muted-foreground">Total: {stats.hardware.disk.totalGb} GB</span>
                 </div>
              </Card>
           </div>
@@ -314,7 +304,7 @@ export default function DashboardPage() {
                <ShieldAlert className="h-5 w-5 text-amber-600" />
                Gatekeeper Logs
              </h2>
-             <p className="text-sm text-slate-500">Richieste bloccate o errori di sistema (Live Telemetry)</p>
+             <p className="text-sm text-muted-foreground">Richieste bloccate o errori di sistema (Live Telemetry)</p>
            </div>
            
            <div className="flex items-center gap-2">
@@ -323,17 +313,17 @@ export default function DashboardPage() {
                     <Activity className="h-3 w-3 animate-pulse" /> Live Stream
                 </Badge>
              ) : (
-                <Badge variant="outline" className="font-mono text-slate-500">
+                <Badge variant="outline" className="font-mono text-muted-foreground">
                     Sync (5s)
                 </Badge>
              )}
            </div>
         </div>
 
-        <Card className="overflow-hidden border-slate-200 shadow-sm">
+        <Card className="overflow-hidden border-border shadow-sm">
           <Table>
             <TableHeader>
-              <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
+              <TableRow className="bg-muted/40/50 hover:bg-muted/40/50">
                 <TableHead className="w-[180px]">Timestamp</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>IP Address</TableHead>
@@ -345,14 +335,14 @@ export default function DashboardPage() {
             <TableBody>
               {logs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center text-slate-500">
+                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                     Nessun evento di sicurezza rilevato (Sistema Pulito).
                   </TableCell>
                 </TableRow>
               ) : (
                 logs.map((log, i) => (
-                  <TableRow key={i} className="hover:bg-slate-50 transition-colors">
-                    <TableCell className="font-mono text-xs text-slate-500 whitespace-nowrap">
+                  <TableRow key={i} className="hover:bg-muted/40 transition-colors">
+                    <TableCell className="font-mono text-xs text-muted-foreground whitespace-nowrap">
                       {new Date(log.timestamp).toLocaleTimeString()}
                     </TableCell>
                     <TableCell>
@@ -370,19 +360,19 @@ export default function DashboardPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="font-mono text-xs">{log.ip}</TableCell>
-                    <TableCell className="text-xs text-slate-600 truncate max-w-[200px]">
+                    <TableCell className="text-xs text-muted-foreground truncate max-w-[200px]">
                       {log.path}
                     </TableCell>
                     <TableCell className="text-xs">
                       {log.tenantId !== 'global' ? (
                         <span className="inline-flex items-center gap-1 font-medium text-slate-700">
-                           <Lock className="h-3 w-3 text-slate-400" /> {log.tenantId}
+                           <Lock className="h-3 w-3 text-muted-foreground" /> {log.tenantId}
                         </span>
                       ) : (
-                        <span className="text-slate-400 italic">Global</span>
+                        <span className="text-muted-foreground italic">Global</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-xs text-slate-500">
+                    <TableCell className="text-right font-mono text-xs text-muted-foreground">
                       {/* Gestione polimorfica dei metadati */}
                       {log.metadata?.reason || log.metadata?.message ? (
                           <span className="text-rose-600 font-medium">
