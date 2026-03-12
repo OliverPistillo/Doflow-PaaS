@@ -4,33 +4,31 @@ import * as fs from 'fs';
 import PDFDocument = require('pdfkit');
 import { Invoice, TaxRegime } from './entities/invoice.entity';
 
-// ── Costanti fiscali italiane ────────────────────────────────────────────────
-const STAMP_DUTY_AMOUNT = 2.00;
+// ── Palette ──────────────────────────────────────────────────────────────────
+const NAVY        = '#0d1b2e';   // Header background — come screenshot
+const ACCENT      = '#4f46e5';   // Indigo per etichette e accenti
+const LIGHT_GRAY  = '#f8f8f8';
+const MID_GRAY    = '#e2e8f0';
+const TEXT_GRAY   = '#6b7280';
+const STAMP_DUTY_AMOUNT    = 2.00;
 const STAMP_DUTY_THRESHOLD = 77.47;
-const PRIMARY_COLOR = '#1a1a2e';      // Molto scuro (quasi nero)
-const ACCENT_COLOR  = '#4f46e5';      // Indigo
-const LIGHT_GRAY    = '#f8f8f8';
-const MID_GRAY      = '#e5e5e5';
-const TEXT_GRAY     = '#6b7280';
 
-// Dati emittente — in futuro leggere da tabella settings
+// Dati emittente
 const EMITTENTE = {
-  nome:        'Oliver Pistillo',
-  indirizzo:   'Via Alberto De Falco, 17',
-  cap_citta:   '71016 San Severo FG',
-  piva:        'IT04558810711',
-  cf:          'PSTLVR92R21I158I',
-  email:       'fatture@doflow.it',
-  iban:        'IT63E0338501601100080304679',
+  nome:      'Oliver Pistillo',
+  indirizzo: 'Via Alberto De Falco, 17',
+  cap_citta: '71016 San Severo FG',
+  piva:      'IT04558810711',
+  cf:        'PSTLVR92R21I158I',
+  email:     'fatture@doflow.it',
+  iban:      'IT63E0338501601100080304679',
 };
 
 @Injectable()
 export class InvoicePdfService {
   private readonly logger = new Logger(InvoicePdfService.name);
 
-  // ── Resolve logo ────────────────────────────────────────────────────────────
   private getLogoPath(): string | null {
-    // Il logo si trova in apps/frontend/public/ mentre il backend è in apps/backend/
     const candidates = [
       path.resolve(process.cwd(), '..', 'frontend', 'public', 'logo_doflow_bianco.png'),
       path.resolve(process.cwd(), '..', '..', 'apps', 'frontend', 'public', 'logo_doflow_bianco.png'),
@@ -39,11 +37,9 @@ export class InvoicePdfService {
     for (const p of candidates) {
       if (fs.existsSync(p)) return p;
     }
-    this.logger.warn('Logo non trovato, generazione senza logo.');
     return null;
   }
 
-  // ── Utilità disegno ──────────────────────────────────────────────────────────
   private rect(doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: number, color: string) {
     doc.save().rect(x, y, w, h).fill(color).restore();
   }
@@ -59,7 +55,66 @@ export class InvoicePdfService {
     } catch { return dateStr; }
   }
 
-  // ── Generatore principale ─────────────────────────────────────────────────────
+  // ── Disegna header con onda — uguale allo screenshot ─────────────────────
+  private drawHeader(doc: PDFKit.PDFDocument, W: number, invoice: Invoice) {
+    const HEADER_H = 148; // altezza totale banda header
+
+    // 1. Sfondo navy pieno
+    doc.save().rect(0, 0, W, HEADER_H).fill(NAVY).restore();
+
+    // 2. Forma ad onda bianca in basso a sinistra
+    //    Riproduce l'onda dello screenshot: parte dal basso-sinistra,
+    //    sale con una curva ampia verso destra e torna giù.
+    doc.save();
+    doc.moveTo(0, HEADER_H)                                            // angolo basso-sx
+       .lineTo(0, HEADER_H * 0.62)                                     // sale lungo il bordo sx
+       .bezierCurveTo(
+         W * 0.08, HEADER_H * 0.18,   // cp1 — decolla verso l'alto
+         W * 0.30, HEADER_H * 0.08,   // cp2 — picco sinistro
+         W * 0.50, HEADER_H * 0.22,   // punto medio curva
+       )
+       .bezierCurveTo(
+         W * 0.70, HEADER_H * 0.38,   // cp1 — discesa verso destra
+         W * 0.88, HEADER_H * 0.60,   // cp2
+         W,        HEADER_H * 0.55,   // bordo destro
+       )
+       .lineTo(W, HEADER_H)           // angolo basso-dx
+       .closePath()
+       .fill('#ffffff');
+    doc.restore();
+
+    // 3. Logo "doflow~" — testo bianco (oppure immagine se disponibile)
+    const MARGIN = 45;
+    const logoPath = this.getLogoPath();
+    if (logoPath) {
+      try {
+        doc.image(logoPath, MARGIN, 22, { height: 32, fit: [140, 32] });
+      } catch {
+        this.drawLogoText(doc, MARGIN, 24);
+      }
+    } else {
+      this.drawLogoText(doc, MARGIN, 24);
+    }
+
+    // 4. "FATTURA" + dettagli — in alto a destra
+    doc.font('Helvetica-Bold').fontSize(26).fillColor('#ffffff')
+       .text('FATTURA', 0, 20, { align: 'right', width: W - MARGIN });
+
+    doc.font('Helvetica').fontSize(9.5).fillColor('rgba(255,255,255,0.80)');
+    doc.text(`N. ${invoice.invoiceNumber}`,          0, 55, { align: 'right', width: W - MARGIN });
+    doc.text(`Data: ${this.fmtDate(invoice.issueDate)}`,     0, 69, { align: 'right', width: W - MARGIN });
+    doc.text(`Scadenza: ${this.fmtDate(invoice.dueDate)}`,   0, 83, { align: 'right', width: W - MARGIN });
+
+    return HEADER_H;
+  }
+
+  // Fallback testo "doflow~" se il logo PNG non è disponibile
+  private drawLogoText(doc: PDFKit.PDFDocument, x: number, y: number) {
+    doc.font('Helvetica-Bold').fontSize(22).fillColor('#ffffff').text('doflow', x, y, { continued: true });
+    doc.font('Helvetica').fontSize(22).fillColor('rgba(255,255,255,0.7)').text('~');
+  }
+
+  // ── Generatore principale ─────────────────────────────────────────────────
   async generateInvoicePdf(invoice: Invoice): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       try {
@@ -69,74 +124,47 @@ export class InvoicePdfService {
         doc.on('end',  () => resolve(Buffer.concat(buffers)));
         doc.on('error', reject);
 
-        const W = 595.28; // larghezza A4 pt
-        const H = 841.89; // altezza A4 pt
+        const W      = 595.28;
+        const H      = 841.89;
         const MARGIN = 45;
         const CONTENT_W = W - MARGIN * 2;
 
-        // ── CALCOLI FISCALI ──────────────────────────────────────────────────
-        const isForfettario = invoice.taxRegime === TaxRegime.FORFETTARIO;
-        const imponibile    = Number(invoice.amount) || 0;
-        const taxRate       = isForfettario ? 0 : (Number(invoice.taxRate) || 22);
-        const inpsRate      = Number(invoice.inpsRate) || 0;
-        const ritenutaRate  = Number(invoice.ritenutaRate) || 0;
+        // ── CALCOLI FISCALI ───────────────────────────────────────────────
+        const isForfettario  = invoice.taxRegime === TaxRegime.FORFETTARIO;
+        const imponibile     = Number(invoice.amount) || 0;
+        const taxRate        = isForfettario ? 0 : (Number(invoice.taxRate) || 22);
+        const inpsRate       = Number(invoice.inpsRate)    || 0;
+        const ritenutaRate   = Number(invoice.ritenutaRate) || 0;
 
-        const inpsAmount    = imponibile * inpsRate / 100;
-        const baseConInps   = imponibile + inpsAmount;
-        const ivaAmount     = isForfettario ? 0 : baseConInps * taxRate / 100;
-        const ritenutaAmount= imponibile * ritenutaRate / 100;
-        const stampAmount   = (invoice.stampDuty || (isForfettario && imponibile > STAMP_DUTY_THRESHOLD)) ? STAMP_DUTY_AMOUNT : 0;
-        const totaleLordo   = baseConInps + ivaAmount + stampAmount;
-        const totaleNetto   = totaleLordo - ritenutaAmount;
+        const inpsAmount     = imponibile * inpsRate / 100;
+        const baseConInps    = imponibile + inpsAmount;
+        const ivaAmount      = isForfettario ? 0 : baseConInps * taxRate / 100;
+        const ritenutaAmount = imponibile * ritenutaRate / 100;
+        const stampAmount    = (invoice.stampDuty || (isForfettario && imponibile > STAMP_DUTY_THRESHOLD)) ? STAMP_DUTY_AMOUNT : 0;
+        const totaleLordo    = baseConInps + ivaAmount + stampAmount;
+        const totaleNetto    = totaleLordo - ritenutaAmount;
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // HEADER BAND
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        this.rect(doc, 0, 0, W, 110, PRIMARY_COLOR);
+        // ── HEADER con onda ───────────────────────────────────────────────
+        const headerH = this.drawHeader(doc, W, invoice);
+        let curY = headerH + 22;
 
-        // Logo (in alto a sinistra nell'header)
-        const logoPath = this.getLogoPath();
-        if (logoPath) {
-          try {
-            doc.image(logoPath, MARGIN, 20, { height: 40, fit: [160, 40] });
-          } catch (e) {
-            this.logger.warn('Logo non caricabile nel PDF:', e);
-          }
-        } else {
-          doc.font('Helvetica-Bold').fontSize(20).fillColor('#ffffff')
-             .text('DoFlow', MARGIN, 28);
-        }
-
-        // Titolo fattura (in alto a destra nell'header)
-        doc.font('Helvetica-Bold').fontSize(22).fillColor('#ffffff')
-           .text('FATTURA', 0, 22, { align: 'right', width: W - MARGIN });
-        doc.font('Helvetica').fontSize(10).fillColor('rgba(255,255,255,0.75)')
-           .text(`N. ${invoice.invoiceNumber}`, 0, 50, { align: 'right', width: W - MARGIN })
-           .text(`Data: ${this.fmtDate(invoice.issueDate)}`, 0, 64, { align: 'right', width: W - MARGIN })
-           .text(`Scadenza: ${this.fmtDate(invoice.dueDate)}`, 0, 78, { align: 'right', width: W - MARGIN });
-
-        let curY = 130;
-
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // SEZIONE EMITTENTE / CLIENTE
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // ── SEZIONE EMITTENTE / COMMITTENTE ──────────────────────────────
         const colW = (CONTENT_W - 20) / 2;
         const col1X = MARGIN;
         const col2X = MARGIN + colW + 20;
 
         const drawPartyBlock = (x: number, y: number, label: string, lines: string[]): number => {
-          doc.font('Helvetica-Bold').fontSize(7).fillColor(ACCENT_COLOR)
+          doc.font('Helvetica-Bold').fontSize(7).fillColor(ACCENT)
              .text(label.toUpperCase(), x, y, { characterSpacing: 1.5 });
           y += 14;
-          this.rect(doc, x, y, colW, 1, ACCENT_COLOR);
+          this.rect(doc, x, y, colW, 1, ACCENT);
           y += 8;
-
           lines.filter(Boolean).forEach(line => {
             const isBold = line.startsWith('**');
             const text   = isBold ? line.slice(2) : line;
             doc.font(isBold ? 'Helvetica-Bold' : 'Helvetica')
                .fontSize(isBold ? 11 : 9)
-               .fillColor(isBold ? PRIMARY_COLOR : TEXT_GRAY)
+               .fillColor(isBold ? NAVY : TEXT_GRAY)
                .text(text, x, y, { width: colW });
             y += isBold ? 16 : 13;
           });
@@ -157,109 +185,98 @@ export class InvoicePdfService {
           `**${invoice.clientName}`,
           invoice.clientAddress,
           [invoice.clientZip, invoice.clientCity].filter(Boolean).join(' '),
-          invoice.clientVat        ? `P.IVA: ${invoice.clientVat}` : '',
-          invoice.clientFiscalCode ? `C.F.: ${invoice.clientFiscalCode}` : '',
-          invoice.clientSdi        ? `Cod. SDI: ${invoice.clientSdi}` : '',
-          invoice.clientPec        ? `PEC: ${invoice.clientPec}` : '',
+          invoice.clientVat        ? `P.IVA: ${invoice.clientVat}`        : '',
+          invoice.clientFiscalCode ? `C.F.: ${invoice.clientFiscalCode}`  : '',
+          invoice.clientSdi        ? `Cod. SDI: ${invoice.clientSdi}`     : '',
+          invoice.clientPec        ? `PEC: ${invoice.clientPec}`          : '',
         ];
 
-        const endY1 = drawPartyBlock(col1X, curY, 'Emittente', emittenteLines);
-        const endY2 = drawPartyBlock(col2X, curY, 'Committente', clienteLines);
+        const endY1 = drawPartyBlock(col1X, curY, 'Emittente',    emittenteLines);
+        const endY2 = drawPartyBlock(col2X, curY, 'Committente',  clienteLines);
         curY = Math.max(endY1, endY2) + 24;
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // REGIME FISCALE (badge)
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        const regimeBadge = isForfettario ? 'Regime Forfettario (Legge 190/2014)' : `Regime Ordinario — IVA ${taxRate}%`;
-        const badgeColor  = isForfettario ? '#f59e0b' : ACCENT_COLOR;
-        doc.roundedRect(MARGIN, curY, CONTENT_W, 22, 4).fill(badgeColor + '22');
+        // ── REGIME FISCALE (badge) ────────────────────────────────────────
+        // Per il forfettario: "REGIME IVA NON APPLICABILE" (non la citazione di legge)
+        const regimeBadge = isForfettario
+          ? 'Regime IVA non applicabile'
+          : `Regime Ordinario — IVA ${taxRate}%`;
+        const badgeColor = isForfettario ? '#f59e0b' : ACCENT;
+
+        doc.save().roundedRect(MARGIN, curY, CONTENT_W, 22, 4).fill(badgeColor + '22').restore();
         doc.font('Helvetica-Bold').fontSize(8).fillColor(badgeColor)
            .text(regimeBadge.toUpperCase(), MARGIN + 8, curY + 7, { characterSpacing: 0.8 });
         curY += 36;
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // TABELLA VOCI
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // ── TABELLA VOCI ─────────────────────────────────────────────────
         const COL = {
-          desc:   { x: MARGIN,          w: 200 },
-          qty:    { x: MARGIN + 205,    w: 55  },
-          price:  { x: MARGIN + 265,    w: 80  },
-          iva:    { x: MARGIN + 350,    w: 50  },
-          total:  { x: MARGIN + 405,    w: CONTENT_W - 405 },
+          desc:  { x: MARGIN,         w: 200 },
+          qty:   { x: MARGIN + 205,   w: 55  },
+          price: { x: MARGIN + 265,   w: 80  },
+          iva:   { x: MARGIN + 350,   w: 50  },
+          total: { x: MARGIN + 405,   w: CONTENT_W - 405 },
         };
 
-        // Header row
-        this.rect(doc, MARGIN, curY, CONTENT_W, 22, PRIMARY_COLOR);
-        const headerStyle = { fillColor: '#ffffff', fontSize: 8, font: 'Helvetica-Bold' };
-        const drawHeader = (label: string, x: number, w: number, align: 'left'|'right' = 'left') => {
-          doc.font(headerStyle.font).fontSize(headerStyle.fontSize).fillColor(headerStyle.fillColor)
+        // Header tabella
+        this.rect(doc, MARGIN, curY, CONTENT_W, 22, NAVY);
+        const dh = (label: string, x: number, w: number, align: 'left'|'right' = 'left') =>
+          doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff')
              .text(label, x + 4, curY + 7, { width: w - 8, align });
-        };
-        drawHeader('Descrizione',       COL.desc.x,  COL.desc.w);
-        drawHeader('Q.tà',              COL.qty.x,   COL.qty.w,   'right');
-        drawHeader('Prezzo Un.',        COL.price.x, COL.price.w, 'right');
-        drawHeader('IVA %',             COL.iva.x,   COL.iva.w,   'right');
-        drawHeader('Importo',           COL.total.x, COL.total.w, 'right');
+        dh('Descrizione',  COL.desc.x,  COL.desc.w);
+        dh('Q.tà',         COL.qty.x,   COL.qty.w,   'right');
+        dh('Prezzo Un.',   COL.price.x, COL.price.w, 'right');
+        dh('IVA %',        COL.iva.x,   COL.iva.w,   'right');
+        dh('Importo',      COL.total.x, COL.total.w, 'right');
         curY += 22;
 
-        // Righe
         const items = Array.isArray(invoice.lineItems) && invoice.lineItems.length > 0
           ? invoice.lineItems
           : [{ description: 'Servizi DoFlow', quantity: 1, unitPrice: imponibile, total: imponibile }];
 
         items.forEach((item, idx) => {
-          const rowH = 22;
-          if (idx % 2 === 0) this.rect(doc, MARGIN, curY, CONTENT_W, rowH, LIGHT_GRAY);
+          const rowH    = 22;
           const rowTotal = Number(item.total) || (Number(item.quantity) * Number(item.unitPrice)) || 0;
-
-          doc.font('Helvetica').fontSize(9).fillColor(PRIMARY_COLOR)
-             .text(item.description || '', COL.desc.x + 4, curY + 7, { width: COL.desc.w - 8, ellipsis: true });
-          doc.text(String(item.quantity ?? 1),             COL.qty.x + 4,   curY + 7, { width: COL.qty.w - 8,   align: 'right' });
+          if (idx % 2 === 0) this.rect(doc, MARGIN, curY, CONTENT_W, rowH, LIGHT_GRAY);
+          doc.font('Helvetica').fontSize(9).fillColor(NAVY)
+             .text(item.description || '', COL.desc.x + 4,  curY + 7, { width: COL.desc.w - 8,  ellipsis: true });
+          doc.text(String(item.quantity ?? 1),               COL.qty.x + 4,   curY + 7, { width: COL.qty.w - 8,   align: 'right' });
           doc.text(this.fmtCurrency(Number(item.unitPrice)), COL.price.x + 4, curY + 7, { width: COL.price.w - 8, align: 'right' });
           doc.text(isForfettario ? 'Esente' : `${taxRate}%`, COL.iva.x + 4,   curY + 7, { width: COL.iva.w - 8,   align: 'right' });
-          doc.text(this.fmtCurrency(rowTotal),             COL.total.x + 4, curY + 7, { width: COL.total.w - 8, align: 'right' });
+          doc.text(this.fmtCurrency(rowTotal),               COL.total.x + 4, curY + 7, { width: COL.total.w - 8, align: 'right' });
           curY += rowH;
         });
 
-        // Separatore sotto tabella
         this.rect(doc, MARGIN, curY, CONTENT_W, 1, MID_GRAY);
         curY += 20;
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // BOX TOTALI (in basso a destra)
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // ── BOX TOTALI ───────────────────────────────────────────────────
         const totalsX = W / 2 + 10;
         const totalsW = W - MARGIN - totalsX;
 
-        const drawTotalsRow = (label: string, value: string, bold = false, highlight = false) => {
-          if (highlight) this.rect(doc, totalsX - 8, curY - 2, totalsW + 8, 22, PRIMARY_COLOR);
-          doc.font(bold ? 'Helvetica-Bold' : 'Helvetica')
-             .fontSize(bold ? 10 : 9)
-             .fillColor(highlight ? '#ffffff' : (bold ? PRIMARY_COLOR : TEXT_GRAY))
+        const drawRow = (label: string, value: string, bold = false, highlight = false) => {
+          if (highlight) this.rect(doc, totalsX - 8, curY - 2, totalsW + 8, 22, NAVY);
+          const color = highlight ? '#ffffff' : (bold ? NAVY : TEXT_GRAY);
+          const size  = bold ? 10 : 9;
+          doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(size).fillColor(color)
              .text(label, totalsX, curY, { width: totalsW * 0.55, align: 'left' });
-          doc.font(bold ? 'Helvetica-Bold' : 'Helvetica')
-             .fontSize(bold ? 10 : 9)
-             .fillColor(highlight ? '#ffffff' : (bold ? PRIMARY_COLOR : TEXT_GRAY))
+          doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(size).fillColor(color)
              .text(value, totalsX + totalsW * 0.55, curY, { width: totalsW * 0.45, align: 'right' });
           curY += bold ? 24 : 18;
         };
 
-        drawTotalsRow('Imponibile:',             this.fmtCurrency(imponibile));
-        if (inpsAmount  > 0) drawTotalsRow(`Rivalsa INPS (${inpsRate}%):`,      this.fmtCurrency(inpsAmount));
-        if (!isForfettario)  drawTotalsRow(`IVA (${taxRate}%):`,                this.fmtCurrency(ivaAmount));
-        if (stampAmount > 0) drawTotalsRow('Marca da Bollo:',                   this.fmtCurrency(stampAmount));
+        drawRow('Imponibile:', this.fmtCurrency(imponibile));
+        if (inpsAmount   > 0) drawRow(`Rivalsa INPS (${inpsRate}%):`, this.fmtCurrency(inpsAmount));
+        if (!isForfettario)   drawRow(`IVA (${taxRate}%):`,            this.fmtCurrency(ivaAmount));
+        if (stampAmount  > 0) drawRow('Marca da Bollo:',               this.fmtCurrency(stampAmount));
         if (ritenutaAmount > 0) {
           this.rect(doc, totalsX - 8, curY - 2, totalsW + 8, 18, '#fff7ed');
-          drawTotalsRow(`Ritenuta d'Acconto (${ritenutaRate}%):`, `-${this.fmtCurrency(ritenutaAmount)}`, false, false);
+          drawRow(`Ritenuta d'Acconto (${ritenutaRate}%):`, `-${this.fmtCurrency(ritenutaAmount)}`);
         }
 
         this.rect(doc, totalsX - 8, curY - 2, totalsW + 8, 1, MID_GRAY);
         curY += 6;
-        drawTotalsRow('TOTALE DA PAGARE:', this.fmtCurrency(totaleNetto), true, true);
+        drawRow('TOTALE DA PAGARE:', this.fmtCurrency(totaleNetto), true, true);
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // NOTE / CONDIZIONI
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // ── NOTE ─────────────────────────────────────────────────────────
         curY += 20;
         if (invoice.notes) {
           doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_GRAY)
@@ -267,23 +284,20 @@ export class InvoicePdfService {
           curY += 14;
           doc.font('Helvetica').fontSize(8.5).fillColor(TEXT_GRAY)
              .text(invoice.notes, MARGIN, curY, { width: W / 2 - 20 });
-          curY += 30;
         }
 
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-        // FOOTER con diciture legali
-        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // ── FOOTER ───────────────────────────────────────────────────────
         const footerY = H - 72;
         this.rect(doc, 0, footerY, W, 1, MID_GRAY);
 
         let legalText = '';
-
         if (isForfettario) {
+          // Dicitura corretta: non cita la Legge ma descrive il regime
           legalText =
-            'Operazione in franchigia da IVA ai sensi della Legge 190/2014 e successive modifiche. ' +
+            'Operazione effettuata da soggetto in regime fiscale di vantaggio — IVA non applicabile. ' +
             (stampAmount > 0
-              ? 'Imposta di bollo assolta sull\'originale ai sensi del D.P.R. 642/1972.'
-              : 'Importo non soggetto a marca da bollo (imponibile ≤ €77,47).');
+              ? 'Imposta di bollo assolta sull\'originale (D.P.R. 642/1972).'
+              : 'Documento non soggetto a marca da bollo (importo ≤ €77,47).');
         } else {
           legalText = `Documento soggetto ad IVA al ${taxRate}% ai sensi del D.P.R. 633/1972.`;
           if (ritenutaAmount > 0)
@@ -292,10 +306,9 @@ export class InvoicePdfService {
 
         doc.font('Helvetica').fontSize(7).fillColor(TEXT_GRAY)
            .text(legalText, MARGIN, footerY + 10, { width: CONTENT_W * 0.75, lineGap: 2 });
-
         doc.font('Helvetica').fontSize(7).fillColor(TEXT_GRAY)
-           .text(`${EMITTENTE.nome} — ${EMITTENTE.piva}`, MARGIN, footerY + 38, { align: 'center', width: CONTENT_W });
-        doc.text('Documento generato da DoFlow PaaS', MARGIN, footerY + 50, { align: 'center', width: CONTENT_W });
+           .text(`${EMITTENTE.nome} — P.IVA ${EMITTENTE.piva}`, MARGIN, footerY + 38, { align: 'center', width: CONTENT_W });
+        doc.text('Documento generato da DoFlow', MARGIN, footerY + 50, { align: 'center', width: CONTENT_W });
 
         doc.end();
       } catch (err) {
