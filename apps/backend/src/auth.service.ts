@@ -6,6 +6,7 @@ import * as jwt from 'jsonwebtoken';
 import { authenticator } from '@otplib/preset-default';
 import { toDataURL } from 'qrcode';
 import { Role } from './roles';
+import { safeSchemaOrPublic } from './common/schema.utils';
 
 type JwtPayload = {
   sub: any;
@@ -13,16 +14,15 @@ type JwtPayload = {
   tenantId: string;
   tenantSlug: string;
   role: Role;
-  authStage?: 'FULL' | 'MFA_PENDING' | 'MFA_SETUP_NEEDED'; 
+  authStage?: 'FULL' | 'MFA_PENDING' | 'MFA_SETUP_NEEDED';
   mfa_required?: boolean;
 };
 
-function safeSchema(input: string): string {
-  const s = String(input || '').trim().toLowerCase();
-  if (!s) return 'public';
-  if (!/^[a-z0-9_ -]+$/.test(s)) return 'public';
-  return s;
-}
+// safeSchema è importata da common/schema.utils — NON usare implementazioni locali.
+// safeSchemaOrPublic: fallback silenzioso a 'public' (solo per routing/middleware).
+// In AuthService usiamo sempre safeSchemaOrPublic perché il tenantId
+// può lecitamente essere 'public' per superadmin.
+const safeSchema = safeSchemaOrPublic;
 
 @Injectable()
 export class AuthService {

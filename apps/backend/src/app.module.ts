@@ -127,10 +127,19 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET') || 'SECRET_DA_CONFIGURARE',
-        signOptions: { expiresIn: '1d' },
-      }),
+      useFactory: async (configService: ConfigService) => {
+        const secret = configService.get<string>('JWT_SECRET');
+        if (!secret) {
+          throw new Error(
+            '[AppModule] FATAL: JWT_SECRET is not set. ' +
+            'Set it in your .env file before starting the server.',
+          );
+        }
+        return {
+          secret,
+          signOptions: { expiresIn: '1d' },
+        };
+      },
     }),
 
     MailModule,

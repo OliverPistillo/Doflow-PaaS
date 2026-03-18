@@ -8,7 +8,7 @@ import {
 import { Request, Response } from 'express';
 import { DataSource } from 'typeorm';
 import { randomBytes, createHash } from 'crypto';
-import bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcryptjs'; // namespace import — sicuro con qualsiasi bundler/tsconfig
 import { MailService } from './mail/mail.service';
 
 function getTenantId(req: Request): string {
@@ -50,7 +50,7 @@ export class AuthPasswordController {
 
     // verifica esistenza utente nel tenant
     const userRows = await conn.query(
-      `select id, email from ${tenantId}.users where lower(email) = $1 limit 1`,
+      `select id, email from "${tenantId}".users where lower(email) = $1 limit 1`,
       [email],
     );
 
@@ -66,7 +66,7 @@ export class AuthPasswordController {
 
     await conn.query(
       `
-      insert into ${tenantId}.password_reset_tokens
+      insert into "${tenantId}".password_reset_tokens
       (token_hash, email, created_at, expires_at)
       values ($1, $2, $3, $4)
       `,
@@ -134,7 +134,7 @@ export class AuthPasswordController {
     const rows = await conn.query(
       `
       select id, email, created_at, expires_at, used_at, invalidated_at
-      from ${tenantId}.password_reset_tokens
+      from "${tenantId}".password_reset_tokens
       where token_hash = $1
       order by id desc
       limit 1
@@ -166,7 +166,7 @@ export class AuthPasswordController {
     // 🔧 QUI il fix: niente updated_at (la colonna non esiste)
     await conn.query(
       `
-      update ${tenantId}.users
+      update "${tenantId}".users
       set password_hash = $1
       where lower(email) = $2
       `,
@@ -175,7 +175,7 @@ export class AuthPasswordController {
 
     await conn.query(
       `
-      update ${tenantId}.password_reset_tokens
+      update "${tenantId}".password_reset_tokens
       set used_at = $1
       where id = $2
       `,

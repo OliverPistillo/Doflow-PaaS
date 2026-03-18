@@ -9,3 +9,14 @@ docker-data/
 coverage/
 .ignored_node_modules/
 .vscode
+
+# Certificati TLS e chiavi private — NON committare mai in Git
+# Se trovi *.pem nella history: git filter-repo --path-glob '*.pem' --invert-paths
+infra/certbot/conf/live/
+infra/certbot/conf/archive/
+infra/certbot/conf/accounts/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx

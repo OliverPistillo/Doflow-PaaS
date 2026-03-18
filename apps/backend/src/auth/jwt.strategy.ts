@@ -7,11 +7,20 @@ import { ConfigService } from '@nestjs/config';
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(configService: ConfigService) {
+    const secret = configService.get<string>('JWT_SECRET');
+    if (!secret) {
+      // Blocca il boot dell'applicazione se JWT_SECRET non è configurato.
+      // Non usare mai un fallback hardcoded: chiunque potrebbe forgiare token validi.
+      throw new Error(
+        '[JwtStrategy] FATAL: JWT_SECRET is not set. ' +
+        'Set it in your .env file or environment before starting the server.',
+      );
+    }
+
     super({
-      // Legge il token dall'header: Authorization: Bearer <token>
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET') || 'SECRET_DA_CONFIGURARE',
+      secretOrKey: secret,
     });
   }
 

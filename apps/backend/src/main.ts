@@ -68,9 +68,22 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  // 4. CORS (Configurazione permissiva)
+  // 4. CORS — whitelist esplicita. origin: true è pericoloso con credentials: true
+  //    perché permette a qualsiasi sito di fare richieste autenticate all'API.
+  const allowedOrigins = (process.env.CORS_ORIGINS ?? 'https://app.doflow.it')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: true,
+    origin: (origin, callback) => {
+      // Permetti richieste server-to-server (origin undefined) e origini in whitelist
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS: origin '${origin}' non autorizzata`));
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
@@ -81,7 +94,7 @@ async function bootstrap() {
       'x-doflow-pathname',
       'Accept'
     ],
-    exposedHeaders: ['Content-Length', 'X-RateLimit-Remaining', 'Retry-After'], // Aggiunto per Traffic Control
+    exposedHeaders: ['Content-Length', 'X-RateLimit-Remaining', 'Retry-After'],
     maxAge: 86400,
   });
 
