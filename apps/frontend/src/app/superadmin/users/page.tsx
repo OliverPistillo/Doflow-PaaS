@@ -76,7 +76,7 @@ type AuditRow = {
   action: string;
   actor_email: string | null;
   target_email: string | null;
-  metadata: any;
+  metadata: Record<string, unknown>;
   created_at: string;
 };
 
@@ -121,7 +121,7 @@ type UsersKpiResponse = {
 const AUDIT_COLOR: Record<string, string> = {
   RESET_PASSWORD: "bg-amber-100 text-amber-800 border-amber-200",
   TENANT_USER_CREATED: "bg-green-100 text-green-800 border-green-200",
-  TENANT_USER_UPDATED: "bg-indigo-100 text-indigo-800 border-indigo-200",
+  TENANT_USER_UPDATED: "bg-primary/10 text-primary border-primary/20",
   GLOBAL_USER_UPDATED: "bg-purple-100 text-purple-800 border-purple-200",
   USER_SUSPENDED: "bg-red-100 text-red-800 border-red-200",
   MFA_ENABLED: "bg-sky-100 text-sky-800 border-sky-200",
@@ -134,7 +134,7 @@ function RoleBadge({ role }: { role: string }) {
     r === "superadmin" || r === "owner"
       ? "bg-red-50 text-red-700 border-red-200"
       : r === "admin"
-      ? "bg-indigo-50 text-primary border-indigo-200"
+      ? "bg-primary/10 text-primary border-primary/20"
       : r === "manager"
       ? "bg-amber-50 text-amber-800 border-amber-200"
       : "bg-muted text-muted-foreground border-border";
@@ -149,7 +149,7 @@ function RoleBadge({ role }: { role: string }) {
 function fmtDate(v: string) {
   try {
     return new Date(v).toLocaleString();
-  } catch {
+  } catch (e: unknown) {
     return v;
   }
 }
@@ -243,11 +243,11 @@ export default function SuperadminUsersPage() {
         const firstActive = list.find((t) => t.is_active) ?? list[0];
         if (firstActive?.id) setTargetTenantId(firstActive.id);
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       setTenants([]);
       toast({
         title: "Errore",
-        description: e?.message || "Impossibile caricare la lista tenant",
+        description: e instanceof Error ? e.message : "Impossibile caricare la lista tenant",
         variant: "destructive",
       });
     } finally {
@@ -305,10 +305,10 @@ export default function SuperadminUsersPage() {
 
       setUsers(Array.isArray(data?.users) ? data.users : []);
       setTotal(Number(data?.total ?? 0));
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: "Errore",
-        description: e?.message || "Impossibile caricare utenti",
+        description: e instanceof Error ? e.message : "Impossibile caricare utenti",
         variant: "destructive",
       });
       setUsers([]);
@@ -332,10 +332,10 @@ export default function SuperadminUsersPage() {
 
       const data = await apiFetch<UsersKpiResponse>(`/superadmin/users/kpi?${qs}`);
       setKpi(data);
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: "Errore KPI",
-        description: e?.message || "Impossibile caricare KPI utenti",
+        description: e instanceof Error ? e.message : "Impossibile caricare KPI utenti",
         variant: "destructive",
       });
       setKpi(null);
@@ -354,7 +354,7 @@ export default function SuperadminUsersPage() {
        ACTIONS
    ======================================================= */
 
-  const patchUser = async (id: string, patch: any) => {
+  const patchUser = async (id: string, patch: Record<string, unknown>) => {
     try {
       // ✅ FIX: Patch dinamico. Se siamo in tenant mode, usiamo l'endpoint tenant
       if (activeTab === "tenant") {
@@ -370,10 +370,10 @@ export default function SuperadminUsersPage() {
         });
       }
       await loadUsers();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: "Errore",
-        description: e?.message || "Operazione fallita",
+        description: e instanceof Error ? e.message : "Operazione fallita",
         variant: "destructive",
       });
       throw e;
@@ -395,7 +395,7 @@ export default function SuperadminUsersPage() {
         title: "Aggiornato",
         description: `MFA ${!currentVal ? "abilitato" : "disabilitato"} per ${u.email}`,
       });
-    } catch {
+    } catch (e: unknown) {
       // toast gestito in patchUser
     }
   };
@@ -411,11 +411,11 @@ export default function SuperadminUsersPage() {
 
       const data = await apiFetch<{ logs: AuditRow[] }>(`/superadmin/audit?${qs}`);
       setAudit(Array.isArray(data?.logs) ? data.logs : []);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setAudit([]);
       toast({
         title: "Errore Audit",
-        description: e?.message || "Impossibile caricare audit log",
+        description: e instanceof Error ? e.message : "Impossibile caricare audit log",
         variant: "destructive",
       });
     } finally {
@@ -454,10 +454,10 @@ export default function SuperadminUsersPage() {
 
       setResetResult(res.tempPassword);
       await loadUsers();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: "Errore",
-        description: e?.message || "Reset password fallito",
+        description: e instanceof Error ? e.message : "Reset password fallito",
         variant: "destructive",
       });
     }
@@ -485,7 +485,7 @@ export default function SuperadminUsersPage() {
 
     setCreating(true);
     try {
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         email: createEmail,
         role: createRole,
         mfa_enabled: createMfa,
@@ -521,10 +521,10 @@ export default function SuperadminUsersPage() {
 
       await loadUsers();
       await loadKpi();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: "Errore",
-        description: e?.message || "Creazione utente fallita",
+        description: e instanceof Error ? e.message : "Creazione utente fallita",
         variant: "destructive",
       });
     } finally {
@@ -564,7 +564,7 @@ export default function SuperadminUsersPage() {
       <Tabs
         value={activeTab}
         onValueChange={(v) => {
-          setActiveTab(v as any);
+          setActiveTab(v as "global" | "tenant");
           setPage(1);
           if (v === "tenant" && (targetTenantId === "__all__" || !targetTenantId)) {
             const first = tenants.find((t) => t.is_active) ?? tenants[0];
@@ -780,7 +780,7 @@ export default function SuperadminUsersPage() {
                     <th className="px-4 py-3 text-right">Nuovi</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-border">
                   {(kpi?.kpiByTenant || []).map((t) => (
                     <tr
                       key={t.tenant_id}
@@ -1065,7 +1065,7 @@ export default function SuperadminUsersPage() {
 
               <div>
                 <div className="text-sm font-bold text-muted-foreground">Metodo di accesso</div>
-                <Select value={accessMode} onValueChange={(v) => setAccessMode(v as any)}>
+                <Select value={accessMode} onValueChange={(v) => setAccessMode(v as "invite" | "password")}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -1130,7 +1130,7 @@ export default function SuperadminUsersPage() {
               </p>
             ) : (
               <div className="space-y-2">
-                <div className="bg-slate-900 text-green-400 font-mono p-4 rounded text-center text-lg select-all">
+                <div className="bg-foreground text-green-400 font-mono p-4 rounded text-center text-lg select-all">
                   {resetResult}
                 </div>
                 <p className="text-xs text-muted-foreground">

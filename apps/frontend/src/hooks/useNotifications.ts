@@ -11,7 +11,7 @@ export type HelloEvent = {
 export type NotificationEvent = {
   type: 'tenant_notification' | 'user_notification' | 'system_alert';
   channel: string;
-  payload: any;
+  payload: Record<string, unknown>;
 };
 
 export type RealtimeEvent = HelloEvent | NotificationEvent;
@@ -111,7 +111,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
   }, [enabled, onEvent]);
 
   // Utility per inviare messaggi (es. Ping manuale)
-  const sendMessage = useCallback((data: any) => {
+  const sendMessage = useCallback((data: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify(data));
     } else {

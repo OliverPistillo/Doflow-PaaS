@@ -54,7 +54,7 @@ const INIT_DEALS: Deal[] = [
 ];
 
 const STAGES: { key: Stage; label: string; color: string; dotColor: string }[] = [
-  { key: "nuovo",       label: "Nuovo",        color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",   dotColor: "bg-slate-400" },
+  { key: "nuovo",       label: "Nuovo",        color: "bg-muted/10 text-foreground dark:bg-muted dark:text-muted-foreground/50",   dotColor: "bg-muted/40" },
   { key: "contatto",    label: "Contattato",   color: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300",       dotColor: "bg-sky-500" },
   { key: "proposta",    label: "Proposta",     color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300", dotColor: "bg-amber-500" },
   { key: "negoziazione",label: "Negoziazione", color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300", dotColor: "bg-orange-500" },
@@ -123,7 +123,7 @@ export default function DealsPage() {
             {view === "kanban" ? <List className="h-4 w-4 mr-1.5" /> : <KanbanSquare className="h-4 w-4 mr-1.5" />}
             {view === "kanban" ? "Lista" : "Kanban"}
           </Button>
-          <Button onClick={() => setShowCreate(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white" size="sm">
+          <Button onClick={() => setShowCreate(true)} className="bg-primary hover:bg-primary/90 text-white" size="sm">
             <Plus className="h-4 w-4 mr-1.5" /> Nuova Deal
           </Button>
         </div>
@@ -132,21 +132,24 @@ export default function DealsPage() {
       {/* KPI Strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Pipeline Totale", value: fmt(pipelineTotal), icon: DollarSign, color: "indigo" },
-          { label: "Deal Vinte", value: fmt(wonTotal), icon: TrendingUp, color: "emerald" },
-          { label: "Valore Pesato", value: fmt(weightedTotal), icon: Target, color: "amber" },
-          { label: "Deal Attive", value: String(filtered.filter((d) => !["vinto","perso"].includes(d.stage)).length), icon: Users, color: "sky" },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <Card key={label}>
-            <CardContent className="pt-4 pb-3 px-4">
-              <div className={`h-8 w-8 rounded-lg bg-${color}-100 dark:bg-${color}-900/20 flex items-center justify-center mb-2`}>
-                <Icon className={`h-4 w-4 text-${color}-600 dark:text-${color}-400`} />
-              </div>
-              <div className="text-xl font-bold">{value}</div>
-              <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
-            </CardContent>
-          </Card>
-        ))}
+          { label: "Pipeline Totale", value: fmt(pipelineTotal), icon: DollarSign, bg: "bg-primary/10", text: "text-primary" },
+          { label: "Deal Vinte", value: fmt(wonTotal), icon: TrendingUp, bg: "bg-chart-2/10", text: "text-chart-2" },
+          { label: "Valore Pesato", value: fmt(weightedTotal), icon: Target, bg: "bg-chart-5/10", text: "text-chart-5" },
+          { label: "Deal Attive", value: String(filtered.filter((d) => !["vinto","perso"].includes(d.stage)).length), icon: Users, bg: "bg-chart-3/10", text: "text-chart-3" },
+        ].map((item) => {
+          const Icon = item.icon;
+          return (
+            <Card key={item.label}>
+              <CardContent className="pt-4 pb-3 px-4">
+                <div className={`h-8 w-8 rounded-lg flex items-center justify-center mb-2 ${item.bg}`}>
+                  <Icon className={`h-4 w-4 ${item.text}`} />
+                </div>
+                <div className="text-xl font-bold">{item.value}</div>
+                <p className="text-xs text-muted-foreground mt-0.5">{item.label}</p>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {/* Search */}
@@ -164,7 +167,7 @@ export default function DealsPage() {
             return (
               <div
                 key={key}
-                className={cn("flex-shrink-0 w-64 rounded-xl transition-colors", dragOverStage === key ? "bg-indigo-50 dark:bg-indigo-950/20" : "")}
+                className={cn("flex-shrink-0 w-64 rounded-xl transition-colors", dragOverStage === key ? "bg-primary/5 dark:bg-primary/5" : "")}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(key); }}
                 onDragLeave={() => setDragOver(null)}
                 onDrop={() => { if (draggedId != null) { moveStage(draggedId, key); setDraggedId(null); setDragOver(null); } }}
@@ -192,7 +195,7 @@ export default function DealsPage() {
                         onDragEnd={() => { setDraggedId(null); setDragOver(null); }}
                         className={cn(
                           "bg-card border rounded-xl p-3.5 cursor-grab active:cursor-grabbing transition-all duration-150",
-                          draggedId === deal.id ? "opacity-50 border-indigo-400" : "hover:border-indigo-300 dark:hover:border-indigo-700",
+                          draggedId === deal.id ? "opacity-50 border-primary/70" : "hover:border-primary/50 dark:hover:border-primary/70",
                         )}
                       >
                         <div className="flex justify-between items-start gap-2 mb-2">
@@ -206,16 +209,16 @@ export default function DealsPage() {
                         </div>
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-base font-bold">{fmt(deal.value)}</span>
-                          <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">{deal.probability}%</span>
+                          <span className="text-xs font-semibold text-primary dark:text-primary/70">{deal.probability}%</span>
                         </div>
                         <Progress
                           value={deal.probability}
-                          className={cn("h-1 mb-3", deal.probability >= 70 ? "[&>div]:bg-emerald-500" : deal.probability >= 40 ? "[&>div]:bg-amber-500" : "[&>div]:bg-indigo-500")}
+                          className={cn("h-1 mb-3", deal.probability >= 70 ? "[&>div]:bg-emerald-500" : deal.probability >= 40 ? "[&>div]:bg-amber-500" : "[&>div]:bg-primary")}
                         />
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5">
                             <Avatar className="h-5 w-5">
-                              <AvatarFallback className="text-[9px] bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+                              <AvatarFallback className="text-[9px] bg-primary/10 text-primary dark:bg-primary/5 dark:text-primary">
                                 {deal.owner.split(" ").map((w) => w[0]).join("")}
                               </AvatarFallback>
                             </Avatar>
@@ -271,7 +274,7 @@ export default function DealsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <Progress value={deal.probability} className="h-1.5 w-16 [&>div]:bg-indigo-500" />
+                          <Progress value={deal.probability} className="h-1.5 w-16 [&>div]:bg-primary" />
                           <span className="text-xs font-semibold">{deal.probability}%</span>
                         </div>
                       </td>
@@ -281,7 +284,7 @@ export default function DealsPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1.5">
                           <Avatar className="h-6 w-6">
-                            <AvatarFallback className="text-[10px] bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+                            <AvatarFallback className="text-[10px] bg-primary/10 text-primary dark:bg-primary/5 dark:text-primary">
                               {deal.owner.split(" ").map((w) => w[0]).join("")}
                             </AvatarFallback>
                           </Avatar>
@@ -347,7 +350,7 @@ export default function DealsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Annulla</Button>
-            <Button onClick={handleCreate} disabled={!newDeal.title.trim()} className="bg-indigo-600 hover:bg-indigo-700 text-white">Crea Deal</Button>
+            <Button onClick={handleCreate} disabled={!newDeal.title.trim()} className="bg-primary hover:bg-primary/90 text-white">Crea Deal</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -28,6 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
+import { PageShell, PageHeader, TableLoadingState, ErrorState } from "@/components/ui/page-shell";
 type ProductType = "servizio" | "prodotto";
 
 interface Product {
@@ -79,24 +80,20 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="flex-1 space-y-5 p-4 md:p-6 pt-4 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Catalogo Prodotti</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">{products.length} prodotti e servizi</p>
-        </div>
-        <div className="flex gap-2">
+    <PageShell>
+      <PageHeader
+        title="Catalogo Prodotti"
+        description={`${products.length} prodotti e servizi`}
+        actions={<div className="flex gap-2">
           <Button variant="outline" size="sm"><Upload className="h-4 w-4 mr-1.5" /> Importa</Button>
-          <Button onClick={() => setCreate(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white" size="sm">
-            <Plus className="h-4 w-4 mr-1.5" /> Nuovo Prodotto
-          </Button>
-        </div>
-      </div>
+          <Button onClick={() => setCreate(true)} className="bg-primary hover:bg-primary/90 text-white" size="sm"><Plus className="h-4 w-4 mr-1.5" /> Nuovo Prodotto</Button>
+        </div>}
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: "Totali", value: products.length, color: "", icon: Package },
-          { label: "Servizi", value: products.filter((p) => p.type === "servizio").length, color: "text-indigo-600 dark:text-indigo-400", icon: Tag },
+          { label: "Servizi", value: products.filter((p) => p.type === "servizio").length, color: "text-primary dark:text-primary/70", icon: Tag },
           { label: "Prodotti", value: products.filter((p) => p.type === "prodotto").length, color: "text-emerald-600 dark:text-emerald-400", icon: Box },
           { label: "Categorie", value: CATEGORIES.length, color: "text-amber-600 dark:text-amber-400", icon: Filter },
         ].map(({ label, value, color, icon: Icon }) => (
@@ -165,7 +162,7 @@ export default function ProductsPage() {
                   <TableCell className="font-mono text-xs text-muted-foreground">{p.sku}</TableCell>
                   <TableCell><Badge variant="secondary" className="text-xs">{p.category}</Badge></TableCell>
                   <TableCell>
-                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${p.type === "servizio" ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"}`}>
+                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${p.type === "servizio" ? "bg-primary/10 text-primary dark:bg-primary/5 dark:text-primary/70" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"}`}>
                       {p.type === "servizio" ? "Servizio" : "Prodotto"}
                     </span>
                   </TableCell>
@@ -194,7 +191,7 @@ export default function ProductsPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map((p) => (
-            <Card key={p.id} className="group hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors">
+            <Card key={p.id} className="group hover:border-primary/50 dark:hover:border-primary/70 transition-colors">
               <CardContent className="pt-5 pb-4 px-5">
                 <div className="text-4xl mb-3">{p.image}</div>
                 <div className="font-semibold mb-1">{p.name}</div>
@@ -235,10 +232,10 @@ export default function ProductsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreate(false)}>Annulla</Button>
-            <Button onClick={handleCreate} disabled={!form.name.trim()} className="bg-indigo-600 hover:bg-indigo-700 text-white">Aggiungi</Button>
+            <Button onClick={handleCreate} disabled={!form.name.trim()} className="bg-primary hover:bg-primary/90 text-white">Aggiungi</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }

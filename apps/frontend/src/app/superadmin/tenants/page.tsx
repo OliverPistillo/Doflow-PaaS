@@ -174,7 +174,7 @@ export default function TenantsPage() {
     setFetchState({ status: "loading" });
     try {
       // FIX: Rimosso /v2/ per uniformità
-      const data = await apiFetch<any>("/superadmin/tenants");
+      const data = await apiFetch<Record<string, unknown>>("/superadmin/tenants");
       const list = Array.isArray(data?.tenants) ? data.tenants : [];
 
       setTenants(list);
@@ -187,8 +187,8 @@ export default function TenantsPage() {
           description: `Risposta in modalità fallback (${data.warning}).`,
         });
       }
-    } catch (e: any) {
-      const msg = e?.message || "Impossibile caricare i tenant";
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Impossibile caricare i tenant";
       setTenants([]);
       setFetchState({ status: "degraded", message: msg });
 
@@ -224,8 +224,8 @@ export default function TenantsPage() {
       });
       toast({ title: "Aggiornato", description: `Tenant ${!currentStatus ? 'attivato' : 'sospeso'}.` });
       loadTenants();
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      toast({ title: "Errore", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     }
   };
 
@@ -269,10 +269,11 @@ export default function TenantsPage() {
       setIsCreateOpen(false);
       setNewTenant({ name: "", slug: "", email: "", plan: "STARTER" });
       loadTenants();
-    } catch (e: any) {
-      console.error(e);
-      let errorMessage = e.message || "Impossibile creare il tenant.";
-      if (e.message && Array.isArray(e.message)) errorMessage = e.message.join(", ");
+    } catch (e: unknown) {
+      console.error(e instanceof Error ? e.message : String(e));
+      const eMsg = e instanceof Error ? e.message : String(e);
+      let errorMessage = eMsg || "Impossibile creare il tenant.";
+      if (Array.isArray(eMsg)) errorMessage = eMsg;
 
       toast({
         title: "Errore creazione",
@@ -302,10 +303,10 @@ export default function TenantsPage() {
         title: "Sessione avviata",
         description: `Accesso fantasma su ${data.redirectUrl}`,
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: "Errore",
-        description: e?.message || "Impossibile impersonare l'utente.",
+        description: e instanceof Error ? e.message : "Impossibile impersonare l'utente.",
         variant: "destructive",
       });
     }
@@ -328,10 +329,10 @@ export default function TenantsPage() {
         title: "Successo",
         description: "Password rigenerata con successo.",
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: "Errore",
-        description: e?.message || "Reset fallito.",
+        description: e instanceof Error ? e.message : "Reset fallito.",
         variant: "destructive",
       });
     }
@@ -366,10 +367,10 @@ export default function TenantsPage() {
         variant: "destructive"
       });
       loadTenants();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: "Errore Eliminazione",
-        description: e?.message || "Impossibile eliminare il tenant.",
+        description: e instanceof Error ? e.message : "Impossibile eliminare il tenant.",
         variant: "destructive",
       });
     }
@@ -444,9 +445,9 @@ export default function TenantsPage() {
                 <div className="flex items-center gap-2">
                 <Filter className="h-4 w-4 text-muted-foreground" />
                 <select
-                    className="h-10 rounded-md border border-border bg-card px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="h-10 rounded-md border border-border bg-card px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                     value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as any)}
+                    onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "suspended")}
                 >
                     <option value="all">Tutti gli stati</option>
                     <option value="active">Solo attivi</option>
@@ -479,7 +480,7 @@ export default function TenantsPage() {
                     </tr>
                 </thead>
 
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-border">
                     {isLoading ? (
                     <tr>
                         <td colSpan={7} className="p-10 text-center text-muted-foreground">
@@ -500,7 +501,7 @@ export default function TenantsPage() {
                         <tr key={t.id} className="hover:bg-muted/40 transition-colors group">
                         <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center text-primary shrink-0 border border-indigo-100">
+                            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0 border border-primary/20">
                                 <Building2 className="h-5 w-5" />
                             </div>
                             <div className="min-w-0">
@@ -517,7 +518,7 @@ export default function TenantsPage() {
                         <td className="px-6 py-4">
                             <Badge
                             variant="outline"
-                            className="border-indigo-200 text-primary bg-indigo-50 font-bold px-3 py-1"
+                            className="border-primary/20 text-primary bg-primary/10 font-bold px-3 py-1"
                             >
                             {t.planTier || "STARTER"}
                             </Badge>
@@ -561,7 +562,7 @@ export default function TenantsPage() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleImpersonate(t.id)}
-                                className="hidden group-hover:flex h-8 text-primary hover:text-primary hover:bg-indigo-50"
+                                className="hidden group-hover:flex h-8 text-primary hover:text-primary hover:bg-primary/10"
                             >
                                 <Eye className="h-4 w-4 mr-2" />
                                 Entra
@@ -635,7 +636,7 @@ export default function TenantsPage() {
             <ActivityFeed />
             
             {/* Box informativo (opzionale) */}
-            <Card className="p-4 bg-indigo-50 border-indigo-100 text-indigo-900">
+            <Card className="p-4 bg-primary/10 border-primary/20 text-primary">
               <h3 className="font-bold flex items-center gap-2 text-sm"><Database className="h-4 w-4" /> System Stats</h3>
               <p className="text-xs mt-2 opacity-80">
                 I tenant attivi sono caricati nella Redis Whitelist per il Fast-Path routing.
@@ -749,7 +750,7 @@ export default function TenantsPage() {
                 </Button>
               </div>
             ) : (
-              <div className="mt-4 bg-slate-900 text-white p-6 rounded-2xl text-center shadow-lg">
+              <div className="mt-4 bg-foreground text-background p-6 rounded-2xl text-center shadow-lg">
                 <div className="text-xs text-muted-foreground mb-2 uppercase tracking-widest font-bold">
                   Credenziali
                 </div>

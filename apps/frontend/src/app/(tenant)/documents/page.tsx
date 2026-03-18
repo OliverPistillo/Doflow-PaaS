@@ -55,7 +55,7 @@ const TYPE_CONFIG: Record<DocType, { icon: React.ComponentType<{className?: stri
   pdf:  { icon: FileText, color: "text-rose-600",    bg: "bg-rose-100 dark:bg-rose-950/40",    label: "PDF" },
   docx: { icon: FileText, color: "text-sky-600",     bg: "bg-sky-100 dark:bg-sky-950/40",      label: "Word" },
   xlsx: { icon: Sheet,    color: "text-emerald-600", bg: "bg-emerald-100 dark:bg-emerald-950/40", label: "Excel" },
-  fig:  { icon: Image,    color: "text-violet-600",  bg: "bg-violet-100 dark:bg-violet-950/40", label: "Figma" },
+  fig:  { icon: Image,    color: "text-chart-4",  bg: "bg-chart-4/10 dark:bg-chart-4/5/40", label: "Figma" },
   zip:  { icon: Package,  color: "text-amber-600",   bg: "bg-amber-100 dark:bg-amber-950/40",   label: "ZIP" },
   pptx: { icon: File,     color: "text-orange-600",  bg: "bg-orange-100 dark:bg-orange-950/40", label: "PowerPoint" },
   png:  { icon: Image,    color: "text-teal-600",    bg: "bg-teal-100 dark:bg-teal-950/40",     label: "PNG" },
@@ -63,8 +63,8 @@ const TYPE_CONFIG: Record<DocType, { icon: React.ComponentType<{className?: stri
 };
 
 const AVATAR_COLORS: Record<string, string> = {
-  "Marco R.": "bg-indigo-500", "Giulia B.": "bg-emerald-500",
-  "Luca P.": "bg-violet-500",  "Sara M.": "bg-rose-500",
+  "Marco R.": "bg-primary", "Giulia B.": "bg-emerald-500",
+  "Luca P.": "bg-chart-4",  "Sara M.": "bg-rose-500",
 };
 
 // ─── Stats ────────────────────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ function FileCard({ doc }: { doc: Doc }) {
           <div className="flex -space-x-1">
             {[doc.owner, ...doc.shared].slice(0, 3).map((u, i) => (
               <Avatar key={i} className="h-5 w-5 border border-background">
-                <AvatarFallback className={cn("text-[8px] font-bold text-white", AVATAR_COLORS[u] ?? "bg-slate-500")}>
+                <AvatarFallback className={cn("text-[8px] font-bold text-white", AVATAR_COLORS[u] ?? "bg-muted/60")}>
                   {u.split(" ").map(p => p[0]).join("")}
                 </AvatarFallback>
               </Avatar>
@@ -152,7 +152,7 @@ function FileRow({ doc }: { doc: Doc }) {
       <div className="hidden sm:flex items-center gap-2 shrink-0">
         {[doc.owner, ...doc.shared].slice(0, 2).map((u, i) => (
           <Avatar key={i} className="h-5 w-5">
-            <AvatarFallback className={cn("text-[8px] font-bold text-white", AVATAR_COLORS[u] ?? "bg-slate-500")}>
+            <AvatarFallback className={cn("text-[8px] font-bold text-white", AVATAR_COLORS[u] ?? "bg-muted/60")}>
               {u.split(" ").map(p => p[0]).join("")}
             </AvatarFallback>
           </Avatar>
@@ -212,7 +212,7 @@ export default function Page() {
             onClick={() => { setFolder(f); setStarred(false); }}
             className={cn(
               "w-full flex items-center justify-between text-left px-3 py-1.5 rounded-lg text-sm transition-colors",
-              folder === f && !starred ? "bg-indigo-100 text-indigo-700 font-medium dark:bg-indigo-950/40 dark:text-indigo-300" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              folder === f && !starred ? "bg-primary/10 text-primary font-medium dark:bg-primary/5 dark:text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
             <span className="flex items-center gap-2"><FolderOpen className="h-3.5 w-3.5" />{f}</span>
@@ -254,7 +254,7 @@ export default function Page() {
                 <List className="h-3.5 w-3.5" />
               </button>
             </div>
-            <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white">
+            <Button size="sm" className="bg-primary hover:bg-primary/90 text-white">
               <Upload className="mr-1.5 h-4 w-4" /> Carica
             </Button>
           </div>
@@ -271,7 +271,7 @@ export default function Page() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
               {filtered.map(d => <FileCard key={d.id} doc={d} />)}
               {/* Upload drop zone */}
-              <div className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border/50 rounded-xl p-4 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/10 transition-colors min-h-[140px]">
+              <div className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border/50 rounded-xl p-4 text-center cursor-pointer hover:border-primary/70 hover:bg-primary/5/30 dark:hover:bg-primary/10/10 transition-colors min-h-[140px]">
                 <Plus className="h-8 w-8 text-muted-foreground/40" />
                 <p className="text-xs text-muted-foreground">Carica file</p>
               </div>

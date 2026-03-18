@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
+import { PageShell, PageHeader, TableLoadingState, ErrorState } from "@/components/ui/page-shell";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type EventType = "meeting" | "call" | "demo" | "deadline" | "internal" | "travel";
@@ -34,11 +35,11 @@ interface CalEvent {
 // ─── Event config ─────────────────────────────────────────────────────────────
 
 const EVENT_CONFIG: Record<EventType, { label: string; color: string; bg: string; border: string; icon: React.ComponentType<{className?: string}> }> = {
-  meeting:  { label: "Meeting",    color: "text-indigo-700",  bg: "bg-indigo-100 dark:bg-indigo-900/40",  border: "border-l-indigo-500",  icon: Users },
+  meeting:  { label: "Meeting",    color: "text-primary",  bg: "bg-primary/10 dark:bg-primary/5",  border: "border-l-primary",  icon: Users },
   call:     { label: "Call",       color: "text-emerald-700", bg: "bg-emerald-100 dark:bg-emerald-900/40",border: "border-l-emerald-500", icon: Phone },
-  demo:     { label: "Demo",       color: "text-violet-700",  bg: "bg-violet-100 dark:bg-violet-900/40",  border: "border-l-violet-500",  icon: Video },
+  demo:     { label: "Demo",       color: "text-chart-4",  bg: "bg-chart-4/10 dark:bg-chart-4/10/40",  border: "border-l-violet-500",  icon: Video },
   deadline: { label: "Scadenza",   color: "text-rose-700",    bg: "bg-rose-100 dark:bg-rose-900/40",      border: "border-l-rose-500",    icon: Flag },
-  internal: { label: "Interno",    color: "text-slate-700",   bg: "bg-slate-100 dark:bg-slate-800/40",    border: "border-l-slate-400",   icon: Briefcase },
+  internal: { label: "Interno",    color: "text-foreground",   bg: "bg-muted/10 dark:bg-muted/40",    border: "border-l-slate-400",   icon: Briefcase },
   travel:   { label: "Viaggio",    color: "text-amber-700",   bg: "bg-amber-100 dark:bg-amber-900/40",    border: "border-l-amber-500",   icon: MapPin },
 };
 
@@ -67,7 +68,7 @@ const EVENTS: CalEvent[] = [
 const MONTHS = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const WEEKDAYS_SHORT = ["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
 const ATTENDEE_COLORS: Record<string, string> = {
-  LF: "bg-indigo-500", SC: "bg-emerald-500", MR: "bg-violet-500",
+  LF: "bg-primary", SC: "bg-emerald-500", MR: "bg-chart-4",
   AD: "bg-rose-500", GE: "bg-orange-500",
 };
 
@@ -137,7 +138,7 @@ function EventModal({ event, onClose }: { event: CalEvent; onClose: () => void }
               <div className="flex items-center gap-1">
                 {event.attendees.map((a) => (
                   <Avatar key={a} className="h-6 w-6">
-                    <AvatarFallback className={cn("text-[9px] font-bold text-white", ATTENDEE_COLORS[a] ?? "bg-slate-500")}>{a}</AvatarFallback>
+                    <AvatarFallback className={cn("text-[9px] font-bold text-white", ATTENDEE_COLORS[a] ?? "bg-muted/60")}>{a}</AvatarFallback>
                   </Avatar>
                 ))}
               </div>
@@ -149,7 +150,7 @@ function EventModal({ event, onClose }: { event: CalEvent; onClose: () => void }
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" size="sm" onClick={onClose}><X className="h-3.5 w-3.5 mr-1" /> Chiudi</Button>
-          <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white">
+          <Button size="sm" className="bg-primary hover:bg-primary/90 text-white">
             <Edit2 className="h-3.5 w-3.5 mr-1" /> Modifica
           </Button>
         </DialogFooter>
@@ -199,17 +200,15 @@ export default function Page() {
   }
 
   return (
-    <div className="flex-1 p-4 md:p-6 animate-in fade-in duration-500 space-y-4">
+    <PageShell>
 
       {selectedEvent && <EventModal event={selectedEvent} onClose={() => setSel(null)} />}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Calendario</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">Pianifica meeting, call e scadenze</p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Calendario"
+        description="Pianifica meeting, call e scadenze"
+        actions={<><div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={goToday} className="text-xs">Oggi</Button>
           <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
             <button
@@ -225,11 +224,11 @@ export default function Page() {
               Settimana
             </button>
           </div>
-          <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white">
+          <Button size="sm" className="bg-primary hover:bg-primary/90 text-white">
             <Plus className="mr-1.5 h-4 w-4" /> Nuovo Evento
           </Button>
-        </div>
-      </div>
+        </div></>}
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
 
@@ -270,7 +269,7 @@ export default function Page() {
                   className={cn(
                     "min-h-[80px] p-1.5 border-b border-r border-border/30 flex flex-col gap-1",
                     !isCurrentMonth && "bg-muted/20",
-                    isToday && "bg-indigo-50/60 dark:bg-indigo-950/20",
+                    isToday && "bg-primary/5/60 dark:bg-primary/5",
                   )}
                 >
                   {cell.day !== null && (
@@ -278,7 +277,7 @@ export default function Page() {
                       <span className={cn(
                         "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full",
                         isToday
-                          ? "bg-indigo-600 text-white"
+                          ? "bg-primary text-white"
                           : "text-foreground hover:bg-muted rounded-full cursor-pointer",
                       )}>
                         {cell.day}
@@ -385,6 +384,6 @@ export default function Page() {
           </Card>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

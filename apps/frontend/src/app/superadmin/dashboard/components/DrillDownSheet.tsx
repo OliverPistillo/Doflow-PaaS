@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
-import { DealEditForm } from "./DealEditForm";
+import { DealEditForm, Deal } from "./DealEditForm";
 import { STAGE_CONFIG, formatCurrency } from "../utils";
 import { DashboardFilters } from "./GlobalFilterBar";
 
@@ -21,10 +21,10 @@ interface DrillDownSheetProps {
 }
 
 export function DrillDownSheet({ cardType, onClose, globalFilters }: DrillDownSheetProps) {
-  const [deals, setDeals] = useState<any[]>([]);
+  const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<"LIST" | "EDIT">("LIST");
-  const [selectedDeal, setSelectedDeal] = useState<any>(null);
+  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
 
   // Titolo dinamico in base alla card selezionata
   const getTitle = () => {
@@ -79,7 +79,7 @@ export function DrillDownSheet({ cardType, onClose, globalFilters }: DrillDownSh
            break;
       }
 
-      const res = await apiFetch<any[]>(`/superadmin/dashboard/deals?${params.toString()}`);
+      const res = await apiFetch<Deal[]>(`/superadmin/dashboard/deals?${params.toString()}`);
       setDeals(res);
     } catch (e) {
       console.error(e);
@@ -106,7 +106,7 @@ export function DrillDownSheet({ cardType, onClose, globalFilters }: DrillDownSh
         {view === "LIST" && (
           <>
             <SheetHeader className="mb-6">
-              <SheetTitle className="text-2xl font-bold text-slate-900">{getTitle()}</SheetTitle>
+              <SheetTitle className="text-2xl font-bold text-foreground">{getTitle()}</SheetTitle>
               <SheetDescription>
                 Lista filtrata in base alla card selezionata e ai filtri globali.
               </SheetDescription>
@@ -114,10 +114,10 @@ export function DrillDownSheet({ cardType, onClose, globalFilters }: DrillDownSh
 
             {loading ? (
               <div className="flex justify-center py-10">
-                <Loader2 className="h-8 w-8 animate-spin text-indigo-600"/>
+                <Loader2 className="h-8 w-8 animate-spin text-primary"/>
               </div>
             ) : deals.length === 0 ? (
-               <div className="text-center py-10 text-slate-500 bg-slate-50 rounded border border-dashed">
+               <div className="text-center py-10 text-muted-foreground bg-muted/5 rounded border border-dashed">
                  Nessun dato trovato per i criteri selezionati.
                </div>
             ) : (
@@ -132,16 +132,16 @@ export function DrillDownSheet({ cardType, onClose, globalFilters }: DrillDownSh
                   </TableHeader>
                   <TableBody>
                     {deals.map((deal) => {
-                       const config = STAGE_CONFIG[deal.stage] || { badgeClass: 'bg-slate-100 text-slate-700', label: deal.stage };
+                       const config = STAGE_CONFIG[deal.stage] || { badgeClass: 'bg-muted/10 text-foreground', label: deal.stage };
                        return (
                         <TableRow 
                           key={deal.id} 
-                          className="cursor-pointer hover:bg-slate-50 transition-colors"
+                          className="cursor-pointer hover:bg-muted/5 transition-colors"
                           onClick={() => { setSelectedDeal(deal); setView("EDIT"); }}
                         >
                           <TableCell>
-                            <div className="font-medium text-slate-900">{deal.name}</div>
-                            <div className="text-xs text-slate-500">{deal.clientName || 'Nessun cliente'}</div>
+                            <div className="font-medium text-foreground">{deal.name}</div>
+                            <div className="text-xs text-muted-foreground">{deal.clientName || 'Nessun cliente'}</div>
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline" className={`font-normal ${config.badgeClass}`}>
@@ -167,7 +167,7 @@ export function DrillDownSheet({ cardType, onClose, globalFilters }: DrillDownSh
              <Button 
                 variant="ghost" 
                 onClick={() => setView("LIST")} 
-                className="mb-4 pl-0 hover:pl-2 text-slate-500 hover:text-indigo-600 transition-all"
+                className="mb-4 pl-0 hover:pl-2 text-muted-foreground hover:text-primary transition-all"
              >
                 <ArrowLeft className="h-4 w-4 mr-2" /> Torna alla lista
              </Button>

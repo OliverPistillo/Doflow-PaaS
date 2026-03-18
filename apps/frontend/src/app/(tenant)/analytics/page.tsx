@@ -27,19 +27,19 @@ const REVENUE_DATA = [
 ];
 
 const PIPELINE_FUNNEL = [
-  { name: "Lead",      value: 248, fill: "#6366f1" },
-  { name: "Contatto",  value: 160, fill: "#8b5cf6" },
-  { name: "Proposta",  value: 95,  fill: "#a78bfa" },
-  { name: "Negoziazione", value: 58, fill: "#c4b5fd" },
-  { name: "Vinto",     value: 31,  fill: "#10b981" },
+  { name: "Lead",      value: 248, fill: "hsl(var(--primary))" },
+  { name: "Contatto",  value: 160, fill: "hsl(var(--chart-4))" },
+  { name: "Proposta",  value: 95,  fill: "hsl(var(--primary) / 0.7)" },
+  { name: "Negoziazione", value: 58, fill: "hsl(var(--primary) / 0.5)" },
+  { name: "Vinto",     value: 31,  fill: "hsl(var(--chart-2))" },
 ];
 
 const SECTOR_DATA = [
-  { name: "Tech & Software", value: 38, fill: "#6366f1" },
-  { name: "Manifattura",     value: 22, fill: "#10b981" },
-  { name: "Servizi Profess.", value: 18, fill: "#f59e0b" },
-  { name: "Retail",          value: 12, fill: "#f43f5e" },
-  { name: "Altro",           value: 10, fill: "#94a3b8" },
+  { name: "Tech & Software", value: 38, fill: "hsl(var(--primary))" },
+  { name: "Manifattura",     value: 22, fill: "hsl(var(--chart-2))" },
+  { name: "Servizi Profess.", value: 18, fill: "hsl(var(--chart-5))" },
+  { name: "Retail",          value: 12, fill: "hsl(var(--chart-4))" },
+  { name: "Altro",           value: 10, fill: "hsl(var(--muted-foreground))" },
 ];
 
 const TOP_CLIENTS = [
@@ -101,12 +101,16 @@ function KpiCard({ title, value, delta, up, icon: Icon, sub, color, bg }: {
 
 // ─── Custom tooltip ───────────────────────────────────────────────────────────
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+// Recharts tooltip shape (avoids any)
+type TooltipPayloadEntry = { name: string; value: number; color: string };
+type TooltipProps = { active?: boolean; payload?: TooltipPayloadEntry[]; label?: string };
+
+const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-popover border border-border rounded-lg px-3 py-2 shadow-lg text-xs">
       <p className="font-semibold mb-1">{label}</p>
-      {payload.map((p: any, i: number) => (
+      {payload.map((p, i) => (
         <div key={i} className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color }} />
           <span className="text-muted-foreground">{p.name}:</span>
@@ -156,10 +160,10 @@ export default function Page() {
 
       {/* KPI row */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-        <KpiCard title="Fatturato Totale"     value="€ 250.100" delta="+14.2%"  up icon={DollarSign}  sub="YTD 2026"                    color="text-indigo-600"  bg="bg-indigo-100 dark:bg-indigo-950/40" />
+        <KpiCard title="Fatturato Totale"     value="€ 250.100" delta="+14.2%"  up icon={DollarSign}  sub="YTD 2026"                    color="text-primary"  bg="bg-primary/10 dark:bg-primary/5" />
         <KpiCard title="Nuovi Lead"           value="269"       delta="+18.5%"  up icon={Users}       sub="negli ultimi 7 mesi"          color="text-emerald-600" bg="bg-emerald-100 dark:bg-emerald-950/40" />
         <KpiCard title="Tasso Conversione"    value="12,5%"     delta="+2.1pp"  up icon={TrendingUp}  sub="lead → cliente"              color="text-amber-600"   bg="bg-amber-100 dark:bg-amber-950/40" />
-        <KpiCard title="Valore Medio Deal"    value="€ 28.400"  delta="-3.2%"  up={false} icon={BarChart3} sub="deal chiusi nel periodo" color="text-violet-600"  bg="bg-violet-100 dark:bg-violet-950/40" />
+        <KpiCard title="Valore Medio Deal"    value="€ 28.400"  delta="-3.2%"  up={false} icon={BarChart3} sub="deal chiusi nel periodo" color="text-chart-4"  bg="bg-chart-4/10 dark:bg-chart-4/5/40" />
       </div>
 
       {/* Tabs */}
@@ -218,7 +222,7 @@ export default function Page() {
                     <Pie data={SECTOR_DATA} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} dataKey="value">
                       {SECTOR_DATA.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                     </Pie>
-                    <Tooltip formatter={(v: any) => `${v}%`} />
+                    <Tooltip formatter={(v: number) => `${v}%`} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="space-y-1.5 mt-2">
@@ -289,7 +293,7 @@ export default function Page() {
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
                     <XAxis type="number" tickFormatter={(v) => `${v}gg`} tick={{ fontSize: 11 }} />
                     <YAxis type="category" dataKey="fase" tick={{ fontSize: 10 }} width={70} />
-                    <Tooltip formatter={(v: any) => `${v} giorni`} />
+                    <Tooltip formatter={(v: number) => `${v} giorni`} />
                     <Bar dataKey="giorni" name="Giorni" fill="#6366f1" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>

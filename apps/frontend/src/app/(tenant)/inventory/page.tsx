@@ -85,8 +85,8 @@ function ItemDetail({ item, onClose }: { item: InventoryItem; onClose: () => voi
       <DialogContent className="max-w-md">
         <DialogHeader>
           <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-xl bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center shrink-0">
-              <Package className="h-5 w-5 text-indigo-600" />
+            <div className="h-10 w-10 rounded-xl bg-primary/10 dark:bg-primary/5 flex items-center justify-center shrink-0">
+              <Package className="h-5 w-5 text-primary" />
             </div>
             <div>
               <DialogTitle className="text-base">{item.name}</DialogTitle>
@@ -147,7 +147,7 @@ function ItemDetail({ item, onClose }: { item: InventoryItem; onClose: () => voi
           <Button variant="outline" size="sm">
             <ArrowDown className="mr-1.5 h-3.5 w-3.5 text-rose-500" /> Scarico
           </Button>
-          <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white">
+          <Button size="sm" className="bg-primary hover:bg-primary/90 text-white">
             <ArrowUp className="mr-1.5 h-3.5 w-3.5" /> Carico
           </Button>
         </DialogFooter>
@@ -197,7 +197,7 @@ export default function Page() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm"><Download className="mr-1.5 h-4 w-4" /> Esporta</Button>
-          <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" size="sm">
+          <Button className="bg-primary hover:bg-primary/90 text-white" size="sm">
             <Plus className="mr-1.5 h-4 w-4" /> Nuovo articolo
           </Button>
         </div>
@@ -207,7 +207,7 @@ export default function Page() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: "Articoli totali",  value: String(INVENTORY.length), icon: Package,    color: "text-indigo-600",  bg: "bg-indigo-50 dark:bg-indigo-950/30" },
+            { label: "Articoli totali",  value: String(INVENTORY.length), icon: Package,    color: "text-primary",  bg: "bg-primary/5 dark:bg-primary/5" },
             { label: "Valore magazzino", value: fmt(totalValue),           icon: BarChart2,  color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
             { label: "Alert scorte",     value: String(alertCount),        icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950/30" },
             { label: "Esauriti",         value: String(stockedOut),        icon: PackageX,   color: "text-rose-600",    bg: "bg-rose-50 dark:bg-rose-950/30" },
@@ -255,7 +255,7 @@ export default function Page() {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                 <XAxis dataKey="cat" tick={{ fontSize: 9 }} />
                 <YAxis tickFormatter={v => `€${(v/1000).toFixed(0)}k`} tick={{ fontSize: 9 }} />
-                <Tooltip formatter={(v: any) => fmt(v)} labelFormatter={l => l} />
+                <Tooltip formatter={(v: number) => fmt(v)} labelFormatter={l => l} />
                 <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                   {chartData.map((d, i) => <Cell key={i} fill={d.color} />)}
                 </Bar>

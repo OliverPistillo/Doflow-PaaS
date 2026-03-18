@@ -96,7 +96,7 @@ const DEMO_LEADS: Lead[] = [
 const LEAD_STATUS_CONFIG: Record<LeadStatus, { label: string; color: string; bgColor: string }> = {
   new:       { label: "Nuovo",      color: "text-sky-600 dark:text-sky-400", bgColor: "bg-sky-100 dark:bg-sky-900/30" },
   contacted: { label: "Contattato", color: "text-amber-600 dark:text-amber-400", bgColor: "bg-amber-100 dark:bg-amber-900/30" },
-  qualified: { label: "Qualificato",color: "text-indigo-600 dark:text-indigo-400", bgColor: "bg-indigo-100 dark:bg-indigo-900/30" },
+  qualified: { label: "Qualificato",color: "text-primary dark:text-primary/70", bgColor: "bg-primary/10 dark:bg-primary/5" },
   proposal:  { label: "Proposta",   color: "text-purple-600 dark:text-purple-400", bgColor: "bg-purple-100 dark:bg-purple-900/30" },
   won:       { label: "Vinto",      color: "text-emerald-600 dark:text-emerald-400", bgColor: "bg-emerald-100 dark:bg-emerald-900/30" },
   lost:      { label: "Perso",      color: "text-red-600 dark:text-red-400", bgColor: "bg-red-100 dark:bg-red-900/30" },
@@ -166,7 +166,7 @@ export default function CustomersPage() {
           <Button variant="outline" size="sm">
             <Download className="mr-1.5 h-4 w-4" /> Esporta
           </Button>
-          <Button onClick={() => setShowCreate(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white" size="sm">
+          <Button onClick={() => setShowCreate(true)} className="bg-primary hover:bg-primary/90 text-white" size="sm">
             <UserPlus className="mr-1.5 h-4 w-4" />
             {tab === "users" ? "Nuovo Utente" : "Nuovo Lead"}
           </Button>
@@ -207,18 +207,18 @@ export default function CustomersPage() {
         <TabsContent value="users" className="mt-4">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filteredUsers.map((user) => (
-              <Card key={user.id} className="group hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors">
+              <Card key={user.id} className="group hover:border-primary/50 dark:hover:border-primary/70 transition-colors">
                 <CardContent className="pt-5 pb-4 px-5">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10">
-                        <AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 font-bold text-sm">
+                        <AvatarFallback className="bg-primary/10 text-primary dark:bg-primary/5 dark:text-primary font-bold text-sm">
                           {user.avatar}
                         </AvatarFallback>
                       </Avatar>
                       <div>
                         <div className="font-semibold">{user.name}</div>
-                        <div className="text-xs text-indigo-600 dark:text-indigo-400">{user.role}</div>
+                        <div className="text-xs text-primary dark:text-primary/70">{user.role}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -283,7 +283,7 @@ export default function CustomersPage() {
             </Card>
             <Card>
               <CardContent className="pt-4 pb-3 px-4">
-                <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                <div className="text-2xl font-bold text-primary dark:text-primary/70">
                   €{(pipelineValue / 1000).toFixed(1)}k
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">Pipeline attiva</p>
@@ -442,7 +442,7 @@ export default function CustomersPage() {
                     <p className="text-xs text-muted-foreground mb-1">Score</p>
                     <div className="flex items-center gap-2">
                       <span className="text-xl font-bold">{selectedLead.score}</span>
-                      <Progress value={selectedLead.score} className="h-2 flex-1 [&>div]:bg-indigo-500" />
+                      <Progress value={selectedLead.score} className="h-2 flex-1 [&>div]:bg-primary" />
                     </div>
                   </div>
                 </div>
@@ -484,7 +484,7 @@ export default function CustomersPage() {
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-2">
-                  <Button className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white" size="sm">
+                  <Button className="flex-1 bg-primary hover:bg-primary/90 text-white" size="sm">
                     <Mail className="mr-1.5 h-4 w-4" /> Invia Email
                   </Button>
                   <Button variant="outline" className="flex-1" size="sm">
@@ -549,7 +549,7 @@ export default function CustomersPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Annulla</Button>
-            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" onClick={() => { setShowCreate(false); toast({ title: tab === "users" ? "Utente creato" : "Lead creato" }); }}>
+            <Button className="bg-primary hover:bg-primary/90 text-white" onClick={() => { setShowCreate(false); toast({ title: tab === "users" ? "Utente creato" : "Lead creato" }); }}>
               Crea
             </Button>
           </DialogFooter>

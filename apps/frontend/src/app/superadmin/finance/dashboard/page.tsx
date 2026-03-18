@@ -34,7 +34,7 @@ interface DashboardData {
 }
 
 // Helper formattazione valuta
-const formatCurrency = (value: any): string => {
+const formatCurrency = (value: number | string | null | undefined): string => {
   if (value === undefined || value === null) return "€0,00";
   const val = Array.isArray(value) ? value[0] : value;
   const num = typeof val === 'string' ? parseFloat(val) : val;
@@ -86,11 +86,11 @@ function DrillDownSheet({
                         invoices.map(inv => (
                             <div 
                                 key={inv.id} 
-                                className="bg-card border rounded-lg p-3 shadow-sm hover:shadow-md transition-all flex items-center justify-between group cursor-pointer hover:border-indigo-200"
+                                className="bg-card border rounded-lg p-3 shadow-sm hover:shadow-md transition-all flex items-center justify-between group cursor-pointer hover:border-primary/20"
                                 onClick={() => handleNavigateToInvoice(inv.clientName)}
                             >
                                 <div className="flex items-center gap-3">
-                                    <div className="h-8 w-8 bg-muted/40 rounded flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:bg-indigo-50 transition-colors">
+                                    <div className="h-8 w-8 bg-muted/40 rounded flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 transition-colors">
                                         <FileText className="h-4 w-4" />
                                     </div>
                                     <div>
@@ -294,7 +294,7 @@ export default function FinanceDashboardPage() {
         
         {/* Invoice Status Pie */}
         <Card className="shadow-sm border-border overflow-hidden">
-          <CardHeader className="border-b border-slate-50 bg-muted/40/30">
+          <CardHeader className="border-b border-border bg-muted/30">
             <div className="flex justify-between items-center">
                <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
                  Stato Pagamenti
@@ -350,7 +350,7 @@ export default function FinanceDashboardPage() {
 
         {/* Revenue Line Chart */}
         <Card className="shadow-sm border-border overflow-hidden">
-          <CardHeader className="border-b border-slate-50 bg-muted/40/30">
+          <CardHeader className="border-b border-border bg-muted/30">
             <div className="flex justify-between items-center">
                <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
                  Trend Mensile Ricavi
@@ -378,7 +378,7 @@ export default function FinanceDashboardPage() {
                       />
                       <Tooltip 
                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                        formatter={(value: any) => [formatCurrency(value), "Ricavi"]}
+                        formatter={(value: number) => [formatCurrency(value), "Ricavi"]}
                       />
                       <Line 
                         type="monotone" 
@@ -400,7 +400,7 @@ export default function FinanceDashboardPage() {
 
       {/* Bottom Row - Top Clients */}
       <Card className="shadow-sm border-border overflow-hidden">
-        <CardHeader className="border-b border-slate-50 bg-muted/40/30">
+        <CardHeader className="border-b border-border bg-muted/30">
           <div className="flex justify-between items-center">
              <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
                Top Clienti per Volume d'Affari
@@ -425,7 +425,7 @@ export default function FinanceDashboardPage() {
                       <Tooltip 
                         cursor={{fill: '#f8fafc'}}
                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                        formatter={(value: any) => [formatCurrency(value), "Fatturato"]}
+                        formatter={(value: number) => [formatCurrency(value), "Fatturato"]}
                       />
                       <Bar 
                         dataKey="value" 

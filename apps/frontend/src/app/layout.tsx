@@ -1,4 +1,5 @@
-// Percorso: C:\Doflow\apps\frontend\src\app\layout.tsx
+// Percorso: apps/frontend/src/app/layout.tsx
+// Fix: aggiunto storageKey per persistere dark/light mode in localStorage
 import type { Metadata } from 'next';
 import './globals.css';
 
@@ -21,7 +22,7 @@ const mono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: 'Doflow',
-  description: 'Doflow',
+  description: 'La piattaforma all-in-one per gestire il tuo business.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -32,6 +33,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           attribute="class"
           defaultTheme="system"
           enableSystem
+          disableTransitionOnChange={false}
+          storageKey="doflow_theme"   // ← persiste in localStorage con chiave specifica
         >
           {children}
           <Toaster />

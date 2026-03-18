@@ -104,22 +104,22 @@ const MESSAGES_DATA: Message[] = [
 const LABELS = ["Tutti", "Non letti", "Stellati", "Cliente", "Lead", "Urgente", "Fatturazione", "Completato", "Sistema", "Nuovo"];
 
 const LABEL_COLORS: Record<string, string> = {
-  Cliente:     "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300",
-  Lead:        "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
+  Cliente:     "bg-primary/10 text-primary dark:bg-primary/5 dark:text-primary",
+  Lead:        "bg-chart-4/10 text-chart-4 dark:bg-chart-4/5/40 dark:text-chart-4/70",
   Urgente:     "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
   Fatturazione:"bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
   Completato:  "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
-  Sistema:     "bg-slate-100 text-slate-600 dark:bg-slate-800/40",
+  Sistema:     "bg-muted/10 text-muted-foreground dark:bg-muted/40",
   Importante:  "bg-amber-100 text-amber-700 dark:bg-amber-950/40",
   Nuovo:       "bg-sky-100 text-sky-700 dark:bg-sky-950/40",
 };
 
 const AVATAR_COLORS: Record<string, string> = {
-  "Francesca Romano": "bg-indigo-500", "Alessandro Galli": "bg-violet-500",
+  "Francesca Romano": "bg-primary", "Alessandro Galli": "bg-chart-4",
   "Davide Colombo":   "bg-orange-500", "Elena Ferri":      "bg-rose-500",
   "Chiara Lombardi":  "bg-teal-500",   "Roberto Mazza":    "bg-amber-500",
   "Valentina Ricci":  "bg-sky-500",    "Marco Ferretti":   "bg-emerald-500",
-  "Sistema DoFlow":   "bg-slate-500",
+  "Sistema DoFlow":   "bg-muted/60",
 };
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -172,14 +172,14 @@ export default function Page() {
               className={cn(
                 "flex items-center justify-between px-3 py-1.5 rounded-lg text-sm transition-colors",
                 activeLabel === lbl
-                  ? "bg-indigo-100 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-semibold"
+                  ? "bg-primary/10 dark:bg-primary/5 text-primary dark:text-primary font-semibold"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
               <span>{lbl}</span>
               {count > 0 && (
                 <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center",
-                  lbl === "Non letti" ? "bg-indigo-600 text-white" : "bg-muted text-muted-foreground"
+                  lbl === "Non letti" ? "bg-primary text-white" : "bg-muted text-muted-foreground"
                 )}>{count}</span>
               )}
             </button>
@@ -210,7 +210,7 @@ export default function Page() {
           </div>
           <p className="text-[11px] text-muted-foreground mt-2 px-0.5">
             {filtered.length} {filtered.length === 1 ? "messaggio" : "messaggi"}
-            {unread > 0 && <span className="ml-2 text-indigo-600 font-semibold">{unread} non letti</span>}
+            {unread > 0 && <span className="ml-2 text-primary font-semibold">{unread} non letti</span>}
           </p>
         </div>
 
@@ -228,19 +228,19 @@ export default function Page() {
                 className={cn(
                   "flex items-start gap-3 px-3 py-3 cursor-pointer transition-colors relative",
                   selected?.id === m.id
-                    ? "bg-indigo-50 dark:bg-indigo-950/20"
+                    ? "bg-primary/10 dark:bg-primary/5"
                     : "hover:bg-muted/30",
-                  !m.read && "border-l-2 border-l-indigo-500",
+                  !m.read && "border-l-2 border-l-primary",
                 )}
                 onClick={() => { setSelected(m); markRead(m.id); setShowReply(false); }}
               >
                 {/* Unread dot */}
                 {!m.read && (
-                  <div className="absolute right-3 top-3.5 h-2 w-2 rounded-full bg-indigo-500" />
+                  <div className="absolute right-3 top-3.5 h-2 w-2 rounded-full bg-primary/100" />
                 )}
 
                 <Avatar className="h-8 w-8 shrink-0 mt-0.5">
-                  <AvatarFallback className={cn("text-[10px] font-bold text-white", AVATAR_COLORS[m.from] ?? "bg-slate-500")}>
+                  <AvatarFallback className={cn("text-[10px] font-bold text-white", AVATAR_COLORS[m.from] ?? "bg-muted/60")}>
                     {initials(m.from)}
                   </AvatarFallback>
                 </Avatar>
@@ -319,7 +319,7 @@ export default function Page() {
             {/* Sender card */}
             <div className="flex items-start gap-3 bg-muted/20 rounded-xl p-3">
               <Avatar className="h-10 w-10">
-                <AvatarFallback className={cn("font-bold text-white", AVATAR_COLORS[selected.from] ?? "bg-slate-500")}>
+                <AvatarFallback className={cn("font-bold text-white", AVATAR_COLORS[selected.from] ?? "bg-muted/60")}>
                   {initials(selected.from)}
                 </AvatarFallback>
               </Avatar>
@@ -332,7 +332,7 @@ export default function Page() {
                   <p className="text-xs text-muted-foreground shrink-0 tabular-nums">{selected.date}</p>
                 </div>
                 {selected.hasAttachment && (
-                  <div className="flex items-center gap-1 mt-1.5 text-xs text-indigo-600">
+                  <div className="flex items-center gap-1 mt-1.5 text-xs text-primary">
                     <Paperclip className="h-3 w-3" /> Allegati presenti
                   </div>
                 )}
@@ -370,7 +370,7 @@ export default function Page() {
                   <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">Formatta</Button>
                   <Button variant="ghost" size="sm" className="text-xs text-muted-foreground"><Paperclip className="h-3.5 w-3.5" /></Button>
                 </div>
-                <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white" disabled={!reply.trim()}>
+                <Button size="sm" className="bg-primary hover:bg-primary/90 text-white" disabled={!reply.trim()}>
                   <Send className="mr-1.5 h-4 w-4" /> Invia risposta
                 </Button>
               </div>

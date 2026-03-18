@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
+import { PageShell, PageHeader, TableLoadingState, ErrorState } from "@/components/ui/page-shell";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type InvoiceStatus = "bozza" | "inviata" | "pagata" | "parz_pagata" | "scaduta" | "annullata";
@@ -71,12 +72,12 @@ const INVOICES: Invoice[] = [
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const STATUS_CFG: Record<InvoiceStatus, { label: string; color: string; bg: string; icon: React.ComponentType<{className?: string}> }> = {
-  bozza:       { label: "Bozza",          color: "text-slate-600",   bg: "bg-slate-100 dark:bg-slate-800/40",      icon: Edit2 },
-  inviata:     { label: "Inviata",         color: "text-indigo-600",  bg: "bg-indigo-100 dark:bg-indigo-950/40",    icon: Send },
+  bozza:       { label: "Bozza",          color: "text-muted-foreground",   bg: "bg-muted/10 dark:bg-muted/40",      icon: Edit2 },
+  inviata:     { label: "Inviata",         color: "text-primary",  bg: "bg-primary/10 dark:bg-primary/5",    icon: Send },
   pagata:      { label: "Pagata",          color: "text-emerald-600", bg: "bg-emerald-100 dark:bg-emerald-950/40",  icon: CheckCircle2 },
   parz_pagata: { label: "Parz. pagata",    color: "text-amber-600",   bg: "bg-amber-100 dark:bg-amber-950/40",      icon: Clock },
   scaduta:     { label: "Scaduta",         color: "text-rose-600",    bg: "bg-rose-100 dark:bg-rose-950/40",        icon: AlertTriangle },
-  annullata:   { label: "Annullata",       color: "text-slate-500",   bg: "bg-slate-100 dark:bg-slate-800/30",      icon: XCircle },
+  annullata:   { label: "Annullata",       color: "text-muted-foreground",   bg: "bg-muted/10 dark:bg-muted/30",      icon: XCircle },
 };
 
 const fmt   = (n: number) => `€ ${n.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -103,8 +104,8 @@ function InvoiceSheet({ inv, onClose }: { inv: Invoice; onClose: () => void }) {
       <SheetContent className="w-full sm:w-[520px] overflow-y-auto">
         <SheetHeader className="pb-4">
           <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-xl bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center shrink-0">
-              <Receipt className="h-5 w-5 text-indigo-600" />
+            <div className="h-10 w-10 rounded-xl bg-primary/10 dark:bg-primary/5 flex items-center justify-center shrink-0">
+              <Receipt className="h-5 w-5 text-primary" />
             </div>
             <div className="flex-1">
               <SheetTitle className="text-base">{inv.invoiceNumber}</SheetTitle>
@@ -206,7 +207,7 @@ function InvoiceSheet({ inv, onClose }: { inv: Invoice; onClose: () => void }) {
           <Button variant="outline" size="sm"><Printer className="mr-1.5 h-3.5 w-3.5" /> Stampa</Button>
           <Button variant="outline" size="sm"><Download className="mr-1.5 h-3.5 w-3.5" /> PDF</Button>
           {inv.status === "bozza" && (
-            <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white">
+            <Button size="sm" className="bg-primary hover:bg-primary/90 text-white">
               <Send className="mr-1.5 h-3.5 w-3.5" /> Invia fattura
             </Button>
           )}
@@ -245,30 +246,26 @@ export default function Page() {
   }), [tab, search]);
 
   return (
-    <div className="flex-1 p-4 md:p-6 animate-in fade-in duration-500 space-y-5">
+    <PageShell>
 
       {selected && <InvoiceSheet inv={selected} onClose={() => setSel(null)} />}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Fatture</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {INVOICES.length} fatture · {fmt(totalPaid)} incassato · {fmt(totalPending)} in attesa
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Fatture"
+        description={`${INVOICES.length} fatture · ${fmt(totalPaid)} incassato · ${fmt(totalPending)} in attesa`}
+        actions={<div className="flex items-center gap-2">
           <Button variant="outline" size="sm"><Download className="mr-1.5 h-4 w-4" /> Esporta</Button>
-          <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" size="sm">
+          <Button className="bg-primary hover:bg-primary/90 text-white" size="sm">
             <Plus className="mr-1.5 h-4 w-4" /> Nuova Fattura
           </Button>
-        </div>
-      </div>
+        </div>}
+      />
 
       {/* KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: "Totale fatturato",  value: fmt(totalInvoiced), icon: Receipt,      color: "text-indigo-600",  bg: "bg-indigo-50 dark:bg-indigo-950/30" },
+          { label: "Totale fatturato",  value: fmt(totalInvoiced), icon: Receipt,      color: "text-primary",  bg: "bg-primary/5 dark:bg-primary/5" },
           { label: "Incassato",         value: fmt(totalPaid),     icon: CheckCircle2, color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
           { label: "In attesa",         value: fmt(totalPending),  icon: Clock,        color: "text-amber-600",   bg: "bg-amber-50 dark:bg-amber-950/30" },
           { label: "Scaduto",           value: fmt(totalOverdue),  icon: AlertTriangle,color: "text-rose-600",    bg: "bg-rose-50 dark:bg-rose-950/30" },
@@ -346,7 +343,7 @@ export default function Page() {
                   {/* Title */}
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-indigo-600">{inv.invoiceNumber}</span>
+                      <span className="text-xs font-mono font-bold text-primary">{inv.invoiceNumber}</span>
                       {overdue && <AlertTriangle className="h-3 w-3 text-rose-500" />}
                     </div>
                     <p className="text-sm font-semibold truncate mt-0.5">{inv.title}</p>
@@ -417,6 +414,6 @@ export default function Page() {
           <span className="font-black tabular-nums">{fmt(filtered.reduce((s, i) => s + i.total, 0))}</span>
         </div>
       </Card>
-    </div>
+    </PageShell>
   );
 }

@@ -1,3 +1,6 @@
+// Percorso: apps/frontend/src/app/(tenant)/layout.tsx
+// Aggiunto: SearchTriggerButton Cmd+K nell'header
+
 "use client";
 
 import * as React from "react";
@@ -13,29 +16,38 @@ import { Button } from "@/components/ui/button";
 import { getDoFlowUser } from "@/lib/jwt";
 import { PlanProvider } from "@/contexts/PlanContext";
 import { AppSettingsProvider, useAppSettings } from "@/contexts/AppSettingsContext";
+import { SearchTriggerButton } from "@/components/ui/global-search";
 
 // ─── Inner layout — consuma AppSettingsContext ─────────────────────────────────
 
 function TenantLayoutInner({ children }: { children: React.ReactNode }) {
   const { sidebarVariant, sidebarCollapsible } = useAppSettings();
-
-  // collapsible="none" significa sidebar sempre aperta (layout Default)
   const collapsible = sidebarCollapsible === "none" ? "none" : sidebarCollapsible;
 
   return (
     <SidebarProvider>
       <TenantSidebar variant={sidebarVariant} collapsible={collapsible} />
       <SidebarInset>
+
         {/* ── HEADER ── */}
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur-sm px-4 sticky top-0 z-10">
-          <SidebarTrigger className="-ml-1" />
-          <div className="h-5 w-px bg-border" />
-          <div className="flex-1" />
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/95 backdrop-blur-sm px-4 sticky top-0 z-10">
+          <SidebarTrigger className="-ml-1" aria-label="Toggle menu" />
+          <div className="h-5 w-px bg-border" aria-hidden="true" />
+
+          {/* ✅ Cmd+K Search — visibile da sm in su */}
+          <div className="flex-1">
+            <SearchTriggerButton context="tenant" />
+          </div>
 
           {/* Notifiche */}
-          <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground">
-            <Bell className="h-4 w-4" />
-            <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-rose-500 rounded-full" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative text-muted-foreground hover:text-foreground"
+            aria-label="Notifiche"
+          >
+            <Bell className="h-4 w-4" aria-hidden="true" />
+            <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-rose-500 rounded-full" aria-hidden="true" />
           </Button>
 
           {/* Theme Settings drawer */}

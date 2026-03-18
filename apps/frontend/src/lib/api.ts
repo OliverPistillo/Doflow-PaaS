@@ -104,20 +104,20 @@ export async function apiFetch<T = unknown>(
 
   const text = await res.text();
 
-  let json: any = null;
+  let json: Record<string, unknown> | null = null;
   try {
-    json = text ? JSON.parse(text) : null;
+    json = text ? (JSON.parse(text) as Record<string, unknown>) : null;
   } catch {
     // ignore
   }
 
   if (!res.ok) {
-    const msg = json?.error || json?.message || text || `HTTP ${res.status}`;
-    throw new Error(msg);
+    const msg = json?.error ?? json?.message ?? text ?? `HTTP ${res.status}`;
+    throw new Error(String(msg));
   }
 
   if (json && typeof json === "object" && json.error) {
-    throw new Error(json.error);
+    throw new Error(String(json.error));
   }
 
   return (json ?? (text as unknown)) as T;

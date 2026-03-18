@@ -35,6 +35,7 @@ import { Progress } from "@/components/ui/progress";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
+import { PageShell, PageHeader, TableLoadingState, ErrorState } from "@/components/ui/page-shell";
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type TaskStatus   = "todo" | "in_progress" | "done";
@@ -154,20 +155,16 @@ export default function TasksPage() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex-1 space-y-5 p-4 md:p-6 pt-4 animate-in fade-in duration-500">
+    <PageShell>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Task</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Gestisci e monitora le attività del team
-          </p>
-        </div>
-        <Button onClick={() => setShowCreate(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+      <PageHeader
+        title="Task"
+        description="Gestisci e monitora le attività del team"
+        actions={<><Button onClick={() => setShowCreate(true)} className="bg-primary hover:bg-primary/90 text-white">
           <Plus className="mr-1.5 h-4 w-4" /> Nuovo Task
-        </Button>
-      </div>
+        </Button></>}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -309,7 +306,7 @@ export default function TasksPage() {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Avatar className="h-6 w-6">
-                        <AvatarFallback className="text-[10px] bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+                        <AvatarFallback className="text-[10px] bg-primary/10 text-primary dark:bg-primary/5 dark:text-primary">
                           {task.assignee.split(" ").map((w) => w[0]).join("").slice(0, 2)}
                         </AvatarFallback>
                       </Avatar>
@@ -423,13 +420,13 @@ export default function TasksPage() {
             <Button
               onClick={handleCreate}
               disabled={!newTask.title.trim()}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              className="bg-primary hover:bg-primary/90 text-white"
             >
               Crea Task
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }

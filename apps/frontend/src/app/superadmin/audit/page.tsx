@@ -18,7 +18,7 @@ type AuditRow = {
   actor_role?: string | null;
   target_email?: string | null;
   ip?: string | null;
-  metadata?: any; // JSONB
+  metadata?: Record<string, unknown>; // JSONB
   created_at: string; // ISO
 };
 
@@ -55,7 +55,7 @@ function ActionBadge({ action }: { action: string }) {
       ? "bg-amber-50 border-amber-200 text-amber-800"
       : s === "ok"
       ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-      : "bg-slate-100 border-slate-200 text-slate-700";
+      : "bg-muted/10 border-border/40 text-foreground";
 
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-black border ${cls}`}>
@@ -72,8 +72,8 @@ function DegradedBanner({ message, onRetry }: { message: string; onRetry: () => 
           <AlertTriangle className="h-5 w-5" />
         </div>
         <div className="flex-1">
-          <div className="font-black text-slate-900">Degraded</div>
-          <div className="text-sm text-slate-700 mt-1">{message}</div>
+          <div className="font-black text-foreground">Degraded</div>
+          <div className="text-sm text-foreground mt-1">{message}</div>
           <div className="mt-3">
             <Button variant="outline" onClick={onRetry}>
               <RefreshCw className="mr-2 h-4 w-4" /> Riprova
@@ -102,9 +102,9 @@ export default function AuditPage() {
     try {
       const data = await apiFetch<{ logs: AuditRow[] }>("/superadmin/audit", { method: "GET" });
       setLogs(Array.isArray(data?.logs) ? data.logs : []);
-    } catch (e: any) {
+    } catch (e: unknown) {
       setLogs([]);
-      setDegraded(e?.message || "Audit API non disponibile");
+      setDegraded(e instanceof Error ? e.message : "Audit API non disponibile");
     } finally {
       setLoading(false);
     }
@@ -117,8 +117,10 @@ export default function AuditPage() {
   // 3. Ascolto Eventi Real-time e aggiornamento tabella
   useEffect(() => {
     const lastEvent = events[events.length - 1];
-    if (lastEvent?.type === 'tenant_notification' && (lastEvent.payload as any).type === 'activity_feed_update') {
-        const newLog = (lastEvent.payload as any).payload as AuditRow;
+    if (lastEvent?.type === 'tenant_notification') {
+        const pl = lastEvent.payload as { type?: string; payload?: AuditRow };
+        if (pl.type !== 'activity_feed_update' || !pl.payload) return;
+        const newLog = pl.payload;
         
         // Aggiungi in cima alla lista (senza duplicati)
         setLogs((prev) => {
@@ -266,7 +268,7 @@ export default function AuditPage() {
                       </button>
 
                       {isOpen && (
-                        <pre className="mt-2 text-xs font-mono whitespace-pre-wrap bg-slate-950 text-slate-100 p-3 rounded-xl border border-slate-800 overflow-auto max-h-64">
+                        <pre className="mt-2 text-xs font-mono whitespace-pre-wrap bg-foreground text-background p-3 rounded-xl border border-border overflow-auto max-h-64">
                           {metaStr}
                         </pre>
                       )}

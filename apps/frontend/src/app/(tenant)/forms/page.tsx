@@ -125,21 +125,21 @@ const FIELD_ICONS: Record<FieldType, React.ComponentType<{className?: string}>> 
 };
 
 const FIELD_COLORS: Record<FieldType, string> = {
-  text:     "text-indigo-600",  email:    "text-violet-600", number: "text-amber-600",
-  textarea: "text-slate-600",   select:   "text-teal-600",   checkbox:"text-emerald-600",
+  text:     "text-primary",  email:    "text-chart-4", number: "text-amber-600",
+  textarea: "text-muted-foreground",   select:   "text-teal-600",   checkbox:"text-emerald-600",
   date:     "text-rose-600",    rating:   "text-amber-500",
 };
 
 const STATUS_CFG: Record<FormStatus, { label: string; color: string; bg: string }> = {
   attivo:     { label: "Attivo",     color: "text-emerald-600", bg: "bg-emerald-100 dark:bg-emerald-950/40" },
-  bozza:      { label: "Bozza",      color: "text-slate-600",   bg: "bg-slate-100 dark:bg-slate-800/40" },
+  bozza:      { label: "Bozza",      color: "text-muted-foreground",   bg: "bg-muted/10 dark:bg-muted/40" },
   archiviato: { label: "Archiviato", color: "text-rose-600",    bg: "bg-rose-100 dark:bg-rose-950/40" },
 };
 
 const CAT_COLORS: Record<string, string> = {
-  "Lead Generation": "text-indigo-600 bg-indigo-50 dark:bg-indigo-950/30",
+  "Lead Generation": "text-primary bg-primary/5 dark:bg-primary/5",
   "Post-vendita":    "text-teal-600 bg-teal-50 dark:bg-teal-950/30",
-  Marketing:         "text-violet-600 bg-violet-50 dark:bg-violet-950/30",
+  Marketing:         "text-chart-4 bg-chart-4/5 dark:bg-chart-4/5/30",
   Supporto:          "text-amber-600 bg-amber-50 dark:bg-amber-950/30",
   HR:                "text-rose-600 bg-rose-50 dark:bg-rose-950/30",
 };
@@ -194,16 +194,16 @@ function FormPreview({ form, onClose }: { form: FormDef; onClose: () => void }) 
                 </div>
               );
             })}
-            <Button disabled className="w-full bg-indigo-600 text-white">Invia</Button>
+            <Button disabled className="w-full bg-primary text-white">Invia</Button>
           </TabsContent>
 
           <TabsContent value="stats" className="mt-4">
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: "Visualizzazioni", value: form.views.toLocaleString("it-IT"),      icon: Eye,            color: "text-indigo-600" },
+                { label: "Visualizzazioni", value: form.views.toLocaleString("it-IT"),      icon: Eye,            color: "text-primary" },
                 { label: "Invii",           value: form.submissions.toLocaleString("it-IT"), icon: MousePointerClick, color: "text-emerald-600" },
                 { label: "Conversione",     value: `${form.conversionRate}%`,                icon: TrendingUp,     color: "text-amber-600" },
-                { label: "Campi totali",    value: String(form.fields.length),               icon: FormInput,      color: "text-violet-600" },
+                { label: "Campi totali",    value: String(form.fields.length),               icon: FormInput,      color: "text-chart-4" },
               ].map(s => (
                 <div key={s.label} className="bg-muted/30 rounded-xl p-3 text-center">
                   <s.icon className={cn("h-5 w-5 mx-auto mb-1", s.color)} />
@@ -238,7 +238,7 @@ function FormPreview({ form, onClose }: { form: FormDef; onClose: () => void }) 
         <DialogFooter className="gap-2">
           <Button variant="outline" size="sm" onClick={onClose}>Chiudi</Button>
           <Button variant="outline" size="sm"><Edit2 className="mr-1.5 h-3.5 w-3.5" /> Modifica</Button>
-          <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white">
+          <Button size="sm" className="bg-primary hover:bg-primary/90 text-white">
             <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Apri form
           </Button>
         </DialogFooter>
@@ -255,8 +255,8 @@ function FormCard({ form, onSelect }: { form: FormDef; onSelect: () => void }) {
     <Card className="group hover:shadow-md transition-all border-border/60 cursor-pointer" onClick={onSelect}>
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-2 mb-3">
-          <div className="h-9 w-9 rounded-lg bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center shrink-0">
-            <FormInput className="h-4 w-4 text-indigo-600" />
+          <div className="h-9 w-9 rounded-lg bg-primary/10 dark:bg-primary/5 flex items-center justify-center shrink-0">
+            <FormInput className="h-4 w-4 text-primary" />
           </div>
           <div className="flex items-center gap-1.5">
             <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", sc.color, "border-current/30")}>{sc.label}</Badge>
@@ -330,7 +330,7 @@ export default function Page() {
             {FORMS.length} form · {totalSubmissions} invii totali · {totalViews.toLocaleString("it-IT")} visualizzazioni
           </p>
         </div>
-        <Button className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0" size="sm">
+        <Button className="bg-primary hover:bg-primary/90 text-white shrink-0" size="sm">
           <Plus className="mr-1.5 h-4 w-4" /> Nuovo Form
         </Button>
       </div>
@@ -339,8 +339,8 @@ export default function Page() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: "Form attivi",       value: String(FORMS.filter(f => f.status === "attivo").length), icon: ToggleLeft,       color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
-          { label: "Visualizzazioni",   value: totalViews.toLocaleString("it-IT"),                      icon: Eye,              color: "text-indigo-600",  bg: "bg-indigo-50 dark:bg-indigo-950/30" },
-          { label: "Invii totali",      value: totalSubmissions.toLocaleString("it-IT"),                icon: MousePointerClick,color: "text-violet-600",  bg: "bg-violet-50 dark:bg-violet-950/30" },
+          { label: "Visualizzazioni",   value: totalViews.toLocaleString("it-IT"),                      icon: Eye,              color: "text-primary",  bg: "bg-primary/5 dark:bg-primary/5" },
+          { label: "Invii totali",      value: totalSubmissions.toLocaleString("it-IT"),                icon: MousePointerClick,color: "text-chart-4",  bg: "bg-chart-4/5 dark:bg-chart-4/5/30" },
           { label: "Conversione media", value: `${avgConversion.toFixed(1)}%`,                          icon: TrendingUp,       color: "text-amber-600",   bg: "bg-amber-50 dark:bg-amber-950/30" },
         ].map(s => (
           <div key={s.label} className="flex items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3">
@@ -369,7 +369,7 @@ export default function Page() {
 
         {/* New form card */}
         <div
-          className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-border/50 rounded-xl p-8 cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/10 transition-colors text-center"
+          className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-border/50 rounded-xl p-8 cursor-pointer hover:border-primary/70 hover:bg-primary/5/20 dark:hover:bg-primary/10/10 transition-colors text-center"
         >
           <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center">
             <Plus className="h-6 w-6 text-muted-foreground/60" />

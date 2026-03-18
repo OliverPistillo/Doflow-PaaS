@@ -11,14 +11,15 @@ type ActivityItem = {
   action: string;
   actor_email: string;
   timestamp: string;
-  metadata?: any;
+  created_at?: string;   // alias usato dal backend WebSocket
+  metadata?: Record<string, unknown>;
 };
 
 // Helper per icone dinamiche
 function getIconForAction(action: string) {
-  if (action.includes('FILE')) return <FileText className="h-4 w-4 text-blue-500" />;
-  if (action.includes('LOGIN') || action.includes('AUTH')) return <Shield className="h-4 w-4 text-green-500" />;
-  return <Activity className="h-4 w-4 text-slate-500" />;
+  if (action.includes('FILE')) return <FileText className="h-4 w-4 text-primary" />;
+  if (action.includes('LOGIN') || action.includes('AUTH')) return <Shield className="h-4 w-4 text-chart-2" />;
+  return <Activity className="h-4 w-4 text-muted-foreground" />;
 }
 
 export function ActivityFeed() {
@@ -29,8 +30,10 @@ export function ActivityFeed() {
   useEffect(() => {
     const lastEvent = events[events.length - 1];
     // Controlla se l'evento è un aggiornamento del feed
-    if (lastEvent?.type === 'tenant_notification' && (lastEvent.payload as any).type === 'activity_feed_update') {
-      const newActivity = (lastEvent.payload as any).payload;
+    if (lastEvent?.type === 'tenant_notification') {
+      const pl = lastEvent.payload as { type?: string; payload?: ActivityItem };
+      if (pl.type !== 'activity_feed_update' || !pl.payload) return;
+      const newActivity = pl.payload;
       
       // Aggiungi in cima e mantieni solo gli ultimi 20
       setActivities(prev => {
@@ -41,7 +44,7 @@ export function ActivityFeed() {
                 id: newActivity.id,
                 action: newActivity.action,
                 actor_email: newActivity.actor_email,
-                timestamp: newActivity.created_at,
+                timestamp: newActivity.created_at ?? new Date().toISOString(),
                 metadata: newActivity.metadata
             }, 
             ...prev
@@ -62,21 +65,21 @@ export function ActivityFeed() {
         <ScrollArea className="h-[350px] pr-4">
           <div className="space-y-4">
             {activities.length === 0 && (
-                <p className="text-sm text-slate-400 text-center py-8">In attesa di eventi...</p>
+                <p className="text-sm text-muted-foreground text-center py-8">In attesa di eventi...</p>
             )}
             {activities.map((act) => (
-              <div key={act.id} className="flex gap-3 items-start pb-3 border-b border-slate-100 last:border-0">
-                <div className="mt-1 bg-slate-50 p-1.5 rounded-full border">
+              <div key={act.id} className="flex gap-3 items-start pb-3 border-b border-border last:border-0">
+                <div className="mt-1 bg-muted/60 p-1.5 rounded-full border">
                     {getIconForAction(act.action)}
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-slate-800">
+                  <p className="text-sm font-medium text-foreground">
                     {act.actor_email}
                   </p>
-                  <p className="text-xs text-slate-500">
-                    ha eseguito <span className="font-mono text-xs font-semibold bg-slate-100 px-1 rounded">{act.action}</span>
+                  <p className="text-xs text-muted-foreground">
+                    ha eseguito <span className="font-mono text-xs font-semibold bg-muted px-1 rounded">{act.action}</span>
                   </p>
-                  <p className="text-[10px] text-slate-400 mt-1">
+                  <p className="text-[10px] text-muted-foreground/70 mt-1">
                     {new Date(act.timestamp).toLocaleTimeString()}
                   </p>
                 </div>

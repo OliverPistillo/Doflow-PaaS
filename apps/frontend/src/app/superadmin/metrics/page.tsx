@@ -19,7 +19,7 @@ interface MetricsData {
   tierDistribution: { name: string; value: number; fill: string }[];
 }
 
-function KpiCard({ title, value, icon: Icon, colorVar }: { title: string; value: string; icon: any; colorVar: string }) {
+function KpiCard({ title, value, icon: Icon, colorVar }: { title: string; value: string; icon: React.ComponentType<{ className?: string }>; colorVar: string }) {
   return (
     <Card className="glass-card transition-all duration-300 group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative">
       <div 
@@ -68,9 +68,9 @@ export default function MetricsPage() {
           mrr: 0, arr: 0, activeTenants: 0, churnRate: 0, totalRevenue: 0, tierDistribution: [],
         });
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Errore caricamento metrics:", e);
-      setError(e?.message || "Errore sconosciuto nel caricamento delle metriche.");
+      setError(e instanceof Error ? e.message : "Errore sconosciuto nel caricamento delle metriche.");
     } finally {
       setLoading(false);
     }

@@ -100,7 +100,7 @@ const StatusBadge = ({
 }: {
   label: string;
   status: ServiceStatus;
-  icon: any;
+  icon: React.ComponentType<{ className?: string }>;
   meta?: string;
 }) => {
   const tone = statusTone(status);
@@ -145,12 +145,12 @@ export default function DashboardPage() {
 
       const [statsData, logsData] = await Promise.all([statsPromise, logsPromise]);
 
-      if (statsData) setStats(statsData as any);
+      if (statsData) setStats(statsData);
       if (logsData?.data) setLogs(logsData.data);
       
       setErrorMsg(null);
-    } catch (e: any) {
-      console.error(e);
+    } catch (e: unknown) {
+      console.error(e instanceof Error ? e.message : String(e));
       setErrorMsg("Errore di connessione alla Control Tower.");
     } finally {
       setLoading(false);
@@ -169,7 +169,7 @@ export default function DashboardPage() {
     if (!lastEvent) return;
 
     if (lastEvent.type === 'tenant_notification') {
-        const payload: any = lastEvent.payload;
+        const payload = lastEvent.payload as { type?: string; channel?: string; payload?: TrafficLog };
         
         // Intercetta i messaggi "system_alert" dal TelemetryService
         if (payload.type === 'system_alert' && payload.channel === 'control_tower') {
@@ -193,7 +193,7 @@ export default function DashboardPage() {
 
   if (loading && !stats && logs.length === 0) {
     return (
-      <div className="p-10 flex items-center gap-2 text-slate-700">
+      <div className="p-10 flex items-center gap-2 text-foreground">
         <Activity className="animate-spin" />
         <span className="font-semibold">Connessione alla Control Tower v3.5...</span>
       </div>
@@ -365,7 +365,7 @@ export default function DashboardPage() {
                     </TableCell>
                     <TableCell className="text-xs">
                       {log.tenantId !== 'global' ? (
-                        <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                        <span className="inline-flex items-center gap-1 font-medium text-foreground">
                            <Lock className="h-3 w-3 text-muted-foreground" /> {log.tenantId}
                         </span>
                       ) : (

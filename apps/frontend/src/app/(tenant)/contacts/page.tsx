@@ -27,6 +27,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 
+import { PageShell, PageHeader, TableLoadingState, ErrorState } from "@/components/ui/page-shell";
 type ContactType = "cliente" | "lead";
 
 interface Contact {
@@ -75,20 +76,18 @@ export default function ContactsPage() {
   };
 
   return (
-    <div className="flex-1 space-y-5 p-4 md:p-6 pt-4 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Rubrica Contatti</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">{contacts.length} contatti totali</p>
-        </div>
-        <div className="flex gap-2">
+    <PageShell>
+      <PageHeader
+        title="Rubrica Contatti"
+        description={`${contacts.length} contatti totali`}
+        actions={<>
           <Button variant="outline" size="sm"><Upload className="h-4 w-4 mr-1.5" /> Importa</Button>
           <Button variant="outline" size="sm"><Download className="h-4 w-4 mr-1.5" /> Esporta</Button>
-          <Button onClick={() => setCreate(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white" size="sm">
+          <Button onClick={() => setCreate(true)} className="bg-primary hover:bg-primary/90 text-white" size="sm">
             <Plus className="h-4 w-4 mr-1.5" /> Nuovo Contatto
           </Button>
-        </div>
-      </div>
+        </>}
+      />
 
       <div className="grid grid-cols-3 gap-3">
         {[
@@ -144,7 +143,7 @@ export default function ContactsPage() {
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
-                        <AvatarFallback className="text-xs font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">{c.avatar}</AvatarFallback>
+                        <AvatarFallback className="text-xs font-bold bg-primary/10 text-primary dark:bg-primary/5 dark:text-primary">{c.avatar}</AvatarFallback>
                       </Avatar>
                       <div>
                         <div className="font-medium">{c.name}</div>
@@ -222,10 +221,10 @@ export default function ContactsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreate(false)}>Annulla</Button>
-            <Button onClick={handleCreate} disabled={!form.name.trim()} className="bg-indigo-600 hover:bg-indigo-700 text-white">Aggiungi</Button>
+            <Button onClick={handleCreate} disabled={!form.name.trim()} className="bg-primary hover:bg-primary/90 text-white">Aggiungi</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }

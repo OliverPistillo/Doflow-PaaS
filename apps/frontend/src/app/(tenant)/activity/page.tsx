@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
+import { PageShell, PageHeader, TableLoadingState, ErrorState } from "@/components/ui/page-shell";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ActionType =
@@ -35,43 +36,43 @@ interface ActivityEvent {
 // ─── Demo data ────────────────────────────────────────────────────────────────
 
 const EVENTS: ActivityEvent[] = [
-  { id: "e01", type: "deal_won",       user: { name: "Luca Ferretti",    initials: "LF", color: "bg-indigo-500"  }, entity: "Contratto Enterprise Luxor Media", entityType: "Deal",     detail: "€ 95.000",                       timestamp: "2026-02-23T13:47:00", relativeTime: "2 min fa",   module: "CRM" },
+  { id: "e01", type: "deal_won",       user: { name: "Luca Ferretti",    initials: "LF", color: "bg-primary"  }, entity: "Contratto Enterprise Luxor Media", entityType: "Deal",     detail: "€ 95.000",                       timestamp: "2026-02-23T13:47:00", relativeTime: "2 min fa",   module: "CRM" },
   { id: "e02", type: "quote_accepted", user: { name: "Sara Colombo",     initials: "SC", color: "bg-emerald-500" }, entity: "PRV-2026-008",                    entityType: "Preventivo", detail: "Accettato da Luxor Media — € 18.400", timestamp: "2026-02-23T13:30:00", relativeTime: "19 min fa",  module: "Preventivi" },
-  { id: "e03", type: "lead_created",   user: { name: "Marco Rinaldi",    initials: "MR", color: "bg-violet-500"  }, entity: "Roberta Silvestri",               entityType: "Lead",     detail: "Tech Solutions S.r.l.",           timestamp: "2026-02-23T13:12:00", relativeTime: "37 min fa",  module: "CRM" },
+  { id: "e03", type: "lead_created",   user: { name: "Marco Rinaldi",    initials: "MR", color: "bg-chart-4"  }, entity: "Roberta Silvestri",               entityType: "Lead",     detail: "Tech Solutions S.r.l.",           timestamp: "2026-02-23T13:12:00", relativeTime: "37 min fa",  module: "CRM" },
   { id: "e04", type: "task_completed", user: { name: "Anna De Luca",     initials: "AD", color: "bg-rose-500"    }, entity: "Configurare integrazione Slack",  entityType: "Task",     detail: "Progetto: DoFlow Internal",      timestamp: "2026-02-23T12:55:00", relativeTime: "54 min fa",  module: "Task" },
-  { id: "e05", type: "invoice_paid",   user: { name: "Luca Ferretti",    initials: "LF", color: "bg-indigo-500"  }, entity: "FT-2026-029",                    entityType: "Fattura",  detail: "Pagato € 6.840 da Brera Design", timestamp: "2026-02-23T12:30:00", relativeTime: "1 ora fa",   module: "Fatturazione" },
+  { id: "e05", type: "invoice_paid",   user: { name: "Luca Ferretti",    initials: "LF", color: "bg-primary"  }, entity: "FT-2026-029",                    entityType: "Fattura",  detail: "Pagato € 6.840 da Brera Design", timestamp: "2026-02-23T12:30:00", relativeTime: "1 ora fa",   module: "Fatturazione" },
   { id: "e06", type: "email_sent",     user: { name: "Sara Colombo",     initials: "SC", color: "bg-emerald-500" }, entity: "Follow-up demo Q2",               entityType: "Email",    detail: "A: marco@nextech.it",           timestamp: "2026-02-23T11:58:00", relativeTime: "1 ora fa",   module: "Comunicazione" },
   { id: "e07", type: "order_created",  user: { name: "Giorgio Esposito", initials: "GE", color: "bg-orange-500"  }, entity: "ORD-2026-044",                   entityType: "Ordine",   detail: "Manifattura Lombarda — € 12.300", timestamp: "2026-02-23T11:20:00", relativeTime: "2 ore fa",   module: "Ordini" },
-  { id: "e08", type: "contact_added",  user: { name: "Marco Rinaldi",    initials: "MR", color: "bg-violet-500"  }, entity: "Federico Gatti",                 entityType: "Contatto", detail: "CFO @ Alpine Ventures",         timestamp: "2026-02-23T10:45:00", relativeTime: "3 ore fa",   module: "CRM" },
-  { id: "e09", type: "deal_lost",      user: { name: "Luca Ferretti",    initials: "LF", color: "bg-indigo-500"  }, entity: "Fornitura annuale Tecno Sud",    entityType: "Deal",     detail: "Motivo: budget non approvato",  timestamp: "2026-02-23T10:10:00", relativeTime: "3 ore fa",   module: "CRM" },
+  { id: "e08", type: "contact_added",  user: { name: "Marco Rinaldi",    initials: "MR", color: "bg-chart-4"  }, entity: "Federico Gatti",                 entityType: "Contatto", detail: "CFO @ Alpine Ventures",         timestamp: "2026-02-23T10:45:00", relativeTime: "3 ore fa",   module: "CRM" },
+  { id: "e09", type: "deal_lost",      user: { name: "Luca Ferretti",    initials: "LF", color: "bg-primary"  }, entity: "Fornitura annuale Tecno Sud",    entityType: "Deal",     detail: "Motivo: budget non approvato",  timestamp: "2026-02-23T10:10:00", relativeTime: "3 ore fa",   module: "CRM" },
   { id: "e10", type: "quote_sent",     user: { name: "Anna De Luca",     initials: "AD", color: "bg-rose-500"    }, entity: "PRV-2026-009",                   entityType: "Preventivo", detail: "A: Nextech S.r.l. — € 28.900", timestamp: "2026-02-23T09:40:00", relativeTime: "4 ore fa",   module: "Preventivi" },
   { id: "e11", type: "invoice_sent",   user: { name: "Giorgio Esposito", initials: "GE", color: "bg-orange-500"  }, entity: "FT-2026-031",                   entityType: "Fattura",  detail: "A: Alpine Ventures — € 9.600", timestamp: "2026-02-23T09:15:00", relativeTime: "4 ore fa",   module: "Fatturazione" },
   { id: "e12", type: "product_updated",user: { name: "Sara Colombo",     initials: "SC", color: "bg-emerald-500" }, entity: "Piano Enterprise DoFlow",        entityType: "Prodotto", detail: "Prezzo aggiornato: € 299/mese", timestamp: "2026-02-23T08:50:00", relativeTime: "5 ore fa",   module: "Catalogo" },
-  { id: "e13", type: "note_added",     user: { name: "Luca Ferretti",    initials: "LF", color: "bg-indigo-500"  }, entity: "Alpine Ventures",                entityType: "Azienda",  detail: "Riunione fissata per 03/03",    timestamp: "2026-02-22T17:30:00", relativeTime: "Ieri 17:30", module: "CRM" },
-  { id: "e14", type: "task_completed", user: { name: "Marco Rinaldi",    initials: "MR", color: "bg-violet-500"  }, entity: "Aggiornare listino prezzi 2026", entityType: "Task",     detail: "Completato in anticipo",        timestamp: "2026-02-22T16:00:00", relativeTime: "Ieri 16:00", module: "Task" },
+  { id: "e13", type: "note_added",     user: { name: "Luca Ferretti",    initials: "LF", color: "bg-primary"  }, entity: "Alpine Ventures",                entityType: "Azienda",  detail: "Riunione fissata per 03/03",    timestamp: "2026-02-22T17:30:00", relativeTime: "Ieri 17:30", module: "CRM" },
+  { id: "e14", type: "task_completed", user: { name: "Marco Rinaldi",    initials: "MR", color: "bg-chart-4"  }, entity: "Aggiornare listino prezzi 2026", entityType: "Task",     detail: "Completato in anticipo",        timestamp: "2026-02-22T16:00:00", relativeTime: "Ieri 16:00", module: "Task" },
   { id: "e15", type: "lead_created",   user: { name: "Anna De Luca",     initials: "AD", color: "bg-rose-500"    }, entity: "Claudio Mantovani",              entityType: "Lead",     detail: "Impresa Costruzioni Verona",    timestamp: "2026-02-22T14:20:00", relativeTime: "Ieri 14:20", module: "CRM" },
   { id: "e16", type: "deal_won",       user: { name: "Giorgio Esposito", initials: "GE", color: "bg-orange-500"  }, entity: "Gestione logistics Q1",          entityType: "Deal",     detail: "€ 24.000",                     timestamp: "2026-02-22T11:05:00", relativeTime: "Ieri 11:05", module: "CRM" },
   { id: "e17", type: "invoice_paid",   user: { name: "Sara Colombo",     initials: "SC", color: "bg-emerald-500" }, entity: "FT-2026-025",                   entityType: "Fattura",  detail: "Pagato € 14.200 da Nextech",   timestamp: "2026-02-22T10:30:00", relativeTime: "Ieri 10:30", module: "Fatturazione" },
-  { id: "e18", type: "email_sent",     user: { name: "Luca Ferretti",    initials: "LF", color: "bg-indigo-500"  }, entity: "Newsletter Febbraio 2026",       entityType: "Campagna", detail: "Inviata a 340 contatti",        timestamp: "2026-02-21T15:00:00", relativeTime: "2 giorni fa", module: "Comunicazione" },
+  { id: "e18", type: "email_sent",     user: { name: "Luca Ferretti",    initials: "LF", color: "bg-primary"  }, entity: "Newsletter Febbraio 2026",       entityType: "Campagna", detail: "Inviata a 340 contatti",        timestamp: "2026-02-21T15:00:00", relativeTime: "2 giorni fa", module: "Comunicazione" },
 ];
 
 // ─── Action config ────────────────────────────────────────────────────────────
 
 const ACTION_CONFIG: Record<ActionType, { label: string; icon: React.ComponentType<{className?: string}>; color: string; bg: string }> = {
-  lead_created:    { label: "Nuovo Lead",         icon: UserPlus,    color: "text-indigo-600",  bg: "bg-indigo-100 dark:bg-indigo-950/40" },
+  lead_created:    { label: "Nuovo Lead",         icon: UserPlus,    color: "text-primary",  bg: "bg-primary/10 dark:bg-primary/5" },
   deal_won:        { label: "Deal Vinto",          icon: DollarSign,  color: "text-emerald-600", bg: "bg-emerald-100 dark:bg-emerald-950/40" },
   deal_lost:       { label: "Deal Perso",          icon: X,           color: "text-rose-600",    bg: "bg-rose-100 dark:bg-rose-950/40" },
   quote_sent:      { label: "Preventivo Inviato",  icon: FileText,    color: "text-amber-600",   bg: "bg-amber-100 dark:bg-amber-950/40" },
   quote_accepted:  { label: "Preventivo Accettato",icon: CheckSquare, color: "text-emerald-600", bg: "bg-emerald-100 dark:bg-emerald-950/40" },
-  invoice_sent:    { label: "Fattura Inviata",     icon: FileText,    color: "text-violet-600",  bg: "bg-violet-100 dark:bg-violet-950/40" },
+  invoice_sent:    { label: "Fattura Inviata",     icon: FileText,    color: "text-chart-4",  bg: "bg-chart-4/10 dark:bg-chart-4/5/40" },
   invoice_paid:    { label: "Fattura Pagata",      icon: DollarSign,  color: "text-emerald-600", bg: "bg-emerald-100 dark:bg-emerald-950/40" },
   contact_added:   { label: "Contatto Aggiunto",   icon: Users,       color: "text-blue-600",    bg: "bg-blue-100 dark:bg-blue-950/40" },
   task_completed:  { label: "Task Completato",     icon: CheckSquare, color: "text-teal-600",    bg: "bg-teal-100 dark:bg-teal-950/40" },
   order_created:   { label: "Ordine Creato",       icon: ShoppingCart,color: "text-orange-600",  bg: "bg-orange-100 dark:bg-orange-950/40" },
-  note_added:      { label: "Nota Aggiunta",       icon: Pencil,      color: "text-slate-600",   bg: "bg-slate-100 dark:bg-slate-800/40" },
+  note_added:      { label: "Nota Aggiunta",       icon: Pencil,      color: "text-muted-foreground",   bg: "bg-muted/10 dark:bg-muted/40" },
   email_sent:      { label: "Email Inviata",       icon: Mail,        color: "text-sky-600",     bg: "bg-sky-100 dark:bg-sky-950/40" },
   product_updated: { label: "Prodotto Modificato", icon: Package,     color: "text-purple-600",  bg: "bg-purple-100 dark:bg-purple-950/40" },
-  user_login:      { label: "Accesso",             icon: Eye,         color: "text-gray-500",    bg: "bg-gray-100 dark:bg-gray-800/40" },
+  user_login:      { label: "Accesso",             icon: Eye,         color: "text-muted-foreground",    bg: "bg-muted/10 dark:bg-muted/40" },
 };
 
 const ALL_USERS  = ["Tutti", "Luca Ferretti", "Sara Colombo", "Marco Rinaldi", "Anna De Luca", "Giorgio Esposito"];
@@ -80,10 +81,10 @@ const ALL_MODULES = ["Tutti", "CRM", "Preventivi", "Fatturazione", "Task", "Ordi
 // ─── Stat summary ─────────────────────────────────────────────────────────────
 
 const STATS = [
-  { label: "Azioni oggi",   value: "42",  icon: Activity,    color: "text-indigo-600",  bg: "bg-indigo-50 dark:bg-indigo-950/30" },
+  { label: "Azioni oggi",   value: "42",  icon: Activity,    color: "text-primary",  bg: "bg-primary/5 dark:bg-primary/5" },
   { label: "Deal chiusi",   value: "5",   icon: DollarSign,  color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
   { label: "Task completati",value: "18", icon: CheckSquare, color: "text-teal-600",    bg: "bg-teal-50 dark:bg-teal-950/30" },
-  { label: "Utenti attivi", value: "5",   icon: Users,       color: "text-violet-600",  bg: "bg-violet-50 dark:bg-violet-950/30" },
+  { label: "Utenti attivi", value: "5",   icon: Users,       color: "text-chart-4",  bg: "bg-chart-4/5 dark:bg-chart-4/5/30" },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -112,18 +113,16 @@ export default function Page() {
   }, [filtered]);
 
   return (
-    <div className="flex-1 p-4 md:p-6 animate-in fade-in duration-500 space-y-5">
+    <PageShell>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Feed Attività</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">Timeline di tutte le azioni del team in tempo reale</p>
-        </div>
-        <Button variant="outline" size="sm">
+      <PageHeader
+        title="Feed Attività"
+        description="Timeline di tutte le azioni del team in tempo reale"
+        actions={<><Button variant="outline" size="sm">
           <Download className="mr-1.5 h-4 w-4" /> Esporta CSV
-        </Button>
-      </div>
+        </Button></>}
+      />
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -241,6 +240,6 @@ export default function Page() {
           </div>
         ))}
       </div>
-    </div>
+    </PageShell>
   );
 }

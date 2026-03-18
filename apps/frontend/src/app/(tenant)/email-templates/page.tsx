@@ -53,9 +53,9 @@ const CATEGORIES = ["Tutti", "Onboarding", "Vendite", "Fatturazione", "Operazion
 
 const CATEGORY_COLORS: Record<string, string> = {
   Onboarding:   "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200",
-  Vendite:      "text-indigo-600 bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200",
+  Vendite:      "text-primary bg-primary/5 dark:bg-primary/5 border-primary/30",
   Fatturazione: "text-amber-600 bg-amber-50 dark:bg-amber-950/30 border-amber-200",
-  Operazioni:   "text-violet-600 bg-violet-50 dark:bg-violet-950/30 border-violet-200",
+  Operazioni:   "text-chart-4 bg-chart-4/5 dark:bg-chart-4/5/30 border-chart-4/30",
   "Post-vendita":"text-teal-600 bg-teal-50 dark:bg-teal-950/30 border-teal-200",
   Relazioni:    "text-rose-600 bg-rose-50 dark:bg-rose-950/30 border-rose-200",
 };
@@ -70,8 +70,8 @@ function TemplateCard({ t, onSelect }: { t: Template; onSelect: (t: Template) =>
     >
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-2 mb-3">
-          <div className="h-9 w-9 rounded-lg bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center shrink-0">
-            <Mail className="h-4.5 w-4.5 text-indigo-600" />
+          <div className="h-9 w-9 rounded-lg bg-primary/10 dark:bg-primary/5 flex items-center justify-center shrink-0">
+            <Mail className="h-4.5 w-4.5 text-primary" />
           </div>
           <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", CATEGORY_COLORS[t.category] ?? "")}>
             {t.category}
@@ -111,7 +111,7 @@ function TemplateSheet({ t, onClose }: { t: Template; onClose: () => void }) {
   // Highlight {variables} in body
   const renderedBody = t.body.replace(
     /\{([a-zA-Z_]+)\}/g,
-    '<span class="text-indigo-600 font-mono bg-indigo-50 dark:bg-indigo-950/30 rounded px-0.5">{$1}</span>'
+    '<span class="text-primary font-mono bg-primary/5 dark:bg-primary/5 rounded px-0.5">{$1}</span>'
   );
 
   return (
@@ -119,8 +119,8 @@ function TemplateSheet({ t, onClose }: { t: Template; onClose: () => void }) {
       <SheetContent className="w-full sm:w-[560px] overflow-y-auto">
         <SheetHeader className="pb-4">
           <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-xl bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center shrink-0">
-              <Mail className="h-5 w-5 text-indigo-600" />
+            <div className="h-10 w-10 rounded-xl bg-primary/10 dark:bg-primary/5 flex items-center justify-center shrink-0">
+              <Mail className="h-5 w-5 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
               <SheetTitle className="text-base">{t.name}</SheetTitle>
@@ -143,7 +143,7 @@ function TemplateSheet({ t, onClose }: { t: Template; onClose: () => void }) {
             </p>
             <div className="flex flex-wrap gap-1.5">
               {t.variables.map(v => (
-                <span key={v} className="text-xs px-2 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 font-mono border border-indigo-200 dark:border-indigo-800 flex items-center gap-1">
+                <span key={v} className="text-xs px-2 py-1 rounded-lg bg-primary/5 dark:bg-primary/5 text-primary font-mono border border-primary/30 dark:border-primary/50 flex items-center gap-1">
                   <Variable className="h-3 w-3" /> {`{${v}}`}
                 </span>
               ))}
@@ -179,7 +179,7 @@ function TemplateSheet({ t, onClose }: { t: Template; onClose: () => void }) {
           {/* Stats */}
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="bg-muted/30 rounded-lg p-3 text-center">
-              <p className="text-xl font-black tabular-nums text-indigo-600">{t.usageCount}</p>
+              <p className="text-xl font-black tabular-nums text-primary">{t.usageCount}</p>
               <p className="text-xs text-muted-foreground mt-0.5">Invii totali</p>
             </div>
             <div className="bg-muted/30 rounded-lg p-3 text-center">
@@ -196,7 +196,7 @@ function TemplateSheet({ t, onClose }: { t: Template; onClose: () => void }) {
           <Button variant="outline" size="sm" className="flex-1">
             <Edit2 className="mr-1.5 h-4 w-4" /> Modifica
           </Button>
-          <Button size="sm" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white">
+          <Button size="sm" className="flex-1 bg-primary hover:bg-primary/90 text-white">
             <Send className="mr-1.5 h-4 w-4" /> Usa template
           </Button>
         </SheetFooter>
@@ -233,7 +233,7 @@ export default function Page() {
             {EMAIL_TEMPLATES.length} template · {totalUsage} invii totali
           </p>
         </div>
-        <Button className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0" size="sm">
+        <Button className="bg-primary hover:bg-primary/90 text-white shrink-0" size="sm">
           <Plus className="mr-1.5 h-4 w-4" /> Nuovo Template
         </Button>
       </div>
@@ -263,8 +263,8 @@ export default function Page() {
             className={cn(
               "text-xs px-3 py-1 rounded-full border transition-colors font-medium",
               category === c
-                ? "bg-indigo-600 text-white border-indigo-600"
-                : "border-border text-muted-foreground hover:border-indigo-300 hover:text-foreground",
+                ? "bg-primary text-white border-primary"
+                : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
             )}
           >
             {c === "Tutti" ? `Tutti (${EMAIL_TEMPLATES.length})` : `${c} (${EMAIL_TEMPLATES.filter(t => t.category === c).length})`}

@@ -88,16 +88,16 @@ const CAMPAIGNS: Campaign[] = [
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<CampaignStatus, { label: string; color: string; bg: string; icon: React.ComponentType<{className?: string}> }> = {
-  bozza:       { label: "Bozza",        color: "text-slate-600",   bg: "bg-slate-100 dark:bg-slate-800/40",    icon: Edit2 },
-  programmata: { label: "Programmata",  color: "text-indigo-600",  bg: "bg-indigo-100 dark:bg-indigo-950/40",  icon: Clock },
+  bozza:       { label: "Bozza",        color: "text-muted-foreground",   bg: "bg-muted/10 dark:bg-muted/40",    icon: Edit2 },
+  programmata: { label: "Programmata",  color: "text-primary",  bg: "bg-primary/10 dark:bg-primary/5",  icon: Clock },
   attiva:      { label: "Attiva",       color: "text-emerald-600", bg: "bg-emerald-100 dark:bg-emerald-950/40",icon: Play },
   completata:  { label: "Completata",   color: "text-teal-600",    bg: "bg-teal-100 dark:bg-teal-950/40",      icon: CheckCircle2 },
   in_pausa:    { label: "In pausa",     color: "text-amber-600",   bg: "bg-amber-100 dark:bg-amber-950/40",    icon: Pause },
 };
 
 const TYPE_CONFIG: Record<CampaignType, { label: string; color: string }> = {
-  newsletter:    { label: "Newsletter",    color: "text-indigo-600" },
-  promozionale:  { label: "Promozionale",  color: "text-violet-600" },
+  newsletter:    { label: "Newsletter",    color: "text-primary" },
+  promozionale:  { label: "Promozionale",  color: "text-chart-4" },
   onboarding:    { label: "Onboarding",    color: "text-emerald-600" },
   followup:      { label: "Follow-up",     color: "text-amber-600" },
   riattivazione: { label: "Riattivazione", color: "text-rose-600" },
@@ -114,10 +114,10 @@ const totalOpened   = sentCampaigns.reduce((s, c) => s + (c.opened ?? 0), 0);
 const totalClicked  = sentCampaigns.reduce((s, c) => s + (c.clicked ?? 0), 0);
 
 const STATS = [
-  { label: "Campagne totali",  value: String(CAMPAIGNS.length),                                 icon: Megaphone,       color: "text-indigo-600",  bg: "bg-indigo-50 dark:bg-indigo-950/30" },
+  { label: "Campagne totali",  value: String(CAMPAIGNS.length),                                 icon: Megaphone,       color: "text-primary",  bg: "bg-primary/5 dark:bg-primary/5" },
   { label: "Email inviate",    value: totalSent.toLocaleString("it-IT"),                         icon: Send,            color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
   { label: "Tasso apertura",   value: `${Math.round(totalOpened / totalSent * 100)}%`,           icon: Eye,             color: "text-amber-600",   bg: "bg-amber-50 dark:bg-amber-950/30" },
-  { label: "Tasso click",      value: `${Math.round(totalClicked / totalOpened * 100)}%`,        icon: MousePointerClick, color: "text-violet-600", bg: "bg-violet-50 dark:bg-violet-950/30" },
+  { label: "Tasso click",      value: `${Math.round(totalClicked / totalOpened * 100)}%`,        icon: MousePointerClick, color: "text-chart-4", bg: "bg-chart-4/5 dark:bg-chart-4/5/30" },
 ];
 
 // ─── Campaign Card ────────────────────────────────────────────────────────────
@@ -162,7 +162,7 @@ function CampaignCard({ c, onSelect }: { c: Campaign; onSelect: (c: Campaign) =>
           {c.sentDate
             ? <span className="flex items-center gap-1"><Send className="h-3 w-3" /> {new Date(c.sentDate).toLocaleDateString("it-IT", { day: "numeric", month: "short" })}</span>
             : c.scheduledDate
-            ? <span className="flex items-center gap-1 text-indigo-600"><Clock className="h-3 w-3" /> {c.scheduledDate.split(" ")[0]}</span>
+            ? <span className="flex items-center gap-1 text-primary"><Clock className="h-3 w-3" /> {c.scheduledDate.split(" ")[0]}</span>
             : <span className="text-muted-foreground/50">—</span>
           }
         </div>
@@ -216,8 +216,8 @@ function CampaignDetail({ c, onClose }: { c: Campaign; onClose: () => void }) {
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-xl bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center shrink-0">
-              <Megaphone className="h-5 w-5 text-indigo-600" />
+            <div className="h-10 w-10 rounded-xl bg-primary/10 dark:bg-primary/5 flex items-center justify-center shrink-0">
+              <Megaphone className="h-5 w-5 text-primary" />
             </div>
             <div className="flex-1 min-w-0">
               <DialogTitle className="text-base">{c.name}</DialogTitle>
@@ -260,7 +260,7 @@ function CampaignDetail({ c, onClose }: { c: Campaign; onClose: () => void }) {
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/60 mb-3">Performance</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
-                  { label: "Recapitate", value: c.sent, pct: 100,          color: "text-indigo-600",  bg: "bg-indigo-50" },
+                  { label: "Recapitate", value: c.sent, pct: 100,          color: "text-primary",  bg: "bg-primary/5" },
                   { label: "Aperte",     value: c.opened ?? 0,  pct: openRate,  color: "text-emerald-600", bg: "bg-emerald-50" },
                   { label: "Click",      value: c.clicked ?? 0, pct: clickRate, color: "text-amber-600",   bg: "bg-amber-50" },
                   { label: "Disiscritti",value: c.unsubscribed ?? 0, pct: Math.round((c.unsubscribed ?? 0) / (c.sent ?? 1) * 100), color: "text-rose-600", bg: "bg-rose-50" },
@@ -279,7 +279,7 @@ function CampaignDetail({ c, onClose }: { c: Campaign; onClose: () => void }) {
         <DialogFooter className="gap-2">
           <Button variant="outline" size="sm" onClick={onClose}>Chiudi</Button>
           {c.status === "bozza" && (
-            <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white">
+            <Button size="sm" className="bg-primary hover:bg-primary/90 text-white">
               <Send className="mr-1.5 h-4 w-4" /> Invia campagna
             </Button>
           )}
@@ -325,7 +325,7 @@ export default function Page() {
           <h2 className="text-2xl font-bold tracking-tight">Campagne Email</h2>
           <p className="text-sm text-muted-foreground mt-0.5">Gestisci e monitora le tue campagne di email marketing</p>
         </div>
-        <Button className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0" size="sm">
+        <Button className="bg-primary hover:bg-primary/90 text-white shrink-0" size="sm">
           <Plus className="mr-1.5 h-4 w-4" /> Nuova Campagna
         </Button>
       </div>
