@@ -50,21 +50,21 @@ import { getDoFlowUser, getInitials } from "@/lib/jwt";
 
 const MENU_GROUPS = [
   {
-    label: "Performance commerciali",
+    label: "Sales & Pipeline",
     items: [
       { label: "Sales Dashboard",  href: "/superadmin/dashboard",      icon: BarChart3   },
       { label: "Gestione offerte", href: "/superadmin/sales/pipeline", icon: ListTodo    },
     ],
   },
   {
-    label: "Metriche Platform",
+    label: "Analytics & Control",
     items: [
       { label: "Metriche SaaS", href: "/superadmin/metrics",       icon: TrendingUp  },
       { label: "Control Tower", href: "/superadmin/control-tower", icon: ShieldAlert },
     ],
   },
   {
-    label: "Consegna del servizio",
+    label: "Operations",
     items: [
       { label: "Stato del servizio",      href: "/superadmin/delivery/status",   icon: Truck       },
       { label: "Calendario del progetto", href: "/superadmin/delivery/calendar", icon: CalendarDays },
@@ -197,14 +197,6 @@ export function SuperAdminSidebar() {
               />
             )}
           </div>
-          {/* Brand name — nascosto quando collassato */}
-          <span
-            className={`text-[15px] font-bold text-foreground whitespace-nowrap overflow-hidden transition-all duration-300 ${
-              isOpen ? "opacity-100 max-w-[120px]" : "opacity-0 max-w-0"
-            }`}
-          >
-            DoFlow
-          </span>
         </div>
       </SidebarHeader>
 
