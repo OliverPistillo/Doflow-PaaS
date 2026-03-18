@@ -150,6 +150,32 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   LEGACY CSS VAR ALIASES
+   Mappano i vecchi var(--text-primary) ai token semantici nuovi.
+   Evitano di riscrivere ogni pagina superadmin.
+═══════════════════════════════════════════════════════════════════ */
+:root {
+  --text-primary:    hsl(var(--foreground));
+  --text-secondary:  hsl(var(--muted-foreground));
+  --bg-surface:      hsl(var(--card));
+  --bg-surface-2:    hsl(var(--muted));
+  --border-divider:  hsl(var(--border));
+  --border-table:    hsl(var(--border));
+  --border-row:      hsl(var(--border) / 0.5);
+  --bg-hover:        hsl(var(--primary) / 0.06);
+}
+.dark {
+  --text-primary:    hsl(var(--foreground));
+  --text-secondary:  hsl(var(--muted-foreground));
+  --bg-surface:      hsl(var(--card));
+  --bg-surface-2:    hsl(var(--muted));
+  --border-divider:  hsl(var(--border));
+  --border-table:    hsl(var(--border));
+  --border-row:      hsl(var(--border) / 0.5);
+  --bg-hover:        hsl(var(--primary) / 0.08);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    UTILITY CLASSES — Figma Design Primitives
 ═══════════════════════════════════════════════════════════════════ */
 @layer components {
@@ -244,3 +270,187 @@
     background: hsl(var(--muted-foreground) / 0.5);
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   SUPERADMIN LAYOUT UTILITIES
+   Classi condivise tra tutte le pagine superadmin.
+═══════════════════════════════════════════════════════════════════ */
+@layer components {
+
+  /* Wrapper radice di ogni pagina superadmin */
+  .dashboard-content {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    max-width: 1800px;
+    animation: fadeInUp 0.55s cubic-bezier(0.22,1,0.36,1) both;
+  }
+
+  /* KPI Grid — responsive 1→2→4 colonne */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 16px;
+  }
+  @media (min-width: 768px)  { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1280px) { .kpi-grid { grid-template-columns: repeat(4, 1fr); } }
+
+  /* Charts Grid — 1→2 colonne */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  @media (min-width: 1024px) { .charts-grid { grid-template-columns: 1fr 1fr; } }
+
+  /* Glass Card — sfondo semi-trasparente con blur */
+  .glass-card {
+    background: hsl(var(--card) / 0.85);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    transition: background-color 0.32s ease, border-color 0.32s ease, box-shadow 0.32s ease;
+  }
+  .dark .glass-card {
+    background: hsl(var(--card) / 0.75);
+    border-color: hsl(var(--border) / 0.8);
+  }
+
+  /* Loading / Error states */
+  .loading-state {
+    height: 70vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+  }
+  .error-state  { padding: 24px; max-width: 1800px; margin: 0 auto; }
+  .error-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 24px;
+    background: hsl(var(--card));
+    border: 1px dashed hsl(var(--border));
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-sm);
+  }
+  .error-icon {
+    width: 64px; height: 64px;
+    background: hsl(0 84% 95%); color: hsl(0 84% 60%);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 16px;
+  }
+  .dark .error-icon { background: hsl(0 50% 15%); color: hsl(0 72% 55%); }
+
+  /* Closing Alert Card */
+  .closing-alert {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid hsl(var(--primary) / 0.20);
+    border-radius: var(--radius-card);
+    padding: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.3s ease, transform 0.2s ease;
+  }
+  .closing-alert:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+  .closing-alert-bg {
+    position: absolute; inset: 0; z-index: 0;
+    background: linear-gradient(to right, hsl(var(--primary) / 0.08), transparent);
+  }
+  .dark .closing-alert-bg { background: linear-gradient(to right, hsl(var(--primary) / 0.12), transparent); }
+  .closing-alert-content { position: relative; z-index: 1; }
+
+  /* ── KPI Card Variants (superadmin dashboard) ─────────────────── */
+
+  /* Dark Card: scura in light, si adatta in dark */
+  .sa-card-dark {
+    @apply bg-slate-900 text-white dark:bg-card dark:text-card-foreground border border-transparent dark:border-border transition-colors duration-300;
+  }
+
+  /* Logistics Card: gradiente caldo */
+  .sa-card-logistics {
+    @apply text-foreground border border-transparent dark:border-primary/20 transition-colors duration-300;
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.12) 0%, hsl(var(--accent) / 0.10) 100%);
+  }
+  .dark .sa-card-logistics {
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.08) 0%, hsl(var(--accent) / 0.06) 100%);
+  }
+
+  /* Yellow Card */
+  .sa-card-yellow {
+    @apply bg-yellow-50 text-yellow-950 dark:bg-yellow-500/10 dark:text-yellow-400 border border-yellow-200/60 dark:border-yellow-500/20 transition-colors duration-300;
+  }
+
+  /* Orange Card */
+  .sa-card-orange {
+    @apply bg-orange-50 text-orange-950 dark:bg-orange-500/10 dark:text-orange-400 border border-orange-200/60 dark:border-orange-500/20 transition-colors duration-300;
+  }
+
+  /* ── Sidebar trigger icon animation ─────────────────────────── */
+  /* Gestisce i 2 SVG sovrapposti nel pulsante toggle sidebar */
+  .icon-open, .icon-close {
+    position: absolute;
+    width: 20px; height: 20px;
+    stroke-width: 2;
+    transition: opacity 0.2s ease, transform 0.25s ease;
+  }
+  .icon-open  { opacity: 1; transform: scale(1); }
+  .icon-close { opacity: 0; transform: scale(0.75); }
+  /* Quando il trigger ha la classe .active (sidebar aperta) */
+  button.active .icon-open  { opacity: 0; transform: scale(0.75); }
+  button.active .icon-close { opacity: 1; transform: scale(1); }
+
+  /* ── Theme toggle sun/moon icon animation ──────────────────── */
+  .icon-sun, .icon-moon {
+    position: absolute;
+    width: 18px; height: 18px;
+    transition: opacity 0.25s ease, transform 0.35s ease;
+  }
+  .icon-sun  { opacity: 1; transform: rotate(0deg) scale(1); }
+  .icon-moon { opacity: 0; transform: rotate(-30deg) scale(0.7); }
+  .dark .icon-sun  { opacity: 0; transform: rotate(30deg) scale(0.7); }
+  .dark .icon-moon { opacity: 1; transform: rotate(0deg) scale(1); }
+
+  /* ── Notification bell ──────────────────────────────────────── */
+  .header-btn {
+    width: 36px; height: 36px;
+    border-radius: var(--radius-nav);
+    background: hsl(var(--muted));
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: hsl(var(--muted-foreground));
+    border: none; outline: none;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .header-btn:hover { background: hsl(var(--muted) / 0.8); color: hsl(var(--foreground)); }
+  .header-btn-bell  { position: relative; }
+  .header-bell-dot  {
+    position: absolute; top: 8px; right: 8px;
+    width: 6px; height: 6px;
+    background: hsl(var(--destructive));
+    border-radius: 50%;
+    pointer-events: none;
+  }
+}
+
+/* ── Animation keyframes ─────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* Legacy alias (alcuni file usano animate-fadeIn) */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-fadeIn    { animation: fadeIn    0.4s ease both; }
+.animate-fadeInUp  { animation: fadeInUp  0.45s cubic-bezier(0.22,1,0.36,1) both; }

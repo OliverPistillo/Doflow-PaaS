@@ -34,6 +34,7 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   "/superadmin/users":                "Gestione Utenti",
   "/superadmin/audit":                "Audit Log",
   "/superadmin/settings":             "Impostazioni Globali",
+  "/superadmin/account":              "Il mio Account",
 };
 
 function getPageTitle(pathname: string | null): string {
@@ -141,7 +142,7 @@ function UserNav() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href="/superadmin/users" className="cursor-pointer">
+          <Link href="/superadmin/account" className="cursor-pointer">
             <User className="mr-2 h-4 w-4 text-muted-foreground" />
             Il mio Account
           </Link>

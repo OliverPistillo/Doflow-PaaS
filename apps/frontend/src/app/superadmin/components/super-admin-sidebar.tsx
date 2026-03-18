@@ -303,7 +303,7 @@ export function SuperAdminSidebar() {
 
                 <DropdownMenuGroup>
                   <DropdownMenuItem asChild>
-                    <Link href="/superadmin/users" className="cursor-pointer">
+                    <Link href="/superadmin/account" className="cursor-pointer">
                       <User className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
                       Il mio Account
                     </Link>

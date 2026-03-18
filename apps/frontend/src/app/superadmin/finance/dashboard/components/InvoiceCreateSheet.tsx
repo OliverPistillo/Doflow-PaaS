@@ -1,3 +1,6 @@
+// Percorso: apps/frontend/src/app/superadmin/finance/dashboard/components/InvoiceCreateSheet.tsx
+// Fix: tutti i colori indigo-* → token semantici primary/*
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -17,64 +20,35 @@ import { Separator } from "@/components/ui/separator";
 import { Loader2, Building2, Sparkles, ChevronDown, ChevronUp, Save, UserPlus } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
-
 type Invoice = {
-  id: string;
-  invoiceNumber: string;
-  clientName: string;
-  clientAddress?: string;
-  clientCity?: string;
-  clientZip?: string;
-  clientVat?: string;
-  clientFiscalCode?: string;
-  clientSdi?: string;
-  clientPec?: string;
-  amount: number;
-  issueDate: string;
-  dueDate: string;
-  status: string;
+  id: string; invoiceNumber: string; clientName: string;
+  clientAddress?: string; clientCity?: string; clientZip?: string;
+  clientVat?: string; clientFiscalCode?: string; clientSdi?: string; clientPec?: string;
+  amount: number; issueDate: string; dueDate: string; status: string;
 };
 
 interface InvoiceClient {
-  id: string;
-  clientName: string;
-  clientVat?: string;
-  clientFiscalCode?: string;
-  clientSdi?: string;
-  clientPec?: string;
-  clientAddress?: string;
-  clientCity?: string;
-  clientZip?: string;
-  paymentMethod?: string;
-  invoiceCount: number;
+  id: string; clientName: string; clientVat?: string; clientFiscalCode?: string;
+  clientSdi?: string; clientPec?: string; clientAddress?: string;
+  clientCity?: string; clientZip?: string; paymentMethod?: string; invoiceCount: number;
 }
 
 interface InvoiceSheetProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSuccess: () => void;
-  invoiceToEdit?: Invoice | null;
+  isOpen: boolean; onClose: () => void; onSuccess: () => void; invoiceToEdit?: Invoice | null;
 }
 
-// ─── Dialog conferma salvataggio cliente ────────────────────────────────────────
-
-function SaveClientDialog({
-  open, clientName, onSave, onSkip,
-}: {
-  open: boolean;
-  clientName: string;
-  onSave: () => Promise<void>;
-  onSkip: () => void;
+function SaveClientDialog({ open, clientName, onSave, onSkip }: {
+  open: boolean; clientName: string; onSave: () => Promise<void>; onSkip: () => void;
 }) {
   const [saving, setSaving] = useState(false);
   return (
-    <Dialog open={open} onOpenChange={v => { if (!v) onSkip(); }}>
-      <DialogContent className="sm:max-w-sm">
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onSkip(); }}>
+      <DialogContent className="sm:max-w-sm rounded-card">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
-            <div className="h-10 w-10 rounded-xl bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center">
-              <Save className="h-5 w-5 text-indigo-600" />
+            {/* ✅ bg-primary/10 invece di bg-indigo-100 */}
+            <div className="h-10 w-10 rounded-nav bg-primary/10 flex items-center justify-center">
+              <Save className="h-5 w-5 text-primary" aria-hidden="true" />
             </div>
             <DialogTitle>Salvare il cliente?</DialogTitle>
           </div>
@@ -84,11 +58,8 @@ function SaveClientDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" size="sm" onClick={onSkip} disabled={saving}>
-            No, continua
-          </Button>
+          <Button variant="outline" size="sm" onClick={onSkip} disabled={saving}>No, continua</Button>
           <Button size="sm" disabled={saving}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white"
             onClick={async () => { setSaving(true); await onSave(); setSaving(false); }}>
             {saving && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
             Sì, salva cliente
@@ -99,57 +70,34 @@ function SaveClientDialog({
   );
 }
 
-// ─── Empty form ─────────────────────────────────────────────────────────────────
-
 const emptyForm = () => ({
   invoiceNumber: `INV-${new Date().getFullYear()}-${Math.floor(Math.random() * 900) + 100}`,
-  clientName: "",
-  clientAddress: "",
-  clientCity: "",
-  clientZip: "",
-  clientVat: "",
-  clientFiscalCode: "",
-  clientSdi: "",
-  clientPec: "",
-  amount: "",
-  issueDate: new Date().toISOString().split("T")[0],
-  dueDate: "",
-  status: "pending",
+  clientName: "", clientAddress: "", clientCity: "", clientZip: "",
+  clientVat: "", clientFiscalCode: "", clientSdi: "", clientPec: "",
+  amount: "", issueDate: new Date().toISOString().split("T")[0], dueDate: "", status: "pending",
 });
 
-// ─── Main Component ──────────────────────────────────────────────────────────────
-
 export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }: InvoiceSheetProps) {
-  const [loading,       setLoading]       = useState(false);
-  const [clients,       setClients]       = useState<InvoiceClient[]>([]);
-  const [showExtra,     setShowExtra]     = useState(false);
-  const [autofilled,    setAutofilled]    = useState(false);
-
-  // "nuovo" = utente sta inserendo un cliente che non è in anagrafica
-  const [clientMode,    setClientMode]    = useState<"select" | "nuovo">("select");
-  const [selectedId,    setSelectedId]    = useState<string>("");     // id cliente selezionato dal menu
-
-  // Dialog conferma salvataggio nuovo cliente
+  const [loading,    setLoading]    = useState(false);
+  const [clients,    setClients]    = useState<InvoiceClient[]>([]);
+  const [showExtra,  setShowExtra]  = useState(false);
+  const [autofilled, setAutofilled] = useState(false);
+  const [clientMode, setClientMode] = useState<"select" | "nuovo">("select");
+  const [selectedId, setSelectedId] = useState<string>("");
   const [showSaveDialog,  setShowSaveDialog]  = useState(false);
   const [pendingFormData, setPendingFormData] = useState<ReturnType<typeof emptyForm> | null>(null);
-
   const [formData, setFormData] = useState(emptyForm());
 
-  // Carica clienti salvati
   useEffect(() => {
     if (!isOpen) return;
     apiFetch<InvoiceClient[]>("/superadmin/finance/clients")
-      .then(data => setClients(Array.isArray(data) ? data : []))
+      .then((data) => setClients(Array.isArray(data) ? data : []))
       .catch(() => setClients([]));
   }, [isOpen]);
 
-  // Reset / popola al (ri)apertura
   useEffect(() => {
     if (!isOpen) return;
-    setShowExtra(false);
-    setAutofilled(false);
-    setClientMode("select");
-    setSelectedId("");
+    setShowExtra(false); setAutofilled(false); setClientMode("select"); setSelectedId("");
     if (invoiceToEdit) {
       setFormData({
         invoiceNumber:    invoiceToEdit.invoiceNumber,
@@ -171,32 +119,23 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
     }
   }, [isOpen, invoiceToEdit]);
 
-  // Selezione cliente dal menu a tendina
   function handleClientSelect(value: string) {
     if (value === "__nuovo__") {
-      setClientMode("nuovo");
-      setSelectedId("");
-      setFormData(prev => ({
-        ...prev,
-        clientName: "", clientAddress: "", clientCity: "", clientZip: "",
+      setClientMode("nuovo"); setSelectedId("");
+      setFormData((prev) => ({
+        ...prev, clientName: "", clientAddress: "", clientCity: "", clientZip: "",
         clientVat: "", clientFiscalCode: "", clientSdi: "", clientPec: "",
       }));
       return;
     }
-    const client = clients.find(c => c.id === value);
+    const client = clients.find((c) => c.id === value);
     if (!client) return;
-    setSelectedId(value);
-    setClientMode("select");
-    setFormData(prev => ({
-      ...prev,
-      clientName:       client.clientName,
-      clientAddress:    client.clientAddress    ?? "",
-      clientCity:       client.clientCity       ?? "",
-      clientZip:        client.clientZip        ?? "",
-      clientVat:        client.clientVat        ?? "",
-      clientFiscalCode: client.clientFiscalCode ?? "",
-      clientSdi:        client.clientSdi        ?? "",
-      clientPec:        client.clientPec        ?? "",
+    setSelectedId(value); setClientMode("select");
+    setFormData((prev) => ({
+      ...prev, clientName: client.clientName, clientAddress: client.clientAddress ?? "",
+      clientCity: client.clientCity ?? "", clientZip: client.clientZip ?? "",
+      clientVat: client.clientVat ?? "", clientFiscalCode: client.clientFiscalCode ?? "",
+      clientSdi: client.clientSdi ?? "", clientPec: client.clientPec ?? "",
     }));
     if (client.clientVat || client.clientSdi || client.clientPec) setShowExtra(true);
     setAutofilled(true);
@@ -204,18 +143,14 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
   }
 
   const set = (field: keyof typeof formData) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setFormData(prev => ({ ...prev, [field]: e.target.value }));
+    setFormData((prev) => ({ ...prev, [field]: e.target.value }));
 
   async function persistInvoice(data: typeof formData) {
     const payload = { ...data, amount: parseFloat(data.amount) };
     if (invoiceToEdit) {
-      await apiFetch(`/superadmin/finance/invoices/${invoiceToEdit.id}`, {
-        method: "PATCH", body: JSON.stringify(payload),
-      });
+      await apiFetch(`/superadmin/finance/invoices/${invoiceToEdit.id}`, { method: "PATCH", body: JSON.stringify(payload) });
     } else {
-      await apiFetch("/superadmin/finance/invoices", {
-        method: "POST", body: JSON.stringify(payload),
-      });
+      await apiFetch("/superadmin/finance/invoices", { method: "POST", body: JSON.stringify(payload) });
     }
   }
 
@@ -223,64 +158,41 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
     await apiFetch("/superadmin/finance/clients/upsert", {
       method: "POST",
       body: JSON.stringify({
-        clientName:       data.clientName,
-        clientAddress:    data.clientAddress    || undefined,
-        clientCity:       data.clientCity       || undefined,
-        clientZip:        data.clientZip        || undefined,
-        clientVat:        data.clientVat        || undefined,
-        clientFiscalCode: data.clientFiscalCode || undefined,
-        clientSdi:        data.clientSdi        || undefined,
-        clientPec:        data.clientPec        || undefined,
+        clientName: data.clientName, clientAddress: data.clientAddress || undefined,
+        clientCity: data.clientCity || undefined, clientZip: data.clientZip || undefined,
+        clientVat: data.clientVat || undefined, clientFiscalCode: data.clientFiscalCode || undefined,
+        clientSdi: data.clientSdi || undefined, clientPec: data.clientPec || undefined,
       }),
     });
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+    e.preventDefault(); setLoading(true);
     try {
       await persistInvoice(formData);
       onSuccess();
-      // Se è un cliente nuovo (non era in anagrafica), chiedi se salvarlo
       const isNewClient = clientMode === "nuovo" && formData.clientName.trim();
       if (isNewClient && !invoiceToEdit) {
-        setPendingFormData({ ...formData });
-        setShowSaveDialog(true);
-      } else {
-        onClose();
-      }
+        setPendingFormData({ ...formData }); setShowSaveDialog(true);
+      } else { onClose(); }
     } catch (err) {
-      console.error(err);
-      alert("Errore salvataggio fattura");
-    } finally {
-      setLoading(false);
-    }
+      console.error(err); alert("Errore salvataggio fattura");
+    } finally { setLoading(false); }
   };
 
-  const handleConfirmSave = async () => {
-    if (pendingFormData) await persistClient(pendingFormData).catch(console.error);
-    setShowSaveDialog(false);
-    onClose();
-  };
-
-  const handleSkipSave = () => {
-    setShowSaveDialog(false);
-    onClose();
-  };
-
-  // Il cliente selezionato dal menu (per mostrare "Compilato automaticamente")
-  const selectedClient = clients.find(c => c.id === selectedId);
+  const selectedClient = clients.find((c) => c.id === selectedId);
 
   return (
     <>
-      <SaveClientDialog
-        open={showSaveDialog}
-        clientName={pendingFormData?.clientName ?? ""}
-        onSave={handleConfirmSave}
-        onSkip={handleSkipSave}
+      <SaveClientDialog open={showSaveDialog} clientName={pendingFormData?.clientName ?? ""}
+        onSave={async () => {
+          if (pendingFormData) await persistClient(pendingFormData).catch(console.error);
+          setShowSaveDialog(false); onClose();
+        }}
+        onSkip={() => { setShowSaveDialog(false); onClose(); }}
       />
 
-      <Sheet open={isOpen && !showSaveDialog} onOpenChange={open => !open && onClose()}>
+      <Sheet open={isOpen && !showSaveDialog} onOpenChange={(open) => !open && onClose()}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader>
             <SheetTitle>{invoiceToEdit ? "Modifica Fattura" : "Nuova Fattura"}</SheetTitle>
@@ -292,8 +204,6 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
           </SheetHeader>
 
           <form onSubmit={handleSubmit} className="space-y-5 mt-6">
-
-            {/* Numero fattura */}
             <div className="grid gap-1.5">
               <Label className="text-xs">Numero Fattura</Label>
               <Input required value={formData.invoiceNumber} onChange={set("invoiceNumber")} />
@@ -301,68 +211,47 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
 
             <Separator />
 
-            {/* ── Selezione cliente ── */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <Building2 className="h-3.5 w-3.5 text-indigo-600" />
-                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/70">
-                  Cliente
-                </span>
+                {/* ✅ text-primary invece di text-indigo-600 */}
+                <Building2 className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/70">Cliente</span>
                 {autofilled && (
-                  <span className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-full animate-in fade-in">
-                    <Sparkles className="h-2.5 w-2.5" /> Compilato automaticamente
+                  <span className="flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full animate-in fade-in">
+                    <Sparkles className="h-2.5 w-2.5" aria-hidden="true" /> Compilato automaticamente
                   </span>
                 )}
               </div>
 
-              {/* Menu a tendina principale */}
               <div className="grid gap-1.5">
                 <Label className="text-xs">Ragione Sociale *</Label>
-                <Select
-                  value={clientMode === "nuovo" ? "__nuovo__" : selectedId}
-                  onValueChange={handleClientSelect}
-                >
+                <Select value={clientMode === "nuovo" ? "__nuovo__" : selectedId} onValueChange={handleClientSelect}>
                   <SelectTrigger>
-                    <SelectValue placeholder={
-                      clients.length > 0
-                        ? "Seleziona cliente o scegli Nuovo…"
-                        : "Seleziona Nuovo per inserire un cliente…"
-                    } />
+                    <SelectValue placeholder={clients.length > 0 ? "Seleziona cliente o scegli Nuovo…" : "Seleziona Nuovo per inserire un cliente…"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {clients.map(c => (
+                    {clients.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         <span className="font-medium">{c.clientName}</span>
-                        {c.clientVat && (
-                          <span className="text-muted-foreground text-xs ml-2">{c.clientVat}</span>
-                        )}
+                        {c.clientVat && <span className="text-muted-foreground text-xs ml-2">{c.clientVat}</span>}
                       </SelectItem>
                     ))}
                     {clients.length > 0 && <Separator className="my-1" />}
                     <SelectItem value="__nuovo__">
-                      <span className="flex items-center gap-2 text-indigo-600 font-semibold">
-                        <UserPlus className="h-3.5 w-3.5" />
+                      {/* ✅ text-primary */}
+                      <span className="flex items-center gap-2 text-primary font-semibold">
+                        <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />
                         Nuovo cliente…
                       </span>
                     </SelectItem>
                   </SelectContent>
                 </Select>
-
-                {/* Se clienti esistono e nessuno è selezionato, mostra hint */}
-                {!selectedId && clientMode === "select" && clients.length > 0 && (
-                  <p className="text-[11px] text-muted-foreground/60 flex items-center gap-1">
-                    <Sparkles className="h-3 w-3 text-indigo-400" />
-                    {clients.length} client{clients.length === 1 ? "e salvato" : "i salvati"} disponibili
-                  </p>
-                )}
               </div>
 
-              {/* Se selezionato da menu, mostra nome in sola lettura */}
               {clientMode === "select" && selectedClient && (
-                <div className="rounded-lg border border-indigo-100 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20 px-3 py-2">
-                  <p className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">
-                    {selectedClient.clientName}
-                  </p>
+                // ✅ bg-primary/5 border-primary/20 invece di bg-indigo-50 border-indigo-100
+                <div className="rounded-nav border border-primary/20 bg-primary/5 px-3 py-2">
+                  <p className="text-sm font-semibold text-primary">{selectedClient.clientName}</p>
                   {(selectedClient.clientAddress || selectedClient.clientCity) && (
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {[selectedClient.clientAddress, selectedClient.clientCity].filter(Boolean).join(", ")}
@@ -371,19 +260,13 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
                 </div>
               )}
 
-              {/* Form campi clienti — visibile se "Nuovo" o se si vuole modificare il selezionato */}
               {clientMode === "nuovo" && (
-                <div className="space-y-3 pl-3 border-l-2 border-indigo-200 dark:border-indigo-800">
+                // ✅ border-primary/30 invece di border-indigo-200
+                <div className="space-y-3 pl-3 border-l-2 border-primary/30">
                   <div className="grid gap-1.5">
-                    <Label className="text-xs">Ragione Sociale (nome cliente) *</Label>
-                    <Input
-                      required
-                      placeholder="Es. Rossi Srl"
-                      value={formData.clientName}
-                      onChange={set("clientName")}
-                    />
+                    <Label className="text-xs">Ragione Sociale *</Label>
+                    <Input required placeholder="Es. Rossi Srl" value={formData.clientName} onChange={set("clientName")} />
                   </div>
-
                   <div className="grid grid-cols-3 gap-2">
                     <div className="grid gap-1.5 col-span-2">
                       <Label className="text-xs">Indirizzo</Label>
@@ -394,14 +277,12 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
                       <Input value={formData.clientZip} onChange={set("clientZip")} placeholder="20100" className="font-mono" />
                     </div>
                   </div>
-
                   <div className="grid gap-1.5">
                     <Label className="text-xs">Città</Label>
                     <Input value={formData.clientCity} onChange={set("clientCity")} placeholder="Milano" />
                   </div>
 
-                  {/* Dati fiscali espandibili */}
-                  <button type="button" onClick={() => setShowExtra(v => !v)}
+                  <button type="button" onClick={() => setShowExtra((v) => !v)}
                     className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
                     {showExtra ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                     {showExtra ? "Nascondi" : "Aggiungi"} dati fiscali (P.IVA, C.F., SDI, PEC)
@@ -437,16 +318,12 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
 
             <Separator />
 
-            {/* ── Dati fattura ── */}
             <div className="space-y-3">
               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/70">Dati Fattura</span>
-
               <div className="grid gap-1.5">
                 <Label className="text-xs">Importo imponibile (€) *</Label>
-                <Input required type="number" step="0.01" min="0" placeholder="0.00"
-                  value={formData.amount} onChange={set("amount")} />
+                <Input required type="number" step="0.01" min="0" placeholder="0.00" value={formData.amount} onChange={set("amount")} />
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-1.5">
                   <Label className="text-xs">Data emissione *</Label>
@@ -457,10 +334,9 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
                   <Input type="date" required value={formData.dueDate} onChange={set("dueDate")} />
                 </div>
               </div>
-
               <div className="grid gap-1.5">
                 <Label className="text-xs">Stato</Label>
-                <Select value={formData.status} onValueChange={v => setFormData(prev => ({ ...prev, status: v }))}>
+                <Select value={formData.status} onValueChange={(v) => setFormData((prev) => ({ ...prev, status: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="pending">In Scadenza</SelectItem>
@@ -472,12 +348,10 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
             </div>
 
             <div className="pt-2 flex justify-end">
-              <Button
-                type="submit"
-                disabled={loading || (!selectedId && clientMode === "select" && !invoiceToEdit)}
-                className="bg-slate-900 hover:bg-slate-800 text-white"
-              >
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {/* ✅ bg-foreground invece di bg-slate-900 */}
+              <Button type="submit"
+                disabled={loading || (!selectedId && clientMode === "select" && !invoiceToEdit)}>
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
                 {invoiceToEdit ? "Salva Modifiche" : "Registra Fattura"}
               </Button>
             </div>
