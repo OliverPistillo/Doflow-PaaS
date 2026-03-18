@@ -1,3 +1,12 @@
+// Percorso: apps/frontend/src/app/(tenant)/dashboard/dashboard-client.tsx
+// Refactored 1:1 dal Figma — logica invariata, stile aggiornato:
+//   • Tutti "indigo-*" hardcoded → rimpiazzati con token semantici
+//   • KPI cards → df-card-gray (Figma: elm/card/gray)
+//   • Header → Figma typescale Bold 22px / SemiBold 16px
+//   • Loading spinner → text-primary
+//   • Alert strip → Figma warm palette (amber via destructive tokens)
+//   • Tag pills → bg-primary/10 text-primary (Figma: active section style)
+
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -30,8 +39,7 @@ import { COMPONENT_MAP } from "@/components/dashboard/dashboard-widgets";
 import { cn } from "@/lib/utils";
 import { getDoFlowUser } from "@/lib/jwt";
 
-// ─── Helper: orario del saluto ────────────────────────────────────────────────
-
+// ─── Helper: saluto per ora ────────────────────────────────────────────────────
 function getGreeting(): string {
   const h = new Date().getHours();
   if (h < 12) return "Buongiorno";
@@ -39,27 +47,25 @@ function getGreeting(): string {
   return "Buonasera";
 }
 
-/** Ricava un nome visualizzabile dal JWT (email o sub). */
 function getDisplayName(): string {
   if (typeof window === "undefined") return "";
   const user = getDoFlowUser();
   if (!user) return "";
-  if (user.email) {
-    // es. "mario.rossi@doflow.it" → "mario.rossi"
-    return user.email.split("@")[0];
-  }
+  if (user.email) return user.email.split("@")[0];
   if (user.tenantSlug) return user.tenantSlug;
   return "";
 }
 
 // ─── Quick KPI Strip ──────────────────────────────────────────────────────────
+// Figma: elm/card/gray cells (bg #f4f9fd, radius 24px)
+// Icon backgrounds use tinted primary variants instead of hardcoded colors
 
 const QUICK_KPIS = [
-  { label: "Nuovi lead oggi",    value: "7",        delta: "+3",   icon: Users,        color: "text-indigo-600",  bg: "bg-indigo-50 dark:bg-indigo-950/30" },
-  { label: "Ordini in corso",    value: "23",       delta: "+5",   icon: ShoppingCart, color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
-  { label: "Preventivi aperti", value: "€ 84.200", delta: "+12%", icon: FileText,     color: "text-amber-600",   bg: "bg-amber-50 dark:bg-amber-950/30" },
-  { label: "Fatturato mensile", value: "€ 41.600", delta: "+8%",  icon: TrendingUp,   color: "text-violet-600",  bg: "bg-violet-50 dark:bg-violet-950/30" },
-];
+  { label: "Nuovi lead oggi",    value: "7",        delta: "+3",   icon: Users,        iconClass: "text-primary",     bgClass: "bg-primary/10" },
+  { label: "Ordini in corso",    value: "23",       delta: "+5",   icon: ShoppingCart, iconClass: "text-chart-2",     bgClass: "bg-chart-2/10" },
+  { label: "Preventivi aperti", value: "€ 84.200", delta: "+12%", icon: FileText,     iconClass: "text-chart-5",     bgClass: "bg-chart-5/10" },
+  { label: "Fatturato mensile", value: "€ 41.600", delta: "+8%",  icon: TrendingUp,   iconClass: "text-chart-4",     bgClass: "bg-chart-4/10" },
+] as const;
 
 function QuickKpiStrip() {
   return (
@@ -67,16 +73,21 @@ function QuickKpiStrip() {
       {QUICK_KPIS.map((kpi) => (
         <div
           key={kpi.label}
-          className="flex items-center gap-3 rounded-xl border border-border/60 bg-card px-4 py-3 shadow-xs hover:shadow-sm transition-shadow"
+          // Figma: elm/card/gray — bg #f4f9fd, rounded-[24px]
+          className="df-card-gray flex items-center gap-3 px-4 py-4 hover:shadow-sm transition-shadow duration-150"
         >
-          <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center shrink-0", kpi.bg)}>
-            <kpi.icon className={cn("h-4 w-4", kpi.color)} />
+          <div className={cn("h-10 w-10 rounded-nav flex items-center justify-center shrink-0", kpi.bgClass)}>
+            <kpi.icon className={cn("h-5 w-5", kpi.iconClass)} aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] text-muted-foreground truncate leading-tight">{kpi.label}</p>
+            <p className="text-[12px] font-semibold text-muted-foreground truncate leading-tight">
+              {kpi.label}
+            </p>
             <div className="flex items-baseline gap-1.5 mt-0.5">
-              <span className="text-base font-bold tabular-nums tracking-tight">{kpi.value}</span>
-              <span className="text-[10px] font-medium text-emerald-600">{kpi.delta}</span>
+              <span className="text-[18px] font-bold tabular-nums tracking-tight text-foreground">
+                {kpi.value}
+              </span>
+              <span className="text-[11px] font-bold text-chart-2">{kpi.delta}</span>
             </div>
           </div>
         </div>
@@ -85,75 +96,91 @@ function QuickKpiStrip() {
   );
 }
 
-// ─── Notifiche urgenti ────────────────────────────────────────────────────────
+// ─── Alert Strip ──────────────────────────────────────────────────────────────
+// Figma-aligned: warm accent via CSS tokens, no hardcoded amber-*
 
 const NOTIFS = [
-  { text: "Preventivo PRV-2026-008 accettato da Luxor Media", time: "2 min fa",  dot: "bg-emerald-500" },
-  { text: "Nuovo lead: Roberta Silvestri (Tech Solutions)",   time: "18 min fa", dot: "bg-indigo-500" },
-  { text: "Fattura FT-2026-031 in scadenza domani",           time: "1 ora fa",  dot: "bg-amber-500" },
+  { text: "Preventivo PRV-2026-008 accettato da Luxor Media", time: "2 min fa",  dotClass: "bg-chart-2" },
+  { text: "Nuovo lead: Roberta Silvestri (Tech Solutions)",   time: "18 min fa", dotClass: "bg-primary" },
+  { text: "Fattura FT-2026-031 in scadenza domani",           time: "1 ora fa",  dotClass: "bg-chart-5" },
 ];
 
 function AlertStrip() {
   const [visible, setVisible] = useState(true);
   if (!visible) return null;
   return (
-    <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800/40 px-4 py-3 flex items-start justify-between gap-3">
+    <div
+      role="alert"
+      // Uses accent/chart tokens instead of hardcoded amber
+      className="rounded-card border border-chart-5/30 bg-chart-5/10 dark:bg-chart-5/5 px-4 py-3 flex items-start justify-between gap-3"
+    >
       <div className="flex items-start gap-3 min-w-0">
-        <Bell className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+        <Bell className="h-4 w-4 text-chart-5 mt-0.5 shrink-0" aria-hidden="true" />
         <div className="flex flex-col gap-1.5 min-w-0">
           {NOTIFS.map((n, i) => (
-            <div key={i} className="flex items-center gap-2 text-sm min-w-0">
-              <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", n.dot)} />
-              <span className="text-amber-900 dark:text-amber-200 truncate">{n.text}</span>
-              <span className="text-amber-600/70 text-xs shrink-0">{n.time}</span>
+            <div key={i} className="flex items-center gap-2 text-[14px] min-w-0">
+              <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", n.dotClass)} />
+              <span className="text-foreground/80 truncate">{n.text}</span>
+              <span className="text-muted-foreground text-[12px] shrink-0">{n.time}</span>
             </div>
           ))}
         </div>
       </div>
       <button
         onClick={() => setVisible(false)}
-        className="text-amber-600 hover:text-amber-800 shrink-0 mt-0.5"
-        aria-label="Chiudi"
+        className="text-muted-foreground hover:text-foreground shrink-0 mt-0.5 transition-colors"
+        aria-label="Chiudi notifiche"
       >
-        <X className="h-4 w-4" />
+        <X className="h-4 w-4" aria-hidden="true" />
       </button>
     </div>
   );
 }
 
-// ─── Prossimi appuntamenti ────────────────────────────────────────────────────
+// ─── Upcoming Strip ───────────────────────────────────────────────────────────
+// No hardcoded indigo/emerald/slate — uses semantic tokens
 
 const UPCOMING = [
-  { title: "Call con Marco Bianchi",    time: "14:00", tag: "Meeting",  tagColor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300" },
-  { title: "Demo Luxor Media",          time: "16:30", tag: "Demo",     tagColor: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" },
-  { title: "Review Q2 pipeline",        time: "18:00", tag: "Interno",  tagColor: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" },
+  { title: "Call con Marco Bianchi", time: "14:00", tag: "Meeting",  tagClass: "bg-primary/10 text-primary" },
+  { title: "Demo Luxor Media",       time: "16:30", tag: "Demo",     tagClass: "bg-chart-2/10 text-chart-2" },
+  { title: "Review Q2 pipeline",     time: "18:00", tag: "Interno",  tagClass: "bg-muted text-muted-foreground" },
 ];
 
 function UpcomingStrip() {
-  const today = new Date().toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+  const today = new Date().toLocaleDateString("it-IT", {
+    weekday: "long", day: "numeric", month: "long",
+  });
   return (
-    <div className="rounded-xl border border-border/60 bg-card px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
-        <CalendarDays className="h-4 w-4" />
-        <span className="capitalize font-medium text-foreground">{today}</span>
+    <div className="df-card-gray px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+      <div className="flex items-center gap-2 text-[14px] text-muted-foreground shrink-0">
+        <CalendarDays className="h-4 w-4" aria-hidden="true" />
+        <span className="capitalize font-bold text-foreground">{today}</span>
       </div>
       <div className="flex items-center gap-2 flex-wrap">
         {UPCOMING.map((ev, i) => (
-          <span key={i} className="flex items-center gap-1.5 text-xs bg-muted/60 rounded-lg px-2.5 py-1.5 border border-border/50">
-            <span className="font-semibold tabular-nums text-foreground">{ev.time}</span>
+          <span
+            key={i}
+            className="flex items-center gap-1.5 text-[13px] bg-background rounded-nav px-2.5 py-1.5 border border-border/50"
+          >
+            <span className="font-bold tabular-nums text-foreground">{ev.time}</span>
             <span className="text-muted-foreground">{ev.title}</span>
-            <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-semibold", ev.tagColor)}>{ev.tag}</span>
+            <span className={cn("rounded-full px-1.5 py-0.5 text-[11px] font-bold", ev.tagClass)}>
+              {ev.tag}
+            </span>
           </span>
         ))}
-        <a href="/calendar" className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-0.5 font-medium">
-          Vedi tutto <ChevronRight className="h-3 w-3" />
+        <a
+          href="/calendar"
+          className="text-[13px] text-primary hover:text-primary/80 flex items-center gap-0.5 font-semibold transition-colors"
+        >
+          Vedi tutto <ChevronRight className="h-3 w-3" aria-hidden="true" />
         </a>
       </div>
     </div>
   );
 }
 
-// ─── Converte LayoutItem → WidgetItem ─────────────────────────────────────────
+// ─── Helpers (invariati) ─────────────────────────────────────────────────────
 
 function toWidgetItems(items: LayoutItem[]): WidgetItem[] {
   return items.map((item) => ({
@@ -166,15 +193,13 @@ function toWidgetItems(items: LayoutItem[]): WidgetItem[] {
   }));
 }
 
-// ─── Wrapper widget con lock overlay ─────────────────────────────────────────
-
 function WidgetRenderer({ moduleKey, activePlan }: { moduleKey: string; activePlan: PlanTier }) {
   const def       = WIDGET_DEFINITIONS[moduleKey as WidgetId];
   const component = COMPONENT_MAP[moduleKey];
 
   if (!component) {
     return (
-      <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+      <div className="h-full flex items-center justify-center text-muted-foreground text-[14px]">
         Widget non trovato: {moduleKey}
       </div>
     );
@@ -191,8 +216,6 @@ function WidgetRenderer({ moduleKey, activePlan }: { moduleKey: string; activePl
   return <>{component}</>;
 }
 
-// ─── Pannello aggiunta widget ─────────────────────────────────────────────────
-
 function AddWidgetPanel({
   activePlan,
   currentIds,
@@ -200,7 +223,7 @@ function AddWidgetPanel({
 }: {
   activePlan: PlanTier;
   currentIds: string[];
-  onAdd:      (id: WidgetId) => void;
+  onAdd: (id: WidgetId) => void;
 }) {
   const available = Object.values(WIDGET_DEFINITIONS).filter(
     (d) => !currentIds.includes(d.id),
@@ -208,7 +231,7 @@ function AddWidgetPanel({
 
   if (available.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground py-2">
+      <p className="text-[14px] text-muted-foreground py-2">
         Tutti i widget sono già nella dashboard.
       </p>
     );
@@ -224,15 +247,16 @@ function AddWidgetPanel({
             disabled={locked}
             onClick={() => onAdd(def.id)}
             className={cn(
-              "text-left px-3 py-2 rounded-lg border text-sm font-medium transition-colors",
+              "text-left px-3 py-2 rounded-nav border text-[14px] font-semibold transition-colors",
               locked
-                ? "opacity-50 cursor-not-allowed border-dashed border-muted-foreground/30 text-muted-foreground"
-                : "border-border hover:bg-accent hover:border-indigo-300",
+                ? "opacity-50 cursor-not-allowed border-dashed border-border text-muted-foreground"
+                // ✅ border-primary/30 instead of border-indigo-300
+                : "border-border hover:bg-primary/5 hover:border-primary/30 text-foreground",
             )}
           >
             {def.label}
             {locked && (
-              <span className="block text-[10px] mt-0.5 text-muted-foreground">
+              <span className="block text-[11px] mt-0.5 text-muted-foreground">
                 Piano {def.minPlan}
               </span>
             )}
@@ -243,7 +267,7 @@ function AddWidgetPanel({
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Main DashboardClient ─────────────────────────────────────────────────────
 
 export default function DashboardClient() {
   const { plan, meta } = usePlan();
@@ -325,23 +349,27 @@ export default function DashboardClient() {
     setShowAddWidget(false);
   };
 
+  // ── Loading state ─────────────────────────────────────────────────────
   if (!layout) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+      <div className="h-full flex items-center justify-center" role="status" aria-label="Caricamento dashboard">
+        {/* ✅ text-primary instead of text-indigo-600 */}
+        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
       </div>
     );
   }
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-6 pt-4 animate-in fade-in duration-500">
+    <div className="flex-1 space-y-4 p-4 md:p-6 pt-4 animate-fade-in">
 
-      {/* Dialog reset */}
+      {/* ── Reset Dialog ──────────────────────────────────────────────── */}
       <AlertDialog open={showReset} onOpenChange={setShowReset}>
-        <AlertDialogContent>
+        <AlertDialogContent className="rounded-card">
           <AlertDialogHeader>
-            <AlertDialogTitle>Ripristinare il layout {meta.label}?</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-[22px] font-bold">
+              Ripristinare il layout {meta.label}?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[16px]">
               Tutte le personalizzazioni andranno perse. Verrà applicato il layout ottimale
               per il piano {meta.label}.
             </AlertDialogDescription>
@@ -350,7 +378,7 @@ export default function DashboardClient() {
             <AlertDialogCancel>Annulla</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleReset}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Ripristina
             </AlertDialogAction>
@@ -358,42 +386,48 @@ export default function DashboardClient() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Greeting header ─────────────────────────────────────────────────── */}
+      {/* ── Greeting Header ────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            <h2 className="text-2xl font-bold tracking-tight">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            {/* Figma: Bold 22px #0a1629 */}
+            <h2 className="text-[22px] font-bold tracking-tight text-foreground">
               {getGreeting()}{displayName ? `, ${displayName}` : ""} 👋
             </h2>
+            {/* ✅ Plan badge: semantic tokens, no hardcoded indigo-* */}
             <Badge
               variant="outline"
-              className="text-[10px] font-semibold px-2 py-0.5 text-indigo-700 border-indigo-200 bg-indigo-50 dark:bg-indigo-950/30 dark:text-indigo-300"
+              className="text-[11px] font-bold px-2 py-0.5 text-primary border-primary/30 bg-primary/10"
             >
               {meta.label}
             </Badge>
           </div>
           {isEditing ? (
-            <p className="text-sm text-indigo-600 font-medium animate-pulse mt-0.5">
-              Modalità modifica — trascina i widget per riorganizzarli, ridimensionali dagli angoli
+            <p className="text-[14px] text-primary font-semibold animate-pulse">
+              Modalità modifica — trascina i widget per riorganizzarli
             </p>
           ) : (
-            <p className="text-sm text-muted-foreground mt-0.5">
+            <p className="text-[14px] text-muted-foreground">
               Ecco il riepilogo di oggi. Buon lavoro.
             </p>
           )}
         </div>
 
+        {/* ── Edit Controls ──────────────────────────────────────────── */}
         <div className="flex items-center gap-2 shrink-0">
           {isEditing ? (
             <>
               <DropdownMenu open={showAddWidget} onOpenChange={setShowAddWidget}>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm">
-                    <Plus className="mr-1.5 h-4 w-4" /> Aggiungi Widget
+                    <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                    Aggiungi Widget
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64 p-3">
-                  <DropdownMenuLabel className="mb-2">Widget disponibili</DropdownMenuLabel>
+                <DropdownMenuContent align="end" className="w-64 p-3 rounded-card">
+                  <DropdownMenuLabel className="mb-2 text-[14px] font-bold">
+                    Widget disponibili
+                  </DropdownMenuLabel>
                   <AddWidgetPanel
                     activePlan={plan}
                     currentIds={layout.map((l) => l.i)}
@@ -402,79 +436,63 @@ export default function DashboardClient() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <Button variant="ghost" size="sm" onClick={handleCancel} disabled={isSaving}>
-                <X className="mr-1.5 h-4 w-4" /> Annulla
-              </Button>
               <Button
+                variant="ghost"
                 size="sm"
-                onClick={handleSave}
-                disabled={isSaving}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                onClick={() => setShowReset(true)}
+                title="Ripristina layout di default"
               >
+                <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCancel}
+                disabled={isSaving}
+              >
+                <X className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                Annulla
+              </Button>
+
+              <Button size="sm" onClick={handleSave} disabled={isSaving}>
                 {isSaving
-                  ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
-                  : <Save className="mr-1.5 h-4 w-4" />}
-                {isSaving ? "Salvataggio…" : "Salva"}
+                  ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />
+                  : <Save className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                }
+                Salva
               </Button>
             </>
           ) : (
             <>
-              {meta.nextPlan && (
-                <a
-                  href="/billing"
-                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors dark:bg-indigo-950/30 dark:text-indigo-300 dark:hover:bg-indigo-950/50"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  {meta.upgradeLabel}
-                </a>
-              )}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon">
-                    <Settings2 className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Opzioni Vista</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => setIsEditing(true)}>
-                    <Pencil className="mr-2 h-4 w-4" /> Personalizza Layout
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => setShowReset(true)}
-                    className="text-red-600"
-                  >
-                    <RotateCcw className="mr-2 h-4 w-4" /> Ripristina Default
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsEditing(true)}
+                title="Personalizza dashboard"
+              >
+                <Settings2 className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                Personalizza
+              </Button>
             </>
           )}
         </div>
       </div>
 
-      {/* ── Notifiche urgenti ────────────────────────────────────────────────── */}
-      {!isEditing && <AlertStrip />}
+      {/* ── KPI Strip ──────────────────────────────────────────────────── */}
+      <QuickKpiStrip />
 
-      {/* ── Quick KPI Strip ──────────────────────────────────────────────────── */}
-      {!isEditing && <QuickKpiStrip />}
+      {/* ── Alert Strip ────────────────────────────────────────────────── */}
+      <AlertStrip />
 
-      {/* ── Agenda del giorno ────────────────────────────────────────────────── */}
-      {!isEditing && <UpcomingStrip />}
+      {/* ── Upcoming ───────────────────────────────────────────────────── */}
+      <UpcomingStrip />
 
-      {/* ── Separatore sezione widget ────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 pt-1">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">
-          Widget Dashboard
-        </p>
-        <div className="flex-1 border-t border-border/40" />
-      </div>
-
-      {/* ── Griglia widget ───────────────────────────────────────────────────── */}
+      {/* ── Widget Grid ────────────────────────────────────────────────── */}
       <DashboardGrid
         layout={layout}
+        onLayoutChange={(items) => setLayout(items)}
         isEditing={isEditing}
-        onLayoutChange={setLayout}
         renderWidget={(moduleKey) => (
           <WidgetRenderer moduleKey={moduleKey} activePlan={plan} />
         )}

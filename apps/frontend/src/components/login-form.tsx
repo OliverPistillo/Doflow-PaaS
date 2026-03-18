@@ -1,3 +1,13 @@
+// Percorso: apps/frontend/src/components/login-form.tsx
+// Refactored 1:1 dal Figma — logica auth invariata, solo stile aggiornato
+// Figma tokens applicati:
+//   - card bg: #ffffff, radius 24px, shadow-card
+//   - button: #3f8cff, radius 14px, shadow-button
+//   - input: border radius 14px, h-12
+//   - font: Nunito Sans Bold/SemiBold
+//   - text primary: #0a1629, muted: #7d8592
+//   - bg body: #f4f9fd
+
 "use client";
 
 import * as React from "react";
@@ -27,7 +37,7 @@ import {
 
 import { Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 
-// --- CONFIGURAZIONE ---
+// ── CONFIGURAZIONE (invariata) ────────────────────────────────────────────────
 const MAIN_DB_NAME = "public";
 
 type JwtPayload = {
@@ -36,11 +46,10 @@ type JwtPayload = {
   tenantId?: string;
   tenant_id?: string;
   tenantSlug?: string;
-  authStage?: string;     // Aggiunto per supporto MFA
-  mfa_pending?: boolean;  // Aggiunto per supporto MFA
+  authStage?: string;
+  mfa_pending?: boolean;
 };
 
-// Funzione helper per leggere il token
 function parseJwtPayload(token: string): JwtPayload | null {
   try {
     const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
@@ -56,7 +65,6 @@ function normalizeRole(role?: string) {
   return "USER";
 }
 
-// Helper per capire se il token è in stato "MFA pending"
 function isMfaPending(payload?: any) {
   return payload?.mfa_pending === true || payload?.authStage === "MFA_PENDING";
 }
@@ -89,22 +97,21 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-// Aggiornato type LoginResponse per MFA
-type LoginResponse = { 
-  token: string; 
-  error?: string; 
+type LoginResponse = {
+  token: string;
+  error?: string;
   message?: string;
   mfa?: {
-    required?: boolean;         // MFA richiesto adesso
-    pending?: boolean;          // token è MFA_PENDING
-    redirect?: string;          // opzionale: path consigliato es. "/{tenantSlug}/mfa"
+    required?: boolean;
+    pending?: boolean;
+    redirect?: string;
   };
-  user?: { 
+  user?: {
     tenantSlug?: string;
     tenant_id?: string;
     schema?: string;
     role?: string;
-  }
+  };
 };
 
 function getHostContext() {
@@ -114,9 +121,9 @@ function getHostContext() {
       : "app.doflow.it";
 
   const isAppHost =
-    host.startsWith("app.") || 
-    host.startsWith("admin.") || 
-    host === "doflow.it" || 
+    host.startsWith("app.") ||
+    host.startsWith("admin.") ||
+    host === "doflow.it" ||
     host.includes("localhost");
 
   const subdomain = host.endsWith(".doflow.it")
@@ -133,13 +140,13 @@ function getHostContext() {
   return { host, isAppHost, tenantSub };
 }
 
+// ── LoginForm Component ───────────────────────────────────────────────────────
+
 export function LoginForm() {
   const router = useRouter();
   const [showPassword, setShowPassword] = React.useState(false);
   const [generalError, setGeneralError] = React.useState<string | null>(null);
   const [slide, setSlide] = React.useState(0);
-
-  // Stati per il redirect tenant
   const [showTenantRedirect, setShowTenantRedirect] = React.useState(false);
   const [tenantRedirectUrl, setTenantRedirectUrl] = React.useState<string | null>(null);
   const [tenantDialogMode, setTenantDialogMode] = React.useState<"redirect" | "info">("redirect");
@@ -153,30 +160,17 @@ export function LoginForm() {
     defaultValues: { email: "", password: "" },
   });
 
-  // =========================================================
-  // 1. GESTIONE ARRIVO SUL TENANT (Il "Check-in" automatico)
-  // =========================================================
+  // ── Effetti (invariati) ───────────────────────────────────────────────────
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tokenFromUrl = params.get("accessToken");
-    
     if (tokenFromUrl) {
-      // Puliamo vecchi token
       window.localStorage.removeItem("doflow_token");
-      console.log("🔄 Token rilevato nell'URL. Configurazione ambiente...");
-      
-      // Salviamo il nuovo token
       window.localStorage.setItem("doflow_token", tokenFromUrl);
-      
-      // Decodifichiamo il token per sapere DOVE andare
       const payload = parseJwtPayload(tokenFromUrl);
       const tenantSlug = payload?.tenantSlug || payload?.tenantId;
-
-      // Gestione redirect (MFA vs Dashboard)
       const next = (params.get("next") || "").toLowerCase();
       const goMfa = next === "mfa" || isMfaPending(payload);
-
-      // 🔥 FIX: Reindirizziamo alla cartella specifica del tenant (/federicanerone/...)
       if (tenantSlug && tenantSlug !== "public") {
         window.location.href = goMfa ? `/${tenantSlug}/mfa` : `/${tenantSlug}/dashboard`;
       } else {
@@ -190,7 +184,6 @@ export function LoginForm() {
     return () => clearInterval(id);
   }, []);
 
-  // Redirect automatico (dalla finestra modale)
   React.useEffect(() => {
     if (!showTenantRedirect || !tenantRedirectUrl) return;
     const t = setTimeout(() => {
@@ -199,27 +192,21 @@ export function LoginForm() {
     return () => clearTimeout(t);
   }, [showTenantRedirect, tenantRedirectUrl]);
 
+  // ── Submit (invariato) ────────────────────────────────────────────────────
   const onSubmit = async (values: LoginFormValues) => {
     setGeneralError(null);
-
     const { isAppHost, tenantSub } = getHostContext();
     const realm = isAppHost ? "platform" : "tenant";
 
     try {
       const headers: Record<string, string> = {};
-      if (isAppHost) {
-        headers['x-doflow-tenant-id'] = MAIN_DB_NAME;
-      }
+      if (isAppHost) headers["x-doflow-tenant-id"] = MAIN_DB_NAME;
 
       const data = await apiFetch<LoginResponse>("/auth/login", {
         method: "POST",
         auth: false,
-        headers, 
-        body: JSON.stringify({
-          ...values,
-          realm,
-          tenantSlug: tenantSub ?? undefined,
-        }),
+        headers,
+        body: JSON.stringify({ ...values, realm, tenantSlug: tenantSub ?? undefined }),
       });
 
       if (data?.error) throw new Error(data.error || data.message);
@@ -230,88 +217,51 @@ export function LoginForm() {
       const role = normalizeRole(payload?.role);
 
       let targetTenant = "public";
-
       if (data.user?.schema || data.user?.tenantSlug || data.user?.tenant_id) {
-          targetTenant = (data.user.schema || data.user.tenantSlug || data.user.tenant_id || "public").toLowerCase();
+        targetTenant = (data.user.schema || data.user.tenantSlug || data.user.tenant_id || "public").toLowerCase();
       } else if (payload?.tenantSlug || payload?.tenantId || payload?.tenant_id) {
-          targetTenant = (payload.tenantSlug || payload.tenantId || payload.tenant_id || "public").toLowerCase();
+        targetTenant = (payload.tenantSlug || payload.tenantId || payload.tenant_id || "public").toLowerCase();
       }
 
-      console.log(`🔍 Login Check: Ruolo [${role}], Tenant Rilevato [${targetTenant}]`);
-
-      // 0. CHECK MFA (Priorità assoluta)
       const mfaRequired = data?.mfa?.required === true || isMfaPending(payload);
-
       if (mfaRequired) {
-        // salva comunque il token (anche se MFA_PENDING)
         window.localStorage.setItem("doflow_token", token);
-
-        // Se siamo su app host, dobbiamo mandare l'utente sul dominio tenant,
-        // MA sulla pagina /mfa (non /login e non /dashboard).
         if (isAppHost) {
           if (targetTenant !== "public" && /^[a-z0-9_]+$/i.test(targetTenant)) {
             const safeToken = encodeURIComponent(token);
-            // Aggiungiamo next=mfa all'URL
-            const redirectUrl = `https://${targetTenant}.doflow.it/login?accessToken=${safeToken}&next=mfa`;
-            
-            setTenantRedirectUrl(redirectUrl);
+            setTenantRedirectUrl(`https://${targetTenant}.doflow.it/login?accessToken=${safeToken}&next=mfa`);
             setTenantDialogMode("redirect");
             setShowTenantRedirect(true);
             return;
           }
-
-          // fallback super raro: MFA su public da app host
           router.push(`/mfa`);
           return;
         }
-
-        // siamo già sul dominio tenant: vai a /{tenant}/mfa (enterprise-safe)
-        if (tenantSub) {
-          router.push(`/${tenantSub}/mfa`);
-          return;
-        }
-
-        router.push(`/mfa`);
+        router.push(tenantSub ? `/${tenantSub}/mfa` : `/mfa`);
         return;
       }
 
-      // 1. SUPERADMIN
       if (role === "SUPER_ADMIN") {
         window.localStorage.setItem("doflow_token", token);
         router.push("/superadmin");
         return;
       }
 
-      // 2. REDIRECT VERSO DOMINIO TENANT
       if (isAppHost) {
         if (targetTenant !== "public" && /^[a-z0-9_]+$/i.test(targetTenant)) {
-          
-          // Encode per sicurezza (gestisce i caratteri + / = nel token)
           const safeToken = encodeURIComponent(token);
-          const redirectUrl = `https://${targetTenant}.doflow.it/login?accessToken=${safeToken}`;
-          
-          setTenantRedirectUrl(redirectUrl);
+          setTenantRedirectUrl(`https://${targetTenant}.doflow.it/login?accessToken=${safeToken}`);
           setTenantDialogMode("redirect");
           setShowTenantRedirect(true);
           return;
-        } 
-        
-        // Fallback se non siamo riusciti a determinare un tenant
+        }
         window.localStorage.setItem("doflow_token", token);
         router.push("/dashboard");
         return;
       }
 
-      // 3. UTENTE GIÀ SUL DOMINIO CORRETTO
       window.localStorage.setItem("doflow_token", token);
-      if (tenantSub) {
-        // Se siamo già su federicanerone.doflow.it, andiamo alla dashboard specifica
-        router.push(`/${tenantSub}/dashboard`);
-        return;
-      }
-
-      router.push("/dashboard");
-      
+      router.push(tenantSub ? `/${tenantSub}/dashboard` : "/dashboard");
     } catch (err: any) {
       setGeneralError(err?.message || "Si è verificato un errore imprevisto.");
     }
@@ -319,19 +269,21 @@ export function LoginForm() {
 
   return (
     <>
+      {/* ── Redirect Dialog ─────────────────────────────────────────────── */}
       <AlertDialog open={showTenantRedirect} onOpenChange={setShowTenantRedirect}>
-        <AlertDialogContent>
+        <AlertDialogContent className="rounded-card">
           <AlertDialogHeader>
-            <AlertDialogTitle>Accesso al dominio aziendale</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-[22px] font-bold">
+              Accesso al dominio aziendale
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[16px]">
               {tenantDialogMode === "redirect" ? (
                 <>
                   Accesso effettuato correttamente.
                   <br />
                   Ti stiamo reindirizzando al tuo spazio di lavoro aziendale.
-                  <br />
-                  <div className="flex items-center gap-2 mt-4 p-3 bg-muted rounded-md text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" /> 
+                  <div className="flex items-center gap-2 mt-4 p-3 bg-figma-gray rounded-nav text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
                     <span>Reindirizzamento in corso...</span>
                   </div>
                 </>
@@ -344,66 +296,102 @@ export function LoginForm() {
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
-
           <AlertDialogFooter>
             {!tenantRedirectUrl && (
-                <AlertDialogAction onClick={() => setShowTenantRedirect(false)}>
+              <AlertDialogAction onClick={() => setShowTenantRedirect(false)}>
                 Ok
-                </AlertDialogAction>
+              </AlertDialogAction>
             )}
             {tenantRedirectUrl && (
-                <AlertDialogAction onClick={() => window.location.href = tenantRedirectUrl!}>
+              <AlertDialogAction onClick={() => window.location.href = tenantRedirectUrl!}>
                 Vai ora
-                </AlertDialogAction>
+              </AlertDialogAction>
             )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      <Card className="mx-auto w-full max-w-[1100px] overflow-hidden border-none shadow-2xl sm:border sm:border-border">
-        <div className="grid min-h-[650px] lg:grid-cols-2">
-          {/* FORM AREA */}
-          <div className="flex flex-col justify-center bg-card p-8 md:p-12 lg:p-16">
-            <div className="mx-auto w-full max-w-[350px] space-y-8">
-              <div className="flex flex-col items-center space-y-2 text-center">
+      {/* ── Login Card ──────────────────────────────────────────────────── */}
+      {/*
+        Figma: Card at root = elm/card/main
+          • bg: #ffffff
+          • border-radius: 24px  (rounded-card)
+          • shadow: 0px 6px 58px rgba(196,203,214,0.10)  (shadow-card)
+          • no visible border
+      */}
+      <Card className="mx-auto w-full max-w-[1100px] overflow-hidden border-none">
+        <div className="grid min-h-[680px] lg:grid-cols-2">
+
+          {/* ── Form Panel ──────────────────────────────────────────────── */}
+          <div className="flex flex-col justify-center bg-card px-8 py-12 md:px-12 lg:px-16">
+            <div className="mx-auto w-full max-w-[360px] space-y-8">
+
+              {/* Brand */}
+              <div className="flex flex-col items-center space-y-3 text-center">
                 <Image
                   src="/doflow_logo.svg"
                   alt="Doflow"
                   width={120}
                   height={40}
-                  className="mb-4 h-10 w-auto object-contain"
+                  className="mb-2 h-10 w-auto object-contain"
                   priority
                 />
-                <h1 className="text-2xl font-bold tracking-tight">Bentornato</h1>
-                <p className="text-sm text-muted-foreground">
+                {/* Figma: Bold 22px #0a1629 */}
+                <h1 className="text-[22px] font-bold tracking-tight text-foreground">
+                  Bentornato
+                </h1>
+                {/* Figma: Regular 16px #7d8592 */}
+                <p className="text-[16px] text-muted-foreground">
                   Inserisci le tue credenziali per accedere.
                 </p>
               </div>
 
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              {/* Form */}
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+
+                {/* Email */}
                 <div className="grid gap-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label
+                    htmlFor="email"
+                    className="text-[14px] font-bold text-foreground"
+                  >
+                    Email
+                  </Label>
                   <Input
                     id="email"
                     type="email"
                     placeholder="nome@azienda.it"
                     disabled={isSubmitting}
-                    className={cn(errors.email && "border-destructive focus-visible:ring-destructive")}
+                    aria-invalid={!!errors.email}
+                    aria-describedby={errors.email ? "email-error" : undefined}
+                    className={cn(
+                      errors.email && "border-destructive focus-visible:ring-destructive"
+                    )}
                     {...register("email")}
                   />
                   {errors.email && (
-                    <p className="text-[11px] font-medium text-destructive">
+                    <p
+                      id="email-error"
+                      role="alert"
+                      className="text-[12px] font-semibold text-destructive"
+                    >
                       {errors.email.message}
                     </p>
                   )}
                 </div>
 
+                {/* Password */}
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="password">Password</Label>
+                    <Label
+                      htmlFor="password"
+                      className="text-[14px] font-bold text-foreground"
+                    >
+                      Password
+                    </Label>
                     <Link
                       href="/forgot-password"
-                      className="text-xs font-semibold text-primary hover:underline"
+                      className="text-[14px] font-semibold text-primary hover:underline"
                     >
                       Dimenticata?
                     </Link>
@@ -414,36 +402,60 @@ export function LoginForm() {
                       type={showPassword ? "text" : "password"}
                       placeholder="••••••••"
                       disabled={isSubmitting}
-                      className={cn("pr-10", errors.password && "border-destructive")}
+                      aria-invalid={!!errors.password}
+                      aria-describedby={errors.password ? "password-error" : undefined}
+                      className={cn(
+                        "pr-12",
+                        errors.password && "border-destructive focus-visible:ring-destructive"
+                      )}
                       {...register("password")}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                       disabled={isSubmitting}
+                      aria-label={showPassword ? "Nascondi password" : "Mostra password"}
                     >
-                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      {showPassword
+                        ? <EyeOff size={18} aria-hidden="true" />
+                        : <Eye size={18} aria-hidden="true" />
+                      }
                     </button>
                   </div>
                   {errors.password && (
-                    <p className="text-[11px] font-medium text-destructive">
+                    <p
+                      id="password-error"
+                      role="alert"
+                      className="text-[12px] font-semibold text-destructive"
+                    >
                       {errors.password.message}
                     </p>
                   )}
                 </div>
 
+                {/* Error banner */}
                 {generalError && (
-                  <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive border border-destructive/20">
-                    <AlertCircle size={16} />
+                  <div
+                    role="alert"
+                    className="flex items-center gap-3 rounded-nav bg-destructive/10 px-4 py-3 text-[14px] text-destructive border border-destructive/20"
+                  >
+                    <AlertCircle size={16} aria-hidden="true" className="shrink-0" />
                     <span>{generalError}</span>
                   </div>
                 )}
 
-                <Button type="submit" className="w-full h-11 font-semibold" disabled={isSubmitting}>
+                {/* Submit — Figma: elm/button/mainbutton h-12 shadow-button */}
+                <Button
+                  type="submit"
+                  className="w-full"
+                  size="default"
+                  disabled={isSubmitting}
+                >
                   {isSubmitting ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> In corso...
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                      In corso...
                     </>
                   ) : (
                     "Accedi"
@@ -451,13 +463,14 @@ export function LoginForm() {
                 </Button>
               </form>
 
-              <p className="text-center text-[11px] text-muted-foreground leading-relaxed">
+              {/* Legal */}
+              <p className="text-center text-[12px] text-muted-foreground leading-relaxed">
                 Cliccando su Accedi, accetti i nostri{" "}
-                <Link href="/terms" className="underline underline-offset-4 hover:text-primary">
+                <Link href="/terms" className="underline underline-offset-4 hover:text-primary font-semibold">
                   Termini
                 </Link>{" "}
                 e la{" "}
-                <Link href="/privacy" className="underline underline-offset-4 hover:text-primary">
+                <Link href="/privacy" className="underline underline-offset-4 hover:text-primary font-semibold">
                   Privacy Policy
                 </Link>
                 .
@@ -465,15 +478,20 @@ export function LoginForm() {
             </div>
           </div>
 
-          {/* SLIDER AREA */}
-          <div className="relative hidden lg:block bg-muted overflow-hidden">
+          {/* ── Slider Panel ────────────────────────────────────────────── */}
+          {/*
+            Figma: right panel is a rich visual area
+            bg-figma-gray matches the body background for seamless bleed
+          */}
+          <div className="relative hidden lg:block bg-figma-blue overflow-hidden">
             {SLIDES.map((s, i) => (
               <div
                 key={i}
                 className={cn(
                   "absolute inset-0 transition-opacity duration-1000 ease-in-out",
-                  i === slide ? "opacity-100 z-10" : "opacity-0 z-0",
+                  i === slide ? "opacity-100 z-10" : "opacity-0 z-0"
                 )}
+                aria-hidden={i !== slide}
               >
                 <Image
                   src={s.src}
@@ -482,14 +500,34 @@ export function LoginForm() {
                   priority={i === 0}
                   className="object-cover"
                 />
+                {/* Gradient overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+
+                {/* Quote */}
                 <div className="absolute bottom-0 left-0 p-12 text-white w-full">
-                  <blockquote className="text-lg font-medium leading-relaxed italic">
+                  <blockquote className="text-[18px] font-semibold leading-relaxed italic">
                     &ldquo;{s.quote}&rdquo;
                   </blockquote>
-                  <p className="mt-4 text-sm font-semibold text-white/80">
+                  <p className="mt-4 text-[14px] font-bold text-white/80">
                     — {s.author}
                   </p>
+
+                  {/* Slide dots */}
+                  <div className="flex items-center gap-2 mt-6" role="tablist" aria-label="Slide indicators">
+                    {SLIDES.map((_, di) => (
+                      <button
+                        key={di}
+                        role="tab"
+                        aria-selected={di === slide}
+                        aria-label={`Slide ${di + 1}`}
+                        onClick={() => setSlide(di)}
+                        className={cn(
+                          "h-1.5 rounded-full transition-all duration-300",
+                          di === slide ? "w-6 bg-white" : "w-1.5 bg-white/40"
+                        )}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
             ))}

@@ -1,5 +1,5 @@
-/* Percorso: C:\Doflow\apps\frontend\src\app\globals.css */
-@import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@300;400;500;600;700;800;900&display=swap');
+/* Percorso: apps/frontend/src/app/globals.css */
+@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,300;0,6..12,400;0,6..12,600;0,6..12,700;0,6..12,800;1,6..12,400&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -8,1072 +8,239 @@
 @layer base {
 
   /* ═══════════════════════════════════════════════════════════════════
-     LIGHT THEME — DoFlow Warm Palette (Default / Neutro)
+     LIGHT THEME — DoFlow CRM (Figma: CRM-Workroom-Community)
+     Valori estratti 1:1 dal file Figma node-id="0:1"
+     ─────────────────────────────────────────────────────────────────
+     Figma Palette:
+       Background body:  #f4f9fd  → hsl(208 68% 97%)
+       Card white:       #ffffff
+       Card gray:        #f4f9fd
+       Primary blue:     #3f8cff  → hsl(214 100% 62%)
+       Text dark:        #0a1629  → hsl(220 82% 10%)
+       Text muted:       #7d8592  → hsl(218 8% 54%)
+       Sidebar card bg:  #ffffff  (rounded-[24px])
+       Active section:   #3f8cff  at 10% opacity
   ═══════════════════════════════════════════════════════════════════ */
   :root {
-    --yellow:  #F5ED31;
-    --orange:  #FF934F;
-    --dark:    #0D0C0B;
+    /* ── Figma raw primitives ──────────────────────────────────────── */
+    --figma-blue:          #3f8cff;
+    --figma-bg:            #f4f9fd;
+    --figma-card-white:    #ffffff;
+    --figma-card-gray:     #f4f9fd;
+    --figma-text-dark:     #0a1629;
+    --figma-text-muted:    #7d8592;
+    --figma-support-card:  #3f8cff;   /* lightblue card at 10% */
 
-    --bg-body:              linear-gradient(145deg, #ece8e1 0%, #e0dbd3 40%, #d8d2c8 100%);
-    --bg-sidebar:           transparent;
-    --bg-sidebar-open:      rgba(255, 255, 255, 0.72);
-    --bg-surface:           #ffffff;
-    --bg-surface-2:         rgba(255, 255, 255, 0.55);
-    --bg-input:             #ffffff;
-    --bg-hover:             rgba(255, 255, 255, 0.65);
-    --bg-thumb:             #f0f0f0;
+    /* ── shadcn/ui semantic tokens (mapped from Figma) ────────────── */
+    --background:           208 68% 97%;   /* #f4f9fd */
+    --foreground:           220 82% 10%;   /* #0a1629 */
 
-    --text-primary:         #1a1a1a;
-    --text-secondary:       #6b6b6b;
-    --text-placeholder:     #bbbbbb;
-
-    --border-sidebar:       transparent;
-    --border-sidebar-open:  rgba(255, 255, 255, 0.50);
-    --border-card:          rgba(255, 255, 255, 0.30);
-    --border-divider:       #eeeeee;
-    --border-table:         #f0f0f0;
-    --border-row:           #f8f8f8;
-    --border-checkbox:      #dddddd;
-
-    --icon-color:           #9b9b9b;
-    --icon-active-bg:       #ffffff;
-    --icon-active-color:    #1a1a1a;
-    --icon-active-shadow:   0 2px 10px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06);
-
-    --card-logistics-bg:    linear-gradient(135deg, rgba(245,237,49,0.25) 0%, rgba(255,147,79,0.15) 100%);
-    --delay-time-bg:        rgba(255, 255, 255, 0.70);
-    --demand-high-bg:       #fff0e6;
-    --demand-high-color:    #e8722a;
-    --demand-low-bg:        #e6f9ee;
-    --demand-low-color:     #2aad5a;
-
-    --filters-bg:           #ffffff;
-    --filter-divider:       #eeeeee;
-    --filter-btn-hover:     #f5f5f5;
-    --table-bg:             #ffffff;
-
-    --shadow-sm:            0 1px 4px rgba(0,0,0,0.06);
-    --shadow-md:            0 2px 10px rgba(0,0,0,0.10);
-    --shadow-sidebar:       none;
-    --shadow-sidebar-open:  4px 0 24px rgba(0,0,0,0.07);
-
-    --logo-color:           #0D0C0B;
-    --scrollbar-thumb:      #cccccc;
-    --toggle-bg:            #1a1a1a;
-    --toggle-color:         #ffffff;
-
-    --background:           38 25% 90%;
-    --foreground:           0 0% 10%;
-
-    --card:                 0 0% 100%;
-    --card-foreground:      0 0% 10%;
+    --card:                 0 0% 100%;     /* #ffffff */
+    --card-foreground:      220 82% 10%;
 
     --popover:              0 0% 100%;
-    --popover-foreground:   0 0% 10%;
+    --popover-foreground:   220 82% 10%;
 
-    --primary:              244 76% 58%;
+    --primary:              214 100% 62%;  /* #3f8cff */
     --primary-foreground:   0 0% 100%;
 
-    --secondary:            38 20% 94%;
-    --secondary-foreground: 0 0% 20%;
+    --secondary:            208 68% 97%;   /* #f4f9fd (card gray) */
+    --secondary-foreground: 220 82% 10%;
 
-    --muted:                38 16% 93%;
-    --muted-foreground:     0 0% 42%;
+    --muted:                208 40% 95%;
+    --muted-foreground:     218 8% 54%;    /* #7d8592 */
 
-    --accent:               44 90% 56%;
-    --accent-foreground:    0 0% 7%;
+    --accent:               214 100% 62%;
+    --accent-foreground:    0 0% 100%;
 
     --destructive:          0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border:               38 12% 88%;
+    --border:               214 20% 90%;
     --input:                0 0% 100%;
-    --ring:                 244 76% 58%;
-    --radius:               0.75rem;
+    --ring:                 214 100% 62%;
 
-    --sidebar-background:   38 25% 96%;
-    --sidebar-foreground:   0 0% 26%;
-    --sidebar-primary:      244 76% 58%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent:       38 16% 93%;
-    --sidebar-accent-foreground: 0 0% 10%;
-    --sidebar-border:       38 12% 91%;
-    --sidebar-ring:         244 76% 58%;
+    /* ── Radius scale — Figma uses 24px cards / 14px buttons / 10px nav ── */
+    --radius:               0.875rem;      /* 14px — button base */
+    --radius-card:          1.5rem;        /* 24px — card/panel */
+    --radius-nav:           0.625rem;      /* 10px — sidebar active section */
+    --radius-badge:         0.25rem;       /* 4px  — level badge */
 
-    --chart-1:              244 76% 60%;
-    --chart-2:              28  90% 58%;
-    --chart-3:              152 60% 42%;
+    /* ── Sidebar ─────────────────────────────────────────────────── */
+    --sidebar-background:            208 68% 99%;
+    --sidebar-foreground:            220 82% 10%;
+    --sidebar-primary:               214 100% 62%;
+    --sidebar-primary-foreground:    0 0% 100%;
+    --sidebar-accent:                214 100% 62%;   /* used at /10 opacity */
+    --sidebar-accent-foreground:     214 100% 62%;   /* text stays blue */
+    --sidebar-border:                214 20% 92%;
+    --sidebar-ring:                  214 100% 62%;
+
+    /* ── Card shadow (Figma: 0px 6px 58px 0px rgba(196,203,214,0.10)) ── */
+    --shadow-card:     0px 6px 58px 0px rgba(196, 203, 214, 0.10);
+    --shadow-button:   0px 6px 12px 0px rgba(63, 140, 255, 0.26);
+    --shadow-sm:       0 1px 4px rgba(0, 0, 0, 0.06);
+    --shadow-md:       0 2px 10px rgba(0, 0, 0, 0.10);
+
+    /* ── Chart colors ─────────────────────────────────────────────── */
+    --chart-1:              214 100% 62%;
+    --chart-2:              152 60% 42%;
+    --chart-3:              28  90% 58%;
     --chart-4:              339 80% 55%;
     --chart-5:              54  90% 52%;
   }
 
   /* ═══════════════════════════════════════════════════════════════════
-     DARK THEME — DoFlow Warm Olive-Black
+     DARK THEME — Warm Olive-Black (DoFlow product dark)
   ═══════════════════════════════════════════════════════════════════ */
   .dark {
-    --bg-body:              linear-gradient(145deg, #1e1d12 0%, #1a1910 50%, #171610 100%);
-    --bg-sidebar:           transparent;
-    --bg-sidebar-open:      rgba(22, 21, 12, 0.88);
-    --bg-surface:           #252418;
-    --bg-surface-2:         #2e2c1c;
-    --bg-input:             #2a2918;
-    --bg-hover:             rgba(255, 255, 255, 0.07);
-    --bg-thumb:             #32301f;
+    --background:           220 25% 10%;
+    --foreground:           210 30% 94%;
 
-    --text-primary:         #f0eedf;
-    --text-secondary:       #7e7c6a;
-    --text-placeholder:     #4e4d3d;
+    --card:                 220 20% 14%;
+    --card-foreground:      210 30% 94%;
 
-    --border-sidebar:       transparent;
-    --border-sidebar-open:  rgba(255, 255, 255, 0.06);
-    --border-card:          rgba(255, 255, 255, 0.06);
-    --border-divider:       rgba(255, 255, 255, 0.08);
-    --border-table:         rgba(255, 255, 255, 0.06);
-    --border-row:           rgba(255, 255, 255, 0.04);
-    --border-checkbox:      rgba(255, 255, 255, 0.18);
+    --popover:              220 20% 14%;
+    --popover-foreground:   210 30% 94%;
 
-    --icon-color:           #585644;
-    --icon-active-bg:       #F5ED31;
-    --icon-active-color:    #0D0C0B;
-    --icon-active-shadow:   0 2px 14px rgba(245,237,49,0.28), 0 1px 4px rgba(0,0,0,0.30);
-
-    --card-logistics-bg:    linear-gradient(135deg, rgba(245,237,49,0.10) 0%, rgba(255,147,79,0.08) 100%);
-    --delay-time-bg:        rgba(255, 255, 255, 0.08);
-    --demand-high-bg:       rgba(255, 147, 79, 0.15);
-    --demand-high-color:    #ffa060;
-    --demand-low-bg:        rgba(42, 173, 90, 0.15);
-    --demand-low-color:     #4dd68a;
-
-    --filters-bg:           #252418;
-    --filter-divider:       rgba(255, 255, 255, 0.08);
-    --filter-btn-hover:     rgba(255, 255, 255, 0.06);
-    --table-bg:             #252418;
-
-    --shadow-sm:            0 1px 4px rgba(0,0,0,0.35);
-    --shadow-md:            0 2px 12px rgba(0,0,0,0.50);
-    --shadow-sidebar:       none;
-    --shadow-sidebar-open:  4px 0 28px rgba(0,0,0,0.50);
-
-    --logo-color:           #f0eedf;
-    --scrollbar-thumb:      #3a3928;
-    --toggle-bg:            #F5ED31;
-    --toggle-color:         #0D0C0B;
-
-    --background:           44 30% 9%;
-    --foreground:           44 20% 94%;
-
-    --card:                 44 22% 14%;
-    --card-foreground:      44 20% 94%;
-
-    --popover:              44 22% 14%;
-    --popover-foreground:   44 20% 94%;
-
-    --primary:              244 76% 65%;
+    --primary:              214 100% 65%;
     --primary-foreground:   0 0% 100%;
 
-    --secondary:            44 18% 20%;
-    --secondary-foreground: 44 15% 75%;
+    --secondary:            220 18% 20%;
+    --secondary-foreground: 210 20% 75%;
 
-    --muted:                44 18% 18%;
-    --muted-foreground:     44 12% 52%;
+    --muted:                220 18% 18%;
+    --muted-foreground:     218 8% 52%;
 
-    --accent:               54 90% 56%;
-    --accent-foreground:    0 0% 7%;
+    --accent:               214 100% 65%;
+    --accent-foreground:    0 0% 100%;
 
     --destructive:          0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border:               44 14% 20%;
-    --input:                44 22% 18%;
-    --ring:                 244 76% 65%;
+    --border:               220 14% 22%;
+    --input:                220 20% 18%;
+    --ring:                 214 100% 65%;
 
-    --sidebar-background:   44 30% 9%;
-    --sidebar-foreground:   44 20% 90%;
-    --sidebar-primary:      244 76% 65%;
+    --sidebar-background:   220 25% 10%;
+    --sidebar-foreground:   210 30% 90%;
+    --sidebar-primary:      214 100% 65%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent:       44 18% 18%;
-    --sidebar-accent-foreground: 44 20% 90%;
-    --sidebar-border:       44 14% 20%;
-    --sidebar-ring:         244 76% 65%;
+    --sidebar-accent:       214 100% 65%;
+    --sidebar-accent-foreground: 214 100% 65%;
+    --sidebar-border:       220 14% 22%;
+    --sidebar-ring:         214 100% 65%;
 
-    --chart-1:              244 80% 68%;
-    --chart-2:              28  95% 62%;
-    --chart-3:              152 65% 50%;
-    --chart-4:              339 85% 62%;
-    --chart-5:              54  95% 58%;
+    --shadow-card:     0px 6px 24px 0px rgba(0, 0, 0, 0.35);
+    --shadow-button:   0px 6px 12px 0px rgba(63, 140, 255, 0.30);
   }
 
-  /* ═══════════════════════════════════════════════════════════════════
-     TEMA OCEAN (Blu/Verde)
-  ═══════════════════════════════════════════════════════════════════ */
-  :root[data-color-theme="ocean"] {
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
-    --sidebar-primary: 221 83% 53%;
-    --ring: 221 83% 53%;
-    --chart-1: 221 83% 53%;
-    --chart-2: 160 84% 39%;
-    --chart-3: 199 89% 48%;
-    --chart-4: 215 25% 27%;
-  }
-  .dark[data-color-theme="ocean"] {
-    --primary: 217 91% 60%;
-    --sidebar-primary: 217 91% 60%;
-    --ring: 217 91% 60%;
-    --chart-1: 217 91% 60%;
-    --chart-2: 160 84% 45%;
-    --chart-3: 199 89% 55%;
-    --chart-4: 215 25% 40%;
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════
-     TEMA SUNSET (Giallo/Arancione)
-  ═══════════════════════════════════════════════════════════════════ */
-  :root[data-color-theme="sunset"] {
-    --primary: 28 95% 55%;
-    --primary-foreground: 0 0% 100%;
-    --sidebar-primary: 28 95% 55%;
-    --ring: 28 95% 55%;
-    --chart-1: 28 95% 55%;
-    --chart-2: 42 90% 50%;
-    --chart-3: 12 85% 58%;
-    --chart-4: 35 25% 45%;
-  }
-  .dark[data-color-theme="sunset"] {
-    --primary: 28 95% 62%;
-    --sidebar-primary: 28 95% 62%;
-    --ring: 28 95% 62%;
-    --chart-1: 28 95% 62%;
-    --chart-2: 42 90% 58%;
-    --chart-3: 12 85% 65%;
-    --chart-4: 35 25% 55%;
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════
-     TEMA EMERALD (Verde Smeraldo)
-  ═══════════════════════════════════════════════════════════════════ */
-  :root[data-color-theme="emerald"] {
-    --primary: 152 60% 42%;
-    --primary-foreground: 0 0% 100%;
-    --sidebar-primary: 152 60% 42%;
-    --ring: 152 60% 42%;
-    --chart-1: 152 60% 42%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 71% 52%;
-    --chart-4: 43 74% 49%;
-  }
-  .dark[data-color-theme="emerald"] {
-    --primary: 152 65% 50%;
-    --sidebar-primary: 152 65% 50%;
-    --ring: 152 65% 50%;
-    --chart-1: 152 65% 50%;
-    --chart-2: 173 62% 48%;
-    --chart-3: 197 75% 58%;
-    --chart-4: 43 78% 56%;
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════
-     BASE STYLES
-  ═══════════════════════════════════════════════════════════════════ */
+  /* ── Tailwind base resets ─────────────────────────────────────── */
   * { @apply border-border; }
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Urbanist', var(--font-sans, system-ui), sans-serif;
-    background: var(--bg-body);
-    background-attachment: fixed;
+    /* Figma uses Nunito Sans — added via Google Fonts above */
+    font-family: 'Nunito Sans', var(--font-sans, system-ui), sans-serif;
+    background-color: hsl(var(--background));
     min-height: 100vh;
     overflow-x: hidden;
-    transition: background 0.4s ease, color 0.4s ease;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   UTILITY CLASSES — Figma Design Primitives
+═══════════════════════════════════════════════════════════════════ */
+@layer components {
+
+  /* ── Card primitives (Figma: elm/card/main, elm/card/gray) ─── */
+  .df-card {
+    background: hsl(var(--card));
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
   }
 
-  /* ═══════════════════════════════════════════════════════════════════
-     GLASSMORPHISM UTILITIES
-  ═══════════════════════════════════════════════════════════════════ */
-  .glass-card {
-    background: hsl(var(--card) / 0.85);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+  .df-card-gray {
+    background: #f4f9fd;
+    border-radius: var(--radius-card);
+  }
+  .dark .df-card-gray {
+    background: hsl(var(--card));
     border: 1px solid hsl(var(--border));
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-sm);
-    transition:
-      background-color 0.32s ease,
-      border-color      0.32s ease,
-      box-shadow        0.32s ease,
-      opacity           0.5s  ease,
-      transform         0.5s  ease;
   }
 
-  .dark .glass-card {
-    background: hsl(var(--card) / 0.75);
-    border-color: hsl(var(--border) / 0.8);
-    box-shadow: var(--shadow-md), 0 0 0 1px rgba(255,255,255,0.03);
-  }
-
-  .glass-sidebar {
-    @apply backdrop-blur-2xl border-r shadow-2xl;
-    background: hsl(var(--sidebar-background) / 0.85);
-    border-color: hsl(var(--sidebar-border));
-    transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-                background 0.32s ease,
-                border-color 0.32s ease;
-  }
-
-  @supports (backdrop-filter: blur(1px)) {
-    .glass-sidebar {
-      background: hsl(var(--sidebar-background) / 0.60);
-    }
-  }
-
-  .dark .glass-sidebar {
-    background: hsl(var(--sidebar-background) / 0.90);
-    border-color: rgba(255,255,255,0.06);
-  }
-
-  .sidebar-hover-expand {
-    @apply transition-[width,padding] duration-300 ease-out;
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════
-     SUPERADMIN DASHBOARD — Layout Classes
-  ═══════════════════════════════════════════════════════════════════ */
-
-  .dashboard-content {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    max-width: 1800px;
-  }
-
-  .dashboard-hero {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    background: hsl(var(--card) / 0.40);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    padding: 24px;
-    border-radius: 20px;
-    border: 1px solid hsl(var(--border) / 0.4);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .dashboard-hero-meta {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
+  /* ── Sidebar nav: active section (Figma: elm/sidebar/activesection) ── */
+  .df-nav-active {
+    background: hsl(var(--sidebar-primary) / 0.10);
+    border-radius: var(--radius-nav);
+    color: hsl(var(--sidebar-primary));
     font-weight: 700;
-    color: hsl(var(--muted-foreground));
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 6px;
-  }
-
-  .dashboard-hero-meta .accent { color: hsl(var(--primary)); }
-  .dashboard-hero-meta .dot    { color: hsl(var(--border)); }
-
-  .dashboard-hero-title {
-    font-size: 38px;
-    font-weight: 900;
-    color: hsl(var(--foreground));
-    letter-spacing: -1px;
-    line-height: 1.1;
-    font-family: 'Urbanist', sans-serif;
-  }
-
-  .dashboard-hero-sub {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 8px;
-    font-size: 13px;
-    color: hsl(var(--muted-foreground));
-  }
-
-  .dashboard-hero-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-
-  .kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(1, 1fr);
-    gap: 16px;
-  }
-  @media (min-width: 768px)  { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (min-width: 1280px) { .kpi-grid { grid-template-columns: repeat(4, 1fr); } }
-
-  .closing-alert {
     position: relative;
-    overflow: hidden;
-    border: 1px solid hsl(var(--primary) / 0.20);
-    border-radius: 20px;
-    padding: 24px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: pointer;
-    box-shadow: var(--shadow-sm);
-    transition: box-shadow 0.3s ease, transform 0.2s ease;
   }
-  .closing-alert:hover {
-    box-shadow: var(--shadow-md), 0 0 0 1px hsl(var(--primary) / 0.15);
-    transform: translateY(-1px);
+  /* Active indicator: 4px left bar (Figma: elm/sidebar/indicator/activesection) */
+  .df-nav-active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 4px;
+    height: 100%;
+    background: hsl(var(--sidebar-primary));
+    border-radius: 2px;
   }
 
-  .closing-alert-bg {
-    position: absolute; inset: 0; z-index: 0;
-    background: linear-gradient(to right, hsl(var(--primary) / 0.08), transparent);
-  }
-  .dark .closing-alert-bg {
-    background: linear-gradient(to right, hsl(var(--primary) / 0.12), transparent);
-  }
-
-  .closing-alert-content { position: relative; z-index: 1; }
-
-  .closing-alert-label {
-    font-size: 11px; font-weight: 700;
-    color: hsl(var(--primary));
-    text-transform: uppercase; letter-spacing: 0.08em;
-    margin-bottom: 8px;
-  }
-  .closing-alert-value {
-    font-size: 38px; font-weight: 900;
-    color: hsl(var(--foreground));
-    letter-spacing: -1.5px; line-height: 1;
-    font-family: 'Urbanist', sans-serif;
-  }
-  .closing-alert-sub {
-    font-size: 15px; font-weight: 500;
-    color: hsl(var(--muted-foreground));
-    letter-spacing: 0;
-  }
-
-  .closing-alert-icon {
-    position: relative; z-index: 1;
-    width: 48px; height: 48px;
-    border-radius: 14px;
-    border: 1px solid hsl(var(--primary) / 0.30);
-    background: hsl(var(--background));
-    display: flex; align-items: center; justify-content: center;
-    color: hsl(var(--primary));
-    flex-shrink: 0;
-    transition: background 0.3s ease, color 0.3s ease;
-  }
-  .closing-alert:hover .closing-alert-icon {
+  /* ── Primary button (Figma: elm/button/mainbutton) ───────────── */
+  .df-btn-primary {
     background: hsl(var(--primary));
     color: hsl(var(--primary-foreground));
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-button);
+    font-weight: 700;
+    font-size: 16px;
+    transition: opacity 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  }
+  .df-btn-primary:hover {
+    opacity: 0.92;
+    transform: translateY(-1px);
+  }
+  .df-btn-primary:active {
+    transform: translateY(0);
   }
 
-  .charts-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-  @media (min-width: 1024px) { .charts-grid { grid-template-columns: 1fr 1fr; } }
-
-  /* ── Loading / Error states ── */
-  .loading-state {
-    height: 70vh;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    gap: 16px;
-  }
-  .error-state { padding: 24px; max-width: 1800px; margin: 0 auto; }
-  .error-box {
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    padding: 80px 24px;
-    background: hsl(var(--card));
-    border: 1px dashed hsl(var(--border));
-    border-radius: 20px;
-    box-shadow: var(--shadow-sm);
-  }
-  .error-icon {
-    width: 64px; height: 64px;
-    background: hsl(0 84% 95%); color: hsl(0 84% 60%);
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    margin-bottom: 16px;
-  }
-  .dark .error-icon {
-    background: hsl(0 50% 15%); color: hsl(0 72% 55%);
+  /* ── Level badge (Figma: elm/employees/level) ─────────────────── */
+  .df-level-badge {
+    border: 1px solid hsl(var(--muted-foreground));
+    border-radius: var(--radius-badge);
+    color: hsl(var(--muted-foreground));
+    font-size: 12px;
+    font-weight: 600;
+    padding: 1px 6px;
+    line-height: 1.4;
   }
 
-  /* ═══════════════════════════════════════════════════════════════════
-     ENTRY ANIMATIONS
-  ═══════════════════════════════════════════════════════════════════ */
-  @keyframes fadeInUp {
-    from { opacity: 0; transform: translateY(18px); }
-    to   { opacity: 1; transform: translateY(0);    }
+  /* ── Support card (Figma: elm/card/lightblue) ─────────────────── */
+  .df-support-card {
+    background: hsl(var(--primary) / 0.10);
+    border-radius: var(--radius-card);
   }
 
-  .dashboard-content { animation: fadeInUp 0.55s cubic-bezier(0.22,1,0.36,1) both; }
-  .kpi-grid > *:nth-child(1) { animation: fadeInUp 0.45s 0.08s cubic-bezier(0.22,1,0.36,1) both; }
-  .kpi-grid > *:nth-child(2) { animation: fadeInUp 0.45s 0.14s cubic-bezier(0.22,1,0.36,1) both; }
-  .kpi-grid > *:nth-child(3) { animation: fadeInUp 0.45s 0.20s cubic-bezier(0.22,1,0.36,1) both; }
-  .kpi-grid > *:nth-child(4) { animation: fadeInUp 0.45s 0.26s cubic-bezier(0.22,1,0.36,1) both; }
-  .closing-alert  { animation: fadeInUp 0.45s 0.30s cubic-bezier(0.22,1,0.36,1) both; }
-  .charts-grid    { animation: fadeInUp 0.45s 0.36s cubic-bezier(0.22,1,0.36,1) both; }
-
-  /* ═══════════════════════════════════════════════════════════════════
-     RECHARTS — Tooltip styling
-  ═══════════════════════════════════════════════════════════════════ */
-  .recharts-tooltip-wrapper .recharts-default-tooltip {
-    background-color: hsl(var(--card)) !important;
-    border: 1px solid hsl(var(--border)) !important;
-    border-radius: 12px !important;
-    box-shadow: var(--shadow-md) !important;
-    font-family: 'Urbanist', sans-serif !important;
+  /* ── Section title (Figma: 22px Bold, #0a1629) ───────────────── */
+  .df-section-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: hsl(var(--foreground));
+    line-height: 1.2;
   }
 
-  /* ═══════════════════════════════════════════════════════════════════
-     SCROLLBAR
-  ═══════════════════════════════════════════════════════════════════ */
+  /* ── Scrollbar ───────────────────────────────────────────────── */
   ::-webkit-scrollbar       { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: #aaa; }
-
-  /* ═══════════════════════════════════════════════════════════════════
-     REACT-GRID-LAYOUT
-  ═══════════════════════════════════════════════════════════════════ */
-  .react-grid-layout { position: relative; transition: height 200ms ease; }
-  .react-grid-item { transition: all 200ms ease; transition-property: left, top; }
-  .react-grid-item.cssTransforms { transition-property: transform; }
-  .react-grid-item.resizing { z-index: 100; box-shadow: 0 0 20px rgba(0,0,0,0.15); opacity: 0.9; }
-  .react-grid-placeholder { @apply bg-primary/20 rounded-xl opacity-50 backdrop-blur-sm !important; border: 2px dashed hsl(var(--primary)); }
-  .react-resizable-handle { position: absolute; width: 20px; height: 20px; bottom: 0; right: 0; cursor: se-resize; }
-  .react-resizable-handle::after { content: ""; position: absolute; right: 5px; bottom: 5px; width: 6px; height: 6px; border-right: 2px solid hsl(var(--muted-foreground)); border-bottom: 2px solid hsl(var(--muted-foreground)); opacity: 0.5; }
-
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════════
-   SUPERADMIN THEME — Scoped Isolation
-   ─────────────────────────────────────────────────────────────────────────────
-   All demo-specific styling is scoped under .superadmin-theme so that the
-   rest of the app (tenant dashboards, login, etc.) is never affected.
-═══════════════════════════════════════════════════════════════════════════════ */
-
-/* ── Theme Toggle Button (shared between header & sidebar dropdown) ──────── */
-.doflow-theme-toggle {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--toggle-bg);
-  color: var(--toggle-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  border: none;
-  box-shadow: var(--shadow-sm);
-  flex-shrink: 0;
-  position: relative;
-  overflow: hidden;
-  transition: box-shadow 0.25s ease, transform 0.2s ease,
-              background-color 0.32s ease, color 0.32s ease;
-}
-.doflow-theme-toggle:hover {
-  box-shadow: var(--shadow-md);
-  transform: scale(1.05);
-}
-
-/* ── Superadmin-scoped layout overrides ─────────────────────────────────── */
-.superadmin-theme {
-  font-family: 'Urbanist', var(--font-sans, system-ui), sans-serif;
-  min-height: 100vh;
-  background: var(--bg-body);
-  background-attachment: fixed;
-  color: var(--text-primary);
-}
-
-/* Smooth theme transitions inside superadmin */
-.superadmin-theme *,
-.superadmin-theme *::before,
-.superadmin-theme *::after {
-  transition-property: background-color, background, border-color, color, box-shadow;
-  transition-duration: 0.32s;
-  transition-timing-function: ease;
-}
-
-/* ── Override shadcn/ui Sidebar inside superadmin ────────────────────────── */
-.superadmin-theme [data-sidebar="sidebar"] {
-  --sidebar-width: 220px;
-  --sidebar-width-icon: 72px;
-  background: var(--bg-sidebar) !important;
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border-right: none !important; /* FORZATURA RIMOZIONE BORDO LATERALE */
-  box-shadow: none !important; /* RIMOSSA OMBRA STATICA */
-  overflow: hidden;
-  transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-              background 0.32s ease,
-              border-color 0.32s ease,
-              box-shadow 0.28s ease !important;
-}
-
-/* Force overflow containment on all sidebar inner wrappers */
-.superadmin-theme [data-sidebar="sidebar"] > div {
-  overflow: hidden !important;
-}
-
-/* When sidebar is hovered/expanded → open state tokens */
-.superadmin-theme [data-sidebar="sidebar"].sa-sidebar-open {
-  background: var(--bg-sidebar-open) !important;
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
-  border-right: none !important; /* NESSUN BORDO NEMMENO APERTA */
-  box-shadow: var(--shadow-sidebar-open) !important;
-}
-
-/* Allow tooltips to escape collapsed sidebar */
-.superadmin-theme [data-sidebar="sidebar"]:not(.sa-sidebar-open) [data-sidebar="content"] {
-  overflow: visible !important;
-}
-
-/* Allow scrolling ONLY when expanded */
-.superadmin-theme [data-sidebar="sidebar"].sa-sidebar-open > div {
-  overflow: visible !important;
-}
-.superadmin-theme [data-sidebar="sidebar"].sa-sidebar-open [data-sidebar="content"] {
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-}
-
-/* Remove default shadcn sidebar bg and borders that conflict */
-.superadmin-theme [data-sidebar="sidebar"] [data-sidebar="header"],
-.superadmin-theme [data-sidebar="sidebar"] [data-sidebar="content"],
-.superadmin-theme [data-sidebar="sidebar"] [data-sidebar="footer"] {
-  background: transparent !important;
-}
-
-/* Collapsed content: center items, clip text overflow */
-.superadmin-theme [data-sidebar="sidebar"]:not(.sa-sidebar-open) [data-sidebar="content"] {
-  overflow: hidden !important;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-.superadmin-theme [data-sidebar="sidebar"]:not(.sa-sidebar-open) [data-sidebar="footer"] {
-  overflow: hidden !important;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-/* ── Sidebar Nav Icons — Demo-accurate styling ──────────────────────────── */
-.superadmin-theme .sa-nav-item {
-  width: 44px;
-  height: 44px;
-  border-radius: 13px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: var(--icon-color);
-  position: relative;
-  flex-shrink: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-decoration: none;
-  margin: 0 auto; /* center within collapsed sidebar */
-  transition: width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-              background 0.18s ease,
-              color 0.18s ease,
-              box-shadow 0.18s ease,
-              padding 0.28s ease,
-              margin 0.28s ease !important;
-}
-
-.superadmin-theme .sa-nav-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-/* Fix attivo: Nessuna "pillola", solo colore testo accentato e grassetto */
-.superadmin-theme .sa-nav-item.active {
-  background: transparent !important;
-  color: hsl(var(--primary)) !important;
-  box-shadow: none !important;
-  font-weight: 700;
-}
-
-/* Expanded: stretch to full width with left-aligned icon + label */
-.superadmin-theme .sa-sidebar-open .sa-nav-item {
-  width: 100%;
-  margin: 0; /* reset auto-centering */
-  padding-left: 12px;
-  justify-content: flex-start;
-  gap: 12px;
-}
-
-.superadmin-theme .sa-nav-item svg {
-  width: 19px;
-  height: 19px;
-  stroke-width: 1.75;
-  flex-shrink: 0;
-}
-
-/* ── Nav Labels — hidden when collapsed ─────────────────────────────────── */
-.superadmin-theme .sa-nav-label {
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  opacity: 0;
-  max-width: 0;
-  overflow: hidden;
-  transition: opacity 0.15s ease, max-width 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  pointer-events: none;
-}
-
-.superadmin-theme .sa-sidebar-open .sa-nav-label {
-  opacity: 1;
-  max-width: 140px;
-}
-
-/* ── Sidebar Group Labels ───────────────────────────────────────────────── */
-.superadmin-theme .sa-group-label {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--text-secondary);
-  padding: 0;
-  margin: 0;
-  line-height: 0;
-  height: 0;
-  opacity: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  transition: opacity 0.2s ease,
-              height 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-              padding 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-              line-height 0.28s ease !important;
-}
-
-.superadmin-theme .sa-sidebar-open .sa-group-label {
-  opacity: 1;
-  height: auto;
-  line-height: 1.4;
-  padding: 8px 12px 4px;
-}
-
-/* ── Sidebar Logo/Brand ─────────────────────────────────────────────────── */
-.superadmin-theme .sa-logo-wrapper {
-  display: flex;
-  align-items: center;
-  padding: 28px 0 20px;
-  justify-content: center;
-  width: 100%;
-  transition: padding 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-              justify-content 0.28s ease !important;
-}
-
-.superadmin-theme .sa-sidebar-open .sa-logo-wrapper {
-  padding: 28px 14px 20px;
-  justify-content: flex-start;
-}
-
-.superadmin-theme .sa-brand-name {
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.3px;
-  color: var(--text-primary);
-  white-space: nowrap;
-  opacity: 0;
-  width: 0;
-  overflow: hidden;
-  transition: opacity 0.18s ease, width 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  margin-left: 8px;
-}
-
-.superadmin-theme .sa-sidebar-open .sa-brand-name {
-  opacity: 1;
-  width: 90px;
-}
-
-/* ── Sidebar Bottom (avatar row) ────────────────────────────────────────── */
-.superadmin-theme .sa-avatar-info {
-  opacity: 0;
-  max-width: 0;
-  overflow: hidden;
-  transition: opacity 0.15s ease, max-width 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.superadmin-theme .sa-sidebar-open .sa-avatar-info {
-  opacity: 1;
-  max-width: 120px;
-}
-
-/* Footer trigger button: contain within collapsed width */
-.superadmin-theme [data-sidebar="sidebar"]:not(.sa-sidebar-open) [data-sidebar="footer"] button {
-  width: 44px;
-  padding: 4px;
-  justify-content: center;
-  overflow: hidden;
-}
-.superadmin-theme [data-sidebar="sidebar"]:not(.sa-sidebar-open) [data-sidebar="footer"] button > .sa-avatar-info,
-.superadmin-theme [data-sidebar="sidebar"]:not(.sa-sidebar-open) [data-sidebar="footer"] button > svg {
-  display: none;
-}
-
-/* Collapsed nav groups: center the items column */
-.superadmin-theme [data-sidebar="sidebar"]:not(.sa-sidebar-open) .sa-nav-group {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
-}
-
-/* ── Main Content area ──────────────────────────────────────────────────── */
-.superadmin-theme .sa-main-content {
-  padding: 28px 32px;
-  transition: margin-left 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-              max-width 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-/* ── Header unificato (sticky, fuori dal main) ───────────────────────── */
-.superadmin-theme .header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 32px;
-  height: 72px;
-  flex-shrink: 0;
-  position: sticky;
-  top: 0;
-  z-index: 40;
-  background: transparent;
-}
-
-.superadmin-theme .header-left {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.superadmin-theme .header h1 {
-  font-size: 32px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  color: var(--text-primary);
-  margin-left: 8px;
-  line-height: 1;
-}
-
-
-.superadmin-theme .header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.superadmin-theme .sidebar-trigger {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-  margin-right: 4px;
-  position: relative;
-}
-.superadmin-theme .sidebar-trigger:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-.superadmin-theme .sidebar-trigger svg {
-  width: 20px;
-  height: 20px;
-  stroke-width: 2;
-  position: absolute;
-  transition: opacity 0.2s ease, transform 0.25s ease;
-}
-.superadmin-theme .sidebar-trigger .icon-open  { opacity: 1; transform: scale(1); }
-.superadmin-theme .sidebar-trigger .icon-close { opacity: 0; transform: scale(0.75); }
-.superadmin-theme .sidebar-trigger.active .icon-open  { opacity: 0; transform: scale(0.75); }
-.superadmin-theme .sidebar-trigger.active .icon-close { opacity: 1; transform: scale(1); }
-
-.superadmin-theme .storage-badge,
-.superadmin-theme .month-badge {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--bg-surface);
-  border-radius: 40px;
-  padding: 10px 20px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-}
-
-.superadmin-theme .header-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--bg-surface);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  color: var(--text-secondary);
-}
-.superadmin-theme .header-btn:hover {
-  box-shadow: var(--shadow-md);
-  color: var(--text-primary);
-}
-
-/* Notifica bell dot */
-.superadmin-theme .header-btn-bell {
-  position: relative;
-}
-.superadmin-theme .header-bell-dot {
-  position: absolute;
-  top: 9px;
-  right: 9px;
-  width: 6px;
-  height: 6px;
-  background: #ef4444;
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-/* Avatar button (mostra iniziali utente) */
-.superadmin-theme .header-avatar-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--icon-active-bg);
-  color: var(--icon-active-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  border: none;
-  box-shadow: var(--shadow-sm);
-  outline: none;
-  transition: box-shadow 0.18s ease;
-}
-.superadmin-theme .header-avatar-btn:hover {
-  box-shadow: var(--shadow-md);
-}
-.superadmin-theme .header-avatar-initials {
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  line-height: 1;
-}
-
-.superadmin-theme .theme-toggle {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--toggle-bg);
-  color: var(--toggle-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  border: none;
-  box-shadow: var(--shadow-sm);
-  position: relative;
-  overflow: hidden;
-}
-.superadmin-theme .theme-toggle svg {
-  width: 18px;
-  height: 18px;
-  position: absolute;
-  transition: opacity 0.25s ease, transform 0.35s ease;
-}
-.superadmin-theme .theme-toggle .icon-sun  { opacity: 1; transform: rotate(0deg) scale(1); }
-.superadmin-theme .theme-toggle .icon-moon { opacity: 0; transform: rotate(-30deg) scale(0.7); }
-.dark .superadmin-theme .theme-toggle .icon-sun  { opacity: 0; transform: rotate(30deg) scale(0.7); }
-.dark .superadmin-theme .theme-toggle .icon-moon { opacity: 1; transform: rotate(0deg) scale(1); }
-
-/* ── sa-header legacy (kept for backward compat) ────────────────────────── */
-.superadmin-theme .sa-header {
-  background: var(--bg-surface);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: var(--shadow-sm);
-  border-bottom: 1px solid var(--border-divider);
-}
-
-/* ── Demo-accurate Card Geometry ────────────────────────────────────────── */
-.superadmin-theme .sa-card-base {
-  border-radius: 20px;
-  padding: 22px;
-  position: relative;
-  overflow: hidden;
-  animation: fadeInUp 0.5s ease forwards;
-  opacity: 0;
-}
-.superadmin-theme .sa-card-base:nth-child(1) { animation-delay: 0.05s; }
-.superadmin-theme .sa-card-base:nth-child(2) { animation-delay: 0.10s; }
-.superadmin-theme .sa-card-base:nth-child(3) { animation-delay: 0.15s; }
-.superadmin-theme .sa-card-base:nth-child(4) { animation-delay: 0.20s; }
-
-/* ── Sidebar Expand Button ──────────────────────────────────────────────── */
-.superadmin-theme .sa-expand-btn {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: var(--text-secondary);
-  background: transparent;
-  border: none;
-  transition: background 0.2s ease, color 0.2s ease !important;
-}
-.superadmin-theme .sa-expand-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-/* ── Scrollbar inside superadmin ────────────────────────────────────────── */
-.superadmin-theme ::-webkit-scrollbar { width: 6px; }
-.superadmin-theme ::-webkit-scrollbar-track { background: transparent; }
-.superadmin-theme ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
-.superadmin-theme ::-webkit-scrollbar-thumb:hover { background: #aaa; }
-
-@layer components {
-  /* DARK CARD: In Light Mode è scura, in Dark Mode si adatta al tema */
-  .superadmin-theme .sa-card-dark {
-    @apply bg-slate-900 text-white dark:bg-card dark:text-card-foreground border border-transparent dark:border-border transition-colors duration-300;
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
   }
-  
-  /* LOGISTICS CARD: Mantiene i gradienti caldi in light mode, si smorza in dark mode */
-  .superadmin-theme .sa-card-logistics {
-    @apply text-white dark:text-primary-foreground border border-transparent dark:border-primary/30 transition-colors duration-300;
-    background: var(--card-logistics-bg);
-  }
-
-  /* YELLOW CARD: Pieno contrasto in Light, contrasto morbido in Dark */
-  .superadmin-theme .sa-card-yellow {
-    @apply bg-[#fef08a] text-yellow-950 dark:bg-yellow-500/10 dark:text-yellow-500 dark:border dark:border-yellow-500/20 transition-colors duration-300;
-  }
-
-  /* ORANGE CARD */
-  .superadmin-theme .sa-card-orange {
-    @apply bg-[#ff934f] text-orange-950 dark:bg-orange-500/10 dark:text-orange-500 dark:border dark:border-orange-500/20 transition-colors duration-300;
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
   }
 }
