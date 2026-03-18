@@ -54,7 +54,7 @@ function AnimatedTrigger() {
   return (
     <button
       onClick={toggleSidebar}
-      className={`sidebar-trigger ${isOpen ? "active" : ""}`}
+      className={`h-9 w-9 rounded-nav flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors relative outline-none focus-visible:ring-2 focus-visible:ring-ring ${isOpen ? "text-foreground" : ""}`}
       aria-label="Toggle sidebar"
     >
       <svg className="icon-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
@@ -79,7 +79,7 @@ function AnimatedThemeToggle() {
   return (
     <button
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-      className="theme-toggle"
+      className="h-9 w-9 rounded-nav bg-muted hover:bg-muted/80 flex items-center justify-center text-foreground transition-colors relative overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-ring"
       aria-label="Toggle theme"
     >
       <svg className="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -120,33 +120,33 @@ function UserNav() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="header-avatar-btn"
+          className="h-9 w-9 rounded-nav bg-primary/10 text-primary flex items-center justify-center font-bold text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring hover:bg-primary/20 transition-colors"
           aria-label="User menu"
         >
-          <span className="header-avatar-initials">
+          <span className="text-sm font-bold leading-none">
             {user?.initials ?? "SA"}
           </span>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56 rounded-xl glass-card">
+      <DropdownMenuContent align="end" className="w-56 rounded-card shadow-card border-border">
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col gap-1">
-            <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>
+            <p className="text-sm font-semibold truncate text-foreground">
               {user?.email ?? "Superadmin"}
             </p>
-            <p className="text-xs flex items-center gap-1" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-xs flex items-center gap-1 text-muted-foreground">
               <Shield className="h-3 w-3 text-primary" /> Control Plane
             </p>
           </div>
         </DropdownMenuLabel>
-        <DropdownMenuSeparator style={{ background: "var(--border-divider)" }} />
+        <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link href="/superadmin/users" className="cursor-pointer">
-            <User className="mr-2 h-4 w-4" style={{ color: "var(--icon-color)" }} />
+            <User className="mr-2 h-4 w-4 text-muted-foreground" />
             Il mio Account
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuSeparator style={{ background: "var(--border-divider)" }} />
+        <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={logout}
           className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
@@ -165,12 +165,12 @@ function SuperAdminHeader() {
   const title = getPageTitle(pathname);
 
   return (
-    <header className="header">
-      <div className="header-left">
+    <header className="flex items-center justify-between px-6 h-14 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-40 shrink-0">
+      <div className="flex items-center gap-2">
         <AnimatedTrigger />
-        <h1>{title}</h1>
+        <h1 className="text-lg font-bold text-foreground ml-1">{title}</h1>
       </div>
-      <div className="header-right">
+      <div className="flex items-center gap-3">
         {/* Notifiche */}
         <button className="header-btn header-btn-bell" aria-label="Notifiche">
           <Bell style={{ width: 18, height: 18 }} />
@@ -214,7 +214,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
 
   if (!ready) {
     return (
-      <div className="superadmin-theme min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
           <p className="text-sm animate-pulse" style={{ color: "var(--text-secondary)" }}>
@@ -226,21 +226,24 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <div className="superadmin-theme">
-      <SidebarProvider>
-        <SuperAdminSidebar />
-        <SidebarInset>
-          {/* ── HEADER UNICO PER TUTTE LE PAGINE ───────────────────── */}
-          <SuperAdminHeader />
+    <SidebarProvider
+      style={{
+        "--sidebar-width":      "220px",
+        "--sidebar-width-icon": "72px",
+      } as React.CSSProperties}
+    >
+      <SuperAdminSidebar />
+      <SidebarInset>
+        {/* ── HEADER UNICO PER TUTTE LE PAGINE ─────────────────── */}
+        <SuperAdminHeader />
 
-          {/* ── CONTENUTO ───────────────────────────────────────────── */}
-          <main className="sa-main-content flex-1 overflow-y-auto">
-            <div className="max-w-[1600px] mx-auto animate-in fade-in duration-500">
-              {children}
-            </div>
-          </main>
-        </SidebarInset>
-      </SidebarProvider>
-    </div>
+        {/* ── CONTENUTO ──────────────────────────────────────────── */}
+        <main className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-[1600px] mx-auto animate-fade-in">
+            {children}
+          </div>
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

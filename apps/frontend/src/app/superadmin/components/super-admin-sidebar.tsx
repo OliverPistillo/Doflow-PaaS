@@ -1,4 +1,7 @@
-// Percorso: C:\Doflow\apps\frontend\src\app\superadmin\components\super-admin-sidebar.tsx
+// Percorso: apps/frontend/src/app/superadmin/components/super-admin-sidebar.tsx
+// FIXED: usa SidebarMenu/SidebarMenuButton invece di raw <Link> con classi sa-*
+// Eredita automaticamente lo stile dal sidebar.tsx refactored (token Figma)
+
 "use client";
 
 import * as React from "react";
@@ -6,25 +9,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Building2,
-  Users,
-  Activity,
-  ShieldAlert,
-  LogOut,
-  BarChart3,
-  ListTodo,
-  Truck,
-  CalendarDays,
-  Wallet,
-  Receipt,
-  Moon,
-  Sun,
-  ChevronsUpDown,
-  BadgeCheck,
-  User,
-  Settings,
-  Palette,
-  TrendingUp,
+  Building2, Users, Activity, ShieldAlert, LogOut,
+  BarChart3, ListTodo, Truck, CalendarDays, Wallet,
+  Receipt, Moon, Sun, ChevronsUpDown, BadgeCheck,
+  User, Settings, Palette, TrendingUp,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -33,6 +21,13 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
+  SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
 import {
@@ -51,52 +46,52 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getDoFlowUser, getInitials } from "@/lib/jwt";
 
-// ─── Menu ─────────────────────────────────────────────────────────────────────
+// ─── Menu definition ──────────────────────────────────────────────────────────
 
 const MENU_GROUPS = [
   {
     label: "Performance commerciali",
     items: [
-      { label: "Sales Dashboard",  href: "/superadmin/dashboard",      icon: BarChart3,   badge: undefined },
-      { label: "Gestione offerte", href: "/superadmin/sales/pipeline", icon: ListTodo,    badge: undefined },
+      { label: "Sales Dashboard",  href: "/superadmin/dashboard",      icon: BarChart3   },
+      { label: "Gestione offerte", href: "/superadmin/sales/pipeline", icon: ListTodo    },
     ],
   },
   {
     label: "Metriche Platform",
     items: [
-      { label: "Metriche SaaS",    href: "/superadmin/metrics",        icon: TrendingUp,  badge: undefined },
-      { label: "Control Tower",    href: "/superadmin/control-tower",  icon: ShieldAlert, badge: undefined },
+      { label: "Metriche SaaS", href: "/superadmin/metrics",       icon: TrendingUp  },
+      { label: "Control Tower", href: "/superadmin/control-tower", icon: ShieldAlert },
     ],
   },
   {
     label: "Consegna del servizio",
     items: [
-      { label: "Stato del servizio",      href: "/superadmin/delivery/status",   icon: Truck,        badge: undefined },
-      { label: "Calendario del progetto", href: "/superadmin/delivery/calendar", icon: CalendarDays,  badge: undefined },
+      { label: "Stato del servizio",      href: "/superadmin/delivery/status",   icon: Truck       },
+      { label: "Calendario del progetto", href: "/superadmin/delivery/calendar", icon: CalendarDays },
     ],
   },
   {
     label: "Fatturazione",
     items: [
-      { label: "Dashboard finanziario", href: "/superadmin/finance/dashboard", icon: Wallet,  badge: undefined },
-      { label: "Gestione fatture",      href: "/superadmin/finance/invoices",  icon: Receipt, badge: undefined },
+      { label: "Dashboard finanziario", href: "/superadmin/finance/dashboard", icon: Wallet  },
+      { label: "Gestione fatture",      href: "/superadmin/finance/invoices",  icon: Receipt },
     ],
   },
   {
     label: "Platform Admin",
     items: [
-      { label: "Gestione Tenant", href: "/superadmin/tenants", icon: Building2, badge: undefined },
-      { label: "Gestione Utenti", href: "/superadmin/users",   icon: Users,     badge: undefined },
-      { label: "Audit Log",       href: "/superadmin/audit",   icon: Activity,  badge: undefined },
+      { label: "Gestione Tenant", href: "/superadmin/tenants", icon: Building2 },
+      { label: "Gestione Utenti", href: "/superadmin/users",   icon: Users     },
+      { label: "Audit Log",       href: "/superadmin/audit",   icon: Activity  },
     ],
   },
 ];
 
-// ─── Theming Logic ─────────────────────────────────────────────────────────────
+// ─── Color themes ─────────────────────────────────────────────────────────────
 
 const COLOR_THEMES = [
-  { id: "default", label: "Neutro (Default)", colorClass: "bg-slate-500" },
-  { id: "ocean",   label: "Ocean (Blu/Verde)", colorClass: "bg-blue-500" },
+  { id: "default", label: "Neutro (Default)",      colorClass: "bg-slate-500"   },
+  { id: "ocean",   label: "Ocean (Blu/Verde)",      colorClass: "bg-blue-500"    },
   { id: "sunset",  label: "Sunset (Giallo/Arancio)", colorClass: "bg-orange-500" },
   { id: "emerald", label: "Emerald (Verde Smeraldo)", colorClass: "bg-emerald-500" },
 ];
@@ -108,74 +103,65 @@ function setColorTheme(themeId: string) {
   }
 }
 
-// ─── Nav Item Modificato per rimuovere "pillola" e aggiungere tooltip ───────────
+// ─── NavItem — usa SidebarMenuButton → eredita tutti i token Figma ────────────
 
 function NavItem({
   href,
   label,
   icon: Icon,
-  badge,
-  isOpen,
 }: {
-  href:   string;
-  label:  string;
-  icon:   React.ComponentType<{ className?: string }>;
-  badge?: number;
-  isOpen: boolean;
+  href:  string;
+  label: string;
+  icon:  React.ComponentType<{ className?: string }>;
 }) {
   const pathname = usePathname();
-  const active   = pathname === href || pathname.startsWith(href + "/");
+  const isActive = pathname === href || pathname.startsWith(href + "/");
 
   return (
-    <Link
-      href={href}
-      className={`group relative flex items-center gap-3 py-2 px-3 my-0.5 rounded-none transition-colors 
-        ${active ? "text-primary font-bold" : "text-muted-foreground hover:text-foreground"}`}
-    >
-      <Icon className="h-[19px] w-[19px] shrink-0" />
-      
-      {/* Testo visibile solo se espansa */}
-      <span className={`transition-all duration-200 whitespace-nowrap ${isOpen ? "opacity-100 w-auto" : "opacity-0 w-0 overflow-hidden"}`}>
-        {label}
-      </span>
-
-      {/* Badge (se presente) */}
-      {badge !== undefined && badge > 0 && isOpen && (
-        <span className="ml-auto text-[10px] font-bold bg-rose-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center leading-none">
-          {badge > 99 ? "99+" : badge}
-        </span>
-      )}
-
-      {/* Tooltip Fluttuante: visibile SOLO se la sidebar è chiusa e c'è l'hover */}
-      {!isOpen && (
-        <div className="absolute left-full ml-4 px-2.5 py-1.5 bg-[#1a1a1a] dark:bg-white text-white dark:text-[#1a1a1a] text-xs font-bold rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[9999] whitespace-nowrap shadow-lg">
-          {label}
-        </div>
-      )}
-    </Link>
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        asChild
+        isActive={isActive}
+        tooltip={label}
+        // Non servono classi extra: tutti gli stili vengono da sidebar.tsx refactored
+      >
+        <Link href={href}>
+          <Icon className="h-[19px] w-[19px] shrink-0" aria-hidden="true" />
+          <span>{label}</span>
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 
-// ─── Main sidebar ──────────────────────────────────────────────────────────────
+// ─── SuperAdminSidebar ────────────────────────────────────────────────────────
 
 export function SuperAdminSidebar() {
   const router = useRouter();
   const { setTheme, theme, resolvedTheme } = useTheme();
   const { state } = useSidebar();
+  const isOpen = state === "expanded";
 
   const [mounted, setMounted] = React.useState(false);
-  const [user, setUser]       = React.useState<{ email: string; role: string; initials: string } | null>(null);
+  const [user, setUser] = React.useState<{
+    email: string;
+    role: string;
+    initials: string;
+  } | null>(null);
 
   React.useEffect(() => {
     setMounted(true);
+
+    // Ripristina tema colore salvato
     const savedColorTheme = localStorage.getItem("doflow_color_theme") || "default";
     setColorTheme(savedColorTheme);
 
+    // Carica utente dal JWT
     const payload = getDoFlowUser();
     if (payload) {
       setUser({
         email:    payload.email ?? "superadmin",
-        role:     payload.role  ?? "superadmin",
+        role:     payload.role  ?? "SUPER_ADMIN",
         initials: getInitials(payload.email),
       });
     }
@@ -186,176 +172,201 @@ export function SuperAdminSidebar() {
     router.push("/login");
   }, [router]);
 
-  const isOpen  = state === "expanded";
-  const logoSrc = mounted && resolvedTheme === "light" ? "/logo_doflow_nero.png" : "/logo_doflow_bianco.png";
+  const logoSrc = mounted && resolvedTheme === "light"
+    ? "/logo_doflow_nero.png"
+    : "/logo_doflow_bianco.png";
 
   return (
     <Sidebar
       collapsible="icon"
-      className={`z-50 border-none ${isOpen ? "sa-sidebar-open" : ""}`}
-      style={{
-        ["--sidebar-width" as string]: "220px",
-        ["--sidebar-width-icon" as string]: "72px",
-        transition: "width 0.28s cubic-bezier(0.4, 0, 0.2, 1)",
-      }}
+      // Larghezze ereditate dal SidebarProvider nel layout (220/72px)
     >
-      {/* ── HEADER: Logo + Brand ─────────────────────────────────── */}
-      <SidebarHeader className="border-b-0 p-0 overflow-hidden shrink-0">
-        <div className="sa-logo-wrapper">
-          <div className={`relative h-10 shrink-0 transition-all duration-300 ease-out ${isOpen ? "w-10" : "w-10"}`}>
+
+      {/* ── HEADER: Logo ──────────────────────────────────────────────── */}
+      <SidebarHeader className="h-16 p-0 border-b border-sidebar-border flex items-center justify-center">
+        <div className={`flex items-center gap-2.5 px-3 w-full transition-all duration-300 ${isOpen ? "justify-start" : "justify-center"}`}>
+          {/* Logo mark */}
+          <div className="relative h-8 w-8 shrink-0">
             {mounted && (
               <Image
                 src={logoSrc}
-                alt="DoFlow Logo"
+                alt="DoFlow"
                 fill
                 priority
-                className={`object-contain object-left transition-opacity duration-300 ${isOpen ? "opacity-100" : "opacity-90"}`}
+                className="object-contain"
               />
             )}
           </div>
-          <span className="sa-brand-name">DoFlow</span>
+          {/* Brand name — nascosto quando collassato */}
+          <span
+            className={`text-[15px] font-bold text-foreground whitespace-nowrap overflow-hidden transition-all duration-300 ${
+              isOpen ? "opacity-100 max-w-[120px]" : "opacity-0 max-w-0"
+            }`}
+          >
+            DoFlow
+          </span>
         </div>
       </SidebarHeader>
 
-      {/* ── CONTENT: Nav Groups ──────────────────────────────────── */}
-      <SidebarContent className={`pt-2 overflow-y-auto overflow-x-visible scrollbar-none transition-all duration-300 ${isOpen ? "px-3" : "px-[14px]"}`}>
+      {/* ── CONTENT: Nav Groups ───────────────────────────────────────── */}
+      <SidebarContent>
         {MENU_GROUPS.map((group) => (
-          <div key={group.label} className="sa-nav-group mb-3">
-            <div className={`transition-all duration-200 text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 ${isOpen ? "opacity-100 h-auto" : "opacity-0 h-0 overflow-hidden"}`}>
-              {group.label}
-            </div>
-            <div className="flex flex-col gap-[2px]">
-              {group.items.map((item) => (
-                <NavItem
-                  key={item.href}
-                  href={item.href}
-                  label={item.label}
-                  icon={item.icon}
-                  badge={item.badge}
-                  isOpen={isOpen}
-                />
-              ))}
-            </div>
-          </div>
+          <SidebarGroup key={group.label}>
+            {/* Label di gruppo — SidebarGroupLabel già gestisce collapsed */}
+            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.items.map((item) => (
+                  <NavItem
+                    key={item.href}
+                    href={item.href}
+                    label={item.label}
+                    icon={item.icon}
+                  />
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
         ))}
       </SidebarContent>
 
-      {/* ── FOOTER: Avatar + Dropdown ────────────────────────────── */}
-      <SidebarFooter className={`border-t border-[var(--border-divider)] transition-all duration-300 ${isOpen ? "p-3" : "p-2 flex items-center justify-center"}`}>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              className="flex items-center gap-2.5 w-full rounded-xl p-2 hover:bg-[var(--bg-hover)] transition-colors outline-none"
-            >
-              <Avatar className="h-9 w-9 rounded-lg border-2 border-primary/20 shrink-0 shadow-md">
-                <AvatarFallback
-                  className="rounded-lg font-bold text-sm"
-                  style={{
-                    background: "var(--icon-active-bg)",
-                    color: "var(--icon-active-color)",
-                  }}
+      {/* ── FOOTER: User avatar + dropdown ───────────────────────────── */}
+      <SidebarFooter className="border-t border-sidebar-border">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton
+                  size="lg"
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                  aria-label="Menu utente"
                 >
-                  {user?.initials ?? "SA"}
-                </AvatarFallback>
-              </Avatar>
-              <div className="sa-avatar-info">
-                <span className="text-[13px] font-semibold text-[var(--text-primary)] whitespace-nowrap">
-                  {user?.email ?? "Superadmin"}
-                </span>
-                <span className="text-[10px] font-bold text-[var(--text-secondary)] uppercase flex items-center gap-1 whitespace-nowrap">
-                  <BadgeCheck className="h-3 w-3 text-primary" />
-                  {user?.role}
-                </span>
-              </div>
-              {isOpen && <ChevronsUpDown className="ml-auto h-4 w-4 text-[var(--text-secondary)] shrink-0" />}
-            </button>
-          </DropdownMenuTrigger>
+                  <Avatar className="h-8 w-8 rounded-nav border border-border shrink-0">
+                    <AvatarFallback
+                      className="rounded-nav text-sm font-bold"
+                      style={{
+                        background: "hsl(var(--primary) / 0.12)",
+                        color:      "hsl(var(--primary))",
+                      }}
+                    >
+                      {user?.initials ?? "SA"}
+                    </AvatarFallback>
+                  </Avatar>
 
-          <DropdownMenuContent
-            className="w-[240px] rounded-xl shadow-2xl border-[var(--border-card)] glass-card"
-            side={state === "collapsed" ? "right" : "bottom"}
-            align="end"
-            sideOffset={10}
-          >
-            <DropdownMenuLabel className="p-2 font-normal">
-              <div className="flex items-center gap-3 text-left text-sm">
-                <Avatar className="h-10 w-10 rounded-lg shadow-md">
-                  <AvatarFallback
-                    className="rounded-lg font-bold"
-                    style={{
-                      background: "var(--icon-active-bg)",
-                      color: "var(--icon-active-color)",
-                    }}
-                  >
-                    {user?.initials ?? "SA"}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-bold text-[var(--text-primary)]">{user?.email}</span>
-                  <span className="truncate text-xs text-[var(--text-secondary)]">{user?.role}</span>
-                </div>
-              </div>
-            </DropdownMenuLabel>
+                  {/* Testo — nascosto quando collassato (gestito da SidebarMenuButton) */}
+                  <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                    <span className="truncate font-semibold text-foreground">
+                      {user?.email ?? "Superadmin"}
+                    </span>
+                    <span className="truncate text-[11px] text-muted-foreground flex items-center gap-1">
+                      <BadgeCheck className="h-3 w-3 text-primary" aria-hidden="true" />
+                      {user?.role ?? "SUPER_ADMIN"}
+                    </span>
+                  </div>
 
-            <DropdownMenuSeparator className="bg-[var(--border-divider)]" />
+                  <ChevronsUpDown className="ml-auto size-4 text-muted-foreground/50 group-data-[collapsible=icon]:hidden" aria-hidden="true" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
 
-            <DropdownMenuGroup>
-              <DropdownMenuItem asChild>
-                <Link href="/superadmin/users" className="cursor-pointer py-2 rounded-lg">
-                  <User className="mr-2 h-4 w-4 text-[var(--text-secondary)]" />
-                  Il mio Account
-                </Link>
-              </DropdownMenuItem>
-
-              {/* Tema Chiaro/Scuro */}
-              <DropdownMenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")} className="cursor-pointer py-2 rounded-lg">
-                {resolvedTheme === "dark" ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
-                Passa a {resolvedTheme === "dark" ? "Light Mode" : "Dark Mode"}
-              </DropdownMenuItem>
-
-              {/* Colori Primari */}
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="py-2 rounded-lg cursor-pointer">
-                  <Palette className="mr-2 h-4 w-4 text-[var(--text-secondary)]" />
-                  Stile e Colori
-                </DropdownMenuSubTrigger>
-                <DropdownMenuPortal>
-                  <DropdownMenuSubContent className="glass-card rounded-xl border-[var(--border-card)] ml-2">
-                    {COLOR_THEMES.map((ct) => (
-                      <DropdownMenuItem
-                        key={ct.id}
-                        onClick={() => setColorTheme(ct.id)}
-                        className="cursor-pointer py-2 flex items-center gap-2"
+              <DropdownMenuContent
+                className="w-60 rounded-card shadow-card border-border"
+                side={isOpen ? "bottom" : "right"}
+                align="end"
+                sideOffset={8}
+              >
+                {/* User info header */}
+                <DropdownMenuLabel className="p-2 font-normal">
+                  <div className="flex items-center gap-2.5">
+                    <Avatar className="h-9 w-9 rounded-nav">
+                      <AvatarFallback
+                        className="rounded-nav font-bold"
+                        style={{
+                          background: "hsl(var(--primary) / 0.12)",
+                          color:      "hsl(var(--primary))",
+                        }}
                       >
-                        <div className={`h-3 w-3 rounded-full ${ct.colorClass} ring-1 ring-offset-1 ring-offset-card ring-black/10`} />
-                        {ct.label}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuPortal>
-              </DropdownMenuSub>
+                        {user?.initials ?? "SA"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="grid text-left text-sm leading-tight">
+                      <span className="truncate font-bold text-foreground">
+                        {user?.email ?? "superadmin"}
+                      </span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {user?.role ?? "SUPER_ADMIN"}
+                      </span>
+                    </div>
+                  </div>
+                </DropdownMenuLabel>
 
-              <DropdownMenuItem asChild>
-                <Link href="/superadmin/settings" className="cursor-pointer py-2 rounded-lg">
-                  <Settings className="mr-2 h-4 w-4 text-[var(--text-secondary)]" />
-                  Impostazioni Globali
-                </Link>
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
+                <DropdownMenuSeparator />
 
-            <DropdownMenuSeparator className="bg-[var(--border-divider)]" />
+                <DropdownMenuGroup>
+                  <DropdownMenuItem asChild>
+                    <Link href="/superadmin/users" className="cursor-pointer">
+                      <User className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                      Il mio Account
+                    </Link>
+                  </DropdownMenuItem>
 
-            <DropdownMenuItem
-              onClick={logout}
-              className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer py-2 mt-1 rounded-lg font-medium"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Disconnetti in sicurezza
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+                  {/* Light/Dark toggle */}
+                  <DropdownMenuItem
+                    onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                    className="cursor-pointer"
+                  >
+                    {resolvedTheme === "dark"
+                      ? <Sun  className="mr-2 h-4 w-4" aria-hidden="true" />
+                      : <Moon className="mr-2 h-4 w-4" aria-hidden="true" />
+                    }
+                    Passa a {resolvedTheme === "dark" ? "Light Mode" : "Dark Mode"}
+                  </DropdownMenuItem>
+
+                  {/* Color theme sub-menu */}
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="cursor-pointer">
+                      <Palette className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                      Stile e Colori
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuPortal>
+                      <DropdownMenuSubContent className="rounded-card border-border">
+                        {COLOR_THEMES.map((ct) => (
+                          <DropdownMenuItem
+                            key={ct.id}
+                            onClick={() => setColorTheme(ct.id)}
+                            className="cursor-pointer gap-2"
+                          >
+                            <div className={`h-3 w-3 rounded-full ${ct.colorClass} ring-1 ring-offset-1 ring-offset-card ring-black/10`} />
+                            {ct.label}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuPortal>
+                  </DropdownMenuSub>
+
+                  <DropdownMenuItem asChild>
+                    <Link href="/superadmin/settings" className="cursor-pointer">
+                      <Settings className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                      Impostazioni Globali
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem
+                  onClick={logout}
+                  className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer font-medium"
+                >
+                  <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Disconnetti in sicurezza
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
-      {/* Rimosso SidebarRail per eliminare la linea laterale */}
+
+      <SidebarRail />
     </Sidebar>
   );
 }
