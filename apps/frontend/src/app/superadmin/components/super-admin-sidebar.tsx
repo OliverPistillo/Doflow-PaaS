@@ -183,17 +183,18 @@ export function SuperAdminSidebar() {
     >
 
       {/* ── HEADER: Logo ──────────────────────────────────────────────── */}
-      <SidebarHeader className="h-16 p-0 border-b border-sidebar-border flex items-center justify-center">
-        <div className={`relative h-8 transition-all duration-300 ${isOpen ? "w-32" : "w-8 shrink-0"}`}>
+      <SidebarHeader className="h-16 p-0 border-b border-sidebar-border flex flex-col justify-center">
+        <div className={`flex w-full items-center transition-all duration-300 ${isOpen ? "px-4 justify-start" : "px-0 justify-center"}`}>
           {/* Logo mark */}
-          <div className="relative h-8 w-8 shrink-0">
+          <div className={`relative transition-all duration-300 ${isOpen ? "h-8 w-36" : "h-8 w-8 shrink-0"}`}>
             {mounted && (
               <Image
                 src={logoSrc}
                 alt="DoFlow"
                 fill
                 priority
-                className="object-contain"
+                // object-left assicura che il logo parta da sinistra quando è aperto, allargandosi
+                className={`transition-all duration-300 ${isOpen ? "object-contain object-left" : "object-contain object-center"}`}
               />
             )}
           </div>
