@@ -150,7 +150,7 @@ export default function TenantMfaPage() {
     } catch (e: unknown) {
       toast({
         title: "Codice non valido",
-        description: e.message || "Riprova con un nuovo codice.",
+        description: e instanceof Error ? e.message : "Riprova con un nuovo codice.",
         variant: "destructive",
       });
       setCode(""); // Pulisci input per riprovare

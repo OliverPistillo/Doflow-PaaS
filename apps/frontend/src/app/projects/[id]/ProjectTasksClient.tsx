@@ -35,7 +35,7 @@ async function readErrorMessage(res: Response): Promise<string> {
     const ct = res.headers.get('content-type') || '';
     if (ct.includes('application/json')) {
       const j = await res.json() as Record<string, unknown>;
-      return j?.error || j?.message || JSON.stringify(j);
+      return String(j?.error ?? j?.message ?? JSON.stringify(j));
     }
     const t = await res.text();
     return t || `HTTP ${res.status}`;

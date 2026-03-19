@@ -146,11 +146,11 @@ export default function NewInvoicePage() {
   // Load tenants + saved clients
   useEffect(() => {
     apiFetch<Tenant[]>("/superadmin/tenants")
-      .then((d) => setTenants(Array.isArray(d) ? d.filter(t => t?.id && t?.name) : []))
+      .then((d: Tenant[]) => setTenants(Array.isArray(d) ? d.filter(t => t?.id && t?.name) : []))
       .catch(() => setTenants([]))
       .finally(() => setLoading(false));
     apiFetch<InvoiceClient[]>("/superadmin/finance/clients")
-      .then(d => setSavedClients(Array.isArray(d) ? d : []))
+      .then((d: InvoiceClient[]) => setSavedClients(Array.isArray(d) ? d : []))
       .catch(() => setSavedClients([]));
   }, []);
 
@@ -269,7 +269,7 @@ export default function NewInvoicePage() {
         <DialogHeader>
           <DialogTitle>Salvare il cliente?</DialogTitle>
           <DialogDescription>
-            Vuoi aggiungere <strong>{pendingData?.clientName}</strong> all&apos;anagrafica clienti?
+            Vuoi aggiungere <strong>{String(pendingData?.clientName ?? "")}</strong> all&apos;anagrafica clienti?
             La prossima volta apparirà nel menu a tendina.
           </DialogDescription>
         </DialogHeader>

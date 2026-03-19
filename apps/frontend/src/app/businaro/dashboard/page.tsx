@@ -11,9 +11,27 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { tenantFetch } from "@/lib/tenant-fetch";
 
 
+interface BusinKpi {
+  overdueValue: number;
+  oee:          number;
+  leadTime:     number;
+  totalValue:   number;
+  [key: string]: unknown;
+}
+interface BusinJob {
+  id:       unknown;
+  client:   unknown;
+  project?: unknown;
+  value:    number;
+  status:   unknown;
+  progress: number;
+  due:      unknown;
+  warning?: unknown;
+  [key: string]: unknown;
+}
 interface BusinDashboardStats {
-  kpi: Record<string, unknown>;
-  activeJobs: Record<string, unknown>[];
+  kpi:        BusinKpi;
+  activeJobs: BusinJob[];
 }
 
 export default function BusinaroDashboard() {
@@ -44,8 +62,8 @@ export default function BusinaroDashboard() {
 
   if (loading) return <div className="flex h-[50vh] items-center justify-center"><Factory className="h-10 w-10 animate-bounce text-primary" /></div>;
 
-  const metrics = stats?.kpi || { overdueValue: 0, oee: 0, leadTime: 0, totalValue: 0 };
-  const jobs = stats?.activeJobs || [];
+  const metrics: BusinKpi = stats?.kpi ?? { overdueValue: 0, oee: 0, leadTime: 0, totalValue: 0 };
+  const jobs: BusinJob[] = stats?.activeJobs ?? [];
 
   return (
     <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in duration-700 font-sans">

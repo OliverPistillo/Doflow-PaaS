@@ -73,7 +73,7 @@ export default function DeliveryStatusPage() {
       const res = await apiFetch<Task[]>("/superadmin/delivery/tasks");
       setTasks(res);
       
-      const allGroups = new Set(res.map(t => t.serviceName));
+      const allGroups = new Set<string>(res.map(t => t.serviceName));
       const initialExpanded: Record<string, boolean> = {};
       allGroups.forEach(g => initialExpanded[g] = true);
       setExpanded(prev => ({...initialExpanded, ...prev}));
