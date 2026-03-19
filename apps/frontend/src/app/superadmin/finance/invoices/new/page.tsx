@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm, useFieldArray } from "react-hook-form";
 import {
   Loader2, ArrowLeft, Plus, Trash2, Receipt, AlertTriangle,
-  UserPlus, Sparkles, Bookmark,
+  UserPlus, Sparkles, Bookmark, FileText, FileCheck2,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -40,6 +40,7 @@ type InvoiceFormValues = {
   clientSdi:         string;
   clientPec:         string;
   // Documento
+  invoiceNumber:     string;
   issueDate:         string;
   dueDate:           string;
   status:            "paid" | "pending" | "overdue";
@@ -48,8 +49,6 @@ type InvoiceFormValues = {
   taxRate:           number;
   inpsRate:          number;
   ritenutaRate:      number;
-  // Acconto
-  acconto:           number;
   // Voci e note
   notes:             string;
   lineItems:         LineItemForm[];
@@ -152,6 +151,7 @@ export default function NewInvoicePage() {
   const router = useRouter();
 
   // Stato base
+  const [docType, setDocType]           = useState<"preventivo" | "fattura">("preventivo");
   const [tenants, setTenants]           = useState<Tenant[]>([]);
   const [loadingTenants, setLoading]    = useState(true);
   const [isSubmitting, setSubmitting]   = useState(false);
@@ -182,9 +182,8 @@ export default function NewInvoicePage() {
       defaultValues: {
         tenantId: "", clientName: "", clientAddress: "", clientCity: "",
         clientZip: "", clientVat: "", clientFiscalCode: "", clientSdi: "", clientPec: "",
-        issueDate: today, dueDate: nextMonth, status: "pending",
+        invoiceNumber: "", issueDate: today, dueDate: nextMonth, status: "pending",
         taxRegime: "ordinario", taxRate: 22, inpsRate: 0, ritenutaRate: 0,
-        acconto: 0,
         notes: "",
         lineItems: [{ description: "Servizio piattaforma DoFlow", quantity: 1, unitPrice: 0 }],
       },
@@ -198,7 +197,6 @@ export default function NewInvoicePage() {
   const watchTaxRegime = watch("taxRegime");
   const watchInpsRate  = watch("inpsRate");
   const watchRitenuta  = watch("ritenutaRate");
-  const watchAcconto   = watch("acconto");
 
   const isForfettario = watchTaxRegime === "forfettario";
 
@@ -210,7 +208,6 @@ export default function NewInvoicePage() {
   const taxRate      = isForfettario ? 0 : (Number(watchTaxRate) || 22);
   const inpsRate     = Number(watchInpsRate) || 0;
   const ritenutaRate = Number(watchRitenuta) || 0;
-  const accontoAmt   = Number(watchAcconto) || 0;
 
   const inpsAmount  = imponibile * inpsRate / 100;
   const baseConInps = imponibile + inpsAmount;
@@ -218,7 +215,6 @@ export default function NewInvoicePage() {
   const ritenutaAmt = imponibile * ritenutaRate / 100;
   const totaleLordo = baseConInps + ivaAmount;
   const totaleNetto = totaleLordo - ritenutaAmt;
-  const saldoResiduo = accontoAmt > 0 ? totaleNetto - accontoAmt : totaleNetto;
 
   // Reset aliquote al cambio regime
   useEffect(() => {
@@ -321,9 +317,9 @@ export default function NewInvoicePage() {
   // ── Costruzione payload ──────────────────────────────────────────────────────
   const buildPayload = (data: InvoiceFormValues) => ({
     ...data,
+    docType,
     amount:    imponibile,
     taxRate:   isForfettario ? 0 : Number(data.taxRate),
-    acconto:   Number(data.acconto) || 0,
     lineItems: data.lineItems.map(i => ({
       description: i.description,
       quantity:    i.quantity,
@@ -407,15 +403,51 @@ export default function NewInvoicePage() {
           </Link>
           <div>
             <h1 className="text-3xl font-black tracking-tight flex items-center gap-2">
-              <Receipt className="h-6 w-6 text-primary" /> Crea Nuova Fattura
+              {docType === "preventivo"
+                ? <><FileText className="h-6 w-6 text-primary" /> Crea Preventivo</>
+                : <><FileCheck2 className="h-6 w-6 text-primary" /> Crea Fattura di Cortesia</>
+              }
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
-              Compila i dati fiscali e aggiungi le voci per generare una fattura conforme.
+              {docType === "preventivo"
+                ? "Documento proforma non fiscale — da inviare al cliente per approvazione."
+                : "Documento di cortesia non fiscale — ricorda di emettere anche la fattura elettronica via SDI."}
             </p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+
+          {/* ── Tipo Documento ───────────────────────────────────────────────── */}
+          <div className="grid grid-cols-2 gap-4">
+            {([
+              { type: "preventivo", label: "Preventivo", sub: "Proforma non fiscale", Icon: FileText },
+              { type: "fattura",    label: "Fattura di Cortesia", sub: "Documento informativo", Icon: FileCheck2 },
+            ] as const).map(({ type, label, sub, Icon }) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setDocType(type)}
+                className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left ${
+                  docType === type
+                    ? "border-primary bg-primary/5 shadow-sm"
+                    : "border-border bg-card hover:border-primary/40"
+                }`}
+              >
+                <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${
+                  docType === type ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                }`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className={`font-bold text-sm ${docType === type ? "text-primary" : "text-foreground"}`}>
+                    {label}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{sub}</p>
+                </div>
+              </button>
+            ))}
+          </div>
 
           {/* ── Regime Fiscale ──────────────────────────────────────────────── */}
           <div className="bg-card glass-card rounded-2xl border border-border/50 p-6">
@@ -476,6 +508,22 @@ export default function NewInvoicePage() {
             {/* Documento */}
             <div className="bg-card glass-card p-6 rounded-2xl shadow-sm border border-border/50 space-y-4">
               <h2 className="text-base font-bold border-b pb-2">Dati Documento</h2>
+
+              {docType === "fattura" && (
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-2">
+                    Numero Fattura
+                    <span className="text-[10px] font-medium text-muted-foreground/60 normal-case tracking-normal">
+                      opzionale — solo per archivio interno
+                    </span>
+                  </label>
+                  <Input
+                    {...register("invoiceNumber")}
+                    placeholder="Es. 2026-001"
+                    className="font-mono"
+                  />
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-2">
@@ -731,23 +779,6 @@ export default function NewInvoicePage() {
                 placeholder="Es. Pagamento a 30gg data fattura tramite bonifico bancario."
               />
 
-              {/* Acconto */}
-              <Separator />
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase">
-                  Acconto ricevuto (€)
-                </label>
-                <Input
-                  type="number" step="0.01" min="0"
-                  {...register("acconto", { valueAsNumber: true })}
-                  placeholder="0,00 — lascia vuoto se non applicabile"
-                />
-                {accontoAmt > 0 && (
-                  <p className="text-xs text-amber-600 font-medium">
-                    Saldo residuo da pagare: <span className="font-bold">{fmtCurrency(saldoResiduo)}</span>
-                  </p>
-                )}
-              </div>
             </div>
 
             {/* Totali */}
@@ -767,28 +798,13 @@ export default function NewInvoicePage() {
               ))}
 
               <div className="pt-3 border-t flex justify-between items-center">
-                <span className="font-bold text-foreground">Totale fattura:</span>
-                <span className={`${accontoAmt > 0 ? "text-xl font-bold text-foreground/70" : "text-3xl font-black text-primary"} tabular-nums`}>
+                <span className="font-bold text-foreground">
+                  {docType === "preventivo" ? "Totale preventivo:" : "Totale da pagare:"}
+                </span>
+                <span className="text-3xl font-black text-primary tabular-nums">
                   {fmtCurrency(totaleNetto)}
                 </span>
               </div>
-
-              {accontoAmt > 0 && (
-                <>
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">Acconto ricevuto:</span>
-                    <span className="tabular-nums font-medium text-amber-600">
-                      -{fmtCurrency(accontoAmt)}
-                    </span>
-                  </div>
-                  <div className="pt-2 border-t flex justify-between items-center">
-                    <span className="font-bold text-foreground">Saldo a pagare:</span>
-                    <span className="text-3xl font-black text-primary tabular-nums">
-                      {fmtCurrency(saldoResiduo)}
-                    </span>
-                  </div>
-                </>
-              )}
             </div>
           </div>
 
@@ -801,7 +817,9 @@ export default function NewInvoicePage() {
               {isSubmitting ? (
                 <><Loader2 className="h-4 w-4 animate-spin" /> Salvataggio…</>
               ) : (
-                <><Receipt className="h-4 w-4" /> Salva Fattura</>
+                docType === "preventivo"
+                ? <><FileText className="h-4 w-4" /> Salva Preventivo</>
+                : <><FileCheck2 className="h-4 w-4" /> Salva Fattura di Cortesia</>
               )}
             </Button>
           </div>
