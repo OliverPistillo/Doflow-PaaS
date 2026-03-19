@@ -625,7 +625,7 @@ export default function NewInvoicePage() {
                 Aggiungi voce
               </label>
               <Select key={serviceSelectKey} onValueChange={handleServiceSelect}>
-                <SelectTrigger className="max-w-lg">
+                <SelectTrigger className="max-w-lg focus:ring-0 focus:ring-offset-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none">
                   <SelectValue placeholder="Seleziona servizio salvato o aggiungi nuovo…" />
                 </SelectTrigger>
                 <SelectContent>
