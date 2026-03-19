@@ -104,22 +104,20 @@ export async function apiFetch<T = unknown>(
 
   const text = await res.text();
 
-  // Internal shape for error responses — string fields allow safe use in new Error()
-  type JsonErrorShape = { error?: string; message?: string; [k: string]: unknown };
-  let json: JsonErrorShape | null = null;
+  let json: Record<string, unknown> | null = null;
   try {
-    json = text ? (JSON.parse(text) as JsonErrorShape) : null;
+    json = text ? (JSON.parse(text) as Record<string, unknown>) : null;
   } catch {
-    // ignore — non-JSON response body
+    // ignore
   }
 
   if (!res.ok) {
     const msg = json?.error ?? json?.message ?? text ?? `HTTP ${res.status}`;
-    throw new Error(msg);
+    throw new Error(String(msg));
   }
 
-  if (json && json.error) {
-    throw new Error(json.error);
+  if (json && typeof json === "object" && json.error) {
+    throw new Error(String(json.error));
   }
 
   return (json ?? (text as unknown)) as T;

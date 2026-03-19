@@ -114,8 +114,8 @@ export default function SettingsPage() {
   }) => (
     <div className={`flex items-center justify-between py-4 ${last ? "" : "border-b"}`}>
       <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/5 dark:bg-primary/5">
-          <Icon className="h-4 w-4 text-primary dark:text-primary" />
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-900/20">
+          <Icon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
         </div>
         <div>
           <div className="text-sm font-medium">{label}</div>
@@ -159,7 +159,7 @@ export default function SettingsPage() {
               {/* Avatar */}
               <div className="flex items-center gap-4">
                 <Avatar className="h-16 w-16">
-                  <AvatarFallback className="bg-primary/10 text-primary dark:bg-primary/5 dark:text-primary text-xl font-bold">
+                  <AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 text-xl font-bold">
                     {user?.initials ?? "DF"}
                   </AvatarFallback>
                 </Avatar>
@@ -215,7 +215,7 @@ export default function SettingsPage() {
                 <Button
                   onClick={handleSaveProfile}
                   disabled={saving}
-                  className="bg-primary hover:bg-primary/90 text-white"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
                   {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
                   {saving ? "Salvataggio…" : "Salva modifiche"}
@@ -389,10 +389,10 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-5">
               {/* Current plan */}
-              <div className="flex items-center justify-between p-4 rounded-xl border-2 border-primary/30 dark:border-primary/30 bg-primary/5/50 dark:bg-primary/5">
+              <div className="flex items-center justify-between p-4 rounded-xl border-2 border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-900/10">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/5">
-                    <Sparkles className="h-5 w-5 text-primary dark:text-primary" />
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-900/30">
+                    <Sparkles className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                   </div>
                   <div>
                     <div className="font-semibold text-lg">Piano {meta.label}</div>
@@ -404,7 +404,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 {meta.nextPlan && (
-                  <Button className="bg-primary hover:bg-primary/90 text-white" size="sm">
+                  <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" size="sm">
                     <Sparkles className="mr-1.5 h-4 w-4" /> {meta.upgradeLabel}
                   </Button>
                 )}
@@ -421,7 +421,7 @@ export default function SettingsPage() {
                   </div>
                   <Progress
                     value={(tenantInfo.storageUsedMb / (tenantInfo.storageLimitGb * 1024)) * 100}
-                    className="h-2 [&>div]:bg-primary"
+                    className="h-2 [&>div]:bg-indigo-500"
                   />
                 </div>
               )}
@@ -451,12 +451,12 @@ export default function SettingsPage() {
                   return (
                     <div
                       key={tier}
-                      className={`rounded-xl border-2 p-4 transition-colors ${isActive ? "border-primary/30 dark:border-primary/30 bg-primary/5/30 dark:bg-primary/5" : "border-border"}`}
+                      className={`rounded-xl border-2 p-4 transition-colors ${isActive ? "border-indigo-400 dark:border-indigo-600 bg-indigo-50/30 dark:bg-indigo-900/10" : "border-border"}`}
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div className="font-semibold">{tierMeta.label}</div>
                         {isActive && (
-                          <Badge variant="secondary" className="bg-primary/10 text-primary dark:bg-primary/5 dark:text-primary border-0 text-[10px]">
+                          <Badge variant="secondary" className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border-0 text-[10px]">
                             ATTIVO
                           </Badge>
                         )}
@@ -465,7 +465,7 @@ export default function SettingsPage() {
                       <ul className="space-y-1.5">
                         {tierMeta.features.map((f) => (
                           <li key={f} className="text-sm text-muted-foreground flex items-center gap-2">
-                            <div className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
+                            <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0" />
                             {f}
                           </li>
                         ))}

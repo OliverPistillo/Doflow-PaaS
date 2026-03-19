@@ -54,12 +54,12 @@ export default function NotificationsTestPage() {
   return (
     <main className="min-h-screen flex flex-col items-center p-6">
       <div className="w-full max-w-3xl flex flex-col gap-4">
-        <header className="border-b border-border pb-4 mb-2 flex justify-between items-center">
+        <header className="border-b border-zinc-800 pb-4 mb-2 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold">
               Test Notifiche Realtime (Redis + WS)
             </h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-zinc-400">
               Stato WebSocket:{' '}
               <span
                 className={
@@ -81,7 +81,7 @@ export default function NotificationsTestPage() {
         <section className="border rounded-lg p-4 flex flex-col gap-3">
           <h2 className="text-lg font-semibold">Invia ping di test</h2>
           <input
-            className="border border-border rounded px-3 py-2 text-sm bg-transparent"
+            className="border border-zinc-700 rounded px-3 py-2 text-sm bg-transparent"
             placeholder="Messaggio di test"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
@@ -89,13 +89,13 @@ export default function NotificationsTestPage() {
           <div className="flex gap-2">
             <button
               onClick={sendTenantPing}
-              className="px-4 py-2 text-sm rounded bg-muted border border-border hover:bg-muted"
+              className="px-4 py-2 text-sm rounded bg-zinc-900 border border-zinc-700 hover:bg-zinc-800"
             >
               Ping TENANT
             </button>
             <button
               onClick={sendUserPing}
-              className="px-4 py-2 text-sm rounded bg-muted border border-border hover:bg-muted"
+              className="px-4 py-2 text-sm rounded bg-zinc-900 border border-zinc-700 hover:bg-zinc-800"
             >
               Ping USER
             </button>
@@ -105,7 +105,7 @@ export default function NotificationsTestPage() {
         <section className="border rounded-lg p-4">
           <h2 className="text-lg font-semibold mb-2">Eventi ricevuti</h2>
           {events.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-zinc-500">
               Nessun evento ancora ricevuto.
             </p>
           ) : (
@@ -116,7 +116,7 @@ export default function NotificationsTestPage() {
                 .map((ev, idx) => (
                   <li
                     key={idx}
-                    className="border border-border rounded px-2 py-1"
+                    className="border border-zinc-800 rounded px-2 py-1"
                   >
                     {JSON.stringify(ev)}
                   </li>

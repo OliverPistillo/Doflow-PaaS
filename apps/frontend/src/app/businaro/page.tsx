@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 
-function parseJwt(token: string): Record<string, unknown> {
+function parseJwt(token: string): any {
   try {
     const payload = token.split(".")[1];
     const decoded = Buffer.from(payload, "base64").toString("utf-8");

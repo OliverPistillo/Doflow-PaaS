@@ -90,10 +90,10 @@ export default function TenantMfaPage() {
       setQrCode(res.qrCodeUrl);
       setSecret(res.secret);
       setOtpUrl(res.otpauthUrl);
-    } catch (e: unknown) {
+    } catch (e: any) {
       toast({
         title: "Errore Setup",
-        description: "Impossibile generare i dati MFA. " + (e instanceof Error ? e.message : ""),
+        description: "Impossibile generare i dati MFA. " + (e.message || ""),
         variant: "destructive",
       });
     } finally {
@@ -147,10 +147,10 @@ export default function TenantMfaPage() {
       } else {
         throw new Error(res.error || "Errore sconosciuto");
       }
-    } catch (e: unknown) {
+    } catch (e: any) {
       toast({
         title: "Codice non valido",
-        description: e instanceof Error ? e.message : "Riprova con un nuovo codice.",
+        description: e.message || "Riprova con un nuovo codice.",
         variant: "destructive",
       });
       setCode(""); // Pulisci input per riprovare
@@ -165,8 +165,8 @@ export default function TenantMfaPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-muted/5 flex items-center justify-center">
-        <div className="text-center text-muted-foreground animate-pulse">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center text-slate-500 animate-pulse">
           <RefreshCw className="h-8 w-8 mx-auto mb-2 animate-spin" />
           <p>Caricamento sicurezza...</p>
         </div>
@@ -175,18 +175,18 @@ export default function TenantMfaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/5 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md p-8 shadow-xl border-border bg-white">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md p-8 shadow-xl border-slate-200 bg-white">
         
         {/* Header Icon */}
         <div className="flex flex-col items-center text-center space-y-4 mb-6">
-          <div className="p-3 bg-primary/10 rounded-full text-primary">
+          <div className="p-3 bg-indigo-100 rounded-full text-indigo-600">
             {mode === "SETUP" ? <QrCode className="h-8 w-8" /> : <ShieldCheck className="h-8 w-8" />}
           </div>
-          <h1 className="text-2xl font-bold text-foreground">
+          <h1 className="text-2xl font-bold text-slate-900">
             {mode === "SETUP" ? "Configura MFA" : "Verifica Accesso"}
           </h1>
-          <p className="text-sm text-muted-foreground px-4">
+          <p className="text-sm text-slate-500 px-4">
             {mode === "SETUP" 
               ? "Per proteggere il tuo account, scansiona il QR code con la tua app Authenticator (Google/Microsoft)."
               : "Inserisci il codice a 6 cifre generato dalla tua app di autenticazione."}
@@ -201,9 +201,9 @@ export default function TenantMfaPage() {
             </div>
             
             {/* Fallback Text */}
-            <details className="mt-4 text-xs text-muted-foreground cursor-pointer text-center w-full">
-              <summary className="hover:text-primary transition-colors">Non riesci a scansionare?</summary>
-              <div className="mt-2 p-3 bg-muted/20 rounded border border-border font-mono break-all select-all text-foreground">
+            <details className="mt-4 text-xs text-slate-400 cursor-pointer text-center w-full">
+              <summary className="hover:text-indigo-600 transition-colors">Non riesci a scansionare?</summary>
+              <div className="mt-2 p-3 bg-slate-100 rounded border border-slate-200 font-mono break-all select-all text-slate-600">
                 {secret}
               </div>
             </details>
@@ -214,11 +214,11 @@ export default function TenantMfaPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-muted-foreground">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
                 <Lock className="h-5 w-5" />
               </div>
               <Input
-                className="pl-10 text-center text-2xl tracking-[0.5em] font-mono h-14 border-border focus:border-primary/30 focus:ring-primary/30"
+                className="pl-10 text-center text-2xl tracking-[0.5em] font-mono h-14 border-slate-300 focus:border-indigo-500 focus:ring-indigo-500"
                 maxLength={6}
                 placeholder="000000"
                 value={code}
@@ -231,7 +231,7 @@ export default function TenantMfaPage() {
 
           <Button 
             type="submit" 
-            className="w-full h-12 text-lg font-semibold bg-primary hover:bg-primary/90 transition-all shadow-md hover:shadow-lg"
+            className="w-full h-12 text-lg font-semibold bg-indigo-600 hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg"
             disabled={submitting || code.length !== 6}
           >
             {submitting ? (
@@ -247,10 +247,10 @@ export default function TenantMfaPage() {
         </form>
 
         {/* Footer Actions */}
-        <div className="mt-8 pt-6 border-t border-border text-center">
+        <div className="mt-8 pt-6 border-t border-slate-100 text-center">
           <Button 
             variant="link" 
-            className="text-xs text-muted-foreground hover:text-foreground" 
+            className="text-xs text-slate-400 hover:text-slate-600" 
             onClick={() => router.replace(tenantSlug ? `/${tenantSlug}/login` : "/login")}
           >
             Torna al login

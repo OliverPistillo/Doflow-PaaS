@@ -226,15 +226,15 @@ export const PLAN_META: Record<PlanTier, {
 }> = {
   STARTER: {
     label:        "Starter",
-    color:        "bg-muted/20",
-    textColor:    "text-foreground",
+    color:        "bg-slate-100",
+    textColor:    "text-slate-700",
     nextPlan:     "PRO",
     upgradeLabel: "Passa a Pro",
   },
   PRO: {
     label:        "Pro",
-    color:        "bg-primary/10",
-    textColor:    "text-primary",
+    color:        "bg-indigo-100",
+    textColor:    "text-indigo-700",
     nextPlan:     "ENTERPRISE",
     upgradeLabel: "Passa a Enterprise",
   },

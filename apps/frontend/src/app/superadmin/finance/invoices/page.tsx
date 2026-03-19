@@ -121,9 +121,9 @@ function InvoicesContent() {
       a.click();
       a.remove();
       URL.revokeObjectURL(objectUrl);
-    } catch (e: unknown) {
+    } catch (e: any) {
       console.error("Errore download PDF:", e);
-      alert(`Impossibile scaricare il PDF: ${e instanceof Error ? e.message : "Errore sconosciuto"}`);
+      alert(`Impossibile scaricare il PDF: ${e?.message || "Errore sconosciuto"}`);
     }
   };
 

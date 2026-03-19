@@ -51,7 +51,7 @@ const STATUS_CONFIG: Record<QuoteStatus, { label: string; color: string; icon: t
   inviato:  { label: "Inviato",  color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",  icon: Send },
   accettato:{ label: "Accettato",color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400", icon: CheckCircle2 },
   rifiutato:{ label: "Rifiutato",color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",          icon: X },
-  scaduto:  { label: "Scaduto",  color: "bg-muted/20 text-foreground dark:bg-muted dark:text-muted-foreground",     icon: Clock },
+  scaduto:  { label: "Scaduto",  color: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",     icon: Clock },
 };
 
 const fmt = (n: number) => new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", minimumFractionDigits: 0 }).format(n);
@@ -80,7 +80,7 @@ export default function QuotesPage() {
           <h2 className="text-2xl font-bold tracking-tight">Preventivi</h2>
           <p className="text-sm text-muted-foreground mt-0.5">{quotes.length} preventivi totali</p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 text-white" size="sm">
+        <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" size="sm">
           <Plus className="h-4 w-4 mr-1.5" /> Nuovo Preventivo
         </Button>
       </div>
@@ -233,11 +233,11 @@ export default function QuotesPage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between"><span className="text-muted-foreground">Imponibile</span><span className="font-medium">{fmt(selected.subtotal)}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">IVA 22%</span><span className="font-medium">{fmt(selected.vat)}</span></div>
-                  <div className="flex justify-between text-base font-bold border-t pt-2"><span>Totale</span><span className="text-primary dark:text-primary">{fmt(selected.total)}</span></div>
+                  <div className="flex justify-between text-base font-bold border-t pt-2"><span>Totale</span><span className="text-indigo-600 dark:text-indigo-400">{fmt(selected.total)}</span></div>
                 </div>
 
                 <div className="flex gap-2 pt-2">
-                  <Button size="sm" className="flex-1 bg-primary hover:bg-primary/90 text-white"><Download className="mr-1.5 h-4 w-4" /> Scarica PDF</Button>
+                  <Button size="sm" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"><Download className="mr-1.5 h-4 w-4" /> Scarica PDF</Button>
                   <Button size="sm" variant="outline" className="flex-1"><Send className="mr-1.5 h-4 w-4" /> Invia</Button>
                 </div>
               </div>

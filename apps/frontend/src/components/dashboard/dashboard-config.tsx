@@ -4,7 +4,7 @@ import { BarChart3, Users, DollarSign, Activity } from "lucide-react";
 
 // --- WIDGET DI ESEMPIO (Placeholder) ---
 // In un sistema reale, questi sarebbero componenti complessi importati
-const KpiWidget = ({ title, value, icon: Icon, color }: { title: string; value: string; icon: React.ComponentType<{className?: string}>; color: string }) => (
+const KpiWidget = ({ title, value, icon: Icon, color }: any) => (
   <Card className="h-full border-l-4" style={{ borderLeftColor: color }}>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
       <CardTitle className="text-sm font-medium text-muted-foreground uppercase">{title}</CardTitle>
@@ -18,9 +18,9 @@ const KpiWidget = ({ title, value, icon: Icon, color }: { title: string; value: 
 );
 
 const ChartWidget = () => (
-  <Card className="h-full flex flex-col justify-center items-center bg-muted/5">
-    <BarChart3 className="h-10 w-10 text-muted-foreground/50 mb-2" />
-    <span className="text-muted-foreground font-medium">Grafico Vendite</span>
+  <Card className="h-full flex flex-col justify-center items-center bg-slate-50">
+    <BarChart3 className="h-10 w-10 text-slate-300 mb-2" />
+    <span className="text-slate-400 font-medium">Grafico Vendite</span>
   </Card>
 );
 
@@ -33,10 +33,10 @@ export const WIDGET_REGISTRY: Record<string, React.ReactNode> = {
   recent_activity: (
     <Card className="h-full p-4 bg-white">
       <h3 className="font-bold text-sm mb-4">Attività Recenti</h3>
-      <div className="space-y-2 text-xs text-muted-foreground">
-        <div className="p-2 bg-muted/5 rounded">Mario Rossi ha creato un preventivo.</div>
-        <div className="p-2 bg-muted/5 rounded">Fattura #1029 pagata.</div>
-        <div className="p-2 bg-muted/5 rounded">Nuovo ticket di supporto aperto.</div>
+      <div className="space-y-2 text-xs text-slate-500">
+        <div className="p-2 bg-slate-50 rounded">Mario Rossi ha creato un preventivo.</div>
+        <div className="p-2 bg-slate-50 rounded">Fattura #1029 pagata.</div>
+        <div className="p-2 bg-slate-50 rounded">Nuovo ticket di supporto aperto.</div>
       </div>
     </Card>
   )

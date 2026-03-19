@@ -24,20 +24,20 @@ export default function KioskHeader({
     <div className="flex flex-col gap-4 rounded-xl border bg-white p-6 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
+          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">
             {title}
           </h1>
           {subtitle ? (
-            <p className="text-muted-foreground">{subtitle}</p>
+            <p className="text-slate-500">{subtitle}</p>
           ) : (
-            <p className="text-muted-foreground">Postazione operativa (Kiosk Mode)</p>
+            <p className="text-slate-500">Postazione operativa (Kiosk Mode)</p>
           )}
         </div>
 
         <div className="flex items-center gap-3">
           <Badge
             variant="outline"
-            className="px-4 py-2 text-base border-border bg-muted/20"
+            className="px-4 py-2 text-base border-slate-300 bg-slate-100"
           >
             <ShieldCheck className="mr-2 h-4 w-4" />
             Ruolo: <b className="ml-1">{roleLabel}</b>
@@ -45,7 +45,7 @@ export default function KioskHeader({
 
           <Badge
             variant="outline"
-            className="px-4 py-2 text-base border-border bg-muted/20"
+            className="px-4 py-2 text-base border-slate-300 bg-slate-100"
           >
             Operatore: <b className="ml-1">{operatorLabel}</b>
           </Badge>
@@ -57,7 +57,7 @@ export default function KioskHeader({
             aria-label="Reset"
             title="Reset"
           >
-            <RefreshCw className="h-6 w-6 text-muted-foreground" />
+            <RefreshCw className="h-6 w-6 text-slate-500" />
           </Button>
         </div>
       </div>

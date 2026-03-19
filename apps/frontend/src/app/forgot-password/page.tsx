@@ -39,9 +39,9 @@ export default function ForgotPasswordPage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-md border border-border rounded-lg p-6 bg-black/60">
+      <div className="w-full max-w-md border border-zinc-800 rounded-lg p-6 bg-black/60">
         <h1 className="text-2xl font-bold mb-2">Password dimenticata</h1>
-        <p className="text-sm text-muted-foreground mb-4">
+        <p className="text-sm text-zinc-400 mb-4">
           Inserisci l&apos;email del tuo account. Se esiste, ti invieremo un link
           per reimpostare la password.
         </p>
@@ -60,7 +60,7 @@ export default function ForgotPasswordPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="px-3 py-2 rounded bg-black border border-border text-sm"
+                className="px-3 py-2 rounded bg-black border border-zinc-700 text-sm"
               />
             </div>
 

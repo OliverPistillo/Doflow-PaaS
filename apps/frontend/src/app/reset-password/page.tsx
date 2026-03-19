@@ -78,7 +78,7 @@ export default function ResetPasswordPage() {
   if (initializing) {
     return (
       <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="text-sm text-muted-foreground">
+        <div className="text-sm text-zinc-400">
           Caricamento link di reset...
         </div>
       </main>
@@ -88,7 +88,7 @@ export default function ResetPasswordPage() {
   if (!token) {
     return (
       <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="w-full max-w-md border border-border rounded-lg p-6 bg-black/60">
+        <div className="w-full max-w-md border border-zinc-800 rounded-lg p-6 bg-black/60">
           <h1 className="text-2xl font-bold mb-2">Reimposta password</h1>
           <p className="text-sm text-red-400 mb-4">
             Link non valido o mancante. Richiedi nuovamente la reimpostazione
@@ -101,7 +101,7 @@ export default function ResetPasswordPage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-md border border-border rounded-lg p-6 bg-black/60">
+      <div className="w-full max-w-md border border-zinc-800 rounded-lg p-6 bg-black/60">
         <h1 className="text-2xl font-bold mb-2">Reimposta password</h1>
 
         {done ? (
@@ -118,7 +118,7 @@ export default function ResetPasswordPage() {
                 minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="px-3 py-2 rounded bg-black border border-border text-sm"
+                className="px-3 py-2 rounded bg-black border border-zinc-700 text-sm"
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -129,7 +129,7 @@ export default function ResetPasswordPage() {
                 minLength={8}
                 value={password2}
                 onChange={(e) => setPassword2(e.target.value)}
-                className="px-3 py-2 rounded bg-black border border-border text-sm"
+                className="px-3 py-2 rounded bg-black border border-zinc-700 text-sm"
               />
             </div>
 

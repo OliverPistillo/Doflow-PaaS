@@ -44,10 +44,10 @@ export function UserNav() {
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="relative h-9 w-9 rounded-full ring-2 ring-border dark:ring-border hover:ring-primary/30 focus:ring-primary/30 focus-visible:outline-none"
+          className="relative h-9 w-9 rounded-full ring-2 ring-slate-100 dark:ring-slate-800 hover:ring-indigo-200 focus:ring-indigo-300 focus-visible:outline-none"
         >
           <Avatar className="h-9 w-9">
-            <AvatarFallback className="bg-primary text-white font-bold text-sm">
+            <AvatarFallback className="bg-indigo-600 text-white font-bold text-sm">
               {user?.initials ?? "DF"}
             </AvatarFallback>
           </Avatar>

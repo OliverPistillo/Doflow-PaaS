@@ -20,8 +20,8 @@ import { cn } from "@/lib/utils";
 // ─── Demo data ────────────────────────────────────────────────────────────────
 
 const CONTACTS = [
-  { id: "1", name: "Francesca Romano",  email: "francesca@startup.io",      phone: "+39 338 6789012", company: "StartupIO",           companyId: "1", role: "CEO",               initials: "FR", color: "bg-primary",  type: "lead",    tags: ["Decision Maker","Tech"],       lastContact: "2026-02-18", city: "Milano" },
-  { id: "2", name: "Alessandro Galli",  email: "ale@bigcorp.com",           phone: "+39 339 7890123", company: "BigCorp SpA",          companyId: "2", role: "CTO",               initials: "AG", color: "bg-chart-4",  type: "lead",    tags: ["Tecnico"],                     lastContact: "2026-02-15", city: "Roma" },
+  { id: "1", name: "Francesca Romano",  email: "francesca@startup.io",      phone: "+39 338 6789012", company: "StartupIO",           companyId: "1", role: "CEO",               initials: "FR", color: "bg-indigo-500",  type: "lead",    tags: ["Decision Maker","Tech"],       lastContact: "2026-02-18", city: "Milano" },
+  { id: "2", name: "Alessandro Galli",  email: "ale@bigcorp.com",           phone: "+39 339 7890123", company: "BigCorp SpA",          companyId: "2", role: "CTO",               initials: "AG", color: "bg-violet-500",  type: "lead",    tags: ["Tecnico"],                     lastContact: "2026-02-15", city: "Roma" },
   { id: "3", name: "Elena Ferri",       email: "elena@design.studio",       phone: "+39 340 8901234", company: "DesignStudio Srl",     companyId: "3", role: "Creative Director",  initials: "EF", color: "bg-rose-500",    type: "cliente", tags: ["Decision Maker","Design"],     lastContact: "2026-02-19", city: "Torino" },
   { id: "4", name: "Roberto Mazza",     email: "rob@innovate.it",           phone: "+39 341 9012345", company: "InnovateIT",           companyId: "4", role: "Head of Product",    initials: "RM", color: "bg-amber-500",   type: "lead",    tags: ["Product"],                     lastContact: "2026-02-10", city: "Bologna" },
   { id: "5", name: "Chiara Lombardi",   email: "chiara@mediagroup.it",      phone: "+39 342 0123456", company: "MediaGroup Italia",    companyId: "5", role: "Marketing Manager",  initials: "CL", color: "bg-teal-500",    type: "lead",    tags: ["Marketing"],                   lastContact: "2026-02-17", city: "Napoli" },
@@ -72,19 +72,19 @@ const ACTIVITIES = [
 ];
 
 const STAGE_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  nuovo:        { label: "Nuovo",         color: "text-foreground",   bg: "bg-muted/20 dark:bg-muted/40" },
-  contatto:     { label: "Contatto",      color: "text-primary",  bg: "bg-primary/10 dark:bg-primary/5" },
+  nuovo:        { label: "Nuovo",         color: "text-slate-600",   bg: "bg-slate-100 dark:bg-slate-800/40" },
+  contatto:     { label: "Contatto",      color: "text-indigo-600",  bg: "bg-indigo-100 dark:bg-indigo-950/30" },
   proposta:     { label: "Proposta",      color: "text-amber-600",   bg: "bg-amber-100 dark:bg-amber-950/30" },
-  negoziazione: { label: "Negoziazione",  color: "text-chart-4",  bg: "bg-chart-4/10 dark:bg-chart-4/30" },
+  negoziazione: { label: "Negoziazione",  color: "text-violet-600",  bg: "bg-violet-100 dark:bg-violet-950/30" },
   vinto:        { label: "Vinto",         color: "text-emerald-600", bg: "bg-emerald-100 dark:bg-emerald-950/30" },
   perso:        { label: "Perso",         color: "text-rose-600",    bg: "bg-rose-100 dark:bg-rose-950/30" },
 };
 
 const ACTIVITY_CONFIG: Record<string, { icon: React.ComponentType<{className?: string}>; color: string; bg: string }> = {
-  email:   { icon: Mail,      color: "text-primary",  bg: "bg-primary/10 dark:bg-primary/5" },
+  email:   { icon: Mail,      color: "text-indigo-600",  bg: "bg-indigo-100 dark:bg-indigo-950/40" },
   call:    { icon: PhoneCall, color: "text-emerald-600", bg: "bg-emerald-100 dark:bg-emerald-950/40" },
   note:    { icon: StickyNote,color: "text-amber-600",   bg: "bg-amber-100 dark:bg-amber-950/40" },
-  meeting: { icon: Calendar,  color: "text-chart-4",  bg: "bg-chart-4/10 dark:bg-chart-4/40" },
+  meeting: { icon: Calendar,  color: "text-violet-600",  bg: "bg-violet-100 dark:bg-violet-950/40" },
   deal:    { icon: Briefcase, color: "text-teal-600",    bg: "bg-teal-100 dark:bg-teal-950/40" },
 };
 
@@ -111,7 +111,7 @@ export default function Page() {
 
       {/* Hero card */}
       <Card className="border-border/60 overflow-hidden">
-        <div className="h-16 bg-gradient-to-r from-primary/20 via-chart-4/10 to-transparent" />
+        <div className="h-16 bg-gradient-to-r from-indigo-600/20 via-violet-600/10 to-transparent" />
         <CardContent className="px-6 pb-6 pt-0 -mt-8">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div className="flex items-end gap-4">
@@ -123,7 +123,7 @@ export default function Page() {
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-xl font-bold">{contact.name}</h2>
-                  <Badge variant={contact.type === "cliente" ? "default" : "secondary"} className={cn("text-xs", contact.type === "cliente" && "bg-primary hover:bg-primary")}>
+                  <Badge variant={contact.type === "cliente" ? "default" : "secondary"} className={cn("text-xs", contact.type === "cliente" && "bg-indigo-600 hover:bg-indigo-600")}>
                     {contact.type === "cliente" ? "Cliente" : "Lead"}
                   </Badge>
                 </div>
@@ -133,7 +133,7 @@ export default function Page() {
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm"><PhoneCall className="mr-1.5 h-4 w-4" /> Chiama</Button>
               <Button variant="outline" size="sm"><Mail className="mr-1.5 h-4 w-4" /> Email</Button>
-              <Button size="sm" className="bg-primary hover:bg-primary/90 text-white"><Pencil className="mr-1.5 h-4 w-4" /> Modifica</Button>
+              <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white"><Pencil className="mr-1.5 h-4 w-4" /> Modifica</Button>
             </div>
           </div>
 
@@ -174,7 +174,7 @@ export default function Page() {
           {/* Deal KPI mini-strip */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "Pipeline totale",  value: `€ ${(totalDealValue / 1000).toFixed(0)}K`, icon: TrendingUp,  color: "text-primary",  bg: "bg-primary/5 dark:bg-primary/5" },
+              { label: "Pipeline totale",  value: `€ ${(totalDealValue / 1000).toFixed(0)}K`, icon: TrendingUp,  color: "text-indigo-600",  bg: "bg-indigo-50 dark:bg-indigo-950/30" },
               { label: "Deal vinte",       value: String(wonDeals.length),                    icon: DollarSign,  color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
               { label: "Valore acquisito", value: `€ ${(wonValue / 1000).toFixed(0)}K`,       icon: CheckSquare, color: "text-teal-600",    bg: "bg-teal-50 dark:bg-teal-950/30" },
             ].map(k => (
@@ -291,7 +291,7 @@ export default function Page() {
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-primary/10 dark:bg-primary/5 flex items-center justify-center font-bold text-primary">
+                  <div className="h-10 w-10 rounded-lg bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center font-bold text-indigo-600">
                     {contact.company.substring(0, 2).toUpperCase()}
                   </div>
                   <div>
@@ -328,7 +328,7 @@ export default function Page() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground italic">Budget confermato a €28K. Preferisce stack React + Node.js. Seguire entro metà marzo per aggiornamento fase 2.</p>
-              <Button variant="ghost" size="sm" className="mt-2 text-xs text-primary px-0">
+              <Button variant="ghost" size="sm" className="mt-2 text-xs text-indigo-600 px-0">
                 <Pencil className="h-3 w-3 mr-1" /> Modifica nota
               </Button>
             </CardContent>
@@ -344,7 +344,7 @@ export default function Page() {
             <CardContent className="space-y-2">
               {[
                 { text: "Scadenza preventivo PRV-2026-001", date: "10/03/2026", color: "text-amber-600" },
-                { text: "Followup fase 2 e-commerce",       date: "15/03/2026", color: "text-primary" },
+                { text: "Followup fase 2 e-commerce",       date: "15/03/2026", color: "text-indigo-600" },
               ].map((r, i) => (
                 <div key={i} className="flex items-start gap-2 text-xs">
                   <Calendar className={cn("h-3.5 w-3.5 mt-0.5 shrink-0", r.color)} />

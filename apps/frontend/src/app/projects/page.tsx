@@ -118,14 +118,14 @@ export default function ProjectsPage() {
   return (
     <main className="min-h-screen flex flex-col items-center gap-6 p-6">
       <div className="w-full max-w-5xl flex flex-col gap-4">
-        <header className="flex flex-col gap-2 border-b border-border pb-3 mb-2">
-          <div className="flex justify-between items-center text-xs text-muted-foreground/50">
+        <header className="flex flex-col gap-2 border-b border-zinc-800 pb-3 mb-2">
+          <div className="flex justify-between items-center text-xs text-gray-400">
             <span>
               Tenant: <span className="font-mono">{tenantHost}</span>
             </span>
             <button
               onClick={handleLogout}
-              className="text-xs px-3 py-1 border rounded border-border hover:bg-muted"
+              className="text-xs px-3 py-1 border rounded border-zinc-700 hover:bg-zinc-800"
             >
               Logout
             </button>
@@ -136,10 +136,10 @@ export default function ProjectsPage() {
               <Link href="/projects" className="underline">
                 Progetti
               </Link>
-              <Link href="/admin/users" className="text-muted-foreground/50 hover:underline">
+              <Link href="/admin/users" className="text-gray-400 hover:underline">
                 Admin utenti
               </Link>
-              <Link href="/admin/audit" className="text-muted-foreground/50 hover:underline">
+              <Link href="/admin/audit" className="text-gray-400 hover:underline">
                 Audit log
               </Link>
             </nav>
@@ -196,7 +196,7 @@ export default function ProjectsPage() {
           </div>
 
           {projects.length === 0 ? (
-            <p className="text-sm text-muted-foreground/50">
+            <p className="text-sm text-gray-400">
               Nessun progetto presente per questo tenant.
             </p>
           ) : (
@@ -204,20 +204,20 @@ export default function ProjectsPage() {
               {projects.map((p) => (
                 <li
                   key={p.id}
-                  className="border border-border rounded px-3 py-2 flex justify-between items-center"
+                  className="border border-zinc-800 rounded px-3 py-2 flex justify-between items-center"
                 >
                   <div>
                     <div className="font-semibold">{p.name}</div>
                     {p.description && (
-                      <div className="text-xs text-muted-foreground/50">
+                      <div className="text-xs text-gray-400">
                         {p.description}
                       </div>
                     )}
-                    <div className="text-[11px] text-muted-foreground">
+                    <div className="text-[11px] text-gray-500">
                       Owner: {p.owner_email ?? '—'} ·{' '}
                       {new Date(p.created_at).toLocaleString()}
                     </div>
-                    <div className="mt-1 text-[11px] text-muted-foreground flex items-center gap-2">
+                    <div className="mt-1 text-[11px] text-gray-500 flex items-center gap-2">
                       <span>
                         ID:{' '}
                         <span className="font-mono">
@@ -227,7 +227,7 @@ export default function ProjectsPage() {
                       <button
                         type="button"
                         onClick={() => handleCopyId(p.id)}
-                        className="text-[10px] px-2 py-0.5 border border-border rounded hover:bg-muted"
+                        className="text-[10px] px-2 py-0.5 border border-zinc-700 rounded hover:bg-zinc-800"
                       >
                         Copia ID
                       </button>
@@ -235,7 +235,7 @@ export default function ProjectsPage() {
                   </div>
                   <Link
                     href={`/projects/${p.id}`}
-                    className="text-xs px-3 py-1 border rounded border-border hover:bg-muted"
+                    className="text-xs px-3 py-1 border rounded border-zinc-700 hover:bg-zinc-800"
                   >
                     Task →
                   </Link>

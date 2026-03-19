@@ -118,12 +118,12 @@ export default function TenantUsersPage() {
 
       <div className="border rounded p-4 max-w-xl">
         <h2 className="font-semibold mb-2">Utenti del tenant corrente</h2>
-        {users.length === 0 && !error && <p className="text-sm text-muted-foreground">Nessun utente.</p>}
+        {users.length === 0 && !error && <p className="text-sm text-gray-500">Nessun utente.</p>}
         <ul className="space-y-1 text-sm">
           {users.map((u) => (
             <li key={u.id} className="flex justify-between gap-4">
               <span>{u.email}</span>
-              <span className="text-muted-foreground">schema: {u.schema}</span>
+              <span className="text-gray-500">schema: {u.schema}</span>
             </li>
           ))}
         </ul>

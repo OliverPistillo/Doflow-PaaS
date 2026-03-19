@@ -48,7 +48,7 @@ function centsToEuro(cents: number | null | undefined) {
 export default function ClienteDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const id = Number(params?.id);
+  const id = Number((params as any).id);
 
   const [cliente, setCliente] = React.useState<Cliente | null>(null);
   const [storico, setStorico] = React.useState<Appuntamento[]>([]);

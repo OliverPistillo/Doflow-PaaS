@@ -89,7 +89,7 @@ export function LockedFeature({
           href="/billing"
           className={cn(
             "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold",
-            "bg-primary hover:bg-primary/90 text-white transition-colors shadow-md",
+            "bg-indigo-600 hover:bg-indigo-700 text-white transition-colors shadow-md",
           )}
         >
           <Sparkles className="h-3.5 w-3.5" />

@@ -1,5 +1,5 @@
 // Percorso: apps/frontend/src/app/superadmin/delivery/status/components/TaskCreateSheet.tsx
-// Fix: bg-primary/hover:bg-primary/90 → bg-primary hover:bg-primary/90
+// Fix: bg-indigo-600/hover:bg-indigo-700 → bg-primary hover:bg-primary/90
 
 "use client";
 
@@ -135,7 +135,7 @@ export function TaskCreateSheet({ isOpen, onClose, onSuccess, taskToEdit }: Task
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })} />
           </div>
           <div className="pt-4 flex justify-end">
-            {/* ✅ bg-primary invece di bg-primary */}
+            {/* ✅ bg-primary invece di bg-indigo-600 */}
             <Button type="submit" disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
               {taskToEdit ? "Salva Modifiche" : "Crea Task"}

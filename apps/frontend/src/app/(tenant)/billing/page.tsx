@@ -18,7 +18,7 @@ const PLANS = [
     name: "Starter",
     price: 49,
     description: "Perfetto per piccoli team e liberi professionisti",
-    color: "text-foreground",
+    color: "text-slate-700",
     border: "border-border",
     badge: "",
     features: [
@@ -33,8 +33,8 @@ const PLANS = [
     name: "Pro",
     price: 129,
     description: "Per team in crescita con esigenze avanzate",
-    color: "text-primary",
-    border: "border-primary/30 dark:border-primary/30",
+    color: "text-indigo-700",
+    border: "border-indigo-300 dark:border-indigo-700",
     badge: "Attivo",
     features: [
       "Fino a 15 utenti", "Tutto di Starter +", "Fatturazione & contabilità",
@@ -65,10 +65,10 @@ const PLANS = [
 // ─── Usage data ───────────────────────────────────────────────────────────────
 
 const USAGE = [
-  { label: "Utenti",          used: 9,    limit: 15,    unit: "utenti",    icon: Users,    color: "bg-primary" },
+  { label: "Utenti",          used: 9,    limit: 15,    unit: "utenti",    icon: Users,    color: "bg-indigo-500" },
   { label: "Storage",         used: 2.3,  limit: 5,     unit: "GB",        icon: Shield,   color: "bg-emerald-500" },
   { label: "Automazioni",     used: 4,    limit: 10,    unit: "attive",    icon: Zap,      color: "bg-amber-500" },
-  { label: "Email Campaign",  used: 1840, limit: 5000,  unit: "inviate/m", icon: Sparkles, color: "bg-chart-4" },
+  { label: "Email Campaign",  used: 1840, limit: 5000,  unit: "inviate/m", icon: Sparkles, color: "bg-violet-500" },
 ];
 
 // ─── Invoice history ──────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ function PaymentCard() {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-muted/30">
-          <div className="h-9 w-14 rounded-lg bg-gradient-to-br from-primary to-chart-4 flex items-center justify-center shrink-0">
+          <div className="h-9 w-14 rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center shrink-0">
             <span className="text-white text-[10px] font-bold">VISA</span>
           </div>
           <div>
@@ -115,19 +115,19 @@ function PaymentCard() {
 
 function RenewalCard() {
   return (
-    <Card className="border-primary/30 dark:border-primary/30 bg-primary/5/50 dark:bg-primary/5">
+    <Card className="border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20">
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-primary/10 dark:bg-primary/5 flex items-center justify-center">
-              <Calendar className="h-5 w-5 text-primary" />
+            <div className="h-10 w-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/40 flex items-center justify-center">
+              <Calendar className="h-5 w-5 text-indigo-600" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-primary dark:text-primary">Prossimo rinnovo</p>
-              <p className="text-xs text-primary dark:text-primary mt-0.5">1 Marzo 2026 · Piano Pro · <strong>€ 129,00</strong></p>
+              <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-100">Prossimo rinnovo</p>
+              <p className="text-xs text-indigo-700 dark:text-indigo-300 mt-0.5">1 Marzo 2026 · Piano Pro · <strong>€ 129,00</strong></p>
             </div>
           </div>
-          <Button variant="ghost" size="sm" className="text-xs text-primary">
+          <Button variant="ghost" size="sm" className="text-xs text-indigo-700">
             Gestisci <ChevronRight className="h-3 w-3 ml-1" />
           </Button>
         </div>
@@ -156,18 +156,18 @@ export default function Page() {
       </div>
 
       {/* Current plan banner */}
-      <div className="rounded-2xl border border-primary/30 dark:border-primary/30 bg-gradient-to-r from-primary/5 to-chart-4/5 dark:from-primary/80/30 dark:to-chart-4/80/20 p-5">
+      <div className="rounded-2xl border border-indigo-200 dark:border-indigo-800 bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950/30 dark:to-violet-950/20 p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-2xl bg-primary flex items-center justify-center shrink-0">
+            <div className="h-12 w-12 rounded-2xl bg-indigo-600 flex items-center justify-center shrink-0">
               <Zap className="h-6 w-6 text-white" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-lg font-bold text-primary dark:text-primary">Piano Pro</h3>
-                <Badge className="bg-primary text-white text-xs">Attivo</Badge>
+                <h3 className="text-lg font-bold text-indigo-900 dark:text-indigo-100">Piano Pro</h3>
+                <Badge className="bg-indigo-600 text-white text-xs">Attivo</Badge>
               </div>
-              <p className="text-sm text-primary dark:text-primary mt-0.5">
+              <p className="text-sm text-indigo-700 dark:text-indigo-300 mt-0.5">
                 Fatturazione mensile · <strong>€ 129/mese</strong> · Rinnovo 01/03/2026
               </p>
             </div>
@@ -233,13 +233,13 @@ export default function Page() {
                     className={cn(
                       "rounded-xl border p-4 flex flex-col gap-3 relative",
                       plan.current
-                        ? "border-primary/30 bg-primary/5/50 dark:bg-primary/5 dark:border-primary/30"
+                        ? "border-indigo-300 bg-indigo-50/50 dark:bg-indigo-950/20 dark:border-indigo-700"
                         : "border-border",
                     )}
                   >
                     {plan.current && (
                       <div className="absolute -top-2.5 left-1/2 -translate-x-1/2">
-                        <Badge className="bg-primary text-white text-[10px]">Piano Attuale</Badge>
+                        <Badge className="bg-indigo-600 text-white text-[10px]">Piano Attuale</Badge>
                       </div>
                     )}
                     {plan.id === "ENTERPRISE" && (

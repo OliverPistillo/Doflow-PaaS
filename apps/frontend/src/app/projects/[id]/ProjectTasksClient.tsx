@@ -34,8 +34,8 @@ async function readErrorMessage(res: Response): Promise<string> {
   try {
     const ct = res.headers.get('content-type') || '';
     if (ct.includes('application/json')) {
-      const j = await res.json() as Record<string, unknown>;
-      return String(j?.error ?? j?.message ?? JSON.stringify(j));
+      const j = (await res.json()) as any;
+      return j?.error || j?.message || JSON.stringify(j);
     }
     const t = await res.text();
     return t || `HTTP ${res.status}`;
@@ -100,7 +100,7 @@ export default function ProjectTasksClient() {
         const data = (await res.json()) as TasksResponse;
         setTasks(Array.isArray(data?.tasks) ? data.tasks : []);
       } catch (e) {
-        if (e instanceof Error && e.name === 'AbortError') return;
+        if ((e as any)?.name === 'AbortError') return;
         setError('Errore nel caricamento task: ' + safeText(e));
       } finally {
         setLoading(false);
@@ -192,14 +192,14 @@ export default function ProjectTasksClient() {
   return (
     <main className="min-h-screen flex flex-col items-center gap-6 p-6">
       <div className="w-full max-w-5xl flex flex-col gap-4">
-        <header className="flex flex-col gap-2 border-b border-border pb-3 mb-2">
-          <div className="flex justify-between items-center text-xs text-muted-foreground/50">
+        <header className="flex flex-col gap-2 border-b border-zinc-800 pb-3 mb-2">
+          <div className="flex justify-between items-center text-xs text-gray-400">
             <span>
               Tenant: <span className="font-mono">{tenantHost || '—'}</span>
             </span>
             <button
               onClick={handleLogout}
-              className="text-xs px-3 py-1 border rounded border-border hover:bg-muted"
+              className="text-xs px-3 py-1 border rounded border-zinc-700 hover:bg-zinc-800"
             >
               Logout
             </button>
@@ -208,7 +208,7 @@ export default function ProjectTasksClient() {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold">Task progetto #{projectId}</h1>
-              <Link href="/projects" className="text-xs text-muted-foreground/50 hover:underline">
+              <Link href="/projects" className="text-xs text-gray-400 hover:underline">
                 ← Torna ai progetti
               </Link>
             </div>
@@ -278,23 +278,23 @@ export default function ProjectTasksClient() {
           <h2 className="text-lg font-semibold mb-3">Task del progetto</h2>
 
           {loading && tasks.length === 0 ? (
-            <p className="text-sm text-muted-foreground/50">Caricamento…</p>
+            <p className="text-sm text-gray-400">Caricamento…</p>
           ) : tasks.length === 0 ? (
-            <p className="text-sm text-muted-foreground/50">Nessun task presente per questo progetto.</p>
+            <p className="text-sm text-gray-400">Nessun task presente per questo progetto.</p>
           ) : (
             <ul className="flex flex-col gap-2">
               {tasks.map((t) => (
-                <li key={t.id} className="border border-border rounded px-3 py-2">
+                <li key={t.id} className="border border-zinc-800 rounded px-3 py-2">
                   <div className="flex justify-between gap-4">
                     <div className="min-w-0">
                       <div className="font-semibold truncate">{t.title}</div>
-                      {t.description ? <div className="text-xs text-muted-foreground/50 truncate">{t.description}</div> : null}
-                      <div className="text-[11px] text-muted-foreground">
+                      {t.description ? <div className="text-xs text-gray-400 truncate">{t.description}</div> : null}
+                      <div className="text-[11px] text-gray-500">
                         Assegnato a: {t.assignee_email ?? '—'} ·{' '}
                         {t.due_date ? `Scadenza: ${t.due_date}` : 'Senza scadenza'}
                       </div>
                     </div>
-                    <div className="text-xs text-muted-foreground/50 shrink-0">Stato: {t.status}</div>
+                    <div className="text-xs text-gray-400 shrink-0">Stato: {t.status}</div>
                   </div>
                 </li>
               ))}

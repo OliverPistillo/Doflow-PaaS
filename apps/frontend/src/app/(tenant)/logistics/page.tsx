@@ -52,7 +52,7 @@ const STATUS_CFG: Record<ShipmentStatus, {
   icon: React.ComponentType<{className?: string}>;
   step: number; // 0-4 for timeline
 }> = {
-  in_preparazione: { label: "In preparazione", color: "text-primary",  bg: "bg-primary/10 dark:bg-primary/5",   border: "border-primary/30",  icon: Package,       step: 0 },
+  in_preparazione: { label: "In preparazione", color: "text-indigo-600",  bg: "bg-indigo-100 dark:bg-indigo-950/40",   border: "border-indigo-200",  icon: Package,       step: 0 },
   spedito:         { label: "Spedito",          color: "text-sky-600",     bg: "bg-sky-100 dark:bg-sky-950/40",         border: "border-sky-200",     icon: Truck,         step: 1 },
   in_transito:     { label: "In transito",      color: "text-amber-600",   bg: "bg-amber-100 dark:bg-amber-950/40",     border: "border-amber-200",   icon: Navigation,    step: 2 },
   consegnato:      { label: "Consegnato",       color: "text-emerald-600", bg: "bg-emerald-100 dark:bg-emerald-950/40", border: "border-emerald-200", icon: PackageCheck,  step: 3 },
@@ -94,7 +94,7 @@ function ShipmentTimeline({ status }: { status: ShipmentStatus }) {
                 "h-6 w-6 rounded-full flex items-center justify-center border-2 transition-all",
                 isActive
                   ? isCurrent
-                    ? cn("border-primary/30 bg-primary shadow-sm shadow-indigo-200")
+                    ? cn("border-indigo-500 bg-indigo-500 shadow-sm shadow-indigo-200")
                     : "border-emerald-500 bg-emerald-500"
                   : "border-border bg-background",
               )}>
@@ -156,7 +156,7 @@ export default function Page() {
             {SHIPMENTS.length} spedizioni · {inTransit} in transito · {problems > 0 ? `${problems} con problemi` : "nessun problema"}
           </p>
         </div>
-        <Button className="bg-primary hover:bg-primary/90 text-white shrink-0" size="sm">
+        <Button className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0" size="sm">
           <Plus className="mr-1.5 h-4 w-4" /> Nuova Spedizione
         </Button>
       </div>
@@ -164,7 +164,7 @@ export default function Page() {
       {/* KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: "In preparazione", value: String(preparing),  icon: Package,      color: "text-primary",  bg: "bg-primary/5 dark:bg-primary/5" },
+          { label: "In preparazione", value: String(preparing),  icon: Package,      color: "text-indigo-600",  bg: "bg-indigo-50 dark:bg-indigo-950/30" },
           { label: "In transito",     value: String(inTransit),  icon: Navigation,   color: "text-amber-600",   bg: "bg-amber-50 dark:bg-amber-950/30" },
           { label: "Consegnate",      value: String(delivered),  icon: PackageCheck, color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
           { label: "Problemi",        value: String(problems),   icon: AlertTriangle,color: "text-rose-600",    bg: "bg-rose-50 dark:bg-rose-950/30" },
@@ -187,7 +187,7 @@ export default function Page() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Cerca spedizione, tracking, destinazione..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <Select value={statusFilter} onValueChange={v => setStatus(v as "Tutti" | ShipmentStatus)}>
+        <Select value={statusFilter} onValueChange={v => setStatus(v as any)}>
           <SelectTrigger className="w-full sm:w-48">
             <SelectValue placeholder="Stato" />
           </SelectTrigger>
@@ -234,7 +234,7 @@ export default function Page() {
                   key={s.id}
                   className={cn(
                     "cursor-pointer hover:shadow-md transition-all border-border/60",
-                    isSelected && "border-primary/30 shadow-md ring-1 ring-primary/30/30",
+                    isSelected && "border-indigo-400 shadow-md ring-1 ring-indigo-400/30",
                     isProblem  && "border-rose-300 dark:border-rose-800",
                   )}
                   onClick={() => setSelected(isSelected ? null : s)}
@@ -247,7 +247,7 @@ export default function Page() {
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-black font-mono text-primary">{s.id}</span>
+                            <span className="text-sm font-black font-mono text-indigo-600">{s.id}</span>
                             <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", sc.color, "border-current/30", sc.bg)}>
                               {sc.label}
                             </Badge>
@@ -266,7 +266,7 @@ export default function Page() {
                     <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap mt-1">
                       <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{s.destination.split(",").pop()?.trim()}</span>
                       <span className="flex items-center gap-1"><Package className="h-3 w-3" />{s.items} colli · {s.weight}</span>
-                      {s.orderId && <span className="flex items-center gap-1 text-primary"><Hash className="h-3 w-3" />{s.orderId}</span>}
+                      {s.orderId && <span className="flex items-center gap-1 text-indigo-600"><Hash className="h-3 w-3" />{s.orderId}</span>}
                       {s.status !== "consegnato" && s.status !== "problema" && (
                         <span className={cn("flex items-center gap-1 font-semibold",
                           days < 0 ? "text-rose-600" : days <= 1 ? "text-amber-600" : "text-muted-foreground"
@@ -294,7 +294,7 @@ export default function Page() {
             <Card className="sticky top-4 border-border/60">
               <CardHeader className="pb-3 flex flex-row items-start justify-between">
                 <div>
-                  <p className="font-black font-mono text-primary text-sm">{selected.id}</p>
+                  <p className="font-black font-mono text-indigo-600 text-sm">{selected.id}</p>
                   <Badge variant="outline" className={cn("text-[10px] mt-1", STATUS_CFG[selected.status].color, "border-current/30", STATUS_CFG[selected.status].bg)}>
                     {STATUS_CFG[selected.status].label}
                   </Badge>
@@ -317,7 +317,7 @@ export default function Page() {
                     <info.icon className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
                     <div className="min-w-0">
                       <p className="text-[10px] text-muted-foreground">{info.label}</p>
-                      <p className={cn("text-xs font-semibold mt-0.5 break-all", Boolean((info as Record<string,unknown>).mono) && "font-mono")}>{info.value}</p>
+                      <p className={cn("text-xs font-semibold mt-0.5 break-all", (info as any).mono && "font-mono")}>{info.value}</p>
                     </div>
                   </div>
                 ))}

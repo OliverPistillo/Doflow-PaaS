@@ -151,7 +151,7 @@ export default function PipelinePage() {
 
   // --- RAGGRUPPAMENTO DATI ---
   const groupedStages: StageGroup[] = ORDERED_STAGES.map(stageKey => {
-    const config = STAGE_CONFIG[stageKey] || { label: stageKey, color: "#ccc", badgeClass: "bg-muted/20" };
+    const config = STAGE_CONFIG[stageKey] || { label: stageKey, color: "#ccc", badgeClass: "bg-gray-100" };
     return {
       id: stageKey,
       label: config.label,
@@ -188,7 +188,7 @@ export default function PipelinePage() {
                 className="flex items-center gap-2 cursor-pointer select-none group py-1" 
                 onClick={() => toggleStage(stage.id)}
               >
-                <div className="p-1 rounded-md hover:bg-muted/20 transition-colors">
+                <div className="p-1 rounded-md hover:bg-slate-200 transition-colors">
                   {expanded[stage.id] ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                 </div>
                 <Badge variant="outline" className={`px-2 py-1 text-xs font-semibold rounded-md border-0 ${stage.badgeClass}`}>
@@ -237,7 +237,7 @@ export default function PipelinePage() {
                               {/* Barra visuale probabilità */}
                               <div className="flex items-center gap-2">
                                 <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
-                                    <div className="h-full bg-primary" style={{ width: `${deal.winProbability * 100}%` }}></div>
+                                    <div className="h-full bg-indigo-500" style={{ width: `${deal.winProbability * 100}%` }}></div>
                                 </div>
                                 <span className="text-xs">{Math.round(deal.winProbability * 100)}%</span>
                               </div>
