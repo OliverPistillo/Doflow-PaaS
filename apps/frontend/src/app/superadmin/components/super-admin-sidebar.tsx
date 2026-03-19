@@ -226,7 +226,7 @@ export function SuperAdminSidebar() {
       </SidebarContent>
 
       {/* ── FOOTER: User avatar + dropdown ───────────────────────────── */}
-      <SidebarFooter className="border-t border-sidebar-border">
+      <SidebarFooter className="border-none">
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
@@ -234,7 +234,7 @@ export function SuperAdminSidebar() {
                 {/* Modifichiamo il button: allineiamo al centro quando collassato, puliamo padding */}
                 <SidebarMenuButton
                   size="lg"
-                  className={`relative flex items-center transition-all duration-300 ${isOpen ? "px-3 justify-start" : "px-0 justify-center"} data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground`}
+                  className={`data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground ${isOpen ? "justify-start px-3" : "justify-center p-0"}`}
                   aria-label="Menu utente"
                 >
                   {/* Aumentiamo l'avatar da h-8/w-8 a h-10/w-10 (40px) */}
