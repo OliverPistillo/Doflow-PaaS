@@ -3,7 +3,7 @@
 //   radius:  14px  (var(--radius))
 //   shadow:  0px 6px 12px rgba(63,140,255,0.26)
 //   font:    Bold 16px Nunito Sans
-//   bg:      #3f8cff → hsl(var(--primary))
+//   bg:      #052136 → hsl(var(--primary))
 
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";

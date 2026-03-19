@@ -15,21 +15,21 @@
        Background body:  #f4f9fd  → hsl(208 68% 97%)
        Card white:       #ffffff
        Card gray:        #f4f9fd
-       Primary blue:     #3f8cff  → hsl(214 100% 62%)
+       Primary blue:     #052136  → hsl(214 100% 62%)
        Text dark:        #0a1629  → hsl(220 82% 10%)
        Text muted:       #7d8592  → hsl(218 8% 54%)
        Sidebar card bg:  #ffffff  (rounded-[24px])
-       Active section:   #3f8cff  at 10% opacity
+       Active section:   #052136  at 10% opacity
   ═══════════════════════════════════════════════════════════════════ */
   :root {
     /* ── Figma raw primitives ──────────────────────────────────────── */
-    --figma-blue:          #3f8cff;
+    --figma-blue:          #052136;
     --figma-bg:            #f4f9fd;
     --figma-card-white:    #ffffff;
     --figma-card-gray:     #f4f9fd;
-    --figma-text-dark:     #0a1629;
+    --figma-text-dark:     #052136;
     --figma-text-muted:    #7d8592;
-    --figma-support-card:  #3f8cff;   /* lightblue card at 10% */
+    --figma-support-card:  #052136;   /* lightblue card at 10% */
 
     /* ── shadcn/ui semantic tokens (mapped from Figma) ────────────── */
     --background:           208 68% 97%;   /* #f4f9fd */
@@ -41,7 +41,7 @@
     --popover:              0 0% 100%;
     --popover-foreground:   220 82% 10%;
 
-    --primary:              214 100% 62%;  /* #3f8cff */
+    --primary:              214 100% 62%;  /* #052136 */
     --primary-foreground:   0 0% 100%;
 
     --secondary:            208 68% 97%;   /* #f4f9fd (card gray) */

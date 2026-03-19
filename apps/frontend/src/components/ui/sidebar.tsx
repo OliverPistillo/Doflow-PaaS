@@ -1,8 +1,8 @@
 // Percorso: apps/frontend/src/components/ui/sidebar.tsx
 // Refactored 1:1 dal Figma: elm/sidebar/activesection, elm/sidebar/indicator
-//   Active bg:      #3f8cff at 10% opacity, radius 10px
-//   Active indicator: 4px solid #3f8cff (left)
-//   Active text:    #3f8cff Bold
+//   Active bg:      #052136 at 10% opacity, radius 10px
+//   Active indicator: 4px solid #052136 (left)
+//   Active text:    #052136 Bold
 //   Inactive text:  #7d8592 SemiBold
 //   Hover bg:       slight blue tint
 //   Sidebar bg:     white card (shadow-card, radius 24px)

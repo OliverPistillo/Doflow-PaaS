@@ -2,7 +2,7 @@
 // Refactored 1:1 dal Figma — logica auth invariata, solo stile aggiornato
 // Figma tokens applicati:
 //   - card bg: #ffffff, radius 24px, shadow-card
-//   - button: #3f8cff, radius 14px, shadow-button
+//   - button: #052136, radius 14px, shadow-button
 //   - input: border radius 14px, h-12
 //   - font: Nunito Sans Bold/SemiBold
 //   - text primary: #0a1629, muted: #7d8592

@@ -56,9 +56,9 @@ const config: Config = {
       // ── Colors (tutte semantiche → CSS vars) ───────────────────────
       colors: {
         // Figma raw primitives (usati solo dove si vuole il valore esatto)
-        "figma-blue":    "#3f8cff",
+        "figma-blue":    "#052136",
         "figma-bg":      "#f4f9fd",
-        "figma-dark":    "#0a1629",
+        "figma-dark":    "#052136",
         "figma-muted":   "#7d8592",
         "figma-gray":    "#f4f9fd",
 
