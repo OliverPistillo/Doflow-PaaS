@@ -184,7 +184,7 @@ export function SuperAdminSidebar() {
 
       {/* ── HEADER: Logo ──────────────────────────────────────────────── */}
       <SidebarHeader className="h-16 p-0 border-b border-sidebar-border flex items-center justify-center">
-        <div className={`flex items-center gap-2.5 px-3 w-full transition-all duration-300 ${isOpen ? "justify-start" : "justify-center"}`}>
+        <div className={`relative h-8 transition-all duration-300 ${isOpen ? "w-32" : "w-8 shrink-0"}`}>
           {/* Logo mark */}
           <div className="relative h-8 w-8 shrink-0">
             {mounted && (

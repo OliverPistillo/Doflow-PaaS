@@ -555,15 +555,6 @@ const sidebarMenuButtonVariants = cva(
     "data-[active=true]:bg-primary/10",
     "data-[active=true]:text-primary",
     "data-[active=true]:font-bold",
-    // Active indicator — 4px left bar (Figma: elm/sidebar/indicator/activesection)
-    "data-[active=true]:relative",
-    "data-[active=true]:before:absolute",
-    "data-[active=true]:before:left-0",
-    "data-[active=true]:before:top-0",
-    "data-[active=true]:before:h-full",
-    "data-[active=true]:before:w-1",
-    "data-[active=true]:before:rounded-r-sm",
-    "data-[active=true]:before:bg-primary",
     // Collapsed icon mode
     "group-data-[collapsible=icon]:!size-10 group-data-[collapsible=icon]:!p-2 group-data-[collapsible=icon]:justify-center",
     "[&>span:last-child]:truncate",
