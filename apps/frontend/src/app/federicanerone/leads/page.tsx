@@ -27,8 +27,8 @@ export default function FacebookLeadsPage() {
     try {
       // Usiamo l'endpoint clienti filtrando per source (dovrai aggiornare clienti.service per supportare il filtro source se non lo fa)
       // O per ora carichiamo tutto e filtriamo lato client per semplicità
-      const res = await apiFetch<{ clienti: any[] }>('/clienti');
-      const fbLeads = (res.clienti || []).filter((c: any) => c.source === 'facebook_ads');
+      const res = await apiFetch<{ clienti: Record<string,unknown>[] }>('/clienti');
+      const fbLeads = (res.clienti || []).filter((c) => (c as Record<string,unknown>).source === 'facebook_ads');
       setLeads(fbLeads);
     } catch (e) {
       console.error(e);

@@ -80,9 +80,9 @@ export default function FedericaDashboardPage() {
   type ModalType = 'KPI_REVENUE' | 'KPI_CLIENTS' | 'KPI_APPS' | 'STATUS_DETAIL' | 'TREATMENT_DETAIL' | null;
   
   const [modalType, setModalType] = React.useState<ModalType>(null);
-  const [modalData, setModalData] = React.useState<any>(null); // Dati dinamici da passare al modale
+  const [modalData, setModalData] = React.useState<Record<string, unknown> | null>(null); // Dati dinamici da passare al modale
 
-  const openModal = (type: ModalType, data: any = {}) => {
+  const openModal = (type: ModalType, data: Record<string, unknown> = {}) => {
     setModalData(data);
     setModalType(type);
   };
@@ -533,7 +533,7 @@ export default function FedericaDashboardPage() {
 
 // --- MICRO COMPONENTS ---
 
-function KpiCard({ title, value, icon: Icon, trendColor, borderColor = "border-border" }: any) {
+function KpiCard({ title, value, icon: Icon, trendColor, borderColor = "border-border" }: { title: string; value: string | number; icon: React.ComponentType<{className?: string}>; trendColor?: string; borderColor?: string }) {
   return (
     <div className={cn("rounded-xl border bg-card p-5 shadow-sm flex items-center justify-between hover:shadow-md transition-all duration-200", borderColor)}>
       <div>
@@ -547,7 +547,7 @@ function KpiCard({ title, value, icon: Icon, trendColor, borderColor = "border-b
   );
 }
 
-function FunnelRow({ label, value, color, icon: Icon, onClick }: any) {
+function FunnelRow({ label, value, color, icon: Icon, onClick }: { label: string; value: string | number; color?: string; icon?: React.ComponentType<{className?: string}>; onClick?: () => void }) {
   return (
     <div 
       onClick={onClick}

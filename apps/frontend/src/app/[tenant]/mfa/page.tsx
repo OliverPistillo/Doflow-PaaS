@@ -93,7 +93,7 @@ export default function TenantMfaPage() {
     } catch (e: unknown) {
       toast({
         title: "Errore Setup",
-        description: "Impossibile generare i dati MFA. " + (e.message || ""),
+        description: "Impossibile generare i dati MFA. " + (e instanceof Error ? e.message : ""),
         variant: "destructive",
       });
     } finally {
