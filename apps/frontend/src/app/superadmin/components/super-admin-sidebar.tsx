@@ -110,9 +110,9 @@ function NavItem({
   label,
   icon: Icon,
 }: {
-  href:  string;
+  href:  string;
   label: string;
-  icon:  React.ComponentType<{ className?: string }>;
+  icon:  React.ComponentType<{ className?: string }>;
 }) {
   const pathname = usePathname();
   const isActive = pathname === href || pathname.startsWith(href + "/");
@@ -126,8 +126,10 @@ function NavItem({
         // Non servono classi extra: tutti gli stili vengono da sidebar.tsx refactored
       >
         <Link href={href}>
-          <Icon className="h-[19px] w-[19px] shrink-0" aria-hidden="true" />
-          <span>{label}</span>
+          {/* Aumentiamo la dimensione dell'icona (da 19 a 22px) per balance su collapsed width 80px */}
+          <Icon className="h-[22px] w-[22px] shrink-0" aria-hidden="true" />
+          {/* LA CORREZIONE: Aggiungiamo 'group-data-[collapsible=icon]:hidden' */}
+          <span className="group-data-[collapsible=icon]:hidden">{label}</span>
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>
@@ -229,28 +231,30 @@ export function SuperAdminSidebar() {
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
+                {/* Modifichiamo il button: allineiamo al centro quando collassato, puliamo padding */}
                 <SidebarMenuButton
                   size="lg"
-                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                  className={`relative flex items-center transition-all duration-300 ${isOpen ? "px-3 justify-start" : "px-0 justify-center"} data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground`}
                   aria-label="Menu utente"
                 >
-                  <Avatar className="h-8 w-8 rounded-nav border border-border shrink-0">
+                  {/* Aumentiamo l'avatar da h-8/w-8 a h-10/w-10 (40px) */}
+                  <Avatar className="h-10 w-10 rounded-nav border border-border shrink-0">
                     <AvatarFallback
-                      className="rounded-nav text-sm font-bold"
+                      className="rounded-nav text-base font-bold"
                       style={{
                         background: "hsl(var(--primary) / 0.12)",
-                        color:      "hsl(var(--primary))",
+                        color:      "hsl(var(--primary))",
                       }}
                     >
                       {user?.initials ?? "SA"}
                     </AvatarFallback>
                   </Avatar>
 
-                  {/* Testo — nascosto quando collassato (gestito da SidebarMenuButton) */}
+                  {/* Testo — nascosto quando collassato (gestito da group-data-[collapsible=icon]:hidden) */}
                   <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                     <span className="truncate font-semibold text-foreground">
                       {user?.email ?? "Superadmin"}
-                    </span>
+                    </span >
                     <span className="truncate text-[11px] text-muted-foreground flex items-center gap-1">
                       <BadgeCheck className="h-3 w-3 text-primary" aria-hidden="true" />
                       {user?.role ?? "SUPER_ADMIN"}
@@ -267,15 +271,16 @@ export function SuperAdminSidebar() {
                 align="end"
                 sideOffset={8}
               >
-                {/* User info header */}
+                {/* ...DropdownMenuLabel content... */}
                 <DropdownMenuLabel className="p-2 font-normal">
                   <div className="flex items-center gap-2.5">
-                    <Avatar className="h-9 w-9 rounded-nav">
+                    {/* Aumentiamo anche l'avatar nel Dropdown (da h-9/w-9 a h-10/w-10) per coerenza */}
+                    <Avatar className="h-10 w-10 rounded-nav">
                       <AvatarFallback
                         className="rounded-nav font-bold"
                         style={{
                           background: "hsl(var(--primary) / 0.12)",
-                          color:      "hsl(var(--primary))",
+                          color:      "hsl(var(--primary))",
                         }}
                       >
                         {user?.initials ?? "SA"}
@@ -284,7 +289,7 @@ export function SuperAdminSidebar() {
                     <div className="grid text-left text-sm leading-tight">
                       <span className="truncate font-bold text-foreground">
                         {user?.email ?? "superadmin"}
-                      </span>
+                      </span >
                       <span className="truncate text-xs text-muted-foreground">
                         {user?.role ?? "SUPER_ADMIN"}
                       </span>

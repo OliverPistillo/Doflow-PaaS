@@ -38,7 +38,7 @@ const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 // Figma sidebar width: 200px, icon-only: 72px
 const SIDEBAR_WIDTH = "200px"
 const SIDEBAR_WIDTH_MOBILE = "260px"
-const SIDEBAR_WIDTH_ICON = "72px"
+const SIDEBAR_WIDTH_ICON = "80px"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
 type SidebarContextProps = {
@@ -558,7 +558,7 @@ const sidebarMenuButtonVariants = cva(
     // Collapsed icon mode
     "group-data-[collapsible=icon]:!size-10 group-data-[collapsible=icon]:!p-2 group-data-[collapsible=icon]:justify-center",
     "[&>span:last-child]:truncate",
-    "[&>svg]:size-5 [&>svg]:shrink-0",   // Figma icon: 24px → 20px for balance
+    "[&>svg]:size-6 [&>svg]:shrink-0",   // Figma icon: 24px → 20px for balance
   ].join(" "),
   {
     variants: {
