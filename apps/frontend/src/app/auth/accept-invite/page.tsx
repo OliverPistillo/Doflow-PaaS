@@ -93,9 +93,9 @@ export default function AcceptInvitePage() {
   if (!inviteToken) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-black text-white p-6">
-        <div className="max-w-md w-full border border-zinc-800 rounded-lg p-6 bg-zinc-900/50">
+        <div className="max-w-md w-full border border-border rounded-lg p-6 bg-muted/50">
           <h1 className="text-xl font-semibold mb-2">Link non valido</h1>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-muted-foreground">
             Token mancante. Richiedi un nuovo invito all’amministratore.
           </p>
         </div>
@@ -105,32 +105,32 @@ export default function AcceptInvitePage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-6 bg-black text-white">
-      <div className="w-full max-w-md border border-zinc-800 rounded-lg p-6 bg-zinc-900/50">
+      <div className="w-full max-w-md border border-border rounded-lg p-6 bg-muted/50">
         <h1 className="text-2xl font-bold mb-2 text-center">Attiva account</h1>
-        <p className="text-sm text-gray-400 text-center mb-6">
+        <p className="text-sm text-muted-foreground/50 text-center mb-6">
           Imposta una password per completare la registrazione.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-xs uppercase text-gray-500">Password</label>
+            <label className="text-xs uppercase text-muted-foreground">Password</label>
             <input
               type="password"
               minLength={8}
               required
-              className="w-full bg-black border border-zinc-700 rounded px-3 py-2"
+              className="w-full bg-black border border-border rounded px-3 py-2"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
 
           <div>
-            <label className="text-xs uppercase text-gray-500">Ripeti password</label>
+            <label className="text-xs uppercase text-muted-foreground">Ripeti password</label>
             <input
               type="password"
               minLength={8}
               required
-              className="w-full bg-black border border-zinc-700 rounded px-3 py-2"
+              className="w-full bg-black border border-border rounded px-3 py-2"
               value={password2}
               onChange={(e) => setPassword2(e.target.value)}
             />
@@ -145,7 +145,7 @@ export default function AcceptInvitePage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-white text-black font-bold py-2 rounded hover:bg-gray-200 disabled:opacity-50"
+            className="w-full bg-white text-black font-bold py-2 rounded hover:bg-muted/20 disabled:opacity-50"
           >
             {loading ? 'Attivazione...' : 'Attiva e entra'}
           </button>

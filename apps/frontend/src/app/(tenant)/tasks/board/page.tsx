@@ -17,8 +17,8 @@ export default function Page() {
 
       <Card>
         <CardContent className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="h-16 w-16 rounded-2xl bg-indigo-100 dark:bg-indigo-900/20 flex items-center justify-center mb-4">
-            <KanbanSquare className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
+          <div className="h-16 w-16 rounded-2xl bg-primary/10 dark:bg-primary/5 flex items-center justify-center mb-4">
+            <KanbanSquare className="h-8 w-8 text-primary dark:text-primary" />
           </div>
           <h3 className="text-lg font-semibold mb-2">In arrivo</h3>
           <p className="text-sm text-muted-foreground max-w-sm">

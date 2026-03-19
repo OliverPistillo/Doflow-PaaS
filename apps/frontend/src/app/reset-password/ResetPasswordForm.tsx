@@ -85,7 +85,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="px-3 py-2 rounded bg-black border border-zinc-700 text-sm"
+              className="px-3 py-2 rounded bg-black border border-border text-sm"
             />
           </div>
           <div className="flex flex-col gap-1">
@@ -96,7 +96,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
               minLength={8}
               value={password2}
               onChange={(e) => setPassword2(e.target.value)}
-              className="px-3 py-2 rounded bg-black border border-zinc-700 text-sm"
+              className="px-3 py-2 rounded bg-black border border-border text-sm"
             />
           </div>
 

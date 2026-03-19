@@ -96,7 +96,7 @@ export default function BusinaroWarehouseKioskPage() {
       setPickSku("");
       setPickQty(1);
       setPickStep("SKU");
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({ title: "Errore bloccante", description: e?.message ?? "Pick fallito", variant: "destructive" });
       setPickStep("JOB");
     } finally {
@@ -156,7 +156,7 @@ export default function BusinaroWarehouseKioskPage() {
 
       // Reset per prossimo spostamento
       resetMove();
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({ title: "Errore bloccante", description: e?.message ?? "Move fallito", variant: "destructive" });
       setMoveStep("FROM");
     } finally {

@@ -12,7 +12,7 @@ export default function Page() {
           <h2 className="text-2xl font-bold tracking-tight">Ordini di Acquisto</h2>
           <p className="text-sm text-muted-foreground mt-0.5">Gestione ordini verso i fornitori</p>
         </div>
-        <span className="text-xs font-semibold px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">Piano Pro</span>
+        <span className="text-xs font-semibold px-2 py-1 rounded-full bg-primary/10 text-primary dark:bg-primary/5 dark:text-primary">Piano Pro</span>
       </div>
 
       <Card>

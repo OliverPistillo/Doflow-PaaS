@@ -65,7 +65,7 @@ function normalizeRole(role?: string) {
   return "USER";
 }
 
-function isMfaPending(payload?: any) {
+function isMfaPending(payload?: Record<string, unknown>) {
   return payload?.mfa_pending === true || payload?.authStage === "MFA_PENDING";
 }
 
@@ -262,8 +262,8 @@ export function LoginForm() {
 
       window.localStorage.setItem("doflow_token", token);
       router.push(tenantSub ? `/${tenantSub}/dashboard` : "/dashboard");
-    } catch (err: any) {
-      setGeneralError(err?.message || "Si è verificato un errore imprevisto.");
+    } catch (err: unknown) {
+      setGeneralError(err instanceof Error ? err.message : "Si è verificato un errore imprevisto.");
     }
   };
 

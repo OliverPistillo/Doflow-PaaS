@@ -252,17 +252,17 @@ export default function ProjectBoardPage() {
 
   return (
     <main className="min-h-screen flex flex-col p-6">
-      <header className="flex items-center justify-between mb-4 border-b border-zinc-800 pb-3">
+      <header className="flex items-center justify-between mb-4 border-b border-border pb-3">
         <div>
           <h1 className="text-2xl font-bold">
             Board – Progetto <span className="font-mono text-sm">{projectId}</span>
           </h1>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-muted-foreground">
             Vista Kanban dei task di progetto. Trascina le card tra le colonne per
             aggiornare lo stato. Le modifiche degli altri utenti appaiono in tempo reale.
           </p>
         </div>
-        <div className="flex flex-col items-end gap-1 text-xs text-zinc-400">
+        <div className="flex flex-col items-end gap-1 text-xs text-muted-foreground">
           <span>
             Stato dati:{' '}
             {loading ? (
@@ -276,7 +276,7 @@ export default function ProjectBoardPage() {
             {saving ? (
               <span className="text-yellow-400">in corso…</span>
             ) : (
-              <span className="text-zinc-500">idle</span>
+              <span className="text-muted-foreground">idle</span>
             )}
           </span>
           <span>
@@ -286,7 +286,7 @@ export default function ProjectBoardPage() {
             ) : wsConnected ? (
               <span className="text-green-400">connesso</span>
             ) : (
-              <span className="text-zinc-500">offline</span>
+              <span className="text-muted-foreground">offline</span>
             )}
           </span>
         </div>
@@ -316,16 +316,16 @@ export default function ProjectBoardPage() {
                       ref={provided.innerRef}
                       {...provided.droppableProps}
                       className={[
-                        'w-64 flex-shrink-0 rounded-lg border border-zinc-800 bg-black/60 flex flex-col max-h-[80vh]',
-                        snapshot.isDraggingOver ? 'ring-1 ring-zinc-400' : '',
+                        'w-64 flex-shrink-0 rounded-lg border border-border bg-black/60 flex flex-col max-h-[80vh]',
+                        snapshot.isDraggingOver ? 'ring-1 ring-border' : '',
                       ].join(' ')}
                       style={{ minHeight: 80 }}
                     >
-                      <div className="px-3 py-2 border-b border-zinc-800 flex items-center justify-between">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-300">
+                      <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           {column.title}
                         </span>
-                        <span className="text-[10px] text-zinc-500">
+                        <span className="text-[10px] text-muted-foreground">
                           {colTasks.length} task
                         </span>
                       </div>
@@ -342,31 +342,31 @@ export default function ProjectBoardPage() {
                                 {...dragProvided.draggableProps}
                                 {...dragProvided.dragHandleProps}
                                 className={[
-                                  'rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs flex flex-col gap-1 cursor-grab active:cursor-grabbing',
+                                  'rounded-md border border-border bg-muted px-3 py-2 text-xs flex flex-col gap-1 cursor-grab active:cursor-grabbing',
                                   dragSnapshot.isDragging
                                     ? 'shadow-lg shadow-black/70 scale-[1.02]'
                                     : '',
                                 ].join(' ')}
                               >
-                                <div className="font-medium text-zinc-100 truncate">
+                                <div className="font-medium text-muted-foreground truncate">
                                   {task.title}
                                 </div>
                                 {task.description && (
-                                  <div className="text-[11px] text-zinc-400 line-clamp-2">
+                                  <div className="text-[11px] text-muted-foreground line-clamp-2">
                                     {task.description}
                                   </div>
                                 )}
-                                <div className="flex justify-between items-center mt-1 text-[10px] text-zinc-500">
+                                <div className="flex justify-between items-center mt-1 text-[10px] text-muted-foreground">
                                   <div className="flex items-center gap-1">
                                     {task.priority && (
-                                      <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700">
+                                      <span className="px-1.5 py-0.5 rounded bg-muted border border-border">
                                         {task.priority}
                                       </span>
                                     )}
                                   </div>
                                   <div className="flex items-center gap-1">
                                     {task.assignee_name && (
-                                      <span className="px-1.5 py-0.5 rounded-full bg-zinc-800 border border-zinc-700">
+                                      <span className="px-1.5 py-0.5 rounded-full bg-muted border border-border">
                                         {task.assignee_name}
                                       </span>
                                     )}

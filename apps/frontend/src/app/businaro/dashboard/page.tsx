@@ -10,8 +10,14 @@ import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { tenantFetch } from "@/lib/tenant-fetch";
 
+
+interface BusinDashboardStats {
+  kpi: Record<string, unknown>;
+  activeJobs: Record<string, unknown>[];
+}
+
 export default function BusinaroDashboard() {
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<BusinDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -105,7 +111,7 @@ export default function BusinaroDashboard() {
         </div>
 
         {/* Card 4: Valore (Gradiente Principale) */}
-        <div className="rounded-[2.5rem] p-8 relative overflow-hidden text-white bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 shadow-2xl">
+        <div className="rounded-[2.5rem] p-8 relative overflow-hidden text-white bg-gradient-to-br from-blue-600 via-primary to-purple-700 shadow-2xl">
            <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 blur-[100px] rounded-full -mr-20 -mt-20 pointer-events-none" />
            <div>
              <div className="text-sm font-bold uppercase tracking-widest opacity-80 mb-4">Valore Produzione</div>
@@ -125,7 +131,7 @@ export default function BusinaroDashboard() {
         </div>
 
         <div className="grid gap-4">
-          {jobs.map((job: any, idx: number) => (
+          {jobs.map((job: Record<string, unknown>, idx: number) => (
              <div key={idx} className={`
                 group flex flex-col md:flex-row items-center gap-6 p-5 rounded-[2rem] transition-all duration-300 relative overflow-hidden
                 ${idx === 0 ? 'glass border-primary/30 shadow-lg' : 'hover:bg-accent/30 border border-transparent'}
@@ -134,7 +140,7 @@ export default function BusinaroDashboard() {
                 {/* Avatar & ID */}
                 <div className="flex items-center gap-4 w-full md:w-1/4">
                    <Avatar className="h-14 w-14 rounded-2xl border-2 border-white/30 shadow-sm">
-                      <AvatarFallback className="rounded-2xl bg-gradient-to-br from-gray-100 to-gray-300 dark:from-gray-800 dark:to-gray-900 font-black text-muted-foreground">JOB</AvatarFallback>
+                      <AvatarFallback className="rounded-2xl bg-gradient-to-br from-muted/30 to-muted/50 dark:from-muted dark:to-foreground font-black text-muted-foreground">JOB</AvatarFallback>
                    </Avatar>
                    <div>
                       <div className="font-black text-lg tracking-tight">{job.id}</div>

@@ -174,7 +174,7 @@ export default function DeliveryStatusPage() {
         {loading && tasks.length === 0 ? (
              <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary h-8 w-8" /></div>
         ) : groupedData.length === 0 ? (
-            <div className="text-center py-16 bg-muted/40 rounded-xl border border-dashed border-slate-300">
+            <div className="text-center py-16 bg-muted/40 rounded-xl border border-dashed border-border">
                 <p className="text-muted-foreground font-medium">Nessun task attivo.</p>
                 <Button onClick={openCreate} variant="outline" className="mt-4">Crea il primo Task</Button>
             </div>
@@ -183,7 +183,7 @@ export default function DeliveryStatusPage() {
             <div key={group.id} className="space-y-3">
                 {/* Header Gruppo Servizio */}
                 <div className="flex items-center gap-3 select-none group/header" onClick={() => toggle(group.id)}>
-                    <button className="p-1 hover:bg-slate-200 rounded-md transition-colors text-muted-foreground group-hover/header:text-muted-foreground">
+                    <button className="p-1 hover:bg-muted/20 rounded-md transition-colors text-muted-foreground group-hover/header:text-muted-foreground">
                         {expanded[group.id] ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
                     </button>
                     <h3 className="font-bold text-lg text-foreground cursor-pointer">{group.name}</h3>
@@ -230,7 +230,7 @@ export default function DeliveryStatusPage() {
                                         task.status === 'done' ? 'bg-green-500' : 
                                         task.status === 'inprogress' ? 'bg-blue-500' :
                                         task.status === 'review' ? 'bg-amber-500' :
-                                        'bg-slate-300'
+                                        'bg-muted/20'
                                     }`}></div>
                                     <span className={`font-medium text-base cursor-pointer hover:text-primary ${task.status === 'done' ? 'text-muted-foreground line-through' : 'text-muted-foreground'}`} onClick={() => openEdit(task)}>
                                         {task.name}
@@ -268,7 +268,7 @@ export default function DeliveryStatusPage() {
                                 >
                                     <Edit className="h-3.5 w-3.5 mr-1" /> Modifica
                                 </Button>
-                                <div className="h-4 w-px bg-slate-200"></div>
+                                <div className="h-4 w-px bg-muted/20"></div>
                                 <Button 
                                     variant="ghost" 
                                     size="sm" 

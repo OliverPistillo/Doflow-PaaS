@@ -318,7 +318,7 @@ export function W_LeaderboardSellers() {
             <div className="flex items-center gap-2.5">
               <span className="text-base w-5 text-center shrink-0">{medals[i]}</span>
               <Avatar className="h-7 w-7 shrink-0">
-                <AvatarFallback className="bg-indigo-100 text-indigo-700 font-bold text-[10px]">
+                <AvatarFallback className="bg-primary/10 text-primary font-bold text-[10px]">
                   {s.name.split(" ").map((p) => p[0]).join("")}
                 </AvatarFallback>
               </Avatar>
@@ -326,11 +326,11 @@ export function W_LeaderboardSellers() {
                 <p className="text-sm font-semibold truncate leading-tight">{s.name}</p>
                 <p className="text-[10px] text-muted-foreground">{s.deals} trattative</p>
               </div>
-              <span className="text-sm font-bold text-indigo-600 tabular-nums shrink-0">{s.revenue}</span>
+              <span className="text-sm font-bold text-primary tabular-nums shrink-0">{s.revenue}</span>
             </div>
             <div className="ml-7 h-1.5 bg-muted rounded-full overflow-hidden">
               <div
-                className="h-full bg-indigo-500 rounded-full transition-all"
+                className="h-full bg-primary rounded-full transition-all"
                 style={{ width: `${s.pct}%` }}
               />
             </div>
@@ -369,7 +369,7 @@ export function W_ChartLeadFunnel() {
     <Card className="h-full flex flex-col">
       <CardHeader className="pb-0">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <GitFork className="h-4 w-4 text-indigo-500" />
+          <GitFork className="h-4 w-4 text-primary" />
           Funnel Pipeline
         </CardTitle>
         <CardDescription className="text-xs">Lead per fase — ultimi 30gg</CardDescription>
@@ -408,7 +408,7 @@ const TOP_DEALS = [
   { name: "Luxor Media SRL",      contact: "M. Bianchi",  value: "€ 42.000", stage: "Trattativa", stageColor: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" },
   { name: "TechHub Napoli",       contact: "R. Silvestri", value: "€ 28.500", stage: "Proposta",   stageColor: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" },
   { name: "Verde Costruzioni",    contact: "L. Rossi",    value: "€ 19.800", stage: "Proposta",   stageColor: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" },
-  { name: "Alfa Capital Holding", contact: "S. Ferrari",  value: "€ 15.200", stage: "Qualificato",stageColor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300" },
+  { name: "Alfa Capital Holding", contact: "S. Ferrari",  value: "€ 15.200", stage: "Qualificato",stageColor: "bg-primary/10 text-primary dark:bg-primary/5 dark:text-primary" },
   { name: "Neri Logistica SpA",   contact: "A. Conti",    value: "€ 11.400", stage: "Trattativa", stageColor: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" },
 ];
 
@@ -417,7 +417,7 @@ export function W_ListTopDeals() {
     <Card className="h-full flex flex-col">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
-          <GitFork className="h-4 w-4 text-indigo-500" />
+          <GitFork className="h-4 w-4 text-primary" />
           Top Deal Pipeline
         </CardTitle>
         <CardDescription className="text-xs">Trattative attive per valore</CardDescription>
@@ -437,7 +437,7 @@ export function W_ListTopDeals() {
                 <td className="px-4 py-2.5">
                   <div className="flex items-center gap-2.5">
                     <Avatar className="h-7 w-7 shrink-0">
-                      <AvatarFallback className="bg-indigo-100 text-indigo-700 font-bold text-[10px] dark:bg-indigo-950/50 dark:text-indigo-300">
+                      <AvatarFallback className="bg-primary/10 text-primary font-bold text-[10px] dark:bg-primary/5 dark:text-primary">
                         {deal.contact.split(" ").map((p) => p[0]).join("")}
                       </AvatarFallback>
                     </Avatar>
@@ -452,7 +452,7 @@ export function W_ListTopDeals() {
                     {deal.stage}
                   </span>
                 </td>
-                <td className="px-4 py-2.5 text-right font-bold tabular-nums text-indigo-600">
+                <td className="px-4 py-2.5 text-right font-bold tabular-nums text-primary">
                   {deal.value}
                 </td>
               </tr>

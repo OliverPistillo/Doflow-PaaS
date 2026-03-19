@@ -37,8 +37,8 @@ export function GlobalFilterBar({ filters, onFilterChange }: GlobalFilterBarProp
   const hasActiveFilters = filters.stage || filters.month || filters.clientName;
 
   return (
-    <div className="flex flex-wrap items-center gap-4 bg-white p-4 rounded-lg border border-slate-200 shadow-sm mb-6">
-      <span className="text-sm font-semibold text-slate-700">Filtra per:</span>
+    <div className="flex flex-wrap items-center gap-4 bg-white p-4 rounded-lg border border-border shadow-sm mb-6">
+      <span className="text-sm font-semibold text-foreground">Filtra per:</span>
       
       {/* Filtro A: Stato Trattativa */}
       <Select 
@@ -104,7 +104,7 @@ export function GlobalFilterBar({ filters, onFilterChange }: GlobalFilterBarProp
           variant="ghost" 
           size="sm" 
           onClick={() => onFilterChange({})}
-          className="text-slate-500 hover:text-red-500"
+          className="text-muted-foreground hover:text-red-500"
         >
           <X className="mr-2 h-4 w-4" /> Resetta
         </Button>

@@ -254,7 +254,7 @@ export default function FedericaAppuntamentiPage() {
       setStartsAt(''); setNotes(''); setFinalPrice('');
       setIsCreateOpen(false); 
       await loadAll(); 
-    } catch (e: any) { alert('Errore creazione'); } finally { setLoading(false); }
+    } catch (e: unknown) { alert('Errore creazione'); } finally { setLoading(false); }
   }
 
   async function handleCreateClientAndAppointment() {
@@ -267,7 +267,7 @@ export default function FedericaAppuntamentiPage() {
       setClienti(prev => [...prev, newClient]);
       setShowNewClientForm(false); setNewClientPhone(''); setNewClientEmail('');
       await doCreateAppointment(newClient.id);
-    } catch (e: any) { alert('Errore creazione cliente'); setLoading(false); }
+    } catch (e: unknown) { alert('Errore creazione cliente'); setLoading(false); }
   }
 
   async function handleUpdateStatus(id: string, next: AppuntamentoStatus) {

@@ -250,7 +250,7 @@ function AddWidgetPanel({
               "text-left px-3 py-2 rounded-nav border text-[14px] font-semibold transition-colors",
               locked
                 ? "opacity-50 cursor-not-allowed border-dashed border-border text-muted-foreground"
-                // ✅ border-primary/30 instead of border-indigo-300
+                // ✅ border-primary/30 instead of border-primary/30
                 : "border-border hover:bg-primary/5 hover:border-primary/30 text-foreground",
             )}
           >
@@ -353,7 +353,7 @@ export default function DashboardClient() {
   if (!layout) {
     return (
       <div className="h-full flex items-center justify-center" role="status" aria-label="Caricamento dashboard">
-        {/* ✅ text-primary instead of text-indigo-600 */}
+        {/* ✅ text-primary instead of text-primary */}
         <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
       </div>
     );

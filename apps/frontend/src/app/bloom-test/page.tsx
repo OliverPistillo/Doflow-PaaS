@@ -48,7 +48,7 @@ export default function BloomTestPage() {
       </div>
 
       {result && (
-        <pre className="mt-4 w-full max-w-xl border rounded p-3 text-sm bg-gray-50">
+        <pre className="mt-4 w-full max-w-xl border rounded p-3 text-sm bg-muted/5">
           {result}
         </pre>
       )}

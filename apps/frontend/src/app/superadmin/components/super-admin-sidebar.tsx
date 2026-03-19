@@ -90,7 +90,7 @@ const MENU_GROUPS = [
 // ─── Color themes ─────────────────────────────────────────────────────────────
 
 const COLOR_THEMES = [
-  { id: "default", label: "Neutro (Default)",      colorClass: "bg-slate-500"   },
+  { id: "default", label: "Neutro (Default)",      colorClass: "bg-muted/20"   },
   { id: "ocean",   label: "Ocean (Blu/Verde)",      colorClass: "bg-blue-500"    },
   { id: "sunset",  label: "Sunset (Giallo/Arancio)", colorClass: "bg-orange-500" },
   { id: "emerald", label: "Emerald (Verde Smeraldo)", colorClass: "bg-emerald-500" },

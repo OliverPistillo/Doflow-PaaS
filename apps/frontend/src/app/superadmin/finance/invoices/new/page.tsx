@@ -79,7 +79,7 @@ export default function NewInvoicePage() {
   const [clientMode, setClientMode]       = useState<"tenant"|"saved"|"nuovo">("nuovo");
   const [autofilled, setAutofilled]       = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [pendingData, setPendingData]     = useState<any>(null);
+  const [pendingData, setPendingData]     = useState<Record<string,unknown> | null>(null);
 
   const today = new Date().toISOString().split("T")[0];
   const nextMonth = (() => {
@@ -191,13 +191,13 @@ export default function NewInvoicePage() {
 
   // Current select value for controlled Select
   const selectValue = (() => {
-    const tid = (document?.querySelector?.('[name="tenantId"]') as any)?.value ?? "";
+    const tid = document?.querySelector<HTMLInputElement>('[name="tenantId"]')?.value ?? "";
     if (clientMode === "nuovo") return "__nuovo__";
     if (clientMode === "tenant") {
-      const t = tenants.find(t => t.name === (document?.querySelector?.('[name="clientName"]') as any)?.value);
+      const t = tenants.find(t => t.name === document?.querySelector<HTMLInputElement>('[name="clientName"]')?.value);
       return t?.id ?? "";
     }
-    const sc = savedClients.find(c => c.clientName === (document?.querySelector?.('[name="clientName"]') as any)?.value);
+    const sc = savedClients.find(c => c.clientName === document?.querySelector<HTMLInputElement>('[name="clientName"]')?.value);
     return sc?.id ?? "";
   })();
 
@@ -228,8 +228,8 @@ export default function NewInvoicePage() {
       } else {
         router.push("/superadmin/finance/invoices");
       }
-    } catch (e: any) {
-      alert(`Errore: ${e?.message || "Errore sconosciuto"}`);
+    } catch (e: unknown) {
+      alert(`Errore: ${e instanceof Error ? e.message : "Errore sconosciuto"}`);
     } finally {
       setSubmitting(false);
     }
@@ -279,7 +279,7 @@ export default function NewInvoicePage() {
             No, continua
           </button>
           <button type="button" onClick={handleConfirmSaveClient}
-            className="text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors">
+            className="text-sm font-semibold bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg transition-colors">
             Sì, salva cliente
           </button>
         </DialogFooter>
@@ -373,7 +373,7 @@ export default function NewInvoicePage() {
               <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-2">
                 Seleziona Cliente
                 {autofilled && (
-                  <span className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                  <span className="flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/5 px-2 py-0.5 rounded-full">
                     <Sparkles className="h-2.5 w-2.5" /> Compilato automaticamente
                   </span>
                 )}
@@ -405,7 +405,7 @@ export default function NewInvoicePage() {
                   )}
                   <Separator className="my-1" />
                   <SelectItem value="__nuovo__">
-                    <span className="flex items-center gap-2 text-indigo-600 font-semibold">
+                    <span className="flex items-center gap-2 text-primary font-semibold">
                       <UserPlus className="h-3.5 w-3.5" /> Nuovo cliente…
                     </span>
                   </SelectItem>

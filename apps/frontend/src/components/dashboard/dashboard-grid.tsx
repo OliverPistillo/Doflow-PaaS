@@ -130,7 +130,7 @@ export function DashboardGrid({
       ref={containerRef}
       className={cn(
         "w-full transition-all duration-200",
-        isEditing && "rounded-xl bg-muted/20 ring-2 ring-indigo-200 ring-offset-2 p-3",
+        isEditing && "rounded-xl bg-muted/20 ring-2 ring-primary/30 ring-offset-2 p-3",
       )}
     >
       <GridLayout
@@ -158,15 +158,15 @@ export function DashboardGrid({
               "bg-background border border-border rounded-xl",
               "transition-shadow duration-200",
               isEditing
-                ? "shadow-lg ring-1 ring-indigo-300"
+                ? "shadow-lg ring-1 ring-primary/30"
                 : "hover:shadow-md hover:border-border/80",
             )}
           >
             {/* Handle drag — solo in edit mode */}
             {isEditing && (
-              <div className="drag-handle h-7 flex-shrink-0 flex items-center justify-center gap-1.5 cursor-grab active:cursor-grabbing select-none rounded-t-xl bg-indigo-50 border-b border-indigo-100 hover:bg-indigo-100 transition-colors">
-                <GripHorizontal className="h-3.5 w-3.5 text-indigo-400" />
-                <span className="text-[10px] font-medium text-indigo-400 uppercase tracking-widest">trascina</span>
+              <div className="drag-handle h-7 flex-shrink-0 flex items-center justify-center gap-1.5 cursor-grab active:cursor-grabbing select-none rounded-t-xl bg-primary/5 border-b border-primary/30 hover:bg-primary/10 transition-colors">
+                <GripHorizontal className="h-3.5 w-3.5 text-primary" />
+                <span className="text-[10px] font-medium text-primary uppercase tracking-widest">trascina</span>
               </div>
             )}
 

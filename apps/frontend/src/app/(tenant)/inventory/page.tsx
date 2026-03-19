@@ -63,7 +63,7 @@ const STATUS_CFG: Record<StockStatus, { label: string; color: string; bg: string
   ok:           { label: "Disponibile",  color: "text-emerald-600", bg: "bg-emerald-100 dark:bg-emerald-950/40",  border: "border-emerald-200" },
   sottoscorta:  { label: "Sottoscorta",  color: "text-amber-600",   bg: "bg-amber-100 dark:bg-amber-950/40",     border: "border-amber-200" },
   critico:      { label: "Critico",      color: "text-rose-600",    bg: "bg-rose-100 dark:bg-rose-950/40",       border: "border-rose-300" },
-  esaurito:     { label: "Esaurito",     color: "text-slate-600",   bg: "bg-slate-100 dark:bg-slate-800/40",     border: "border-slate-200" },
+  esaurito:     { label: "Esaurito",     color: "text-foreground",   bg: "bg-muted/20 dark:bg-muted/40",     border: "border-border" },
 };
 
 const CAT_COLORS: Record<string, string> = {
@@ -109,7 +109,7 @@ function ItemDetail({ item, onClose }: { item: InventoryItem; onClose: () => voi
             </div>
             <div className="relative h-3 bg-muted rounded-full overflow-hidden">
               <div
-                className={cn("h-full rounded-full transition-all", item.status === "ok" ? "bg-emerald-500" : item.status === "sottoscorta" ? "bg-amber-500" : item.status === "critico" ? "bg-rose-500" : "bg-slate-400")}
+                className={cn("h-full rounded-full transition-all", item.status === "ok" ? "bg-emerald-500" : item.status === "sottoscorta" ? "bg-amber-500" : item.status === "critico" ? "bg-rose-500" : "bg-muted/20")}
                 style={{ width: `${stockPct}%` }}
               />
               {/* Min marker */}
@@ -342,7 +342,7 @@ export default function Page() {
                         className={cn("h-full rounded-full",
                           item.status === "ok"          ? "bg-emerald-500" :
                           item.status === "sottoscorta" ? "bg-amber-500"   :
-                          item.status === "critico"     ? "bg-rose-500"    : "bg-slate-400",
+                          item.status === "critico"     ? "bg-rose-500"    : "bg-muted/20",
                         )}
                         style={{ width: `${stockPct}%` }}
                       />

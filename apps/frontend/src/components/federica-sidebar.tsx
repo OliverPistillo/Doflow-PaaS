@@ -66,7 +66,7 @@ function Item({
         tooltip={label}
         className={`gap-3 pl-3 transition-all duration-200 ${
           active 
-            ? "font-semibold bg-sidebar-accent text-sidebar-accent-foreground border-l-4 border-indigo-500 rounded-l-none" 
+            ? "font-semibold bg-sidebar-accent text-sidebar-accent-foreground border-l-4 border-primary/30 rounded-l-none" 
             : "text-muted-foreground hover:text-foreground"
         }`}
       >
@@ -178,14 +178,14 @@ export function FedericaSidebar() {
                 >
                   <Avatar className="h-8 w-8 rounded-lg border border-border">
                     <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback className="rounded-lg bg-indigo-100 text-indigo-700 font-bold">
+                    <AvatarFallback className="rounded-lg bg-primary/10 text-primary font-bold">
                       {user.initials}
                     </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight ml-1">
                     <span className="truncate font-semibold text-foreground">{user.name}</span>
                     <span className="truncate text-xs text-muted-foreground font-medium flex items-center gap-1">
-                      <BadgeCheck className="h-3 w-3 text-indigo-500" />
+                      <BadgeCheck className="h-3 w-3 text-primary" />
                       {user.role}
                     </span>
                   </div>

@@ -118,14 +118,14 @@ export default function FilesTestPage() {
   return (
     <main className="min-h-screen flex flex-col items-center gap-6 p-6">
       <div className="w-full max-w-4xl flex flex-col gap-4">
-        <header className="flex flex-col gap-2 border-b border-zinc-800 pb-3 mb-2">
-          <div className="flex justify-between items-center text-xs text-gray-400">
+        <header className="flex flex-col gap-2 border-b border-border pb-3 mb-2">
+          <div className="flex justify-between items-center text-xs text-muted-foreground/50">
             <span>
               Tenant: <span className="font-mono">{tenantHost}</span>
             </span>
             <button
               onClick={handleLogout}
-              className="text-xs px-3 py-1 border rounded border-zinc-700 hover:bg-zinc-800"
+              className="text-xs px-3 py-1 border rounded border-border hover:bg-muted"
             >
               Logout
             </button>
@@ -174,7 +174,7 @@ export default function FilesTestPage() {
           </div>
 
           {files.length === 0 ? (
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-muted-foreground/50">
               Nessun file ancora caricato per questo tenant.
             </p>
           ) : (
@@ -182,19 +182,19 @@ export default function FilesTestPage() {
               {files.map((f) => (
                 <li
                   key={f.id}
-                  className="border border-zinc-800 rounded px-3 py-2 flex justify-between"
+                  className="border border-border rounded px-3 py-2 flex justify-between"
                 >
                   <div>
                     <div className="font-semibold">
                       {f.original_name}
                     </div>
-                    <div className="text-[11px] text-gray-500">
+                    <div className="text-[11px] text-muted-foreground">
                       {f.content_type ?? 'n/a'} ·{' '}
                       {f.size != null ? `${f.size} bytes` : '?'} ·{' '}
                       {new Date(f.created_at).toLocaleString()}
                     </div>
                   </div>
-                  <div className="text-[11px] text-gray-500">
+                  <div className="text-[11px] text-muted-foreground">
                     key:
                     <br />
                     <span className="font-mono">{f.key}</span>
