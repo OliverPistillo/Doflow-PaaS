@@ -5,23 +5,18 @@ import PDFDocument = require('pdfkit');
 import { Invoice, TaxRegime } from './entities/invoice.entity';
 
 // ── Palette ──────────────────────────────────────────────────────────────────
-const NAVY        = '#0d1b2e';   // Header background — come screenshot
-const ACCENT      = '#4f46e5';   // Indigo per etichette e accenti
-const LIGHT_GRAY  = '#f8f8f8';
-const MID_GRAY    = '#e2e8f0';
-const TEXT_GRAY   = '#6b7280';
-const STAMP_DUTY_AMOUNT    = 2.00;
-const STAMP_DUTY_THRESHOLD = 77.47;
+const NAVY       = '#0d1b2e';
+const ACCENT     = '#0d1b2e';
+const LIGHT_GRAY = '#f8f8f8';
+const MID_GRAY   = '#e2e8f0';
+const TEXT_GRAY  = '#6b7280';
 
 // Dati emittente
 const EMITTENTE = {
-  nome:      'Oliver Pistillo',
-  indirizzo: 'Via Alberto De Falco, 17',
-  cap_citta: '71016 San Severo FG',
-  piva:      'IT04558810711',
-  cf:        'PSTLVR92R21I158I',
-  email:     'fatture@doflow.it',
-  iban:      'IT63E0338501601100080304679',
+  nome:  'DoFlow',
+  piva:  'IT04558810711',
+  email: 'fatture@doflow.it',
+  iban:  'IT63E0338501601100080304679',
 };
 
 @Injectable()
@@ -51,19 +46,20 @@ export class InvoicePdfService {
   private fmtDate(dateStr: string): string {
     if (!dateStr) return '';
     try {
-      return new Intl.DateTimeFormat('it-IT', { day: '2-digit', month: 'long', year: 'numeric' }).format(new Date(dateStr));
+      return new Intl.DateTimeFormat('it-IT', {
+        day: '2-digit', month: 'long', year: 'numeric',
+      }).format(new Date(dateStr));
     } catch { return dateStr; }
   }
 
-  // ── Disegna header con onda ─────────────────────────────────────────────
+  // ── Header con onda ────────────────────────────────────────────────────────
   private drawHeader(doc: PDFKit.PDFDocument, W: number, invoice: Invoice) {
-    const HEADER_H = 148; // altezza totale banda header
+    const HEADER_H = 148;
 
-    // 1. Sfondo navy sagomato con onda in basso (taglio bianco)
     doc.save();
-    doc.moveTo(0, 0)                          // Partenza: angolo in alto a sinistra
-       .lineTo(0, HEADER_H * 0.74)            // Scende lungo il bordo sinistro
-       .bezierCurveTo(                        // Disegna la curva
+    doc.moveTo(0, 0)
+       .lineTo(0, HEADER_H * 0.74)
+       .bezierCurveTo(
          W * 0.10, HEADER_H * 0.44,
          W * 0.28, HEADER_H * 0.40,
          W * 0.48, HEADER_H * 0.54,
@@ -73,12 +69,11 @@ export class InvoicePdfService {
          W * 0.84, HEADER_H * 0.76,
          W,        HEADER_H * 0.72,
        )
-       .lineTo(W, 0)                          // Risale lungo il bordo destro
-       .closePath()                           // Chiude il tracciato in alto
-       .fill(NAVY);                           // Riempie tutto di NAVY
+       .lineTo(W, 0)
+       .closePath()
+       .fill(NAVY);
     doc.restore();
 
-    // 2. Logo "doflow~" — testo bianco (oppure immagine se disponibile)
     const MARGIN = 45;
     const logoPath = this.getLogoPath();
     if (logoPath) {
@@ -91,60 +86,63 @@ export class InvoicePdfService {
       this.drawLogoText(doc, MARGIN, 24);
     }
 
-    // 3. "FATTURA" + dettagli — in alto a destra
     doc.font('Helvetica-Bold').fontSize(26).fillColor('#ffffff')
        .text('FATTURA', 0, 20, { align: 'right', width: W - MARGIN });
 
     doc.font('Helvetica').fontSize(9.5).fillColor('rgba(255,255,255,0.80)');
-    doc.text(`N. ${invoice.invoiceNumber}`,          0, 55, { align: 'right', width: W - MARGIN });
-    doc.text(`Data: ${this.fmtDate(invoice.issueDate)}`,     0, 69, { align: 'right', width: W - MARGIN });
-    doc.text(`Scadenza: ${this.fmtDate(invoice.dueDate)}`,   0, 83, { align: 'right', width: W - MARGIN });
+    doc.text(`N. ${invoice.invoiceNumber}`,                0, 55, { align: 'right', width: W - MARGIN });
+    doc.text(`Data: ${this.fmtDate(invoice.issueDate)}`,   0, 69, { align: 'right', width: W - MARGIN });
+    doc.text(`Scadenza: ${this.fmtDate(invoice.dueDate)}`, 0, 83, { align: 'right', width: W - MARGIN });
 
     return HEADER_H;
   }
 
-  // Fallback testo "doflow~" se il logo PNG non è disponibile
   private drawLogoText(doc: PDFKit.PDFDocument, x: number, y: number) {
     doc.font('Helvetica-Bold').fontSize(22).fillColor('#ffffff').text('doflow', x, y, { continued: true });
     doc.font('Helvetica').fontSize(22).fillColor('rgba(255,255,255,0.7)').text('~');
   }
 
-  // ── Generatore principale ─────────────────────────────────────────────────
+  // ── Generatore principale ──────────────────────────────────────────────────
   async generateInvoicePdf(invoice: Invoice): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       try {
         const doc = new PDFDocument({ margin: 0, size: 'A4' });
         const buffers: Buffer[] = [];
-        doc.on('data', (chunk) => buffers.push(chunk));
-        doc.on('end',  () => resolve(Buffer.concat(buffers)));
+        doc.on('data',  (chunk) => buffers.push(chunk));
+        doc.on('end',   () => resolve(Buffer.concat(buffers)));
         doc.on('error', reject);
 
-        const W      = 595.28;
-        const H      = 841.89;
-        const MARGIN = 45;
+        const W        = 595.28;
+        const H        = 841.89;
+        const MARGIN   = 45;
         const CONTENT_W = W - MARGIN * 2;
 
-        // ── CALCOLI FISCALI ───────────────────────────────────────────────
+        // ── Calcoli fiscali ────────────────────────────────────────────────
         const isForfettario  = invoice.taxRegime === TaxRegime.FORFETTARIO;
-        const imponibile     = Number(invoice.amount) || 0;
-        const taxRate        = isForfettario ? 0 : (Number(invoice.taxRate) || 22);
+        const imponibile     = Number(invoice.amount)      || 0;
+        const taxRate        = isForfettario ? 0 : (Number(invoice.taxRate)     || 22);
         const inpsRate       = Number(invoice.inpsRate)    || 0;
         const ritenutaRate   = Number(invoice.ritenutaRate) || 0;
+        const accontoAmt     = Number((invoice as any).acconto) || 0;
 
         const inpsAmount     = imponibile * inpsRate / 100;
         const baseConInps    = imponibile + inpsAmount;
         const ivaAmount      = isForfettario ? 0 : baseConInps * taxRate / 100;
         const ritenutaAmount = imponibile * ritenutaRate / 100;
-        const stampAmount    = (invoice.stampDuty || (isForfettario && imponibile > STAMP_DUTY_THRESHOLD)) ? STAMP_DUTY_AMOUNT : 0;
-        const totaleLordo    = baseConInps + ivaAmount + stampAmount;
+        const totaleLordo    = baseConInps + ivaAmount;
         const totaleNetto    = totaleLordo - ritenutaAmount;
+        const saldoResiduo   = accontoAmt > 0 ? totaleNetto - accontoAmt : totaleNetto;
 
-        // ── HEADER con onda ───────────────────────────────────────────────
+        // Dati pagamento: usa quello specifico della fattura, fallback all'IBAN emittente
+        const paymentIban = (invoice as any).paymentIban || EMITTENTE.iban;
+        const paymentNote = (invoice as any).paymentNote || '';
+
+        // ── Header ────────────────────────────────────────────────────────
         const headerH = this.drawHeader(doc, W, invoice);
         let curY = headerH + 22;
 
-        // ── SEZIONE EMITTENTE / COMMITTENTE ──────────────────────────────
-        const colW = (CONTENT_W - 20) / 2;
+        // ── Emittente / Committente ────────────────────────────────────────
+        const colW  = (CONTENT_W - 20) / 2;
         const col1X = MARGIN;
         const col2X = MARGIN + colW + 20;
 
@@ -168,30 +166,25 @@ export class InvoicePdfService {
 
         const emittenteLines = [
           `**${EMITTENTE.nome}`,
-          EMITTENTE.indirizzo,
-          EMITTENTE.cap_citta,
           `P.IVA: ${EMITTENTE.piva}`,
-          `C.F.: ${EMITTENTE.cf}`,
           EMITTENTE.email,
-          EMITTENTE.iban ? `IBAN: ${EMITTENTE.iban}` : '',
         ];
 
         const clienteLines = [
           `**${invoice.clientName}`,
           invoice.clientAddress,
           [invoice.clientZip, invoice.clientCity].filter(Boolean).join(' '),
-          invoice.clientVat        ? `P.IVA: ${invoice.clientVat}`        : '',
-          invoice.clientFiscalCode ? `C.F.: ${invoice.clientFiscalCode}`  : '',
-          invoice.clientSdi        ? `Cod. SDI: ${invoice.clientSdi}`     : '',
-          invoice.clientPec        ? `PEC: ${invoice.clientPec}`          : '',
+          invoice.clientVat        ? `P.IVA: ${invoice.clientVat}`       : '',
+          invoice.clientFiscalCode ? `C.F.: ${invoice.clientFiscalCode}` : '',
+          invoice.clientSdi        ? `Cod. SDI: ${invoice.clientSdi}`    : '',
+          invoice.clientPec        ? `PEC: ${invoice.clientPec}`         : '',
         ];
 
-        const endY1 = drawPartyBlock(col1X, curY, 'Emittente',    emittenteLines);
-        const endY2 = drawPartyBlock(col2X, curY, 'Committente',  clienteLines);
+        const endY1 = drawPartyBlock(col1X, curY, 'Emittente',   emittenteLines);
+        const endY2 = drawPartyBlock(col2X, curY, 'Committente', clienteLines);
         curY = Math.max(endY1, endY2) + 24;
 
-        // ── REGIME FISCALE (badge) ────────────────────────────────────────
-        // Per il forfettario: "REGIME IVA NON APPLICABILE" (non la citazione di legge)
+        // ── Regime fiscale (badge) ─────────────────────────────────────────
         const regimeBadge = isForfettario
           ? 'Regime IVA non applicabile'
           : `Regime Ordinario — IVA ${taxRate}%`;
@@ -202,25 +195,24 @@ export class InvoicePdfService {
            .text(regimeBadge.toUpperCase(), MARGIN + 8, curY + 7, { characterSpacing: 0.8 });
         curY += 36;
 
-        // ── TABELLA VOCI ─────────────────────────────────────────────────
+        // ── Tabella voci ───────────────────────────────────────────────────
         const COL = {
-          desc:  { x: MARGIN,         w: 200 },
-          qty:   { x: MARGIN + 205,   w: 55  },
-          price: { x: MARGIN + 265,   w: 80  },
-          iva:   { x: MARGIN + 350,   w: 50  },
-          total: { x: MARGIN + 405,   w: CONTENT_W - 405 },
+          desc:  { x: MARGIN,       w: 200 },
+          qty:   { x: MARGIN + 205, w: 55  },
+          price: { x: MARGIN + 265, w: 80  },
+          iva:   { x: MARGIN + 350, w: 50  },
+          total: { x: MARGIN + 405, w: CONTENT_W - 405 },
         };
 
-        // Header tabella
         this.rect(doc, MARGIN, curY, CONTENT_W, 22, NAVY);
-        const dh = (label: string, x: number, w: number, align: 'left'|'right' = 'left') =>
+        const dh = (label: string, x: number, w: number, align: 'left' | 'right' = 'left') =>
           doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff')
              .text(label, x + 4, curY + 7, { width: w - 8, align });
-        dh('Descrizione',  COL.desc.x,  COL.desc.w);
-        dh('Q.tà',         COL.qty.x,   COL.qty.w,   'right');
-        dh('Prezzo Un.',   COL.price.x, COL.price.w, 'right');
-        dh('IVA %',        COL.iva.x,   COL.iva.w,   'right');
-        dh('Importo',      COL.total.x, COL.total.w, 'right');
+        dh('Descrizione', COL.desc.x,  COL.desc.w);
+        dh('Q.tà',        COL.qty.x,   COL.qty.w,   'right');
+        dh('Prezzo Un.',  COL.price.x, COL.price.w, 'right');
+        dh('IVA %',       COL.iva.x,   COL.iva.w,   'right');
+        dh('Importo',     COL.total.x, COL.total.w, 'right');
         curY += 22;
 
         const items = Array.isArray(invoice.lineItems) && invoice.lineItems.length > 0
@@ -228,27 +220,28 @@ export class InvoicePdfService {
           : [{ description: 'Servizi DoFlow', quantity: 1, unitPrice: imponibile, total: imponibile }];
 
         items.forEach((item, idx) => {
-          const rowH    = 22;
+          const rowH     = 22;
           const rowTotal = Number(item.total) || (Number(item.quantity) * Number(item.unitPrice)) || 0;
           if (idx % 2 === 0) this.rect(doc, MARGIN, curY, CONTENT_W, rowH, LIGHT_GRAY);
           doc.font('Helvetica').fontSize(9).fillColor(NAVY)
              .text(item.description || '', COL.desc.x + 4,  curY + 7, { width: COL.desc.w - 8,  ellipsis: true });
-          doc.text(String(item.quantity ?? 1),               COL.qty.x + 4,   curY + 7, { width: COL.qty.w - 8,   align: 'right' });
-          doc.text(this.fmtCurrency(Number(item.unitPrice)), COL.price.x + 4, curY + 7, { width: COL.price.w - 8, align: 'right' });
+          doc.text(String(item.quantity ?? 1),                COL.qty.x + 4,   curY + 7, { width: COL.qty.w - 8,   align: 'right' });
+          doc.text(this.fmtCurrency(Number(item.unitPrice)),  COL.price.x + 4, curY + 7, { width: COL.price.w - 8, align: 'right' });
           doc.text(isForfettario ? 'Esente' : `${taxRate}%`, COL.iva.x + 4,   curY + 7, { width: COL.iva.w - 8,   align: 'right' });
-          doc.text(this.fmtCurrency(rowTotal),               COL.total.x + 4, curY + 7, { width: COL.total.w - 8, align: 'right' });
+          doc.text(this.fmtCurrency(rowTotal),                COL.total.x + 4, curY + 7, { width: COL.total.w - 8, align: 'right' });
           curY += rowH;
         });
 
         this.rect(doc, MARGIN, curY, CONTENT_W, 1, MID_GRAY);
         curY += 20;
 
-        // ── BOX TOTALI ───────────────────────────────────────────────────
+        // ── Box totali ─────────────────────────────────────────────────────
         const totalsX = W / 2 + 10;
         const totalsW = W - MARGIN - totalsX;
 
-        const drawRow = (label: string, value: string, bold = false, highlight = false) => {
+        const drawRow = (label: string, value: string, bold = false, highlight = false, accent = false) => {
           if (highlight) this.rect(doc, totalsX - 8, curY - 2, totalsW + 8, 22, NAVY);
+          if (accent)    this.rect(doc, totalsX - 8, curY - 2, totalsW + 8, 22, '#fff7ed');
           const color = highlight ? '#ffffff' : (bold ? NAVY : TEXT_GRAY);
           const size  = bold ? 10 : 9;
           doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(size).fillColor(color)
@@ -259,40 +252,62 @@ export class InvoicePdfService {
         };
 
         drawRow('Imponibile:', this.fmtCurrency(imponibile));
-        if (inpsAmount   > 0) drawRow(`Rivalsa INPS (${inpsRate}%):`, this.fmtCurrency(inpsAmount));
-        if (!isForfettario)   drawRow(`IVA (${taxRate}%):`,            this.fmtCurrency(ivaAmount));
-        if (stampAmount  > 0) drawRow('Marca da Bollo:',               this.fmtCurrency(stampAmount));
-        if (ritenutaAmount > 0) {
-          this.rect(doc, totalsX - 8, curY - 2, totalsW + 8, 18, '#fff7ed');
-          drawRow(`Ritenuta d'Acconto (${ritenutaRate}%):`, `-${this.fmtCurrency(ritenutaAmount)}`);
-        }
+        if (inpsAmount > 0)     drawRow(`Rivalsa INPS (${inpsRate}%):`, this.fmtCurrency(inpsAmount));
+        if (!isForfettario)     drawRow(`IVA (${taxRate}%):`,           this.fmtCurrency(ivaAmount));
+        if (ritenutaAmount > 0) drawRow(`Ritenuta d'Acconto (${ritenutaRate}%):`, `-${this.fmtCurrency(ritenutaAmount)}`, false, false, true);
 
         this.rect(doc, totalsX - 8, curY - 2, totalsW + 8, 1, MID_GRAY);
         curY += 6;
-        drawRow('TOTALE DA PAGARE:', this.fmtCurrency(totaleNetto), true, true);
 
-        // ── NOTE ─────────────────────────────────────────────────────────
-        curY += 20;
+        if (accontoAmt > 0) {
+          // Mostra totale fattura, poi acconto, poi saldo
+          drawRow('Totale fattura:', this.fmtCurrency(totaleNetto), true);
+          drawRow('Acconto ricevuto:', `-${this.fmtCurrency(accontoAmt)}`, false, false, true);
+          this.rect(doc, totalsX - 8, curY - 2, totalsW + 8, 1, MID_GRAY);
+          curY += 6;
+          drawRow('SALDO A PAGARE:', this.fmtCurrency(saldoResiduo), true, true);
+        } else {
+          drawRow('TOTALE DA PAGARE:', this.fmtCurrency(totaleNetto), true, true);
+        }
+
+        // ── Blocco pagamento (IBAN) ────────────────────────────────────────
+        curY += 16;
+        const ibanY = curY;
+        doc.save().roundedRect(MARGIN, ibanY, CONTENT_W * 0.55, 44, 6).fill('#f1f5f9').restore();
+
+        doc.font('Helvetica-Bold').fontSize(7).fillColor(ACCENT)
+           .text('DATI PER IL PAGAMENTO', MARGIN + 10, ibanY + 8, { characterSpacing: 1.2 });
+
+        doc.font('Helvetica').fontSize(9).fillColor(NAVY)
+           .text(`IBAN: ${paymentIban}`, MARGIN + 10, ibanY + 20, { width: CONTENT_W * 0.55 - 20 });
+
+        if (paymentNote) {
+          doc.font('Helvetica').fontSize(8).fillColor(TEXT_GRAY)
+             .text(paymentNote, MARGIN + 10, ibanY + 34, { width: CONTENT_W * 0.55 - 20 });
+          curY = ibanY + 56;
+        } else {
+          curY = ibanY + 56;
+        }
+
+        // ── Note ──────────────────────────────────────────────────────────
         if (invoice.notes) {
+          curY += 4;
           doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_GRAY)
-             .text('NOTE / CONDIZIONI DI PAGAMENTO', MARGIN, curY, { characterSpacing: 0.8 });
+             .text('NOTE', MARGIN, curY, { characterSpacing: 0.8 });
           curY += 14;
           doc.font('Helvetica').fontSize(8.5).fillColor(TEXT_GRAY)
              .text(invoice.notes, MARGIN, curY, { width: W / 2 - 20 });
         }
 
-        // ── FOOTER ───────────────────────────────────────────────────────
+        // ── Footer ────────────────────────────────────────────────────────
         const footerY = H - 72;
         this.rect(doc, 0, footerY, W, 1, MID_GRAY);
 
         let legalText = '';
         if (isForfettario) {
-          // Dicitura corretta: non cita la Legge ma descrive il regime
           legalText =
-            'Operazione effettuata da soggetto in regime fiscale di vantaggio — IVA non applicabile. ' +
-            (stampAmount > 0
-              ? 'Imposta di bollo assolta sull\'originale (D.P.R. 642/1972).'
-              : 'Documento non soggetto a marca da bollo (importo ≤ €77,47).');
+            'Operazione effettuata da soggetto in regime fiscale di vantaggio — IVA non applicabile ' +
+            'ai sensi dell\'art. 1, commi 54-89, Legge 190/2014.';
         } else {
           legalText = `Documento soggetto ad IVA al ${taxRate}% ai sensi del D.P.R. 633/1972.`;
           if (ritenutaAmount > 0)
