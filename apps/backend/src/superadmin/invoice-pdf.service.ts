@@ -99,7 +99,7 @@ export class InvoicePdfService {
         const MARGIN    = 45;
         const CONTENT_W = W - MARGIN * 2;
 
-        const isPreventivo = (invoice as any).docType !== 'fattura';
+        const isPreventivo = (invoice as any).docType === 'preventivo';
         const docLabel     = isPreventivo ? 'PREVENTIVO' : 'FATTURA DI CORTESIA';
 
         const isForfettario  = invoice.taxRegime === TaxRegime.FORFETTARIO;
