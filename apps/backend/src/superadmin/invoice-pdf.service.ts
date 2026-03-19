@@ -232,16 +232,17 @@ export class InvoicePdfService {
         const totalLabel = isPreventivo ? 'TOTALE PREVENTIVO:' : 'TOTALE DA PAGARE:';
         drawRow(totalLabel, this.fmtCurrency(totaleNetto), true, true);
 
-        // IBAN
-        curY += 16;
-        const ibanBoxH = 44;
-        doc.save().roundedRect(MARGIN, curY, CONTENT_W * 0.55, ibanBoxH, 6).fill('#f1f5f9').restore();
-        doc.font('Helvetica-Bold').fontSize(7).fillColor(ACCENT)
-           .text('DATI PER IL PAGAMENTO', MARGIN + 10, curY + 8, { characterSpacing: 1.2 });
-        doc.font('Helvetica').fontSize(9).fillColor(NAVY)
-           .text(`IBAN: ${EMITTENTE.iban}`, MARGIN + 10, curY + 20, { width: CONTENT_W * 0.55 - 20 });
-
-        curY += ibanBoxH + 8;
+        // IBAN — solo su fattura di cortesia, non sul preventivo
+        if (!isPreventivo) {
+          curY += 16;
+          const ibanBoxH = 44;
+          doc.save().roundedRect(MARGIN, curY, CONTENT_W * 0.55, ibanBoxH, 6).fill('#f1f5f9').restore();
+          doc.font('Helvetica-Bold').fontSize(7).fillColor(ACCENT)
+             .text('DATI PER IL PAGAMENTO', MARGIN + 10, curY + 8, { characterSpacing: 1.2 });
+          doc.font('Helvetica').fontSize(9).fillColor(NAVY)
+             .text(`IBAN: ${EMITTENTE.iban}`, MARGIN + 10, curY + 20, { width: CONTENT_W * 0.55 - 20 });
+          curY += ibanBoxH + 8;
+        }
 
         // Note
         if (invoice.notes) {
