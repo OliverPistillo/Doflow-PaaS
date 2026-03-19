@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm, useFieldArray } from "react-hook-form";
 import {
   Loader2, ArrowLeft, Plus, Trash2, Receipt, AlertTriangle,
-  UserPlus, Sparkles, Bookmark, CreditCard,
+  UserPlus, Sparkles, Bookmark,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -48,9 +48,6 @@ type InvoiceFormValues = {
   taxRate:           number;
   inpsRate:          number;
   ritenutaRate:      number;
-  // Pagamento
-  paymentIban:       string;
-  paymentNote:       string;
   // Acconto
   acconto:           number;
   // Voci e note
@@ -160,6 +157,7 @@ export default function NewInvoicePage() {
   const [isSubmitting, setSubmitting]   = useState(false);
   const [savedClients, setSavedClients] = useState<InvoiceClient[]>([]);
   const [savedServices, setSavedServices] = useState<SavedService[]>([]);
+  const [serviceSelectKey, setServiceSelectKey] = useState(0); // forza reset dopo ogni selezione
   const [clientMode, setClientMode]     = useState<"tenant" | "saved" | "nuovo">("nuovo");
   const [autofilled, setAutofilled]     = useState(false);
 
@@ -186,7 +184,6 @@ export default function NewInvoicePage() {
         clientZip: "", clientVat: "", clientFiscalCode: "", clientSdi: "", clientPec: "",
         issueDate: today, dueDate: nextMonth, status: "pending",
         taxRegime: "ordinario", taxRate: 22, inpsRate: 0, ritenutaRate: 0,
-        paymentIban: "", paymentNote: "",
         acconto: 0,
         notes: "",
         lineItems: [{ description: "Servizio piattaforma DoFlow", quantity: 1, unitPrice: 0 }],
@@ -287,12 +284,14 @@ export default function NewInvoicePage() {
   const handleServiceSelect = useCallback((value: string) => {
     if (value === "__nuovo__") {
       append({ description: "", quantity: 1, unitPrice: 0 });
-      return;
+    } else {
+      const svc = savedServices.find(s => s.id === value);
+      if (svc) {
+        append({ description: svc.description, quantity: svc.quantity || 1, unitPrice: svc.unitPrice });
+      }
     }
-    const svc = savedServices.find(s => s.id === value);
-    if (svc) {
-      append({ description: svc.description, quantity: svc.quantity || 1, unitPrice: svc.unitPrice });
-    }
+    // Reset al placeholder dopo ogni selezione (evita la riga blu persistente)
+    setServiceSelectKey(k => k + 1);
   }, [savedServices, append]);
 
   const openSaveService = (idx: number) => {
@@ -625,7 +624,7 @@ export default function NewInvoicePage() {
               <label className="text-xs font-bold text-muted-foreground uppercase mb-2 block">
                 Aggiungi voce
               </label>
-              <Select onValueChange={handleServiceSelect}>
+              <Select key={serviceSelectKey} onValueChange={handleServiceSelect}>
                 <SelectTrigger className="max-w-lg">
                   <SelectValue placeholder="Seleziona servizio salvato o aggiungi nuovo…" />
                 </SelectTrigger>
@@ -715,33 +714,6 @@ export default function NewInvoicePage() {
                   </div>
                 );
               })}
-            </div>
-          </div>
-
-          {/* ── Dati Pagamento ───────────────────────────────────────────────── */}
-          <div className="bg-card glass-card p-6 rounded-2xl shadow-sm border border-border/50 space-y-4">
-            <h2 className="text-base font-bold border-b pb-2 flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-primary" />
-              Dati di Pagamento
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase">IBAN</label>
-                <Input
-                  {...register("paymentIban")}
-                  placeholder="IT00 X000 0000 0000 0000 0000 000"
-                  className="font-mono tracking-wider"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase">
-                  Riferimento / Intestatario conto
-                </label>
-                <Input
-                  {...register("paymentNote")}
-                  placeholder="Es. Bonifico intestato a DoFlow S.r.l."
-                />
-              </div>
             </div>
           </div>
 
