@@ -13,7 +13,7 @@ const MID_GRAY    = '#cbd5e1';
 const TEXT_GRAY   = '#6b7280';
 
 const EMITTENTE = {
-  nome:  'DoFlow S.r.l.',
+  nome:  'DoFlow',
   piva:  'IT04558810711',
   email: 'fatture@doflow.it',
   iban:  'IT63E0338501601100080304679',
@@ -230,8 +230,8 @@ export class InvoicePdfService {
         curY += 12;
 
         // --- BOX TOTALI ---
-        const totalsX = W / 2 + 10;
-        const totalsW = W - MARGIN - totalsX;
+        const boxW = 250; // Larghezza fissa per il box dei totali
+        const boxX = MARGIN + CONTENT_W - boxW; // Bordo destro perfettamente allineato
         const boxPadding = 12;
 
         // Calcolo dinamico altezza box totali
@@ -243,7 +243,7 @@ export class InvoicePdfService {
 
         // Sfondo Box Totali
         doc.save()
-           .roundedRect(totalsX - boxPadding, curY - boxPadding, totalsW + (boxPadding * 2), totalsBoxH, 6)
+           .roundedRect(boxX, curY - boxPadding, boxW, totalsBoxH, 6)
            .lineWidth(1)
            .fillAndStroke(LIGHT_BEIGE, GOLD)
            .restore();
@@ -251,10 +251,11 @@ export class InvoicePdfService {
         const drawRow = (label: string, value: string, bold = false) => {
           const color = NAVY;
           const size  = bold ? 11 : 9;
+          const innerW = boxW - (boxPadding * 2);
           doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(size).fillColor(color)
-             .text(label, totalsX, curY, { width: totalsW * 0.55, align: 'left' });
+             .text(label, boxX + boxPadding, curY, { width: innerW * 0.55, align: 'left' });
           doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(size).fillColor(color)
-             .text(value, totalsX + totalsW * 0.55, curY, { width: totalsW * 0.45, align: 'right' });
+             .text(value, boxX + boxPadding + innerW * 0.55, curY, { width: innerW * 0.45, align: 'right' });
           curY += bold ? 24 : 18;
         };
 
@@ -263,8 +264,8 @@ export class InvoicePdfService {
         if (!isForfettario)     drawRow(`IVA (${taxRate}%):`,                     this.fmtCurrency(ivaAmount));
         if (ritenutaAmount > 0) drawRow(`Ritenuta (${ritenutaRate}%):`, `-${this.fmtCurrency(ritenutaAmount)}`);
 
-        // Linea separatrice pre-totale
-        this.rect(doc, totalsX, curY, totalsW, 1, BORDER_GRAY);
+        // Linea separatrice pre-totale dentro il box
+        this.rect(doc, boxX + boxPadding, curY, boxW - (boxPadding * 2), 1, BORDER_GRAY);
         curY += 8;
 
         const totalLabel = 'TOTALE PREVENTIVO:';
@@ -285,9 +286,12 @@ export class InvoicePdfService {
         // --- FOOTER ---
         const footerY = H - 90;
 
-        // Watermark/Logo pallido a fondo pagina
-        doc.font('Helvetica-Bold').fontSize(24).fillColor(BORDER_GRAY)
-           .text('doflow~', 0, footerY - 40, { align: 'center', width: W });
+        // Inserimento del logo immagine sopra il footer
+        const footerLogoPath = 'C:\\Doflow\\apps\\frontend\\public\\logo_footer.png';
+        if (fs.existsSync(footerLogoPath)) {
+            const logoW = 80; // Puoi regolare la larghezza del logo qui (es. 60, 80, 100)
+            doc.image(footerLogoPath, (W - logoW) / 2, footerY - 40, { width: logoW });
+        }
 
         this.rect(doc, MARGIN, footerY, CONTENT_W, 1, BORDER_GRAY);
 
