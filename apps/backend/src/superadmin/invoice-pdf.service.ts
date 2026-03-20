@@ -286,11 +286,33 @@ export class InvoicePdfService {
         // --- FOOTER ---
         const footerY = H - 90;
 
-        // Inserimento del logo immagine sopra il footer
-        const footerLogoPath = 'C:\\Doflow\\apps\\frontend\\public\\logo_footer.png';
-        if (fs.existsSync(footerLogoPath)) {
-            const logoW = 80; // Puoi regolare la larghezza del logo qui (es. 60, 80, 100)
-            doc.image(footerLogoPath, (W - logoW) / 2, footerY - 40, { width: logoW });
+        // Risoluzione dinamica del path (come per l'header)
+        const footerLogoCandidates = [
+          'C:\\Doflow\\apps\\frontend\\public\\logo_footer.png',
+          path.resolve(process.cwd(), '..', 'frontend', 'public', 'logo_footer.png'),
+          path.resolve(process.cwd(), '..', '..', 'apps', 'frontend', 'public', 'logo_footer.png'),
+          path.resolve(__dirname, '..', '..', '..', '..', 'frontend', 'public', 'logo_footer.png')
+        ];
+
+        let footerLogoPath = null;
+        for (const p of footerLogoCandidates) {
+          if (fs.existsSync(p)) {
+            footerLogoPath = p;
+            break;
+          }
+        }
+
+        if (footerLogoPath) {
+            const logoW = 80; // Larghezza del logo
+            // L'immagine viene posizionata al centro, appena sopra la linea grigia
+            doc.image(footerLogoPath, (W - logoW) / 2, footerY - 35, { width: logoW });
+        } else {
+            // Se non lo trova, lascia un log per farti capire il problema
+            this.logger.warn('Logo footer non trovato. Ricontrolla la posizione del file logo_footer.png');
+            
+            // Fallback testuale opzionale (puoi anche rimuovere questo else se non vuoi scritte)
+            doc.font('Helvetica-Bold').fontSize(16).fillColor(MID_GRAY)
+               .text('doflow~', 0, footerY - 30, { align: 'center', width: W });
         }
 
         this.rect(doc, MARGIN, footerY, CONTENT_W, 1, BORDER_GRAY);
