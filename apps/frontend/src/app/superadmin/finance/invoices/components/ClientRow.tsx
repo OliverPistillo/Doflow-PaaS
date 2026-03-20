@@ -1,3 +1,4 @@
+// Percorso: apps/frontend/src/app/superadmin/finance/invoices/components/ClientRow.tsx
 import React, { useState } from "react";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,48 +20,90 @@ interface ClientRowProps {
   onDeleteInvoice: (id: string) => void;
   onDownloadInvoice: (id: string, number: string) => void;
   onSendInvoice: (id: string, number: string) => void;
+  onRefresh?: () => void;
 }
 
-export function ClientRow({ client, onAddInvoice, onEditInvoice, onDeleteInvoice, onDownloadInvoice, onSendInvoice }: ClientRowProps) {
+export function ClientRow({
+  client, onAddInvoice, onEditInvoice, onDeleteInvoice,
+  onDownloadInvoice, onSendInvoice, onRefresh,
+}: ClientRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // Conta preventivi vs fatture per il badge
+  const nPreventivi = client.invoices.filter(i => i.docType === "preventivo").length;
+  const nFatture    = client.invoices.filter(i => i.docType !== "preventivo").length;
 
   return (
     <div className="border rounded-lg bg-white overflow-hidden shadow-sm group transition-all">
-      <div 
-        className="grid grid-cols-[30px_2fr_1fr_1fr_1fr] px-4 py-4 items-center hover:bg-slate-50/50 transition-colors cursor-pointer select-none" 
+      <div
+        className="grid grid-cols-[30px_2fr_1fr_1fr_1fr] px-4 py-4 items-center hover:bg-slate-50/50 transition-colors cursor-pointer select-none"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex justify-center">
-          {isExpanded ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+          {isExpanded
+            ? <ChevronDown className="h-4 w-4 text-slate-400" />
+            : <ChevronRight className="h-4 w-4 text-slate-400" />}
         </div>
-        
-        <div><div className="font-bold text-lg text-slate-800">{client.name}</div></div>
-        <div className="font-mono font-bold text-slate-700 text-right pr-8">€{client.totalVolume.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</div>
-        <div className="text-sm text-slate-600 pl-2"><Badge variant="outline" className="bg-slate-50">{client.invoices.length} docs</Badge></div>
-        <div><Badge variant="secondary" className={client.status === 'Attivo' ? "bg-green-100 text-green-800 border-green-200" : "bg-slate-100 text-slate-600"}>{client.status}</Badge></div>
+
+        <div>
+          <div className="font-bold text-lg text-slate-800">{client.name}</div>
+        </div>
+
+        <div className="font-mono font-bold text-slate-700 text-right pr-8">
+          €{client.totalVolume.toLocaleString("it-IT", { minimumFractionDigits: 2 })}
+        </div>
+
+        <div className="text-sm text-slate-600 pl-2 flex items-center gap-2 flex-wrap">
+          <Badge variant="outline" className="bg-slate-50">
+            {client.invoices.length} docs
+          </Badge>
+          {nPreventivi > 0 && (
+            <Badge variant="outline" className="bg-indigo-50 text-indigo-600 border-indigo-200 text-[10px]">
+              {nPreventivi} prev.
+            </Badge>
+          )}
+          {nFatture > 0 && (
+            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 text-[10px]">
+              {nFatture} fatt.
+            </Badge>
+          )}
+        </div>
+
+        <div>
+          <Badge
+            variant="secondary"
+            className={client.status === "Attivo"
+              ? "bg-green-100 text-green-800 border-green-200"
+              : "bg-slate-100 text-slate-600"}
+          >
+            {client.status}
+          </Badge>
+        </div>
       </div>
 
       {isExpanded && (
         <div className="bg-slate-50/50 border-t p-4 animate-in slide-in-from-top-2 duration-200">
           <div className="ml-0 sm:ml-8 space-y-3">
-            {client.invoices.map((inv) => (
-              <InvoiceRow 
-                 key={inv.id} 
-                 invoice={inv} 
-                 onEdit={onEditInvoice} 
-                 onDelete={onDeleteInvoice} 
-                 onDownload={onDownloadInvoice}
-                 onSend={onSendInvoice}
+            {client.invoices.map(inv => (
+              <InvoiceRow
+                key={inv.id}
+                invoice={inv}
+                onEdit={onEditInvoice}
+                onDelete={onDeleteInvoice}
+                onDownload={onDownloadInvoice}
+                onSend={onSendInvoice}
+                onRefresh={onRefresh}
               />
             ))}
           </div>
-          
+
           <div className="mt-4 ml-8">
-            <Button variant="ghost" size="sm" className="text-slate-500 text-xs hover:text-indigo-600 hover:bg-indigo-50" onClick={(e) => {
-                e.stopPropagation(); 
-                onAddInvoice();
-            }}>
-                <Plus className="h-3 w-3 mr-1" /> Aggiungi nuova fattura a questo cliente
+            <Button
+              variant="ghost" size="sm"
+              className="text-slate-500 text-xs hover:text-primary hover:bg-primary/5"
+              onClick={e => { e.stopPropagation(); onAddInvoice(); }}
+            >
+              <Plus className="h-3 w-3 mr-1" /> Aggiungi nuova fattura a questo cliente
             </Button>
           </div>
         </div>

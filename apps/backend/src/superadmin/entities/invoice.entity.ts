@@ -6,9 +6,10 @@ import { InvoiceLineItem } from './invoice-line-item.entity';
 import { InvoiceTemplate } from './invoice-template.entity';
 
 export enum InvoiceStatus {
-  PAID    = 'paid',
-  PENDING = 'pending',
-  OVERDUE = 'overdue',
+  PAID     = 'paid',
+  PENDING  = 'pending',
+  OVERDUE  = 'overdue',
+  APPROVED = 'approved',  // solo per preventivi
 }
 
 export enum TaxRegime {

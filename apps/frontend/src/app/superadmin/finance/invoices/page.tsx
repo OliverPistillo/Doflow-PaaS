@@ -238,7 +238,8 @@ function InvoicesContent() {
           <ClientRow key={client.clientId} client={client}
             onAddInvoice={() => router.push("/superadmin/finance/invoices/new")}
             onEditInvoice={openEdit} onDeleteInvoice={handleDelete}
-            onDownloadInvoice={handleDownload} onSendInvoice={handleSend} />
+            onDownloadInvoice={handleDownload} onSendInvoice={handleSend}
+            onRefresh={loadInvoices} />
         ))}
       </div>
 
