@@ -1,16 +1,15 @@
-// Percorso: apps/frontend/src/app/superadmin/finance/invoices/new/page.tsx
+// Percorso: apps/frontend/src/app/superadmin/finance/preventivi/new/page.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, useFieldArray } from "react-hook-form";
-import { Loader2, ArrowLeft, Plus, Trash2, FileCheck2, AlertTriangle, UserPlus, Sparkles, Bookmark } from "lucide-react";
+import { Loader2, ArrowLeft, Plus, Trash2, FileText, UserPlus, Sparkles, Bookmark } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api";
 import Link from "next/link";
 
@@ -21,14 +20,12 @@ type LineItemForm = { description: string; quantity: number; unitPrice: number }
 type FormValues = {
   tenantId: string; clientName: string; clientAddress: string; clientCity: string;
   clientZip: string; clientVat: string; clientFiscalCode: string; clientSdi: string; clientPec: string;
-  invoiceNumber: string; issueDate: string; dueDate: string;
-  status: "paid" | "pending" | "overdue";
-  taxRegime: "ordinario" | "forfettario"; taxRate: number; inpsRate: number; ritenutaRate: number;
+  issueDate: string; validUntil: string;
   notes: string; lineItems: LineItemForm[];
 };
 
 type Tenant        = { id: string; name: string };
-type InvoiceClient = { id: string; clientName: string; clientVat?: string; clientFiscalCode?: string; clientSdi?: string; clientPec?: string; clientAddress?: string; clientCity?: string; clientZip?: string; invoiceCount: number };
+type InvoiceClient = { id: string; clientName: string; clientVat?: string; clientAddress?: string; clientCity?: string; clientZip?: string; clientFiscalCode?: string; clientSdi?: string; clientPec?: string; invoiceCount: number };
 type SavedService  = { id: string; description: string; unitPrice: number; quantity: number };
 
 // ─── Dialog salva cliente ──────────────────────────────────────────────────────
@@ -62,8 +59,8 @@ function SaveServiceDialog({ open, item, onSave, onSkip }: { open: boolean; item
       <DialogContent className="sm:max-w-sm rounded-card">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
-            <div className="h-10 w-10 rounded-nav bg-primary/10 flex items-center justify-center">
-              <Bookmark className="h-5 w-5 text-primary" />
+            <div className="h-10 w-10 rounded-nav bg-indigo-50 flex items-center justify-center">
+              <Bookmark className="h-5 w-5 text-indigo-600" />
             </div>
             <DialogTitle>Salvare il servizio?</DialogTitle>
           </div>
@@ -82,7 +79,7 @@ function SaveServiceDialog({ open, item, onSave, onSkip }: { open: boolean; item
 
 // ─── Pagina ────────────────────────────────────────────────────────────────────
 
-export default function NewInvoicePage() {
+export default function NewPreventivoPage() {
   const router = useRouter();
   const [tenants, setTenants]             = useState<Tenant[]>([]);
   const [loadingTenants, setLoading]      = useState(true);
@@ -92,49 +89,29 @@ export default function NewInvoicePage() {
   const [serviceSelectKey, setServiceSelectKey] = useState(0);
   const [clientMode, setClientMode]       = useState<"tenant" | "saved" | "nuovo">("nuovo");
   const [autofilled, setAutofilled]       = useState(false);
-  const [showSaveDialog, setShowSaveDialog]       = useState(false);
-  const [pendingData, setPendingData]             = useState<any>(null);
+  const [showSaveDialog, setShowSaveDialog]               = useState(false);
+  const [pendingData, setPendingData]                     = useState<any>(null);
   const [showSaveServiceDialog, setShowSaveServiceDialog] = useState(false);
   const [pendingServiceIdx, setPendingServiceIdx]         = useState<number | null>(null);
 
-  const today     = new Date().toISOString().split("T")[0];
-  const nextMonth = (() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString().split("T")[0]; })();
+  // Validità preventivo: 30 giorni da oggi
+  const today = new Date().toISOString().split("T")[0];
+  const in30  = (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split("T")[0]; })();
 
   const { register, control, handleSubmit, watch, setValue, getValues } = useForm<FormValues>({
     defaultValues: {
       tenantId: "", clientName: "", clientAddress: "", clientCity: "", clientZip: "",
       clientVat: "", clientFiscalCode: "", clientSdi: "", clientPec: "",
-      invoiceNumber: "", issueDate: today, dueDate: nextMonth, status: "pending",
-      taxRegime: "ordinario", taxRate: 22, inpsRate: 0, ritenutaRate: 0,
-      notes: "",
-      lineItems: [{ description: "Servizio piattaforma DoFlow", quantity: 1, unitPrice: 0 }],
+      issueDate: today, validUntil: in30,
+      notes: "Il presente preventivo ha validità 30 giorni dalla data di emissione.",
+      lineItems: [{ description: "", quantity: 1, unitPrice: 0 }],
     },
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "lineItems" });
   const watchLineItems = watch("lineItems");
-  const watchTaxRate   = watch("taxRate");
-  const watchTaxRegime = watch("taxRegime");
-  const watchInpsRate  = watch("inpsRate");
-  const watchRitenuta  = watch("ritenutaRate");
-  const isForfettario  = watchTaxRegime === "forfettario";
-
-  const safeItems   = Array.isArray(watchLineItems) ? watchLineItems : [];
-  const imponibile  = safeItems.reduce((s, i) => s + (Number(i?.quantity) || 0) * (Number(i?.unitPrice) || 0), 0);
-  const taxRate     = isForfettario ? 0 : (Number(watchTaxRate) || 22);
-  const inpsRate    = Number(watchInpsRate) || 0;
-  const ritenutaRate = Number(watchRitenuta) || 0;
-  const inpsAmount  = imponibile * inpsRate / 100;
-  const baseConInps = imponibile + inpsAmount;
-  const ivaAmount   = isForfettario ? 0 : baseConInps * taxRate / 100;
-  const ritenutaAmt = imponibile * ritenutaRate / 100;
-  const totaleNetto = baseConInps + ivaAmount - ritenutaAmt;
-
-  useEffect(() => {
-    if (isForfettario) setValue("taxRate", 0);
-    else if ((getValues("taxRate") || 0) === 0) setValue("taxRate", 22);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isForfettario]);
+  const safeItems  = Array.isArray(watchLineItems) ? watchLineItems : [];
+  const totale     = safeItems.reduce((s, i) => s + (Number(i?.quantity) || 0) * (Number(i?.unitPrice) || 0), 0);
 
   useEffect(() => {
     apiFetch<Tenant[]>("/superadmin/tenants").then(d => setTenants(Array.isArray(d) ? d.filter(t => t?.id && t?.name) : [])).catch(() => setTenants([])).finally(() => setLoading(false));
@@ -187,8 +164,13 @@ export default function NewInvoicePage() {
       await apiFetch("/superadmin/finance/invoices", {
         method: "POST",
         body: JSON.stringify({
-          ...data, docType: "fattura", amount: imponibile,
-          taxRate: isForfettario ? 0 : Number(data.taxRate),
+          ...data,
+          docType: "preventivo",
+          amount: totale,
+          dueDate: data.validUntil,
+          status: "pending",
+          taxRegime: "forfettario",
+          taxRate: 0, inpsRate: 0, ritenutaRate: 0,
           lineItems: data.lineItems.map(i => ({ ...i, total: Number(i.quantity) * Number(i.unitPrice) })),
         }),
       });
@@ -220,73 +202,26 @@ export default function NewInvoicePage() {
           </Link>
           <div>
             <h1 className="text-3xl font-black tracking-tight flex items-center gap-2">
-              <FileCheck2 className="h-6 w-6 text-primary" /> Nuova Fattura di Cortesia
+              <FileText className="h-6 w-6 text-indigo-600" /> Nuovo Preventivo
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
-              Documento informativo non fiscale — ricorda di emettere anche la fattura elettronica via SDI.
+              Documento proforma non fiscale — da inviare al cliente per approvazione prima di iniziare i lavori.
             </p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
 
-          {/* Regime Fiscale */}
-          <div className="bg-card glass-card rounded-2xl border border-border/50 p-6">
-            <h2 className="text-base font-bold mb-4 flex items-center gap-2">
-              Regime Fiscale
-              {isForfettario && <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">IVA NON APPLICATA</Badge>}
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="col-span-2 space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase">Regime</label>
-                <Select onValueChange={(v: "ordinario"|"forfettario") => setValue("taxRegime", v)} value={watchTaxRegime}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ordinario">Regime Ordinario (IVA)</SelectItem>
-                    <SelectItem value="forfettario">Regime Forfettario (L. 190/2014)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase">IVA (%)</label>
-                <Input type="number" step="1" disabled={isForfettario} {...register("taxRate", { valueAsNumber: true })} className={isForfettario ? "opacity-40" : ""} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase">Rivalsa INPS (%)</label>
-                <Input type="number" step="0.5" {...register("inpsRate", { valueAsNumber: true })} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase">Ritenuta Acc. (%)</label>
-                <Input type="number" step="0.5" {...register("ritenutaRate", { valueAsNumber: true })} />
-              </div>
-            </div>
-            {isForfettario && (
-              <div className="mt-4 flex gap-2 items-start bg-amber-50 dark:bg-amber-950/20 border border-amber-200 rounded-lg p-3">
-                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                <p className="text-xs text-amber-700">In regime forfettario l&apos;IVA non viene applicata. Il PDF includerà la dicitura legale (Legge 190/2014).</p>
-              </div>
-            )}
-          </div>
-
           {/* Dati Documento + Cliente */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-card glass-card p-6 rounded-2xl shadow-sm border border-border/50 space-y-4">
               <h2 className="text-base font-bold border-b pb-2">Dati Documento</h2>
 
-              {/* Numero fattura */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-2">
-                  Numero Fattura
-                  <span className="text-[10px] font-medium text-muted-foreground/60 normal-case tracking-normal">opzionale — solo per archivio interno</span>
-                </label>
-                <Input {...register("invoiceNumber")} placeholder="Es. 2026-001" className="font-mono" />
-              </div>
-
               {/* Selettore cliente */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-2">
                   Cliente
-                  {autofilled && <span className="flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full"><Sparkles className="h-2.5 w-2.5" /> Compilato</span>}
+                  {autofilled && <span className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full"><Sparkles className="h-2.5 w-2.5" /> Compilato</span>}
                 </label>
                 <Select onValueChange={handleClientSelect} value={clientMode === "nuovo" ? "__nuovo__" : ""}>
                   <SelectTrigger><SelectValue placeholder={loadingTenants ? "Caricamento..." : "Scegli cliente..."} /></SelectTrigger>
@@ -294,7 +229,7 @@ export default function NewInvoicePage() {
                     {tenants.length > 0 && (<><div className="px-2 py-1 text-[10px] font-bold uppercase text-muted-foreground">Tenant</div>{tenants.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</>)}
                     {savedClients.length > 0 && (<><Separator className="my-1" /><div className="px-2 py-1 text-[10px] font-bold uppercase text-muted-foreground">Salvati</div>{savedClients.map(c => <SelectItem key={c.id} value={c.id}><span className="font-medium">{c.clientName}</span>{c.clientVat && <span className="text-muted-foreground text-xs ml-2">{c.clientVat}</span>}</SelectItem>)}</>)}
                     <Separator className="my-1" />
-                    <SelectItem value="__nuovo__"><span className="flex items-center gap-2 text-primary font-semibold"><UserPlus className="h-3.5 w-3.5" /> Nuovo cliente…</span></SelectItem>
+                    <SelectItem value="__nuovo__"><span className="flex items-center gap-2 text-indigo-600 font-semibold"><UserPlus className="h-3.5 w-3.5" /> Nuovo cliente…</span></SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -308,32 +243,19 @@ export default function NewInvoicePage() {
               {/* Date */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-muted-foreground uppercase">Data Emissione</label>
+                  <label className="text-xs font-bold text-muted-foreground uppercase">Data Preventivo</label>
                   <Input type="date" {...register("issueDate", { required: true })} />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-muted-foreground uppercase">Scadenza Pagamento</label>
-                  <Input type="date" {...register("dueDate", { required: true })} />
+                  <label className="text-xs font-bold text-muted-foreground uppercase">Valido Fino Al</label>
+                  <Input type="date" {...register("validUntil", { required: true })} />
                 </div>
-              </div>
-
-              {/* Stato */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase">Stato</label>
-                <Select onValueChange={(v: "paid"|"pending"|"overdue") => setValue("status", v)} value={watch("status")}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="paid">Pagata</SelectItem>
-                    <SelectItem value="pending">In Scadenza</SelectItem>
-                    <SelectItem value="overdue">Scaduta</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </div>
 
-            {/* Dati fiscali cliente */}
+            {/* Dati cliente (solo ragione, indirizzo, piva) */}
             <div className="bg-card glass-card p-6 rounded-2xl shadow-sm border border-border/50 space-y-4">
-              <h2 className="text-base font-bold border-b pb-2">Dati Fiscali Committente</h2>
+              <h2 className="text-base font-bold border-b pb-2">Dati Cliente</h2>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2"><label className="text-xs font-bold text-muted-foreground uppercase">Partita IVA</label><Input {...register("clientVat")} placeholder="IT12345678901" /></div>
                 <div className="space-y-2"><label className="text-xs font-bold text-muted-foreground uppercase">Codice Fiscale</label><Input {...register("clientFiscalCode")} placeholder="RSSMRA80A01H501U" /></div>
@@ -344,7 +266,7 @@ export default function NewInvoicePage() {
                 <div className="space-y-2 col-span-2"><label className="text-xs font-bold text-muted-foreground uppercase">Città</label><Input {...register("clientCity")} placeholder="Milano MI" /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2"><label className="text-xs font-bold text-muted-foreground uppercase">Codice SDI</label><Input {...register("clientSdi")} placeholder="0000000" maxLength={7} className="font-mono" /></div>
+                <div className="space-y-2"><label className="text-xs font-bold text-muted-foreground uppercase">SDI</label><Input {...register("clientSdi")} placeholder="0000000" maxLength={7} className="font-mono" /></div>
                 <div className="space-y-2"><label className="text-xs font-bold text-muted-foreground uppercase">PEC</label><Input {...register("clientPec")} type="email" placeholder="cliente@pec.it" /></div>
               </div>
             </div>
@@ -353,7 +275,7 @@ export default function NewInvoicePage() {
           {/* Voci */}
           <div className="bg-card glass-card p-6 rounded-2xl shadow-sm border border-border/50">
             <div className="flex justify-between items-center border-b pb-3 mb-4">
-              <h2 className="text-base font-bold">Voci Fattura</h2>
+              <h2 className="text-base font-bold">Voci Preventivo</h2>
             </div>
             <div className="mb-5 pb-4 border-b border-dashed border-border/60">
               <label className="text-xs font-bold text-muted-foreground uppercase mb-2 block">Aggiungi voce</label>
@@ -363,7 +285,7 @@ export default function NewInvoicePage() {
                 </SelectTrigger>
                 <SelectContent>
                   {savedServices.length > 0 && (<><div className="px-2 py-1 text-[10px] font-bold uppercase text-muted-foreground">Servizi Salvati</div>{savedServices.map(s => <SelectItem key={s.id} value={s.id}><span className="font-medium">{s.description}</span><span className="text-muted-foreground text-xs ml-2">— {fmt(s.unitPrice)}</span></SelectItem>)}<Separator className="my-1" /></>)}
-                  <SelectItem value="__nuovo__"><span className="flex items-center gap-2 text-primary font-semibold"><Plus className="h-3.5 w-3.5" /> Aggiungi riga vuota</span></SelectItem>
+                  <SelectItem value="__nuovo__"><span className="flex items-center gap-2 text-indigo-600 font-semibold"><Plus className="h-3.5 w-3.5" /> Aggiungi riga vuota</span></SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -380,7 +302,7 @@ export default function NewInvoicePage() {
                     <Input type="number" step="0.01" {...register(`lineItems.${index}.unitPrice`, { required: true, valueAsNumber: true })} />
                     <div className="text-right font-mono font-bold text-sm bg-muted/50 p-2 rounded-md h-10 flex items-center justify-end">{fmt(rowTotal)}</div>
                     <div className="flex justify-center">
-                      <Button type="button" variant="ghost" size="icon" className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-10 w-10" onClick={() => openSaveService(index)} title="Salva come predefinito"><Bookmark className="h-4 w-4" /></Button>
+                      <Button type="button" variant="ghost" size="icon" className="text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50 h-10 w-10" onClick={() => openSaveService(index)}><Bookmark className="h-4 w-4" /></Button>
                     </div>
                     <div className="flex justify-end">
                       <Button type="button" variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => remove(index)} disabled={fields.length === 1}><Trash2 className="h-4 w-4" /></Button>
@@ -391,28 +313,25 @@ export default function NewInvoicePage() {
             </div>
           </div>
 
-          {/* Note + Totali */}
+          {/* Note + Totale */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-card glass-card p-6 rounded-2xl shadow-sm border border-border/50 space-y-2">
-              <label className="text-xs font-bold text-muted-foreground uppercase">Note / Condizioni di Pagamento</label>
-              <textarea {...register("notes")} className="w-full min-h-[140px] rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none" placeholder="Es. Pagamento a 30gg tramite bonifico bancario." />
+              <label className="text-xs font-bold text-muted-foreground uppercase">Note / Condizioni</label>
+              <textarea {...register("notes")} className="w-full min-h-[140px] rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none" placeholder="Es. Tempi di consegna, modalità di pagamento, esclusioni…" />
             </div>
-            <div className="bg-muted/30 p-6 rounded-2xl border border-border/50 space-y-3">
-              <h2 className="text-base font-bold mb-4">Riepilogo Importi</h2>
-              {[
-                { label: "Imponibile:", value: fmt(imponibile), show: true },
-                { label: `Rivalsa INPS (${inpsRate}%):`, value: fmt(inpsAmount), show: inpsAmount > 0 },
-                { label: `IVA (${taxRate}%):`, value: isForfettario ? "Non applicata" : fmt(ivaAmount), show: true },
-                { label: `Ritenuta (${ritenutaRate}%):`, value: `-${fmt(ritenutaAmt)}`, show: ritenutaAmt > 0 },
-              ].filter(r => r.show).map(r => (
-                <div key={r.label} className="flex justify-between items-center text-sm text-muted-foreground">
-                  <span>{r.label}</span><span className="tabular-nums font-medium">{r.value}</span>
-                </div>
-              ))}
-              <div className="pt-3 border-t flex justify-between items-center">
-                <span className="font-bold text-foreground">Totale da pagare:</span>
-                <span className="text-3xl font-black text-primary tabular-nums">{fmt(totaleNetto)}</span>
+            <div className="bg-indigo-50/60 dark:bg-indigo-950/20 p-6 rounded-2xl border border-indigo-100 dark:border-indigo-800/40 space-y-3">
+              <h2 className="text-base font-bold mb-4">Riepilogo</h2>
+              <div className="flex justify-between items-center text-sm text-muted-foreground">
+                <span>Totale voci:</span>
+                <span className="tabular-nums font-medium">{fmt(totale)}</span>
               </div>
+              <div className="pt-3 border-t border-indigo-200/60 flex justify-between items-center">
+                <span className="font-bold text-foreground">Totale preventivo:</span>
+                <span className="text-3xl font-black text-indigo-600 tabular-nums">{fmt(totale)}</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground pt-2">
+                Il preventivo non include IVA (regime forfettario). Il prezzo è da intendersi tutto incluso.
+              </p>
             </div>
           </div>
 
@@ -421,8 +340,8 @@ export default function NewInvoicePage() {
             <Link href="/superadmin/finance/invoices">
               <Button type="button" variant="ghost" className="rounded-xl px-8">Annulla</Button>
             </Link>
-            <Button type="submit" className="rounded-xl px-8 shadow-md gap-2" disabled={isSubmitting}>
-              {isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvataggio…</> : <><FileCheck2 className="h-4 w-4" /> Salva Fattura di Cortesia</>}
+            <Button type="submit" className="rounded-xl px-8 shadow-md gap-2 bg-indigo-600 hover:bg-indigo-700 text-white" disabled={isSubmitting}>
+              {isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvataggio…</> : <><FileText className="h-4 w-4" /> Salva Preventivo</>}
             </Button>
           </div>
         </form>
