@@ -160,12 +160,6 @@ export class PreventivoPdfService {
         const endY2 = drawPartyBlock(col2X, curY, 'Destinatario', clienteLines);
         curY = Math.max(endY1, endY2) + 20;
 
-        // --- BADGE (Banner Dorato) ---
-        doc.save().roundedRect(MARGIN, curY, CONTENT_W, 24, 6).fill(GOLD).restore();
-        doc.font('Helvetica-Bold').fontSize(9).fillColor(NAVY)
-           .text('DOCUMENTO PROFORMA NON FISCALE', MARGIN + 12, curY + 8, { characterSpacing: 0.8 });
-        curY += 38;
-
         // ── TABELLA VOCI ───────────────────────────────────────────────────
         const COL = {
           desc:  { x: MARGIN,       w: 250 },
