@@ -49,7 +49,7 @@ export class InvoicePdfService {
   }
 
   private drawHeader(doc: PDFKit.PDFDocument, W: number, invoice: Invoice, docLabel: string) {
-    const HEADER_H = 148;
+    const HEADER_H = 165; // Aumentato da 148 a 165 per abbassare l'onda
     const MARGIN   = 45;
 
     // 1. Sfondo Blu Notte
@@ -68,17 +68,19 @@ export class InvoicePdfService {
 
     const logoPath = this.getLogoPath();
     if (logoPath) {
-      try { doc.image(logoPath, MARGIN, 22, { height: 32, fit: [140, 32] }); }
-      catch { this.drawLogoText(doc, MARGIN, 24); }
+      // Logo ingrandito: height da 32 a 42
+      try { doc.image(logoPath, MARGIN, 25, { height: 42, fit: [180, 42] }); }
+      catch { this.drawLogoText(doc, MARGIN, 28); }
     } else {
-      this.drawLogoText(doc, MARGIN, 24);
+      this.drawLogoText(doc, MARGIN, 28);
     }
 
     // Titolo in Oro
     doc.font('Helvetica-Bold').fontSize(22).fillColor(GOLD)
-       .text(docLabel, 0, 20, { align: 'right', width: W - MARGIN });
+       .text(docLabel, 0, 25, { align: 'right', width: W - MARGIN });
 
-    let lineY = 55;
+    // Informazioni header abbassate per fare spazio al logo più grande
+    let lineY = 60; 
     doc.font('Helvetica').fontSize(9.5).fillColor('rgba(255,255,255,0.85)');
     doc.text(`Data: ${this.fmtDate(invoice.issueDate)}`,   0, lineY,      { align: 'right', width: W - MARGIN });
     doc.text(`Scadenza: ${this.fmtDate(invoice.dueDate)}`, 0, lineY + 14, { align: 'right', width: W - MARGIN });
@@ -87,8 +89,9 @@ export class InvoicePdfService {
   }
 
   private drawLogoText(doc: PDFKit.PDFDocument, x: number, y: number) {
-    doc.font('Helvetica-Bold').fontSize(22).fillColor('#ffffff').text('doflow', x, y, { continued: true });
-    doc.font('Helvetica').fontSize(22).fillColor('rgba(255,255,255,0.7)').text('~');
+    // Ingrandito anche il font di fallback nel caso il logo non carichi
+    doc.font('Helvetica-Bold').fontSize(26).fillColor('#ffffff').text('doflow', x, y, { continued: true });
+    doc.font('Helvetica').fontSize(26).fillColor('rgba(255,255,255,0.7)').text('~');
   }
 
   async generateInvoicePdf(invoice: Invoice): Promise<Buffer> {
@@ -225,24 +228,43 @@ export class InvoicePdfService {
 
         curY += 12;
 
-        // --- BOX TOTALI ---
-        const boxW = 250; // Larghezza fissa per il box dei totali
-        const boxX = MARGIN + CONTENT_W - boxW; // Bordo destro perfettamente allineato
+        // --- AFFIANCAMENTO BOX IBAN E BOX TOTALI ---
+        const startY = curY; // Fissiamo la Y di partenza per entrambi i box
+
+        // Impostazioni larghezze per allinearli perfettamente ai margini della tabella
+        const boxW = 250; // Larghezza box totali
+        const boxX = MARGIN + CONTENT_W - boxW; // Allineato a destra
+        const gap = 20; // Spazio tra i due box
+        const ibanBoxW = CONTENT_W - boxW - gap; // Il box IBAN prende lo spazio rimanente a sinistra
         const boxPadding = 12;
 
-        // Calcolo dinamico altezza box totali
+        // 1. DISEGNO BOX IBAN (A Sinistra)
+        const ibanBoxH = 50;
+        doc.save()
+           .roundedRect(MARGIN, startY, ibanBoxW, ibanBoxH, 6)
+           .fill(LIGHT_BEIGE)
+           .restore();
+        
+        doc.font('Helvetica-Bold').fontSize(7).fillColor(GOLD)
+           .text('DATI PER IL PAGAMENTO', MARGIN + boxPadding, startY + 12, { characterSpacing: 1.2 });
+        doc.font('Helvetica').fontSize(9).fillColor(NAVY)
+           .text(`IBAN: ${EMITTENTE.iban}`, MARGIN + boxPadding, startY + 28, { width: ibanBoxW - (boxPadding * 2) });
+
+        // 2. CALCOLO E DISEGNO BOX TOTALI (A Destra)
         let totalsRowsCount = 1; 
         if (inpsAmount > 0) totalsRowsCount++;
         if (!isForfettario) totalsRowsCount++;
         if (ritenutaAmount > 0) totalsRowsCount++;
         const totalsBoxH = (totalsRowsCount * 18) + 6 + 24 + (boxPadding * 2) - 10;
 
-        // Sfondo Box Totali
         doc.save()
-           .roundedRect(boxX, curY - boxPadding, boxW, totalsBoxH, 6)
+           .roundedRect(boxX, startY, boxW, totalsBoxH, 6)
            .lineWidth(1)
            .fillAndStroke(LIGHT_BEIGE, GOLD)
            .restore();
+
+        // Riposizioniamo curY dentro il box dei totali per scrivere i testi
+        curY = startY + boxPadding;
 
         const drawRow = (label: string, value: string, bold = false) => {
           const color = NAVY;
@@ -267,17 +289,7 @@ export class InvoicePdfService {
         const totalLabel = 'TOTALE PREVENTIVO:';
         drawRow(totalLabel, this.fmtCurrency(totaleNetto), true);
         
-        curY += boxPadding; // Esci dal box
-
-        // --- IBAN ---
-        curY += 16;
-        const ibanBoxH = 44;
-        doc.save().roundedRect(MARGIN, curY, CONTENT_W * 0.55, ibanBoxH, 6).fill(LIGHT_BEIGE).restore();
-        doc.font('Helvetica-Bold').fontSize(7).fillColor(GOLD)
-           .text('DATI PER IL PAGAMENTO', MARGIN + 10, curY + 8, { characterSpacing: 1.2 });
-        doc.font('Helvetica').fontSize(9).fillColor(NAVY)
-           .text(`IBAN: ${EMITTENTE.iban}`, MARGIN + 10, curY + 22, { width: CONTENT_W * 0.55 - 20 });
-        curY += ibanBoxH + 8;
+        // --- FINE BOX TOTALI E IBAN ---
 
         // --- FOOTER ---
         const footerY = H - 90;
