@@ -42,6 +42,7 @@ import { TenantsService } from './superadmin/tenants.service';
 import { SystemController } from './superadmin/system.controller';
 import { MetricsController } from './superadmin/metrics.controller';
 import { InvoicePdfService } from './superadmin/invoice-pdf.service';
+import { PreventivoPdfService } from './superadmin/preventivo-pdf.service';
 import { InvoiceMailService } from './superadmin/invoice-mail.service';
 import { PublicSchemaBootstrapService } from './superadmin/public-schema-bootstrap.service';
 
@@ -188,6 +189,7 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
     CalendarService,
     FinanceService,
     InvoicePdfService,
+    PreventivoPdfService,
     InvoiceMailService,
     TenantsService,
     MetricsService,

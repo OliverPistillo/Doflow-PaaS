@@ -99,8 +99,7 @@ export class InvoicePdfService {
         const MARGIN    = 45;
         const CONTENT_W = W - MARGIN * 2;
 
-        const isPreventivo = false; // Questo service genera solo fatture di cortesia
-        const docLabel     = 'FATTURA DI CORTESIA';
+        const docLabel = 'FATTURA DI CORTESIA';
 
         const isForfettario  = invoice.taxRegime === TaxRegime.FORFETTARIO;
         const imponibile     = Number(invoice.amount)       || 0;
@@ -156,10 +155,8 @@ export class InvoicePdfService {
         curY = Math.max(endY1, endY2) + 24;
 
         // Badge
-        const regimeBadge = isPreventivo
-          ? 'Documento proforma non fiscale'
-          : isForfettario ? 'Regime IVA non applicabile — Forfettario' : `Regime Ordinario — IVA ${taxRate}%`;
-        const badgeColor = isPreventivo ? '#6366f1' : isForfettario ? '#f59e0b' : ACCENT;
+        const regimeBadge = isForfettario ? 'Regime IVA non applicabile — Forfettario' : `Regime Ordinario — IVA ${taxRate}%`;
+        const badgeColor = isForfettario ? '#f59e0b' : ACCENT;
         doc.save().roundedRect(MARGIN, curY, CONTENT_W, 22, 4).fill(badgeColor + '22').restore();
         doc.font('Helvetica-Bold').fontSize(8).fillColor(badgeColor)
            .text(regimeBadge.toUpperCase(), MARGIN + 8, curY + 7, { characterSpacing: 0.8 });
@@ -229,20 +226,18 @@ export class InvoicePdfService {
         this.rect(doc, totalsX - 8, curY - 2, totalsW + 8, 1, MID_GRAY);
         curY += 6;
 
-        const totalLabel = isPreventivo ? 'TOTALE PREVENTIVO:' : 'TOTALE DA PAGARE:';
+        const totalLabel = 'TOTALE DA PAGARE:';
         drawRow(totalLabel, this.fmtCurrency(totaleNetto), true, true);
 
-        // IBAN — solo su fattura di cortesia, non sul preventivo
-        if (!isPreventivo) {
-          curY += 16;
-          const ibanBoxH = 44;
-          doc.save().roundedRect(MARGIN, curY, CONTENT_W * 0.55, ibanBoxH, 6).fill('#f1f5f9').restore();
-          doc.font('Helvetica-Bold').fontSize(7).fillColor(ACCENT)
-             .text('DATI PER IL PAGAMENTO', MARGIN + 10, curY + 8, { characterSpacing: 1.2 });
-          doc.font('Helvetica').fontSize(9).fillColor(NAVY)
-             .text(`IBAN: ${EMITTENTE.iban}`, MARGIN + 10, curY + 20, { width: CONTENT_W * 0.55 - 20 });
-          curY += ibanBoxH + 8;
-        }
+        // IBAN
+        curY += 16;
+        const ibanBoxH = 44;
+        doc.save().roundedRect(MARGIN, curY, CONTENT_W * 0.55, ibanBoxH, 6).fill('#f1f5f9').restore();
+        doc.font('Helvetica-Bold').fontSize(7).fillColor(ACCENT)
+           .text('DATI PER IL PAGAMENTO', MARGIN + 10, curY + 8, { characterSpacing: 1.2 });
+        doc.font('Helvetica').fontSize(9).fillColor(NAVY)
+           .text(`IBAN: ${EMITTENTE.iban}`, MARGIN + 10, curY + 20, { width: CONTENT_W * 0.55 - 20 });
+        curY += ibanBoxH + 8;
 
         // Note
         if (invoice.notes) {
@@ -258,12 +253,7 @@ export class InvoicePdfService {
         this.rect(doc, 0, footerY, W, 1, MID_GRAY);
 
         let legalText = '';
-        if (isPreventivo) {
-          legalText =
-            'Documento non fiscale emesso a titolo di preventivo/proforma. ' +
-            'Non costituisce fattura ai sensi del D.P.R. 633/1972. ' +
-            'Valido 30 giorni dalla data di emissione salvo disponibilità.';
-        } else if (isForfettario) {
+        if (isForfettario) {
           legalText =
             "Operazione effettuata da soggetto in regime fiscale di vantaggio — IVA non applicabile " +
             "ai sensi dell'art. 1, commi 54-89, Legge 190/2014.";

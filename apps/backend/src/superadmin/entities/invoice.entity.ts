@@ -21,8 +21,11 @@ export class Invoice {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ name: 'invoice_number' })
+  @Column({ name: 'invoice_number', nullable: true })
   invoiceNumber!: string;
+
+  @Column({ name: 'doc_type', type: 'varchar', length: 20, default: 'fattura', nullable: true })
+  docType!: string;            // 'fattura' | 'preventivo'
 
   // ── Dati Cliente ─────────────────────────────────────────────────────
   @Column({ name: 'client_name' })
@@ -84,8 +87,6 @@ export class Invoice {
   @Column({ name: 'ritenuta_rate', type: 'decimal', precision: 5, scale: 2, nullable: true, default: 0 })
   ritenutaRate!: number;       // % Ritenuta d'Acconto (es. 20)
 
-  @Column({ name: 'stamp_duty', type: 'boolean', default: false })
-  stampDuty!: boolean;         // Marca da Bollo 2€
 
   @Column({ type: 'text', nullable: true })
   notes!: string;

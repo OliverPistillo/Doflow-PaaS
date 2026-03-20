@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, UseGuards, Query, Param, Patch, Delete, Res, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { FinanceService } from './finance.service';
 import { InvoicePdfService } from './invoice-pdf.service';
+import { PreventivoPdfService } from './preventivo-pdf.service';
 import { InvoiceMailService } from './invoice-mail.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Invoice } from './entities/invoice.entity';
@@ -12,16 +13,18 @@ export class FinanceController {
   constructor(
     private readonly service: FinanceService,
     private readonly pdfService: InvoicePdfService,
+    private readonly preventivoPdfService: PreventivoPdfService,
     private readonly mailService: InvoiceMailService,
   ) {}
 
   @Get('invoices')
   async getAllInvoices(
-    @Query('search') search?: string,
-    @Query('status') status?: string
+    @Query('search')  search?: string,
+    @Query('status')  status?: string,
+    @Query('docType') docType?: string,
   ) {
     try {
-      return await this.service.findAll(search, status);
+      return await this.service.findAll(search, status, docType);
     } catch (error) {
       console.error('[FinanceController] Error fetching invoices:', error);
       throw new InternalServerErrorException('Impossibile recuperare le fatture');
@@ -44,104 +47,101 @@ export class FinanceController {
       return await this.service.create(body);
     } catch (error) {
       console.error('[FinanceController] Error creating invoice:', error);
-      throw new InternalServerErrorException('Impossibile creare la fattura. Verifica i dati o lo schema DB.');
+      throw new InternalServerErrorException('Impossibile creare il documento. Verifica i dati o lo schema DB.');
     }
   }
 
-  // AGGIORNA FATTURA
   @Patch('invoices/:id')
   async updateInvoice(@Param('id') id: string, @Body() body: Partial<Invoice>) {
     try {
       return await this.service.update(id, body);
     } catch (error) {
       console.error(`[FinanceController] Error updating invoice ${id}:`, error);
-      throw new InternalServerErrorException('Impossibile aggiornare la fattura');
+      throw new InternalServerErrorException('Impossibile aggiornare il documento');
     }
   }
 
-  // ELIMINA FATTURA
   @Delete('invoices/:id')
   async deleteInvoice(@Param('id') id: string) {
     try {
       return await this.service.delete(id);
     } catch (error) {
       console.error(`[FinanceController] Error deleting invoice ${id}:`, error);
-      throw new InternalServerErrorException('Impossibile eliminare la fattura');
+      throw new InternalServerErrorException('Impossibile eliminare il documento');
     }
   }
 
-  // DOWNLOAD PDF
+  // ── PDF: routing automatico per tipo documento ─────────────────────────────
+
   @Get('invoices/:id/pdf')
   async downloadPdf(@Param('id') id: string, @Res() res: Response) {
     const invoice = await this.service.findOneWithItems(id);
-    if (!invoice) throw new NotFoundException('Fattura non trovata');
+    if (!invoice) throw new NotFoundException('Documento non trovato');
 
-    const pdfBuffer = await this.pdfService.generateInvoicePdf(invoice);
+    const isPreventivo = invoice.docType === 'preventivo';
+
+    const pdfBuffer = isPreventivo
+      ? await this.preventivoPdfService.generatePdf(invoice)
+      : await this.pdfService.generateInvoicePdf(invoice);
+
+    const filename = isPreventivo
+      ? `Preventivo_${invoice.id}.pdf`
+      : `Fattura_${invoice.invoiceNumber || invoice.id}.pdf`;
 
     res.set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="fattura_${invoice.invoiceNumber}.pdf"`,
-      'Content-Length': pdfBuffer.length,
+      'Content-Type':        'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length':      pdfBuffer.length,
     });
-
     res.end(pdfBuffer);
   }
 
-  // INVIA EMAIL CON PDF
+  // ── Email: invia il PDF corretto in base al tipo ───────────────────────────
+
   @Post('invoices/:id/send')
   async sendEmail(@Param('id') id: string, @Body('email') targetEmail: string) {
     const invoice = await this.service.findOneWithItems(id);
-    if (!invoice) throw new NotFoundException('Fattura non trovata');
+    if (!invoice) throw new NotFoundException('Documento non trovato');
+    if (!targetEmail) throw new Error('Email destinatario obbligatoria');
 
-    const pdfBuffer = await this.pdfService.generateInvoicePdf(invoice);
-    
-    if (!targetEmail) throw new Error('Email destination required');
+    const isPreventivo = invoice.docType === 'preventivo';
 
-    return this.mailService.sendInvoiceEmail(targetEmail, invoice.clientName, invoice.invoiceNumber, pdfBuffer);
+    const pdfBuffer = isPreventivo
+      ? await this.preventivoPdfService.generatePdf(invoice)
+      : await this.pdfService.generateInvoicePdf(invoice);
+
+    const docLabel = isPreventivo ? 'preventivo' : invoice.invoiceNumber;
+
+    return this.mailService.sendInvoiceEmail(
+      targetEmail,
+      invoice.clientName,
+      docLabel,
+      pdfBuffer,
+    );
   }
 
   // ── Anagrafica Clienti ────────────────────────────────────────────────────
 
-  /** GET /api/superadmin/finance/clients — lista clienti salvati */
   @Get('clients')
   async getClients() {
     try {
-      console.log('[FinanceController] GET clients');
-      const result = await this.service.findAllClients();
-      console.log(`[FinanceController] GET clients → ${result.length} records`);
-      return result;
+      return await this.service.findAllClients();
     } catch (error) {
       console.error('[FinanceController] Error fetching clients:', error);
       throw new InternalServerErrorException('Impossibile recuperare i clienti');
     }
   }
 
-  /**
-   * POST /api/superadmin/finance/clients/upsert
-   * Inserisce un nuovo cliente o aggiorna i dati se già esiste (chiave: clientName).
-   */
   @Post('clients/upsert')
   async upsertClient(@Body() body: {
-    clientName: string;
-    contactName?: string;
-    clientVat?: string;
-    clientFiscalCode?: string;
-    clientSdi?: string;
-    clientPec?: string;
-    clientAddress?: string;
-    clientCity?: string;
-    clientZip?: string;
-    paymentMethod?: string;
-    notes?: string;
+    clientName: string; contactName?: string; clientVat?: string;
+    clientFiscalCode?: string; clientSdi?: string; clientPec?: string;
+    clientAddress?: string; clientCity?: string; clientZip?: string;
+    paymentMethod?: string; notes?: string;
   }) {
     try {
-      console.log('[FinanceController] POST clients/upsert →', body.clientName);
-      if (!body.clientName?.trim()) {
-        throw new Error('clientName è obbligatorio');
-      }
-      const result = await this.service.upsertClient(body);
-      console.log('[FinanceController] upsert OK → id:', result.id);
-      return result;
+      if (!body.clientName?.trim()) throw new Error('clientName è obbligatorio');
+      return await this.service.upsertClient(body);
     } catch (error) {
       console.error('[FinanceController] Error upserting client:', error);
       throw new InternalServerErrorException('Impossibile salvare il cliente');
