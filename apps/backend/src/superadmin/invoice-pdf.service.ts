@@ -80,10 +80,6 @@ export class InvoicePdfService {
 
     let lineY = 55;
     doc.font('Helvetica').fontSize(9.5).fillColor('rgba(255,255,255,0.85)');
-    if (invoice.invoiceNumber) {
-      doc.text(`N. ${invoice.invoiceNumber}`, 0, lineY, { align: 'right', width: W - MARGIN });
-      lineY += 14;
-    }
     doc.text(`Data: ${this.fmtDate(invoice.issueDate)}`,   0, lineY,      { align: 'right', width: W - MARGIN });
     doc.text(`Scadenza: ${this.fmtDate(invoice.dueDate)}`, 0, lineY + 14, { align: 'right', width: W - MARGIN });
 
