@@ -4,14 +4,16 @@ import * as fs from 'fs';
 import PDFDocument = require('pdfkit');
 import { Invoice, TaxRegime } from './entities/invoice.entity';
 
-const NAVY       = '#0d1b2e';
-const ACCENT     = '#0d1b2e';
-const LIGHT_GRAY = '#f8f8f8';
-const MID_GRAY   = '#e2e8f0';
-const TEXT_GRAY  = '#6b7280';
+// --- NUOVA PALETTE COLORI ---
+const NAVY        = '#1a2332'; // Blu notte scuro ed elegante
+const GOLD        = '#cfa86b'; // Oro/Senape per accenti e bordi
+const LIGHT_BEIGE = '#f6f4f0'; // Sfondo per i riquadri (card)
+const BORDER_GRAY = '#e5e7eb'; // Grigio chiaro per i bordi neutri
+const MID_GRAY    = '#cbd5e1';
+const TEXT_GRAY   = '#6b7280';
 
 const EMITTENTE = {
-  nome:  'DoFlow',
+  nome:  'DoFlow S.r.l.',
   piva:  'IT04558810711',
   email: 'fatture@doflow.it',
   iban:  'IT63E0338501601100080304679',
@@ -50,11 +52,18 @@ export class InvoicePdfService {
     const HEADER_H = 148;
     const MARGIN   = 45;
 
+    // 1. Sfondo Blu Notte
     doc.save();
     doc.moveTo(0, 0).lineTo(0, HEADER_H * 0.74)
        .bezierCurveTo(W * 0.10, HEADER_H * 0.44, W * 0.28, HEADER_H * 0.40, W * 0.48, HEADER_H * 0.54)
        .bezierCurveTo(W * 0.66, HEADER_H * 0.67, W * 0.84, HEADER_H * 0.76, W, HEADER_H * 0.72)
        .lineTo(W, 0).closePath().fill(NAVY);
+    
+    // 2. Linea dorata sul bordo curvo
+    doc.moveTo(0, HEADER_H * 0.74)
+       .bezierCurveTo(W * 0.10, HEADER_H * 0.44, W * 0.28, HEADER_H * 0.40, W * 0.48, HEADER_H * 0.54)
+       .bezierCurveTo(W * 0.66, HEADER_H * 0.67, W * 0.84, HEADER_H * 0.76, W, HEADER_H * 0.72)
+       .lineWidth(3).stroke(GOLD);
     doc.restore();
 
     const logoPath = this.getLogoPath();
@@ -65,11 +74,12 @@ export class InvoicePdfService {
       this.drawLogoText(doc, MARGIN, 24);
     }
 
-    doc.font('Helvetica-Bold').fontSize(22).fillColor('#ffffff')
+    // Titolo in Oro
+    doc.font('Helvetica-Bold').fontSize(22).fillColor(GOLD)
        .text(docLabel, 0, 20, { align: 'right', width: W - MARGIN });
 
     let lineY = 55;
-    doc.font('Helvetica').fontSize(9.5).fillColor('rgba(255,255,255,0.80)');
+    doc.font('Helvetica').fontSize(9.5).fillColor('rgba(255,255,255,0.85)');
     if (invoice.invoiceNumber) {
       doc.text(`N. ${invoice.invoiceNumber}`, 0, lineY, { align: 'right', width: W - MARGIN });
       lineY += 14;
@@ -99,7 +109,7 @@ export class InvoicePdfService {
         const MARGIN    = 45;
         const CONTENT_W = W - MARGIN * 2;
 
-        const docLabel = 'PROFORMA';
+        const docLabel = 'PREVENTIVO'; // o PROFORMA
 
         const isForfettario  = invoice.taxRegime === TaxRegime.FORFETTARIO;
         const imponibile     = Number(invoice.amount)       || 0;
@@ -122,21 +132,34 @@ export class InvoicePdfService {
         const col1X = MARGIN;
         const col2X = MARGIN + colW + 20;
 
+        // --- DISEGNO BOX ANAGRAFICHE ---
         const drawPartyBlock = (x: number, y: number, label: string, lines: string[]): number => {
-          doc.font('Helvetica-Bold').fontSize(7).fillColor(ACCENT)
-             .text(label.toUpperCase(), x, y, { characterSpacing: 1.5 });
-          y += 14;
-          this.rect(doc, x, y, colW, 1, ACCENT);
-          y += 8;
+          const padding = 12;
+          const boxH = 95; // Altezza fissa per simmetria o calcolabile dinamicamente
+          
+          doc.save()
+             .roundedRect(x, y, colW, boxH, 8)
+             .lineWidth(1)
+             .fillAndStroke(LIGHT_BEIGE, BORDER_GRAY)
+             .restore();
+
+          let textY = y + padding;
+          doc.font('Helvetica-Bold').fontSize(8).fillColor(GOLD)
+             .text(label.toUpperCase(), x + padding, textY, { characterSpacing: 1.2 });
+          
+          textY += 14;
+          this.rect(doc, x + padding, textY, colW - (padding * 2), 1, BORDER_GRAY);
+          textY += 8;
+
           lines.filter(Boolean).forEach(line => {
             const isBold = line.startsWith('**');
             const text   = isBold ? line.slice(2) : line;
             doc.font(isBold ? 'Helvetica-Bold' : 'Helvetica')
-               .fontSize(isBold ? 11 : 9).fillColor(isBold ? NAVY : TEXT_GRAY)
-               .text(text, x, y, { width: colW });
-            y += isBold ? 16 : 13;
+               .fontSize(isBold ? 10 : 9).fillColor(isBold ? NAVY : NAVY) // Tutto blu notte nei box
+               .text(text, x + padding, textY, { width: colW - (padding * 2) });
+            textY += isBold ? 16 : 13;
           });
-          return y;
+          return y + boxH;
         };
 
         const emittenteLines = [`**${EMITTENTE.nome}`, `P.IVA: ${EMITTENTE.piva}`, EMITTENTE.email];
@@ -152,17 +175,16 @@ export class InvoicePdfService {
 
         const endY1 = drawPartyBlock(col1X, curY, 'Emittente',   emittenteLines);
         const endY2 = drawPartyBlock(col2X, curY, 'Committente', clienteLines);
-        curY = Math.max(endY1, endY2) + 24;
+        curY = Math.max(endY1, endY2) + 20;
 
-        // Badge
-        const regimeBadge = isForfettario ? 'Regime IVA non applicabile — Forfettario' : `Regime Ordinario — IVA ${taxRate}%`;
-        const badgeColor = isForfettario ? '#f59e0b' : ACCENT;
-        doc.save().roundedRect(MARGIN, curY, CONTENT_W, 22, 4).fill(badgeColor + '22').restore();
-        doc.font('Helvetica-Bold').fontSize(8).fillColor(badgeColor)
-           .text(regimeBadge.toUpperCase(), MARGIN + 8, curY + 7, { characterSpacing: 0.8 });
-        curY += 36;
+        // --- BADGE (Banner Dorato) ---
+        const regimeBadge = 'DOCUMENTO PROFORMA NON FISCALE';
+        doc.save().roundedRect(MARGIN, curY, CONTENT_W, 24, 6).fill(GOLD).restore();
+        doc.font('Helvetica-Bold').fontSize(9).fillColor(NAVY)
+           .text(regimeBadge, MARGIN + 12, curY + 8, { characterSpacing: 0.8 });
+        curY += 38;
 
-        // Tabella voci
+        // --- TABELLA VOCI ---
         const COL = {
           desc:  { x: MARGIN,       w: 200 },
           qty:   { x: MARGIN + 205, w: 55  },
@@ -171,46 +193,64 @@ export class InvoicePdfService {
           total: { x: MARGIN + 405, w: CONTENT_W - 405 },
         };
 
-        this.rect(doc, MARGIN, curY, CONTENT_W, 22, NAVY);
+        // Header Tabella
+        doc.save().roundedRect(MARGIN, curY, CONTENT_W, 22, 6).fill(NAVY).restore();
         const dh = (label: string, x: number, w: number, align: 'left' | 'right' = 'left') =>
           doc.font('Helvetica-Bold').fontSize(8).fillColor('#ffffff')
-             .text(label, x + 4, curY + 7, { width: w - 8, align });
+             .text(label, x + 8, curY + 7, { width: w - 16, align });
+        
         dh('Descrizione', COL.desc.x, COL.desc.w);
         dh('Q.tà',        COL.qty.x,   COL.qty.w,   'right');
         dh('Prezzo Un.',  COL.price.x, COL.price.w, 'right');
         dh('IVA %',       COL.iva.x,   COL.iva.w,   'right');
         dh('Importo',     COL.total.x, COL.total.w, 'right');
-        curY += 22;
+        curY += 26;
 
         const items = Array.isArray(invoice.lineItems) && invoice.lineItems.length > 0
           ? invoice.lineItems
-          : [{ description: 'Servizi DoFlow', quantity: 1, unitPrice: imponibile, total: imponibile }];
+          : [{ description: 'Servizio piattaforma DoFlow', quantity: 1, unitPrice: imponibile, total: imponibile }];
 
         items.forEach((item, idx) => {
-          const rowH     = 22;
+          const rowH     = 24;
           const rowTotal = Number(item.total) || (Number(item.quantity) * Number(item.unitPrice)) || 0;
-          if (idx % 2 === 0) this.rect(doc, MARGIN, curY, CONTENT_W, rowH, LIGHT_GRAY);
+          
           doc.font('Helvetica').fontSize(9).fillColor(NAVY)
-             .text(item.description || '',                  COL.desc.x + 4,  curY + 7, { width: COL.desc.w - 8,  ellipsis: true });
-          doc.text(String(item.quantity ?? 1),              COL.qty.x + 4,   curY + 7, { width: COL.qty.w - 8,   align: 'right' });
-          doc.text(this.fmtCurrency(Number(item.unitPrice)),COL.price.x + 4, curY + 7, { width: COL.price.w - 8, align: 'right' });
-          doc.text(isForfettario ? 'Esente' : `${taxRate}%`,COL.iva.x + 4,   curY + 7, { width: COL.iva.w - 8,   align: 'right' });
-          doc.text(this.fmtCurrency(rowTotal),              COL.total.x + 4, curY + 7, { width: COL.total.w - 8, align: 'right' });
+             .text(item.description || '',                  COL.desc.x + 8,  curY + 7, { width: COL.desc.w - 16,  ellipsis: true });
+          doc.text(String(item.quantity ?? 1),              COL.qty.x + 8,   curY + 7, { width: COL.qty.w - 16,   align: 'right' });
+          doc.text(this.fmtCurrency(Number(item.unitPrice)),COL.price.x + 8, curY + 7, { width: COL.price.w - 16, align: 'right' });
+          doc.text(isForfettario ? 'Esente' : `${taxRate}%`,COL.iva.x + 8,   curY + 7, { width: COL.iva.w - 16,   align: 'right' });
+          doc.text(this.fmtCurrency(rowTotal),              COL.total.x + 8, curY + 7, { width: COL.total.w - 16, align: 'right' });
           curY += rowH;
+          
+          // Linea separatrice punteggiata per ogni riga
+          doc.save().moveTo(MARGIN, curY).lineTo(MARGIN + CONTENT_W, curY).dash(2, { space: 2 }).lineWidth(0.5).stroke(MID_GRAY).restore();
+          curY += 8;
         });
 
-        this.rect(doc, MARGIN, curY, CONTENT_W, 1, MID_GRAY);
-        curY += 20;
+        curY += 12;
 
-        // Totali
+        // --- BOX TOTALI ---
         const totalsX = W / 2 + 10;
         const totalsW = W - MARGIN - totalsX;
+        const boxPadding = 12;
 
-        const drawRow = (label: string, value: string, bold = false, highlight = false, accentBg = false) => {
-          if (highlight) this.rect(doc, totalsX - 8, curY - 2, totalsW + 8, 22, NAVY);
-          if (accentBg)  this.rect(doc, totalsX - 8, curY - 2, totalsW + 8, 22, '#fff7ed');
-          const color = highlight ? '#ffffff' : (bold ? NAVY : TEXT_GRAY);
-          const size  = bold ? 10 : 9;
+        // Calcolo dinamico altezza box totali
+        let totalsRowsCount = 1; 
+        if (inpsAmount > 0) totalsRowsCount++;
+        if (!isForfettario) totalsRowsCount++;
+        if (ritenutaAmount > 0) totalsRowsCount++;
+        const totalsBoxH = (totalsRowsCount * 18) + 6 + 24 + (boxPadding * 2) - 10;
+
+        // Sfondo Box Totali
+        doc.save()
+           .roundedRect(totalsX - boxPadding, curY - boxPadding, totalsW + (boxPadding * 2), totalsBoxH, 6)
+           .lineWidth(1)
+           .fillAndStroke(LIGHT_BEIGE, GOLD)
+           .restore();
+
+        const drawRow = (label: string, value: string, bold = false) => {
+          const color = NAVY;
+          const size  = bold ? 11 : 9;
           doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(size).fillColor(color)
              .text(label, totalsX, curY, { width: totalsW * 0.55, align: 'left' });
           doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(size).fillColor(color)
@@ -221,53 +261,52 @@ export class InvoicePdfService {
         drawRow('Imponibile:', this.fmtCurrency(imponibile));
         if (inpsAmount > 0)     drawRow(`Rivalsa INPS (${inpsRate}%):`,           this.fmtCurrency(inpsAmount));
         if (!isForfettario)     drawRow(`IVA (${taxRate}%):`,                     this.fmtCurrency(ivaAmount));
-        if (ritenutaAmount > 0) drawRow(`Ritenuta d'Acconto (${ritenutaRate}%):`, `-${this.fmtCurrency(ritenutaAmount)}`, false, false, true);
+        if (ritenutaAmount > 0) drawRow(`Ritenuta (${ritenutaRate}%):`, `-${this.fmtCurrency(ritenutaAmount)}`);
 
-        this.rect(doc, totalsX - 8, curY - 2, totalsW + 8, 1, MID_GRAY);
-        curY += 6;
+        // Linea separatrice pre-totale
+        this.rect(doc, totalsX, curY, totalsW, 1, BORDER_GRAY);
+        curY += 8;
 
-        const totalLabel = 'TOTALE DA PAGARE:';
-        drawRow(totalLabel, this.fmtCurrency(totaleNetto), true, true);
+        const totalLabel = 'TOTALE PREVENTIVO:';
+        drawRow(totalLabel, this.fmtCurrency(totaleNetto), true);
+        
+        curY += boxPadding; // Esci dal box
 
-        // IBAN
+        // --- IBAN ---
         curY += 16;
         const ibanBoxH = 44;
-        doc.save().roundedRect(MARGIN, curY, CONTENT_W * 0.55, ibanBoxH, 6).fill('#f1f5f9').restore();
-        doc.font('Helvetica-Bold').fontSize(7).fillColor(ACCENT)
+        doc.save().roundedRect(MARGIN, curY, CONTENT_W * 0.55, ibanBoxH, 6).fill(LIGHT_BEIGE).restore();
+        doc.font('Helvetica-Bold').fontSize(7).fillColor(GOLD)
            .text('DATI PER IL PAGAMENTO', MARGIN + 10, curY + 8, { characterSpacing: 1.2 });
         doc.font('Helvetica').fontSize(9).fillColor(NAVY)
-           .text(`IBAN: ${EMITTENTE.iban}`, MARGIN + 10, curY + 20, { width: CONTENT_W * 0.55 - 20 });
+           .text(`IBAN: ${EMITTENTE.iban}`, MARGIN + 10, curY + 22, { width: CONTENT_W * 0.55 - 20 });
         curY += ibanBoxH + 8;
 
-        // Note
-        if (invoice.notes) {
-          doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_GRAY)
-             .text('NOTE', MARGIN, curY, { characterSpacing: 0.8 });
-          curY += 14;
-          doc.font('Helvetica').fontSize(8.5).fillColor(TEXT_GRAY)
-             .text(invoice.notes, MARGIN, curY, { width: W / 2 - 20 });
-        }
+        // --- FOOTER ---
+        const footerY = H - 90;
 
-        // Footer
-        const footerY = H - 72;
-        this.rect(doc, 0, footerY, W, 1, MID_GRAY);
+        // Watermark/Logo pallido a fondo pagina
+        doc.font('Helvetica-Bold').fontSize(24).fillColor(BORDER_GRAY)
+           .text('doflow~', 0, footerY - 40, { align: 'center', width: W });
+
+        this.rect(doc, MARGIN, footerY, CONTENT_W, 1, BORDER_GRAY);
 
         let legalText = '';
         if (isForfettario) {
-          legalText =
-            "Operazione effettuata da soggetto in regime fiscale di vantaggio — IVA non applicabile " +
-            "ai sensi dell'art. 1, commi 54-89, Legge 190/2014.";
+          legalText = "Operazione effettuata da soggetto in regime fiscale di vantaggio — IVA non applicabile ai sensi dell'art. 1, commi 54-89, Legge 190/2014.";
         } else {
           legalText = `Documento soggetto ad IVA al ${taxRate}% ai sensi del D.P.R. 633/1972.`;
-          if (ritenutaAmount > 0)
-            legalText += ` Ritenuta d'acconto del ${ritenutaRate}% a carico del committente.`;
+          if (ritenutaAmount > 0) legalText += ` Ritenuta d'acconto del ${ritenutaRate}% a carico del committente.`;
         }
+        legalText += ' Valido 30 giorni dalla data di emissione salvo disponibilità.';
 
         doc.font('Helvetica').fontSize(7).fillColor(TEXT_GRAY)
-           .text(legalText, MARGIN, footerY + 10, { width: CONTENT_W * 0.75, lineGap: 2 });
-        doc.font('Helvetica').fontSize(7).fillColor(TEXT_GRAY)
+           .text(legalText, MARGIN, footerY + 12, { width: CONTENT_W, lineGap: 2 });
+        
+        doc.font('Helvetica-Bold').fontSize(7).fillColor(NAVY)
            .text(`${EMITTENTE.nome} — P.IVA ${EMITTENTE.piva}`, MARGIN, footerY + 38, { align: 'center', width: CONTENT_W });
-        doc.text('Documento generato da DoFlow', MARGIN, footerY + 50, { align: 'center', width: CONTENT_W });
+        doc.font('Helvetica').fontSize(7).fillColor(TEXT_GRAY)
+           .text('Documento generato da DoFlow', MARGIN, footerY + 48, { align: 'center', width: CONTENT_W });
 
         doc.end();
       } catch (err) {
