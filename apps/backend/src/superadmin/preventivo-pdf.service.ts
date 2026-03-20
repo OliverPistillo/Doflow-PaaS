@@ -68,7 +68,7 @@ export class PreventivoPdfService {
     const logoPath = this.getLogoPath();
     if (logoPath) {
       // Logo ingrandito
-      try { doc.image(logoPath, MARGIN, 25, { height: 36, fit: [180, 42] }); }
+      try { doc.image(logoPath, MARGIN, 25, { height: 30, fit: [180, 42] }); }
       catch { this.drawLogoText(doc, MARGIN, 28); }
     } else { 
       this.drawLogoText(doc, MARGIN, 28); 
