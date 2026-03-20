@@ -16,7 +16,7 @@ const EMITTENTE = {
   nome:  'DoFlow',
   piva:  'IT04558810711',
   email: 'fatture@doflow.it',
-  iban:  'IT63E0338501601100080304679',
+  iban:  'IT46 O036 6901 6000 7016 8652 022',
 };
 
 @Injectable()
@@ -25,9 +25,9 @@ export class InvoicePdfService {
 
   private getLogoPath(): string | null {
     const candidates = [
-      path.resolve(process.cwd(), '..', 'frontend', 'public', 'logo_pdf.png'),
-      path.resolve(process.cwd(), '..', '..', 'apps', 'frontend', 'public', 'logo_pdf.png'),
-      path.resolve(__dirname, '..', '..', '..', '..', 'frontend', 'public', 'logo_pdf.png'),
+      path.resolve(process.cwd(), '..', 'frontend', 'public', 'logo_doflow_bianco.png'),
+      path.resolve(process.cwd(), '..', '..', 'apps', 'frontend', 'public', 'logo_doflow_bianco.png'),
+      path.resolve(__dirname, '..', '..', '..', '..', 'frontend', 'public', 'logo_doflow_bianco.png'),
     ];
     for (const p of candidates) { if (fs.existsSync(p)) return p; }
     return null;

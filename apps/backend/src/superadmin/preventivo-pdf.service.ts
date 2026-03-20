@@ -25,7 +25,6 @@ export class PreventivoPdfService {
 
   private getLogoPath(): string | null {
     const candidates = [
-      path.resolve(process.cwd(), '..', 'frontend', 'public', 'logo_pdf.png'),
       path.resolve(process.cwd(), '..', 'frontend', 'public', 'logo_doflow_bianco.png'),
       path.resolve(process.cwd(), '..', '..', 'apps', 'frontend', 'public', 'logo_doflow_bianco.png'),
       path.resolve(__dirname, '..', '..', '..', '..', 'frontend', 'public', 'logo_doflow_bianco.png'),
