@@ -77,7 +77,7 @@ export class PreventivoPdfService {
 
     // Titolo in Oro
     doc.font('Helvetica-Bold').fontSize(22).fillColor(GOLD)
-       .text('QUOTAZIONE', 0, 25, { align: 'right', width: W - MARGIN });
+       .text('PREVENTIVO', 0, 25, { align: 'right', width: W - MARGIN });
 
     let lineY = 60;
     doc.font('Helvetica').fontSize(9.5).fillColor('rgba(255,255,255,0.85)');
