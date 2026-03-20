@@ -108,7 +108,7 @@ export class InvoicePdfService {
         const MARGIN    = 45;
         const CONTENT_W = W - MARGIN * 2;
 
-        const docLabel = 'PREVENTIVO'; // o PROFORMA
+        const docLabel = 'PROFORMA'; // o PREVENTIVO, ma per le fatture di cortesia vogliamo sempre "Proforma" per chiarezza
 
         const isForfettario  = invoice.taxRegime === TaxRegime.FORFETTARIO;
         const imponibile     = Number(invoice.amount)       || 0;
