@@ -49,7 +49,7 @@ export class InvoicePdfService {
   }
 
   private drawHeader(doc: PDFKit.PDFDocument, W: number, invoice: Invoice, docLabel: string) {
-    const HEADER_H = 165; // Aumentato da 148 a 165 per abbassare l'onda
+    const HEADER_H = 175; // Aumentato da 148 a 175 per abbassare l'onda
     const MARGIN   = 45;
 
     // 1. Sfondo Blu Notte
@@ -339,8 +339,6 @@ export class InvoicePdfService {
         
         doc.font('Helvetica-Bold').fontSize(7).fillColor(NAVY)
            .text(`${EMITTENTE.nome} — P.IVA ${EMITTENTE.piva}`, MARGIN, footerY + 38, { align: 'center', width: CONTENT_W });
-        doc.font('Helvetica').fontSize(7).fillColor(TEXT_GRAY)
-           .text('Documento generato da DoFlow', MARGIN, footerY + 48, { align: 'center', width: CONTENT_W });
 
         doc.end();
       } catch (err) {
