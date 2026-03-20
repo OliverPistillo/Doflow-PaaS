@@ -64,7 +64,7 @@ export class PreventivoPdfService {
     } else { this.drawLogoText(doc, MARGIN, 24); }
 
     doc.font('Helvetica-Bold').fontSize(22).fillColor('#ffffff')
-       .text('PREVENTIVO', 0, 20, { align: 'right', width: W - MARGIN });
+       .text('QUOTAZIONE', 0, 20, { align: 'right', width: W - MARGIN });
 
     let lineY = 55;
     doc.font('Helvetica').fontSize(9.5).fillColor('rgba(255,255,255,0.85)');

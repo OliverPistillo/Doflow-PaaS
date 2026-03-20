@@ -23,9 +23,9 @@ export class InvoicePdfService {
 
   private getLogoPath(): string | null {
     const candidates = [
-      path.resolve(process.cwd(), '..', 'frontend', 'public', 'logo_doflow_bianco.png'),
-      path.resolve(process.cwd(), '..', '..', 'apps', 'frontend', 'public', 'logo_doflow_bianco.png'),
-      path.resolve(__dirname, '..', '..', '..', '..', 'frontend', 'public', 'logo_doflow_bianco.png'),
+      path.resolve(process.cwd(), '..', 'frontend', 'public', 'logo_pdf.png'),
+      path.resolve(process.cwd(), '..', '..', 'apps', 'frontend', 'public', 'logo_pdf.png'),
+      path.resolve(__dirname, '..', '..', '..', '..', 'frontend', 'public', 'logo_pdf.png'),
     ];
     for (const p of candidates) { if (fs.existsSync(p)) return p; }
     return null;
@@ -99,7 +99,7 @@ export class InvoicePdfService {
         const MARGIN    = 45;
         const CONTENT_W = W - MARGIN * 2;
 
-        const docLabel = 'FATTURA DI CORTESIA';
+        const docLabel = 'PROFORMA';
 
         const isForfettario  = invoice.taxRegime === TaxRegime.FORFETTARIO;
         const imponibile     = Number(invoice.amount)       || 0;
