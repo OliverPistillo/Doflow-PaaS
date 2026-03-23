@@ -1,6 +1,6 @@
-// Percorso: apps/frontend/src/app/superadmin/components/super-admin-sidebar.tsx
-// FIXED: usa SidebarMenu/SidebarMenuButton invece di raw <Link> con classi sa-*
-// Eredita automaticamente lo stile dal sidebar.tsx refactored (token Figma)
+// apps/frontend/src/app/superadmin/components/super-admin-sidebar.tsx
+// AGGIORNAMENTO: Aggiunta voce "Richieste Preventivo" nel gruppo Sales & Pipeline
+// Icona: FileText (lucide-react). Le righe aggiunte marcate con // <-- QUOTE REQUEST
 
 "use client";
 
@@ -13,6 +13,7 @@ import {
   BarChart3, ListTodo, Truck, CalendarDays, Wallet,
   Receipt, Moon, Sun, ChevronsUpDown, BadgeCheck,
   User, Settings, Palette, TrendingUp,
+  FileText, // <-- QUOTE REQUEST: Icona per le richieste preventivo
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -52,8 +53,9 @@ const MENU_GROUPS = [
   {
     label: "Sales & Pipeline",
     items: [
-      { label: "Sales Dashboard",  href: "/superadmin/dashboard",      icon: BarChart3   },
-      { label: "Gestione offerte", href: "/superadmin/sales/pipeline", icon: ListTodo    },
+      { label: "Sales Dashboard",       href: "/superadmin/dashboard",              icon: BarChart3  },
+      { label: "Gestione offerte",      href: "/superadmin/sales/pipeline",        icon: ListTodo   },
+      { label: "Richieste Preventivo",  href: "/superadmin/sales/quote-requests",  icon: FileText   }, // <-- QUOTE REQUEST
     ],
   },
   {
@@ -103,16 +105,16 @@ function setColorTheme(themeId: string) {
   }
 }
 
-// ─── NavItem — usa SidebarMenuButton → eredita tutti i token Figma ────────────
+// ─── NavItem ──────────────────────────────────────────────────────────────────
 
 function NavItem({
   href,
   label,
   icon: Icon,
 }: {
-  href:  string;
+  href:  string;
   label: string;
-  icon:  React.ComponentType<{ className?: string }>;
+  icon:  React.ComponentType<{ className?: string }>;
 }) {
   const pathname = usePathname();
   const isActive = pathname === href || pathname.startsWith(href + "/");
@@ -123,12 +125,9 @@ function NavItem({
         asChild
         isActive={isActive}
         tooltip={label}
-        // Non servono classi extra: tutti gli stili vengono da sidebar.tsx refactored
       >
         <Link href={href}>
-          {/* Aumentiamo la dimensione dell'icona (da 19 a 22px) per balance su collapsed width 80px */}
           <Icon className="h-[22px] w-[22px] shrink-0" aria-hidden="true" />
-          {/* LA CORREZIONE: Aggiungiamo 'group-data-[collapsible=icon]:hidden' */}
           <span className="group-data-[collapsible=icon]:hidden">{label}</span>
         </Link>
       </SidebarMenuButton>
@@ -153,12 +152,9 @@ export function SuperAdminSidebar() {
 
   React.useEffect(() => {
     setMounted(true);
-
-    // Ripristina tema colore salvato
     const savedColorTheme = localStorage.getItem("doflow_color_theme") || "default";
     setColorTheme(savedColorTheme);
 
-    // Carica utente dal JWT
     const payload = getDoFlowUser();
     if (payload) {
       setUser({
@@ -179,15 +175,10 @@ export function SuperAdminSidebar() {
     : "/logo_doflow_bianco.png";
 
   return (
-    <Sidebar
-      collapsible="icon"
-      // Larghezze ereditate dal SidebarProvider nel layout (220/72px)
-    >
-
+    <Sidebar collapsible="icon">
       {/* ── HEADER: Logo ──────────────────────────────────────────────── */}
       <SidebarHeader className="h-16 p-0 border-b border-sidebar-border flex flex-col justify-center">
         <div className={`flex w-full items-center transition-all duration-300 ${isOpen ? "px-4 justify-start" : "px-0 justify-center"}`}>
-          {/* Logo mark */}
           <div className={`relative transition-all duration-300 ${isOpen ? "h-8 w-36" : "h-8 w-8 shrink-0"}`}>
             {mounted && (
               <Image
@@ -195,7 +186,6 @@ export function SuperAdminSidebar() {
                 alt="DoFlow"
                 fill
                 priority
-                // object-left assicura che il logo parta da sinistra quando è aperto, allargandosi
                 className={`transition-all duration-300 ${isOpen ? "object-contain object-left" : "object-contain object-center"}`}
               />
             )}
@@ -207,7 +197,6 @@ export function SuperAdminSidebar() {
       <SidebarContent>
         {MENU_GROUPS.map((group) => (
           <SidebarGroup key={group.label}>
-            {/* Label di gruppo — SidebarGroupLabel già gestisce collapsed */}
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
@@ -231,36 +220,31 @@ export function SuperAdminSidebar() {
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                {/* Modifichiamo il button: allineiamo al centro quando collassato, puliamo padding */}
                 <SidebarMenuButton
                   size="lg"
                   className={`data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground ${isOpen ? "justify-start px-3" : "w-full justify-center px-0 py-1"}`}
                   aria-label="Menu utente"
                 >
-                  {/* Aumentiamo l'avatar da h-8/w-8 a h-10/w-10 (40px) */}
                   <Avatar className="h-10 w-10 rounded-nav border border-border shrink-0">
                     <AvatarFallback
                       className="rounded-nav text-base font-bold"
                       style={{
                         background: "hsl(var(--primary) / 0.12)",
-                        color:      "hsl(var(--primary))",
+                        color:      "hsl(var(--primary))",
                       }}
                     >
                       {user?.initials ?? "SA"}
                     </AvatarFallback>
                   </Avatar>
-
-                  {/* Testo — nascosto quando collassato (gestito da group-data-[collapsible=icon]:hidden) */}
                   <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                     <span className="truncate font-semibold text-foreground">
                       {user?.email ?? "Superadmin"}
-                    </span >
+                    </span>
                     <span className="truncate text-[11px] text-muted-foreground flex items-center gap-1">
                       <BadgeCheck className="h-3 w-3 text-primary" aria-hidden="true" />
                       {user?.role ?? "SUPER_ADMIN"}
                     </span>
                   </div>
-
                   <ChevronsUpDown className="ml-auto size-4 text-muted-foreground/50 group-data-[collapsible=icon]:hidden" aria-hidden="true" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
@@ -271,16 +255,14 @@ export function SuperAdminSidebar() {
                 align="end"
                 sideOffset={8}
               >
-                {/* ...DropdownMenuLabel content... */}
                 <DropdownMenuLabel className="p-2 font-normal">
                   <div className="flex items-center gap-2.5">
-                    {/* Aumentiamo anche l'avatar nel Dropdown (da h-9/w-9 a h-10/w-10) per coerenza */}
                     <Avatar className="h-10 w-10 rounded-nav">
                       <AvatarFallback
                         className="rounded-nav font-bold"
                         style={{
                           background: "hsl(var(--primary) / 0.12)",
-                          color:      "hsl(var(--primary))",
+                          color:      "hsl(var(--primary))",
                         }}
                       >
                         {user?.initials ?? "SA"}
@@ -289,7 +271,7 @@ export function SuperAdminSidebar() {
                     <div className="grid text-left text-sm leading-tight">
                       <span className="truncate font-bold text-foreground">
                         {user?.email ?? "superadmin"}
-                      </span >
+                      </span>
                       <span className="truncate text-xs text-muted-foreground">
                         {user?.role ?? "SUPER_ADMIN"}
                       </span>
@@ -307,7 +289,6 @@ export function SuperAdminSidebar() {
                     </Link>
                   </DropdownMenuItem>
 
-                  {/* Light/Dark toggle */}
                   <DropdownMenuItem
                     onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
                     className="cursor-pointer"
@@ -319,7 +300,6 @@ export function SuperAdminSidebar() {
                     Passa a {resolvedTheme === "dark" ? "Light Mode" : "Dark Mode"}
                   </DropdownMenuItem>
 
-                  {/* Color theme sub-menu */}
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger className="cursor-pointer">
                       <Palette className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />

@@ -1,3 +1,6 @@
+// apps/backend/src/app.module.ts
+// AGGIORNAMENTO: Aggiunti QuoteRequest entity, controllers (pubblico + admin) e service
+
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -11,7 +14,7 @@ import { TrafficControlModule } from './traffic-control/traffic-control.module';
 import { TenancyModule } from './tenancy/tenancy.module';
 import { MailModule } from './mail/mail.module';
 import { HealthModule } from './health/health.module';
-import { NotificationsModule } from './realtime/notifications.module'; // <--- NUOVO IMPORT MODULO
+import { NotificationsModule } from './realtime/notifications.module';
 
 // --- CONTROLLERS ---
 import { AppController } from './app.controller';
@@ -46,12 +49,15 @@ import { PreventivoPdfService } from './superadmin/preventivo-pdf.service';
 import { InvoiceMailService } from './superadmin/invoice-mail.service';
 import { PublicSchemaBootstrapService } from './superadmin/public-schema-bootstrap.service';
 
+// --- NUOVO: Richieste Preventivo (sito web → CRM) ---
+import { PublicQuoteRequestController, AdminQuoteRequestController } from './superadmin/quote-request.controller';
+import { QuoteRequestService } from './superadmin/quote-request.service';
+
 // --- SERVIZI ---
 import { AuthService } from './auth.service';
 import { AuditService } from './audit.service';
 import { LoginGuardService } from './login-guard.service';
 import { FileStorageService } from './file-storage.service';
-// import { NotificationsService } from './realtime/notifications.service'; <--- RIMOSSO (Ora usiamo il modulo)
 import { ProjectsEventsService } from './realtime/projects-events.service';
 import { TenantBootstrapService } from './tenancy/tenant-bootstrap.service';
 import { AuthMfaService } from './auth-mfa.service';
@@ -67,6 +73,7 @@ import { InvoiceLineItem } from './superadmin/entities/invoice-line-item.entity'
 import { InvoiceTemplate } from './superadmin/entities/invoice-template.entity';
 import { InvoiceClient } from './superadmin/entities/invoice-client.entity';
 import { Tenant } from './superadmin/entities/tenant.entity';
+import { QuoteRequest } from './superadmin/entities/quote-request.entity'; // <--- NUOVO
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './auth/jwt.strategy';
@@ -98,7 +105,7 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
     TelemetryModule,
     TrafficControlModule,
     TenancyModule,
-    NotificationsModule, // <--- AGGIUNTO IL MODULO QUI
+    NotificationsModule,
 
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -107,7 +114,7 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
         type: 'postgres' as const,
         url: cfg.get<string>('DATABASE_URL'),
         autoLoadEntities: true,
-        synchronize: process.env.DB_SYNC === 'true', // Permette di forzare la sync da variabile ambiente
+        synchronize: process.env.DB_SYNC === 'true',
       }),
     }),
 
@@ -122,6 +129,7 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
       Tenant,
       PlatformModule,
       TenantSubscription,
+      QuoteRequest, // <--- NUOVA ENTITY
     ]),
 
     PassportModule,
@@ -171,6 +179,9 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
     SystemController,
     MetricsController,
     TenantDashboardController,
+    // --- NUOVO: Controller pubblico e admin per richieste preventivo ---
+    PublicQuoteRequestController,
+    AdminQuoteRequestController,
   ],
 
   providers: [
@@ -179,7 +190,6 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
     AuditService,
     LoginGuardService,
     FileStorageService,
-    // NotificationsService, <--- RIMOSSO (Service Providers)
     ProjectsEventsService,
     TenantBootstrapService,
     AuthMfaService,
@@ -195,6 +205,7 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
     MetricsService,
     TenantDashboardService,
     PublicSchemaBootstrapService,
+    QuoteRequestService, // <--- NUOVO SERVICE
     {
       provide: APP_GUARD,
       useClass: TrafficGuard,
@@ -205,7 +216,8 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(TenancyMiddleware, AuthMiddleware)
-      .exclude('api/superadmin/(.*)')
+      // Escludiamo superadmin E le route pubbliche dal middleware tenant
+      .exclude('api/superadmin/(.*)', 'api/public/(.*)')
       .forRoutes('*');
   }
 }
