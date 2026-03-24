@@ -11,6 +11,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import * as jwt from 'jsonwebtoken';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as express from 'express';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
@@ -112,6 +113,31 @@ async function bootstrap() {
     whitelist: true,
     forbidNonWhitelisted: false,
   }));
+
+  // ── Swagger / OpenAPI Documentation ──────────────────────────────────────
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('DoFlow PaaS API')
+    .setDescription('API completa della piattaforma DoFlow — superadmin, tenant, self-service, automazioni')
+    .setVersion('3.6')
+    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'JWT')
+    .addServer(`http://localhost:${Number(process.env.PORT ?? 4000)}`, 'Local Dev')
+    .addServer('https://api.doflow.it', 'Production')
+    .addTag('Superadmin', 'Gestione piattaforma, tenant, moduli, metriche')
+    .addTag('Tenant Self-Service', 'Portale tenant: piano, moduli, ticket, notifiche')
+    .addTag('Auth', 'Login, MFA, password reset')
+    .addTag('Export', 'Download CSV dati')
+    .addTag('Automations', 'Regole di automazione workflow')
+    .build();
+  const swaggerDoc = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, swaggerDoc, {
+    customSiteTitle: 'DoFlow API Docs',
+    swaggerOptions: {
+      persistAuthorization: true,
+      tagsSorter: 'alpha',
+      operationsSorter: 'alpha',
+    },
+  });
+  console.log(`📖 Swagger docs available at /api/docs`);
 
   const telemetryService = app.get(TelemetryService);
   app.useGlobalInterceptors(new TelemetryInterceptor(telemetryService));

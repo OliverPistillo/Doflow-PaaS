@@ -1,16 +1,19 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder, Brackets } from 'typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DashboardResponseDto, DashboardKpiDto, PipelineStageDto, TopDealDto } from './dto/dashboard-stats.dto';
 import { GetDealsQueryDto, UpdateDealDto } from './dto/deals.dto';
 import { PlatformDeal } from './entities/platform-deal.entity';
 import { DealStage } from './enums/deal-stage.enum';
+import { TriggerEvent } from './entities/automation-rule.entity';
 
 @Injectable()
 export class SuperadminDashboardService {
   constructor(
     @InjectRepository(PlatformDeal)
     private dealRepo: Repository<PlatformDeal>,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   // ===========================================================================
@@ -137,6 +140,8 @@ export class SuperadminDashboardService {
     const deal = await this.dealRepo.findOne({ where: { id } });
     if (!deal) throw new NotFoundException('Offerta non trovata');
 
+    const oldStage = deal.stage;
+
     // Mapping Update DTO -> Entity
     if (updateData.title !== undefined) deal.title = updateData.title;
     if (updateData.clientName !== undefined) deal.clientName = updateData.clientName;
@@ -151,7 +156,21 @@ export class SuperadminDashboardService {
       deal.probabilityBps = Math.round(updateData.winProbability * 100);
     }
 
-    return this.dealRepo.save(deal);
+    const saved = await this.dealRepo.save(deal);
+
+    // 🔗 Automation hook: DEAL_STAGE_CHANGE
+    if (updateData.stage !== undefined && updateData.stage !== oldStage) {
+      this.eventEmitter.emit('automation.trigger', {
+        event: TriggerEvent.DEAL_STAGE_CHANGE,
+        context: {
+          dealId: saved.id, title: saved.title, clientName: saved.clientName,
+          fromStage: oldStage, toStage: saved.stage,
+          valueCents: saved.valueCents,
+        },
+      });
+    }
+
+    return saved;
   }
 
   // ===========================================================================

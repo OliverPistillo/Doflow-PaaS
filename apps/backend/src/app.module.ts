@@ -53,6 +53,47 @@ import { PublicSchemaBootstrapService } from './superadmin/public-schema-bootstr
 import { PublicQuoteRequestController, AdminQuoteRequestController } from './superadmin/quote-request.controller';
 import { QuoteRequestService } from './superadmin/quote-request.service';
 
+// --- NUOVI MODULI SUPERADMIN ---
+import { ModulesController } from './superadmin/modules.controller';
+import { ModulesService } from './superadmin/modules.service';
+import { SubscriptionsController } from './superadmin/subscriptions.controller';
+import { SubscriptionsService } from './superadmin/subscriptions.service';
+import { LeadsController } from './superadmin/leads.controller';
+import { LeadsService } from './superadmin/leads.service';
+import { BackupController } from './superadmin/backup.controller';
+import { BackupService } from './superadmin/backup.service';
+import { Lead } from './superadmin/entities/lead.entity';
+import { SystemBackup } from './superadmin/entities/system-backup.entity';
+
+// --- NUOVI MODULI SUPERADMIN (Batch 2: Notifiche, Ticket, API Usage) ---
+import { PlatformNotificationsController } from './superadmin/platform-notifications.controller';
+import { PlatformNotificationsService } from './superadmin/platform-notifications.service';
+import { TicketsController } from './superadmin/tickets.controller';
+import { TicketsService } from './superadmin/tickets.service';
+import { ApiUsageController } from './superadmin/api-usage.controller';
+import { ApiUsageService } from './superadmin/api-usage.service';
+import { PlatformNotification } from './superadmin/entities/platform-notification.entity';
+import { SupportTicket } from './superadmin/entities/support-ticket.entity';
+
+// --- NUOVI MODULI SUPERADMIN (Batch 3: Email Templates, Changelog, Automations) ---
+import { EmailTemplatesController } from './superadmin/email-templates.controller';
+import { EmailTemplatesService } from './superadmin/email-templates.service';
+import { ChangelogAdminController, ChangelogPublicController } from './superadmin/changelog.controller';
+import { ChangelogService } from './superadmin/changelog.service';
+import { AutomationsController } from './superadmin/automations.controller';
+import { AutomationsService } from './superadmin/automations.service';
+import { EmailTemplate } from './superadmin/entities/email-template.entity';
+import { ChangelogEntry } from './superadmin/entities/changelog-entry.entity';
+import { AutomationRule } from './superadmin/entities/automation-rule.entity';
+import { TenantSelfServiceController } from './tenant/tenant-selfservice.controller';
+import { ScheduleModule } from '@nestjs/schedule';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { AutomationEventBus } from './superadmin/automation-event-bus';
+import { AutomationCronService } from './superadmin/automation-cron.service';
+import { ExportController } from './superadmin/export.controller';
+import { ExportService } from './superadmin/export.service';
+
 // --- SERVIZI ---
 import { AuthService } from './auth.service';
 import { AuditService } from './audit.service';
@@ -130,6 +171,13 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
       PlatformModule,
       TenantSubscription,
       QuoteRequest, // <--- NUOVA ENTITY
+      Lead,
+      SystemBackup,
+      PlatformNotification,
+      SupportTicket,
+      EmailTemplate,
+      ChangelogEntry,
+      AutomationRule,
     ]),
 
     PassportModule,
@@ -153,6 +201,9 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
 
     MailModule,
     TenantModule,
+    ScheduleModule.forRoot(),
+    EventEmitterModule.forRoot(),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }]),
     FedericaNeroneModule,
     BusinaroModule,
   ],
@@ -182,6 +233,22 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
     // --- NUOVO: Controller pubblico e admin per richieste preventivo ---
     PublicQuoteRequestController,
     AdminQuoteRequestController,
+    // --- NUOVI CONTROLLER SUPERADMIN ---
+    ModulesController,
+    SubscriptionsController,
+    LeadsController,
+    BackupController,
+    // --- NUOVI CONTROLLER SUPERADMIN (Batch 2) ---
+    PlatformNotificationsController,
+    TicketsController,
+    ApiUsageController,
+    // --- NUOVI CONTROLLER SUPERADMIN (Batch 3) ---
+    EmailTemplatesController,
+    ChangelogAdminController,
+    ChangelogPublicController,
+    AutomationsController,
+    TenantSelfServiceController,
+    ExportController,
   ],
 
   providers: [
@@ -206,6 +273,22 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
     TenantDashboardService,
     PublicSchemaBootstrapService,
     QuoteRequestService, // <--- NUOVO SERVICE
+    // --- NUOVI SERVICE SUPERADMIN ---
+    ModulesService,
+    SubscriptionsService,
+    LeadsService,
+    BackupService,
+    // --- NUOVI SERVICE SUPERADMIN (Batch 2) ---
+    PlatformNotificationsService,
+    TicketsService,
+    ApiUsageService,
+    // --- NUOVI SERVICE SUPERADMIN (Batch 3) ---
+    EmailTemplatesService,
+    ChangelogService,
+    AutomationsService,
+    AutomationEventBus,
+    AutomationCronService,
+    ExportService,
     {
       provide: APP_GUARD,
       useClass: TrafficGuard,
@@ -217,7 +300,7 @@ export class AppModule implements NestModule {
     consumer
       .apply(TenancyMiddleware, AuthMiddleware)
       // Escludiamo superadmin E le route pubbliche dal middleware tenant
-      .exclude('api/superadmin/(.*)', 'api/public/(.*)')
+      .exclude('api/superadmin/(.*)', 'api/public/(.*)', 'api/tenant/self-service/(.*)')
       .forRoutes('*');
   }
 }

@@ -10,6 +10,7 @@ import {
   FolderOpen, PenLine, UsersRound, UserCog, Activity,
   Banknote, TrendingUp, BarChart2, Building, FileSpreadsheet,
   Zap, Plug, Bell, ShieldCheck, Download, Timer,
+  Crown, Rocket, LifeBuoy, Compass,
 } from "lucide-react";
 
 export type PlanTier = "STARTER" | "PRO" | "ENTERPRISE";
@@ -571,6 +572,35 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
         icon:    ShieldCheck,
         minPlan: "ENTERPRISE",
         lockMsg: "Disponibile con il piano Enterprise. Audit log, ruoli granulari e IP whitelist.",
+      },
+    ],
+  },
+  {
+    label: "Account & Supporto",
+    modules: [
+      {
+        label:   "Il Mio Piano",
+        href:    "/my-plan",
+        icon:    Crown,
+        minPlan: "STARTER",
+      },
+      {
+        label:   "Onboarding",
+        href:    "/onboarding",
+        icon:    Compass,
+        minPlan: "STARTER",
+      },
+      {
+        label:   "Novità Piattaforma",
+        href:    "/changelog",
+        icon:    Rocket,
+        minPlan: "STARTER",
+      },
+      {
+        label:   "Supporto",
+        href:    "/support",
+        icon:    LifeBuoy,
+        minPlan: "STARTER",
       },
     ],
   },

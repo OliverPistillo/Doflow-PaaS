@@ -33,6 +33,17 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   "/superadmin/audit":                "Audit Log",
   "/superadmin/settings":             "Impostazioni Globali",
   "/superadmin/account":              "Il mio Account",
+  "/superadmin/modules":              "Moduli & Feature Flags",
+  "/superadmin/subscriptions":        "Subscription & Revenue",
+  "/superadmin/leads":                "Lead Management",
+  "/superadmin/system-health":        "System Health",
+  "/superadmin/storage":              "Storage & Backup",
+  "/superadmin/notifications":        "Centro Notifiche",
+  "/superadmin/tickets":              "Ticket Supporto",
+  "/superadmin/api-usage":            "API Usage",
+  "/superadmin/email-templates":      "Email Templates",
+  "/superadmin/changelog":            "Changelog & Release Notes",
+  "/superadmin/automations":          "Automazioni CRM",
 };
 
 function getPageTitle(p: string | null): string {

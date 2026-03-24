@@ -14,6 +14,9 @@ import {
   Receipt, Moon, Sun, ChevronsUpDown, BadgeCheck,
   User, Settings, Palette, TrendingUp,
   FileText, // <-- QUOTE REQUEST: Icona per le richieste preventivo
+  Puzzle, CircleDollarSign, HeartPulse, UserPlus, HardDrive,
+  Bell as BellIcon, LifeBuoy, Radio,
+  Mail, Rocket, Zap,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -85,6 +88,32 @@ const MENU_GROUPS = [
       { label: "Gestione Tenant", href: "/superadmin/tenants", icon: Building2 },
       { label: "Gestione Utenti", href: "/superadmin/users",   icon: Users     },
       { label: "Audit Log",       href: "/superadmin/audit",   icon: Activity  },
+    ],
+  },
+  {
+    label: "Product & Revenue",
+    items: [
+      { label: "Moduli / Feature Flags",  href: "/superadmin/modules",       icon: Puzzle            },
+      { label: "Subscription & Revenue",   href: "/superadmin/subscriptions", icon: CircleDollarSign  },
+      { label: "Lead Management",          href: "/superadmin/leads",         icon: UserPlus          },
+      { label: "Automazioni CRM",          href: "/superadmin/automations",   icon: Zap               },
+    ],
+  },
+  {
+    label: "Infrastruttura",
+    items: [
+      { label: "System Health",      href: "/superadmin/system-health", icon: HeartPulse },
+      { label: "Storage & Backup",   href: "/superadmin/storage",      icon: HardDrive  },
+      { label: "API Usage",          href: "/superadmin/api-usage",    icon: Radio      },
+    ],
+  },
+  {
+    label: "Comunicazione & Supporto",
+    items: [
+      { label: "Centro Notifiche",    href: "/superadmin/notifications",    icon: BellIcon  },
+      { label: "Ticket Supporto",     href: "/superadmin/tickets",          icon: LifeBuoy  },
+      { label: "Email Templates",     href: "/superadmin/email-templates",  icon: Mail      },
+      { label: "Changelog / Release", href: "/superadmin/changelog",        icon: Rocket    },
     ],
   },
 ];

@@ -4,6 +4,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import {
   SidebarProvider, SidebarTrigger, SidebarInset,
@@ -40,15 +41,17 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Notifiche */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative text-muted-foreground hover:text-foreground"
-            aria-label="Notifiche"
-          >
-            <Bell className="h-4 w-4" aria-hidden="true" />
-            <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-rose-500 rounded-full" aria-hidden="true" />
-          </Button>
+          <Link href="/notifications">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative text-muted-foreground hover:text-foreground"
+              aria-label="Notifiche"
+            >
+              <Bell className="h-4 w-4" aria-hidden="true" />
+              <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-rose-500 rounded-full" aria-hidden="true" />
+            </Button>
+          </Link>
 
           {/* Theme Settings drawer */}
           <ThemeSettingsDrawer />
