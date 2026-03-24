@@ -66,7 +66,7 @@ function getUsageColor(percent: number): string {
 
 function GaugeCard({ title, percent, used, total, unit, icon: Icon }: {
   title: string; percent: number; used: string; total: string; unit: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
 }) {
   const color = getUsageColor(percent);
   const circumference = 2 * Math.PI * 54;
@@ -103,7 +103,7 @@ function GaugeCard({ title, percent, used, total, unit, icon: Icon }: {
 
 function ServiceCard({ name, status, latency, icon: Icon }: {
   name: string; status: "up" | "down" | "unknown";
-  latency?: number; icon: React.ComponentType<{ className?: string }>;
+  latency?: number; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
 }) {
   const color = getStatusColor(status);
   const label = status === "up" ? "Operativo" : status === "down" ? "Non raggiungibile" : "Sconosciuto";
