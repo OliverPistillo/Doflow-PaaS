@@ -26,8 +26,9 @@ RUN mkdir -p apps/backend/dist/redis/scripts \
 FROM node:20-alpine AS runner
 WORKDIR /app
 
-# 🔥 FIX: Installa utility Linux necessarie per 'systeminformation'
-RUN apk add --no-cache util-linux postgresql-client
+# 🔥 FIX: utility Linux + pg_dump v17 (via Alpine edge repo)
+RUN apk add --no-cache util-linux \
+  && apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main postgresql17-client
 
 ENV NODE_ENV=production
 
