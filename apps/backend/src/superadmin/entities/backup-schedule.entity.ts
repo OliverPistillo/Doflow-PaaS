@@ -35,14 +35,14 @@ export class BackupSchedule {
   @Column({ name: 'tenant_name', type: 'varchar', nullable: true })
   tenantName!: string | null;
 
-  @Column({ type: 'enum', enum: ScheduleFrequency, default: ScheduleFrequency.DAILY })
+  @Column({ name: 'frequency', type: 'enum', enum: ScheduleFrequency, default: ScheduleFrequency.DAILY })
   frequency!: ScheduleFrequency;
 
-  @Column({ type: 'enum', enum: ScheduleBackupType, default: ScheduleBackupType.FULL })
+  @Column({ name: 'backup_type', type: 'enum', enum: ScheduleBackupType, default: ScheduleBackupType.FULL })
   backupType!: ScheduleBackupType;
 
   /** Ora del giorno 0-23 */
-  @Column({ type: 'int', default: 2 })
+  @Column({ name: 'hour', type: 'int', default: 2 })
   hour!: number;
 
   /** Giorno della settimana 0=dom 1=lun … 6=sab (usato se WEEKLY) */
@@ -57,7 +57,7 @@ export class BackupSchedule {
   @Column({ name: 'retention_days', type: 'int', default: 30 })
   retentionDays!: number;
 
-  @Column({ name: 'is_active', default: true })
+  @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive!: boolean;
 
   @Column({ name: 'last_run_at', type: 'timestamp', nullable: true })
