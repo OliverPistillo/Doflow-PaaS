@@ -26,13 +26,13 @@ export class BackupSchedule {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ name: 'tenant_id', nullable: true })
+  @Column({ name: 'tenant_id', type: 'varchar', nullable: true })
   tenantId!: string | null;
 
-  @Column({ name: 'tenant_slug', nullable: true })
+  @Column({ name: 'tenant_slug', type: 'varchar', nullable: true })
   tenantSlug!: string | null;
 
-  @Column({ name: 'tenant_name', nullable: true })
+  @Column({ name: 'tenant_name', type: 'varchar', nullable: true })
   tenantName!: string | null;
 
   @Column({ type: 'enum', enum: ScheduleFrequency, default: ScheduleFrequency.DAILY })
