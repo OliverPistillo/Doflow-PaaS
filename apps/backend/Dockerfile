@@ -33,7 +33,9 @@ RUN apk add --no-cache util-linux \
 ENV NODE_ENV=production
 
 # Copy necessary files from builder
+# Copia ENTRAMBI i node_modules (root + backend-specific per pnpm workspace hoisting)
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/backend/node_modules ./apps/backend/node_modules
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
 COPY --from=builder /app/apps/backend/package.json ./apps/backend/package.json
 
