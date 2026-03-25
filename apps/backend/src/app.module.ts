@@ -93,6 +93,7 @@ import { AutomationEventBus } from './superadmin/automation-event-bus';
 import { AutomationCronService } from './superadmin/automation-cron.service';
 import { ExportController } from './superadmin/export.controller';
 import { ExportService } from './superadmin/export.service';
+import { BackupSchedule } from './superadmin/entities/backup-schedule.entity';
 
 // --- SERVIZI ---
 import { AuthService } from './auth.service';
@@ -178,6 +179,7 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
       EmailTemplate,
       ChangelogEntry,
       AutomationRule,
+      BackupSchedule,
     ]),
 
     PassportModule,
