@@ -18,7 +18,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      // Accetta il token sia dall'header Authorization (tutte le chiamate API normali)
+      // che dal query param ?token= (usato da window.open per i download diretti del browser)
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        ExtractJwt.fromUrlQueryParameter('token'),
+      ]),
       ignoreExpiration: false,
       secretOrKey: secret,
     });

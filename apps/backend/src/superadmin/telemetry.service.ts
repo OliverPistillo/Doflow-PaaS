@@ -59,8 +59,31 @@ export class SystemStatsService {
         this.logger.warn('Failed to read fsSize (Docker limitation?)');
       }
 
-      const totalDisk = fs.reduce((acc, drive) => acc + (drive.size || 0), 0);
-      const usedDisk = fs.reduce((acc, drive) => acc + (drive.used || 0), 0);
+      // Filtra solo il filesystem fisico reale (root mount).
+      // su Docker/Coolify, fsSize() restituisce anche overlay, tmpfs, shm ecc.
+      // che sommati portano a valori gonfiati (es. 3TB invece di 1TB reale).
+      const VIRTUAL_FS_TYPES = new Set([
+        'overlay', 'tmpfs', 'devtmpfs', 'squashfs', 'nsfs',
+        'shm', 'proc', 'sysfs', 'cgroup', 'cgroup2', 'devpts',
+        'mqueue', 'hugetlbfs', 'pstore', 'debugfs', 'tracefs',
+      ]);
+      const physicalFs = fs.filter(drive =>
+        !VIRTUAL_FS_TYPES.has(drive.fs) &&
+        !VIRTUAL_FS_TYPES.has(drive.type) &&
+        (
+          drive.type?.startsWith('ext') ||
+          drive.type === 'xfs' ||
+          drive.type === 'btrfs' ||
+          drive.type === 'zfs' ||
+          drive.type === 'ntfs' ||
+          drive.type === 'apfs' ||
+          drive.mount === '/'
+        )
+      );
+      // Preferisce il mount "/" come riferimento canonico, fallback al primo fisico
+      const rootFs = physicalFs.find(d => d.mount === '/') ?? physicalFs[0];
+      const totalDisk = rootFs?.size || 0;
+      const usedDisk = rootFs?.used || 0;
 
       // Uptime corretto
       const t = await Promise.resolve(si.time()).catch(() => ({ uptime: 0 } as any));
