@@ -379,17 +379,36 @@ export function LoginForm() {
 
             {/* RIGHT */}
             <div className="relative hidden lg:flex flex-col justify-between overflow-hidden p-10"
-              style={{background:"#1a2332",minHeight:"640px"}}>
+              style={{background:"#1a2332",minHeight:"740px"}}>
               <div className="absolute inset-0 df-grid-bg"/>
               <div className="absolute top-0 right-0 w-96 h-96 pointer-events-none"
                 style={{background:"radial-gradient(circle at 80% 10%,rgba(59,130,246,.22) 0%,transparent 60%)"}}/>
               <div className="absolute bottom-0 left-0 w-96 h-64 pointer-events-none"
                 style={{background:"radial-gradient(circle at 20% 90%,rgba(99,102,241,.15) 0%,transparent 60%)"}}/>
 
-              {/* Logo */}
+              {/* Top: small logo */}
               <div className="relative z-10">
                 <Image src="/doflow_logo.svg" alt="Doflow" width={90} height={24}
                   className="h-6 w-auto brightness-0 invert opacity-75"/>
+              </div>
+
+              {/* Center: big logo hero */}
+              <div className="relative z-10 flex flex-col items-center justify-center py-4">
+                <div style={{
+                  width:160,height:160,borderRadius:"32px",
+                  background:"rgba(255,255,255,.06)",
+                  border:"1px solid rgba(255,255,255,.1)",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  backdropFilter:"blur(12px)",
+                  boxShadow:"0 0 60px rgba(59,130,246,.15), inset 0 1px 0 rgba(255,255,255,.1)",
+                  marginBottom:20,
+                }}>
+                  <Image src="/doflow_logo.svg" alt="Doflow" width={90} height={90}
+                    className="w-20 h-20 brightness-0 invert opacity-90"/>
+                </div>
+                <p style={{fontSize:13,fontWeight:600,color:"rgba(255,255,255,.4)",letterSpacing:"0.05em"}}>
+                  doflow
+                </p>
               </div>
 
               {/* Feature card */}
