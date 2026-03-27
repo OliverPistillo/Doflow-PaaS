@@ -385,30 +385,14 @@ export function LoginForm() {
                 style={{background:"radial-gradient(circle at 80% 10%,rgba(59,130,246,.22) 0%,transparent 60%)"}}/>
               <div className="absolute bottom-0 left-0 w-96 h-64 pointer-events-none"
                 style={{background:"radial-gradient(circle at 20% 90%,rgba(99,102,241,.15) 0%,transparent 60%)"}}/>
+              {/* Frame overlay */}
+              <div className="absolute inset-[10px] rounded-[20px] pointer-events-none"
+                style={{border:"1.5px solid rgba(255,255,255,.1)",boxShadow:"inset 0 0 0 1px rgba(255,255,255,.04)"}}/>
 
-              {/* Top: small logo */}
+              {/* Logo */}
               <div className="relative z-10">
                 <Image src="/doflow_logo.svg" alt="Doflow" width={90} height={24}
                   className="h-6 w-auto brightness-0 invert opacity-75"/>
-              </div>
-
-              {/* Center: big logo hero */}
-              <div className="relative z-10 flex flex-col items-center justify-center py-4">
-                <div style={{
-                  width:160,height:160,borderRadius:"32px",
-                  background:"rgba(255,255,255,.06)",
-                  border:"1px solid rgba(255,255,255,.1)",
-                  display:"flex",alignItems:"center",justifyContent:"center",
-                  backdropFilter:"blur(12px)",
-                  boxShadow:"0 0 60px rgba(59,130,246,.15), inset 0 1px 0 rgba(255,255,255,.1)",
-                  marginBottom:20,
-                }}>
-                  <Image src="/doflow_logo.svg" alt="Doflow" width={90} height={90}
-                    className="w-20 h-20 brightness-0 invert opacity-90"/>
-                </div>
-                <p style={{fontSize:13,fontWeight:600,color:"rgba(255,255,255,.4)",letterSpacing:"0.05em"}}>
-                  doflow
-                </p>
               </div>
 
               {/* Feature card */}
