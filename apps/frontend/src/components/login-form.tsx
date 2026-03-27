@@ -261,13 +261,12 @@ export function LoginForm() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="df-wrap flex min-h-screen items-center justify-center bg-[#edf0f4] p-4 md:p-8">
-        <div className="w-full max-w-[1060px] overflow-hidden rounded-[26px]"
-          style={{boxShadow:"0 24px 80px rgba(0,0,0,.16),0 4px 16px rgba(0,0,0,.08)"}}>
-          <div className="grid lg:grid-cols-[460px_1fr]">
+      <div className="df-wrap flex min-h-screen items-center justify-center bg-[#edf0f4] p-6 md:p-10">
+        <div className="w-full max-w-[1060px]">
+          <div className="grid lg:grid-cols-[420px_1fr] lg:gap-8 items-center">
 
             {/* LEFT */}
-            <div className="flex flex-col justify-center bg-white px-8 py-10 md:px-10 lg:px-12">
+            <div className="flex flex-col justify-center px-4 py-10 md:px-6 lg:px-8">
               <div className="mx-auto w-full max-w-[360px] space-y-6">
 
                 <div className="df-a df-a1">
@@ -377,9 +376,9 @@ export function LoginForm() {
               </div>
             </div>
 
-            {/* RIGHT */}
-            <div className="relative hidden lg:flex flex-col justify-between overflow-hidden p-10"
-              style={{background:"#1a2332",minHeight:"740px"}}>
+            {/* RIGHT — floating card */}
+            <div className="relative hidden lg:flex flex-col justify-between overflow-hidden p-10 rounded-[24px]"
+              style={{background:"#1a2332",minHeight:"740px",boxShadow:"0 24px 80px rgba(0,0,0,.22),0 4px 16px rgba(0,0,0,.1)"}}>
               <div className="absolute inset-0 df-grid-bg"/>
               <div className="absolute top-0 right-0 w-96 h-96 pointer-events-none"
                 style={{background:"radial-gradient(circle at 80% 10%,rgba(59,130,246,.22) 0%,transparent 60%)"}}/>
