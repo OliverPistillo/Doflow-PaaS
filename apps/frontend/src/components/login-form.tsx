@@ -238,6 +238,32 @@ export function LoginForm() {
           transition:all .3s;height:5px;
         }
         .df-dot.active{background:#60a5fa;width:22px!important}
+
+        /* ── Wave animation ── */
+        @keyframes dfWave1 {
+          0%   { d: path("M0,60 C120,20 240,100 360,60 C480,20 600,100 720,60 C840,20 960,100 1080,60 L1080,200 L0,200 Z"); }
+          50%  { d: path("M0,80 C120,40 240,120 360,80 C480,40 600,120 720,80 C840,40 960,120 1080,80 L1080,200 L0,200 Z"); }
+          100% { d: path("M0,60 C120,20 240,100 360,60 C480,20 600,100 720,60 C840,20 960,100 1080,60 L1080,200 L0,200 Z"); }
+        }
+        @keyframes dfWave2 {
+          0%   { d: path("M0,80 C150,40 300,120 450,80 C600,40 750,120 900,80 C1000,50 1060,90 1080,80 L1080,200 L0,200 Z"); }
+          50%  { d: path("M0,50 C150,90 300,30 450,70 C600,110 750,30 900,70 C1000,100 1060,50 1080,60 L1080,200 L0,200 Z"); }
+          100% { d: path("M0,80 C150,40 300,120 450,80 C600,40 750,120 900,80 C1000,50 1060,90 1080,80 L1080,200 L0,200 Z"); }
+        }
+        @keyframes dfWave3 {
+          0%   { d: path("M0,90 C180,50 360,130 540,90 C720,50 900,130 1080,90 L1080,200 L0,200 Z"); }
+          50%  { d: path("M0,70 C180,110 360,30 540,70 C720,110 900,30 1080,70 L1080,200 L0,200 Z"); }
+          100% { d: path("M0,90 C180,50 360,130 540,90 C720,50 900,130 1080,90 L1080,200 L0,200 Z"); }
+        }
+        @keyframes dfFlow {
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .df-wave-svg { position:absolute; bottom:0; left:0; width:200%; height:160px; }
+        .df-wave1 path { animation: dfWave1 6s ease-in-out infinite; }
+        .df-wave2 path { animation: dfWave2 9s ease-in-out infinite; }
+        .df-wave3 path { animation: dfWave3 12s ease-in-out infinite; }
+        .df-wave-wrap { animation: dfFlow 20s linear infinite; }
       `}</style>
 
       <AlertDialog open={showTenantRedirect} onOpenChange={setShowTenantRedirect}>
@@ -270,7 +296,7 @@ export function LoginForm() {
               <div className="mx-auto w-full max-w-[360px] space-y-6">
 
                 <div className="df-a df-a1">
-                  <Image src="/doflow_logo.svg" alt="Doflow" width={120} height={32} className="h-8 w-auto" priority/>
+                  <Image src="/doflow_logo.svg" alt="Doflow" width={160} height={44} className="h-11 w-auto" priority/>
                 </div>
 
                 <div className="df-a df-a2 space-y-1">
@@ -388,10 +414,25 @@ export function LoginForm() {
               <div className="absolute inset-[10px] rounded-[20px] pointer-events-none"
                 style={{border:"1.5px solid rgba(255,255,255,.1)",boxShadow:"inset 0 0 0 1px rgba(255,255,255,.04)"}}/>
 
+              {/* Wave animation at bottom */}
+              <div className="absolute bottom-0 left-0 w-full overflow-hidden z-0" style={{height:160}}>
+                <div className="df-wave-wrap" style={{width:"200%",height:"100%",position:"relative"}}>
+                  <svg className="df-wave-svg df-wave3" viewBox="0 0 1080 160" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M0,90 C180,50 360,130 540,90 C720,50 900,130 1080,90 L1080,160 L0,160 Z" fill="rgba(99,102,241,.06)"/>
+                  </svg>
+                  <svg className="df-wave-svg df-wave2" viewBox="0 0 1080 160" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M0,80 C150,40 300,120 450,80 C600,40 750,120 900,80 C1000,50 1060,90 1080,80 L1080,160 L0,160 Z" fill="rgba(59,130,246,.07)"/>
+                  </svg>
+                  <svg className="df-wave-svg df-wave1" viewBox="0 0 1080 160" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M0,60 C120,20 240,100 360,60 C480,20 600,100 720,60 C840,20 960,100 1080,60 L1080,160 L0,160 Z" fill="rgba(96,165,250,.09)"/>
+                  </svg>
+                </div>
+              </div>
+
               {/* Logo */}
               <div className="relative z-10">
-                <Image src="/doflow_logo.svg" alt="Doflow" width={90} height={24}
-                  className="h-6 w-auto brightness-0 invert opacity-75"/>
+                <Image src="/doflow_logo.svg" alt="Doflow" width={130} height={36}
+                  className="h-9 w-auto brightness-0 invert opacity-80"/>
               </div>
 
               {/* Feature card */}
