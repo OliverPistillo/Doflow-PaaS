@@ -8,7 +8,6 @@ import {
   S3Client, PutObjectCommand, DeleteObjectCommand,
   GetObjectCommand, ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { SystemBackup, BackupStatus, BackupType } from './entities/system-backup.entity';
 import { BackupSchedule, ScheduleFrequency, ScheduleBackupType } from './entities/backup-schedule.entity';
 import { Tenant } from './entities/tenant.entity';
@@ -304,21 +303,26 @@ export class BackupService implements OnModuleInit {
     }
   }
 
-  // ─── Download presigned URL ───────────────────────────────────────────────
+  // ─── Download stream (proxy through backend) ────────────────────────────────
+  // MinIO non è esposto pubblicamente: il backend scarica da MinIO internamente
+  // e fa il pipe diretto al browser, senza presigned URL.
 
-  async getDownloadUrl(id: string): Promise<string> {
+  async streamDownload(id: string): Promise<{ stream: NodeJS.ReadableStream; filename: string; size?: number }> {
     const backup = await this.findOne(id);
     if (!backup.storagePath) throw new NotFoundException('File backup non disponibile.');
 
     const command = new GetObjectCommand({
       Bucket: this.s3Bucket,
       Key: backup.storagePath,
-      ResponseContentDisposition: `attachment; filename="${path.basename(backup.storagePath)}"`,
     });
 
-    const url = await getSignedUrl(this.s3Client as any, command as any, { expiresIn: 900 });
-    this.logger.log(`🔗 Presigned URL generato per: ${backup.storagePath}`);
-    return url;
+    const response = await this.s3Client.send(command);
+    const stream = response.Body as NodeJS.ReadableStream;
+    const filename = path.basename(backup.storagePath);
+    const size = response.ContentLength;
+
+    this.logger.log(`⬇️ Stream download avviato per: ${backup.storagePath}`);
+    return { stream, filename, size };
   }
 
   // ─── Execute backup ──────────────────────────────────────────────────────────

@@ -36,8 +36,15 @@ export class BackupController {
 
   @Get('backups/:id/download')
   async downloadBackup(@Param('id') id: string, @Res() res: Response) {
-    const url = await this.backupService.getDownloadUrl(id);
-    return res.redirect(url);
+    // MinIO non è esposto pubblicamente: proxiamo lo stream direttamente
+    // attraverso il backend invece di fare redirect a una presigned URL.
+    const { stream, filename, size } = await this.backupService.streamDownload(id);
+
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/gzip');
+    if (size) res.setHeader('Content-Length', size);
+
+    stream.pipe(res);
   }
 
   @Post('backups/:id/restore')
