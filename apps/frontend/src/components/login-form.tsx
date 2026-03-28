@@ -296,7 +296,7 @@ export function LoginForm() {
               <div className="mx-auto w-full max-w-[360px] space-y-6">
 
                 <div className="df-a df-a1">
-                  <Image src="/doflow_logo.svg" alt="Doflow" width={160} height={44} className="h-11 w-auto" priority/>
+                  <Image src="/doflow_logo.svg" alt="Doflow" width={160} height={70} className="h-11 w-auto" priority/>
                 </div>
 
                 <div className="df-a df-a2 space-y-1">
