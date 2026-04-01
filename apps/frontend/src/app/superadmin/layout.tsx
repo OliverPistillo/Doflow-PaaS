@@ -1,5 +1,7 @@
-// Percorso: apps/frontend/src/app/superadmin/layout.tsx
-// Refactored completo — zero CSS class custom, zero inline style, Cmd+K integrato
+// apps/frontend/src/app/superadmin/layout.tsx
+// Aggiornato: PAGE_TITLE_MAP allineato alle nuove rotte dopo il refactoring.
+// Zero modifiche strutturali al layout; aggiornate solo le chiavi della mappa.
+
 "use client";
 
 import * as React from "react";
@@ -17,39 +19,64 @@ import { useTheme } from "next-themes";
 import { SearchTriggerButton } from "@/components/ui/global-search";
 
 // ─── PAGE_TITLE_MAP ───────────────────────────────────────────────────────────
+// Aggiornato post-refactoring: rotte legacy rimosse, nuove rotte aggiunte.
 
 const PAGE_TITLE_MAP: Record<string, string> = {
-  "/superadmin/dashboard":            "Sales Dashboard",
-  "/superadmin/sales/pipeline":       "Gestione Offerte",
-  "/superadmin/metrics":              "Metriche SaaS",
-  "/superadmin/control-tower":        "Control Tower",
-  "/superadmin/delivery/status":      "Stato del Servizio",
-  "/superadmin/delivery/calendar":    "Calendario Progetto",
-  "/superadmin/finance/dashboard":    "Dashboard Finanziario",
-  "/superadmin/finance/invoices/new": "Nuova Fattura",
-  "/superadmin/finance/invoices":     "Gestione Fatture",
-  "/superadmin/tenants":              "Gestione Tenant",
-  "/superadmin/users":                "Gestione Utenti",
-  "/superadmin/audit":                "Audit Log",
-  "/superadmin/settings":             "Impostazioni Globali",
-  "/superadmin/account":              "Il mio Account",
-  "/superadmin/modules":              "Moduli & Feature Flags",
-  "/superadmin/subscriptions":        "Subscription & Revenue",
-  "/superadmin/leads":                "Lead Management",
-  "/superadmin/system-health":        "System Health",
-  "/superadmin/storage":              "Storage & Backup",
-  "/superadmin/notifications":        "Centro Notifiche",
-  "/superadmin/tickets":              "Ticket Supporto",
-  "/superadmin/api-usage":            "API Usage",
-  "/superadmin/email-templates":      "Email Templates",
-  "/superadmin/changelog":            "Changelog & Release Notes",
-  "/superadmin/automations":          "Automazioni CRM",
+  // Command Center
+  "/superadmin":                           "Control Room",
+
+  // Sales & CRM
+  "/superadmin/sales/dashboard":           "Sales Dashboard",
+  "/superadmin/sales/pipeline":            "Pipeline",
+  "/superadmin/sales/quote-requests":      "Richieste Preventivo",
+  "/superadmin/leads":                     "Lead Management",
+  "/superadmin/automations":               "Automazioni CRM",
+
+  // Platform Admin
+  "/superadmin/tenants":                   "Gestione Tenant",
+  "/superadmin/users":                     "Gestione Utenti",
+  "/superadmin/modules":                   "Moduli & Feature Flags",
+  "/superadmin/subscriptions":             "Subscription & Revenue",
+
+  // Billing
+  "/superadmin/finance/dashboard":         "Dashboard Finanziario",
+  "/superadmin/finance/invoices/new":      "Nuova Fattura",
+  "/superadmin/finance/invoices":          "Gestione Fatture",
+  "/superadmin/finance/preventivi/new":    "Nuovo Preventivo",
+
+  // Operations
+  "/superadmin/delivery/status":           "Stato Delivery",
+  "/superadmin/delivery/calendar":         "Calendario Progetto",
+
+  // Infrastruttura
+  "/superadmin/system":                    "System Monitor",
+  "/superadmin/storage":                   "Storage & Backup",
+
+  // Comunicazione & Supporto
+  "/superadmin/notifications":             "Centro Notifiche",
+  "/superadmin/tickets":                   "Ticket Supporto",
+  "/superadmin/email-templates":           "Email Templates",
+  "/superadmin/changelog":                 "Changelog & Release Notes",
+
+  // Configurazione
+  "/superadmin/audit":                     "Audit Log",
+  "/superadmin/settings":                  "Impostazioni Globali",
+  "/superadmin/account":                   "Il mio Account",
+
+  // Legacy (redirect, ma tenuti per sicurezza)
+  "/superadmin/dashboard":                 "Sales Dashboard",
+  "/superadmin/metrics":                   "Metriche SaaS",
+  "/superadmin/control-tower":             "Control Tower",
+  "/superadmin/system-health":             "System Health",
+  "/superadmin/api-usage":                 "API Usage",
 };
 
 function getPageTitle(p: string | null): string {
   if (!p) return "DoFlow";
   if (PAGE_TITLE_MAP[p]) return PAGE_TITLE_MAP[p];
-  const match = Object.keys(PAGE_TITLE_MAP).filter((k) => p.startsWith(k)).sort((a, b) => b.length - a.length)[0];
+  const match = Object.keys(PAGE_TITLE_MAP)
+    .filter((k) => p.startsWith(k))
+    .sort((a, b) => b.length - a.length)[0];
   return match ? PAGE_TITLE_MAP[match] : "DoFlow";
 }
 

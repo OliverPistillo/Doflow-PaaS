@@ -1,6 +1,6 @@
 // apps/frontend/src/app/superadmin/components/super-admin-sidebar.tsx
-// AGGIORNAMENTO: Aggiunta voce "Richieste Preventivo" nel gruppo Sales & Pipeline
-// Icona: FileText (lucide-react). Le righe aggiunte marcate con // <-- QUOTE REQUEST
+// Refactored: MENU_GROUPS rimosso, la struttura dati è ora in config/sidebar-config.ts.
+// Aggiunto supporto per NavGroup (Collapsible) e NavLeaf con badge.
 
 "use client";
 
@@ -9,14 +9,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Building2, Users, Activity, ShieldAlert, LogOut,
-  BarChart3, ListTodo, Truck, CalendarDays, Wallet,
-  Receipt, Moon, Sun, ChevronsUpDown, BadgeCheck,
-  User, Settings, Palette, TrendingUp,
-  FileText, // <-- QUOTE REQUEST: Icona per le richieste preventivo
-  Puzzle, CircleDollarSign, HeartPulse, UserPlus, HardDrive,
-  Bell as BellIcon, LifeBuoy, Radio,
-  Mail, Rocket, Zap,
+  LogOut, Moon, Sun, ChevronsUpDown, BadgeCheck,
+  User, Settings, Palette, ChevronRight,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -47,84 +41,29 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { getDoFlowUser, getInitials } from "@/lib/jwt";
-
-// ─── Menu definition ──────────────────────────────────────────────────────────
-
-const MENU_GROUPS = [
-  {
-    label: "Sales & Pipeline",
-    items: [
-      { label: "Sales Dashboard",       href: "/superadmin/dashboard",              icon: BarChart3  },
-      { label: "Gestione offerte",      href: "/superadmin/sales/pipeline",        icon: ListTodo   },
-      { label: "Richieste Preventivo",  href: "/superadmin/sales/quote-requests",  icon: FileText   }, // <-- QUOTE REQUEST
-    ],
-  },
-  {
-    label: "Analytics & Control",
-    items: [
-      { label: "Metriche SaaS", href: "/superadmin/metrics",       icon: TrendingUp  },
-      { label: "Control Tower", href: "/superadmin/control-tower", icon: ShieldAlert },
-    ],
-  },
-  {
-    label: "Operations",
-    items: [
-      { label: "Stato del servizio",      href: "/superadmin/delivery/status",   icon: Truck       },
-      { label: "Calendario del progetto", href: "/superadmin/delivery/calendar", icon: CalendarDays },
-    ],
-  },
-  {
-    label: "Fatturazione",
-    items: [
-      { label: "Dashboard finanziario", href: "/superadmin/finance/dashboard", icon: Wallet  },
-      { label: "Gestione fatture",      href: "/superadmin/finance/invoices",  icon: Receipt },
-    ],
-  },
-  {
-    label: "Platform Admin",
-    items: [
-      { label: "Gestione Tenant", href: "/superadmin/tenants", icon: Building2 },
-      { label: "Gestione Utenti", href: "/superadmin/users",   icon: Users     },
-      { label: "Audit Log",       href: "/superadmin/audit",   icon: Activity  },
-    ],
-  },
-  {
-    label: "Product & Revenue",
-    items: [
-      { label: "Moduli / Feature Flags",  href: "/superadmin/modules",       icon: Puzzle            },
-      { label: "Subscription & Revenue",   href: "/superadmin/subscriptions", icon: CircleDollarSign  },
-      { label: "Lead Management",          href: "/superadmin/leads",         icon: UserPlus          },
-      { label: "Automazioni CRM",          href: "/superadmin/automations",   icon: Zap               },
-    ],
-  },
-  {
-    label: "Infrastruttura",
-    items: [
-      { label: "System Health",      href: "/superadmin/system-health", icon: HeartPulse },
-      { label: "Storage & Backup",   href: "/superadmin/storage",      icon: HardDrive  },
-      { label: "API Usage",          href: "/superadmin/api-usage",    icon: Radio      },
-    ],
-  },
-  {
-    label: "Comunicazione & Supporto",
-    items: [
-      { label: "Centro Notifiche",    href: "/superadmin/notifications",    icon: BellIcon  },
-      { label: "Ticket Supporto",     href: "/superadmin/tickets",          icon: LifeBuoy  },
-      { label: "Email Templates",     href: "/superadmin/email-templates",  icon: Mail      },
-      { label: "Changelog / Release", href: "/superadmin/changelog",        icon: Rocket    },
-    ],
-  },
-];
+import {
+  SUPERADMIN_SIDEBAR,
+  isNavLeaf,
+  isNavGroup,
+  type NavLeaf,
+  type NavGroup,
+} from "../config/sidebar-config";
 
 // ─── Color themes ─────────────────────────────────────────────────────────────
 
 const COLOR_THEMES = [
-  { id: "default", label: "Neutro (Default)",      colorClass: "bg-slate-500"   },
-  { id: "ocean",   label: "Ocean (Blu/Verde)",      colorClass: "bg-blue-500"    },
-  { id: "sunset",  label: "Sunset (Giallo/Arancio)", colorClass: "bg-orange-500" },
-  { id: "emerald", label: "Emerald (Verde Smeraldo)", colorClass: "bg-emerald-500" },
+  { id: "default", label: "Neutro (Default)",       colorClass: "bg-slate-500"   },
+  { id: "ocean",   label: "Ocean (Blu/Verde)",       colorClass: "bg-blue-500"    },
+  { id: "sunset",  label: "Sunset (Giallo/Arancio)", colorClass: "bg-orange-500"  },
+  { id: "emerald", label: "Emerald (Verde Smeraldo)",colorClass: "bg-emerald-500" },
 ];
 
 function setColorTheme(themeId: string) {
@@ -134,33 +73,78 @@ function setColorTheme(themeId: string) {
   }
 }
 
-// ─── NavItem ──────────────────────────────────────────────────────────────────
+// ─── NavLeafItem ──────────────────────────────────────────────────────────────
 
-function NavItem({
-  href,
-  label,
-  icon: Icon,
-}: {
-  href:  string;
-  label: string;
-  icon:  React.ComponentType<{ className?: string }>;
-}) {
+function NavLeafItem({ item }: { item: NavLeaf }) {
   const pathname = usePathname();
-  const isActive = pathname === href || pathname.startsWith(href + "/");
+  // Match esatto o prefisso (gestisce rotte nested come /superadmin/sales/*)
+  // Eccezione: /superadmin esatto per non attivare tutto il subtree
+  const isActive =
+    item.href === "/superadmin"
+      ? pathname === "/superadmin"
+      : pathname === item.href || pathname.startsWith(item.href + "/");
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton
-        asChild
-        isActive={isActive}
-        tooltip={label}
-      >
-        <Link href={href}>
-          <Icon className="h-[22px] w-[22px] shrink-0" aria-hidden="true" />
-          <span className="group-data-[collapsible=icon]:hidden">{label}</span>
+      <SidebarMenuButton asChild isActive={isActive} tooltip={item.label}>
+        <Link
+          href={item.href}
+          target={item.external ? "_blank" : undefined}
+          rel={item.external ? "noopener noreferrer" : undefined}
+        >
+          <item.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+          <span className="flex-1 group-data-[collapsible=icon]:hidden truncate">
+            {item.label}
+          </span>
+          {item.badge && (
+            <Badge
+              variant="secondary"
+              className="ml-auto h-5 min-w-5 px-1.5 text-[10px] font-bold group-data-[collapsible=icon]:hidden"
+            >
+              {item.badge}
+            </Badge>
+          )}
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>
+  );
+}
+
+// ─── NavGroupItem ─────────────────────────────────────────────────────────────
+
+function NavGroupItem({ item }: { item: NavGroup }) {
+  const pathname = usePathname();
+  const isAnyChildActive = item.items.some(
+    (child) => pathname === child.href || pathname.startsWith(child.href + "/")
+  );
+  const [open, setOpen] = React.useState(item.defaultOpen ?? isAnyChildActive);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="group/collapsible">
+      <SidebarMenuItem>
+        <CollapsibleTrigger asChild>
+          <SidebarMenuButton tooltip={item.label} isActive={isAnyChildActive}>
+            <item.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+            <span className="flex-1 group-data-[collapsible=icon]:hidden truncate">
+              {item.label}
+            </span>
+            <ChevronRight
+              className="ml-auto h-4 w-4 text-muted-foreground/50 transition-transform duration-200
+                group-data-[state=open]/collapsible:rotate-90
+                group-data-[collapsible=icon]:hidden"
+              aria-hidden="true"
+            />
+          </SidebarMenuButton>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <SidebarMenu className="pl-4 mt-0.5">
+            {item.items.map((child) => (
+              <NavLeafItem key={child.href} item={child} />
+            ))}
+          </SidebarMenu>
+        </CollapsibleContent>
+      </SidebarMenuItem>
+    </Collapsible>
   );
 }
 
@@ -183,7 +167,6 @@ export function SuperAdminSidebar() {
     setMounted(true);
     const savedColorTheme = localStorage.getItem("doflow_color_theme") || "default";
     setColorTheme(savedColorTheme);
-
     const payload = getDoFlowUser();
     if (payload) {
       setUser({
@@ -199,44 +182,58 @@ export function SuperAdminSidebar() {
     router.push("/login");
   }, [router]);
 
-  const logoSrc = mounted && resolvedTheme === "light"
-    ? "/logo_doflow_nero.png"
-    : "/logo_doflow_bianco.png";
+  const logoSrc =
+    mounted && resolvedTheme === "light"
+      ? "/logo_doflow_nero.png"
+      : "/logo_doflow_bianco.png";
 
   return (
     <Sidebar collapsible="icon">
-      {/* ── HEADER: Logo ──────────────────────────────────────────────── */}
+      {/* ── HEADER: Logo ─────────────────────────────────────────────── */}
       <SidebarHeader className="h-16 p-0 border-b border-sidebar-border flex flex-col justify-center">
-        <div className={`flex w-full items-center transition-all duration-300 ${isOpen ? "px-4 justify-start" : "px-0 justify-center"}`}>
-          <div className={`relative transition-all duration-300 ${isOpen ? "h-8 w-36" : "h-8 w-8 shrink-0"}`}>
+        <div
+          className={`flex w-full items-center transition-all duration-300 ${
+            isOpen ? "px-4 justify-start" : "px-0 justify-center"
+          }`}
+        >
+          <div
+            className={`relative transition-all duration-300 ${
+              isOpen ? "h-8 w-36" : "h-8 w-8 shrink-0"
+            }`}
+          >
             {mounted && (
               <Image
                 src={logoSrc}
                 alt="DoFlow"
                 fill
                 priority
-                className={`transition-all duration-300 ${isOpen ? "object-contain object-left" : "object-contain object-center"}`}
+                className={`transition-all duration-300 ${
+                  isOpen
+                    ? "object-contain object-left"
+                    : "object-contain object-center"
+                }`}
               />
             )}
           </div>
         </div>
       </SidebarHeader>
 
-      {/* ── CONTENT: Nav Groups ───────────────────────────────────────── */}
+      {/* ── CONTENT: Nav Groups ──────────────────────────────────────── */}
       <SidebarContent>
-        {MENU_GROUPS.map((group) => (
-          <SidebarGroup key={group.label}>
-            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+        {SUPERADMIN_SIDEBAR.map((section) => (
+          <SidebarGroup key={section.id}>
+            <SidebarGroupLabel>{section.title}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {group.items.map((item) => (
-                  <NavItem
-                    key={item.href}
-                    href={item.href}
-                    label={item.label}
-                    icon={item.icon}
-                  />
-                ))}
+                {section.items.map((item) => {
+                  if (isNavLeaf(item)) {
+                    return <NavLeafItem key={item.href} item={item} />;
+                  }
+                  if (isNavGroup(item)) {
+                    return <NavGroupItem key={item.label} item={item} />;
+                  }
+                  return null;
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -251,7 +248,11 @@ export function SuperAdminSidebar() {
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton
                   size="lg"
-                  className={`data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground ${isOpen ? "justify-start px-3" : "w-full justify-center px-0 py-1"}`}
+                  className={`data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground ${
+                    isOpen
+                      ? "justify-start px-3"
+                      : "w-full justify-center px-0 py-1"
+                  }`}
                   aria-label="Menu utente"
                 >
                   <Avatar className="h-10 w-10 rounded-nav border border-border shrink-0">
@@ -259,7 +260,7 @@ export function SuperAdminSidebar() {
                       className="rounded-nav text-base font-bold"
                       style={{
                         background: "hsl(var(--primary) / 0.12)",
-                        color:      "hsl(var(--primary))",
+                        color: "hsl(var(--primary))",
                       }}
                     >
                       {user?.initials ?? "SA"}
@@ -291,7 +292,7 @@ export function SuperAdminSidebar() {
                         className="rounded-nav font-bold"
                         style={{
                           background: "hsl(var(--primary) / 0.12)",
-                          color:      "hsl(var(--primary))",
+                          color: "hsl(var(--primary))",
                         }}
                       >
                         {user?.initials ?? "SA"}
@@ -322,10 +323,11 @@ export function SuperAdminSidebar() {
                     onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
                     className="cursor-pointer"
                   >
-                    {resolvedTheme === "dark"
-                      ? <Sun  className="mr-2 h-4 w-4" aria-hidden="true" />
-                      : <Moon className="mr-2 h-4 w-4" aria-hidden="true" />
-                    }
+                    {resolvedTheme === "dark" ? (
+                      <Sun className="mr-2 h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <Moon className="mr-2 h-4 w-4" aria-hidden="true" />
+                    )}
                     Passa a {resolvedTheme === "dark" ? "Light Mode" : "Dark Mode"}
                   </DropdownMenuItem>
 
@@ -342,7 +344,9 @@ export function SuperAdminSidebar() {
                             onClick={() => setColorTheme(ct.id)}
                             className="cursor-pointer gap-2"
                           >
-                            <div className={`h-3 w-3 rounded-full ${ct.colorClass} ring-1 ring-offset-1 ring-offset-card ring-black/10`} />
+                            <div
+                              className={`h-3 w-3 rounded-full ${ct.colorClass} ring-1 ring-offset-1 ring-offset-card ring-black/10`}
+                            />
                             {ct.label}
                           </DropdownMenuItem>
                         ))}

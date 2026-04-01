@@ -1,9 +1,16 @@
-import { Controller, Get, Patch, Post, Delete, Body, Query, Param, UseGuards, SetMetadata } from '@nestjs/common';
+// apps/backend/src/superadmin/superadmin-dashboard.controller.ts
+// MODIFICATO: aggiunto GET /superadmin/dashboard/activity-feed
+// per il feed attività della Control Room (ultimi eventi cross-modulo).
+
+import {
+  Controller, Get, Patch, Post, Delete,
+  Body, Query, Param,
+  UseGuards, SetMetadata,
+} from '@nestjs/common';
 import { SuperadminDashboardService } from './superadmin-dashboard.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { JwtAuthGuard }               from '../auth/jwt-auth.guard';
 import { GetDealsQueryDto, UpdateDealDto } from './dto/deals.dto';
 
-// Helper per i ruoli
 export const Roles = (...roles: string[]) => SetMetadata('roles', roles);
 
 @Controller('superadmin/dashboard')
@@ -11,45 +18,61 @@ export const Roles = (...roles: string[]) => SetMetadata('roles', roles);
 export class SuperadminDashboardController {
   constructor(private readonly dashboardService: SuperadminDashboardService) {}
 
-  // 1. STATISTICHE GENERALI (KPI Cards)
+  // ── GET /superadmin/dashboard/stats ──────────────────────────────────────
+  // KPI cards Sales Dashboard: leadsCount, totalValue, winRate, avgDealValue,
+  // dealsClosingThisMonth, pipeline by stage, top deals.
   @Get('stats')
   @Roles('superadmin')
   async getStats(@Query() query: GetDealsQueryDto) {
     return this.dashboardService.getSalesStats(query);
   }
 
-  // 2. LISTA DETTAGLIATA (Drill-down Sheet)
+  // ── GET /superadmin/dashboard/deals ──────────────────────────────────────
+  // Lista dettagliata per il drill-down sheet.
   @Get('deals')
   @Roles('superadmin')
   async getDeals(@Query() query: GetDealsQueryDto) {
     return this.dashboardService.findAllDeals(query);
   }
 
-  // 3. DROPDOWN CLIENTI (Per la barra filtri)
+  // ── GET /superadmin/dashboard/filters/clients ────────────────────────────
+  // Dropdown clienti per la barra filtri della Sales Dashboard.
   @Get('filters/clients')
   @Roles('superadmin')
   async getClients() {
     return this.dashboardService.getUniqueClients();
   }
 
-  // 4. MODIFICA DEAL (Form di dettaglio)
+  // ── GET /superadmin/dashboard/activity-feed ──────────────────────────────
+  // NUOVO: stream dei 20 eventi più recenti cross-modulo per la Control Room.
+  // Aggrega: deal modificati, tenant creati, ticket aperti, fatture emesse.
+  // Shape risposta: { items: ActivityFeedItem[] }
+  @Get('activity-feed')
+  @Roles('superadmin')
+  async getActivityFeed(@Query('limit') limit?: string) {
+    const n = limit ? Math.min(parseInt(limit, 10) || 20, 50) : 20;
+    return this.dashboardService.getActivityFeed(n);
+  }
+
+  // ── PATCH /superadmin/dashboard/deals/:id ────────────────────────────────
+  // Modifica deal dal drill-down form.
   @Patch('deals/:id')
   @Roles('superadmin')
   async updateDeal(
-    @Param('id') id: string, 
-    @Body() body: UpdateDealDto
+    @Param('id') id: string,
+    @Body()      body: UpdateDealDto,
   ) {
     return this.dashboardService.updateDeal(id, body);
   }
 
-  // 5. CREA OFFERTA (Nuovo)
+  // ── POST /superadmin/dashboard/deals ─────────────────────────────────────
   @Post('deals')
   @Roles('superadmin')
   async createDeal(@Body() body: UpdateDealDto) {
     return this.dashboardService.createDeal(body);
   }
 
-  // 6. ELIMINA OFFERTA (Nuovo)
+  // ── DELETE /superadmin/dashboard/deals/:id ───────────────────────────────
   @Delete('deals/:id')
   @Roles('superadmin')
   async deleteDeal(@Param('id') id: string) {
