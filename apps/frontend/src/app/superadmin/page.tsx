@@ -57,15 +57,20 @@ interface ControlRoomData {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const fmtEur = (n: number) =>
-  new Intl.NumberFormat("it-IT", {
+// Entrambe le funzioni usano Number() esplicito per sopravvivere a valori
+// undefined, null o stringhe che arrivano dall'API prima che il backend
+// sia completamente aggiornato.
+const fmtEur = (n: unknown) => {
+  const num = Number(n) || 0;
+  return new Intl.NumberFormat("it-IT", {
     style: "currency",
     currency: "EUR",
     maximumFractionDigits: 0,
-    notation: n >= 100_000 ? "compact" : "standard",
-  }).format(n ?? 0);
+    notation: num >= 100_000 ? "compact" : "standard",
+  }).format(num);
+};
 
-const fmtPct = (n: number) => `${(n ?? 0).toFixed(1)}%`;
+const fmtPct = (n: unknown) => `${(Number(n) || 0).toFixed(1)}%`;
 
 type Trend = { value: number; label?: string };
 
@@ -253,7 +258,7 @@ export default function ControlRoomPage() {
         apiFetch<{ revenueTrend: { month: string; amount: number }[] }>("/superadmin/subscriptions/revenue-trend"),
         apiFetch<{ openCount: number }>("/superadmin/tickets/stats"),
         apiFetch<{ status: "up" | "degraded" | "down" }>("/superadmin/system/health-summary"),
-        apiFetch<{ items: ControlRoomData["recentActivity"] }>("/superadmin/activity-feed"),
+        apiFetch<{ items: ControlRoomData["recentActivity"] }>("/superadmin/dashboard/activity-feed"),
       ]);
 
       const metricsData  = metrics.status  === "fulfilled" ? metrics.value  : null;
@@ -270,7 +275,7 @@ export default function ControlRoomPage() {
 
       // Quote requests pending
       const quoteStats = await apiFetch<{ pendingCount: number }>(
-        "/superadmin/sales/quote-requests/stats"
+        "/superadmin/quote-requests/stats"
       ).catch(() => null);
 
       setData({
@@ -360,8 +365,8 @@ export default function ControlRoomPage() {
           label="Churn Rate (30d)"
           value={fmtPct(data.churnRate)}
           icon={TrendingDown}
-          accent={data.churnRate > 5 ? "hsl(0 70% 55%)" : "hsl(150 60% 45%)"}
-          trend={{ value: data.churnRate > 3 ? -0.3 : 0.1 }}
+          accent={Number(data.churnRate) > 5 ? "hsl(0 70% 55%)" : "hsl(150 60% 45%)"}
+          trend={{ value: Number(data.churnRate) > 3 ? -0.3 : 0.1 }}
           href="/superadmin/subscriptions"
         />
         <KpiCard
@@ -369,7 +374,7 @@ export default function ControlRoomPage() {
           value={fmtPct(data.winRate)}
           icon={TrendingUp}
           accent="hsl(var(--chart-3))"
-          trend={{ value: data.winRate >= 30 ? 5 : -2 }}
+          trend={{ value: Number(data.winRate) >= 30 ? 5 : -2 }}
           href="/superadmin/sales/dashboard"
         />
       </div>
