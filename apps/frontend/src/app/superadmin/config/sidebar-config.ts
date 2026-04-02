@@ -9,7 +9,6 @@ import {
   FileText,
   Building2,
   Users,
-  ShieldAlert,
   Wallet,
   Receipt,
   CircleDollarSign,
@@ -269,12 +268,6 @@ export const SUPERADMIN_SIDEBAR: SidebarConfig = [
     id: "settings",
     title: "Configurazione",
     items: [
-      {
-        kind: "leaf",
-        label: "Audit Log",
-        href: "/superadmin/audit",
-        icon: ShieldAlert,
-      },
       {
         kind: "leaf",
         label: "Impostazioni Globali",
