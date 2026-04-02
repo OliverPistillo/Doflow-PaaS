@@ -1,55 +1,47 @@
 // apps/frontend/src/app/superadmin/system/components/tab-api-usage.tsx
-// Estratto da ex /superadmin/api-usage/page.tsx e adattato come componente tab.
+// CORRETTO: allineato allo shape reale di ApiUsageStats dal backend.
+// requestsTimeline (non requestsByHour), topEndpoints senza avgMs/errors,
+// no avgResponseMs, aggiunto rateLimitHits e uniqueIps.
 
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import {
-  Card, CardContent, CardHeader, CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import { Loader2, RefreshCw, Radio } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 interface ApiUsageStats {
-  totalRequests: number;
-  avgResponseMs: number;
-  errorRate: number;
-  topEndpoints: { path: string; count: number; avgMs: number; errors: number }[];
-  requestsByHour: { hour: string; count: number; errors: number }[];
-  topTenants: { tenantId: string; count: number }[];
+  totalRequests:    number;
+  uniqueIps:        number;
+  topEndpoints:     { path: string; count: number }[];
+  topTenants:       { tenantId: string; tenantName?: string; count: number }[];
+  requestsByType:   { type: string; count: number }[];
+  errorRate:        number;
+  recentErrors:     any[];
+  requestsTimeline: { hour: string; count: number }[];
+  rateLimitHits:    number;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const fmtNumber = (n: number) =>
-  new Intl.NumberFormat("it-IT").format(n ?? 0);
+const fmtNumber = (n: unknown) =>
+  new Intl.NumberFormat("it-IT").format(Number(n) || 0);
 
 function ErrorRateBadge({ rate }: { rate: number }) {
-  if (rate < 1)  return <Badge className="bg-emerald-100 text-emerald-700 border-0">{rate.toFixed(2)}%</Badge>;
-  if (rate < 5)  return <Badge className="bg-amber-100 text-amber-700 border-0">{rate.toFixed(2)}%</Badge>;
-  return               <Badge variant="destructive">{rate.toFixed(2)}%</Badge>;
+  const r = Number(rate) || 0;
+  if (r < 1) return <Badge className="bg-emerald-100 text-emerald-700 border-0">{r.toFixed(2)}%</Badge>;
+  if (r < 5) return <Badge className="bg-amber-100 text-amber-700 border-0">{r.toFixed(2)}%</Badge>;
+  return <Badge variant="destructive">{r.toFixed(2)}%</Badge>;
 }
 
-// ─── TabApiUsage ──────────────────────────────────────────────────────────────
-
 export function TabApiUsage() {
-  const [data, setData] = useState<ApiUsageStats | null>(null);
+  const [data, setData]       = useState<ApiUsageStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -86,15 +78,21 @@ export function TabApiUsage() {
     );
   }
 
+  const errorRate = Number(data.errorRate) || 0;
+
   return (
     <div className="space-y-6">
 
-      {/* KPI Row */}
+      {/* KPI */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: "Richieste totali",  value: fmtNumber(data.totalRequests), color: "hsl(var(--chart-1))" },
-          { label: "Latenza media",     value: `${data.avgResponseMs.toFixed(0)} ms`, color: "hsl(var(--chart-2))" },
-          { label: "Error rate",        value: `${data.errorRate.toFixed(2)}%`,       color: data.errorRate > 5 ? "hsl(0 70% 55%)" : "hsl(150 60% 45%)" },
+          { label: "Richieste totali", value: fmtNumber(data.totalRequests), color: "hsl(var(--chart-1))" },
+          { label: "IP unici",         value: fmtNumber(data.uniqueIps),     color: "hsl(var(--chart-2))" },
+          {
+            label: "Error rate",
+            value: `${errorRate.toFixed(2)}%`,
+            color: errorRate > 5 ? "hsl(0 70% 55%)" : "hsl(150 60% 45%)",
+          },
         ].map(({ label, value, color }) => (
           <Card key={label} className="glass-card border-none">
             <CardContent className="pt-5 pb-5">
@@ -105,40 +103,34 @@ export function TabApiUsage() {
         ))}
       </div>
 
-      {/* Richieste per ora */}
-      {data.requestsByHour?.length > 0 && (
+      {/* Rate limit warning */}
+      {(data.rateLimitHits ?? 0) > 0 && (
+        <Card className="border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20">
+          <CardContent className="pt-4 pb-4">
+            <span className="text-amber-600 dark:text-amber-400 text-sm font-bold">
+              ⚠ Rate limit colpito {fmtNumber(data.rateLimitHits)} volte nell&apos;ultima finestra
+            </span>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Timeline */}
+      {(data.requestsTimeline?.length ?? 0) > 0 && (
         <Card className="glass-card border-none">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-              Traffico per ora (ultime 24h)
+              Traffico per ora
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[220px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.requestsByHour} barGap={2}>
+                <BarChart data={data.requestsTimeline}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis
-                    dataKey="hour"
-                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      borderRadius: "12px",
-                      border: "1px solid hsl(var(--border))",
-                      fontSize: 12,
-                    }}
-                  />
-                  <Bar dataKey="count"  fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} name="Richieste" />
-                  <Bar dataKey="errors" fill="hsl(0 70% 55%)"       radius={[4, 4, 0, 0]} name="Errori"    />
+                  <XAxis dataKey="hour" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderRadius: "12px", border: "1px solid hsl(var(--border))", fontSize: 12 }} />
+                  <Bar dataKey="count" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} name="Richieste" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -161,23 +153,13 @@ export function TabApiUsage() {
                 <TableRow>
                   <TableHead>Endpoint</TableHead>
                   <TableHead className="text-right">Chiamate</TableHead>
-                  <TableHead className="text-right">Avg ms</TableHead>
-                  <TableHead className="text-right">Errori</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(data.topEndpoints ?? []).slice(0, 10).map((ep) => (
                   <TableRow key={ep.path}>
-                    <TableCell className="font-mono text-xs max-w-[200px] truncate">{ep.path}</TableCell>
-                    <TableCell className="text-right tabular-nums text-sm font-medium">
-                      {fmtNumber(ep.count)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-sm">
-                      {ep.avgMs.toFixed(0)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <ErrorRateBadge rate={ep.count > 0 ? (ep.errors / ep.count) * 100 : 0} />
-                    </TableCell>
+                    <TableCell className="font-mono text-xs max-w-[260px] truncate">{ep.path}</TableCell>
+                    <TableCell className="text-right tabular-nums text-sm font-medium">{fmtNumber(ep.count)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -189,7 +171,7 @@ export function TabApiUsage() {
         <Card className="glass-card border-none">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-              Tenant più attivi (per volume)
+              Tenant più attivi
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -203,10 +185,8 @@ export function TabApiUsage() {
               <TableBody>
                 {(data.topTenants ?? []).slice(0, 10).map((t) => (
                   <TableRow key={t.tenantId}>
-                    <TableCell className="font-medium text-sm">{t.tenantId}</TableCell>
-                    <TableCell className="text-right tabular-nums font-medium">
-                      {fmtNumber(t.count)}
-                    </TableCell>
+                    <TableCell className="text-sm font-medium">{t.tenantName || t.tenantId}</TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">{fmtNumber(t.count)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -216,7 +196,6 @@ export function TabApiUsage() {
 
       </div>
 
-      {/* Refresh */}
       <div className="flex justify-end">
         <Button variant="outline" size="sm" onClick={load} disabled={loading} className="gap-2">
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
