@@ -114,6 +114,7 @@ import { Invoice } from './superadmin/entities/invoice.entity';
 import { InvoiceLineItem } from './superadmin/entities/invoice-line-item.entity';
 import { InvoiceTemplate } from './superadmin/entities/invoice-template.entity';
 import { InvoiceClient } from './superadmin/entities/invoice-client.entity';
+import { SavedService } from './superadmin/entities/saved-service.entity';
 import { Tenant } from './superadmin/entities/tenant.entity';
 import { QuoteRequest } from './superadmin/entities/quote-request.entity'; // <--- NUOVO
 import { PassportModule } from '@nestjs/passport';
@@ -168,6 +169,7 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
       InvoiceLineItem,
       InvoiceTemplate,
       InvoiceClient,
+      SavedService,
       Tenant,
       PlatformModule,
       TenantSubscription,
