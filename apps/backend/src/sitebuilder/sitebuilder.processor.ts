@@ -77,7 +77,7 @@ export class SitebuilderProcessor extends WorkerHost {
   ) {
     super();
     this.anthropic = new Anthropic({
-      apiKey: config.getOrThrow<string>('ANTHROPIC_API_KEY'),
+      apiKey: config.get<string>('ANTHROPIC_API_KEY') ?? '',
     });
     this.deploymentsRoot = path.resolve(
       config.get<string>('SITEBUILDER_DEPLOYMENTS_PATH', './deployments'),
