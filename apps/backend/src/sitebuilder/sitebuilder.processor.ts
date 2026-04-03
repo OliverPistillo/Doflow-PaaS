@@ -291,6 +291,9 @@ Restituisci ESCLUSIVAMENTE un oggetto JSON valido con questa struttura esatta:
         .map((b) => b.text)
         .join('');
 
+      // LOG TEMPORANEO — rimuovere dopo il debug
+      this.logger.debug(`[${payload.jobId}] RAW LLM "${topic}": ${rawText.substring(0, 500)}`);
+
       // Rimuovi fence markdown residui e whitespace
       const clean = rawText
         .replace(/^```(?:json)?\s*/i, '')
