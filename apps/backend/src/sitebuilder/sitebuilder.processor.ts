@@ -252,7 +252,7 @@ Il titolo del sito è: ${payload.siteTitle}.`;
     const userMessage = `Genera i blocchi Gutenberg per queste sezioni del sito "${payload.siteTitle}":\n${topicList}`;
 
     const message = await this.anthropic.messages.create({
-      model: 'claude-3-7-sonnet-20250219',
+      model: 'claude-sonnet-4-6',
       max_tokens: 8192,
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }],
