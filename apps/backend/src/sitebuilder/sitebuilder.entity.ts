@@ -9,20 +9,14 @@ import {
   Index,
 } from 'typeorm';
 
-// ─────────────────────────────────────────────
-//  Enum: stati del job
-// ─────────────────────────────────────────────
 export enum SitebuilderJobStatus {
-  PENDING   = 'PENDING',    // appena creato, in coda
-  RUNNING   = 'RUNNING',    // il worker sta lavorando
-  DONE      = 'DONE',       // completato con successo
-  FAILED    = 'FAILED',     // fallito dopo tutti i retry
-  ROLLED_BACK = 'ROLLED_BACK', // cleanup eseguito dopo fallimento
+  PENDING     = 'PENDING',
+  RUNNING     = 'RUNNING',
+  DONE        = 'DONE',
+  FAILED      = 'FAILED',
+  ROLLED_BACK = 'ROLLED_BACK',
 }
 
-// ─────────────────────────────────────────────
-//  Entity
-// ─────────────────────────────────────────────
 @Entity({ schema: 'public', name: 'sitebuilder_jobs' })
 @Index(['status'])
 @Index(['tenantId'])
@@ -30,35 +24,27 @@ export class SitebuilderJob {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  /** Tenant/cliente per cui viene creato il sito */
-  @Column({ name: 'tenant_id' })
+  @Column({ type: 'varchar', name: 'tenant_id' })
   tenantId!: string;
 
-  /** Dominio finale del sito WP (es. "demo.cliente.it") */
-  @Column({ name: 'site_domain' })
+  @Column({ type: 'varchar', name: 'site_domain' })
   siteDomain!: string;
 
-  /** Titolo del sito WordPress */
-  @Column({ name: 'site_title' })
+  @Column({ type: 'varchar', name: 'site_title' })
   siteTitle!: string;
 
-  /** Email admin WP */
-  @Column({ name: 'admin_email' })
+  @Column({ type: 'varchar', name: 'admin_email' })
   adminEmail!: string;
 
-  /** Temi/argomenti da passare ad Anthropic per la generazione dei contenuti */
   @Column({ type: 'text', array: true, name: 'content_topics' })
   contentTopics!: string[];
 
-  /** Slug dei plugin WP.org da installare (es. ["yoast-seo"]) */
   @Column({ type: 'text', array: true, name: 'plugins', default: '{}' })
   plugins!: string[];
 
-  /** Lingua del sito (default: it) */
-  @Column({ default: 'it' })
+  @Column({ type: 'varchar', default: 'it' })
   locale!: string;
 
-  /** Stato corrente del job */
   @Column({
     type: 'enum',
     enum: SitebuilderJobStatus,
@@ -66,19 +52,15 @@ export class SitebuilderJob {
   })
   status!: SitebuilderJobStatus;
 
-  /**
-   * Log di esecuzione — array di stringhe append-only.
-   * Salvato come JSONB per query flessibili dal superadmin.
-   */
   @Column({ type: 'jsonb', default: [] })
   logs!: string[];
 
-  /** Numero di tentativi eseguiti da BullMQ */
-  @Column({ name: 'attempt_count', default: 0 })
+  @Column({ type: 'int', name: 'attempt_count', default: 0 })
   attemptCount!: number;
 
-  /** URL del sito una volta completato con successo */
-  @Column({ name: 'site_url', nullable: true })
+  // type: 'varchar' esplicito — senza di esso TypeORM inferisce "Object"
+  // dal tipo union string | null e lancia DataTypeNotSupportedError
+  @Column({ type: 'varchar', name: 'site_url', nullable: true })
   siteUrl!: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
