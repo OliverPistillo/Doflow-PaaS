@@ -100,6 +100,25 @@ export class SitebuilderProcessor extends WorkerHost {
 
     const deployDir = path.join(this.deploymentsRoot, jobId);
 
+    // ─ Cleanup attempt precedente ──────────────────────────────────
+    // Al retry i container del tentativo precedente esistono ancora con
+    // la vecchia password generata. Li distruggiamo prima di ricominciare
+    // per evitare "Error establishing a database connection".
+    if (job.attemptsMade > 0) {
+      await this.appendLog(jobId, `Cleanup attempt precedente (attempt #${job.attemptsMade})...`);
+      const prevCompose = path.join(deployDir, 'docker-compose.yml');
+      try {
+        await fs.access(prevCompose);
+        await spawnAsync('docker-compose', [
+          '-f', prevCompose, 'down', '-v', '--remove-orphans', '--timeout', '15',
+        ]);
+        this.logger.debug(`[${jobId}] Container precedenti distrutti.`);
+      } catch {
+        this.logger.debug(`[${jobId}] Nessun compose precedente trovato, procedo.`);
+      }
+      await fs.rm(deployDir, { recursive: true, force: true });
+    }
+
     // ─ Step 1: prepara la directory di deployment ───────────────────
     await this.appendLog(jobId, 'Creazione directory deployment...');
     await fs.mkdir(deployDir, { recursive: true });
@@ -586,14 +605,15 @@ Restituisci ESCLUSIVAMENTE un oggetto JSON valido con questa struttura esatta:
     const ts = new Date().toISOString();
     const entry = `[${ts}] ${message}`;
     this.logger.debug(`[${jobId}] ${message}`);
-    // Usa un raw query per append atomico su JSONB senza race condition
+    // Usa :entry come parametro tipizzato — evita che caratteri speciali nel messaggio
+    // (virgolette, punti, backslash) rompano la query JSONB raw
     await this.jobRepo
       .createQueryBuilder()
       .update(SitebuilderJob)
       .set({
-        logs: () => `logs || '${JSON.stringify([entry])}'::jsonb`,
-        attemptCount: () => 'attempt_count + 0', // no-op, mantiene updatedAt
+        logs: () => `logs || :entry::jsonb`,
       })
+      .setParameter('entry', JSON.stringify([entry]))
       .where('id = :id', { id: jobId })
       .execute();
   }
