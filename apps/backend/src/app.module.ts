@@ -134,6 +134,7 @@ import { BusinaroModule } from './businaro/businaro.module';
 
 // --- SITEBUILDER (WordPress AI) ---
 import { SitebuilderModule } from './sitebuilder/sitebuilder.module';
+import { BullModule } from '@nestjs/bullmq';
 
 // --- Piattaforma odoo-style ---
 import { PlatformModule } from './superadmin/entities/platform-module.entity';
@@ -218,6 +219,18 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }]),
     FedericaNeroneModule,
     BusinaroModule,
+    // --- BULLMQ ROOT (connessione Redis condivisa per tutte le code) ---
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (cfg: ConfigService) => ({
+        connection: {
+          host:     cfg.get<string>('REDIS_HOST', 'localhost'),
+          port:     cfg.get<number>('REDIS_PORT', 6379),
+          password: cfg.get<string>('REDIS_PASSWORD'),
+        },
+      }),
+    }),
     // --- SITEBUILDER ---
     SitebuilderModule,
   ],
