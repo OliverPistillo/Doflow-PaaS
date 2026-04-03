@@ -95,6 +95,9 @@ import { ExportController } from './superadmin/export.controller';
 import { ExportService } from './superadmin/export.service';
 import { BackupSchedule } from './superadmin/entities/backup-schedule.entity';
 
+// --- SITEBUILDER ENTITY ---
+import { SitebuilderJob } from './sitebuilder/sitebuilder.entity';
+
 // --- SERVIZI ---
 import { AuthService } from './auth.service';
 import { AuditService } from './audit.service';
@@ -128,6 +131,9 @@ import { AuthMiddleware } from './auth.middleware';
 import { TenantModule } from './tenant/tenant.module';
 import { FedericaNeroneModule } from './federicanerone/federicanerone.module';
 import { BusinaroModule } from './businaro/businaro.module';
+
+// --- SITEBUILDER (WordPress AI) ---
+import { SitebuilderModule } from './sitebuilder/sitebuilder.module';
 
 // --- Piattaforma odoo-style ---
 import { PlatformModule } from './superadmin/entities/platform-module.entity';
@@ -182,6 +188,8 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
       ChangelogEntry,
       AutomationRule,
       BackupSchedule,
+      // --- SITEBUILDER ---
+      SitebuilderJob,
     ]),
 
     PassportModule,
@@ -210,6 +218,8 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }]),
     FedericaNeroneModule,
     BusinaroModule,
+    // --- SITEBUILDER ---
+    SitebuilderModule,
   ],
 
   controllers: [

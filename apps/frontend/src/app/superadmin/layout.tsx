@@ -47,6 +47,7 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   // Operations
   "/superadmin/delivery/status":           "Stato Delivery",
   "/superadmin/delivery/calendar":         "Calendario Progetto",
+  "/superadmin/sitebuilder":               "Sitebuilder WordPress",
 
   // Infrastruttura
   "/superadmin/system":                    "System Monitor",

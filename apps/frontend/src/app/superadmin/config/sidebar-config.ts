@@ -25,6 +25,7 @@ import {
   Activity,
   CalendarDays,
   Truck,
+  Globe,
   type LucideIcon,
 } from "lucide-react";
 
@@ -206,6 +207,13 @@ export const SUPERADMIN_SIDEBAR: SidebarConfig = [
         label: "Calendario",
         href: "/superadmin/delivery/calendar",
         icon: CalendarDays,
+      },
+      {
+        kind: "leaf",
+        label: "Sitebuilder WP",
+        href: "/superadmin/sitebuilder",
+        icon: Globe,
+        badge: "AI",
       },
     ],
   },
