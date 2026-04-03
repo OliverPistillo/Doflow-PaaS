@@ -6,6 +6,7 @@ import {
   Loader2, Globe, Sparkles, Plus, X, RefreshCw,
   CheckCircle2, XCircle, Clock, Zap, Terminal,
   ExternalLink, ChevronRight, ArrowLeft, Puzzle,
+  Download,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getApiBaseUrl } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useSitebuilderJob, type SitebuilderJob, type SitebuilderJobStatus } from "@/hooks/useSitebuilderJob";
 import { cn } from "@/lib/utils";
@@ -222,6 +223,62 @@ function PluginInput({
   );
 }
 
+// ─── Download Button ──────────────────────────────────────────────────────────
+
+function DownloadButton({ jobId, siteDomain }: { jobId: string; siteDomain: string }) {
+  const [loading, setLoading] = React.useState(false);
+
+  const handleDownload = async () => {
+    setLoading(true);
+    try {
+      // Chiama l'endpoint che restituisce il blob ZIP in streaming
+      const base = getApiBaseUrl(); // es. "https://api.doflow.it/api"
+      const token = typeof window !== "undefined"
+        ? window.localStorage.getItem("doflow_token") ?? ""
+        : "";
+
+      const res = await fetch(`${base}/sitebuilder/jobs/${jobId}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { message?: string };
+        throw new Error(err.message ?? `HTTP ${res.status}`);
+      }
+
+      // Crea un link temporaneo e forza il download nel browser
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `wp-${siteDomain}-${jobId.slice(0, 8)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(`Errore download: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleDownload}
+      disabled={loading}
+      className="w-full flex items-center justify-center gap-2 px-3 py-2.5 border border-dashed border-border rounded-lg text-sm text-muted-foreground hover:text-foreground hover:border-border hover:bg-muted/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {loading
+        ? <Loader2 className="h-4 w-4 animate-spin" />
+        : <Download className="h-4 w-4" />}
+      {loading ? "Preparazione ZIP..." : "Scarica cartella WordPress (.zip)"}
+    </button>
+  );
+}
+
+// ─── Job Monitor ──────────────────────────────────────────────────────────────
+
 function JobMonitor({ job }: { job: SitebuilderJob }) {
   const logRef = useRef<HTMLDivElement>(null);
   const stepIndex = guessStepFromLog(job.logs);
@@ -301,7 +358,7 @@ function JobMonitor({ job }: { job: SitebuilderJob }) {
           {job.logs.length === 0 ? (
             <span className="text-muted-foreground">In attesa di log...</span>
           ) : (
-            job.logs.map((line: string, i: number) => {
+            job.logs.map((line, i) => {
               const isError = line.toLowerCase().includes("error") || line.toLowerCase().includes("fallito");
               const isOk = line.includes("✓") || line.toLowerCase().includes("completato") || line.toLowerCase().includes("ready");
               return (
@@ -323,14 +380,18 @@ function JobMonitor({ job }: { job: SitebuilderJob }) {
 
       {/* Result */}
       {job.status === "DONE" && job.siteUrl && (
-        <div className="flex items-center gap-2 px-3 py-2.5 bg-green-50 border border-green-200 rounded-lg">
-          <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
-          <span className="text-sm text-green-700 font-medium flex-1">{job.siteUrl}</span>
-          <a href={job.siteUrl} target="_blank" rel="noreferrer">
-            <Button variant="outline" size="sm" className="h-7 text-xs border-green-300 text-green-700 hover:bg-green-100">
-              Apri <ExternalLink className="h-3 w-3 ml-1" />
-            </Button>
-          </a>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 px-3 py-2.5 bg-green-50 border border-green-200 rounded-lg">
+            <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+            <span className="text-sm text-green-700 font-medium flex-1">{job.siteUrl}</span>
+            <a href={job.siteUrl} target="_blank" rel="noreferrer">
+              <Button variant="outline" size="sm" className="h-7 text-xs border-green-300 text-green-700 hover:bg-green-100">
+                Apri <ExternalLink className="h-3 w-3 ml-1" />
+              </Button>
+            </a>
+          </div>
+          {/* Pulsante download ZIP */}
+          <DownloadButton jobId={job.id} siteDomain={job.siteDomain} />
         </div>
       )}
       {(job.status === "FAILED" || job.status === "ROLLED_BACK") && (
@@ -517,7 +578,7 @@ export default function SitebuilderClient() {
                   <Select value={form.locale} onValueChange={(v) => setField("locale", v)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {([["it","Italiano"],["en","English"],["fr","Français"],["de","Deutsch"],["es","Español"]] as [string, string][]).map(([v, l]) => (
+                      {[["it","Italiano"],["en","English"],["fr","Français"],["de","Deutsch"],["es","Español"]].map(([v,l]) => (
                         <SelectItem key={v} value={v}>{l}</SelectItem>
                       ))}
                     </SelectContent>

@@ -26,14 +26,21 @@ RUN mkdir -p apps/backend/dist/redis/scripts \
 FROM node:20-alpine AS runner
 WORKDIR /app
 
-# 🔥 FIX: utility Linux + pg_dump v17 (via Alpine edge repo)
-RUN apk add --no-cache util-linux \
-  && apk add --no-cache --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main postgresql17-client
+# ── Utility Linux + pg_dump v17 + zip + Docker CLI ───────────────────────────
+# zip    → usato dal SitebuilderController per creare il download .zip
+# docker → usato dal SitebuilderProcessor per lanciare i container WordPress
+#          Il socket /var/run/docker.sock viene montato dal docker-compose.yml
+RUN apk add --no-cache \
+      util-linux \
+      zip \
+      docker-cli \
+  && apk add --no-cache \
+      --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main \
+      postgresql17-client
 
 ENV NODE_ENV=production
 
 # Copy necessary files from builder
-# Copia ENTRAMBI i node_modules (root + backend-specific per pnpm workspace hoisting)
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/backend/node_modules ./apps/backend/node_modules
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
