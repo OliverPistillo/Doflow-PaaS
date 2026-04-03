@@ -1,3 +1,5 @@
+// apps/backend/src/sitebuilder/sitebuilder.module.ts
+
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
@@ -6,24 +8,24 @@ import { SitebuilderJob } from './sitebuilder.entity';
 import { SitebuilderController } from './sitebuilder.controller';
 import { SitebuilderProducerService } from './sitebuilder.producer.service';
 import { SitebuilderProcessor } from './sitebuilder.processor';
+import { SITEBUILDER_QUEUE } from './sitebuilder.constants';
 
-export const SITEBUILDER_QUEUE = 'sitebuilder';
+// Re-esporta per comodità — chi vuole può importare da qui o da constants
+export { SITEBUILDER_QUEUE } from './sitebuilder.constants';
 
 @Module({
   imports: [
-    // ── TypeORM ───────────────────────────────────────────────────────
     TypeOrmModule.forFeature([SitebuilderJob]),
 
-    // ── BullMQ Queue ──────────────────────────────────────────────────
-    // La connessione Redis è già definita in BullModule.forRootAsync
-    // dentro AppModule — qui registriamo solo la coda con le sue opzioni.
+    // La connessione Redis è fornita da BullModule.forRootAsync in AppModule.
+    // Qui registriamo solo la coda con le sue opzioni di default.
     BullModule.registerQueue({
       name: SITEBUILDER_QUEUE,
       defaultJobOptions: {
         attempts: 4,
         backoff: {
           type: 'exponential',
-          delay: 15_000, // 15 s → 30 s → 60 s → 120 s
+          delay: 15_000,
         },
         removeOnComplete: { count: 100 },
         removeOnFail:     { count: 100 },

@@ -8,7 +8,7 @@ import { Queue } from 'bullmq';
 
 import { SitebuilderJob, SitebuilderJobStatus } from './sitebuilder.entity';
 import { CreateSitebuilderJobDto } from './dto/create-sitebuilder-job.dto';
-import { SITEBUILDER_QUEUE } from './sitebuilder.module';
+import { SITEBUILDER_QUEUE } from './sitebuilder.constants'; // ← da constants, non da module
 
 // ─────────────────────────────────────────────
 //  Tipo del payload che viaggia dentro BullMQ.

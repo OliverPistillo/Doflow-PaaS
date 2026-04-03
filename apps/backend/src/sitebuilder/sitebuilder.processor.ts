@@ -19,7 +19,7 @@ import {
   SitebuilderJob,
   SitebuilderJobStatus,
 } from './sitebuilder.entity';
-import { SITEBUILDER_QUEUE } from './sitebuilder.module';
+import { SITEBUILDER_QUEUE } from './sitebuilder.constants'; // ← da constants, non da module
 import { SitebuilderJobPayload } from './sitebuilder.producer.service';
 
 // ─────────────────────────────────────────────
