@@ -34,6 +34,7 @@ RUN apk add --no-cache \
       util-linux \
       zip \
       docker-cli \
+      docker-compose \
   && apk add --no-cache \
       --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main \
       postgresql17-client

@@ -232,60 +232,72 @@ volumes:
   }
 
   // ── 3. Anthropic — genera blocchi Gutenberg ───────────────────────
+  // Strategia: un topic alla volta con max_tokens basso.
+  // Evita il troncamento JSON che avviene con molti topic in un unico array.
   private async generateGutenbergContent(
     payload: SitebuilderJobPayload,
   ): Promise<GutenbergBlock[]> {
-    const topicList = payload.contentTopics
-      .map((t, i) => `${i + 1}. ${t}`)
-      .join('\n');
+    const blocks: GutenbergBlock[] = [];
 
-    const systemPrompt = `Sei un esperto sviluppatore WordPress. Genera ESCLUSIVAMENTE codice HTML valido
-compatibile con l'editor Gutenberg di WordPress per le sezioni elencate dall'utente.
-Il tuo output deve essere un array JSON puro, senza alcun testo aggiuntivo, senza blocchi
-markdown (niente triple backtick), senza spiegazioni.
-Ogni elemento dell'array deve avere questa struttura:
-{"topic": "<nome sezione>", "html": "<HTML del blocco Gutenberg>"}
-Usa blocchi Gutenberg standard (<!-- wp:paragraph -->, <!-- wp:heading -->, <!-- wp:group -->, ecc.).
-Il sito è in lingua: ${payload.locale}.
-Il titolo del sito è: ${payload.siteTitle}.`;
+    for (const topic of payload.contentTopics) {
+      const message = await this.anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2048,
+        system: `Sei un esperto sviluppatore WordPress.
+Genera ESCLUSIVAMENTE un oggetto JSON valido con questa struttura esatta:
+{"topic": "<nome>", "html": "<HTML Gutenberg>"}
+REGOLE ASSOLUTE:
+- Nessun markdown, nessun backtick, nessun testo fuori dal JSON
+- Nell'HTML usa SOLO apici singoli negli attributi (es. class='wp-block')
+- Non usare MAI doppie virgolette dentro i valori HTML
+- Usa blocchi Gutenberg standard (<!-- wp:paragraph -->, <!-- wp:heading -->, ecc.)
+- Lingua del sito: ${payload.locale}
+- Titolo del sito: ${payload.siteTitle}`,
+        messages: [{
+          role: 'user',
+          content: `Genera il blocco Gutenberg per la sezione "${topic}" del sito "${payload.siteTitle}".`,
+        }],
+      });
 
-    const userMessage = `Genera i blocchi Gutenberg per queste sezioni del sito "${payload.siteTitle}":\n${topicList}`;
+      const rawText = message.content
+        .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+        .map((b) => b.text)
+        .join('');
 
-    const message = await this.anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 8192,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userMessage }],
-    });
+      const clean = rawText
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .trim();
 
-    // Estrai il testo dalla risposta
-    const rawText = message.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join('');
+      try {
+        const block = JSON.parse(clean) as GutenbergBlock;
+        blocks.push(block);
+        this.logger.debug(`[${payload.jobId}] Blocco "${topic}" generato OK`);
+      } catch {
+        // Parse fallito per questo topic: usa blocco placeholder e continua
+        this.logger.warn(`[${payload.jobId}] Parse JSON fallito per topic "${topic}", uso fallback`);
+        blocks.push({
+          topic,
+          html: `<!-- wp:paragraph --><p>${topic}</p><!-- /wp:paragraph -->`,
+        });
+      }
+    }
 
-    // Rimuovi eventuali fence markdown residui prima del parse
-    const cleanedText = rawText
-      .replace(/^```(?:json)?\s*/i, '')
-      .replace(/\s*```$/i, '')
-      .trim();
-
-    const blocks = JSON.parse(cleanedText) as GutenbergBlock[];
     return blocks;
   }
 
   // ── 4. docker compose up ──────────────────────────────────────────
   private async dockerComposeUp(deployDir: string, jobId: string): Promise<void> {
     const result = await spawnAsync(
-      'docker',
-      ['compose', '-f', path.join(deployDir, 'docker-compose.yml'), 'up', '-d', '--remove-orphans'],
+      'docker-compose',
+      ['-f', path.join(deployDir, 'docker-compose.yml'), 'up', '-d', '--remove-orphans'],
       { cwd: deployDir },
     );
 
-    await this.appendLog(jobId, `docker compose up: ${result.stdout || result.stderr}`);
+    await this.appendLog(jobId, `docker-compose up: ${result.stdout || result.stderr}`);
 
     if (result.code !== 0) {
-      throw new Error(`docker compose up fallito (exit ${result.code}): ${result.stderr}`);
+      throw new Error(`docker-compose up fallito (exit ${result.code}): ${result.stderr}`);
     }
   }
 
@@ -505,8 +517,7 @@ Il titolo del sito è: ${payload.siteTitle}.`;
       // Controlla se il file esiste prima di provare
       await fs.access(composePath);
 
-      const result = await spawnAsync('docker', [
-        'compose',
+      const result = await spawnAsync('docker-compose', [
         '-f',
         composePath,
         'down',
