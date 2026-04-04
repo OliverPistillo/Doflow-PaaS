@@ -22,19 +22,26 @@ RUN pnpm --filter backend run build
 RUN mkdir -p apps/backend/dist/redis/scripts \
   && cp apps/backend/src/redis/scripts/dual_probe.lua apps/backend/dist/redis/scripts/dual_probe.lua || true
 
+# Copy Sitebuilder assets (blocksy-companion-pro.zip) into dist
+# Il TypeScript compiler non copia i file non-.ts, quindi lo facciamo manualmente
+RUN mkdir -p apps/backend/dist/sitebuilder/assets \
+  && cp apps/backend/src/sitebuilder/assets/blocksy-companion-pro.zip \
+     apps/backend/dist/sitebuilder/assets/blocksy-companion-pro.zip 2>/dev/null || true
+
 # ===== STAGE 2: RUNNER =====
 FROM node:20-alpine AS runner
 WORKDIR /app
 
-# ── Utility Linux + pg_dump v17 + zip + Docker CLI ───────────────────────────
-# zip    → usato dal SitebuilderController per creare il download .zip
-# docker → usato dal SitebuilderProcessor per lanciare i container WordPress
-#          Il socket /var/run/docker.sock viene montato dal docker-compose.yml
+# ── Utility Linux ─────────────────────────────────────────────────────────────
+# zip    → SitebuilderController: crea lo ZIP della cartella wordpress/
+# unzip  → SitebuilderProcessor v2: estrae wordpress-latest.zip e i temi
+# curl   → SitebuilderProcessor v2: download WordPress e tema Blocksy
+# pg_dump v17 → BackupService
 RUN apk add --no-cache \
       util-linux \
       zip \
-      docker-cli \
-      docker-compose \
+      unzip \
+      curl \
   && apk add --no-cache \
       --repository=https://dl-cdn.alpinelinux.org/alpine/edge/main \
       postgresql17-client

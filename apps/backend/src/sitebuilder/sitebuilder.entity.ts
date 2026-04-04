@@ -1,12 +1,8 @@
 // apps/backend/src/sitebuilder/sitebuilder.entity.ts
 
 import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  CreateDateColumn,
-  UpdateDateColumn,
-  Index,
+  Entity, Column, PrimaryGeneratedColumn,
+  CreateDateColumn, UpdateDateColumn, Index,
 } from 'typeorm';
 
 export enum SitebuilderJobStatus {
@@ -36,11 +32,25 @@ export class SitebuilderJob {
   @Column({ type: 'varchar', name: 'admin_email' })
   adminEmail!: string;
 
+  /** Tipo di business (es. "Ristorante", "eCommerce", "Portfolio") */
+  @Column({ type: 'varchar', name: 'business_type', default: 'Business' })
+  businessType!: string;
+
+  /** Descrizione del business — usata dall'LLM per generare i testi */
+  @Column({ type: 'text', name: 'business_description', nullable: true })
+  businessDescription!: string | null;
+
+  /** Slug del tema Blocksy Starter Site selezionato */
+  @Column({ type: 'varchar', name: 'starter_site', default: 'business' })
+  starterSite!: string;
+
+  /** Palette e font selezionati dall'utente (JSON) */
+  @Column({ type: 'jsonb', name: 'design_scheme', default: {} })
+  designScheme!: Record<string, unknown>;
+
+  /** Pagine/sezioni da generare */
   @Column({ type: 'text', array: true, name: 'content_topics' })
   contentTopics!: string[];
-
-  @Column({ type: 'text', array: true, name: 'plugins', default: '{}' })
-  plugins!: string[];
 
   @Column({ type: 'varchar', default: 'it' })
   locale!: string;
@@ -58,8 +68,10 @@ export class SitebuilderJob {
   @Column({ type: 'int', name: 'attempt_count', default: 0 })
   attemptCount!: number;
 
-  // type: 'varchar' esplicito — senza di esso TypeORM inferisce "Object"
-  // dal tipo union string | null e lancia DataTypeNotSupportedError
+  /** URL del file ZIP scaricabile */
+  @Column({ type: 'varchar', name: 'zip_filename', nullable: true })
+  zipFilename!: string | null;
+
   @Column({ type: 'varchar', name: 'site_url', nullable: true })
   siteUrl!: string | null;
 

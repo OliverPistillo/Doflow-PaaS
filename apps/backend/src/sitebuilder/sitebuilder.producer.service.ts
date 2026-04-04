@@ -8,22 +8,19 @@ import { Queue } from 'bullmq';
 
 import { SitebuilderJob, SitebuilderJobStatus } from './sitebuilder.entity';
 import { CreateSitebuilderJobDto } from './dto/create-sitebuilder-job.dto';
-import { SITEBUILDER_QUEUE } from './sitebuilder.constants'; // ← da constants, non da module
+import { SITEBUILDER_QUEUE } from './sitebuilder.constants';
 
-// ─────────────────────────────────────────────
-//  Tipo del payload che viaggia dentro BullMQ.
-//  Non usa `any`; include anche la password
-//  (cifrata in transit tramite Redis — assicurarsi di usare Redis con AUTH).
-// ─────────────────────────────────────────────
 export interface SitebuilderJobPayload {
   jobId: string;
   tenantId: string;
   siteDomain: string;
   siteTitle: string;
   adminEmail: string;
-  adminPassword: string;
+  businessType: string;
+  businessDescription: string;
+  starterSite: string;
+  designScheme: Record<string, unknown>;
   contentTopics: string[];
-  plugins: string[];        // slug WP.org dei plugin aggiuntivi
   locale: string;
 }
 
@@ -34,55 +31,60 @@ export class SitebuilderProducerService {
   constructor(
     @InjectRepository(SitebuilderJob)
     private readonly jobRepo: Repository<SitebuilderJob>,
-
     @InjectQueue(SITEBUILDER_QUEUE)
     private readonly queue: Queue<SitebuilderJobPayload>,
   ) {}
 
-  // ── Crea record DB + job in coda, ritorna subito ──────────────────
   async enqueue(dto: CreateSitebuilderJobDto): Promise<SitebuilderJob> {
-    // 1) Persistiamo il record in stato PENDING
     const entity = this.jobRepo.create({
-      tenantId:      dto.tenantId,
-      siteDomain:    dto.siteDomain,
-      siteTitle:     dto.siteTitle,
-      adminEmail:    dto.adminEmail,
-      contentTopics: dto.contentTopics,
-      plugins:       dto.plugins ?? [],
-      locale:        dto.locale ?? 'it',
-      status:        SitebuilderJobStatus.PENDING,
-      logs:          [],
+      tenantId:            dto.tenantId,
+      siteDomain:          dto.siteDomain,
+      siteTitle:           dto.siteTitle,
+      adminEmail:          dto.adminEmail,
+      businessType:        dto.businessType,
+      businessDescription: dto.businessDescription ?? null,
+      starterSite:         dto.starterSite,
+      designScheme:        (dto.designScheme as Record<string, unknown>) ?? {},
+      contentTopics:       dto.contentTopics,
+      locale:              dto.locale ?? 'it',
+      status:              SitebuilderJobStatus.PENDING,
+      logs:                [],
     });
     const saved = await this.jobRepo.save(entity);
 
-    // 2) Accodiamo il job BullMQ usando l'UUID come jobId (idempotenza)
-    await this.queue.add(
-      'create-wp-site',  // nome del job — il Processor filtra su questo
-      {
-        jobId:         saved.id,
-        tenantId:      saved.tenantId,
-        siteDomain:    saved.siteDomain,
-        siteTitle:     saved.siteTitle,
-        adminEmail:    saved.adminEmail,
-        adminPassword: dto.adminPassword,
-        contentTopics: saved.contentTopics,
-        plugins:       saved.plugins,
-        locale:        saved.locale,
-      } satisfies SitebuilderJobPayload,
-      {
-        jobId: saved.id, // BullMQ userà l'UUID come ID — previene duplicati
-        priority: 1,
-      },
-    );
+    await this.queue.add('build-wp-site', {
+      jobId:               saved.id,
+      tenantId:            saved.tenantId,
+      siteDomain:          saved.siteDomain,
+      siteTitle:           saved.siteTitle,
+      adminEmail:          saved.adminEmail,
+      businessType:        saved.businessType,
+      businessDescription: saved.businessDescription ?? '',
+      starterSite:         saved.starterSite,
+      designScheme:        saved.designScheme,
+      contentTopics:       saved.contentTopics,
+      locale:              saved.locale,
+    } satisfies SitebuilderJobPayload, {
+      jobId:    saved.id,
+      priority: 1,
+    });
 
     this.logger.log(`Job accodato → id=${saved.id} domain=${saved.siteDomain}`);
     return saved;
   }
 
-  // ── Polling ───────────────────────────────────────────────────────
   async findOne(jobId: string): Promise<SitebuilderJob> {
     const job = await this.jobRepo.findOne({ where: { id: jobId } });
     if (!job) throw new NotFoundException(`Job ${jobId} non trovato`);
     return job;
+  }
+
+  async findAll(tenantId?: string): Promise<SitebuilderJob[]> {
+    const where = tenantId ? { tenantId } : {};
+    return this.jobRepo.find({
+      where,
+      order: { createdAt: 'DESC' },
+      take: 50,
+    });
   }
 }
