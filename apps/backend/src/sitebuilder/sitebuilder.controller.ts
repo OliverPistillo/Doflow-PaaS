@@ -3,7 +3,7 @@
 import {
   Body, Controller, Get, HttpCode, HttpStatus,
   Param, ParseUUIDPipe, Post, Res, Query,
-  NotFoundException, UseGuards,
+  NotFoundException, UseGuards, Delete,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -104,5 +104,86 @@ export class SitebuilderController {
     fileStream.on('error', () => {
       if (!res.headersSent) res.status(500).json({ message: 'Errore lettura ZIP' });
     });
+  }
+
+  // ─── POST /sitebuilder/enhance-description ───────────────────────
+  @Post('enhance-description')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Migliora la descrizione del business con AI' })
+  async enhanceDescription(
+    @Body() body: { siteTitle?: string; businessType?: string; description?: string; locale?: string },
+  ): Promise<{ enhanced: string }> {
+    const { siteTitle, businessType, description, locale = 'it' } = body;
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const anthropic = new Anthropic({ apiKey: this.config.get<string>('ANTHROPIC_API_KEY') ?? '' });
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 512,
+      system: `Sei un copywriter professionista specializzato in siti web aziendali.
+Migliora la descrizione del business fornita, rendendola più dettagliata, professionale e utile per generare contenuti web.
+Rispondi SOLO con il testo migliorato, senza introduzioni o spiegazioni. Lingua: ${locale}. Max 400 parole.`,
+      messages: [{
+        role: 'user',
+        content: `Migliora questa descrizione per "${siteTitle}" (${businessType}):
+${description || `Sito web per ${businessType || siteTitle}.`}
+
+Aggiungi dettagli su servizi, punti di forza, target clienti e proposta di valore unica.`,
+      }],
+    });
+
+    const enhanced = message.content
+      .filter((b): b is import('@anthropic-ai/sdk').TextBlock => b.type === 'text')
+      .map((b) => b.text).join('').trim();
+
+    return { enhanced };
+  }
+
+  // ─── POST /sitebuilder/seo-keywords ──────────────────────────────
+  @Post('seo-keywords')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Genera keyword SEO per il sito' })
+  async generateSeoKeywords(
+    @Body() body: { siteTitle?: string; businessType?: string; description?: string; locale?: string },
+  ): Promise<{ keywords: string[]; metaDescription: string }> {
+    const { siteTitle, businessType, description, locale = 'it' } = body;
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const anthropic = new Anthropic({ apiKey: this.config.get<string>('ANTHROPIC_API_KEY') ?? '' });
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 512,
+      system: `Sei un esperto SEO. Genera keyword e meta description per un sito web.
+OUTPUT ESCLUSIVO: JSON puro. Primo carattere {, ultimo }.
+Formato: {"keywords":["kw1","kw2",...],"metaDescription":"...max 160 chars..."}
+Lingua: ${locale}.`,
+      messages: [{
+        role: 'user',
+        content: `Sito: "${siteTitle}" | Settore: ${businessType} | Descrizione: ${description ?? ''}`,
+      }],
+    });
+
+    const raw = message.content
+      .filter((b): b is import('@anthropic-ai/sdk').TextBlock => b.type === 'text')
+      .map((b) => b.text).join('')
+      .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
+    try {
+      return JSON.parse(raw) as { keywords: string[]; metaDescription: string };
+    } catch {
+      return { keywords: [], metaDescription: '' };
+    }
+  }
+  @Delete('jobs/:jobId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Elimina un job e il relativo ZIP dal filesystem' })
+  async deleteJob(
+    @Param('jobId', new ParseUUIDPipe()) jobId: string,
+  ): Promise<void> {
+    await this.producer.delete(jobId);
+    const deployDir = path.join(this.deploymentsRoot, jobId);
+    try {
+      await (await import('fs/promises')).rm(deployDir, { recursive: true, force: true });
+    } catch { /* cartella già assente */ }
   }
 }

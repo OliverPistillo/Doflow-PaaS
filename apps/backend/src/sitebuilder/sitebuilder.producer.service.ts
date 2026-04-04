@@ -87,4 +87,10 @@ export class SitebuilderProducerService {
       take: 50,
     });
   }
+
+  async delete(jobId: string): Promise<void> {
+    const job = await this.jobRepo.findOne({ where: { id: jobId } });
+    if (!job) throw new NotFoundException(`Job ${jobId} non trovato`);
+    await this.jobRepo.delete(jobId);
+  }
 }

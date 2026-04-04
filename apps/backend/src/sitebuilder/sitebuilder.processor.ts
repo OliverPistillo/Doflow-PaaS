@@ -16,6 +16,7 @@ import * as http from 'http';
 import { createWriteStream } from 'fs';
 import { pipeline } from 'stream/promises';
 import { createUnzip } from 'zlib';
+import * as tar from 'tar'; // fallback, usiamo unzip nativo
 import { spawn } from 'child_process';
 
 import { SitebuilderJob, SitebuilderJobStatus } from './sitebuilder.entity';
@@ -391,10 +392,8 @@ Lingua: ${payload.locale}`,
 
         try {
           const query = encodeURIComponent(brick.image_query);
-          const apiUrl = `https://api.unsplash.com/photos/random?query=${query}&orientation=landscape&content_filter=high`;
-          const res = await fetch(apiUrl, {
-            headers: { Authorization: `Client-ID ${this.unsplashKey}` },
-          });
+          const apiUrl = `https://api.unsplash.com/photos/random?query=${query}&orientation=landscape&content_filter=high&client_id=${this.unsplashKey}`;
+          const res = await fetch(apiUrl);
 
           if (!res.ok) {
             this.logger.warn(`[${jobId}] Unsplash error ${res.status} per "${brick.image_query}"`);
