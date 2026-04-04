@@ -318,9 +318,9 @@ export default function SitebuilderClient() {
     const token = window.localStorage.getItem("doflow_token") ?? "";
     const base  = getApiBaseUrl();
     fetch(`${base}/sitebuilder/starter-sites`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json()).then(setSites).catch(console.error);
+      .then((r) => r.json()).then((d) => setSites(Array.isArray(d) ? d : [])).catch(console.error);
     fetch(`${base}/sitebuilder/jobs`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json()).then(setHistory).catch(console.error);
+      .then((r) => r.json()).then((d) => setHistory(Array.isArray(d) ? d : [])).catch(console.error);
   }, []);
 
   // Refresh history quando job è DONE
@@ -329,7 +329,7 @@ export default function SitebuilderClient() {
       const token = window.localStorage.getItem("doflow_token") ?? "";
       const base  = getApiBaseUrl();
       fetch(`${base}/sitebuilder/jobs`, { headers: { Authorization: `Bearer ${token}` } })
-        .then((r) => r.json()).then(setHistory).catch(console.error);
+        .then((r) => r.json()).then((d) => setHistory(Array.isArray(d) ? d : [])).catch(console.error);
     }
   }, [job?.status]);
 
