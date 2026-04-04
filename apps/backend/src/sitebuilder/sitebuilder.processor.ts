@@ -16,7 +16,6 @@ import * as http from 'http';
 import { createWriteStream } from 'fs';
 import { pipeline } from 'stream/promises';
 import { createUnzip } from 'zlib';
-import * as tar from 'tar'; // fallback, usiamo unzip nativo
 import { spawn } from 'child_process';
 
 import { SitebuilderJob, SitebuilderJobStatus } from './sitebuilder.entity';
