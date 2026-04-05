@@ -1,0 +1,33 @@
+{
+  "name": "doflow",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build:frontend": "pnpm -C apps/frontend build",
+    "build:backend": "pnpm -C apps/backend build",
+    "build": "pnpm run build:frontend && pnpm run build:backend",
+    "dev": "pnpm --parallel --filter \"./apps/**\" run dev"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.8",
+    "cross-env": "^10.1.0",
+    "husky": "^9.1.7",
+    "typescript": "^5.6.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "react": "18.3.1",
+      "react-dom": "18.3.1",
+      "@types/react": "18.2.0",
+      "@types/react-dom": "18.2.0"
+    },
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "sharp"
+    ]
+  },
+  "volta": {
+    "node": "20.19.6",
+    "pnpm": "10.24.0"
+  }
+}

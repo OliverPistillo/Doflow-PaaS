@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  # --- Frontend ---
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+      args:
+        # 🔥 FONDAMENTALE: Se sei su server, metti il dominio pubblico!
+        # Se sei in locale, va bene http://localhost:3000/api
+        - NEXT_PUBLIC_API_URL=https://app.doflow.it/api 
+    container_name: doflow-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./.env
+    environment:
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      # Questo serve al server Next.js per parlare col backend DENTRO la rete Docker
+      - INTERNAL_BACKEND_URL=http://backend:4000
+      # Questo serve al browser dell'utente (che sta fuori)
+      - NEXT_PUBLIC_API_URL=https://app.doflow.it/api
+    depends_on:
+      - backend
+    networks:
+      - doflow-net
+
+  # --- Backend ---
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: doflow-backend
+    restart: always
+    ports:
+      - "4000:4000"
+    env_file:
+      - ./.env
+    environment:
+      - PORT=4000
+      - DATABASE_URL=postgres://user:password@postgres:5432/doflow
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - WS_PATH=/ws
+      - JWT_SECRET=${JWT_SECRET}
+      # Path dove il Sitebuilder salva i deployment WordPress
+      - SITEBUILDER_DEPLOYMENTS_PATH=/opt/doflow/deployments
+    volumes:
+      # ── Socket Docker dell'host: permette al backend di lanciare
+      #    container WordPress tramite il SitebuilderProcessor
+      - /var/run/docker.sock:/var/run/docker.sock
+      # ── Cartella deployments: persistente tra rebuild del container
+      - /opt/doflow/deployments:/opt/doflow/deployments
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - doflow-net
+
+  # --- Database ---
+  postgres:
+    image: postgres:16-alpine
+    container_name: doflow-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: doflow
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - doflow-net
+
+  # --- Redis ---
+  redis:
+    image: redislabs/rebloom:latest
+    container_name: doflow-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - doflow-net
+
+  # --- Nginx (Opzionale se usi Cloudflare/Coolify, ma utile) ---
+  nginx:
+    image: nginx:alpine
+    container_name: doflow-nginx
+    restart: always
+    depends_on:
+      - frontend
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - doflow-net
+
+networks:
+  doflow-net:
+    driver: bridge
+
+volumes:
+  pgdata:

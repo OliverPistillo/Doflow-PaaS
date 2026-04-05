@@ -1,0 +1,81 @@
+#############################################
+# DOFLOW MONOREPO - TURBOREPO IGNORE RULES #
+#############################################
+
+# Node & PNPM packages
+node_modules/
+.pnp/
+.pnp.*
+**/.pnpm-store/
+pnpm-lock.yaml
+
+# Turbo cache
+turbo/
+.turbo/
+
+# Build output (Next.js, NestJS, shared packages)
+dist/
+build/
+.next/
+out/
+temp/
+.cache/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / Editor Junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+##############################
+# Environment & Secrets
+##############################
+.env
+.env.*
+!.env.example
+
+##############################
+# Docker & Infrastructure
+##############################
+
+# Docker-compose volumes
+infra/**/volumes/
+infra/**/data/
+infra/docker-data/
+infra/postgres-data/
+infra/redis-data/
+infra/minio-data/
+infra/clickhouse-data/
+
+# Docker build artifacts
+docker-compose.override.yml
+*.pid
+
+##############################
+# Next.js specific
+##############################
+.next/
+out/
+.vercel/
+
+##############################
+# Frontend Assets
+##############################
+*.pem
+*.key
+*.cert
+
+##############################
+# Misc
+##############################
+*.swp
+*.tmp
