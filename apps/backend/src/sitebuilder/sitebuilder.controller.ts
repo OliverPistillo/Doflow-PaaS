@@ -132,9 +132,9 @@ Aggiungi dettagli su servizi, punti di forza, target clienti e proposta di valor
       }],
     });
 
-    const enhanced = message.content
-      .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-      .map((b) => b.text).join('').trim();
+    const enhanced = (message.content as Array<{type:string;text?:string}>)
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text ?? '').join('').trim();
 
     return { enhanced };
   }
@@ -163,9 +163,9 @@ Lingua: ${locale}.`,
       }],
     });
 
-    const raw = message.content
-      .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-      .map((b) => b.text).join('')
+    const raw = (message.content as Array<{type:string;text?:string}>)
+      .filter((b: unknown): b is { type: string; text: string } => (b as { type?: string }).type === 'text')
+      .map((b) => (b as { text: string }).text).join('')
       .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 
     try {
