@@ -56,12 +56,22 @@ export class CreateSitebuilderJobDto {
   designScheme?: DesignSchemeDto;
 
   @ApiProperty({ type: [String], example: ['Home', 'Chi Siamo', 'Menu', 'Contatti'] })
-  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(10)
+  @IsOptional()
+  @IsArray() @ArrayMaxSize(10)
   @IsString({ each: true }) @IsNotEmpty({ each: true }) @MaxLength(80, { each: true })
-  contentTopics!: string[];
+  contentTopics?: string[];
 
   @ApiPropertyOptional({ example: 'it' })
   @IsOptional() @IsString()
   @IsIn(['it', 'en', 'fr', 'de', 'es'])
   locale?: string;
+
+  /**
+   * Blocchi JSON pre-parsati da un XML sitebuilder_master_doc.
+   * Se presenti, il processor salta la generazione LLM e usa direttamente
+   * questi dati per costruire il WXR WordPress.
+   */
+  @ApiPropertyOptional({ description: 'Blocchi JSON prodotti dal parser XML (/parse-xml)' })
+  @IsOptional()
+  xmlBlocks?: { strategy?: Record<string, string>; pages: unknown[] };
 }

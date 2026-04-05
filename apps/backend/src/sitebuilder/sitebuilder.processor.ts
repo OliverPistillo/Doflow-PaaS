@@ -16,7 +16,6 @@ import * as http from 'http';
 import { createWriteStream } from 'fs';
 import { pipeline } from 'stream/promises';
 import { createUnzip } from 'zlib';
-import * as tar from 'tar'; // fallback, usiamo unzip nativo
 import { spawn } from 'child_process';
 
 import { SitebuilderJob, SitebuilderJobStatus } from './sitebuilder.entity';
@@ -170,14 +169,22 @@ export class SitebuilderProcessor extends WorkerHost {
     await this.appendLog(jobId, 'Installazione Blocksy Companion Pro...');
     await this.installBlocksyCompanionPro(deployDir, wpDir);
 
-    // ─ Step 4: Genera struttura sito con LLM ────────────────────────
-    await this.appendLog(jobId, 'Generazione struttura sito con AI...');
-    const pages = await this.generateSiteStructure(payload);
-    await this.appendLog(jobId, `Struttura generata: ${pages.length} pagine.`);
+    // ─ Step 4 & 5: Struttura + contenuti ────────────────────────────
+    // Se il payload contiene xmlBlocks (prodotti dal parser /parse-xml),
+    // usiamo direttamente quei dati saltando la generazione LLM.
+    // Altrimenti generiamo la struttura e i contenuti con Anthropic.
+    let pagesWithContent: SitePage[];
 
-    // ─ Step 5: Genera contenuti per ogni pagina ─────────────────────
-    await this.appendLog(jobId, 'Generazione contenuti con AI...');
-    const pagesWithContent = await this.generatePageContents(payload, pages, jobId);
+    if (payload.xmlBlocks?.pages?.length) {
+      await this.appendLog(jobId, `Modalità XML: utilizzo ${payload.xmlBlocks.pages.length} pagine pre-parsate dall'XML master doc.`);
+      pagesWithContent = payload.xmlBlocks.pages as SitePage[];
+    } else {
+      await this.appendLog(jobId, 'Generazione struttura sito con AI...');
+      const pages = await this.generateSiteStructure(payload);
+      await this.appendLog(jobId, `Struttura generata: ${pages.length} pagine.`);
+      await this.appendLog(jobId, 'Generazione contenuti con AI...');
+      pagesWithContent = await this.generatePageContents(payload, pages, jobId);
+    }
 
     // ─ Step 6: Scarica immagini da Unsplash ─────────────────────────
     await this.appendLog(jobId, 'Download immagini da Unsplash...');
@@ -305,7 +312,7 @@ Lingua: ${payload.locale}`,
     });
 
     const raw = message.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
       .map((b) => b.text).join('')
       .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 
@@ -353,7 +360,7 @@ Lingua: ${payload.locale}`,
         });
 
         const raw = message.content
-          .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+          .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
           .map((b) => b.text).join('')
           .replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 

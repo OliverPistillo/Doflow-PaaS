@@ -22,6 +22,8 @@ export interface SitebuilderJobPayload {
   designScheme: Record<string, unknown>;
   contentTopics: string[];
   locale: string;
+  /** Blocchi pre-parsati da XML. Se presenti, saltano la generazione LLM. */
+  xmlBlocks?: { strategy?: Record<string, string>; pages: unknown[] } | null;
 }
 
 @Injectable()
@@ -45,7 +47,7 @@ export class SitebuilderProducerService {
       businessDescription: dto.businessDescription ?? null,
       starterSite:         dto.starterSite,
       designScheme:        (dto.designScheme as Record<string, unknown>) ?? {},
-      contentTopics:       dto.contentTopics,
+      contentTopics:       dto.contentTopics ?? [],
       locale:              dto.locale ?? 'it',
       status:              SitebuilderJobStatus.PENDING,
       logs:                [],
@@ -64,12 +66,13 @@ export class SitebuilderProducerService {
       designScheme:        saved.designScheme,
       contentTopics:       saved.contentTopics,
       locale:              saved.locale,
+      xmlBlocks:           dto.xmlBlocks ?? null,
     } satisfies SitebuilderJobPayload, {
       jobId:    saved.id,
       priority: 1,
     });
 
-    this.logger.log(`Job accodato → id=${saved.id} domain=${saved.siteDomain}`);
+    this.logger.log(`Job accodato → id=${saved.id} domain=${saved.siteDomain} xmlMode=${!!dto.xmlBlocks}`);
     return saved;
   }
 
