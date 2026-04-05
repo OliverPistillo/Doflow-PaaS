@@ -135,7 +135,7 @@ function SitePreview({ form }: { form: WizardForm }) {
             {form.siteTitle || "Nome Sito"}
           </span>
           <div className="flex gap-3">
-            {(form.contentTopics.slice(0, 4)).map((t) => (
+            {((form.contentTopics ?? []).slice(0, 4)).map((t) => (
               <span key={t} className="text-[9px] text-gray-500">{t}</span>
             ))}
           </div>
@@ -171,7 +171,7 @@ function SitePreview({ form }: { form: WizardForm }) {
         </div>
 
         {/* Sections */}
-        {form.contentTopics.map((topic, i) => (
+        {(form.contentTopics ?? []).map((topic, i) => (
           <div key={topic} className={cn("px-5 py-5 border-b", i % 2 === 0 ? "bg-white" : "bg-gray-50")}>
             <div className="flex items-center gap-2 mb-2">
               <div className="h-4 w-1 rounded-full" style={{ backgroundColor: getColor(topic) }} />
@@ -652,13 +652,13 @@ function XmlUploadStep({
             <p className="text-xs text-muted-foreground">
               Claude genererà i contenuti autonomamente in base al titolo sito e alla descrizione business.
             </p>
-            <TopicInput topics={form.contentTopics} onChange={onTopicsChange} />
+            <TopicInput topics={form.contentTopics ?? []} onChange={onTopicsChange} />
             <div className="flex flex-wrap gap-1.5">
               {["Home","Chi Siamo","Servizi","Portfolio","Contatti","Blog","FAQ","Prezzi"]
-                .filter((s) => !form.contentTopics.includes(s))
+                .filter((s) => !(form.contentTopics ?? []).includes(s))
                 .map((s) => (
                   <button key={s} onClick={() => {
-                    if (form.contentTopics.length < 10) onTopicsChange([...form.contentTopics, s]);
+                    if ((form.contentTopics ?? []).length < 10) onTopicsChange([...(form.contentTopics ?? []), s]);
                   }} className="px-2.5 py-1 text-xs border border-dashed border-primary/40 rounded-md text-primary hover:bg-primary/10 transition-colors">
                     + {s}
                   </button>
@@ -785,7 +785,7 @@ export default function SitebuilderClient() {
     !!form.starterSite,
     true,
     // Ultimo step: valido se ha caricato XML OPPURE ha almeno 1 topic manuale
-    !!(form.xmlBlocks?.pages?.length || form.contentTopics.length >= 1),
+    !!(form.xmlBlocks?.pages?.length || (form.contentTopics ?? []).length >= 1),
   ];
 
   const showSplitPanel = !!jobId && !!job;
@@ -819,6 +819,7 @@ export default function SitebuilderClient() {
                 form={form}
                 job={job}
                 onFormChange={(updates) => setForm((p) => ({ ...p, ...updates,
+                  contentTopics: updates.contentTopics ?? p.contentTopics ?? [],
                   designScheme: updates.designScheme ? { ...p.designScheme, ...updates.designScheme } : p.designScheme,
                 }))}
               />
