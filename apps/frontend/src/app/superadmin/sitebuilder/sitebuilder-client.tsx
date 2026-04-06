@@ -1,1056 +1,1774 @@
-"use client";
-// apps/frontend/src/app/superadmin/sitebuilder/sitebuilder-client.tsx
+'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useState, useReducer, useRef, useCallback, useEffect, useMemo,
+} from 'react';
 import {
-  Loader2, Globe, Sparkles, Plus, X, CheckCircle2,
-  Zap, Download, ArrowLeft, Eye, ChevronRight,
-  Palette, Building2, History, Search, Type,
-  FileText, Copy, RefreshCw, Trash2,
-} from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
-import { Textarea } from "@/components/ui/textarea";
+  GripVertical, Trash2, Copy, ChevronUp, ChevronDown, Plus, Layers,
+  Monitor, Tablet, Smartphone, Undo2, Redo2, Download, Eye, X,
+  Type, Image, Link2, Globe, Building2, FileText, Zap, Loader2,
+  CheckCircle2, Palette, Search, Settings, Edit3, PanelLeftClose,
+  ArrowLeft, Sparkles, ChevronRight, Check, AlertCircle, FolderOpen,
+  LayoutTemplate, Move, MousePointerClick,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { apiFetch, getApiBaseUrl } from "@/lib/api";
-import { useToast } from "@/hooks/use-toast";
-import { useSitebuilderJob, type SitebuilderJob } from "@/hooks/useSitebuilderJob";
-import { cn } from "@/lib/utils";
+} from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+//  TYPES
+// ════════════════════════════════════════════════════════════════════════════
 
-interface StarterSite {
-  slug: string;
-  label: string;
-  previewUrl: string;
-  category: string;
-  isPro: boolean;
+type Device = 'desktop' | 'tablet' | 'mobile';
+
+interface BrickItem { title: string; description: string; }
+
+interface Brick {
+  id: string;
+  type: string;
+  headline?: string;
+  subheadline?: string;
+  body?: string;
+  cta_text?: string;
+  cta_url?: string;
+  imageUrl?: string;
+  image_query?: string;
+  items?: BrickItem[];
+  bgColor?: string;
+  textColor?: string;
 }
 
+interface SitePage { slug: string; title: string; bricks: Brick[]; }
+interface ParsedXml { strategy?: Record<string, string>; pages: SitePage[]; }
+
 interface DesignScheme {
-  primaryColor?: string;
-  secondaryColor?: string;
-  accentColor?: string;
-  headingFont?: string;
-  bodyFont?: string;
+  primaryColor?: string; secondaryColor?: string;
+  accentColor?: string; headingFont?: string;
 }
 
 interface WizardForm {
-  tenantId:            string;
-  siteDomain:          string;
-  siteTitle:           string;
-  adminEmail:          string;
-  businessType:        string;
-  businessDescription: string;
-  starterSite:         string;
-  designScheme:        DesignScheme;
-  contentTopics:       string[];
-  locale:              string;
-  /** Blocchi JSON parsati dall'XML — se presenti saltano la generazione LLM */
-  xmlBlocks?:          { strategy?: Record<string, string>; pages: unknown[] } | null;
+  tenantId: string; siteDomain: string; siteTitle: string;
+  adminEmail: string; businessType: string; businessDescription: string;
+  starterSite: string; designScheme: DesignScheme;
+  contentTopics: string[]; locale: string;
+  xmlBlocks?: ParsedXml | null;
 }
 
-interface SeoResult {
-  keywords: string[];
-  metaTitle: string;
-  metaDescription: string;
+interface SitebuilderJob {
+  id: string; status: string; siteDomain: string; siteTitle: string;
+  logs: string[]; zipFilename?: string; createdAt: string;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+//  BLOCK CATALOG — field definitions per type
+// ════════════════════════════════════════════════════════════════════════════
 
-const BUSINESS_TYPES = [
-  "Ristorante", "eCommerce", "Portfolio", "Agenzia", "Consulenza",
-  "Fitness", "Medico / Clinica", "Avvocato / Studio Legale",
-  "Immobiliare", "Fotografo", "Blog", "SaaS / Software", "Altro",
-];
+type FieldType = 'text' | 'richtext' | 'url' | 'image' | 'select' | 'items' | 'color';
 
-const HEADING_FONTS = [
-  { value: "Inter, sans-serif",    label: "Inter (moderno)" },
-  { value: "Playfair Display, serif", label: "Playfair (elegante)" },
-  { value: "Poppins, sans-serif",  label: "Poppins (pulito)" },
-  { value: "Montserrat, sans-serif", label: "Montserrat (corporate)" },
-  { value: "Lora, serif",          label: "Lora (classico)" },
-];
+interface FieldDef {
+  key: string; label: string; type: FieldType;
+  options?: string[]; placeholder?: string;
+}
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  PENDING:     { label: "In coda",       color: "text-amber-600",  bg: "bg-amber-50 border-amber-200" },
-  RUNNING:     { label: "In esecuzione", color: "text-blue-600",   bg: "bg-blue-50 border-blue-200" },
-  DONE:        { label: "Completato",    color: "text-green-700",  bg: "bg-green-50 border-green-200" },
-  FAILED:      { label: "Fallito",       color: "text-red-600",    bg: "bg-red-50 border-red-200" },
-  ROLLED_BACK: { label: "Rollback",      color: "text-red-500",    bg: "bg-red-50 border-red-200" },
+interface BlockDef {
+  label: string; icon: string; description: string;
+  fields: FieldDef[];
+  defaultProps: Partial<Brick>;
+}
+
+const BLOCK_CATALOG: Record<string, BlockDef> = {
+  hero: {
+    label: 'Hero', icon: '🎯', description: 'Sezione principale con CTA',
+    fields: [
+      { key: 'headline', label: 'Titolo principale (H1)', type: 'text', placeholder: 'Titolo accattivante...' },
+      { key: 'subheadline', label: 'Sottotitolo (H2)', type: 'text', placeholder: 'Proposta di valore...' },
+      { key: 'body', label: 'Testo descrittivo', type: 'richtext', placeholder: 'Descrizione dettagliata...' },
+      { key: 'cta_text', label: 'Testo CTA', type: 'text', placeholder: 'Scopri di più' },
+      { key: 'cta_url', label: 'URL CTA', type: 'url', placeholder: '/contatti' },
+      { key: 'imageUrl', label: 'Immagine di sfondo', type: 'image' },
+      { key: 'bgColor', label: 'Colore sfondo', type: 'color' },
+    ],
+    defaultProps: { headline: 'Titolo Principale', subheadline: 'La tua proposta di valore', cta_text: 'Inizia ora', cta_url: '#contatti', bgColor: '#0f172a' },
+  },
+  features: {
+    label: 'Features / Vantaggi', icon: '⭐', description: 'Griglia di vantaggi o caratteristiche',
+    fields: [
+      { key: 'headline', label: 'Titolo sezione', type: 'text' },
+      { key: 'subheadline', label: 'Sottotitolo', type: 'text' },
+      { key: 'imageUrl', label: 'Immagine decorativa', type: 'image' },
+      { key: 'items', label: 'Voci', type: 'items' },
+    ],
+    defaultProps: {
+      headline: 'Perché sceglierci',
+      items: [
+        { title: 'Vantaggio 1', description: 'Descrizione del primo vantaggio principale.' },
+        { title: 'Vantaggio 2', description: 'Descrizione del secondo vantaggio principale.' },
+        { title: 'Vantaggio 3', description: 'Descrizione del terzo vantaggio principale.' },
+      ],
+    },
+  },
+  about: {
+    label: 'Chi Siamo', icon: '🏢', description: 'Sezione storytelling aziendale',
+    fields: [
+      { key: 'headline', label: 'Titolo (H1)', type: 'text' },
+      { key: 'body', label: 'Testo descrittivo', type: 'richtext' },
+      { key: 'imageUrl', label: 'Immagine', type: 'image' },
+      { key: 'bgColor', label: 'Colore sfondo', type: 'color' },
+    ],
+    defaultProps: { headline: 'Chi Siamo', body: 'La nostra storia e missione...' },
+  },
+  services: {
+    label: 'Servizi', icon: '🛠️', description: 'Elenco dei servizi offerti',
+    fields: [
+      { key: 'headline', label: 'Titolo sezione', type: 'text' },
+      { key: 'subheadline', label: 'Sottotitolo', type: 'text' },
+      { key: 'items', label: 'Servizi', type: 'items' },
+    ],
+    defaultProps: {
+      headline: 'I Nostri Servizi',
+      items: [
+        { title: 'Servizio 1', description: 'Descrizione del servizio.' },
+        { title: 'Servizio 2', description: 'Descrizione del servizio.' },
+      ],
+    },
+  },
+  testimonials: {
+    label: 'Testimonianze', icon: '💬', description: 'Citazioni e recensioni clienti',
+    fields: [
+      { key: 'headline', label: 'Titolo sezione', type: 'text' },
+      { key: 'items', label: 'Testimonianze', type: 'items' },
+      { key: 'bgColor', label: 'Colore sfondo', type: 'color' },
+    ],
+    defaultProps: {
+      headline: 'Cosa Dicono i Nostri Clienti',
+      items: [
+        { title: 'Mario Rossi, CEO Azienda X', description: 'Servizio eccellente, risultati straordinari.' },
+        { title: 'Laura Bianchi, Freelancer', description: 'Professionalità e competenza al massimo livello.' },
+      ],
+    },
+  },
+  faq: {
+    label: 'FAQ', icon: '❓', description: 'Domande frequenti',
+    fields: [
+      { key: 'headline', label: 'Titolo sezione', type: 'text' },
+      { key: 'items', label: 'Domande e risposte', type: 'items' },
+    ],
+    defaultProps: {
+      headline: 'Domande Frequenti',
+      items: [
+        { title: 'Qual è il tempo di consegna?', description: 'Di solito consegniamo entro 2-4 settimane.' },
+        { title: 'Offrite assistenza post-lancio?', description: 'Sì, offriamo supporto continuo per tutti i nostri clienti.' },
+      ],
+    },
+  },
+  contact: {
+    label: 'Contatti', icon: '📧', description: 'Form di contatto',
+    fields: [
+      { key: 'headline', label: 'Titolo', type: 'text' },
+      { key: 'subheadline', label: 'Testo introduttivo', type: 'richtext' },
+      { key: 'bgColor', label: 'Colore sfondo', type: 'color' },
+    ],
+    defaultProps: { headline: 'Contattaci', subheadline: 'Siamo qui per aiutarti. Scrivici!' },
+  },
+  cta: {
+    label: 'Call to Action', icon: '🚀', description: 'Sezione di chiamata all\'azione',
+    fields: [
+      { key: 'headline', label: 'Titolo', type: 'text' },
+      { key: 'subheadline', label: 'Sottotitolo', type: 'text' },
+      { key: 'cta_text', label: 'Testo bottone', type: 'text' },
+      { key: 'cta_url', label: 'URL bottone', type: 'url' },
+      { key: 'bgColor', label: 'Colore sfondo', type: 'color' },
+    ],
+    defaultProps: { headline: 'Pronto a iniziare?', subheadline: 'Contattaci oggi.', cta_text: 'Inizia ora', cta_url: '#contatti', bgColor: '#1e40af' },
+  },
+  stats: {
+    label: 'Statistiche', icon: '📊', description: 'Numeri e dati aziendali',
+    fields: [
+      { key: 'headline', label: 'Titolo sezione', type: 'text' },
+      { key: 'items', label: 'Statistiche', type: 'items' },
+    ],
+    defaultProps: {
+      headline: 'I Nostri Numeri',
+      items: [
+        { title: '500+', description: 'Clienti Soddisfatti' },
+        { title: '10 anni', description: 'di Esperienza' },
+        { title: '98%', description: 'Tasso di Soddisfazione' },
+        { title: '24h', description: 'Supporto Attivo' },
+      ],
+    },
+  },
 };
 
-const WIZARD_STEPS = [
-  { id: "info",      label: "Sito",      icon: Globe },
-  { id: "desc",      label: "Business",  icon: Building2 },
-  { id: "theme",     label: "Tema",      icon: Eye },
-  { id: "design",    label: "Design",    icon: Palette },
-  { id: "documento", label: "Documento", icon: FileText },
-];
+// ════════════════════════════════════════════════════════════════════════════
+//  UTILS
+// ════════════════════════════════════════════════════════════════════════════
 
-// ─── Site Preview Component ───────────────────────────────────────────────────
+const uid = () => Math.random().toString(36).slice(2, 9);
+const getApiBaseUrl = () =>
+  typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:4000/api'
+    : 'https://api.doflow.it/api';
 
-function SitePreview({ form }: { form: WizardForm }) {
-  const primary   = form.designScheme.primaryColor   ?? "#3B82F6";
-  const secondary = form.designScheme.secondaryColor ?? "#8B5CF6";
-  const accent    = form.designScheme.accentColor    ?? "#F59E0B";
-  const font      = form.designScheme.headingFont    ?? "Inter, sans-serif";
+// ════════════════════════════════════════════════════════════════════════════
+//  INLINE EDITABLE TEXT
+// ════════════════════════════════════════════════════════════════════════════
 
-  const sectionColors: Record<string, string> = {
-    home: primary, hero: primary, "chi siamo": secondary, about: secondary,
-    servizi: "#10B981", services: "#10B981", portfolio: "#8B5CF6",
-    contatti: "#6B7280", contact: "#6B7280", blog: "#F59E0B",
-    faq: "#EC4899", prezzi: "#14B8A6", pricing: "#14B8A6",
+interface EditableProps {
+  value: string | undefined;
+  onChange: (v: string) => void;
+  as?: 'h1' | 'h2' | 'h3' | 'p' | 'span';
+  className?: string;
+  enabled: boolean;
+  placeholder?: string;
+}
+
+function Editable({ value, onChange, as: Tag = 'p', className, enabled, placeholder }: EditableProps) {
+  const ref = useRef<HTMLElement>(null);
+  const lastVal = useRef(value ?? '');
+
+  useEffect(() => {
+    if (ref.current && !enabled) {
+      ref.current.textContent = value ?? '';
+      lastVal.current = value ?? '';
+    }
+  }, [value, enabled]);
+
+  const handleBlur = () => {
+    const newVal = ref.current?.textContent ?? '';
+    if (newVal !== lastVal.current) { onChange(newVal); lastVal.current = newVal; }
   };
 
-  const getColor = (topic: string) =>
-    sectionColors[topic.toLowerCase()] ?? primary;
+  return React.createElement(Tag, {
+    ref,
+    contentEditable: enabled,
+    suppressContentEditableWarning: true,
+    onBlur: handleBlur,
+    className: cn(
+      className,
+      enabled && 'outline-none ring-2 ring-blue-400 ring-offset-2 rounded cursor-text',
+      !value && enabled && 'before:content-[attr(data-placeholder)] before:text-gray-400',
+    ),
+    'data-placeholder': placeholder,
+    dangerouslySetInnerHTML: enabled ? undefined : { __html: value ?? placeholder ?? '' },
+    defaultValue: undefined,
+    children: enabled ? (value ?? '') : undefined,
+  } as React.HTMLAttributes<HTMLElement>);
+}
 
+// ════════════════════════════════════════════════════════════════════════════
+//  BLOCK RENDERERS — real styled sections
+// ════════════════════════════════════════════════════════════════════════════
+
+interface BlockRendererProps {
+  brick: Brick;
+  design: DesignScheme;
+  selected: boolean;
+  editing: boolean;
+  onUpdate: (patch: Partial<Brick>) => void;
+}
+
+function HeroRenderer({ brick, design, editing, onUpdate }: BlockRendererProps) {
+  const bg = brick.bgColor ?? '#0f172a';
+  const primary = design.primaryColor ?? '#3b82f6';
   return (
-    <div className="h-full flex flex-col bg-white rounded-lg border overflow-hidden">
-      {/* Browser bar */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 border-b shrink-0">
-        <div className="flex gap-1.5">
-          <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
-          <div className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-          <div className="h-2.5 w-2.5 rounded-full bg-green-400" />
-        </div>
-        <div className="flex-1 mx-2 bg-white rounded text-[10px] text-gray-500 px-2 py-0.5 border text-center truncate">
-          {form.siteDomain || "tuosito.it"}
-        </div>
+    <section style={{ backgroundColor: bg, color: '#fff', fontFamily: design.headingFont ?? 'inherit' }}
+      className="relative py-20 px-6 text-center overflow-hidden">
+      {brick.imageUrl && (
+        <div className="absolute inset-0 opacity-20"
+          style={{ backgroundImage: `url(${brick.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+      )}
+      <div className="relative z-10 max-w-3xl mx-auto space-y-6">
+        <Editable as="h1" value={brick.headline} onChange={(v) => onUpdate({ headline: v })}
+          enabled={editing} placeholder="Titolo principale"
+          className="text-4xl md:text-5xl font-bold leading-tight text-white" />
+        <Editable as="h2" value={brick.subheadline} onChange={(v) => onUpdate({ subheadline: v })}
+          enabled={editing} placeholder="Sottotitolo..."
+          className="text-xl font-medium text-white/80" />
+        {brick.body && (
+          <Editable value={brick.body} onChange={(v) => onUpdate({ body: v })}
+            enabled={editing} className="text-white/70 text-base max-w-2xl mx-auto leading-relaxed" />
+        )}
+        {brick.cta_text && (
+          <div className="flex gap-3 justify-center flex-wrap pt-2">
+            <a href={brick.cta_url ?? '#'} onClick={(e) => e.preventDefault()}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-white shadow-lg"
+              style={{ backgroundColor: primary }}>
+              {brick.cta_text}
+            </a>
+          </div>
+        )}
       </div>
-
-      {/* Preview content */}
-      <div className="flex-1 overflow-y-auto" style={{ fontFamily: font }}>
-        {/* Navbar */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b bg-white sticky top-0 z-10 shadow-sm">
-          <span className="font-bold text-xs" style={{ color: primary }}>
-            {form.siteTitle || "Nome Sito"}
-          </span>
-          <div className="flex gap-3">
-            {((form.contentTopics ?? []).slice(0, 4)).map((t) => (
-              <span key={t} className="text-[9px] text-gray-500">{t}</span>
-            ))}
-          </div>
-          <div className="text-[9px] px-2 py-1 rounded text-white" style={{ backgroundColor: primary }}>
-            Contattaci
-          </div>
-        </div>
-
-        {/* Hero section */}
-        <div className="relative px-6 py-10 text-center overflow-hidden" style={{ backgroundColor: `${primary}12` }}>
-          <div className="absolute inset-0 opacity-5" style={{
-            background: `radial-gradient(circle at 30% 50%, ${primary}, transparent 60%), radial-gradient(circle at 70% 50%, ${secondary}, transparent 60%)`,
-          }} />
-          <div className="relative">
-            <div className="inline-block text-[9px] px-2 py-0.5 rounded-full mb-2 font-medium" style={{ backgroundColor: `${accent}20`, color: accent }}>
-              {form.businessType || "Business"}
-            </div>
-            <h1 className="font-bold text-sm mb-2 leading-tight" style={{ color: "#111" }}>
-              {form.siteTitle || "Il Tuo Sito Web"}
-            </h1>
-            <p className="text-[9px] text-gray-500 mb-3 max-w-xs mx-auto leading-relaxed line-clamp-2">
-              {form.businessDescription || "Descrizione del tuo business e dei servizi che offri ai tuoi clienti."}
-            </p>
-            <div className="flex gap-2 justify-center">
-              <button className="text-[9px] px-3 py-1.5 rounded text-white font-medium" style={{ backgroundColor: primary }}>
-                Scopri di più
-              </button>
-              <button className="text-[9px] px-3 py-1.5 rounded border font-medium" style={{ borderColor: primary, color: primary }}>
-                Contattaci
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Sections */}
-        {(form.contentTopics ?? []).map((topic, i) => (
-          <div key={topic} className={cn("px-5 py-5 border-b", i % 2 === 0 ? "bg-white" : "bg-gray-50")}>
-            <div className="flex items-center gap-2 mb-2">
-              <div className="h-4 w-1 rounded-full" style={{ backgroundColor: getColor(topic) }} />
-              <span className="font-semibold text-[10px]" style={{ color: getColor(topic) }}>{topic}</span>
-            </div>
-            <div className="space-y-1.5">
-              <div className="h-1.5 bg-gray-200 rounded-full w-3/4" />
-              <div className="h-1.5 bg-gray-200 rounded-full w-full" />
-              <div className="h-1.5 bg-gray-200 rounded-full w-2/3" />
-            </div>
-            {i % 3 === 0 && (
-              <div className="grid grid-cols-3 gap-2 mt-3">
-                {[1, 2, 3].map((n) => (
-                  <div key={n} className="rounded p-2" style={{ backgroundColor: `${getColor(topic)}10` }}>
-                    <div className="h-1.5 bg-gray-200 rounded mb-1 w-2/3" />
-                    <div className="h-1 bg-gray-100 rounded w-full" />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-
-        {/* Footer */}
-        <div className="px-5 py-4 text-center" style={{ backgroundColor: "#111" }}>
-          <span className="text-[9px] text-gray-400">© 2025 {form.siteTitle || "Sito"} · Tutti i diritti riservati</span>
-        </div>
-      </div>
-    </div>
+    </section>
   );
 }
 
-// ─── Tools Panel ─────────────────────────────────────────────────────────────
-
-function ToolsPanel({
-  form, job, onFormChange,
-}: {
-  form: WizardForm;
-  job: SitebuilderJob | null;
-  onFormChange: (updates: Partial<WizardForm>) => void;
-}) {
-  const { toast } = useToast();
-  const logRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab]   = useState<"colors" | "seo">("colors");
-  const [seoLoading, setSeoLoading] = useState(false);
-  const [seo, setSeo]               = useState<SeoResult | null>(null);
-  const [copied, setCopied]         = useState<string | null>(null);
-  const base  = getApiBaseUrl();
-  const token = typeof window !== "undefined" ? localStorage.getItem("doflow_token") ?? "" : "";
-
-  const cfg      = STATUS_CONFIG[job?.status ?? "PENDING"] ?? STATUS_CONFIG.PENDING;
-  const progress = !job ? 0 : job.status === "DONE" ? 100 : job.status === "PENDING" ? 5 :
-    Math.min(92, Math.round((job.logs.length / 14) * 92));
-  const isDone   = job?.status === "DONE";
-
-  useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [job?.logs]);
-
-  const handleSeo = async () => {
-    setSeoLoading(true);
-    try {
-      const res = await fetch(`${base}/sitebuilder/seo-keywords`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          siteTitle: form.siteTitle, businessType: form.businessType,
-          description: form.businessDescription, locale: form.locale,
-        }),
-      });
-      const data = await res.json() as SeoResult;
-      setSeo(data);
-    } catch { toast({ title: "Errore SEO", variant: "destructive" }); }
-    finally { setSeoLoading(false); }
-  };
-
-  const copyText = (text: string, key: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(key);
-    setTimeout(() => setCopied(null), 1500);
-  };
-
-  const setColor = (key: keyof DesignScheme, val: string) =>
-    onFormChange({ designScheme: { ...form.designScheme, [key]: val } });
-
+function FeaturesRenderer({ brick, design, editing, onUpdate }: BlockRendererProps) {
+  const items = brick.items ?? [];
+  const primary = design.primaryColor ?? '#3b82f6';
   return (
-    <div className="flex flex-col h-full gap-3 overflow-hidden">
-      {/* Status + progress */}
-      <div className="shrink-0 space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold">{form.siteDomain || "Generazione sito"}</span>
-          <Badge variant="outline" className={cn("text-xs gap-1", cfg.bg, cfg.color)}>
-            {job?.status === "RUNNING" && <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />}
-            {isDone && <CheckCircle2 className="h-3 w-3" />}
-            {cfg.label}
-          </Badge>
+    <section className="py-16 px-6 bg-white">
+      <div className="max-w-5xl mx-auto">
+        <div className="text-center mb-12 space-y-2">
+          <Editable as="h2" value={brick.headline} onChange={(v) => onUpdate({ headline: v })}
+            enabled={editing} placeholder="Titolo sezione"
+            className="text-3xl font-bold text-gray-900" style={{ fontFamily: design.headingFont }} />
+          {brick.subheadline && (
+            <Editable value={brick.subheadline} onChange={(v) => onUpdate({ subheadline: v })}
+              enabled={editing} className="text-gray-500 text-lg" />
+          )}
         </div>
-        <Progress value={progress} className="h-1.5" />
-      </div>
-
-      {/* Log box */}
-      <div className="shrink-0 rounded-lg border overflow-hidden">
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-muted/50 border-b">
-          <div className="h-2 w-2 rounded-full bg-red-400" />
-          <div className="h-2 w-2 rounded-full bg-amber-400" />
-          <div className="h-2 w-2 rounded-full bg-green-400" />
-          <span className="text-[10px] text-muted-foreground ml-1 font-mono">build.log</span>
-        </div>
-        <div ref={logRef} className="bg-card p-2.5 h-28 overflow-y-auto font-mono text-[10px] leading-relaxed space-y-0.5">
-          {!job?.logs?.length
-            ? <span className="text-muted-foreground">Avvio in corso...</span>
-            : job.logs.map((line: string, i: number) => (
-              <div key={i} className={cn(
-                line.includes("✓") || line.includes("completat") ? "text-green-600" :
-                line.includes("ERRORE") || line.includes("fallito") ? "text-red-500" :
-                "text-muted-foreground",
-              )}>{line}</div>
-            ))}
-          {job?.status === "RUNNING" && <span className="inline-block w-1.5 h-3 bg-muted-foreground animate-pulse" />}
-        </div>
-      </div>
-
-      {/* Tools tabs */}
-      <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-        <div className="flex gap-1 mb-2 shrink-0">
-          {([["colors", Palette, "Colori & Font"], ["seo", Search, "SEO"]] as const).map(([id, Icon, label]) => (
-            <button key={id} onClick={() => setActiveTab(id as any)}
-              className={cn(
-                "flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-all flex-1 justify-center",
-                activeTab === id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
-              )}>
-              <Icon className="h-3 w-3" />{label}
-            </button>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {items.map((item, i) => (
+            <div key={i} className="p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow bg-white">
+              <div className="w-10 h-10 rounded-lg mb-4 flex items-center justify-center text-white text-lg font-bold"
+                style={{ backgroundColor: primary }}>{i + 1}</div>
+              <h3 className="font-semibold text-gray-900 mb-2 text-lg">{item.title}</h3>
+              <p className="text-gray-500 text-sm leading-relaxed">{item.description}</p>
+            </div>
           ))}
         </div>
+      </div>
+    </section>
+  );
+}
 
-        <div className="flex-1 overflow-y-auto min-h-0 space-y-3">
-          {/* ── Colori & Font ── */}
-          {activeTab === "colors" && (
-            <>
-              <div className="space-y-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Palette colori</p>
-                {([
-                  ["primaryColor",   "Primario",   "#3B82F6"],
-                  ["secondaryColor", "Secondario", "#8B5CF6"],
-                  ["accentColor",    "Accento",    "#F59E0B"],
-                ] as [keyof DesignScheme, string, string][]).map(([key, label, def]) => (
-                  <div key={key} className="flex items-center gap-2">
-                    <input type="color"
-                      value={(form.designScheme as Record<string, string>)[key] ?? def}
-                      onChange={(e) => setColor(key, e.target.value)}
-                      className="h-7 w-7 rounded cursor-pointer border border-border" />
-                    <span className="text-xs text-muted-foreground w-20">{label}</span>
-                    <Input
-                      value={(form.designScheme as Record<string, string>)[key] ?? def}
-                      onChange={(e) => setColor(key, e.target.value)}
-                      className="font-mono text-xs h-7 flex-1" />
-                  </div>
-                ))}
-              </div>
-              <div className="space-y-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Font</p>
-                <Select value={form.designScheme.headingFont ?? ""}
-                  onValueChange={(v) => onFormChange({ designScheme: { ...form.designScheme, headingFont: v } })}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Scegli font titoli..." /></SelectTrigger>
-                  <SelectContent>
-                    {HEADING_FONTS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              {/* Color preview */}
-              <div className="rounded-lg p-3 border" style={{ fontFamily: form.designScheme.headingFont ?? "Inter, sans-serif" }}>
-                <div className="h-5 rounded-full mb-2" style={{ backgroundColor: form.designScheme.primaryColor ?? "#3B82F6" }} />
-                <div className="flex gap-1.5 mb-2">
-                  <div className="h-3 rounded flex-1" style={{ backgroundColor: form.designScheme.secondaryColor ?? "#8B5CF6" }} />
-                  <div className="h-3 rounded flex-1" style={{ backgroundColor: form.designScheme.accentColor ?? "#F59E0B" }} />
-                </div>
-                <p className="text-xs font-bold" style={{ color: form.designScheme.primaryColor ?? "#3B82F6" }}>Titolo Esempio</p>
-                <p className="text-[10px] text-muted-foreground">Testo del corpo del sito</p>
-              </div>
-            </>
-          )}
-
-          {/* ── SEO ── */}
-          {activeTab === "seo" && (
-            <>
-              <Button size="sm" className="w-full h-8 text-xs gap-1.5" onClick={handleSeo} disabled={seoLoading}>
-                {seoLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
-                Analizza SEO con AI
-              </Button>
-              {seo && (
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Meta Title</p>
-                      <button onClick={() => copyText(seo.metaTitle, "title")} className="text-[10px] text-muted-foreground hover:text-foreground">
-                        {copied === "title" ? <CheckCircle2 className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-                      </button>
-                    </div>
-                    <div className="rounded border p-2 text-xs bg-muted/30">{seo.metaTitle}</div>
-                    <div className="flex justify-between text-[10px] text-muted-foreground">
-                      <span>{seo.metaTitle.length} caratteri</span>
-                      <span className={seo.metaTitle.length <= 60 ? "text-green-600" : "text-red-500"}>
-                        {seo.metaTitle.length <= 60 ? "✓ Ottimale" : "Troppo lungo"}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Meta Description</p>
-                      <button onClick={() => copyText(seo.metaDescription, "desc")} className="text-[10px] text-muted-foreground hover:text-foreground">
-                        {copied === "desc" ? <CheckCircle2 className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-                      </button>
-                    </div>
-                    <div className="rounded border p-2 text-xs bg-muted/30 leading-relaxed">{seo.metaDescription}</div>
-                    <div className="flex justify-between text-[10px] text-muted-foreground">
-                      <span>{seo.metaDescription.length} caratteri</span>
-                      <span className={seo.metaDescription.length <= 160 ? "text-green-600" : "text-red-500"}>
-                        {seo.metaDescription.length <= 160 ? "✓ Ottimale" : "Troppo lunga"}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Keywords ({seo.keywords.length})</p>
-                    <div className="flex flex-wrap gap-1">
-                      {seo.keywords.map((kw) => (
-                        <span key={kw} className="px-1.5 py-0.5 bg-primary/10 text-primary text-[10px] rounded cursor-pointer"
-                          onClick={() => copyText(kw, kw)} title="Copia keyword">
-                          {copied === kw ? "✓" : kw}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-              {!seo && !seoLoading && (
-                <p className="text-xs text-muted-foreground text-center py-4">
-                  Clicca per generare meta title, description e keyword SEO ottimizzati per il tuo sito.
-                </p>
-              )}
-            </>
+function AboutRenderer({ brick, design, editing, onUpdate }: BlockRendererProps) {
+  const bg = brick.bgColor ?? '#f8fafc';
+  return (
+    <section style={{ backgroundColor: bg }} className="py-16 px-6">
+      <div className="max-w-5xl mx-auto">
+        <div className={cn('flex gap-12 items-center', brick.imageUrl ? 'flex-col md:flex-row' : 'flex-col')}>
+          <div className="flex-1 space-y-4">
+            <Editable as="h2" value={brick.headline} onChange={(v) => onUpdate({ headline: v })}
+              enabled={editing} placeholder="Chi Siamo"
+              className="text-3xl font-bold text-gray-900" style={{ fontFamily: design.headingFont }} />
+            <Editable value={brick.body ?? brick.subheadline} onChange={(v) => onUpdate({ body: v })}
+              enabled={editing} placeholder="La vostra storia..."
+              className="text-gray-600 leading-relaxed text-base whitespace-pre-wrap" />
+          </div>
+          {brick.imageUrl && (
+            <div className="flex-1">
+              <img src={brick.imageUrl} alt="" className="rounded-2xl shadow-lg w-full object-cover aspect-video" />
+            </div>
           )}
         </div>
       </div>
+    </section>
+  );
+}
 
-      {/* Download button */}
-      {isDone && (
-        <button onClick={async () => {
-          const res = await fetch(`${base}/sitebuilder/jobs/${job!.id}/download`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!res.ok) return;
-          const blob = await res.blob();
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url; a.download = `${form.siteDomain}-wordpress.zip`;
-          document.body.appendChild(a); a.click(); a.remove();
-          URL.revokeObjectURL(url);
-        }}
-          className="shrink-0 w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors">
-          <Download className="h-4 w-4" /> Scarica WordPress ZIP
-        </button>
+function ServicesRenderer({ brick, design, editing, onUpdate }: BlockRendererProps) {
+  const items = brick.items ?? [];
+  const primary = design.primaryColor ?? '#3b82f6';
+  return (
+    <section className="py-16 px-6 bg-gray-50">
+      <div className="max-w-5xl mx-auto">
+        <div className="text-center mb-12">
+          <Editable as="h2" value={brick.headline} onChange={(v) => onUpdate({ headline: v })}
+            enabled={editing} placeholder="I Nostri Servizi"
+            className="text-3xl font-bold text-gray-900 mb-2" style={{ fontFamily: design.headingFont }} />
+          {brick.subheadline && (
+            <Editable value={brick.subheadline} onChange={(v) => onUpdate({ subheadline: v })}
+              enabled={editing} className="text-gray-500 text-lg" />
+          )}
+        </div>
+        <div className="space-y-4">
+          {items.map((item, i) => (
+            <div key={i} className="flex gap-5 p-5 bg-white rounded-xl border border-gray-100 shadow-sm">
+              <div className="w-2 rounded-full flex-shrink-0" style={{ backgroundColor: primary }} />
+              <div>
+                <h3 className="font-semibold text-gray-900 text-lg">{item.title}</h3>
+                <p className="text-gray-500 text-sm mt-1 leading-relaxed">{item.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TestimonialsRenderer({ brick, design, editing, onUpdate }: BlockRendererProps) {
+  const items = (brick.items ?? []).slice(0, 3);
+  const bg = brick.bgColor ?? '#ffffff';
+  const primary = design.primaryColor ?? '#3b82f6';
+  return (
+    <section style={{ backgroundColor: bg }} className="py-16 px-6">
+      <div className="max-w-5xl mx-auto">
+        <Editable as="h2" value={brick.headline} onChange={(v) => onUpdate({ headline: v })}
+          enabled={editing} placeholder="Testimonianze"
+          className="text-3xl font-bold text-center text-gray-900 mb-12" style={{ fontFamily: design.headingFont }} />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {items.map((item, i) => (
+            <div key={i} className="p-6 rounded-2xl bg-white shadow border border-gray-100">
+              <div className="text-2xl mb-3" style={{ color: primary }}>"</div>
+              <p className="text-gray-600 text-sm italic leading-relaxed mb-4">{item.description}</p>
+              <p className="font-semibold text-gray-900 text-sm">— {item.title}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FaqRenderer({ brick, design, editing, onUpdate }: BlockRendererProps) {
+  const [open, setOpen] = useState<number | null>(0);
+  const items = brick.items ?? [];
+  const primary = design.primaryColor ?? '#3b82f6';
+  return (
+    <section className="py-16 px-6 bg-white">
+      <div className="max-w-3xl mx-auto">
+        <Editable as="h2" value={brick.headline} onChange={(v) => onUpdate({ headline: v })}
+          enabled={editing} placeholder="FAQ"
+          className="text-3xl font-bold text-center text-gray-900 mb-10" style={{ fontFamily: design.headingFont }} />
+        <div className="space-y-3">
+          {items.map((item, i) => (
+            <div key={i} className="border border-gray-200 rounded-xl overflow-hidden">
+              <button onClick={() => setOpen(open === i ? null : i)}
+                className="w-full flex justify-between items-center p-5 text-left font-medium text-gray-900 hover:bg-gray-50">
+                {item.title}
+                <ChevronRight className={cn('h-4 w-4 text-gray-400 transition-transform', open === i && 'rotate-90')}
+                  style={{ color: open === i ? primary : undefined }} />
+              </button>
+              {open === i && (
+                <div className="px-5 pb-5 text-gray-500 text-sm leading-relaxed border-t border-gray-100">
+                  {item.description}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ContactRenderer({ brick, design, editing, onUpdate }: BlockRendererProps) {
+  const bg = brick.bgColor ?? '#f8fafc';
+  const primary = design.primaryColor ?? '#3b82f6';
+  return (
+    <section style={{ backgroundColor: bg }} className="py-16 px-6">
+      <div className="max-w-2xl mx-auto text-center space-y-8">
+        <div className="space-y-3">
+          <Editable as="h2" value={brick.headline} onChange={(v) => onUpdate({ headline: v })}
+            enabled={editing} placeholder="Contattaci"
+            className="text-3xl font-bold text-gray-900" style={{ fontFamily: design.headingFont }} />
+          {brick.subheadline && (
+            <Editable value={brick.subheadline} onChange={(v) => onUpdate({ subheadline: v })}
+              enabled={editing} className="text-gray-500 text-base" />
+          )}
+        </div>
+        <div className="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 text-left space-y-4">
+          {['Nome e Cognome', 'Email', 'Telefono (opzionale)'].map((f) => (
+            <div key={f} className="space-y-1">
+              <label className="text-xs font-medium text-gray-500">{f}</label>
+              <div className="h-10 rounded-lg border border-gray-200 bg-gray-50" />
+            </div>
+          ))}
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-gray-500">Messaggio</label>
+            <div className="h-24 rounded-lg border border-gray-200 bg-gray-50" />
+          </div>
+          <button className="w-full py-3 rounded-lg text-white font-medium"
+            style={{ backgroundColor: primary }}>Invia messaggio</button>
+        </div>
+        <p className="text-xs text-gray-400">Form WordPress Contact Form 7 — attivo dopo importazione</p>
+      </div>
+    </section>
+  );
+}
+
+function CtaRenderer({ brick, design, editing, onUpdate }: BlockRendererProps) {
+  const bg = brick.bgColor ?? (design.primaryColor ?? '#1e40af');
+  return (
+    <section style={{ backgroundColor: bg, color: '#fff' }} className="py-16 px-6 text-center">
+      <div className="max-w-3xl mx-auto space-y-5">
+        <Editable as="h2" value={brick.headline} onChange={(v) => onUpdate({ headline: v })}
+          enabled={editing} placeholder="Pronto a iniziare?"
+          className="text-4xl font-bold text-white" style={{ fontFamily: design.headingFont }} />
+        {brick.subheadline && (
+          <Editable value={brick.subheadline} onChange={(v) => onUpdate({ subheadline: v })}
+            enabled={editing} className="text-white/80 text-lg" />
+        )}
+        {brick.cta_text && (
+          <a href={brick.cta_url ?? '#'} onClick={(e) => e.preventDefault()}
+            className="inline-block px-8 py-4 rounded-xl text-gray-900 font-bold text-lg bg-white shadow-xl mt-2">
+            {brick.cta_text}
+          </a>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function StatsRenderer({ brick, design }: BlockRendererProps) {
+  const items = (brick.items ?? []).slice(0, 4);
+  const primary = design.primaryColor ?? '#3b82f6';
+  return (
+    <section className="py-14 px-6 bg-white">
+      <div className="max-w-4xl mx-auto">
+        {brick.headline && (
+          <h2 className="text-2xl font-bold text-center text-gray-900 mb-10"
+            style={{ fontFamily: design.headingFont }}>{brick.headline}</h2>
+        )}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          {items.map((item, i) => (
+            <div key={i} className="text-center">
+              <div className="text-4xl font-black mb-1" style={{ color: primary }}>{item.title}</div>
+              <div className="text-gray-500 text-sm">{item.description}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const BLOCK_RENDERERS: Record<string, React.FC<BlockRendererProps>> = {
+  hero: HeroRenderer, features: FeaturesRenderer, about: AboutRenderer,
+  services: ServicesRenderer, testimonials: TestimonialsRenderer,
+  faq: FaqRenderer, contact: ContactRenderer, cta: CtaRenderer, stats: StatsRenderer,
+};
+
+function BlockRenderer(props: BlockRendererProps) {
+  const R = BLOCK_RENDERERS[props.brick.type];
+  if (!R) return (
+    <section className="py-10 px-6 bg-gray-100 text-center text-gray-400">
+      Blocco "{props.brick.type}" — renderer non disponibile
+    </section>
+  );
+  return <R {...props} />;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  EDITOR STATE
+// ════════════════════════════════════════════════════════════════════════════
+
+interface EditorState {
+  pages: SitePage[];
+  pageIndex: number;
+  selectedId: string | null;
+  editingId: string | null;
+  device: Device;
+  leftTab: 'layers' | 'palette';
+  past: SitePage[][];
+  future: SitePage[][];
+}
+
+type EditorAction =
+  | { type: 'SELECT'; id: string | null }
+  | { type: 'SET_EDITING'; id: string | null }
+  | { type: 'UPDATE_BRICK'; id: string; patch: Partial<Brick> }
+  | { type: 'ADD_BRICK'; brickType: string; afterId?: string }
+  | { type: 'DELETE_BRICK'; id: string }
+  | { type: 'DUPLICATE_BRICK'; id: string }
+  | { type: 'MOVE_BRICK'; id: string; dir: 'up' | 'down' }
+  | { type: 'REORDER'; from: number; to: number }
+  | { type: 'SET_PAGE'; index: number }
+  | { type: 'SET_DEVICE'; device: Device }
+  | { type: 'SET_LEFT_TAB'; tab: 'layers' | 'palette' }
+  | { type: 'UNDO' }
+  | { type: 'REDO' };
+
+function pushHistory(past: SitePage[][], pages: SitePage[]): SitePage[][] {
+  const next = [...past, pages];
+  return next.length > 50 ? next.slice(-50) : next;
+}
+
+function mutatePages(state: EditorState, fn: (bricks: Brick[]) => Brick[]): EditorState {
+  const pages = state.pages.map((p, i) =>
+    i === state.pageIndex ? { ...p, bricks: fn(p.bricks) } : p,
+  );
+  return {
+    ...state, pages,
+    past: pushHistory(state.past, state.pages),
+    future: [],
+  };
+}
+
+function editorReducer(state: EditorState, action: EditorAction): EditorState {
+  switch (action.type) {
+    case 'SELECT': return { ...state, selectedId: action.id, editingId: null };
+    case 'SET_EDITING': return { ...state, editingId: action.id };
+
+    case 'UPDATE_BRICK':
+      return mutatePages(state, (bricks) =>
+        bricks.map((b) => b.id === action.id ? { ...b, ...action.patch } : b),
+      );
+
+    case 'ADD_BRICK': {
+      const def = BLOCK_CATALOG[action.brickType];
+      if (!def) return state;
+      const newBrick: Brick = { id: uid(), type: action.brickType, ...def.defaultProps };
+      return mutatePages(state, (bricks) => {
+        if (!action.afterId) return [...bricks, newBrick];
+        const idx = bricks.findIndex((b) => b.id === action.afterId);
+        const next = [...bricks];
+        next.splice(idx + 1, 0, newBrick);
+        return next;
+      });
+    }
+
+    case 'DELETE_BRICK':
+      return {
+        ...mutatePages(state, (bricks) => bricks.filter((b) => b.id !== action.id)),
+        selectedId: state.selectedId === action.id ? null : state.selectedId,
+      };
+
+    case 'DUPLICATE_BRICK':
+      return mutatePages(state, (bricks) => {
+        const idx = bricks.findIndex((b) => b.id === action.id);
+        if (idx < 0) return bricks;
+        const dup = { ...bricks[idx], id: uid() };
+        return [...bricks.slice(0, idx + 1), dup, ...bricks.slice(idx + 1)];
+      });
+
+    case 'MOVE_BRICK':
+      return mutatePages(state, (bricks) => {
+        const idx = bricks.findIndex((b) => b.id === action.id);
+        if (idx < 0) return bricks;
+        const next = [...bricks];
+        const target = action.dir === 'up' ? idx - 1 : idx + 1;
+        if (target < 0 || target >= next.length) return bricks;
+        [next[idx], next[target]] = [next[target], next[idx]];
+        return next;
+      });
+
+    case 'REORDER':
+      return mutatePages(state, (bricks) => {
+        const next = [...bricks];
+        const [moved] = next.splice(action.from, 1);
+        next.splice(action.to, 0, moved);
+        return next;
+      });
+
+    case 'SET_PAGE': return { ...state, pageIndex: action.index, selectedId: null, editingId: null };
+    case 'SET_DEVICE': return { ...state, device: action.device };
+    case 'SET_LEFT_TAB': return { ...state, leftTab: action.tab };
+
+    case 'UNDO': {
+      if (!state.past.length) return state;
+      const prev = state.past[state.past.length - 1];
+      return {
+        ...state, pages: prev,
+        past: state.past.slice(0, -1),
+        future: [state.pages, ...state.future],
+      };
+    }
+    case 'REDO': {
+      if (!state.future.length) return state;
+      const [next, ...rest] = state.future;
+      return {
+        ...state, pages: next,
+        past: [...state.past, state.pages],
+        future: rest,
+      };
+    }
+
+    default: return state;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  BLOCK WRAPPER — selection, hover, drag
+// ════════════════════════════════════════════════════════════════════════════
+
+function BlockWrapper({
+  brick, index, total, selected, editing, dispatch, design, onUpdate,
+}: {
+  brick: Brick; index: number; total: number; selected: boolean; editing: boolean;
+  dispatch: React.Dispatch<EditorAction>; design: DesignScheme;
+  onUpdate: (patch: Partial<Brick>) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const showControls = hovered || selected;
+
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('brickIndex', String(index));
+    e.dataTransfer.effectAllowed = 'move';
+  };
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOver(true);
+  };
+  const handleDragLeave = () => setDragOver(false);
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const from = parseInt(e.dataTransfer.getData('brickIndex'));
+    if (!isNaN(from) && from !== index) dispatch({ type: 'REORDER', from, to: index });
+    setDragOver(false);
+  };
+
+  return (
+    <div
+      className={cn(
+        'relative group transition-all duration-100',
+        selected && 'ring-2 ring-blue-500 ring-offset-0',
+        hovered && !selected && 'ring-1 ring-blue-300',
+        dragOver && 'ring-2 ring-orange-400 bg-orange-50',
+      )}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SELECT', id: brick.id }); }}
+      onDoubleClick={(e) => { e.stopPropagation(); dispatch({ type: 'SET_EDITING', id: brick.id }); }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Block label */}
+      {showControls && (
+        <div className="absolute top-0 left-0 z-30 pointer-events-none">
+          <span className="bg-blue-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded-br">
+            {BLOCK_CATALOG[brick.type]?.icon} {BLOCK_CATALOG[brick.type]?.label ?? brick.type}
+          </span>
+        </div>
+      )}
+
+      {/* Floating toolbar */}
+      {showControls && (
+        <div className="absolute top-0 right-0 z-30 flex items-center gap-0.5 bg-white border border-gray-200 rounded-bl shadow-lg p-0.5">
+          {/* Drag handle */}
+          <div draggable onDragStart={handleDragStart}
+            className="p-1.5 cursor-grab rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100" title="Trascina">
+            <GripVertical className="h-3.5 w-3.5" />
+          </div>
+          <div className="w-px h-4 bg-gray-200" />
+          <button onClick={(e) => { e.stopPropagation(); dispatch({ type: 'MOVE_BRICK', id: brick.id, dir: 'up' }); }}
+            disabled={index === 0} className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30 text-gray-500" title="Sposta su">
+            <ChevronUp className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); dispatch({ type: 'MOVE_BRICK', id: brick.id, dir: 'down' }); }}
+            disabled={index === total - 1} className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-30 text-gray-500" title="Sposta giù">
+            <ChevronDown className="h-3.5 w-3.5" />
+          </button>
+          <div className="w-px h-4 bg-gray-200" />
+          <button onClick={(e) => { e.stopPropagation(); dispatch({ type: 'DUPLICATE_BRICK', id: brick.id }); }}
+            className="p-1.5 rounded hover:bg-gray-100 text-gray-500" title="Duplica">
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+          <button onClick={(e) => {
+            e.stopPropagation();
+            dispatch({ type: 'SET_EDITING', id: editing ? null : brick.id });
+          }} className={cn('p-1.5 rounded text-gray-500', editing && 'bg-blue-100 text-blue-600')} title="Modifica testo">
+            <Edit3 className="h-3.5 w-3.5" />
+          </button>
+          <div className="w-px h-4 bg-gray-200" />
+          <button onClick={(e) => { e.stopPropagation(); if (confirm('Eliminare questo blocco?')) dispatch({ type: 'DELETE_BRICK', id: brick.id }); }}
+            className="p-1.5 rounded hover:bg-red-50 text-red-400 hover:text-red-600" title="Elimina">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Block content */}
+      <BlockRenderer brick={brick} design={design} selected={selected} editing={editing} onUpdate={onUpdate} />
+
+      {/* Drop indicator */}
+      {dragOver && <div className="absolute inset-x-0 top-0 h-1 bg-orange-400 rounded" />}
+
+      {/* Add block below */}
+      {selected && (
+        <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20">
+          <button
+            onClick={(e) => { e.stopPropagation(); dispatch({ type: 'SET_LEFT_TAB', tab: 'palette' }); }}
+            className="flex items-center gap-1 px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded-full shadow-lg">
+            <Plus className="h-3 w-3" /> Aggiungi blocco
+          </button>
+        </div>
       )}
     </div>
   );
 }
 
-// ─── Step Indicator ───────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+//  LEFT PANEL — layers + palette
+// ════════════════════════════════════════════════════════════════════════════
 
-function StepIndicator({ currentStep }: { currentStep: number }) {
+function LeftPanel({ state, dispatch, pages }: {
+  state: EditorState; dispatch: React.Dispatch<EditorAction>; pages: SitePage[];
+}) {
+  const currentPage = pages[state.pageIndex];
+  const bricks = currentPage?.bricks ?? [];
+
   return (
-    <div className="flex items-center gap-1 mb-5">
-      {WIZARD_STEPS.map((step, i) => {
-        const Icon = step.icon;
-        const done = i < currentStep;
-        const active = i === currentStep;
-        return (
-          <React.Fragment key={step.id}>
-            {i > 0 && <div className={cn("flex-1 h-px", done ? "bg-primary" : "bg-border")} />}
-            <div className={cn(
-              "flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border transition-all",
-              done && "bg-primary text-primary-foreground border-primary",
-              active && "bg-primary/10 text-primary border-primary",
-              !done && !active && "text-muted-foreground border-border",
-            )}>
-              {done ? <CheckCircle2 className="h-3 w-3" /> : <Icon className="h-3 w-3" />}
-              <span className="hidden sm:inline">{step.label}</span>
-            </div>
-          </React.Fragment>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Topic Chips ──────────────────────────────────────────────────────────────
-
-function TopicInput({ topics, onChange }: { topics: string[]; onChange: (t: string[]) => void }) {
-  const [input, setInput] = useState("");
-  const add = (v: string) => {
-    const c = v.trim();
-    if (c && topics.length < 10 && !topics.includes(c)) onChange([...topics, c]);
-    setInput("");
-  };
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-2 min-h-[36px]">
-        {topics.map((t) => (
-          <span key={t} className="inline-flex items-center gap-1 px-2.5 py-1 bg-primary/10 text-primary text-xs rounded-md font-medium">
-            {t}
-            <button onClick={() => onChange(topics.filter((x) => x !== t))}><X className="h-3 w-3 opacity-60" /></button>
-          </span>
+    <div className="w-64 flex-shrink-0 border-r border-gray-200 bg-gray-50 flex flex-col min-h-0">
+      {/* Page switcher */}
+      <div className="p-3 border-b border-gray-200 space-y-1">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1">Pagine</p>
+        {pages.map((page, i) => (
+          <button key={page.slug} onClick={() => dispatch({ type: 'SET_PAGE', index: i })}
+            className={cn('w-full text-left px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors',
+              state.pageIndex === i ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-100')}>
+            <Globe className="h-3.5 w-3.5 flex-shrink-0" />
+            {page.title}
+          </button>
         ))}
       </div>
-      <div className="flex gap-2">
-        <Input value={input} onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && input.trim()) { e.preventDefault(); add(input); } }}
-          placeholder="Es. Home, Chi siamo, Servizi..." className="text-sm"
-          disabled={topics.length >= 10} />
-        <Button type="button" variant="outline" size="sm" onClick={() => add(input)} disabled={!input.trim() || topics.length >= 10}>
-          <Plus className="h-4 w-4" />
-        </Button>
+
+      {/* Tab switcher */}
+      <div className="flex border-b border-gray-200">
+        {(['layers', 'palette'] as const).map((tab) => (
+          <button key={tab} onClick={() => dispatch({ type: 'SET_LEFT_TAB', tab })}
+            className={cn('flex-1 py-2 text-xs font-medium flex items-center justify-center gap-1 transition-colors',
+              state.leftTab === tab ? 'bg-white text-blue-600 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-700')}>
+            {tab === 'layers' ? <><Layers className="h-3.5 w-3.5" /> Layer</> : <><LayoutTemplate className="h-3.5 w-3.5" /> Blocchi</>}
+          </button>
+        ))}
       </div>
-      <p className="text-xs text-muted-foreground">{topics.length}/10 sezioni</p>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        {state.leftTab === 'layers' ? (
+          <div className="p-2 space-y-1">
+            {bricks.length === 0 && (
+              <p className="text-xs text-gray-400 text-center py-6">Nessun blocco. Aggiungine uno dalla palette →</p>
+            )}
+            {bricks.map((brick, i) => (
+              <button key={brick.id} onClick={() => dispatch({ type: 'SELECT', id: brick.id })}
+                className={cn('w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-left transition-colors',
+                  state.selectedId === brick.id ? 'bg-blue-50 text-blue-700 font-medium ring-1 ring-blue-200' : 'text-gray-600 hover:bg-gray-100')}>
+                <span className="text-base">{BLOCK_CATALOG[brick.type]?.icon ?? '📦'}</span>
+                <span className="flex-1 truncate">{brick.headline ?? BLOCK_CATALOG[brick.type]?.label ?? brick.type}</span>
+                <span className="text-[10px] text-gray-400 font-mono">{i + 1}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="p-2 space-y-1">
+            <p className="text-[10px] text-gray-400 px-2 pb-1">Clicca per aggiungere alla pagina corrente</p>
+            {Object.entries(BLOCK_CATALOG).map(([key, def]) => (
+              <button key={key} onClick={() => {
+                dispatch({ type: 'ADD_BRICK', brickType: key, afterId: state.selectedId ?? undefined });
+                dispatch({ type: 'SET_LEFT_TAB', tab: 'layers' });
+              }}
+                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-left hover:bg-white hover:shadow-sm border border-transparent hover:border-gray-200 transition-all text-gray-700">
+                <span className="text-lg">{def.icon}</span>
+                <div>
+                  <div className="font-medium text-xs">{def.label}</div>
+                  <div className="text-[10px] text-gray-400">{def.description}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-// ─── History Row ──────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+//  RIGHT PANEL — dynamic properties editor
+// ════════════════════════════════════════════════════════════════════════════
 
-// ─── XML Upload Step ─────────────────────────────────────────────────────────
+function ItemsEditor({ items, onChange }: {
+  items: BrickItem[]; onChange: (items: BrickItem[]) => void;
+}) {
+  const update = (i: number, key: keyof BrickItem, val: string) => {
+    const next = items.map((it, idx) => idx === i ? { ...it, [key]: val } : it);
+    onChange(next);
+  };
+  const add = () => onChange([...items, { title: 'Nuovo', description: 'Descrizione...' }]);
+  const remove = (i: number) => onChange(items.filter((_, idx) => idx !== i));
 
-interface ParsedXmlBlocks {
-  strategy?: Record<string, string>;
-  pages: Array<{ slug: string; title: string; bricks: unknown[] }>;
+  return (
+    <div className="space-y-2">
+      {items.map((item, i) => (
+        <div key={i} className="bg-gray-50 rounded-lg p-3 space-y-2 border border-gray-100">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-gray-400">VOCE {i + 1}</span>
+            <button onClick={() => remove(i)} className="text-red-400 hover:text-red-600">
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+          <Input value={item.title} onChange={(e) => update(i, 'title', e.target.value)}
+            placeholder="Titolo" className="h-7 text-xs" />
+          <Textarea value={item.description} onChange={(e) => update(i, 'description', e.target.value)}
+            placeholder="Descrizione" rows={2} className="text-xs resize-none" />
+        </div>
+      ))}
+      <button onClick={add}
+        className="w-full flex items-center justify-center gap-1 py-2 text-xs text-blue-600 border-2 border-dashed border-blue-200 rounded-lg hover:bg-blue-50">
+        <Plus className="h-3 w-3" /> Aggiungi voce
+      </button>
+    </div>
+  );
 }
 
-function XmlUploadStep({
-  form, onXmlParsed, onTopicsChange, apiBase, token,
-}: {
-  form: WizardForm;
-  onXmlParsed: (blocks: ParsedXmlBlocks, topics: string[]) => void;
-  onTopicsChange: (topics: string[]) => void;
-  apiBase: string;
-  token: string;
+function RightPanel({ state, dispatch }: { state: EditorState; dispatch: React.Dispatch<EditorAction> }) {
+  const currentPage = state.pages[state.pageIndex];
+  const brick = currentPage?.bricks.find((b) => b.id === state.selectedId);
+  const def = brick ? BLOCK_CATALOG[brick.type] : null;
+
+  const update = useCallback((patch: Partial<Brick>) => {
+    if (!brick) return;
+    dispatch({ type: 'UPDATE_BRICK', id: brick.id, patch });
+  }, [brick, dispatch]);
+
+  if (!brick || !def) {
+    return (
+      <div className="w-72 flex-shrink-0 border-l border-gray-200 bg-gray-50 flex flex-col items-center justify-center p-6 gap-3">
+        <MousePointerClick className="h-8 w-8 text-gray-300" />
+        <p className="text-sm text-gray-400 text-center">Clicca su un blocco nel canvas per modificarne le proprietà</p>
+        <p className="text-xs text-gray-300 text-center">Doppio click sul testo per editarlo inline</p>
+      </div>
+    );
+  }
+
+  const renderField = (field: FieldDef) => {
+    const val = (brick as Record<string, unknown>)[field.key];
+
+    switch (field.type) {
+      case 'text':
+        return (
+          <Input value={(val as string) ?? ''} onChange={(e) => update({ [field.key]: e.target.value })}
+            placeholder={field.placeholder} className="h-8 text-xs" />
+        );
+      case 'richtext':
+        return (
+          <Textarea value={(val as string) ?? ''} onChange={(e) => update({ [field.key]: e.target.value })}
+            placeholder={field.placeholder} rows={4} className="text-xs resize-none" />
+        );
+      case 'url':
+        return (
+          <Input type="url" value={(val as string) ?? ''} onChange={(e) => update({ [field.key]: e.target.value })}
+            placeholder="https://..." className="h-8 text-xs font-mono" />
+        );
+      case 'image':
+        return (
+          <div className="space-y-2">
+            {val && (
+              <div className="relative aspect-video rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
+                <img src={val as string} alt="" className="w-full h-full object-cover" />
+                <button onClick={() => update({ [field.key]: undefined })}
+                  className="absolute top-1 right-1 p-1 bg-black/50 rounded text-white hover:bg-red-500">
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+            <Input value={(val as string) ?? ''} onChange={(e) => update({ [field.key]: e.target.value })}
+              placeholder="https://esempio.com/immagine.jpg" className="h-8 text-xs font-mono" />
+          </div>
+        );
+      case 'color':
+        return (
+          <div className="flex items-center gap-2">
+            <input type="color" value={(val as string) || '#ffffff'}
+              onChange={(e) => update({ [field.key]: e.target.value })}
+              className="h-8 w-12 rounded border border-gray-200 cursor-pointer p-0.5" />
+            <Input value={(val as string) ?? ''} onChange={(e) => update({ [field.key]: e.target.value })}
+              placeholder="#ffffff" className="h-8 text-xs font-mono flex-1" />
+          </div>
+        );
+      case 'select':
+        return (
+          <Select value={(val as string) ?? ''} onValueChange={(v) => update({ [field.key]: v })}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {(field.options ?? []).map((o) => (
+                <SelectItem key={o} value={o} className="text-xs">{o}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        );
+      case 'items':
+        return (
+          <ItemsEditor items={(val as BrickItem[]) ?? []}
+            onChange={(items) => update({ [field.key]: items })} />
+        );
+      default: return null;
+    }
+  };
+
+  return (
+    <div className="w-72 flex-shrink-0 border-l border-gray-200 bg-gray-50 flex flex-col min-h-0">
+      {/* Header */}
+      <div className="p-4 border-b border-gray-200 flex items-center gap-2">
+        <span className="text-2xl">{def.icon}</span>
+        <div>
+          <h3 className="font-semibold text-sm text-gray-900">{def.label}</h3>
+          <p className="text-[10px] text-gray-400">{def.description}</p>
+        </div>
+        <button onClick={() => dispatch({ type: 'SELECT', id: null })}
+          className="ml-auto p-1 rounded hover:bg-gray-200 text-gray-400">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Editing hint */}
+      <div className="mx-4 mt-3 mb-1 flex items-center gap-2 bg-blue-50 text-blue-600 text-[10px] px-2.5 py-2 rounded-lg">
+        <Edit3 className="h-3 w-3 flex-shrink-0" />
+        <span>Doppio click sul canvas per editare testi inline</span>
+      </div>
+
+      {/* Fields */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {def.fields.map((field) => (
+          <div key={field.key} className="space-y-1.5">
+            <Label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+              {field.label}
+            </Label>
+            {renderField(field)}
+          </div>
+        ))}
+
+        {/* Quick actions */}
+        <div className="pt-2 border-t border-gray-200 space-y-1.5">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Azioni</p>
+          <button onClick={() => dispatch({ type: 'DUPLICATE_BRICK', id: brick.id })}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gray-600 rounded-lg hover:bg-white border border-transparent hover:border-gray-200">
+            <Copy className="h-3.5 w-3.5" /> Duplica blocco
+          </button>
+          <button onClick={() => { if (confirm('Eliminare questo blocco?')) dispatch({ type: 'DELETE_BRICK', id: brick.id }); }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-500 rounded-lg hover:bg-red-50 border border-transparent hover:border-red-100">
+            <Trash2 className="h-3.5 w-3.5" /> Elimina blocco
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  CANVAS
+// ════════════════════════════════════════════════════════════════════════════
+
+const DEVICE_WIDTHS: Record<Device, string> = {
+  desktop: '100%', tablet: '768px', mobile: '375px',
+};
+
+function EditorCanvas({ state, dispatch, design }: {
+  state: EditorState; dispatch: React.Dispatch<EditorAction>; design: DesignScheme;
 }) {
+  const currentPage = state.pages[state.pageIndex];
+  const bricks = currentPage?.bricks ?? [];
+
+  return (
+    <div className="flex-1 overflow-auto bg-gray-200 flex justify-center"
+      onClick={() => dispatch({ type: 'SELECT', id: null })}>
+      <div
+        className="min-h-full bg-white shadow-xl transition-all duration-300"
+        style={{ width: DEVICE_WIDTHS[state.device], maxWidth: '100%' }}>
+
+        {bricks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-96 gap-4 text-gray-400">
+            <LayoutTemplate className="h-12 w-12 opacity-30" />
+            <p className="text-sm font-medium">Nessun blocco in questa pagina</p>
+            <p className="text-xs">Aggiungi blocchi dal pannello "Blocchi" a sinistra</p>
+            <button onClick={() => dispatch({ type: 'SET_LEFT_TAB', tab: 'palette' })}
+              className="flex items-center gap-1 px-4 py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600">
+              <Plus className="h-4 w-4" /> Aggiungi blocco
+            </button>
+          </div>
+        ) : (
+          bricks.map((brick, i) => (
+            <BlockWrapper
+              key={brick.id} brick={brick} index={i} total={bricks.length}
+              selected={state.selectedId === brick.id}
+              editing={state.editingId === brick.id}
+              dispatch={dispatch} design={design}
+              onUpdate={(patch) => dispatch({ type: 'UPDATE_BRICK', id: brick.id, patch })}
+            />
+          ))
+        )}
+
+        {/* Add block at end */}
+        {bricks.length > 0 && (
+          <div className="flex items-center justify-center py-6 border-t border-dashed border-gray-200">
+            <button onClick={() => dispatch({ type: 'SET_LEFT_TAB', tab: 'palette' })}
+              className="flex items-center gap-1 px-4 py-2 text-gray-400 text-xs border border-dashed border-gray-300 rounded-full hover:border-blue-400 hover:text-blue-500 transition-colors">
+              <Plus className="h-3 w-3" /> Aggiungi blocco in fondo
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  TOP BAR
+// ════════════════════════════════════════════════════════════════════════════
+
+function TopBar({
+  state, dispatch, pages, form, onGenerate, generating, onBack,
+}: {
+  state: EditorState; dispatch: React.Dispatch<EditorAction>; pages: SitePage[];
+  form: WizardForm; onGenerate: (pages: SitePage[]) => void;
+  generating: boolean; onBack: () => void;
+}) {
+  return (
+    <div className="h-12 bg-white border-b border-gray-200 flex items-center gap-2 px-3 flex-shrink-0 z-40">
+      {/* Back */}
+      <button onClick={onBack} className="flex items-center gap-1 px-2 py-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg text-xs">
+        <ArrowLeft className="h-3.5 w-3.5" /> Wizard
+      </button>
+
+      <div className="w-px h-5 bg-gray-200" />
+
+      {/* Page name */}
+      <div className="flex items-center gap-1 text-xs font-medium text-gray-600">
+        <Globe className="h-3.5 w-3.5 text-gray-400" />
+        {form.siteDomain || 'Sito senza titolo'}
+        <span className="text-gray-300 mx-1">/</span>
+        <span className="text-blue-600">{pages[state.pageIndex]?.title ?? ''}</span>
+      </div>
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Device toggle */}
+      <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+        {([
+          ['desktop', Monitor],
+          ['tablet', Tablet],
+          ['mobile', Smartphone],
+        ] as const).map(([dev, Icon]) => (
+          <button key={dev} onClick={() => dispatch({ type: 'SET_DEVICE', device: dev })}
+            className={cn('p-1.5 rounded-md transition-colors', state.device === dev ? 'bg-white shadow text-blue-600' : 'text-gray-400 hover:text-gray-600')}>
+            <Icon className="h-3.5 w-3.5" />
+          </button>
+        ))}
+      </div>
+
+      <div className="w-px h-5 bg-gray-200" />
+
+      {/* Undo/Redo */}
+      <button onClick={() => dispatch({ type: 'UNDO' })} disabled={!state.past.length}
+        className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30 text-gray-500" title="Annulla (Ctrl+Z)">
+        <Undo2 className="h-3.5 w-3.5" />
+      </button>
+      <button onClick={() => dispatch({ type: 'REDO' })} disabled={!state.future.length}
+        className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30 text-gray-500" title="Ripristina (Ctrl+Y)">
+        <Redo2 className="h-3.5 w-3.5" />
+      </button>
+
+      <div className="w-px h-5 bg-gray-200" />
+
+      {/* Blocks count badge */}
+      <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
+        {pages.reduce((acc, p) => acc + p.bricks.length, 0)} blocchi · {pages.length} pagine
+      </span>
+
+      {/* Generate */}
+      <button onClick={() => onGenerate(state.pages)} disabled={generating}
+        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-semibold rounded-lg shadow-sm">
+        {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+        {generating ? 'Generazione...' : 'Genera WordPress ZIP'}
+      </button>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SITE EDITOR — full three-panel layout
+// ════════════════════════════════════════════════════════════════════════════
+
+function SiteEditor({ xmlBlocks, form, onBack }: {
+  xmlBlocks: ParsedXml; form: WizardForm; onBack: () => void;
+}) {
+  const { toast } = useToast();
+  const [generating, setGenerating] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [job, setJob] = useState<SitebuilderJob | null>(null);
+
+  const initialPages: SitePage[] = useMemo(() =>
+    (xmlBlocks.pages ?? []).map((p) => ({
+      ...p,
+      bricks: p.bricks.map((b) => ({ ...b, id: b.id || uid() })),
+    })), [xmlBlocks]);
+
+  const [state, dispatch] = useReducer(editorReducer, {
+    pages: initialPages,
+    pageIndex: 0,
+    selectedId: null,
+    editingId: null,
+    device: 'desktop',
+    leftTab: 'layers',
+    past: [],
+    future: [],
+  });
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault(); dispatch({ type: 'UNDO' });
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault(); dispatch({ type: 'REDO' });
+      }
+      if (e.key === 'Escape') {
+        dispatch({ type: 'SET_EDITING', id: null });
+        dispatch({ type: 'SELECT', id: null });
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Poll job status
+  useEffect(() => {
+    if (!jobId) return;
+    const base = getApiBaseUrl();
+    const token = localStorage.getItem('doflow_token') ?? '';
+    const iv = setInterval(async () => {
+      const r = await fetch(`${base}/sitebuilder/jobs/${jobId}`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await r.json() as SitebuilderJob;
+      setJob(data);
+      if (data.status === 'DONE' || data.status === 'FAILED' || data.status === 'ROLLED_BACK') {
+        clearInterval(iv);
+        setGenerating(false);
+        if (data.status === 'DONE') toast({ title: '✅ Sito generato! Puoi scaricarlo.' });
+        else toast({ title: '❌ Generazione fallita', variant: 'destructive' });
+      }
+    }, 2000);
+    return () => clearInterval(iv);
+  }, [jobId]);
+
+  const handleGenerate = async (pages: SitePage[]) => {
+    setGenerating(true);
+    setJob(null);
+    const base = getApiBaseUrl();
+    const token = localStorage.getItem('doflow_token') ?? '';
+    try {
+      const payload = {
+        tenantId: form.tenantId,
+        siteDomain: form.siteDomain,
+        siteTitle: form.siteTitle,
+        adminEmail: form.adminEmail,
+        businessType: form.businessType || 'Business',
+        businessDescription: form.businessDescription,
+        starterSite: form.starterSite || 'consultant',
+        designScheme: form.designScheme,
+        contentTopics: pages.map((p) => p.title),
+        locale: form.locale || 'it',
+        xmlBlocks: { strategy: xmlBlocks.strategy, pages },
+      };
+      const r = await fetch(`${base}/sitebuilder/jobs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json() as { jobId: string };
+      if (r.ok && data.jobId) {
+        setJobId(data.jobId);
+        toast({ title: 'Job avviato — generazione WordPress in corso...' });
+      } else {
+        throw new Error('Risposta backend non valida');
+      }
+    } catch (err) {
+      toast({ title: 'Errore avvio generazione', description: String(err), variant: 'destructive' });
+      setGenerating(false);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!jobId) return;
+    const base = getApiBaseUrl();
+    const token = localStorage.getItem('doflow_token') ?? '';
+    const link = document.createElement('a');
+    link.href = `${base}/sitebuilder/jobs/${jobId}/download?token=${token}`;
+    link.download = `${form.siteDomain ?? 'sito'}-wordpress.zip`;
+    link.click();
+  };
+
+  return (
+    <div className="fixed inset-0 flex flex-col bg-white z-50">
+      <TopBar state={state} dispatch={dispatch} pages={state.pages} form={form}
+        onGenerate={handleGenerate} generating={generating} onBack={onBack} />
+
+      {/* Job status bar */}
+      {job && (
+        <div className={cn(
+          'px-4 py-2 text-xs flex items-center gap-3 border-b',
+          job.status === 'DONE' ? 'bg-green-50 border-green-200 text-green-800' :
+          job.status === 'RUNNING' ? 'bg-blue-50 border-blue-200 text-blue-800' :
+          'bg-red-50 border-red-200 text-red-800',
+        )}>
+          {job.status === 'RUNNING' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {job.status === 'DONE' && <CheckCircle2 className="h-3.5 w-3.5" />}
+          {job.status === 'DONE'
+            ? `✅ WordPress ZIP pronto — ${job.logs.slice(-1)[0]?.replace(/^\[.*?\] /, '') ?? ''}`
+            : job.logs.slice(-1)[0]?.replace(/^\[.*?\] /, '') ?? `Status: ${job.status}`}
+          {job.status === 'DONE' && (
+            <button onClick={handleDownload}
+              className="ml-auto flex items-center gap-1.5 px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">
+              <Download className="h-3.5 w-3.5" /> Scarica ZIP
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Three-panel body */}
+      <div className="flex-1 flex min-h-0">
+        <LeftPanel state={state} dispatch={dispatch} pages={state.pages} />
+        <EditorCanvas state={state} dispatch={dispatch} design={form.designScheme ?? {}} />
+        <RightPanel state={state} dispatch={dispatch} />
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  WIZARD COMPONENTS (5 steps + history)
+// ════════════════════════════════════════════════════════════════════════════
+
+const WIZARD_STEPS = [
+  { id: 'info', label: 'Sito', icon: Globe },
+  { id: 'desc', label: 'Business', icon: Building2 },
+  { id: 'design', label: 'Design', icon: Palette },
+  { id: 'documento', label: 'Documento', icon: FileText },
+];
+
+const BLOCKSY_SITES = [
+  { slug: 'consultant', label: 'Consultant', category: 'Business' },
+  { slug: 'business', label: 'Business', category: 'Business' },
+  { slug: 'restaurant', label: 'Restaurant', category: 'Food' },
+  { slug: 'beauty-salon', label: 'Beauty Salon', category: 'Salute' },
+  { slug: 'yoga', label: 'Yoga', category: 'Sport' },
+  { slug: 'photo-studio', label: 'Photo Studio', category: 'Portfolio' },
+];
+
+const FONTS = [
+  { value: 'Inter, sans-serif', label: 'Inter (moderno)' },
+  { value: '"Playfair Display", serif', label: 'Playfair Display (elegante)' },
+  { value: '"Montserrat", sans-serif', label: 'Montserrat (corporate)' },
+  { value: '"Merriweather", serif', label: 'Merriweather (editoriale)' },
+  { value: '"Roboto", sans-serif', label: 'Roboto (clean)' },
+];
+
+function WizardStep({ step, form, setForm }: {
+  step: number; form: WizardForm; setForm: (f: WizardForm) => void;
+}) {
+  const set = (k: keyof WizardForm, v: unknown) => setForm({ ...form, [k]: v });
+
+  if (step === 0) return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <Label className="text-xs font-semibold text-gray-600">Dominio del sito</Label>
+        <Input value={form.siteDomain} onChange={(e) => set('siteDomain', e.target.value)}
+          placeholder="esempio.com" className="h-9" />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-semibold text-gray-600">Nome del sito</Label>
+        <Input value={form.siteTitle} onChange={(e) => set('siteTitle', e.target.value)}
+          placeholder="Il tuo sito" className="h-9" />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-semibold text-gray-600">Email admin WordPress</Label>
+        <Input type="email" value={form.adminEmail} onChange={(e) => set('adminEmail', e.target.value)}
+          placeholder="admin@esempio.com" className="h-9" />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-semibold text-gray-600">Lingua</Label>
+        <Select value={form.locale} onValueChange={(v) => set('locale', v)}>
+          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="it">🇮🇹 Italiano</SelectItem>
+            <SelectItem value="en">🇬🇧 English</SelectItem>
+            <SelectItem value="fr">🇫🇷 Français</SelectItem>
+            <SelectItem value="de">🇩🇪 Deutsch</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+
+  if (step === 1) return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <Label className="text-xs font-semibold text-gray-600">Settore / Tipo di business</Label>
+        <Input value={form.businessType} onChange={(e) => set('businessType', e.target.value)}
+          placeholder="Es. Agenzia web, Ristorante, Studio medico..." className="h-9" />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-semibold text-gray-600">Descrizione del business</Label>
+        <Textarea value={form.businessDescription}
+          onChange={(e) => set('businessDescription', e.target.value)}
+          placeholder="Descrivi il tuo business, i tuoi servizi e il tuo target cliente..."
+          rows={5} className="resize-none text-sm" />
+      </div>
+      <div className="space-y-2">
+        <Label className="text-xs font-semibold text-gray-600">Tema starter Blocksy</Label>
+        <div className="grid grid-cols-2 gap-2">
+          {BLOCKSY_SITES.map((site) => (
+            <button key={site.slug} onClick={() => set('starterSite', site.slug)}
+              className={cn('p-3 rounded-lg border text-left text-xs transition-all',
+                form.starterSite === site.slug ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-gray-300 text-gray-600')}>
+              <div className="font-medium">{site.label}</div>
+              <div className="text-gray-400 text-[10px]">{site.category}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  if (step === 2) return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label className="text-xs font-semibold text-gray-600">Palette colori</Label>
+        {([
+          ['primaryColor', 'Primario', '#3B82F6'],
+          ['secondaryColor', 'Secondario', '#8B5CF6'],
+          ['accentColor', 'Accento', '#F59E0B'],
+        ] as [keyof DesignScheme, string, string][]).map(([key, label, def]) => (
+          <div key={key} className="flex items-center gap-2">
+            <input type="color"
+              value={(form.designScheme[key] as string) || def}
+              onChange={(e) => set('designScheme', { ...form.designScheme, [key]: e.target.value })}
+              className="h-8 w-8 rounded cursor-pointer border border-gray-200 p-0.5" />
+            <span className="text-xs text-gray-500 w-20">{label}</span>
+            <Input value={(form.designScheme[key] as string) || def}
+              onChange={(e) => set('designScheme', { ...form.designScheme, [key]: e.target.value })}
+              className="font-mono text-xs h-8 flex-1" />
+          </div>
+        ))}
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs font-semibold text-gray-600">Font titoli</Label>
+        <Select value={form.designScheme.headingFont ?? ''}
+          onValueChange={(v) => set('designScheme', { ...form.designScheme, headingFont: v })}>
+          <SelectTrigger className="h-9"><SelectValue placeholder="Scegli font..." /></SelectTrigger>
+          <SelectContent>
+            {FONTS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      {/* Color preview */}
+      <div className="rounded-xl p-4 border space-y-2">
+        <div className="h-5 rounded" style={{ backgroundColor: form.designScheme.primaryColor ?? '#3B82F6' }} />
+        <div className="flex gap-2">
+          <div className="h-3 rounded flex-1" style={{ backgroundColor: form.designScheme.secondaryColor ?? '#8B5CF6' }} />
+          <div className="h-3 rounded flex-1" style={{ backgroundColor: form.designScheme.accentColor ?? '#F59E0B' }} />
+        </div>
+        <p className="text-xs font-bold" style={{ color: form.designScheme.primaryColor ?? '#3B82F6', fontFamily: form.designScheme.headingFont }}>
+          Anteprima titolo
+        </p>
+      </div>
+    </div>
+  );
+
+  // Step 3: Documento XML
+  return <XmlStep form={form} setForm={setForm} />;
+}
+
+function XmlStep({ form, setForm }: { form: WizardForm; setForm: (f: WizardForm) => void }) {
   const { toast } = useToast();
   const [parsing, setParsing] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
-  const [mode, setMode] = useState<"xml" | "manual">(form.xmlBlocks ? "xml" : "manual");
+  const [mode, setMode] = useState<'xml' | 'manual'>(form.xmlBlocks ? 'xml' : 'manual');
   const fileRef = useRef<HTMLInputElement>(null);
-
-  const parsed = form.xmlBlocks as ParsedXmlBlocks | null;
+  const parsed = form.xmlBlocks as ParsedXml | null;
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.name.endsWith(".xml")) {
-      toast({ title: "Formato non supportato", description: "Carica un file .xml", variant: "destructive" });
+    if (!file.name.toLowerCase().endsWith('.xml')) {
+      toast({ title: 'File non supportato', description: 'Carica un file .xml', variant: 'destructive' });
       return;
     }
-    setFileName(file.name);
-    setParsing(true);
+    setFileName(file.name); setParsing(true);
     try {
       const xmlContent = await file.text();
-      const res = await fetch(`${apiBase}/sitebuilder/parse-xml`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      const base = getApiBaseUrl();
+      const token = localStorage.getItem('doflow_token') ?? '';
+      const r = await fetch(`${base}/sitebuilder/parse-xml`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ xmlContent }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json() as ParsedXmlBlocks;
-      const topics = data.pages.map((p) => p.title);
-      onXmlParsed(data, topics);
-      toast({ title: `XML parsato ✓ — ${data.pages.length} pagine rilevate` });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json() as ParsedXml;
+      setForm({ ...form, xmlBlocks: data, contentTopics: data.pages.map((p) => p.title) });
+      toast({ title: `✅ XML parsato — ${data.pages.length} pagine rilevate` });
     } catch (err) {
-      toast({ title: "Errore parsing XML", description: String(err), variant: "destructive" });
+      toast({ title: 'Errore parsing XML', description: String(err), variant: 'destructive' });
       setFileName(null);
     } finally { setParsing(false); }
   };
 
   return (
-    <Card className="glass-card">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Documento Contenuti
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Mode selector */}
-        <div className="flex gap-2">
-          <button onClick={() => setMode("xml")}
-            className={cn("flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg border text-sm font-medium transition-all",
-              mode === "xml" ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:border-primary/40")}>
-            <FileText className="h-4 w-4" /> Carica XML master doc
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        {(['xml', 'manual'] as const).map((m) => (
+          <button key={m} onClick={() => setMode(m)}
+            className={cn('flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-all',
+              mode === m ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:border-gray-300')}>
+            {m === 'xml' ? '📄 Carica XML master doc' : '✍️ Sezioni manuali + AI'}
           </button>
-          <button onClick={() => setMode("manual")}
-            className={cn("flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg border text-sm font-medium transition-all",
-              mode === "manual" ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:border-primary/40")}>
-            <Zap className="h-4 w-4" /> Sezioni manuali + AI
-          </button>
+        ))}
+      </div>
+
+      {mode === 'xml' ? (
+        <div className="space-y-3">
+          <div onClick={() => fileRef.current?.click()}
+            className={cn('flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 border-dashed cursor-pointer transition-all',
+              parsing ? 'border-blue-400 bg-blue-50' :
+              parsed ? 'border-green-400 bg-green-50' :
+              'border-gray-200 hover:border-blue-300 hover:bg-gray-50')}>
+            <input ref={fileRef} type="file" accept=".xml" className="hidden" onChange={handleFile} />
+            {parsing ? (
+              <><Loader2 className="h-7 w-7 text-blue-500 animate-spin" /><p className="text-sm font-medium text-blue-700">Claude sta analizzando l'XML...</p></>
+            ) : parsed ? (
+              <><CheckCircle2 className="h-7 w-7 text-green-600" /><p className="text-sm font-medium text-green-700">{fileName}</p>
+              <p className="text-xs text-gray-500">{parsed.pages.length} pagine · {parsed.pages.reduce((a, p) => a + (p.bricks?.length ?? 0), 0)} blocchi</p>
+              <button onClick={(e) => { e.stopPropagation(); setForm({ ...form, xmlBlocks: null }); setFileName(null); }}
+                className="text-[10px] text-red-500 hover:underline">Rimuovi</button></>
+            ) : (
+              <><FileText className="h-7 w-7 text-gray-300" /><p className="text-sm text-gray-500">Carica il tuo <code className="bg-gray-100 px-1 rounded">sitebuilder_master_doc.xml</code></p>
+              <p className="text-xs text-gray-400">Clicca o trascina qui</p></>
+            )}
+          </div>
+
+          {parsed && parsed.pages.length > 0 && (
+            <div className="rounded-xl border bg-white p-3 space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Pagine rilevate</p>
+              {parsed.pages.map((page) => (
+                <div key={page.slug} className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
+                  <span className="text-xs font-medium text-gray-700">{page.title}</span>
+                  <div className="flex items-center gap-1">
+                    {(page.bricks as Brick[])?.slice(0, 4).map((b, i) => (
+                      <span key={i} className="text-[9px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded-full">
+                        {BLOCK_CATALOG[b.type]?.icon ?? '📦'} {b.type}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-
-        {/* XML Upload mode */}
-        {mode === "xml" && (
-          <div className="space-y-3">
-            <div
-              onClick={() => fileRef.current?.click()}
-              className={cn(
-                "relative flex flex-col items-center justify-center gap-2 p-6 rounded-lg border-2 border-dashed cursor-pointer transition-all",
-                parsing ? "border-primary/50 bg-primary/5" :
-                parsed ? "border-green-500 bg-green-50" :
-                "border-border hover:border-primary/50 hover:bg-muted/30",
-              )}>
-              <input ref={fileRef} type="file" accept=".xml" className="hidden" onChange={handleFile} />
-              {parsing ? (
-                <>
-                  <Loader2 className="h-8 w-8 text-primary animate-spin" />
-                  <p className="text-sm font-medium">Claude sta analizzando l'XML...</p>
-                  <p className="text-xs text-muted-foreground">Estrazione blocchi in corso</p>
-                </>
-              ) : parsed ? (
-                <>
-                  <CheckCircle2 className="h-8 w-8 text-green-600" />
-                  <p className="text-sm font-medium text-green-700">{fileName}</p>
-                  <p className="text-xs text-muted-foreground">{parsed.pages.length} pagine · {parsed.pages.reduce((acc, p) => acc + (p.bricks?.length ?? 0), 0)} blocchi estratti</p>
-                  <button onClick={(e) => { e.stopPropagation(); onXmlParsed({ pages: [] } as any, []); setFileName(null); }}
-                    className="text-[10px] text-red-500 hover:underline mt-1">Rimuovi</button>
-                </>
-              ) : (
-                <>
-                  <FileText className="h-8 w-8 text-muted-foreground/50" />
-                  <p className="text-sm font-medium">Trascina qui il tuo <code className="bg-muted px-1 rounded">sitebuilder_master_doc.xml</code></p>
-                  <p className="text-xs text-muted-foreground">oppure clicca per sfogliare</p>
-                </>
-              )}
-            </div>
-
-            {/* Parsed pages preview */}
-            {parsed && parsed.pages.length > 0 && (
-              <div className="rounded-lg border bg-muted/20 p-3 space-y-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Pagine rilevate</p>
-                {parsed.pages.map((page) => (
-                  <div key={page.slug} className="flex items-center justify-between py-1 border-b border-border/50 last:border-0">
-                    <span className="text-sm font-medium">{page.title}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-muted-foreground">{page.bricks?.length ?? 0} blocchi</span>
-                      <div className="flex gap-0.5">
-                        {(page.bricks as Array<{ type: string }>)?.slice(0, 4).map((b, i) => (
-                          <span key={i} className="text-[9px] px-1 py-0.5 bg-primary/10 text-primary rounded">{b.type}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {parsed.strategy && (
-                  <div className="pt-1">
-                    <p className="text-[10px] text-muted-foreground">
-                      <span className="font-semibold">Tono:</span> {parsed.strategy.toneOfVoice}
-                    </p>
-                  </div>
-                )}
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs text-gray-500">Claude genererà i contenuti autonomamente basandosi sulle informazioni business fornite.</p>
+          <div className="space-y-2">
+            {(form.contentTopics ?? []).map((t, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded-full">{t}</span>
+                <button onClick={() => setForm({ ...form, contentTopics: form.contentTopics.filter((_, idx) => idx !== i) })}
+                  className="text-gray-300 hover:text-red-400"><X className="h-3 w-3" /></button>
               </div>
-            )}
-
-            {!parsed && (
-              <p className="text-xs text-muted-foreground text-center">
-                Il file XML viene analizzato da Claude che estrae titoli, testi, CTA e struttura delle pagine
-                senza riscrivere nulla — i testi SEO/CRO vengono preservati integralmente.
-              </p>
-            )}
+            ))}
           </div>
-        )}
-
-        {/* Manual mode */}
-        {mode === "manual" && (
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              Claude genererà i contenuti autonomamente in base al titolo sito e alla descrizione business.
-            </p>
-            <TopicInput topics={form.contentTopics ?? []} onChange={onTopicsChange} />
-            <div className="flex flex-wrap gap-1.5">
-              {["Home","Chi Siamo","Servizi","Portfolio","Contatti","Blog","FAQ","Prezzi"]
-                .filter((s) => !(form.contentTopics ?? []).includes(s))
-                .map((s) => (
-                  <button key={s} onClick={() => {
-                    if ((form.contentTopics ?? []).length < 10) onTopicsChange([...(form.contentTopics ?? []), s]);
-                  }} className="px-2.5 py-1 text-xs border border-dashed border-primary/40 rounded-md text-primary hover:bg-primary/10 transition-colors">
-                    + {s}
-                  </button>
-                ))}
-            </div>
+          <div className="flex flex-wrap gap-1.5">
+            {['Home', 'Chi Siamo', 'Servizi', 'Portfolio', 'Contatti', 'Blog', 'FAQ', 'Prezzi']
+              .filter((s) => !(form.contentTopics ?? []).includes(s))
+              .map((s) => (
+                <button key={s}
+                  onClick={() => setForm({ ...form, contentTopics: [...(form.contentTopics ?? []), s] })}
+                  className="px-2.5 py-1 text-xs border border-dashed border-blue-300 rounded-lg text-blue-600 hover:bg-blue-50">
+                  + {s}
+                </button>
+              ))}
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </div>
   );
 }
 
-// ─── History Row ─────────────────────────────────────────────────────────────
+// History panel
+function HistoryPanel({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const [jobs, setJobs] = useState<SitebuilderJob[]>([]);
+  const [loading, setLoading] = useState(false);
 
-function HistoryRow({ job, onDelete }: { job: SitebuilderJob; onDelete: (id: string) => void }) {
-  const cfg = STATUS_CONFIG[job.status] ?? STATUS_CONFIG.PENDING;
-  const base = getApiBaseUrl();
-  const token = typeof window !== "undefined" ? localStorage.getItem("doflow_token") ?? "" : "";
-  const [deleting, setDeleting] = useState(false);
+  useEffect(() => {
+    if (!visible) return;
+    setLoading(true);
+    const base = getApiBaseUrl();
+    const token = localStorage.getItem('doflow_token') ?? '';
+    fetch(`${base}/sitebuilder/jobs`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json()).then((data) => setJobs(data as SitebuilderJob[])).catch(() => {})
+      .finally(() => setLoading(false));
+  }, [visible]);
 
-  const handleDownload = async () => {
-    const res = await fetch(`${base}/sitebuilder/jobs/${job.id}/download`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) return alert("ZIP non disponibile");
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `${job.siteDomain}-wordpress.zip`;
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
-  };
+  if (!visible) return null;
 
-  const handleDelete = async () => {
-    if (!confirm(`Eliminare il job per ${job.siteDomain}?`)) return;
-    setDeleting(true);
-    try {
-      await fetch(`${base}/sitebuilder/jobs/${job.id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-      onDelete(job.id);
-    } catch { alert("Errore durante l'eliminazione"); }
-    finally { setDeleting(false); }
+  const handleDownload = (job: SitebuilderJob) => {
+    const base = getApiBaseUrl();
+    const token = localStorage.getItem('doflow_token') ?? '';
+    const link = document.createElement('a');
+    link.href = `${base}/sitebuilder/jobs/${job.id}/download?token=${token}`;
+    link.download = `${job.siteDomain}-wordpress.zip`;
+    link.click();
   };
 
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors">
-      <Globe className="h-4 w-4 text-muted-foreground shrink-0" />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{job.siteDomain}</p>
-        <p className="text-xs text-muted-foreground">
-          {new Date(job.createdAt).toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-        </p>
-      </div>
-      <Badge variant="outline" className={cn("text-xs shrink-0", cfg.bg, cfg.color)}>{cfg.label}</Badge>
-      <div className="flex items-center gap-1">
-        {job.status === "DONE" && (
-          <button onClick={handleDownload} title="Scarica ZIP"
-            className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-            <Download className="h-3.5 w-3.5" />
-          </button>
-        )}
-        <button onClick={handleDelete} disabled={deleting} title="Elimina"
-          className="p-1.5 rounded text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40">
-          {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-        </button>
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b">
+          <h2 className="font-semibold text-gray-900">Storico Build</h2>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-2">
+          {loading && <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>}
+          {!loading && jobs.length === 0 && <p className="text-sm text-gray-400 text-center py-8">Nessun build precedente</p>}
+          {jobs.map((job) => (
+            <div key={job.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-gray-200">
+              <div className={cn('w-2 h-2 rounded-full flex-shrink-0',
+                job.status === 'DONE' ? 'bg-green-500' :
+                job.status === 'RUNNING' ? 'bg-blue-500' : 'bg-red-400')} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{job.siteDomain}</p>
+                <p className="text-xs text-gray-400">{new Date(job.createdAt).toLocaleString('it-IT')}</p>
+              </div>
+              <Badge variant={job.status === 'DONE' ? 'default' : 'secondary'} className="text-xs">
+                {job.status}
+              </Badge>
+              {job.status === 'DONE' && (
+                <button onClick={() => handleDownload(job)}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 text-xs rounded-lg hover:bg-green-100 font-medium">
+                  <Download className="h-3 w-3" /> ZIP
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+//  MAIN EXPORT — SitebuilderClient
+// ════════════════════════════════════════════════════════════════════════════
 
 export default function SitebuilderClient() {
-  const { toast } = useToast();
-  const [tab, setTab]         = useState<"wizard" | "history">("wizard");
-  const [wizardStep, setStep] = useState(0);
-  const [submitting, setSub]  = useState(false);
-  const [starterSites, setSites] = useState<StarterSite[]>([]);
-  const [history, setHistory]    = useState<SitebuilderJob[]>([]);
-  const [jobId, setJobId]        = useState<string | null>(null);
-
-  const { job } = useSitebuilderJob(jobId);
-
+  const [wizardStep, setWizardStep] = useState(0);
   const [form, setForm] = useState<WizardForm>({
-    tenantId: "public", siteDomain: "", siteTitle: "", adminEmail: "",
-    businessType: "", businessDescription: "", starterSite: "",
-    designScheme: { primaryColor: "#3B82F6", secondaryColor: "#8B5CF6", accentColor: "#F59E0B" },
-    contentTopics: [], locale: "it", xmlBlocks: null,
+    tenantId: 'public', siteDomain: '', siteTitle: '', adminEmail: '',
+    businessType: '', businessDescription: '', starterSite: '',
+    designScheme: { primaryColor: '#3B82F6', secondaryColor: '#8B5CF6', accentColor: '#F59E0B' },
+    contentTopics: [], locale: 'it', xmlBlocks: null,
   });
+  const [editorMode, setEditorMode] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
-  const set = <K extends keyof WizardForm>(k: K, v: WizardForm[K]) =>
-    setForm((p) => ({ ...p, [k]: v }));
-
-  const base  = getApiBaseUrl();
-  const token = typeof window !== "undefined" ? localStorage.getItem("doflow_token") ?? "" : "";
-
-  useEffect(() => {
-    fetch(`${base}/sitebuilder/starter-sites`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json()).then((d) => setSites(Array.isArray(d) ? d : [])).catch(console.error);
-    fetch(`${base}/sitebuilder/jobs`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json()).then((d) => setHistory(Array.isArray(d) ? d : [])).catch(console.error);
-  }, []);
-
-  useEffect(() => {
-    if (job?.status === "DONE" || job?.status === "FAILED") {
-      fetch(`${base}/sitebuilder/jobs`, { headers: { Authorization: `Bearer ${token}` } })
-        .then((r) => r.json()).then((d) => setHistory(Array.isArray(d) ? d : [])).catch(console.error);
-    }
-  }, [job?.status]);
-
-  const handleSubmit = async () => {
-    setSub(true);
-    try {
-      const res = await apiFetch<{ jobId: string }>("/sitebuilder/jobs", {
-        method: "POST", body: JSON.stringify(form), auth: true,
-      });
-      setJobId(res.jobId);
-      toast({ title: "Build avviata!", description: `Job ID: ${res.jobId.slice(0, 8)}...` });
-    } catch (err) {
-      toast({ title: "Errore", description: String(err), variant: "destructive" });
-    } finally { setSub(false); }
-  };
-
-  const canNext = [
+  const canProceed = [
     !!(form.siteDomain && form.siteTitle && form.adminEmail),
-    !!form.businessType,
-    !!form.starterSite,
+    !!(form.businessType && form.starterSite),
     true,
-    // Ultimo step: valido se ha caricato XML OPPURE ha almeno 1 topic manuale
     !!(form.xmlBlocks?.pages?.length || (form.contentTopics ?? []).length >= 1),
   ];
 
-  const showSplitPanel = !!jobId && !!job;
+  const hasBlocks = !!form.xmlBlocks?.pages?.length;
+
+  if (editorMode && form.xmlBlocks) {
+    return (
+      <SiteEditor
+        xmlBlocks={form.xmlBlocks}
+        form={form}
+        onBack={() => setEditorMode(false)}
+      />
+    );
+  }
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <Globe className="h-5 w-5 text-primary" /> Sitebuilder AI WordPress
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Genera un sito WordPress completo con AI — pronto per SiteGround
-          </p>
+      <div className="border-b border-gray-200 bg-white/80 backdrop-blur sticky top-0 z-10">
+        <div className="max-w-3xl mx-auto px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🚀</span>
+            <span className="font-bold text-gray-900 text-sm">DoFlow Sitebuilder AI</span>
+          </div>
+          <button onClick={() => setShowHistory(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg">
+            <FolderOpen className="h-3.5 w-3.5" /> Storico build
+          </button>
         </div>
-        {showSplitPanel && (
-          <Button variant="outline" size="sm" onClick={() => { setJobId(null); setStep(0); }}>
-            <Plus className="h-4 w-4 mr-1.5" /> Nuovo sito
-          </Button>
+      </div>
+
+      <div className="max-w-3xl mx-auto px-6 py-8">
+        {/* Step indicators */}
+        <div className="flex items-center gap-2 mb-8">
+          {WIZARD_STEPS.map((step, i) => (
+            <React.Fragment key={step.id}>
+              <button onClick={() => i < wizardStep && setWizardStep(i)}
+                className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all',
+                  i === wizardStep ? 'bg-blue-600 text-white shadow-md' :
+                  i < wizardStep ? 'bg-blue-100 text-blue-700 cursor-pointer hover:bg-blue-200' :
+                  'bg-gray-100 text-gray-400 cursor-not-allowed')}>
+                <step.icon className="h-3.5 w-3.5" /> {step.label}
+              </button>
+              {i < WIZARD_STEPS.length - 1 && (
+                <div className={cn('flex-1 h-px', i < wizardStep ? 'bg-blue-300' : 'bg-gray-200')} />
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+
+        {/* Step content */}
+        <Card className="shadow-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base">
+              {WIZARD_STEPS[wizardStep]?.label} {wizardStep === 3 && hasBlocks ? '— XML caricato ✓' : ''}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <WizardStep step={wizardStep} form={form} setForm={setForm} />
+          </CardContent>
+        </Card>
+
+        {/* Navigation */}
+        <div className="flex items-center justify-between mt-4">
+          <button onClick={() => setWizardStep(Math.max(0, wizardStep - 1))} disabled={wizardStep === 0}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-30">
+            <ArrowLeft className="h-4 w-4" /> Indietro
+          </button>
+
+          <div className="flex items-center gap-2">
+            {/* Open editor button (when XML parsed) */}
+            {wizardStep === 3 && hasBlocks && (
+              <button onClick={() => setEditorMode(true)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl shadow-md">
+                <Edit3 className="h-4 w-4" /> Apri Editor Visuale
+              </button>
+            )}
+
+            {wizardStep < WIZARD_STEPS.length - 1 ? (
+              <button onClick={() => setWizardStep(wizardStep + 1)} disabled={!canProceed[wizardStep]}
+                className="flex items-center gap-1.5 px-5 py-2.5 bg-gray-900 hover:bg-gray-700 disabled:opacity-40 text-white text-sm font-medium rounded-xl">
+                Avanti <ChevronRight className="h-4 w-4" />
+              </button>
+            ) : (
+              !hasBlocks && (
+                <button onClick={() => setEditorMode(false)} disabled={!canProceed[wizardStep]}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white text-sm font-semibold rounded-xl">
+                  <Sparkles className="h-4 w-4" /> Genera con AI
+                </button>
+              )
+            )}
+          </div>
+        </div>
+
+        {/* XML parsed info */}
+        {wizardStep === 3 && hasBlocks && (
+          <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-100 flex items-start gap-3">
+            <CheckCircle2 className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-blue-900">Documento XML pronto</p>
+              <p className="text-xs text-blue-600 mt-0.5">
+                {form.xmlBlocks!.pages.length} pagine con {form.xmlBlocks!.pages.reduce((a, p) => a + (p.bricks?.length ?? 0), 0)} blocchi estratti.
+                Apri l'Editor Visuale per modificare i contenuti, le immagini e la struttura prima di generare il ZIP.
+              </p>
+            </div>
+          </div>
         )}
       </div>
 
-      {/* ─── SPLIT PANEL (job in corso o completato) ─── */}
-      {showSplitPanel ? (
-        <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-4 h-[calc(100vh-160px)] min-h-[600px]">
-          {/* Left: tools */}
-          <Card className="glass-card overflow-hidden">
-            <CardContent className="p-4 h-full">
-              <ToolsPanel
-                form={form}
-                job={job}
-                onFormChange={(updates) => setForm((p) => ({ ...p, ...updates,
-                  contentTopics: updates.contentTopics ?? p.contentTopics ?? [],
-                  designScheme: updates.designScheme ? { ...p.designScheme, ...updates.designScheme } : p.designScheme,
-                }))}
-              />
-            </CardContent>
-          </Card>
-
-          {/* Right: preview */}
-          <Card className="glass-card overflow-hidden">
-            <CardHeader className="pb-2 px-4 pt-4 shrink-0">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Anteprima sito
-                </CardTitle>
-                <span className="text-[10px] text-muted-foreground italic">
-                  Preview simulata — aggiornata in tempo reale
-                </span>
-              </div>
-            </CardHeader>
-            <CardContent className="p-3 h-[calc(100%-52px)]">
-              <SitePreview form={form} />
-            </CardContent>
-          </Card>
-        </div>
-      ) : (
-        /* ─── TABS (wizard + history) ─── */
-        <Tabs value={tab} onValueChange={(v) => setTab(v as "wizard" | "history")}>
-          <TabsList>
-            <TabsTrigger value="wizard"><Zap className="h-3.5 w-3.5 mr-1.5" />Nuovo sito</TabsTrigger>
-            <TabsTrigger value="history"><History className="h-3.5 w-3.5 mr-1.5" />Storico ({history.length})</TabsTrigger>
-          </TabsList>
-
-          {/* Wizard */}
-          <TabsContent value="wizard" className="mt-4 space-y-4 max-w-2xl">
-            <StepIndicator currentStep={wizardStep} />
-
-            {/* Step 0: Info sito */}
-            {wizardStep === 0 && (
-              <Card className="glass-card">
-                <CardHeader className="pb-3"><CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Informazioni sito</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Dominio *</Label>
-                      <Input placeholder="shop.acme.it" value={form.siteDomain}
-                        onChange={(e) => set("siteDomain", e.target.value.toLowerCase())} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Nome sito *</Label>
-                      <Input placeholder="Acme Shop" value={form.siteTitle}
-                        onChange={(e) => set("siteTitle", e.target.value)} />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Email admin *</Label>
-                      <Input type="email" placeholder="admin@acme.it" value={form.adminEmail}
-                        onChange={(e) => set("adminEmail", e.target.value)} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Lingua</Label>
-                      <Select value={form.locale} onValueChange={(v) => set("locale", v)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {[["it","Italiano"],["en","English"],["fr","Français"],["de","Deutsch"],["es","Español"]].map(([v, l]) => (
-                            <SelectItem key={v} value={v}>{l}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Step 1: Business */}
-            {wizardStep === 1 && (
-              <Card className="glass-card">
-                <CardHeader className="pb-3"><CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tipo di Business</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Settore *</Label>
-                    <Select value={form.businessType} onValueChange={(v) => set("businessType", v)}>
-                      <SelectTrigger><SelectValue placeholder="Seleziona..." /></SelectTrigger>
-                      <SelectContent>{BUSINESS_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Descrivi il tuo business</Label>
-                    <Textarea
-                      placeholder="Es. Siamo un ristorante nel centro di Milano, aperto dal 2010. Offriamo cucina tradizionale con ingredienti locali..."
-                      value={form.businessDescription}
-                      onChange={(e) => set("businessDescription", e.target.value)}
-                      rows={5} className="text-sm resize-none" maxLength={3000}
-                    />
-                    <p className="text-xs text-right text-muted-foreground">{form.businessDescription.length}/3000</p>
-                    <p className="text-xs text-muted-foreground">💡 Potrai migliorare la descrizione con AI nel pannello di generazione.</p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Step 2: Tema */}
-            {wizardStep === 2 && (
-              <Card className="glass-card">
-                <CardHeader className="pb-3"><CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Scegli il tema Blocksy</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="max-h-80 overflow-y-auto pr-1 space-y-0.5">
-                    {Array.from(new Set(starterSites.map((s) => s.category))).map((cat) => (
-                      <div key={cat}>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground py-1.5 sticky top-0 bg-card">{cat}</p>
-                        {starterSites.filter((s) => s.category === cat).map((site) => (
-                          <div key={site.slug} onClick={() => set("starterSite", site.slug)}
-                            className={cn(
-                              "flex items-center justify-between px-3 py-2 rounded-md border cursor-pointer transition-all mb-0.5",
-                              form.starterSite === site.slug ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 hover:bg-muted/30",
-                            )}>
-                            <div className="flex items-center gap-2">
-                              <div className={cn("h-3.5 w-3.5 rounded-full border-2 flex items-center justify-center shrink-0",
-                                form.starterSite === site.slug ? "border-primary" : "border-border")}>
-                                {form.starterSite === site.slug && <div className="h-1.5 w-1.5 rounded-full bg-primary" />}
-                              </div>
-                              <span className={cn("text-sm", form.starterSite === site.slug ? "text-primary font-medium" : "")}>{site.label}</span>
-                              <span className={cn("text-[9px] px-1.5 py-0.5 rounded font-bold",
-                                site.isPro ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700")}>
-                                {site.isPro ? "PRO" : "FREE"}
-                              </span>
-                            </div>
-                            <a href={site.previewUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-                              className="p-1 text-muted-foreground hover:text-foreground transition-colors" title="Anteprima">
-                              <Eye className="h-3.5 w-3.5" />
-                            </a>
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Step 3: Design */}
-            {wizardStep === 3 && (
-              <Card className="glass-card">
-                <CardHeader className="pb-3"><CardTitle className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Personalizzazione design</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-3 gap-3">
-                    {([["primaryColor","Primario","#3B82F6"],["secondaryColor","Secondario","#8B5CF6"],["accentColor","Accento","#F59E0B"]] as [keyof DesignScheme, string, string][]).map(([key, label, def]) => (
-                      <div key={key} className="space-y-1.5">
-                        <Label className="text-xs">{label}</Label>
-                        <div className="flex items-center gap-2">
-                          <input type="color"
-                            value={(form.designScheme as Record<string, string>)[key] ?? def}
-                            onChange={(e) => set("designScheme", { ...form.designScheme, [key]: e.target.value })}
-                            className="h-8 w-8 rounded cursor-pointer border border-border" />
-                          <Input value={(form.designScheme as Record<string, string>)[key] ?? def}
-                            onChange={(e) => set("designScheme", { ...form.designScheme, [key]: e.target.value })}
-                            className="font-mono text-xs h-8" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Font titoli</Label>
-                    <Select value={form.designScheme.headingFont ?? ""}
-                      onValueChange={(v) => set("designScheme", { ...form.designScheme, headingFont: v })}>
-                      <SelectTrigger className="text-sm"><SelectValue placeholder="Seleziona..." /></SelectTrigger>
-                      <SelectContent>{HEADING_FONTS.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Potrai modificare colori e font in tempo reale dal pannello di generazione.</p>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Step 4: Documento XML */}
-            {wizardStep === 4 && (
-              <XmlUploadStep
-                form={form}
-                onXmlParsed={(xmlBlocks, topics) => {
-                  set("xmlBlocks", xmlBlocks);
-                  if (topics.length > 0) set("contentTopics", topics);
-                }}
-                onTopicsChange={(t) => set("contentTopics", t)}
-                apiBase={base}
-                token={token}
-              />
-            )}
-
-            {/* Navigation */}
-            <div className="flex justify-between pt-1">
-              <Button variant="outline" onClick={() => setStep(Math.max(0, wizardStep - 1))} disabled={wizardStep === 0}>
-                <ArrowLeft className="h-4 w-4 mr-1.5" /> Indietro
-              </Button>
-              {wizardStep < WIZARD_STEPS.length - 1 ? (
-                <Button onClick={() => setStep(wizardStep + 1)} disabled={!canNext[wizardStep]}>
-                  Avanti <ChevronRight className="h-4 w-4 ml-1.5" />
-                </Button>
-              ) : (
-                <Button onClick={handleSubmit} disabled={!canNext.every(Boolean) || submitting} className="gap-2">
-                  {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Genera sito <Zap className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          </TabsContent>
-
-          {/* History */}
-          <TabsContent value="history" className="mt-4">
-            <Card className="glass-card">
-              <CardContent className="pt-6">
-                {history.length === 0 ? (
-                  <div className="py-12 text-center text-muted-foreground">
-                    <Globe className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm">Nessuna build ancora</p>
-                    <Button variant="outline" size="sm" className="mt-3" onClick={() => setTab("wizard")}>
-                      Crea il tuo primo sito
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {history.map((j) => (
-                      <HistoryRow key={j.id} job={j}
-                        onDelete={(id) => setHistory((h) => h.filter((x) => x.id !== id))} />
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      )}
+      <HistoryPanel visible={showHistory} onClose={() => setShowHistory(false)} />
     </div>
   );
 }
