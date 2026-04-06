@@ -222,6 +222,7 @@ const getApiBaseUrl = () =>
 // ════════════════════════════════════════════════════════════════════════════
 
 interface EditableProps {
+  style?: React.CSSProperties;
   value: string | undefined;
   onChange: (v: string) => void;
   as?: 'h1' | 'h2' | 'h3' | 'p' | 'span';
@@ -230,7 +231,7 @@ interface EditableProps {
   placeholder?: string;
 }
 
-function Editable({ value, onChange, as: Tag = 'p', className, enabled, placeholder }: EditableProps) {
+function Editable({ value, onChange, as: Tag = 'p', className, style, enabled, placeholder }: EditableProps) {
   const ref = useRef<HTMLElement>(null);
   const lastVal = useRef(value ?? '');
 
@@ -257,6 +258,7 @@ function Editable({ value, onChange, as: Tag = 'p', className, enabled, placehol
       !value && enabled && 'before:content-[attr(data-placeholder)] before:text-gray-400',
     ),
     'data-placeholder': placeholder,
+    style,
     dangerouslySetInnerHTML: enabled ? undefined : { __html: value ?? placeholder ?? '' },
     defaultValue: undefined,
     children: enabled ? (value ?? '') : undefined,
@@ -923,8 +925,8 @@ function RightPanel({ state, dispatch }: { state: EditorState; dispatch: React.D
     );
   }
 
-  const renderField = (field: FieldDef) => {
-    const val = (brick as Record<string, unknown>)[field.key];
+  const renderField = (field: FieldDef): React.ReactNode => {
+    const val = (brick as unknown as Record<string, unknown>)[field.key];
 
     switch (field.type) {
       case 'text':
@@ -945,7 +947,7 @@ function RightPanel({ state, dispatch }: { state: EditorState; dispatch: React.D
       case 'image':
         return (
           <div className="space-y-2">
-            {val && (
+            {(val as string) && (
               <div className="relative aspect-video rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
                 <img src={val as string} alt="" className="w-full h-full object-cover" />
                 <button onClick={() => update({ [field.key]: undefined })}
