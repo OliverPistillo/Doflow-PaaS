@@ -1332,37 +1332,44 @@ const WIZARD_STEPS = [
 ];
 
 const BLOCKSY_SITES = [
-  // FREE
-  { slug: 'codespot',       label: 'Codespot',       category: 'Tech',      isPro: false },
-  { slug: 'consultant',     label: 'Consultant',     category: 'Business',  isPro: false },
-  { slug: 'smile-dent',     label: 'Smile Dent',     category: 'Salute',    isPro: false },
-  { slug: 'photo-studio',   label: 'Photo Studio',   category: 'Portfolio', isPro: false },
-  { slug: 'restaurant',     label: 'Restaurant',     category: 'Food',      isPro: false },
-  { slug: 'wood',           label: 'Wood',           category: 'eCommerce', isPro: false },
-  { slug: 'beauty-salon',   label: 'Beauty Salon',   category: 'Salute',    isPro: false },
-  { slug: 'yoga',           label: 'Yoga',           category: 'Sport',     isPro: false },
-  { slug: 'travel-blog',    label: 'Travel Blog',    category: 'Blog',      isPro: false },
-  { slug: 'mechanic',       label: 'Mechanic',       category: 'Servizi',   isPro: false },
-  { slug: 'wedding',        label: 'Wedding',        category: 'Lifestyle', isPro: false },
-  { slug: 'architecture',   label: 'Architecture',   category: 'Portfolio', isPro: false },
-  { slug: 'online-shop',    label: 'Online Shop',    category: 'eCommerce', isPro: false },
-  { slug: 'freelancer',     label: 'Freelancer',     category: 'Portfolio', isPro: false },
-  { slug: 'digital-agency', label: 'Digital Agency', category: 'Business',  isPro: false },
-  { slug: 'news-magazine',  label: 'News Magazine',  category: 'Blog',      isPro: false },
-  // PRO
-  { slug: 'growly',         label: 'Growly',         category: 'Business',  isPro: true },
-  { slug: 'book-store',     label: 'Book Store',     category: 'eCommerce', isPro: true },
-  { slug: 'web-studio',     label: 'Web Studio',     category: 'Business',  isPro: true },
-  { slug: 'invest-boost',   label: 'Invest Boost',   category: 'Finance',   isPro: true },
-  { slug: 'furniture',      label: 'Furniture',      category: 'eCommerce', isPro: true },
-  { slug: 'e-bike',         label: 'E-Bike',         category: 'eCommerce', isPro: true },
-  { slug: 'pottery',        label: 'Pottery',        category: 'eCommerce', isPro: true },
-  { slug: 'smart-home',     label: 'Smart Home',     category: 'eCommerce', isPro: true },
-  { slug: 'daily-news',     label: 'Daily News',     category: 'Blog',      isPro: true },
-  { slug: 'cosmetic',       label: 'Cosmetic',       category: 'eCommerce', isPro: true },
-  { slug: 'real-estate',    label: 'Real Estate',    category: 'Business',  isPro: true },
-  { slug: 'kiddy',          label: 'Kiddy',          category: 'eCommerce', isPro: true },
-  { slug: 'landscape',      label: 'Landscape',      category: 'Blog',      isPro: true },
+  // ── FREE ──────────────────────────────────────────────────────────────────
+  { slug: 'codespot',        label: 'Codespot',        category: 'Tech',       isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2025/11/Main-Image.jpg' },
+  { slug: 'consultant',      label: 'Consultant',      category: 'Business',   isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2024/08/Main-Image.jpg' },
+  { slug: 'smile-dent',      label: 'Smile Dent',      category: 'Salute',     isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2024/02/Main-Image.jpg' },
+  { slug: 'photo-studio',    label: 'Photo Studio',    category: 'Portfolio',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2023/11/Main-Image-3.jpg' },
+  { slug: 'restaurant',      label: 'Restaurant',      category: 'Food',       isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/10/Main-Image.jpg' },
+  { slug: 'wood',            label: 'Wood',            category: 'Portfolio',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-27.jpg' },
+  { slug: 'wedding',         label: 'Wedding',         category: 'Lifestyle',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-12.jpg' },
+  { slug: 'renovation',      label: 'Renovation',      category: 'Business',   isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-26.jpg' },
+  { slug: 'beverr',          label: 'Beverr',          category: 'Portfolio',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-24.jpg' },
+  { slug: 'catering',        label: 'Catering',        category: 'Food',       isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-23.jpg' },
+  { slug: 'barber-shop',     label: 'Barber Shop',     category: 'Salute',     isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-22.jpg' },
+  { slug: 'bizconsult',      label: 'BizConsult',      category: 'Business',   isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-21.jpg' },
+  { slug: 'gadgets',         label: 'Gadgets',         category: 'eCommerce',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-20.jpg' },
+  { slug: 'home-decor',      label: 'Home Decor',      category: 'eCommerce',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-19.jpg' },
+  { slug: 'cleaning-service',label: 'Cleaning Service',category: 'Servizi',   isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-18.jpg' },
+  { slug: 'car-service',     label: 'Car Service',     category: 'Servizi',    isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-17.jpg' },
+  { slug: 'floreo',          label: 'Floreo',          category: 'eCommerce',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-16.jpg' },
+  { slug: 'garderobe',       label: 'Garderobe',       category: 'eCommerce',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-15.jpg' },
+  { slug: 'petsy',           label: 'Petsy',           category: 'eCommerce',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-14.jpg' },
+  { slug: 'justice',         label: 'Justice',         category: 'Business',   isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-13.jpg' },
+  { slug: 'web-agency',      label: 'Web Agency',      category: 'Business',   isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-11.jpg' },
+  { slug: 'persona',         label: 'Persona',         category: 'Portfolio',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-10.jpg' },
+  { slug: 'yogi',            label: 'Yogi',            category: 'Sport',      isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-9.jpg' },
+  // ── PRO ───────────────────────────────────────────────────────────────────
+  { slug: 'growly',          label: 'Growly',          category: 'Business',   isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2026/03/Main-Image5.jpg' },
+  { slug: 'book-store',      label: 'Book Store',      category: 'eCommerce',  isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2026/01/Main-Image.jpg' },
+  { slug: 'landscape',       label: 'Landscape',       category: 'Blog',       isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2025/09/Main-Image.jpg' },
+  { slug: 'web-studio',      label: 'Web Studio',      category: 'Business',   isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2025/08/Main-Image.jpg' },
+  { slug: 'invest-boost',    label: 'Invest Boost',    category: 'Finance',    isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2025/03/Main-Image.jpg' },
+  { slug: 'kiddy',           label: 'Kiddy',           category: 'eCommerce',  isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2025/02/Main-Image.jpg' },
+  { slug: 'furniture',       label: 'Furniture',       category: 'eCommerce',  isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2024/06/Main-Image.jpg' },
+  { slug: 'e-bike',          label: 'E-Bike',          category: 'eCommerce',  isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2024/05/Main-Image.jpg' },
+  { slug: 'pottery',         label: 'Pottery',         category: 'eCommerce',  isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2024/04/Main-Image.jpg' },
+  { slug: 'smart-home',      label: 'Smart Home',      category: 'eCommerce',  isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2023/12/Main-Image.jpg' },
+  { slug: 'daily-news',      label: 'Daily News',      category: 'Blog',       isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2023/11/Main-Image-2.jpg' },
+  { slug: 'cosmetic',        label: 'Cosmetic',        category: 'eCommerce',  isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2023/11/Main-Image-1.jpg' },
+  { slug: 'real-estate',     label: 'Real Estate',     category: 'Business',   isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2023/11/Main-Image.jpg' },
 ];
 
 const FONTS = [
@@ -1376,7 +1383,7 @@ const FONTS = [
 
 // ─── THEME SELECTOR ──────────────────────────────────────────────────────────
 
-const SITE_CATEGORIES = ['Tutti', 'Business', 'eCommerce', 'Portfolio', 'Blog', 'Food', 'Salute', 'Sport', 'Tech', 'Finance', 'Lifestyle', 'Servizi'];
+const SITE_CATEGORIES = ['Tutti', 'Business', 'eCommerce', 'Portfolio', 'Food', 'Salute', 'Sport', 'Tech', 'Finance', 'Lifestyle', 'Servizi', 'Blog'];
 
 function ThemeSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [cat, setCat] = React.useState('Tutti');
@@ -1390,90 +1397,124 @@ function ThemeSelector({ value, onChange }: { value: string; onChange: (v: strin
 
   return (
     <div className="space-y-3">
-      {/* Search */}
-      <div className="relative">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Cerca tema..."
-          className="w-full h-8 pl-3 pr-3 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-blue-400"
-        />
-      </div>
+      {/* Search box */}
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Cerca tema..."
+        className="w-full h-9 px-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400/30 focus:border-blue-400 transition-all"
+      />
 
-      {/* Category pills */}
-      <div className="flex gap-1.5 flex-wrap">
+      {/* Category pills - scrollable row */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
         {SITE_CATEGORIES.map((c) => (
           <button key={c} onClick={() => setCat(c)}
-            className={cn('px-2.5 py-1 rounded-full text-[10px] font-medium border transition-colors',
-              cat === c ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 text-gray-500 hover:border-blue-300')}>
+            className={cn(
+              'px-3 py-1 rounded-full text-[11px] font-medium border whitespace-nowrap transition-all shrink-0',
+              cat === c
+                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                : 'border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-600 bg-white'
+            )}>
             {c}
           </button>
         ))}
       </div>
 
-      {/* Grid */}
-      <div className="grid grid-cols-2 gap-2.5 max-h-[420px] overflow-y-auto pr-0.5">
+      {/* Mosaic grid */}
+      <div className="grid grid-cols-2 gap-3 max-h-[440px] overflow-y-auto pr-0.5">
         {filtered.map((site) => {
           const isSelected = value === site.slug;
-          const screenshotUrl = `https://creativethemes.com/wp-content/uploads/blocksy-starter-sites/${site.slug}/screenshot.png`;
           const previewUrl = `https://creativethemes.com/blocksy/starter-site/${site.slug}/`;
           return (
             <div
               key={site.slug}
               className={cn(
-                'rounded-xl border-2 overflow-hidden cursor-pointer transition-all group relative',
-                isSelected ? 'border-blue-500 shadow-md' : 'border-gray-200 hover:border-blue-300',
+                'group rounded-2xl overflow-hidden cursor-pointer transition-all duration-200',
+                isSelected
+                  ? 'ring-2 ring-blue-500 shadow-lg shadow-blue-200/50 scale-[0.99]'
+                  : 'ring-1 ring-gray-200 hover:ring-blue-300 hover:shadow-md hover:-translate-y-0.5',
               )}
               onClick={() => onChange(site.slug)}
             >
-              {/* Screenshot */}
-              <div className="relative bg-gray-100 h-[90px] overflow-hidden">
+              {/* Screenshot image */}
+              <div className="relative bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden"
+                style={{ height: '120px' }}>
                 <img
-                  src={screenshotUrl}
+                  src={site.screenshot}
                   alt={site.label}
-                  className="w-full h-full object-cover object-top transition-transform group-hover:scale-105"
+                  className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-110"
+                  loading="lazy"
                   onError={(e) => {
-                    const target = e.currentTarget;
-                    target.style.display = 'none';
-                    const parent = target.parentElement;
+                    const img = e.currentTarget;
+                    img.style.display = 'none';
+                    const parent = img.parentElement;
                     if (parent) {
-                      parent.style.background = `linear-gradient(135deg, #e0e7ff 0%, #f0f4ff 100%)`;
-                      parent.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:20px;opacity:0.5">🎨</div>`;
+                      const colors: Record<string, string> = {
+                        Business: '#dbeafe', eCommerce: '#dcfce7', Portfolio: '#f3e8ff',
+                        Food: '#fef3c7', Salute: '#fce7f3', Sport: '#ecfdf5',
+                        Tech: '#1e293b', Finance: '#1e3a5f', Blog: '#fdf4ff',
+                        Lifestyle: '#fff7ed', Servizi: '#f0fdf4',
+                      };
+                      const emojis: Record<string, string> = {
+                        Business: '💼', eCommerce: '🛒', Portfolio: '🎨',
+                        Food: '🍽️', Salute: '💊', Sport: '⚡', Tech: '💻',
+                        Finance: '📈', Blog: '✍️', Lifestyle: '✨', Servizi: '🔧',
+                      };
+                      parent.style.background = colors[site.category] ?? '#f1f5f9';
+                      parent.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:6px;opacity:0.7">
+                        <span style="font-size:28px">${emojis[site.category] ?? '🌐'}</span>
+                        <span style="font-size:9px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">${site.category}</span>
+                      </div>`;
                     }
                   }}
                 />
-                {/* Badges */}
-                <div className="absolute top-1.5 left-1.5 flex gap-1">
-                  {site.isPro && (
-                    <span className="bg-amber-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">PRO</span>
-                  )}
-                  {!site.isPro && (
-                    <span className="bg-green-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">FREE</span>
+
+                {/* Top badges */}
+                <div className="absolute top-2 left-2 flex gap-1">
+                  {site.isPro ? (
+                    <span className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
+                      ★ PRO
+                    </span>
+                  ) : (
+                    <span className="bg-gradient-to-r from-emerald-500 to-green-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
+                      FREE
+                    </span>
                   )}
                 </div>
+
+                {/* Selected checkmark overlay */}
                 {isSelected && (
-                  <div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center">
-                    <div className="bg-blue-500 rounded-full w-6 h-6 flex items-center justify-center">
-                      <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  <div className="absolute inset-0 bg-blue-600/15 flex items-center justify-center">
+                    <div className="bg-blue-600 rounded-full w-7 h-7 flex items-center justify-center shadow-lg">
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
                     </div>
                   </div>
                 )}
-                {/* Preview link */}
+
+                {/* Preview link on hover */}
                 <a
                   href={previewUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 bg-black/60 text-white text-[8px] px-1.5 py-0.5 rounded font-medium transition-opacity"
+                  className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 bg-black/70 backdrop-blur-sm text-white text-[9px] px-2 py-1 rounded-lg font-semibold transition-all duration-200 hover:bg-black/90 flex items-center gap-1"
                 >
-                  Anteprima ↗
+                  Demo ↗
                 </a>
               </div>
 
-              {/* Label */}
-              <div className="px-2 py-1.5 bg-white">
-                <div className={cn('text-[11px] font-semibold truncate', isSelected ? 'text-blue-700' : 'text-gray-800')}>{site.label}</div>
-                <div className="text-[9px] text-gray-400">{site.category}</div>
+              {/* Card footer */}
+              <div className={cn(
+                'px-3 py-2.5 transition-colors',
+                isSelected ? 'bg-blue-50' : 'bg-white group-hover:bg-gray-50',
+              )}>
+                <div className={cn(
+                  'text-[12px] font-semibold leading-tight',
+                  isSelected ? 'text-blue-700' : 'text-gray-900',
+                )}>{site.label}</div>
+                <div className="text-[9px] text-gray-400 mt-0.5 uppercase tracking-wide font-medium">{site.category}</div>
               </div>
             </div>
           );
@@ -1481,11 +1522,20 @@ function ThemeSelector({ value, onChange }: { value: string; onChange: (v: strin
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-6 text-gray-400 text-xs">Nessun tema trovato</div>
+        <div className="text-center py-8 text-gray-400">
+          <div className="text-3xl mb-2">🔍</div>
+          <div className="text-xs">Nessun tema trovato per "{search}"</div>
+        </div>
       )}
+
+      {/* Count */}
+      <div className="text-center text-[10px] text-gray-400">
+        {filtered.length} temi disponibili · {BLOCKSY_SITES.filter(s => !s.isPro).length} FREE · {BLOCKSY_SITES.filter(s => s.isPro).length} PRO
+      </div>
     </div>
   );
 }
+
 
 function WizardStep({ step, form, setForm }: {
   step: number; form: WizardForm; setForm: (f: WizardForm) => void;
