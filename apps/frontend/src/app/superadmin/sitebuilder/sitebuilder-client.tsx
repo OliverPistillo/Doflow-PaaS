@@ -1284,7 +1284,7 @@ function SiteEditor({ xmlBlocks, form, onBack }: {
   };
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-white z-50">
+    <div className="fixed inset-0 flex flex-col bg-white z-[100]">
       <TopBar state={state} dispatch={dispatch} pages={state.pages} form={form}
         onGenerate={handleGenerate} generating={generating} onBack={onBack} />
 
@@ -1332,12 +1332,37 @@ const WIZARD_STEPS = [
 ];
 
 const BLOCKSY_SITES = [
-  { slug: 'consultant', label: 'Consultant', category: 'Business' },
-  { slug: 'business', label: 'Business', category: 'Business' },
-  { slug: 'restaurant', label: 'Restaurant', category: 'Food' },
-  { slug: 'beauty-salon', label: 'Beauty Salon', category: 'Salute' },
-  { slug: 'yoga', label: 'Yoga', category: 'Sport' },
-  { slug: 'photo-studio', label: 'Photo Studio', category: 'Portfolio' },
+  // FREE
+  { slug: 'codespot',       label: 'Codespot',       category: 'Tech',      isPro: false },
+  { slug: 'consultant',     label: 'Consultant',     category: 'Business',  isPro: false },
+  { slug: 'smile-dent',     label: 'Smile Dent',     category: 'Salute',    isPro: false },
+  { slug: 'photo-studio',   label: 'Photo Studio',   category: 'Portfolio', isPro: false },
+  { slug: 'restaurant',     label: 'Restaurant',     category: 'Food',      isPro: false },
+  { slug: 'wood',           label: 'Wood',           category: 'eCommerce', isPro: false },
+  { slug: 'beauty-salon',   label: 'Beauty Salon',   category: 'Salute',    isPro: false },
+  { slug: 'yoga',           label: 'Yoga',           category: 'Sport',     isPro: false },
+  { slug: 'travel-blog',    label: 'Travel Blog',    category: 'Blog',      isPro: false },
+  { slug: 'mechanic',       label: 'Mechanic',       category: 'Servizi',   isPro: false },
+  { slug: 'wedding',        label: 'Wedding',        category: 'Lifestyle', isPro: false },
+  { slug: 'architecture',   label: 'Architecture',   category: 'Portfolio', isPro: false },
+  { slug: 'online-shop',    label: 'Online Shop',    category: 'eCommerce', isPro: false },
+  { slug: 'freelancer',     label: 'Freelancer',     category: 'Portfolio', isPro: false },
+  { slug: 'digital-agency', label: 'Digital Agency', category: 'Business',  isPro: false },
+  { slug: 'news-magazine',  label: 'News Magazine',  category: 'Blog',      isPro: false },
+  // PRO
+  { slug: 'growly',         label: 'Growly',         category: 'Business',  isPro: true },
+  { slug: 'book-store',     label: 'Book Store',     category: 'eCommerce', isPro: true },
+  { slug: 'web-studio',     label: 'Web Studio',     category: 'Business',  isPro: true },
+  { slug: 'invest-boost',   label: 'Invest Boost',   category: 'Finance',   isPro: true },
+  { slug: 'furniture',      label: 'Furniture',      category: 'eCommerce', isPro: true },
+  { slug: 'e-bike',         label: 'E-Bike',         category: 'eCommerce', isPro: true },
+  { slug: 'pottery',        label: 'Pottery',        category: 'eCommerce', isPro: true },
+  { slug: 'smart-home',     label: 'Smart Home',     category: 'eCommerce', isPro: true },
+  { slug: 'daily-news',     label: 'Daily News',     category: 'Blog',      isPro: true },
+  { slug: 'cosmetic',       label: 'Cosmetic',       category: 'eCommerce', isPro: true },
+  { slug: 'real-estate',    label: 'Real Estate',    category: 'Business',  isPro: true },
+  { slug: 'kiddy',          label: 'Kiddy',          category: 'eCommerce', isPro: true },
+  { slug: 'landscape',      label: 'Landscape',      category: 'Blog',      isPro: true },
 ];
 
 const FONTS = [
@@ -1347,6 +1372,120 @@ const FONTS = [
   { value: '"Merriweather", serif', label: 'Merriweather (editoriale)' },
   { value: '"Roboto", sans-serif', label: 'Roboto (clean)' },
 ];
+
+
+// ─── THEME SELECTOR ──────────────────────────────────────────────────────────
+
+const SITE_CATEGORIES = ['Tutti', 'Business', 'eCommerce', 'Portfolio', 'Blog', 'Food', 'Salute', 'Sport', 'Tech', 'Finance', 'Lifestyle', 'Servizi'];
+
+function ThemeSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [cat, setCat] = React.useState('Tutti');
+  const [search, setSearch] = React.useState('');
+
+  const filtered = BLOCKSY_SITES.filter((s) => {
+    const matchCat = cat === 'Tutti' || s.category === cat;
+    const matchSearch = search === '' || s.label.toLowerCase().includes(search.toLowerCase());
+    return matchCat && matchSearch;
+  });
+
+  return (
+    <div className="space-y-3">
+      {/* Search */}
+      <div className="relative">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Cerca tema..."
+          className="w-full h-8 pl-3 pr-3 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-blue-400"
+        />
+      </div>
+
+      {/* Category pills */}
+      <div className="flex gap-1.5 flex-wrap">
+        {SITE_CATEGORIES.map((c) => (
+          <button key={c} onClick={() => setCat(c)}
+            className={cn('px-2.5 py-1 rounded-full text-[10px] font-medium border transition-colors',
+              cat === c ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 text-gray-500 hover:border-blue-300')}>
+            {c}
+          </button>
+        ))}
+      </div>
+
+      {/* Grid */}
+      <div className="grid grid-cols-2 gap-2.5 max-h-[420px] overflow-y-auto pr-0.5">
+        {filtered.map((site) => {
+          const isSelected = value === site.slug;
+          const screenshotUrl = `https://creativethemes.com/wp-content/uploads/blocksy-starter-sites/${site.slug}/screenshot.png`;
+          const previewUrl = `https://creativethemes.com/blocksy/starter-site/${site.slug}/`;
+          return (
+            <div
+              key={site.slug}
+              className={cn(
+                'rounded-xl border-2 overflow-hidden cursor-pointer transition-all group relative',
+                isSelected ? 'border-blue-500 shadow-md' : 'border-gray-200 hover:border-blue-300',
+              )}
+              onClick={() => onChange(site.slug)}
+            >
+              {/* Screenshot */}
+              <div className="relative bg-gray-100 h-[90px] overflow-hidden">
+                <img
+                  src={screenshotUrl}
+                  alt={site.label}
+                  className="w-full h-full object-cover object-top transition-transform group-hover:scale-105"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    target.style.display = 'none';
+                    const parent = target.parentElement;
+                    if (parent) {
+                      parent.style.background = `linear-gradient(135deg, #e0e7ff 0%, #f0f4ff 100%)`;
+                      parent.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:20px;opacity:0.5">🎨</div>`;
+                    }
+                  }}
+                />
+                {/* Badges */}
+                <div className="absolute top-1.5 left-1.5 flex gap-1">
+                  {site.isPro && (
+                    <span className="bg-amber-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">PRO</span>
+                  )}
+                  {!site.isPro && (
+                    <span className="bg-green-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full">FREE</span>
+                  )}
+                </div>
+                {isSelected && (
+                  <div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center">
+                    <div className="bg-blue-500 rounded-full w-6 h-6 flex items-center justify-center">
+                      <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    </div>
+                  </div>
+                )}
+                {/* Preview link */}
+                <a
+                  href={previewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 bg-black/60 text-white text-[8px] px-1.5 py-0.5 rounded font-medium transition-opacity"
+                >
+                  Anteprima ↗
+                </a>
+              </div>
+
+              {/* Label */}
+              <div className="px-2 py-1.5 bg-white">
+                <div className={cn('text-[11px] font-semibold truncate', isSelected ? 'text-blue-700' : 'text-gray-800')}>{site.label}</div>
+                <div className="text-[9px] text-gray-400">{site.category}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {filtered.length === 0 && (
+        <div className="text-center py-6 text-gray-400 text-xs">Nessun tema trovato</div>
+      )}
+    </div>
+  );
+}
 
 function WizardStep({ step, form, setForm }: {
   step: number; form: WizardForm; setForm: (f: WizardForm) => void;
@@ -1399,19 +1538,7 @@ function WizardStep({ step, form, setForm }: {
           placeholder="Descrivi il tuo business, i tuoi servizi e il tuo target cliente..."
           rows={5} className="resize-none text-sm" />
       </div>
-      <div className="space-y-2">
-        <Label className="text-xs font-semibold text-gray-600">Tema starter Blocksy</Label>
-        <div className="grid grid-cols-2 gap-2">
-          {BLOCKSY_SITES.map((site) => (
-            <button key={site.slug} onClick={() => set('starterSite', site.slug)}
-              className={cn('p-3 rounded-lg border text-left text-xs transition-all',
-                form.starterSite === site.slug ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-gray-300 text-gray-600')}>
-              <div className="font-medium">{site.label}</div>
-              <div className="text-gray-400 text-[10px]">{site.category}</div>
-            </button>
-          ))}
-        </div>
-      </div>
+      <ThemeSelector value={form.starterSite} onChange={(v) => set('starterSite', v)} />
     </div>
   );
 
@@ -1606,7 +1733,7 @@ function HistoryPanel({ visible, onClose }: { visible: boolean; onClose: () => v
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b">
@@ -1677,7 +1804,7 @@ export default function SitebuilderClient() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+    <div className="fixed inset-0 overflow-y-auto bg-gradient-to-br from-slate-50 to-blue-50 z-[100]">
       {/* Header */}
       <div className="border-b border-gray-200 bg-white/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-6 py-3 flex items-center justify-between">
