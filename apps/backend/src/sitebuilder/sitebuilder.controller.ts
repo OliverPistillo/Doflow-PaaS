@@ -191,11 +191,13 @@ export class SitebuilderController {
     @Param('token') token: string,
   ): Promise<{ jobId: string; siteDomain: string; siteTitle: string; wpData: Record<string, unknown> | null }> {
     const job = await this.producer.findOneByToken(token);
+    
     return {
       jobId:      job.id,
       siteDomain: job.siteDomain,
       siteTitle:  job.siteTitle,
-      wpData:     job.wpData,
+      // ✅ FIX: Cast esplicito per compatibilità con Record<string, unknown>
+      wpData:     job.wpData as Record<string, unknown> | null,
     };
   }
 }
