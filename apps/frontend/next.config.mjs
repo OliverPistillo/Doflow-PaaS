@@ -14,7 +14,7 @@ const nextConfig = {
   // 2. CONFIGURAZIONE PROXY (Fondamentale)
   async rewrites() {
     // Se siamo in locale senza docker usa localhost, altrimenti usa il nome del servizio docker 'backend'
-    const BACKEND_URL = process.env.INTERNAL_BACKEND_URL || 'http://localhost:4000';
+    const BACKEND_URL = process.env.INTERNAL_BACKEND_URL || 'http://127.0.0.1:4000';
     
     return [
       {

@@ -2,7 +2,7 @@
 import { Controller, Get, Query, UnauthorizedException } from '@nestjs/common';
 import { SiteStorageService } from './site-storage.service';
 
-@Controller('api/export')
+@Controller('export')
 export class SiteExportController {
   constructor(private readonly siteStorageService: SiteStorageService) {}
 

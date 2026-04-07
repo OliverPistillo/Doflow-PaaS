@@ -5,7 +5,7 @@ import { Queue } from 'bullmq';
 import { SiteGenerationProducer } from './queue/site-generation.producer';
 import { GenerateSiteDto } from './dto/generate-site.dto';
 
-@Controller('api/sitebuilder')
+@Controller('sitebuilder')
 export class SiteBuilderController {
   constructor(
     private readonly siteGenerationProducer: SiteGenerationProducer,
