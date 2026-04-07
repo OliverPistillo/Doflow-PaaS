@@ -2,39 +2,39 @@
 
 import {
   Body, Controller, Get, HttpCode, HttpStatus, Inject,
-  Param, ParseUUIDPipe, Post, Query, StreamableFile,
-  NotFoundException, UseGuards, Delete, Header,
+  Param, ParseUUIDPipe, Post, Query,
+  NotFoundException, UseGuards, Delete,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import * as path from 'path';
-import * as fs from 'fs';
+// BUG FIX: rimossi StreamableFile, path, fs — non più necessari senza endpoint ZIP
+import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
 
 import { CreateSitebuilderJobDto } from './dto/create-sitebuilder-job.dto';
 import { SitebuilderProducerService } from './sitebuilder.producer.service';
-import { SitebuilderJob, SitebuilderJobStatus } from './sitebuilder.entity';
+import { SitebuilderJob } from './sitebuilder.entity';
 import { BLOCKSY_STARTER_SITES } from './sitebuilder.constants';
 import { ANTHROPIC_CLIENT } from './sitebuilder.anthropic.provider';
 import { PROMPTS } from './sitebuilder.prompts';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
+/**
+ * NOTA ARCHITETTURALE (FASE 1):
+ * Il controller NON ha @UseGuards(JwtAuthGuard) a livello di classe.
+ * La guard viene applicata individualmente su ogni metodo privato,
+ * lasciando GET /sitebuilder/import/:token completamente pubblica.
+ */
 @ApiTags('Sitebuilder')
-@UseGuards(JwtAuthGuard)
 @Controller('sitebuilder')
 export class SitebuilderController {
-  private readonly deploymentsRoot: string;
+  // BUG FIX: rimosso deploymentsRoot — non esiste più un filesystem di deployment
 
   constructor(
     private readonly producer: SitebuilderProducerService,
     private readonly config: ConfigService,
     @Inject(ANTHROPIC_CLIENT)
     private readonly anthropic: Anthropic,
-  ) {
-    this.deploymentsRoot = path.resolve(
-      config.get<string>('SITEBUILDER_DEPLOYMENTS_PATH', './deployments'),
-    );
-  }
+  ) {}
 
   // ─── Helper: estrae testo dal response Anthropic ────────────────────
   private extractText(message: Anthropic.Message): string {
@@ -45,6 +45,7 @@ export class SitebuilderController {
   }
 
   // ─── GET /sitebuilder/starter-sites ───────────────────────────────
+  @UseGuards(JwtAuthGuard)
   @Get('starter-sites')
   @ApiOperation({ summary: 'Lista dei Blocksy Starter Sites disponibili' })
   getStarterSites() {
@@ -52,6 +53,7 @@ export class SitebuilderController {
   }
 
   // ─── POST /sitebuilder/jobs ────────────────────────────────────────
+  @UseGuards(JwtAuthGuard)
   @Post('jobs')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Accoda un nuovo job di creazione sito WordPress' })
@@ -67,6 +69,7 @@ export class SitebuilderController {
   }
 
   // ─── GET /sitebuilder/jobs ─────────────────────────────────────────
+  @UseGuards(JwtAuthGuard)
   @Get('jobs')
   @ApiOperation({ summary: 'Lista storico job (max 50)' })
   async listJobs(@Query('tenantId') tenantId?: string): Promise<SitebuilderJob[]> {
@@ -74,53 +77,26 @@ export class SitebuilderController {
   }
 
   // ─── GET /sitebuilder/jobs/:jobId ─────────────────────────────────
+  @UseGuards(JwtAuthGuard)
   @Get('jobs/:jobId')
   @ApiOperation({ summary: 'Recupera stato e log di un job' })
   async getJob(@Param('jobId', new ParseUUIDPipe()) jobId: string): Promise<SitebuilderJob> {
     return this.producer.findOne(jobId);
   }
 
-  // ─── GET /sitebuilder/jobs/:jobId/download ────────────────────────
-  // Usa StreamableFile per una gestione robusta degli stream e della memoria
-  @Get('jobs/:jobId/download')
-  @ApiOperation({ summary: 'Scarica lo ZIP del sito WordPress generato' })
-  @Header('Content-Type', 'application/zip')
-  async downloadJob(
-    @Param('jobId', new ParseUUIDPipe()) jobId: string,
-  ): Promise<StreamableFile> {
-    const job = await this.producer.findOne(jobId);
-
-    if (job.status !== SitebuilderJobStatus.DONE) {
-      throw new NotFoundException(`Il job ${jobId} non è ancora completato (status: ${job.status})`);
-    }
-
-    const zipPath = path.join(this.deploymentsRoot, jobId, `${jobId}.zip`);
-    if (!fs.existsSync(zipPath)) {
-      throw new NotFoundException(`File ZIP non trovato per il job ${jobId}`);
-    }
-
-    const zipName = `${job.siteDomain.replace(/\./g, '-')}-wordpress.zip`;
-    return new StreamableFile(fs.createReadStream(zipPath), {
-      type:        'application/zip',
-      disposition: `attachment; filename="${zipName}"`,
-    });
-  }
-
   // ─── DELETE /sitebuilder/jobs/:jobId ──────────────────────────────
+  // BUG FIX: rimosso il blocco fs.rm — non esiste più nessuna cartella
+  // di deployment da cancellare; il job viene rimosso solo dal DB.
+  @UseGuards(JwtAuthGuard)
   @Delete('jobs/:jobId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Elimina un job e il relativo ZIP dal filesystem' })
+  @ApiOperation({ summary: 'Elimina un job dal database' })
   async deleteJob(@Param('jobId', new ParseUUIDPipe()) jobId: string): Promise<void> {
     await this.producer.delete(jobId);
-    try {
-      await (await import('fs/promises')).rm(
-        path.join(this.deploymentsRoot, jobId),
-        { recursive: true, force: true },
-      );
-    } catch { /* cartella già assente, ignora */ }
   }
 
   // ─── POST /sitebuilder/enhance-description ────────────────────────
+  @UseGuards(JwtAuthGuard)
   @Post('enhance-description')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Migliora la descrizione business con AI' })
@@ -143,6 +119,7 @@ export class SitebuilderController {
   }
 
   // ─── POST /sitebuilder/seo-keywords ───────────────────────────────
+  @UseGuards(JwtAuthGuard)
   @Post('seo-keywords')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Genera keyword SEO e meta description' })
@@ -172,6 +149,7 @@ export class SitebuilderController {
   }
 
   // ─── POST /sitebuilder/parse-xml ──────────────────────────────────
+  @UseGuards(JwtAuthGuard)
   @Post('parse-xml')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Parsa XML sitebuilder_master_doc → JSON blocchi UI' })
@@ -197,5 +175,27 @@ export class SitebuilderController {
     } catch {
       throw new Error(`Claude ha restituito JSON non valido. Inizio: ${raw.substring(0, 200)}`);
     }
+  }
+
+  // ─── GET /sitebuilder/import/:token — PUBBLICO, nessun @UseGuards ─
+  @Get('import/:token')
+  @ApiOperation({
+    summary: 'Recupera i dati WP di un sito completato tramite token (pubblica, no JWT)',
+  })
+  @ApiParam({
+    name:        'token',
+    description: 'Token monouso generato al completamento del job',
+    type:        String,
+  })
+  async getImportData(
+    @Param('token') token: string,
+  ): Promise<{ jobId: string; siteDomain: string; siteTitle: string; wpData: Record<string, unknown> | null }> {
+    const job = await this.producer.findOneByToken(token);
+    return {
+      jobId:      job.id,
+      siteDomain: job.siteDomain,
+      siteTitle:  job.siteTitle,
+      wpData:     job.wpData,
+    };
   }
 }

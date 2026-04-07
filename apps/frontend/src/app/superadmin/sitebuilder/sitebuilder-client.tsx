@@ -5,11 +5,11 @@ import React, {
 } from 'react';
 import {
   GripVertical, Trash2, Copy, ChevronUp, ChevronDown, Plus, Layers,
-  Monitor, Tablet, Smartphone, Undo2, Redo2, Download, Eye, X,
+  Monitor, Tablet, Smartphone, Undo2, Redo2, Eye, X,
   Type, Image, Link2, Globe, Building2, FileText, Zap, Loader2,
   CheckCircle2, Palette, Search, Settings, Edit3, PanelLeftClose,
   ArrowLeft, Sparkles, ChevronRight, Check, AlertCircle, FolderOpen,
-  LayoutTemplate, Move, MousePointerClick,
+  LayoutTemplate, Move, MousePointerClick, Key, ClipboardCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -63,8 +63,13 @@ interface WizardForm {
 }
 
 interface SitebuilderJob {
-  id: string; status: string; siteDomain: string; siteTitle: string;
-  logs: string[]; zipFilename?: string; createdAt: string;
+  id: string;
+  status: string;
+  siteDomain: string;
+  siteTitle: string;
+  logs: string[];
+  importToken?: string;   // ← token generato dal Processor al DONE
+  createdAt: string;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1099,7 +1104,6 @@ function EditorCanvas({ state, dispatch, design }: {
 // ════════════════════════════════════════════════════════════════════════════
 //  TOP BAR
 // ════════════════════════════════════════════════════════════════════════════
-
 function TopBar({
   state, dispatch, pages, form, onGenerate, generating, onBack,
 }: {
@@ -1109,14 +1113,14 @@ function TopBar({
 }) {
   return (
     <div className="h-12 bg-white border-b border-gray-200 flex items-center gap-2 px-3 flex-shrink-0 z-40">
-      {/* Back */}
+      {/* Torna al wizard */}
       <button onClick={onBack} className="flex items-center gap-1 px-2 py-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg text-xs">
         <ArrowLeft className="h-3.5 w-3.5" /> Wizard
       </button>
 
       <div className="w-px h-5 bg-gray-200" />
 
-      {/* Page name */}
+      {/* Nome sito + pagina corrente */}
       <div className="flex items-center gap-1 text-xs font-medium text-gray-600">
         <Globe className="h-3.5 w-3.5 text-gray-400" />
         {form.siteDomain || 'Sito senza titolo'}
@@ -1124,10 +1128,9 @@ function TopBar({
         <span className="text-blue-600">{pages[state.pageIndex]?.title ?? ''}</span>
       </div>
 
-      {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Device toggle */}
+      {/* Toggle device */}
       <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
         {([
           ['desktop', Monitor],
@@ -1143,7 +1146,7 @@ function TopBar({
 
       <div className="w-px h-5 bg-gray-200" />
 
-      {/* Undo/Redo */}
+      {/* Undo / Redo */}
       <button onClick={() => dispatch({ type: 'UNDO' })} disabled={!state.past.length}
         className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-30 text-gray-500" title="Annulla (Ctrl+Z)">
         <Undo2 className="h-3.5 w-3.5" />
@@ -1155,32 +1158,35 @@ function TopBar({
 
       <div className="w-px h-5 bg-gray-200" />
 
-      {/* Blocks count badge */}
+      {/* Contatore blocchi */}
       <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
         {pages.reduce((acc, p) => acc + p.bricks.length, 0)} blocchi · {pages.length} pagine
       </span>
 
-      {/* Generate */}
+      {/* MODIFICA: bottone Genera — rimossa icona Download, testo aggiornato */}
       <button onClick={() => onGenerate(state.pages)} disabled={generating}
         className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-semibold rounded-lg shadow-sm">
-        {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-        {generating ? 'Generazione...' : 'Genera WordPress ZIP'}
+        {generating
+          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          : <Sparkles className="h-3.5 w-3.5" />}
+        {generating ? 'Generazione in corso...' : 'Genera Sito WordPress'}
       </button>
     </div>
   );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  SITE EDITOR — full three-panel layout
+//  SITE EDITOR — layout a tre pannelli + status bar token
 // ════════════════════════════════════════════════════════════════════════════
-
 function SiteEditor({ xmlBlocks, form, onBack }: {
   xmlBlocks: ParsedXml; form: WizardForm; onBack: () => void;
 }) {
   const { toast } = useToast();
   const [generating, setGenerating] = useState(false);
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [job, setJob] = useState<SitebuilderJob | null>(null);
+  const [jobId, setJobId]           = useState<string | null>(null);
+  const [job, setJob]               = useState<SitebuilderJob | null>(null);
+  // MODIFICA: stato feedback per il bottone "Copia Token"
+  const [tokenCopied, setTokenCopied] = useState(false);
 
   const initialPages: SitePage[] = useMemo(() =>
     (xmlBlocks.pages ?? []).map((p) => ({
@@ -1217,48 +1223,58 @@ function SiteEditor({ xmlBlocks, form, onBack }: {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // Poll job status
+  // MODIFICA: polling che legge importToken dalla risposta del job
   useEffect(() => {
     if (!jobId) return;
-    const base = getApiBaseUrl();
+    const base  = getApiBaseUrl();
     const token = localStorage.getItem('doflow_token') ?? '';
+
     const iv = setInterval(async () => {
-      const r = await fetch(`${base}/sitebuilder/jobs/${jobId}`, { headers: { Authorization: `Bearer ${token}` } });
+      const r    = await fetch(`${base}/sitebuilder/jobs/${jobId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      // La risposta include ora importToken quando status === DONE
       const data = await r.json() as SitebuilderJob;
       setJob(data);
+
       if (data.status === 'DONE' || data.status === 'FAILED' || data.status === 'ROLLED_BACK') {
         clearInterval(iv);
         setGenerating(false);
-        if (data.status === 'DONE') toast({ title: '✅ Sito generato! Puoi scaricarlo.' });
-        else toast({ title: '❌ Generazione fallita', variant: 'destructive' });
+        if (data.status === 'DONE') {
+          toast({ title: '✅ Sito pronto! Copia il token e importalo su WordPress.' });
+        } else {
+          toast({ title: '❌ Generazione fallita', variant: 'destructive' });
+        }
       }
     }, 2000);
+
     return () => clearInterval(iv);
-  }, [jobId]);
+  }, [jobId, toast]);
 
   const handleGenerate = async (pages: SitePage[]) => {
     setGenerating(true);
     setJob(null);
-    const base = getApiBaseUrl();
+    setTokenCopied(false);
+    const base  = getApiBaseUrl();
     const token = localStorage.getItem('doflow_token') ?? '';
     try {
       const payload = {
-        tenantId: form.tenantId,
-        siteDomain: form.siteDomain,
-        siteTitle: form.siteTitle,
-        adminEmail: form.adminEmail,
-        businessType: form.businessType || 'Business',
+        tenantId:            form.tenantId,
+        siteDomain:          form.siteDomain,
+        siteTitle:           form.siteTitle,
+        adminEmail:          form.adminEmail,
+        businessType:        form.businessType || 'Business',
         businessDescription: form.businessDescription,
-        starterSite: form.starterSite || 'consultant',
-        designScheme: form.designScheme,
-        contentTopics: pages.map((p) => p.title),
-        locale: form.locale || 'it',
-        xmlBlocks: { strategy: xmlBlocks.strategy, pages },
+        starterSite:         form.starterSite || 'consultant',
+        designScheme:        form.designScheme,
+        contentTopics:       pages.map((p) => p.title),
+        locale:              form.locale || 'it',
+        xmlBlocks:           { strategy: xmlBlocks.strategy, pages },
       };
       const r = await fetch(`${base}/sitebuilder/jobs`, {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload),
+        body:    JSON.stringify(payload),
       });
       const data = await r.json() as { jobId: string };
       if (r.ok && data.jobId) {
@@ -1273,14 +1289,15 @@ function SiteEditor({ xmlBlocks, form, onBack }: {
     }
   };
 
-  const handleDownload = () => {
-    if (!jobId) return;
-    const base = getApiBaseUrl();
-    const token = localStorage.getItem('doflow_token') ?? '';
-    const link = document.createElement('a');
-    link.href = `${base}/sitebuilder/jobs/${jobId}/download?token=${token}`;
-    link.download = `${form.siteDomain ?? 'sito'}-wordpress.zip`;
-    link.click();
+  // MODIFICA: helper copia token con feedback visivo temporaneo
+  const handleCopyToken = async (token: string) => {
+    try {
+      await navigator.clipboard.writeText(token);
+      setTokenCopied(true);
+      setTimeout(() => setTokenCopied(false), 2500);
+    } catch {
+      toast({ title: 'Copia manuale', description: token, variant: 'default' });
+    }
   };
 
   return (
@@ -1288,29 +1305,60 @@ function SiteEditor({ xmlBlocks, form, onBack }: {
       <TopBar state={state} dispatch={dispatch} pages={state.pages} form={form}
         onGenerate={handleGenerate} generating={generating} onBack={onBack} />
 
-      {/* Job status bar */}
-      {job && (
+      {/* ── Status bar ────────────────────────────────────────────────────── */}
+
+      {/* Job RUNNING / FAILED: barra compatta con ultimo log */}
+      {job && job.status !== 'DONE' && (
         <div className={cn(
           'px-4 py-2 text-xs flex items-center gap-3 border-b',
-          job.status === 'DONE' ? 'bg-green-50 border-green-200 text-green-800' :
-          job.status === 'RUNNING' ? 'bg-blue-50 border-blue-200 text-blue-800' :
-          'bg-red-50 border-red-200 text-red-800',
+          job.status === 'RUNNING'
+            ? 'bg-blue-50 border-blue-200 text-blue-800'
+            : 'bg-red-50 border-red-200 text-red-800',
         )}>
           {job.status === 'RUNNING' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-          {job.status === 'DONE' && <CheckCircle2 className="h-3.5 w-3.5" />}
-          {job.status === 'DONE'
-            ? `✅ WordPress ZIP pronto — ${job.logs.slice(-1)[0]?.replace(/^\[.*?\] /, '') ?? ''}`
-            : job.logs.slice(-1)[0]?.replace(/^\[.*?\] /, '') ?? `Status: ${job.status}`}
-          {job.status === 'DONE' && (
-            <button onClick={handleDownload}
-              className="ml-auto flex items-center gap-1.5 px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium">
-              <Download className="h-3.5 w-3.5" /> Scarica ZIP
-            </button>
-          )}
+          {job.logs.slice(-1)[0]?.replace(/^\[.*?\] /, '') ?? `Status: ${job.status}`}
         </div>
       )}
 
-      {/* Three-panel body */}
+      {/* MODIFICA: Job DONE — pannello token prominente */}
+      {job && job.status === 'DONE' && (
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200 px-4 py-3">
+          <div className="flex items-start gap-3 max-w-5xl">
+            <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              {/* Istruzione */}
+              <p className="text-xs font-semibold text-green-800 mb-2 flex items-center gap-1.5">
+                <Key className="h-3.5 w-3.5" />
+                Sito generato! Copia il token e incollalo nel plugin
+                <span className="font-bold italic">DoFlow Importer</span>
+                sul tuo sito WordPress.
+              </p>
+
+              {/* Token display + bottone copia */}
+              <div className="flex items-center gap-2">
+                <code className="flex-1 font-mono text-sm bg-white border border-green-300 rounded-lg px-3 py-2 text-green-900 tracking-widest select-all truncate shadow-inner">
+                  {job.importToken ?? '—'}
+                </code>
+                <button
+                  onClick={() => job.importToken && handleCopyToken(job.importToken)}
+                  disabled={!job.importToken}
+                  className={cn(
+                    'flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-200 flex-shrink-0 shadow-sm',
+                    tokenCopied
+                      ? 'bg-green-600 text-white'
+                      : 'bg-white border border-green-300 text-green-700 hover:bg-green-600 hover:text-white hover:border-green-600',
+                  )}>
+                  {tokenCopied
+                    ? <><ClipboardCheck className="h-3.5 w-3.5" /> Copiato!</>
+                    : <><Copy className="h-3.5 w-3.5" /> Copia Token</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Tre pannelli ──────────────────────────────────────────────────── */}
       <div className="flex-1 flex min-h-0">
         <LeftPanel state={state} dispatch={dispatch} pages={state.pages} />
         <EditorCanvas state={state} dispatch={dispatch} design={form.designScheme ?? {}} />
@@ -1319,17 +1367,6 @@ function SiteEditor({ xmlBlocks, form, onBack }: {
     </div>
   );
 }
-
-// ════════════════════════════════════════════════════════════════════════════
-//  WIZARD COMPONENTS (5 steps + history)
-// ════════════════════════════════════════════════════════════════════════════
-
-const WIZARD_STEPS = [
-  { id: 'info', label: 'Sito', icon: Globe },
-  { id: 'desc', label: 'Business', icon: Building2 },
-  { id: 'design', label: 'Design', icon: Palette },
-  { id: 'documento', label: 'Documento', icon: FileText },
-];
 
 const BLOCKSY_SITES = [
   // ── FREE ──────────────────────────────────────────────────────────────────
@@ -1755,60 +1792,97 @@ function XmlStep({ form, setForm }: { form: WizardForm; setForm: (f: WizardForm)
   );
 }
 
-// History panel
+// ════════════════════════════════════════════════════════════════════════════
+//  HISTORY PANEL (modal overlay)
+// ════════════════════════════════════════════════════════════════════════════
 function HistoryPanel({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const [jobs, setJobs] = useState<SitebuilderJob[]>([]);
+  const [jobs, setJobs]       = useState<SitebuilderJob[]>([]);
   const [loading, setLoading] = useState(false);
+  // MODIFICA: traccia quale job ha appena copiato il token (feedback visivo)
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
     setLoading(true);
-    const base = getApiBaseUrl();
+    const base  = getApiBaseUrl();
     const token = localStorage.getItem('doflow_token') ?? '';
     fetch(`${base}/sitebuilder/jobs`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json()).then((data) => setJobs(data as SitebuilderJob[])).catch(() => {})
+      .then((r) => r.json())
+      .then((data) => setJobs(data as SitebuilderJob[]))
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [visible]);
 
   if (!visible) return null;
 
-  const handleDownload = (job: SitebuilderJob) => {
-    const base = getApiBaseUrl();
-    const token = localStorage.getItem('doflow_token') ?? '';
-    const link = document.createElement('a');
-    link.href = `${base}/sitebuilder/jobs/${job.id}/download?token=${token}`;
-    link.download = `${job.siteDomain}-wordpress.zip`;
-    link.click();
+  // MODIFICA: copia token con feedback 2.5s
+  const handleCopyToken = async (job: SitebuilderJob) => {
+    if (!job.importToken) return;
+    try {
+      await navigator.clipboard.writeText(job.importToken);
+      setCopiedId(job.id);
+      setTimeout(() => setCopiedId(null), 2500);
+    } catch { /* fallback silenzioso */ }
   };
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4"
+      onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b">
           <h2 className="font-semibold text-gray-900">Storico Build</h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100">
+            <X className="h-4 w-4" />
+          </button>
         </div>
+
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {loading && <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>}
-          {!loading && jobs.length === 0 && <p className="text-sm text-gray-400 text-center py-8">Nessun build precedente</p>}
+          {loading && (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+            </div>
+          )}
+          {!loading && jobs.length === 0 && (
+            <p className="text-sm text-gray-400 text-center py-8">Nessun build precedente</p>
+          )}
+
           {jobs.map((job) => (
-            <div key={job.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:border-gray-200">
-              <div className={cn('w-2 h-2 rounded-full flex-shrink-0',
-                job.status === 'DONE' ? 'bg-green-500' :
-                job.status === 'RUNNING' ? 'bg-blue-500' : 'bg-red-400')} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{job.siteDomain}</p>
-                <p className="text-xs text-gray-400">{new Date(job.createdAt).toLocaleString('it-IT')}</p>
+            <div key={job.id} className="p-3 rounded-xl border border-gray-100 hover:border-gray-200 space-y-2">
+              {/* Riga info */}
+              <div className="flex items-center gap-3">
+                <div className={cn('w-2 h-2 rounded-full flex-shrink-0',
+                  job.status === 'DONE'    ? 'bg-green-500' :
+                  job.status === 'RUNNING' ? 'bg-blue-500'  : 'bg-red-400')} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{job.siteDomain}</p>
+                  <p className="text-xs text-gray-400">{new Date(job.createdAt).toLocaleString('it-IT')}</p>
+                </div>
+                <Badge variant={job.status === 'DONE' ? 'default' : 'secondary'} className="text-xs">
+                  {job.status}
+                </Badge>
               </div>
-              <Badge variant={job.status === 'DONE' ? 'default' : 'secondary'} className="text-xs">
-                {job.status}
-              </Badge>
-              {job.status === 'DONE' && (
-                <button onClick={() => handleDownload(job)}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 text-xs rounded-lg hover:bg-green-100 font-medium">
-                  <Download className="h-3 w-3" /> ZIP
-                </button>
+
+              {/* MODIFICA: token display inline per job DONE */}
+              {job.status === 'DONE' && job.importToken && (
+                <div className="flex items-center gap-2 bg-green-50 rounded-lg px-2 py-1.5">
+                  <Key className="h-3 w-3 text-green-600 flex-shrink-0" />
+                  <code className="flex-1 font-mono text-xs text-green-800 truncate select-all">
+                    {job.importToken}
+                  </code>
+                  <button
+                    onClick={() => handleCopyToken(job)}
+                    className={cn(
+                      'flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-colors flex-shrink-0',
+                      copiedId === job.id
+                        ? 'bg-green-600 text-white'
+                        : 'bg-white border border-green-300 text-green-700 hover:bg-green-600 hover:text-white',
+                    )}>
+                    {copiedId === job.id
+                      ? <><Check className="h-3 w-3" /> Copiato</>
+                      : <><Copy className="h-3 w-3" /> Copia</>}
+                  </button>
+                </div>
               )}
             </div>
           ))}
@@ -1818,100 +1892,155 @@ function HistoryPanel({ visible, onClose }: { visible: boolean; onClose: () => v
   );
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+//  HISTORY LIST (inline nel wizard)
+// ════════════════════════════════════════════════════════════════════════════
 function HistoryList() {
-  const [jobs, setJobs] = useState<SitebuilderJob[]>([]);
+  const [jobs, setJobs]       = useState<SitebuilderJob[]>([]);
   const [loading, setLoading] = useState(true);
+  // MODIFICA: traccia quale job ha appena copiato il token
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const fetchJobs = useCallback(() => {
     setLoading(true);
-    const base = getApiBaseUrl();
+    const base  = getApiBaseUrl();
     const token = localStorage.getItem('doflow_token') ?? '';
     fetch(`${base}/sitebuilder/jobs`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .then((data) => setJobs(data as SitebuilderJob[]))
-      .catch(() => toast({ title: "Errore caricamento storico", variant: "destructive" }))
+      .catch(() => toast({ title: 'Errore caricamento storico', variant: 'destructive' }))
       .finally(() => setLoading(false));
   }, [toast]);
 
   useEffect(() => { fetchJobs(); }, [fetchJobs]);
 
-  const handleDownload = (job: SitebuilderJob) => {
-    const base = getApiBaseUrl();
-    const token = localStorage.getItem('doflow_token') ?? '';
-    const link = document.createElement('a');
-    link.href = `${base}/sitebuilder/jobs/${job.id}/download?token=${token}`;
-    link.download = `${job.siteDomain}-wordpress.zip`;
-    link.click();
+  // MODIFICA: rimossa handleDownload, aggiunto handleCopyToken
+  const handleCopyToken = async (job: SitebuilderJob) => {
+    if (!job.importToken) return;
+    try {
+      await navigator.clipboard.writeText(job.importToken);
+      setCopiedId(job.id);
+      setTimeout(() => setCopiedId(null), 2500);
+      toast({ title: '✅ Token copiato negli appunti' });
+    } catch {
+      // Fallback: mostra il token nel toast se clipboard non disponibile
+      toast({ title: 'Token', description: job.importToken });
+    }
   };
 
   const handleDelete = async (job: SitebuilderJob) => {
     if (!confirm(`Sei sicuro di voler eliminare definitivamente il sito ${job.siteDomain}?`)) return;
-    
-    const base = getApiBaseUrl();
+    const base  = getApiBaseUrl();
     const token = localStorage.getItem('doflow_token') ?? '';
-    
     try {
       const res = await fetch(`${base}/sitebuilder/jobs/${job.id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
+        method:  'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
       });
-      
       if (res.ok || res.status === 204) {
-        toast({ title: "✅ Sito eliminato con successo" });
-        fetchJobs(); // Ricarica la lista dopo l'eliminazione
+        toast({ title: '✅ Sito eliminato con successo' });
+        fetchJobs();
       } else {
         throw new Error("Errore durante l'eliminazione dal server");
       }
     } catch (error) {
-      toast({ title: "Errore", description: String(error), variant: "destructive" });
+      toast({ title: 'Errore', description: String(error), variant: 'destructive' });
     }
   };
 
-  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>;
-  if (jobs.length === 0) return null; // Nascondi la sezione se non ci sono job
+  if (loading) return (
+    <div className="flex justify-center py-8">
+      <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+    </div>
+  );
+  if (jobs.length === 0) return null;
 
   return (
     <div className="mt-10 space-y-3">
       <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
         <FolderOpen className="h-4 w-4 text-gray-500" /> Storico Creazioni
       </h3>
+
       <div className="grid grid-cols-1 gap-3">
         {jobs.map((job) => (
-          <div key={job.id} className="flex items-center gap-4 p-4 rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all">
-            <div className={cn('w-2.5 h-2.5 rounded-full flex-shrink-0',
-              job.status === 'DONE' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' :
-              job.status === 'RUNNING' ? 'bg-blue-500 animate-pulse' :
-              'bg-red-500')} />
-            
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900 truncate">{job.siteDomain || 'Sito senza nome'}</p>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-xs text-gray-500">{new Date(job.createdAt).toLocaleString('it-IT')}</span>
-                <Badge variant={job.status === 'DONE' ? 'default' : 'secondary'} className="text-[9px] px-1.5 py-0">
-                  {job.status}
-                </Badge>
+          <div key={job.id}
+            className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all space-y-3">
+
+            {/* Riga info + delete */}
+            <div className="flex items-center gap-4">
+              <div className={cn('w-2.5 h-2.5 rounded-full flex-shrink-0',
+                job.status === 'DONE'
+                  ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]'
+                  : job.status === 'RUNNING'
+                    ? 'bg-blue-500 animate-pulse'
+                    : 'bg-red-500')} />
+
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-900 truncate">
+                  {job.siteDomain || 'Sito senza nome'}
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs text-gray-500">
+                    {new Date(job.createdAt).toLocaleString('it-IT')}
+                  </span>
+                  <Badge
+                    variant={job.status === 'DONE' ? 'default' : 'secondary'}
+                    className="text-[9px] px-1.5 py-0">
+                    {job.status}
+                  </Badge>
+                </div>
               </div>
-            </div>
-            
-            <div className="flex items-center gap-1.5 border-l border-gray-100 pl-4">
-              {job.status === 'DONE' && (
-                <button onClick={() => handleDownload(job)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 rounded-lg text-xs font-medium transition-colors" title="Scarica ZIP">
-                  <Download className="h-3.5 w-3.5" /> Scarica
-                </button>
-              )}
-              <button onClick={() => handleDelete(job)}
-                className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Elimina definitivamente">
+
+              {/* Tasto elimina sempre visibile */}
+              <button
+                onClick={() => handleDelete(job)}
+                className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title="Elimina definitivamente">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
+
+            {/* MODIFICA: token display per i job DONE, al posto del bottone ZIP */}
+            {job.status === 'DONE' && (
+              <div className="flex items-center gap-2 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg px-3 py-2">
+                <Key className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />
+                <code className="flex-1 font-mono text-xs text-green-900 truncate select-all tracking-wider">
+                  {job.importToken ?? '(token non disponibile)'}
+                </code>
+                {job.importToken && (
+                  <button
+                    onClick={() => handleCopyToken(job)}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 flex-shrink-0',
+                      copiedId === job.id
+                        ? 'bg-green-600 text-white'
+                        : 'bg-white border border-green-300 text-green-700 hover:bg-green-600 hover:text-white hover:border-transparent',
+                    )}
+                    title="Copia token per DoFlow Importer">
+                    {copiedId === job.id
+                      ? <><ClipboardCheck className="h-3.5 w-3.5" /> Copiato!</>
+                      : <><Copy className="h-3.5 w-3.5" /> Copia Token</>}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>
     </div>
   );
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+//  WIZARD CONFIGURATION
+// ════════════════════════════════════════════════════════════════════════════
+const WIZARD_STEPS = [
+  { id: 'base', label: 'Impostazioni Base', icon: Settings },
+  { id: 'business', label: 'Business & Tema', icon: Building2 },
+  { id: 'design', label: 'Stile Visivo', icon: Palette },
+  { id: 'content', label: 'Contenuti', icon: FileText },
+];
 
 // ════════════════════════════════════════════════════════════════════════════
 //  MAIN EXPORT — SitebuilderClient

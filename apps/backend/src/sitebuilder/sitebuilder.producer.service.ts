@@ -51,6 +51,9 @@ export class SitebuilderProducerService {
       locale:              dto.locale ?? 'it',
       status:              SitebuilderJobStatus.PENDING,
       logs:                [],
+      // FASE 1: inizializzazione esplicita delle nuove colonne
+      importToken:         null,
+      wpData:              null,
     });
     const saved = await this.jobRepo.save(entity);
 
@@ -95,5 +98,33 @@ export class SitebuilderProducerService {
     const job = await this.jobRepo.findOne({ where: { id: jobId } });
     if (!job) throw new NotFoundException(`Job ${jobId} non trovato`);
     await this.jobRepo.delete(jobId);
+  }
+
+  // ─── FASE 1: Lookup tramite import_token ─────────────────────────────
+
+  /**
+   * Cerca un job tramite il suo `import_token` univoco.
+   *
+   * Lancia NotFoundException se:
+   *  - il token non corrisponde ad alcun job
+   *  - il job esiste ma non è ancora nello status DONE
+   *    (il plugin WP non deve ricevere dati parziali)
+   */
+  async findOneByToken(token: string): Promise<SitebuilderJob> {
+    const job = await this.jobRepo.findOne({ where: { importToken: token } });
+
+    // Token inesistente → risposta volutamente generica per non esporre info
+    if (!job) {
+      throw new NotFoundException('Token di importazione non valido o scaduto');
+    }
+
+    // Il plugin deve importare solo siti completamente generati
+    if (job.status !== SitebuilderJobStatus.DONE) {
+      throw new NotFoundException(
+        `Il sito non è ancora pronto per l'importazione (status attuale: ${job.status})`,
+      );
+    }
+
+    return job;
   }
 }
