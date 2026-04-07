@@ -23,6 +23,7 @@
     },
     "onlyBuiltDependencies": [
       "@nestjs/core",
+      "msgpackr-extract",
       "sharp"
     ]
   },

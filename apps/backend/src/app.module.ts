@@ -95,9 +95,6 @@ import { ExportController } from './superadmin/export.controller';
 import { ExportService } from './superadmin/export.service';
 import { BackupSchedule } from './superadmin/entities/backup-schedule.entity';
 
-// --- SITEBUILDER ENTITY ---
-import { SitebuilderJob } from './sitebuilder/sitebuilder.entity';
-
 // --- SERVIZI ---
 import { AuthService } from './auth.service';
 import { AuditService } from './audit.service';
@@ -133,7 +130,7 @@ import { FedericaNeroneModule } from './federicanerone/federicanerone.module';
 import { BusinaroModule } from './businaro/businaro.module';
 
 // --- SITEBUILDER (WordPress AI) ---
-import { SitebuilderModule } from './sitebuilder/sitebuilder.module';
+import { SiteBuilderModule } from './sitebuilder/sitebuilder.module';
 import { BullModule } from '@nestjs/bullmq';
 
 // --- Piattaforma odoo-style ---
@@ -189,8 +186,6 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
       ChangelogEntry,
       AutomationRule,
       BackupSchedule,
-      // --- SITEBUILDER ---
-      SitebuilderJob,
     ]),
 
     PassportModule,
@@ -232,7 +227,7 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
       }),
     }),
     // --- SITEBUILDER ---
-    SitebuilderModule,
+    SiteBuilderModule,
   ],
 
   controllers: [

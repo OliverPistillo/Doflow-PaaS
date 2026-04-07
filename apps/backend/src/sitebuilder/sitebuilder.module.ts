@@ -1,35 +1,31 @@
 // apps/backend/src/sitebuilder/sitebuilder.module.ts
-
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { JwtModule } from '@nestjs/jwt';
 import { BullModule } from '@nestjs/bullmq';
-import { ConfigModule } from '@nestjs/config';
-
-import { SitebuilderJob } from './sitebuilder.entity';
-import { SitebuilderController } from './sitebuilder.controller';
-import { SitebuilderProducerService } from './sitebuilder.producer.service';
-import { SitebuilderProcessor } from './sitebuilder.processor';
-import { SITEBUILDER_QUEUE } from './sitebuilder.constants';
-import { AnthropicProvider } from './sitebuilder.anthropic.provider';
-
-export { SITEBUILDER_QUEUE } from './sitebuilder.constants';
+import { SiteBuilderController } from './sitebuilder.controller';
+import { SiteExportController } from './site-export.controller';
+import { AiGeneratorService } from './ai-generator.service';
+import { SiteStorageService } from './site-storage.service';
+import { SiteGenerationProducer } from './queue/site-generation.producer';
+import { SiteGenerationProcessor } from './queue/site-generation.processor';
 
 @Module({
   imports: [
-    ConfigModule,
-    TypeOrmModule.forFeature([SitebuilderJob]),
+    JwtModule.register({
+      secret: process.env.JWT_EXPORT_SECRET || 'super-secret-export-key',
+      signOptions: { expiresIn: '1h' },
+    }),
+    // Registriamo la coda per BullMQ
     BullModule.registerQueue({
-      name: SITEBUILDER_QUEUE,
-      defaultJobOptions: {
-        attempts: 4,
-        backoff: { type: 'exponential', delay: 15_000 },
-        removeOnComplete: { count: 100 },
-        removeOnFail:     { count: 100 },
-      },
+      name: 'site-generation',
     }),
   ],
-  controllers: [SitebuilderController],
-  providers:   [SitebuilderProducerService, SitebuilderProcessor, AnthropicProvider],
-  exports:     [SitebuilderProducerService],
+  controllers: [SiteBuilderController, SiteExportController],
+  providers: [
+    AiGeneratorService, 
+    SiteStorageService,
+    SiteGenerationProducer,
+    SiteGenerationProcessor
+  ],
 })
-export class SitebuilderModule {}
+export class SiteBuilderModule {}
