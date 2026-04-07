@@ -1,9 +1,9 @@
 // apps/backend/src/sitebuilder/sitebuilder.entity.ts
-
 import {
   Entity, Column, PrimaryGeneratedColumn,
   CreateDateColumn, UpdateDateColumn, Index,
 } from 'typeorm';
+import { DesignTokens, BreakpointConfig, ComponentDefinition, WpData } from './sitebuilder.types';
 
 export enum SitebuilderJobStatus {
   PENDING     = 'PENDING',
@@ -42,10 +42,33 @@ export class SitebuilderJob {
   @Column({ type: 'varchar', name: 'starter_site', default: 'business' })
   starterSite!: string;
 
+  // ════════════════════════════════════════════════════════════════
+  //  DESIGN SYSTEM (nuovi campi)
+  // ════════════════════════════════════════════════════════════════
+  
   @Column({ type: 'jsonb', name: 'design_scheme', default: {} })
   designScheme!: Record<string, unknown>;
 
-  // BUG FIX: rimosso doppio ;; a riga 55
+  @Column({ type: 'jsonb', name: 'design_tokens', default: {} })
+  designTokens!: Partial<DesignTokens>;
+
+  @Column({ type: 'jsonb', name: 'global_styles', default: {} })
+  globalStyles!: { cssVariables: Record<string, string>; customCSS?: string };
+
+  @Column({ type: 'jsonb', name: 'breakpoints', default: {
+    desktop: { minWidth: 1025, label: 'Desktop' },
+    tablet: { minWidth: 768, maxWidth: 1024, label: 'Tablet' },
+    mobile: { maxWidth: 767, label: 'Mobile' },
+  }})
+  breakpoints!: BreakpointConfig;
+
+  @Column({ type: 'jsonb', name: 'components', default: [] })
+  components!: ComponentDefinition[]; // Componenti usati nel sito
+
+  // ════════════════════════════════════════════════════════════════
+  //  CONTENT & STRUCTURE
+  // ════════════════════════════════════════════════════════════════
+
   @Column({ type: 'text', array: true, name: 'content_topics' })
   contentTopics!: string[];
 
@@ -74,8 +97,12 @@ export class SitebuilderJob {
   @Column({ type: 'varchar', name: 'import_token', nullable: true, unique: true })
   importToken!: string | null;
 
+  // ════════════════════════════════════════════════════════════════
+  //  WP DATA OUTPUT (struttura estesa)
+  // ════════════════════════════════════════════════════════════════
+
   @Column({ type: 'jsonb', name: 'wp_data', nullable: true })
-  wpData!: Record<string, unknown> | null;
+  wpData!: WpData | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
