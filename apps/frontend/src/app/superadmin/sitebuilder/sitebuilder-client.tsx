@@ -1163,13 +1163,13 @@ function TopBar({
         {pages.reduce((acc, p) => acc + p.bricks.length, 0)} blocchi · {pages.length} pagine
       </span>
 
-      {/* MODIFICA: bottone Genera — rimossa icona Download, testo aggiornato */}
+      {/* Bottone principale — prominente, testo chiaro */}
       <button onClick={() => onGenerate(state.pages)} disabled={generating}
-        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-semibold rounded-lg shadow-sm">
+        className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-bold rounded-xl shadow-md hover:shadow-lg transition-all duration-200 border border-blue-700">
         {generating
-          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          : <Sparkles className="h-3.5 w-3.5" />}
-        {generating ? 'Generazione in corso...' : 'Genera Sito WordPress'}
+          ? <Loader2 className="h-4 w-4 animate-spin" />
+          : <CheckCircle2 className="h-4 w-4" />}
+        {generating ? 'Generazione in corso...' : 'Salva e Genera Sito'}
       </button>
     </div>
   );
@@ -1301,7 +1301,7 @@ function SiteEditor({ xmlBlocks, form, onBack }: {
   };
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-white z-[100]">
+    <div className="relative flex flex-col bg-white border border-gray-200 rounded-xl shadow-lg h-[820px] mb-8 overflow-hidden">
       <TopBar state={state} dispatch={dispatch} pages={state.pages} form={form}
         onGenerate={handleGenerate} generating={generating} onBack={onBack} />
 
@@ -1368,45 +1368,13 @@ function SiteEditor({ xmlBlocks, form, onBack }: {
   );
 }
 
-const BLOCKSY_SITES = [
-  // ── FREE ──────────────────────────────────────────────────────────────────
-  { slug: 'codespot',        label: 'Codespot',        category: 'Tech',       isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2025/11/Main-Image.jpg' },
-  { slug: 'consultant',      label: 'Consultant',      category: 'Business',   isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2024/08/Main-Image.jpg' },
-  { slug: 'smile-dent',      label: 'Smile Dent',      category: 'Salute',     isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2024/02/Main-Image.jpg' },
-  { slug: 'photo-studio',    label: 'Photo Studio',    category: 'Portfolio',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2023/11/Main-Image-3.jpg' },
-  { slug: 'restaurant',      label: 'Restaurant',      category: 'Food',       isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/10/Main-Image.jpg' },
-  { slug: 'wood',            label: 'Wood',            category: 'Portfolio',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-27.jpg' },
-  { slug: 'wedding',         label: 'Wedding',         category: 'Lifestyle',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-12.jpg' },
-  { slug: 'renovation',      label: 'Renovation',      category: 'Business',   isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-26.jpg' },
-  { slug: 'beverr',          label: 'Beverr',          category: 'Portfolio',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-24.jpg' },
-  { slug: 'catering',        label: 'Catering',        category: 'Food',       isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-23.jpg' },
-  { slug: 'barber-shop',     label: 'Barber Shop',     category: 'Salute',     isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-22.jpg' },
-  { slug: 'bizconsult',      label: 'BizConsult',      category: 'Business',   isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-21.jpg' },
-  { slug: 'gadgets',         label: 'Gadgets',         category: 'eCommerce',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-20.jpg' },
-  { slug: 'home-decor',      label: 'Home Decor',      category: 'eCommerce',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-19.jpg' },
-  { slug: 'cleaning-service',label: 'Cleaning Service',category: 'Servizi',   isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-18.jpg' },
-  { slug: 'car-service',     label: 'Car Service',     category: 'Servizi',    isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-17.jpg' },
-  { slug: 'floreo',          label: 'Floreo',          category: 'eCommerce',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-16.jpg' },
-  { slug: 'garderobe',       label: 'Garderobe',       category: 'eCommerce',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-15.jpg' },
-  { slug: 'petsy',           label: 'Petsy',           category: 'eCommerce',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-14.jpg' },
-  { slug: 'justice',         label: 'Justice',         category: 'Business',   isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-13.jpg' },
-  { slug: 'web-agency',      label: 'Web Agency',      category: 'Business',   isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-11.jpg' },
-  { slug: 'persona',         label: 'Persona',         category: 'Portfolio',  isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-10.jpg' },
-  { slug: 'yogi',            label: 'Yogi',            category: 'Sport',      isPro: false, screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2022/09/Main-Image-9.jpg' },
-  // ── PRO ───────────────────────────────────────────────────────────────────
-  { slug: 'growly',          label: 'Growly',          category: 'Business',   isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2026/03/Main-Image5.jpg' },
-  { slug: 'book-store',      label: 'Book Store',      category: 'eCommerce',  isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2026/01/Main-Image.jpg' },
-  { slug: 'landscape',       label: 'Landscape',       category: 'Blog',       isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2025/09/Main-Image.jpg' },
-  { slug: 'web-studio',      label: 'Web Studio',      category: 'Business',   isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2025/08/Main-Image.jpg' },
-  { slug: 'invest-boost',    label: 'Invest Boost',    category: 'Finance',    isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2025/03/Main-Image.jpg' },
-  { slug: 'kiddy',           label: 'Kiddy',           category: 'eCommerce',  isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2025/02/Main-Image.jpg' },
-  { slug: 'furniture',       label: 'Furniture',       category: 'eCommerce',  isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2024/06/Main-Image.jpg' },
-  { slug: 'e-bike',          label: 'E-Bike',          category: 'eCommerce',  isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2024/05/Main-Image.jpg' },
-  { slug: 'pottery',         label: 'Pottery',         category: 'eCommerce',  isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2024/04/Main-Image.jpg' },
-  { slug: 'smart-home',      label: 'Smart Home',      category: 'eCommerce',  isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2023/12/Main-Image.jpg' },
-  { slug: 'daily-news',      label: 'Daily News',      category: 'Blog',       isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2023/11/Main-Image-2.jpg' },
-  { slug: 'cosmetic',        label: 'Cosmetic',        category: 'eCommerce',  isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2023/11/Main-Image-1.jpg' },
-  { slug: 'real-estate',     label: 'Real Estate',     category: 'Business',   isPro: true,  screenshot: 'https://creativethemes.com/blocksy/wp-content/uploads/2023/11/Main-Image.jpg' },
+const DOFLOW_TEMPLATES = [
+  { slug: 'business',   label: 'Corporate Pro', category: 'Business',  isPro: false, screenshot: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=600&q=80' },
+  { slug: 'ristorante', label: 'Gusto',         category: 'Food',      isPro: false, screenshot: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=600&q=80' },
+  { slug: 'portfolio',  label: 'Creative',      category: 'Portfolio', isPro: false, screenshot: 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?auto=format&fit=crop&w=600&q=80' },
+  { slug: 'medico',     label: 'HealthCare',    category: 'Salute',    isPro: false, screenshot: 'https://images.unsplash.com/photo-1538108149393-fbbd81895907?auto=format&fit=crop&w=600&q=80' },
+  { slug: 'ecommerce',  label: 'StoreFront',    category: 'eCommerce', isPro: true,  screenshot: 'https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=600&q=80' },
+  { slug: 'tech',       label: 'SaaS Innovate', category: 'Tech',      isPro: true,  screenshot: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=600&q=80' },
 ];
 
 const FONTS = [
@@ -1420,13 +1388,13 @@ const FONTS = [
 
 // ─── THEME SELECTOR ──────────────────────────────────────────────────────────
 
-const SITE_CATEGORIES = ['Tutti', 'Business', 'eCommerce', 'Portfolio', 'Food', 'Salute', 'Sport', 'Tech', 'Finance', 'Lifestyle', 'Servizi', 'Blog'];
+const SITE_CATEGORIES = ['Tutti', 'Business', 'Food', 'Portfolio', 'Salute', 'eCommerce', 'Tech'];
 
 function ThemeSelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [cat, setCat] = React.useState('Tutti');
   const [search, setSearch] = React.useState('');
 
-  const filtered = BLOCKSY_SITES.filter((s) => {
+  const filtered = DOFLOW_TEMPLATES.filter((s) => {
     const matchCat = cat === 'Tutti' || s.category === cat;
     const matchSearch = search === '' || s.label.toLowerCase().includes(search.toLowerCase());
     return matchCat && matchSearch;
@@ -1460,7 +1428,6 @@ function ThemeSelector({ value, onChange }: { value: string; onChange: (v: strin
       {/* Mosaic grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[600px] overflow-y-auto pr-2">        {filtered.map((site) => {
           const isSelected = value === site.slug;
-          const previewUrl = `https://creativethemes.com/blocksy/starter-site/${site.slug}/`;
           return (
             <div
               key={site.slug}
@@ -1529,16 +1496,7 @@ function ThemeSelector({ value, onChange }: { value: string; onChange: (v: strin
                   </div>
                 )}
 
-                {/* Preview link on hover */}
-                <a
-                  href={previewUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 bg-black/70 backdrop-blur-sm text-white text-[9px] px-2 py-1 rounded-lg font-semibold transition-all duration-200 hover:bg-black/90 flex items-center gap-1"
-                >
-                  Demo ↗
-                </a>
+
               </div>
 
               {/* Card footer */}
@@ -1566,7 +1524,7 @@ function ThemeSelector({ value, onChange }: { value: string; onChange: (v: strin
 
       {/* Count */}
       <div className="text-center text-[10px] text-gray-400">
-        {filtered.length} temi disponibili · {BLOCKSY_SITES.filter(s => !s.isPro).length} FREE · {BLOCKSY_SITES.filter(s => s.isPro).length} PRO
+        {filtered.length} template disponibili · {DOFLOW_TEMPLATES.filter(s => !s.isPro).length} FREE · {DOFLOW_TEMPLATES.filter(s => s.isPro).length} PRO
       </div>
     </div>
   );
@@ -1616,13 +1574,6 @@ function WizardStep({ step, form, setForm }: {
         <Label className="text-xs font-semibold text-gray-600">Settore / Tipo di business</Label>
         <Input value={form.businessType} onChange={(e) => set('businessType', e.target.value)}
           placeholder="Es. Agenzia web, Ristorante, Studio medico..." className="h-9" />
-      </div>
-      <div className="space-y-1.5">
-        <Label className="text-xs font-semibold text-gray-600">Descrizione del business</Label>
-        <Textarea value={form.businessDescription}
-          onChange={(e) => set('businessDescription', e.target.value)}
-          placeholder="Descrivi il tuo business, i tuoi servizi e il tuo target cliente..."
-          rows={5} className="resize-none text-sm" />
       </div>
       <ThemeSelector value={form.starterSite} onChange={(v) => set('starterSite', v)} />
     </div>
@@ -2077,7 +2028,7 @@ export default function SitebuilderClient() {
   }
 
   return (
-    <div className="fixed inset-0 overflow-y-auto bg-gradient-to-br from-slate-50 to-blue-50 z-[100]">
+    <div className="relative w-full min-h-[calc(100vh-4rem)] bg-gradient-to-br from-slate-50 to-blue-50 rounded-xl overflow-y-auto">
       {/* Header */}
       <div className="border-b border-gray-200 bg-white/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-6 py-3 flex items-center justify-between">
