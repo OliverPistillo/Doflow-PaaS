@@ -1421,8 +1421,7 @@ function ThemeSelector({ value, onChange }: { value: string; onChange: (v: strin
       </div>
 
       {/* Mosaic grid */}
-      <div className="grid grid-cols-2 gap-3 max-h-[440px] overflow-y-auto pr-0.5">
-        {filtered.map((site) => {
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[600px] overflow-y-auto pr-2">        {filtered.map((site) => {
           const isSelected = value === site.slug;
           const previewUrl = `https://creativethemes.com/blocksy/starter-site/${site.slug}/`;
           return (
@@ -1438,7 +1437,7 @@ function ThemeSelector({ value, onChange }: { value: string; onChange: (v: strin
             >
               {/* Screenshot image */}
               <div className="relative bg-gradient-to-br from-gray-100 to-gray-200 overflow-hidden"
-                style={{ height: '120px' }}>
+                style={{ height: '240px' }}>
                 <img
                   src={site.screenshot}
                   alt={site.label}
@@ -1869,7 +1868,7 @@ export default function SitebuilderClient() {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-6 py-8">
+      <div className="max-w-5xl mx-auto px-6 py-8">
         {/* Step indicators */}
         <div className="flex items-center gap-2 mb-8">
           {WIZARD_STEPS.map((step, i) => (
