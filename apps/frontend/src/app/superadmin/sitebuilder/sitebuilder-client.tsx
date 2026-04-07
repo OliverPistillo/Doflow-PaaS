@@ -1818,6 +1818,101 @@ function HistoryPanel({ visible, onClose }: { visible: boolean; onClose: () => v
   );
 }
 
+function HistoryList() {
+  const [jobs, setJobs] = useState<SitebuilderJob[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchJobs = useCallback(() => {
+    setLoading(true);
+    const base = getApiBaseUrl();
+    const token = localStorage.getItem('doflow_token') ?? '';
+    fetch(`${base}/sitebuilder/jobs`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((data) => setJobs(data as SitebuilderJob[]))
+      .catch(() => toast({ title: "Errore caricamento storico", variant: "destructive" }))
+      .finally(() => setLoading(false));
+  }, [toast]);
+
+  useEffect(() => { fetchJobs(); }, [fetchJobs]);
+
+  const handleDownload = (job: SitebuilderJob) => {
+    const base = getApiBaseUrl();
+    const token = localStorage.getItem('doflow_token') ?? '';
+    const link = document.createElement('a');
+    link.href = `${base}/sitebuilder/jobs/${job.id}/download?token=${token}`;
+    link.download = `${job.siteDomain}-wordpress.zip`;
+    link.click();
+  };
+
+  const handleDelete = async (job: SitebuilderJob) => {
+    if (!confirm(`Sei sicuro di voler eliminare definitivamente il sito ${job.siteDomain}?`)) return;
+    
+    const base = getApiBaseUrl();
+    const token = localStorage.getItem('doflow_token') ?? '';
+    
+    try {
+      const res = await fetch(`${base}/sitebuilder/jobs/${job.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (res.ok || res.status === 204) {
+        toast({ title: "✅ Sito eliminato con successo" });
+        fetchJobs(); // Ricarica la lista dopo l'eliminazione
+      } else {
+        throw new Error("Errore durante l'eliminazione dal server");
+      }
+    } catch (error) {
+      toast({ title: "Errore", description: String(error), variant: "destructive" });
+    }
+  };
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-gray-400" /></div>;
+  if (jobs.length === 0) return null; // Nascondi la sezione se non ci sono job
+
+  return (
+    <div className="mt-10 space-y-3">
+      <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+        <FolderOpen className="h-4 w-4 text-gray-500" /> Storico Creazioni
+      </h3>
+      <div className="grid grid-cols-1 gap-3">
+        {jobs.map((job) => (
+          <div key={job.id} className="flex items-center gap-4 p-4 rounded-xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-all">
+            <div className={cn('w-2.5 h-2.5 rounded-full flex-shrink-0',
+              job.status === 'DONE' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' :
+              job.status === 'RUNNING' ? 'bg-blue-500 animate-pulse' :
+              'bg-red-500')} />
+            
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 truncate">{job.siteDomain || 'Sito senza nome'}</p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs text-gray-500">{new Date(job.createdAt).toLocaleString('it-IT')}</span>
+                <Badge variant={job.status === 'DONE' ? 'default' : 'secondary'} className="text-[9px] px-1.5 py-0">
+                  {job.status}
+                </Badge>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-1.5 border-l border-gray-100 pl-4">
+              {job.status === 'DONE' && (
+                <button onClick={() => handleDownload(job)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 rounded-lg text-xs font-medium transition-colors" title="Scarica ZIP">
+                  <Download className="h-3.5 w-3.5" /> Scarica
+                </button>
+              )}
+              <button onClick={() => handleDelete(job)}
+                className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Elimina definitivamente">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 //  MAIN EXPORT — SitebuilderClient
 // ════════════════════════════════════════════════════════════════════════════
@@ -1861,10 +1956,6 @@ export default function SitebuilderClient() {
             <span className="text-lg">🚀</span>
             <span className="font-bold text-gray-900 text-sm">DoFlow Sitebuilder AI</span>
           </div>
-          <button onClick={() => setShowHistory(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg">
-            <FolderOpen className="h-3.5 w-3.5" /> Storico build
-          </button>
         </div>
       </div>
 
@@ -1898,6 +1989,11 @@ export default function SitebuilderClient() {
             <WizardStep step={wizardStep} form={form} setForm={setForm} />
           </CardContent>
         </Card>
+
+        {/* ▼ MOSTRA STORICO SOLO NELLA PRIMA PAGINA ▼ */}
+        {wizardStep === 0 && (
+          <HistoryList />
+        )}
 
         {/* Navigation */}
         <div className="flex items-center justify-between mt-4">
