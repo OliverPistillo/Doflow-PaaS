@@ -1,6 +1,6 @@
-// apps\backend\src\sitebuilder\ai-generator.service.ts
+// apps/backend/src/sitebuilder/ai-generator.service.ts
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 @Injectable()
 export class AiGeneratorService {
@@ -11,289 +11,93 @@ export class AiGeneratorService {
   }
 
   async generateCopy(briefData: any) {
+    // Configurazione ultra-leggera: bypassiamo il limite di complessità del validatore di Google
     const model = this.genAI.getGenerativeModel({
-      model: 'gemini-1.5-pro',
+      model: 'gemini-2.5-pro',
       generationConfig: {
         responseMimeType: 'application/json',
-        responseSchema: {
-          type: SchemaType.OBJECT,
-          properties: {
-            themeId: { type: SchemaType.STRING },
-            blocks: {
-              type: SchemaType.ARRAY,
-              items: {
-                type: SchemaType.OBJECT,
-                properties: {
-                  type: { 
-                    type: SchemaType.STRING, 
-                    description: "Usa: hero-pas-dark, features-grid-3, hero-split, logo-ticker, zig-zag, step-process, pricing-table, cta-ribbon, stats-bar, founder-note, benefit-checklist, team-grid, contact-section, lead-magnet, video-explainer, case-studies-preview, category-grid, trust-badges, hero-centered, tabbed-content, gallery-masonry" 
-                  },
-                  content: { 
-                    type: SchemaType.OBJECT, 
-                    description: "I testi popolati per il blocco specifico",
-                    properties: {
-                      // Base
-                      h1: { type: SchemaType.STRING },
-                      h2: { type: SchemaType.STRING },
-                      paragraph: { type: SchemaType.STRING },
-                      ctaText: { type: SchemaType.STRING },
-                      items: {
-                        type: SchemaType.ARRAY,
-                        items: {
-                          type: SchemaType.OBJECT,
-                          properties: {
-                            title: { type: SchemaType.STRING },
-                            description: { type: SchemaType.STRING }
-                          }
-                        }
-                      },
-
-                      // Per social-proof
-                      testimonials: {
-                        type: SchemaType.ARRAY,
-                        items: {
-                          type: SchemaType.OBJECT,
-                          properties: {
-                            quote: { type: SchemaType.STRING, description: "Recensione breve e realistica" },
-                            author: { type: SchemaType.STRING, description: "Nome e Cognome" },
-                            role: { type: SchemaType.STRING, description: "Ruolo o Azienda cliente" }
-                          }
-                        }
-                      },
-
-                      // Per faq-accordion
-                      faqs: {
-                        type: SchemaType.ARRAY,
-                        items: {
-                          type: SchemaType.OBJECT,
-                          properties: {
-                            question: { type: SchemaType.STRING, description: "Domanda o obiezione comune" },
-                            answer: { type: SchemaType.STRING, description: "Risposta persuasiva" }
-                          }
-                        }
-                      },
-
-                      // Per authority-about
-                      about: {
-                        type: SchemaType.OBJECT,
-                        properties: {
-                          heading: { type: SchemaType.STRING },
-                          description: { type: SchemaType.STRING },
-                          mission: { type: SchemaType.STRING }
-                        }
-                      },
-
-                      // Per logo-ticker
-                      logos: {
-                        type: SchemaType.ARRAY,
-                        items: { type: SchemaType.STRING, description: "Nome di un'azienda partner verosimile" }
-                      },
-
-                      // Per zig-zag (alternato)
-                      zigzagItems: {
-                        type: SchemaType.ARRAY,
-                        items: {
-                          type: SchemaType.OBJECT,
-                          properties: {
-                            title: { type: SchemaType.STRING },
-                            description: { type: SchemaType.STRING }
-                          }
-                        }
-                      },
-
-                      // Per step-process
-                      steps: {
-                        type: SchemaType.ARRAY,
-                        items: {
-                          type: SchemaType.OBJECT,
-                          properties: {
-                            stepNumber: { type: SchemaType.STRING, description: "Es: 01, 02, 03" },
-                            title: { type: SchemaType.STRING },
-                            description: { type: SchemaType.STRING }
-                          }
-                        }
-                      },
-
-                      // Per pricing-table
-                      plans: {
-                        type: SchemaType.ARRAY,
-                        items: {
-                          type: SchemaType.OBJECT,
-                          properties: {
-                            name: { type: SchemaType.STRING, description: "Nome del piano, es. Base, Pro" },
-                            price: { type: SchemaType.STRING, description: "Prezzo, es. €99/mese" },
-                            features: { 
-                              type: SchemaType.ARRAY, 
-                              items: { type: SchemaType.STRING } 
-                            },
-                            isPopular: { type: SchemaType.BOOLEAN, description: "Se true, è il piano raccomandato" },
-                            planCta: { type: SchemaType.STRING }
-                          }
-                        }
-                      },
-
-                      // Per cta-ribbon
-                      ribbonHeadline: { type: SchemaType.STRING },
-                      ribbonSub: { type: SchemaType.STRING },
-                      
-                      // Per stats-bar
-                      stats: {
-                        type: SchemaType.ARRAY,
-                        items: {
-                          type: SchemaType.OBJECT,
-                          properties: {
-                            value: { type: SchemaType.STRING, description: "Il numero, es. 99%, 500+" },
-                            label: { type: SchemaType.STRING, description: "Cosa rappresenta il numero" }
-                          }
-                        }
-                      },
-
-                      // Per founder-note
-                      founderQuote: { type: SchemaType.STRING, description: "Il messaggio o la visione del fondatore" },
-                      founderName: { type: SchemaType.STRING },
-                      founderRole: { type: SchemaType.STRING },
-
-                      // Per benefit-checklist
-                      checklistItems: {
-                        type: SchemaType.ARRAY,
-                        items: { type: SchemaType.STRING, description: "Singolo vantaggio persuasivo" }
-                      },
-
-                      // Per team-grid
-                      teamMembers: {
-                        type: SchemaType.ARRAY,
-                        items: {
-                          type: SchemaType.OBJECT,
-                          properties: {
-                            name: { type: SchemaType.STRING },
-                            role: { type: SchemaType.STRING },
-                            bio: { type: SchemaType.STRING, description: "Breve descrizione delle competenze" }
-                          }
-                        }
-                      },
-
-                      // Per contact-section
-                      contactInfo: {
-                        type: SchemaType.OBJECT,
-                        properties: {
-                          address: { type: SchemaType.STRING },
-                          phone: { type: SchemaType.STRING },
-                          email: { type: SchemaType.STRING },
-                          hours: { type: SchemaType.STRING }
-                        }
-                      },
-
-                      // Per lead-magnet
-                      leadMagnetTitle: { type: SchemaType.STRING },
-                      leadMagnetDesc: { type: SchemaType.STRING, description: "Cosa otterrà l'utente scaricando la risorsa" },
-                      leadMagnetCta: { type: SchemaType.STRING, description: "Es: Scarica il Report Gratuito" },
-
-                      // Per video-explainer
-                      videoTitle: { type: SchemaType.STRING },
-                      videoDesc: { type: SchemaType.STRING },
-
-                      // Per case-studies-preview
-                      cases: {
-                        type: SchemaType.ARRAY,
-                        items: {
-                          type: SchemaType.OBJECT,
-                          properties: {
-                            clientName: { type: SchemaType.STRING },
-                            problem: { type: SchemaType.STRING, description: "Il problema affrontato" },
-                            solution: { type: SchemaType.STRING, description: "La soluzione implementata" },
-                            results: { type: SchemaType.STRING, description: "Risultati quantitativi ottenuti" }
-                          }
-                        }
-                      },
-
-                      // Per category-grid (E-commerce)
-                      categories: {
-                        type: SchemaType.ARRAY,
-                        items: {
-                          type: SchemaType.OBJECT,
-                          properties: {
-                            categoryName: { type: SchemaType.STRING },
-                            categoryDesc: { type: SchemaType.STRING }
-                          }
-                        }
-                      },
-
-                      // Per trust-badges
-                      badges: {
-                        type: SchemaType.ARRAY,
-                        items: {
-                          type: SchemaType.OBJECT,
-                          properties: {
-                            badgeName: { type: SchemaType.STRING, description: "Es: Certificazione ISO, Partner Ufficiale" },
-                            badgeMeaning: { type: SchemaType.STRING, description: "Cosa significa per il cliente" }
-                          }
-                        }
-                      },
-
-                      // Per hero-centered
-                      badgeText: { type: SchemaType.STRING, description: "Etichetta in alto, es: Nuova Release, Top Rated" },
-
-                      // Per tabbed-content (Sticky Side-Nav)
-                      tabs: {
-                        type: SchemaType.ARRAY,
-                        items: {
-                          type: SchemaType.OBJECT,
-                          properties: {
-                            tabName: { type: SchemaType.STRING, description: "Nome breve per il link laterale" },
-                            tabTitle: { type: SchemaType.STRING, description: "Titolo completo della sezione" },
-                            tabContent: { type: SchemaType.STRING, description: "Testo discorsivo del contenuto" }
-                          }
-                        }
-                      },
-
-                      // Per gallery-masonry
-                      galleryItems: {
-                        type: SchemaType.ARRAY,
-                        items: {
-                          type: SchemaType.OBJECT,
-                          properties: {
-                            imageTheme: { type: SchemaType.STRING, description: "Cosa mostra l'immagine (es: Ufficio moderno, Team)" },
-                            caption: { type: SchemaType.STRING, description: "Didascalia dell'immagine" }
-                          }
-                        }
-                      }
-                    }
-                  }
-                },
-                required: ["type", "content"]
-              }
-            }
-          },
-          required: ["themeId", "blocks"]
-        }
       }
     });
 
+    // Insegniamo all'AI la struttura JSON esatta direttamente nel prompt
     const systemPrompt = `
-      Sei un Neuro-Copywriter Esperto. Genera testi in JSON.
-      Dati Cliente: ${JSON.stringify(briefData)}
-      Usa framework PAS e regole E-E-A-T. Compila i contenuti necessari per una landing page moderna.
-      Rispondi ESCLUSIVAMENTE con un oggetto JSON valido, senza usare blocchi di codice o markdown.
+      Sei un Neuro-Copywriter Esperto. Genera testi in JSON per una landing page moderna e persuasiva.
+      
+      DATI CLIENTE:
+      ${JSON.stringify(briefData)}
+
+      REGOLE DI SCRITTURA:
+      Usa framework PAS e regole E-E-A-T.
+      
+      REGOLE DI FORMATTAZIONE:
+      Rispondi ESCLUSIVAMENTE con un oggetto JSON valido, senza blocchi markdown.
+      La tua risposta deve avere esattamente questa struttura radice:
+      {
+        "themeId": "${briefData.themeId || 'neuro-agency-01'}",
+        "blocks": [ ... array di oggetti blocco scelti dalla lista qui sotto ... ]
+      }
+
+      LISTA DEI PATTERN DISPONIBILI E LORO STRUTTURA 'content' (Scegli i più adatti per la landing page):
+      - hero-pas | hero-pas-dark: { "h1":"", "paragraph":"", "ctaText":"" }
+      - hero-split | hero-centered: { "badgeText": "", "h1": "", "paragraph": "", "ctaText": "" }
+      - features-grid-3: { "items": [ {"title":"", "description":""} ] }
+      - social-proof: { "testimonials": [ {"quote":"", "author":"", "role":""} ] }
+      - faq-accordion: { "faqs": [ {"question":"", "answer":""} ] }
+      - authority-about: { "about": { "heading":"", "description":"", "mission":"" } }
+      - logo-ticker: { "logos": ["Logo1", "Logo2"] }
+      - zig-zag: { "zigzagItems": [ {"title":"", "description":""} ] }
+      - step-process: { "steps": [ {"stepNumber":"", "title":"", "description":""} ] }
+      - pricing-table: { "plans": [ {"name":"", "price":"", "features":[""], "isPopular": true, "planCta":""} ] }
+      - cta-ribbon: { "ribbonHeadline":"", "ribbonSub":"", "ctaText":"" }
+      - stats-bar: { "stats": [ {"value":"", "label":""} ] }
+      - founder-note: { "founderQuote":"", "founderName":"", "founderRole":"" }
+      - benefit-checklist: { "checklistItems": [""] }
+      - team-grid: { "teamMembers": [ {"name":"", "role":"", "bio":""} ] }
+      - contact-section: { "contactInfo": { "address":"", "phone":"", "email":"", "hours":"" } }
+      - lead-magnet: { "leadMagnetTitle":"", "leadMagnetDesc":"", "leadMagnetCta":"" }
+      - video-explainer: { "videoTitle":"", "videoDesc":"" }
+      - case-studies-preview: { "cases": [ {"clientName":"", "problem":"", "solution":"", "results":""} ] }
+      - category-grid: { "categories": [ {"categoryName":"", "categoryDesc":""} ] }
+      - trust-badges: { "badges": [ {"badgeName":"", "badgeMeaning":""} ] }
+      - tabbed-content: { "tabs": [ {"tabName":"", "tabTitle":"", "tabContent":""} ] }
+      - gallery-masonry: { "galleryItems": [ {"imageTheme":"", "caption":""} ] }
     `;
 
-    try {
-      const result = await model.generateContent(systemPrompt);
-      let rawText = result.response.text();
+    // Sistema di Auto-Retry (Riprova fino a 3 volte se c'è un 503 o un JSON rotto)
+    let retries = 3;
+    let delay = 5000;
 
-      rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    while (retries > 0) {
+      try {
+        const result = await model.generateContent(systemPrompt);
+        let rawText = result.response.text();
 
-      const parsedData = JSON.parse(rawText);
-      
-      return {
-        themeId: briefData.themeId || parsedData.themeId || "neuro-agency-01",
-        blocks: parsedData.blocks || parsedData
-      };
+        // Pulizia Markdown
+        rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+        const parsedData = JSON.parse(rawText);
+        
+        return {
+          themeId: briefData.themeId || parsedData.themeId || "neuro-agency-01",
+          blocks: parsedData.blocks || parsedData
+        };
 
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      
-      console.error("❌ ERRORE GEMINI DETTAGLIATO:", errorMessage, error); 
-      throw new InternalServerErrorException("Errore generazione testi via LLM");
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        // Gestione Retry per il 503 (Server Saturo) o SyntaxError (JSON malformato dall'AI)
+        if ((errorMessage.includes('503') || error instanceof SyntaxError) && retries > 1) {
+          retries--;
+          const reason = errorMessage.includes('503') ? 'Server saturo (503)' : 'JSON malformato';
+          console.warn(`⏳ [Gemini] ${reason}. Attendo ${delay/1000}s e riprovo... (Tentativi rimasti: ${retries})`);
+          
+          await new Promise(resolve => setTimeout(resolve, delay));
+          delay *= 2; // Exponential backoff (aspetta 5s, poi 10s)
+          continue; 
+        }
+
+        console.error("❌ ERRORE GEMINI DETTAGLIATO:", errorMessage, error); 
+        throw new InternalServerErrorException("Errore generazione testi via LLM: " + errorMessage);
+      }
     }
   }
 }
