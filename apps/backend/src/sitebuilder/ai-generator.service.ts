@@ -11,7 +11,6 @@ export class AiGeneratorService {
   }
 
   async generateCopy(briefData: any) {
-    // 1. Configura il modello FORZANDO l'output in JSON e definendo lo schema
     const model = this.genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       generationConfig: {
@@ -64,14 +63,11 @@ export class AiGeneratorService {
     `;
 
     try {
-      // 2. Esegui la generazione
       const result = await model.generateContent(systemPrompt);
       let rawText = result.response.text();
 
-      // 3. Pulizia di sicurezza nel caso l'AI faccia comunque di testa sua
       rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
 
-      // 4. Parliamo il JSON in sicurezza
       const parsedData = JSON.parse(rawText);
       
       return {
@@ -80,10 +76,9 @@ export class AiGeneratorService {
       };
 
     } catch (error) {
-      // Gestione corretta del tipo 'unknown' in TypeScript
       const errorMessage = error instanceof Error ? error.message : String(error);
       
-      console.error("❌ ERRORE PARSING JSON. Dettagli:", errorMessage);
+      console.error("❌ ERRORE GEMINI DETTAGLIATO:", errorMessage, error); 
       throw new InternalServerErrorException("Errore generazione testi via LLM");
     }
   }
