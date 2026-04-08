@@ -12,7 +12,7 @@ export class AiGeneratorService {
 
   async generateCopy(briefData: any) {
     const model = this.genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.5-pro',
       generationConfig: {
         responseMimeType: 'application/json',
         responseSchema: {
