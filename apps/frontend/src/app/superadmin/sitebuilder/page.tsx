@@ -1,6 +1,6 @@
 // apps/frontend/src/app/superadmin/sitebuilder/page.tsx
 
-import SitebuilderClient from "./sitebuilder-client";
+import SitebuilderClient from "./SiteBuilderWizard";
 
 export const metadata = {
   title: "Sitebuilder — DoFlow",
