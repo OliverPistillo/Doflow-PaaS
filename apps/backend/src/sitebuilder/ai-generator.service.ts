@@ -15,7 +15,7 @@ export class AiGeneratorService {
     const model = this.genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       generationConfig: {
-        responseMimeType: 'application/json', // <-- LA MAGIA È QUI
+        responseMimeType: 'application/json',
         responseSchema: {
           type: SchemaType.OBJECT,
           properties: {
@@ -76,11 +76,11 @@ export class AiGeneratorService {
       
       return {
         themeId: briefData.themeId || parsedData.themeId || "neuro-agency-01",
-        blocks: parsedData.blocks || parsedData // Adatta questo in base a come l'AI struttura la tua risposta
+        blocks: parsedData.blocks || parsedData
       };
 
     } catch (error) {
-      // Diciamo a TypeScript come gestire in sicurezza il tipo "unknown"
+      // Gestione corretta del tipo 'unknown' in TypeScript
       const errorMessage = error instanceof Error ? error.message : String(error);
       
       console.error("❌ ERRORE PARSING JSON. Dettagli:", errorMessage);
