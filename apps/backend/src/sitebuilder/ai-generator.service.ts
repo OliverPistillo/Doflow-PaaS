@@ -68,20 +68,33 @@ export class AiGeneratorService {
     let delay = 5000;
 
     while (retries > 0) {
-      try {
-        const result = await model.generateContent(systemPrompt);
-        let rawText = result.response.text();
+        try {
+            const result = await model.generateContent(systemPrompt);
+            let rawText = result.response.text();
 
-        // Pulizia Markdown
-        rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-        const parsedData = JSON.parse(rawText);
-        
-        return {
-          themeId: briefData.themeId || parsedData.themeId || "neuro-agency-01",
-          blocks: parsedData.blocks || parsedData
-        };
+            // Pulizia Markdown
+            rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+            const parsedData = JSON.parse(rawText);
+            
+            // --- INIZIO NORMALIZZAZIONE DATI ---
+            // Se l'AI usa "patternId" o "blockType" invece di "type", lo correggiamo noi d'ufficio
+            if (parsedData.blocks && Array.isArray(parsedData.blocks)) {
+            parsedData.blocks = parsedData.blocks.map((block: any) => {
+                if (block.patternId && !block.type) {
+                block.type = block.patternId;
+                delete block.patternId;
+                }
+                return block;
+            });
+            }
+            // --- FINE NORMALIZZAZIONE ---
+            
+            return {
+            themeId: briefData.themeId || parsedData.themeId || "neuro-agency-01",
+            blocks: parsedData.blocks || parsedData
+            };
 
-      } catch (error) {
+        } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         
         // Gestione Retry per il 503 (Server Saturo) o SyntaxError (JSON malformato dall'AI)
