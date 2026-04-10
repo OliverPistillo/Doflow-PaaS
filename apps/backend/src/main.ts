@@ -1,7 +1,8 @@
 // apps/backend/src/main.ts
-// AGGIORNAMENTO: 
+// AGGIORNAMENTO:
 // - CORS: aggiunto supporto per dominio sito web pubblico (CORS_PUBLIC_ORIGINS)
 // - Header esposti: aggiunto Content-Disposition per download zip
+// - v3.7: aggiunto useStaticAssets per servire /public/themes/*.zip al plugin WP
 
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
@@ -62,13 +63,28 @@ async function bootstrap() {
   }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    bodyParser: false, 
+    bodyParser: false,
   });
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   app.setGlobalPrefix('api');
+
+  // ── Static assets — serve /public/themes/*.zip al plugin WordPress ────────
+  // Il plugin chiama: https://api.doflow.it/public/themes/doflow-first.zip
+  // Struttura cartelle da creare:
+  //   apps/backend/public/
+  //   apps/backend/public/themes/
+  //   apps/backend/public/themes/doflow-first.zip  ← zip del tema
+  //
+  // process.cwd() quando il processo gira da apps/backend/ punta a quella dir,
+  // quindi  public/  è sempre risolvibile indipendentemente dalla build.
+  app.useStaticAssets(
+    path.resolve(process.cwd(), 'public'),
+    { prefix: '/public' },
+  );
+  console.log(`📦 Static assets served from: ${path.resolve(process.cwd(), 'public')} → /public`);
 
   // ── CORS — Whitelist unificata CRM + Sito Web Pubblico ───────────────────
   // CORS_ORIGINS: origini per l'app CRM (es. https://app.doflow.it)
@@ -101,7 +117,7 @@ async function bootstrap() {
       'X-DOFLOW-TENANT-ID',
       'x-doflow-tenant-id',
       'x-doflow-pathname',
-      'Accept'
+      'Accept',
     ],
     // AGGIUNTO: Content-Disposition per il download zip dal CRM
     exposedHeaders: ['Content-Length', 'X-RateLimit-Remaining', 'Retry-After', 'Content-Disposition'],
@@ -118,7 +134,7 @@ async function bootstrap() {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('DoFlow PaaS API')
     .setDescription('API completa della piattaforma DoFlow — superadmin, tenant, self-service, automazioni')
-    .setVersion('3.6')
+    .setVersion('3.7')
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'JWT')
     .addServer(`http://localhost:${Number(process.env.PORT ?? 4000)}`, 'Local Dev')
     .addServer('https://api.doflow.it', 'Production')
@@ -217,8 +233,8 @@ async function bootstrap() {
 
       socket.on('close', () => clients.delete(socket));
       socket.on('error', (err) => {
-          console.error('[WS] Socket error', err);
-          clients.delete(socket);
+        console.error('[WS] Socket error', err);
+        clients.delete(socket);
       });
 
     } catch (e) {
