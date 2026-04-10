@@ -54,6 +54,12 @@ COPY --from=builder /app/apps/backend/node_modules ./apps/backend/node_modules
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
 COPY --from=builder /app/apps/backend/package.json ./apps/backend/package.json
 
+# ── FIX Sitebuilder: copia i temi zip nella cartella public/ ─────────────────
+# Il builder compila solo .ts → dist/. I file statici (zip dei temi) vanno
+# copiati esplicitamente dal builder al runner.
+# Percorso finale nel container: /app/apps/backend/public/themes/doflow-first.zip
+COPY --from=builder /app/apps/backend/public ./apps/backend/public
+
 EXPOSE 4000
 
 CMD ["node", "apps/backend/dist/main.js"]

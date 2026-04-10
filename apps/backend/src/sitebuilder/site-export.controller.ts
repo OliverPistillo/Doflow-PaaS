@@ -8,6 +8,7 @@ import {
   UnauthorizedException,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { SiteStorageService } from './site-storage.service';
@@ -16,63 +17,85 @@ import * as fs from 'fs';
 
 @Controller('export')
 export class SiteExportController {
+  private readonly logger = new Logger(SiteExportController.name);
+
   constructor(private readonly siteStorageService: SiteStorageService) {}
 
   // ── Endpoint chiamato dal plugin WordPress per i dati AI ──────────────────
   // GET /api/export/wp-pull?token=...
   @Get('wp-pull')
   async pullSiteData(@Query('token') token: string) {
-    if (!token) {
-      throw new UnauthorizedException('Token mancante');
-    }
-
+    if (!token) throw new UnauthorizedException('Token mancante');
     try {
       const siteData = await this.siteStorageService.getSiteDataByToken(token);
-      return {
-        status: 'success',
-        data: siteData,
-      };
-    } catch (error) {
+      return { status: 'success', data: siteData };
+    } catch {
       throw new UnauthorizedException('Token invalido o dati non più disponibili');
     }
   }
 
-  // ── Endpoint per scaricare il tema zip — chiamato dal plugin WordPress ─────
+  // ── Endpoint download tema zip — chiamato da neuro-sitebuilder.php ─────────
   // GET /api/export/theme/doflow-first
-  // Il plugin deve usare questo URL invece di /public/themes/doflow-first.zip
-  //
-  // URL da configurare in neuro-sitebuilder.php:
-  //   $theme_zip_url = 'https://api.doflow.it/api/export/theme/' . $theme_slug;
+  // Configurare nel plugin: $theme_zip_url = 'https://api.doflow.it/api/export/theme/' . $theme_slug;
   @Get('theme/:themeId')
-  async downloadTheme(
-    @Param('themeId') themeId: string,
-    @Res() res: Response,
-  ) {
+  async downloadTheme(@Param('themeId') themeId: string, @Res() res: Response) {
     // Validazione: solo caratteri alfanumerici e trattini (evita path traversal)
     if (!themeId || !/^[a-z0-9\-]+$/.test(themeId)) {
       throw new BadRequestException('themeId non valido.');
     }
 
-    const zipPath = path.resolve(
-      process.cwd(),
-      'public',
-      'themes',
-      `${themeId}.zip`,
-    );
+    const zipName = `${themeId}.zip`;
+    const zipPath = this.resolveThemePath(zipName);
+
+    this.logger.log(`Richiesta tema: ${zipName} → ${zipPath}`);
 
     if (!fs.existsSync(zipPath)) {
+      this.logger.error(`File non trovato: ${zipPath}`);
       throw new NotFoundException(
-        `Tema "${themeId}" non trovato. Caricalo in: apps/backend/public/themes/${themeId}.zip`,
+        `Tema "${themeId}" non trovato. Path cercato: ${zipPath}`,
       );
     }
 
     const stat = fs.statSync(zipPath);
+    this.logger.log(`Invio ${zipName} — ${(stat.size / 1024).toFixed(1)} KB`);
 
     res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${themeId}.zip"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
     res.setHeader('Content-Length', stat.size);
     res.setHeader('Cache-Control', 'no-cache');
 
     fs.createReadStream(zipPath).pipe(res);
+  }
+
+  // ── Risoluzione path robusta ───────────────────────────────────────────────
+  // Prova più candidati in ordine: si adatta a dev locale e container Docker.
+  private resolveThemePath(filename: string): string {
+    // Override manuale via env (utile in ambienti custom)
+    if (process.env.THEMES_DIR) {
+      return path.join(process.env.THEMES_DIR, filename);
+    }
+
+    // In produzione (container Docker con nixpacks/Coolify):
+    //   __dirname = /app/apps/backend/dist/src/sitebuilder/
+    //   3 livelli su → /app/apps/backend/
+    //   poi public/themes/filename
+    //
+    // In locale (ts-node o nest start):
+    //   __dirname = /repo/apps/backend/src/sitebuilder/
+    //   3 livelli su → /repo/apps/backend/
+    //   poi public/themes/filename
+    const candidates = [
+      path.resolve(__dirname, '..', '..', '..', 'public', 'themes', filename),       // dist/src/sitebuilder → 3 su
+      path.resolve(__dirname, '..', '..', '..', '..', 'public', 'themes', filename), // fallback: 4 su
+      path.resolve(process.cwd(), 'public', 'themes', filename),                     // CWD-based
+    ];
+
+    for (const candidate of candidates) {
+      this.logger.debug(`Cerco in: ${candidate}`);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+
+    // Restituisce il primo candidato: il chiamante gestirà il NotFoundException
+    return candidates[0];
   }
 }
