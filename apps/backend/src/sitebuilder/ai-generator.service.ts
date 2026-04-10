@@ -1,6 +1,7 @@
 // apps/backend/src/sitebuilder/ai-generator.service.ts
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
+import { THEMES_REGISTRY } from './themes.registry'; // <-- Importiamo il registro dei temi
 
 @Injectable()
 export class AiGeneratorService {
@@ -11,7 +12,11 @@ export class AiGeneratorService {
   }
 
   async generateCopy(briefData: any) {
-    // 1. Configurazione del Modello con Schema Rigido (JSON Flat)
+    // 1. Seleziona il tema o usa il fallback prelevando i file dal registro esterno
+    const selectedThemeId = briefData.themeId || 'doflow-starter';
+    const layoutFiles = THEMES_REGISTRY[selectedThemeId] || THEMES_REGISTRY['doflow-starter'];
+
+    // 2. Configurazione del Modello con Schema Rigido (JSON Flat)
     const model = this.genAI.getGenerativeModel({
       model: 'gemini-2.5-pro',
       generationConfig: {
@@ -117,8 +122,7 @@ export class AiGeneratorService {
       }
     });
 
-    // 2. Costruzione del Prompt Architetturale
-    // Iniettiamo tutte le scelte dell'utente per manipolare il comportamento di Gemini
+    // 3. Costruzione del Prompt Architetturale
     const systemPrompt = `
       Sei un Senior Neuro-Copywriter specializzato in Conversion Rate Optimization (CRO).
       Il tuo obiettivo è generare un copy perfetto per le pagine di un sito web, riempiendo gli slot JSON richiesti.
@@ -143,12 +147,12 @@ export class AiGeneratorService {
       3. Scrivi titoli (H1, H2, H3) brevi e di impatto.
       4. Le descrizioni devono essere chiare, massimo 2 o 3 frasi.
       5. Le Call To Action (CTA) devono essere orientate all'azione (es. "Inizia Ora", "Scopri il Metodo", non "Clicca Qui").
-      6. Se l'utente ha selezionato più pagine (es. Home, Chi Siamo, Servizi), sfrutta i vari slot del JSON per coprire tutti gli argomenti (es. usa l'About_heading per il Chi Siamo, e le Features per i Servizi).
+      6. Sfrutta abilmente i vari slot del JSON per coprire tutti gli argomenti richiesti dal cliente.
       
       Rispondi ESCLUSIVAMENTE con il JSON compilato, senza markdown.
     `;
 
-    // 3. Auto-Retry Pattern
+    // 4. Auto-Retry Pattern
     let retries = 3;
     let delay = 3000;
 
@@ -162,9 +166,10 @@ export class AiGeneratorService {
         
         const parsedData = JSON.parse(rawText);
         
-        // Ritorna il dizionario piatto sotto la chiave "texts"
+        // Ritorna il payload completo. Il webhook passerà questo blocco intero al plugin WP!
         return {
-          themeId: briefData.themeId || parsedData.themeId || "doflow-starter",
+          themeId: selectedThemeId,
+          layout_files: layoutFiles, // I file estratti dal themes.registry.ts!
           texts: parsedData 
         };
 
