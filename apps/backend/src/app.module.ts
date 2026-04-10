@@ -132,6 +132,8 @@ import { BusinaroModule } from './businaro/businaro.module';
 // --- SITEBUILDER (WordPress AI) ---
 import { SiteBuilderModule } from './sitebuilder/sitebuilder.module';
 import { BullModule } from '@nestjs/bullmq';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 
 // --- Piattaforma odoo-style ---
 import { PlatformModule } from './superadmin/entities/platform-module.entity';
@@ -146,6 +148,11 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
       isGlobal: true,
       ignoreEnvFile: false,
       envFilePath: path.join(__dirname, '..', '.env'),
+    }),
+
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'apps', 'backend', 'public'),
+      serveRoot: '/public', // I file saranno accessibili su /public/...
     }),
 
     RedisModule,
