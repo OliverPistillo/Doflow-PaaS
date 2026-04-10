@@ -70,24 +70,17 @@ export class SiteExportController {
   // ── Risoluzione path robusta ───────────────────────────────────────────────
   // Prova più candidati in ordine: si adatta a dev locale e container Docker.
   private resolveThemePath(filename: string): string {
-    // Override manuale via env (utile in ambienti custom)
     if (process.env.THEMES_DIR) {
       return path.join(process.env.THEMES_DIR, filename);
     }
 
-    // In produzione (container Docker con nixpacks/Coolify):
-    //   __dirname = /app/apps/backend/dist/src/sitebuilder/
-    //   3 livelli su → /app/apps/backend/
-    //   poi public/themes/filename
-    //
-    // In locale (ts-node o nest start):
-    //   __dirname = /repo/apps/backend/src/sitebuilder/
-    //   3 livelli su → /repo/apps/backend/
-    //   poi public/themes/filename
     const candidates = [
-      path.resolve(__dirname, '..', '..', '..', 'public', 'themes', filename),       // dist/src/sitebuilder → 3 su
-      path.resolve(__dirname, '..', '..', '..', '..', 'public', 'themes', filename), // fallback: 4 su
-      path.resolve(process.cwd(), 'public', 'themes', filename),                     // CWD-based
+      // ✅ CORRETTO per questo container: dist/sitebuilder/ → 2 su → /app/apps/backend/
+      path.resolve(__dirname, '..', '..', 'public', 'themes', filename),
+      // Fallback se tsconfig genera dist/src/sitebuilder/
+      path.resolve(__dirname, '..', '..', '..', 'public', 'themes', filename),
+      path.resolve(__dirname, '..', '..', '..', '..', 'public', 'themes', filename),
+      path.resolve(process.cwd(), 'public', 'themes', filename),
     ];
 
     for (const candidate of candidates) {
@@ -95,7 +88,6 @@ export class SiteExportController {
       if (fs.existsSync(candidate)) return candidate;
     }
 
-    // Restituisce il primo candidato: il chiamante gestirà il NotFoundException
     return candidates[0];
   }
 }
