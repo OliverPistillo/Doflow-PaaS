@@ -1,7 +1,7 @@
 // apps/backend/src/sitebuilder/themes.registry.ts
 
 export const THEMES_REGISTRY: Record<string, string[]> = {
-  'doflow-starter': [
+  'doflow-first': [
     'doflow-home-gutenverse-hero.php',
     'doflow-home-gutenverse-clients.php',
     'doflow-home-gutenverse-services.php',
