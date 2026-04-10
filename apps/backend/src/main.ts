@@ -82,7 +82,7 @@ async function bootstrap() {
   // quindi  public/  è sempre risolvibile indipendentemente dalla build.
   app.useStaticAssets(
     path.resolve(process.cwd(), 'public'),
-    { prefix: '/public' },
+    { prefix: '/public', index: false },
   );
   console.log(`📦 Static assets served from: ${path.resolve(process.cwd(), 'public')} → /public`);
 
