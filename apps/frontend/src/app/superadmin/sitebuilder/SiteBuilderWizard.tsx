@@ -32,8 +32,8 @@ interface SavedSite {
 // I temi ora dichiarano anche quali pagine supportano
 const AVAILABLE_THEMES = [
   {
-    id: 'doflow-starter',
-    name: 'DoFlow Premium (Animato)',
+    id: 'doflow-first',
+    name: 'DoFlow First',
     description: 'Design premium con animazioni GSAP.',
     previewColor: 'bg-indigo-900', 
     availablePages: ['Home', 'Chi Siamo', 'Servizi', 'Casi Studio', 'Contatti', 'FAQ']
