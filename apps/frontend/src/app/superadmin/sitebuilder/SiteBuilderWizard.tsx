@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import Image from 'next/image';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,7 +44,7 @@ const AVAILABLE_THEMES: ThemeConfig[] = [
     id: 'doflow-first',
     name: 'DoFlow First',
     description: 'Design premium con blocchi Gutenverse e animazioni GSAP. Perfetto per agenzie, consulenti e professionisti B2B.',
-    previewColor: 'bg-indigo-900',
+    previewImage: '/themes/doflow-first.jpg',
     badge: 'Agenzia / B2B',
     availablePages: ['Home', 'Chi Siamo', 'Servizi', 'Portfolio', 'FAQ', 'Blog', 'Contatti'],
   },
@@ -333,12 +332,10 @@ export default function SiteBuilderWizard() {
                     {/* Anteprima — immagine reale o colore fallback */}
                     <div className="relative h-44 w-full overflow-hidden rounded-t-lg bg-muted">
                       {theme.previewImage ? (
-                        <Image
+                        <img
                           src={theme.previewImage}
                           alt={`Anteprima ${theme.name}`}
-                          fill
-                          className="object-cover object-top transition-transform duration-300 hover:scale-105"
-                          sizes="(max-width: 768px) 100vw, 50vw"
+                          className="absolute inset-0 w-full h-full object-cover object-top transition-transform duration-300 hover:scale-105"
                         />
                       ) : (
                         <div className={`absolute inset-0 ${theme.previewColor ?? 'bg-slate-800'}`} />
@@ -534,12 +531,10 @@ export default function SiteBuilderWizard() {
                 <p className="font-semibold mb-2">📋 Riepilogo generazione</p>
                 {activeThemeObj?.previewImage && (
                   <div className="relative h-24 w-full rounded-md overflow-hidden mb-3">
-                    <Image
+                    <img
                       src={activeThemeObj.previewImage}
                       alt={activeThemeObj.name}
-                      fill
-                      className="object-cover object-top"
-                      sizes="400px"
+                      className="absolute inset-0 w-full h-full object-cover object-top"
                     />
                   </div>
                 )}
