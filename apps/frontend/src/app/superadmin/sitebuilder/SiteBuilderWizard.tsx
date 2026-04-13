@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import Image from 'next/image';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,25 +30,57 @@ interface SavedSite {
   date: string;
 }
 
-// FIX: rimosso 'doflow-minimal' che non esiste nel registro temi backend.
-// FIX: 'Casi Studio' rimosso da doflow-first e sostituito con pagine supportate.
-// Per aggiungere un nuovo tema: aggiungerlo anche in THEMES_REGISTRY e PAGE_PATTERNS backend.
-const AVAILABLE_THEMES = [
+interface ThemeConfig {
+  id: string;
+  name: string;
+  description: string;
+  previewImage?: string;   // path in /public/themes/
+  previewColor?: string;   // fallback colore Tailwind
+  badge?: string;          // etichetta settore
+  availablePages: string[];
+}
+
+const AVAILABLE_THEMES: ThemeConfig[] = [
   {
     id: 'doflow-first',
     name: 'DoFlow First',
     description: 'Design premium con blocchi Gutenverse e animazioni GSAP. Perfetto per agenzie, consulenti e professionisti B2B.',
     previewColor: 'bg-indigo-900',
+    badge: 'Agenzia / B2B',
     availablePages: ['Home', 'Chi Siamo', 'Servizi', 'Portfolio', 'FAQ', 'Blog', 'Contatti'],
   },
-  // Aggiungi qui i futuri temi — devono esistere anche in themes.registry.ts
-  // {
-  //   id: 'doflow-minimal',
-  //   name: 'DoFlow Minimal',
-  //   description: 'Design pulito per cliniche e lifestyle.',
-  //   previewColor: 'bg-zinc-100',
-  //   availablePages: ['Home', 'Chi Siamo', 'Trattamenti', 'Galleria', 'Contatti'],
-  // },
+  {
+    id: 'doflow-konsulty',
+    name: 'DoFlow Konsulty',
+    description: 'Stile corporate con hero fotografico e statistiche di impatto. Ideale per consulenti, studi legali e finance.',
+    previewImage: '/themes/doflow-konsulty.jpg',
+    badge: 'Consulenza / Finance',
+    availablePages: ['Home', 'Chi Siamo', 'Servizi', 'Casi Studio', 'FAQ', 'Blog', 'Contatti'],
+  },
+  {
+    id: 'doflow-skintiva',
+    name: 'DoFlow Skintiva',
+    description: 'Estetica raffinata in toni beige e terracotta. Perfetto per cliniche, beauty center e professionisti del benessere.',
+    previewImage: '/themes/doflow-skintiva.jpg',
+    badge: 'Beauty / Clinica',
+    availablePages: ['Home', 'Chi Siamo', 'Trattamenti', 'FAQ', 'Blog', 'Contatti'],
+  },
+  {
+    id: 'doflow-artifice',
+    name: 'DoFlow Artifice',
+    description: 'Look futuristico dark con accenti cyan. Pensato per startup AI, aziende tech e robotics.',
+    previewImage: '/themes/doflow-artifice.jpg',
+    badge: 'Tech / AI / Startup',
+    availablePages: ['Home', 'Chi Siamo', 'Servizi', 'Portfolio', 'FAQ', 'Blog', 'Contatti'],
+  },
+  {
+    id: 'doflow-zyno',
+    name: 'DoFlow Zyno',
+    description: 'Design moderno light con accenti blu elettrico. Ideale per agenzie di digital marketing, SEO e social media.',
+    previewImage: '/themes/doflow-zyno.jpg',
+    badge: 'Digital Marketing / SEO',
+    availablePages: ['Home', 'Chi Siamo', 'Servizi', 'FAQ', 'Blog', 'Contatti'],
+  },
 ];
 
 const GOALS = [
@@ -71,7 +104,7 @@ export default function SiteBuilderWizard() {
   const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
   const [briefData, setBriefData] = useState<BriefData>({
     companyName: '',
-    pages: ['Home'], // Home sempre pre-selezionata
+    pages: ['Home'],
     goals: [],
     targetAudience: '',
     usp: '',
@@ -91,7 +124,6 @@ export default function SiteBuilderWizard() {
     if (saved) setHistory(JSON.parse(saved));
   }, []);
 
-  // Quando si cambia tema, reset delle pagine selezionate (la nuova lista può essere diversa)
   const handleThemeSelect = (themeId: string) => {
     setSelectedTheme(themeId);
     setBriefData(prev => ({ ...prev, pages: ['Home'] }));
@@ -105,7 +137,7 @@ export default function SiteBuilderWizard() {
     setBriefData(prev => {
       const array = prev[field];
       if (array.includes(item)) {
-        if (item === 'Home') return prev; // Home non si può deselezionare
+        if (item === 'Home') return prev;
         return { ...prev, [field]: array.filter(i => i !== item) };
       }
       return { ...prev, [field]: [...array, item] };
@@ -155,8 +187,6 @@ export default function SiteBuilderWizard() {
     setStep(5);
 
     try {
-      // Il payload invia pages[] come string[] — il backend (processor) 
-      // lo trasforma nella struttura {title, slug, layout_files, set_as_front}
       const response = await axios.post('/api/sitebuilder/generate', {
         themeId: selectedTheme,
         ...briefData,
@@ -260,13 +290,13 @@ export default function SiteBuilderWizard() {
   // ── Wizard ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-muted/40 p-8 flex flex-col items-center">
-      <div className="w-full max-w-4xl flex justify-end mb-4">
+      <div className="w-full max-w-5xl flex justify-end mb-4">
         <Button onClick={() => setViewMode('history')} variant="ghost" className="text-muted-foreground">
           <History className="mr-2 h-4 w-4" /> Vedi Storico
         </Button>
       </div>
 
-      <Card className="w-full max-w-4xl shadow-lg border-muted">
+      <Card className="w-full max-w-5xl shadow-lg border-muted">
         <CardHeader className="border-b bg-card">
           <CardTitle className="text-3xl text-primary">Generatore Siti AI</CardTitle>
           <CardDescription className="text-base">
@@ -295,23 +325,45 @@ export default function SiteBuilderWizard() {
                 {AVAILABLE_THEMES.map(theme => (
                   <Card
                     key={theme.id}
-                    className={`cursor-pointer transition-all hover:shadow-md border-2 ${selectedTheme === theme.id ? 'border-primary ring-2 ring-primary/20' : 'border-transparent'}`}
+                    className={`cursor-pointer transition-all hover:shadow-md border-2 overflow-hidden ${
+                      selectedTheme === theme.id ? 'border-primary ring-2 ring-primary/20' : 'border-transparent hover:border-muted-foreground/20'
+                    }`}
                     onClick={() => handleThemeSelect(theme.id)}
                   >
-                    <div className={`h-32 ${theme.previewColor} rounded-t-lg flex items-center justify-center relative overflow-hidden`}>
+                    {/* Anteprima — immagine reale o colore fallback */}
+                    <div className="relative h-44 w-full overflow-hidden rounded-t-lg bg-muted">
+                      {theme.previewImage ? (
+                        <Image
+                          src={theme.previewImage}
+                          alt={`Anteprima ${theme.name}`}
+                          fill
+                          className="object-cover object-top transition-transform duration-300 hover:scale-105"
+                          sizes="(max-width: 768px) 100vw, 50vw"
+                        />
+                      ) : (
+                        <div className={`absolute inset-0 ${theme.previewColor ?? 'bg-slate-800'}`} />
+                      )}
+                      {/* Badge settore */}
+                      {theme.badge && (
+                        <span className="absolute top-3 left-3 bg-black/60 text-white text-xs font-semibold px-2 py-1 rounded-full backdrop-blur-sm">
+                          {theme.badge}
+                        </span>
+                      )}
+                      {/* Overlay selezione */}
                       {selectedTheme === theme.id && (
-                        <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                          <CheckCircle2 className="text-white h-10 w-10" />
+                        <div className="absolute inset-0 bg-primary/30 flex items-center justify-center backdrop-blur-[1px]">
+                          <CheckCircle2 className="text-white h-12 w-12 drop-shadow-lg" />
                         </div>
                       )}
                     </div>
-                    <CardHeader className="p-4">
-                      <CardTitle className="text-xl">{theme.name}</CardTitle>
-                      <CardDescription className="text-sm mt-2">{theme.description}</CardDescription>
-                      <div className="mt-4 pt-4 border-t flex flex-wrap gap-2">
-                        <span className="text-xs font-semibold w-full text-muted-foreground">Pagine disponibili:</span>
+
+                    <CardHeader className="p-4 pb-3">
+                      <CardTitle className="text-lg">{theme.name}</CardTitle>
+                      <CardDescription className="text-sm mt-1 leading-relaxed">{theme.description}</CardDescription>
+                      <div className="mt-3 pt-3 border-t flex flex-wrap gap-1.5">
+                        <span className="text-xs font-semibold w-full text-muted-foreground mb-1">Pagine disponibili:</span>
                         {theme.availablePages.map(p => (
-                          <span key={p} className="text-xs bg-muted px-2 py-1 rounded-md">{p}</span>
+                          <span key={p} className="text-xs bg-muted px-2 py-0.5 rounded-md">{p}</span>
                         ))}
                       </div>
                     </CardHeader>
@@ -477,9 +529,20 @@ export default function SiteBuilderWizard() {
                 />
               </div>
 
-              {/* Riepilogo prima del lancio */}
-              <div className="bg-muted/50 rounded-lg p-4 text-sm space-y-1 border">
+              {/* Riepilogo con anteprima tema */}
+              <div className="bg-muted/50 rounded-lg p-4 text-sm space-y-2 border">
                 <p className="font-semibold mb-2">📋 Riepilogo generazione</p>
+                {activeThemeObj?.previewImage && (
+                  <div className="relative h-24 w-full rounded-md overflow-hidden mb-3">
+                    <Image
+                      src={activeThemeObj.previewImage}
+                      alt={activeThemeObj.name}
+                      fill
+                      className="object-cover object-top"
+                      sizes="400px"
+                    />
+                  </div>
+                )}
                 <p><strong>Tema:</strong> {activeThemeObj?.name}</p>
                 <p><strong>Azienda:</strong> {briefData.companyName}</p>
                 <p><strong>Pagine ({briefData.pages.length}):</strong> {briefData.pages.join(', ')}</p>
