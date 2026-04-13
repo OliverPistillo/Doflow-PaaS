@@ -208,36 +208,31 @@ export class AiGeneratorService {
   // ── Shared Gemini caller con retry ────────────────────────────────────────
 
   private async callGemini(model: any, prompt: string, themeId: string, layoutFiles: string[], companyName: string) {
-    let retries = 3;
-    let delay = 3000;
+    let retries = 5;
+    let delay = 5000;
 
     while (retries > 0) {
       try {
+        console.log(`🤖 [Gemini] Tentativo... (rimasti: ${retries})`);
         const result = await model.generateContent(prompt);
         let rawText = result.response.text();
         rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
         const parsedData = JSON.parse(rawText);
         parsedData.themeId = themeId;
-
-        return {
-          themeId,
-          layout_files: layoutFiles,
-          texts: parsedData,
-          companyName,
-        };
+        return { themeId, layout_files: layoutFiles, texts: parsedData, companyName };
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        if ((msg.includes('503') || error instanceof SyntaxError) && retries > 1) {
+        if ((msg.includes('503') || msg.includes('overloaded') || msg.includes('high demand') || error instanceof SyntaxError) && retries > 1) {
           retries--;
-          console.warn(`⏳ [Gemini Retry] Attendo ${delay}ms... (Rimasti: ${retries})`);
+          console.warn(`⏳ [Gemini] Sovraccarico. Attendo ${delay}ms... (rimasti: ${retries})`);
           await new Promise(r => setTimeout(r, delay));
-          delay *= 2;
+          delay = Math.min(delay * 2, 30000); // max 30s tra tentativi
           continue;
         }
         console.error('❌ ERRORE GEMINI:', msg);
         throw new InternalServerErrorException('Errore generazione testi: ' + msg);
       }
     }
-    throw new InternalServerErrorException('Tutti i tentativi Gemini esauriti.');
+    throw new InternalServerErrorException('Gemini non disponibile. Riprova tra qualche minuto.');
   }
 }
