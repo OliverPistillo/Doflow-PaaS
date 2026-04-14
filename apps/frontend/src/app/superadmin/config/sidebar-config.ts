@@ -1,6 +1,4 @@
 // apps/frontend/src/app/superadmin/config/sidebar-config.ts
-// Struttura dati centralizzata per la navigazione del superadmin.
-// Separata dal componente per permettere testing, tree-shaking e riuso.
 
 import {
   LayoutDashboard,
@@ -22,10 +20,10 @@ import {
   Rocket,
   Puzzle,
   Settings,
-  Activity,
   CalendarDays,
   Truck,
   Globe,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 
@@ -136,6 +134,13 @@ export const SUPERADMIN_SIDEBAR: SidebarConfig = [
         href: "/superadmin/automations",
         icon: Zap,
       },
+      {
+        kind: "leaf",
+        label: "Sales Intelligence",
+        href: "/superadmin/sales-intelligence",
+        icon: Sparkles,
+        badge: "AI",
+      },
     ],
   },
 
@@ -225,7 +230,6 @@ export const SUPERADMIN_SIDEBAR: SidebarConfig = [
     items: [
       {
         kind: "leaf",
-        // Unico entry-point per le ex-4 pagine server
         label: "System Monitor",
         href: "/superadmin/system",
         icon: HeartPulse,

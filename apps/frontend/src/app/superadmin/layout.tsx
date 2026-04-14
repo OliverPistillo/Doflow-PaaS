@@ -1,6 +1,4 @@
 // apps/frontend/src/app/superadmin/layout.tsx
-// Aggiornato: PAGE_TITLE_MAP allineato alle nuove rotte dopo il refactoring.
-// Zero modifiche strutturali al layout; aggiornate solo le chiavi della mappa.
 
 "use client";
 
@@ -19,7 +17,6 @@ import { useTheme } from "next-themes";
 import { SearchTriggerButton } from "@/components/ui/global-search";
 
 // ─── PAGE_TITLE_MAP ───────────────────────────────────────────────────────────
-// Aggiornato post-refactoring: rotte legacy rimosse, nuove rotte aggiunte.
 
 const PAGE_TITLE_MAP: Record<string, string> = {
   // Command Center
@@ -31,6 +28,7 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   "/superadmin/sales/quote-requests":      "Richieste Preventivo",
   "/superadmin/leads":                     "Lead Management",
   "/superadmin/automations":               "Automazioni CRM",
+  "/superadmin/sales-intelligence":        "Sales Intelligence AI",
 
   // Platform Admin
   "/superadmin/tenants":                   "Gestione Tenant",
@@ -64,7 +62,7 @@ const PAGE_TITLE_MAP: Record<string, string> = {
   "/superadmin/settings":                  "Impostazioni Globali",
   "/superadmin/account":                   "Il mio Account",
 
-  // Legacy (redirect, ma tenuti per sicurezza)
+  // Legacy
   "/superadmin/dashboard":                 "Sales Dashboard",
   "/superadmin/metrics":                   "Metriche SaaS",
   "/superadmin/control-tower":             "Control Tower",

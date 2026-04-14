@@ -1,5 +1,6 @@
 // apps/backend/src/app.module.ts
 // AGGIORNAMENTO: Aggiunti QuoteRequest entity, controllers (pubblico + admin) e service
+// AGGIORNAMENTO: Aggiunto SalesIntelligenceModule con entità e variabili Apollo.io
 
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -116,7 +117,7 @@ import { InvoiceTemplate } from './superadmin/entities/invoice-template.entity';
 import { InvoiceClient } from './superadmin/entities/invoice-client.entity';
 import { SavedService } from './superadmin/entities/saved-service.entity';
 import { Tenant } from './superadmin/entities/tenant.entity';
-import { QuoteRequest } from './superadmin/entities/quote-request.entity'; // <--- NUOVO
+import { QuoteRequest } from './superadmin/entities/quote-request.entity';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './auth/jwt.strategy';
@@ -141,6 +142,13 @@ import { TenantSubscription } from './superadmin/entities/tenant-subscription.en
 import { TenantDashboardController } from './tenant/dashboard/tenant-dashboard.controller';
 import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.service';
 
+// --- SALES INTELLIGENCE (AI B2B Outreach) ---
+import { SalesIntelligenceModule } from './sales-intelligence/sales-intelligence.module';
+import { CompanyIntel }     from './sales-intelligence/entities/company-intel.entity';
+import { Prospect }         from './sales-intelligence/entities/prospect.entity';
+import { ResearchData }     from './sales-intelligence/entities/research-data.entity';
+import { OutreachCampaign } from './sales-intelligence/entities/outreach-campaign.entity';
+
 @Module({
   imports: [
     HealthModule,
@@ -152,7 +160,7 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
 
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'apps', 'backend', 'public'),
-      serveRoot: '/public', // I file saranno accessibili su /public/...
+      serveRoot: '/public',
     }),
 
     RedisModule,
@@ -184,7 +192,7 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
       Tenant,
       PlatformModule,
       TenantSubscription,
-      QuoteRequest, // <--- NUOVA ENTITY
+      QuoteRequest,
       Lead,
       SystemBackup,
       PlatformNotification,
@@ -193,6 +201,11 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
       ChangelogEntry,
       AutomationRule,
       BackupSchedule,
+      // --- Sales Intelligence entities ---
+      CompanyIntel,
+      Prospect,
+      ResearchData,
+      OutreachCampaign,
     ]),
 
     PassportModule,
@@ -221,6 +234,7 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }]),
     FedericaNeroneModule,
     BusinaroModule,
+
     // --- BULLMQ ROOT (connessione Redis condivisa per tutte le code) ---
     BullModule.forRootAsync({
       imports: [ConfigModule],
@@ -233,8 +247,10 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
         },
       }),
     }),
-    // --- SITEBUILDER ---
+
+    // --- FEATURE MODULES ---
     SiteBuilderModule,
+    SalesIntelligenceModule,
   ],
 
   controllers: [
@@ -259,19 +275,15 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
     SystemController,
     MetricsController,
     TenantDashboardController,
-    // --- NUOVO: Controller pubblico e admin per richieste preventivo ---
     PublicQuoteRequestController,
     AdminQuoteRequestController,
-    // --- NUOVI CONTROLLER SUPERADMIN ---
     ModulesController,
     SubscriptionsController,
     LeadsController,
     BackupController,
-    // --- NUOVI CONTROLLER SUPERADMIN (Batch 2) ---
     PlatformNotificationsController,
     TicketsController,
     ApiUsageController,
-    // --- NUOVI CONTROLLER SUPERADMIN (Batch 3) ---
     EmailTemplatesController,
     ChangelogAdminController,
     ChangelogPublicController,
@@ -301,17 +313,14 @@ import { TenantDashboardService } from './tenant/dashboard/tenant-dashboard.serv
     MetricsService,
     TenantDashboardService,
     PublicSchemaBootstrapService,
-    QuoteRequestService, // <--- NUOVO SERVICE
-    // --- NUOVI SERVICE SUPERADMIN ---
+    QuoteRequestService,
     ModulesService,
     SubscriptionsService,
     LeadsService,
     BackupService,
-    // --- NUOVI SERVICE SUPERADMIN (Batch 2) ---
     PlatformNotificationsService,
     TicketsService,
     ApiUsageService,
-    // --- NUOVI SERVICE SUPERADMIN (Batch 3) ---
     EmailTemplatesService,
     ChangelogService,
     AutomationsService,
@@ -328,7 +337,6 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(TenancyMiddleware, AuthMiddleware)
-      // Escludiamo superadmin E le route pubbliche dal middleware tenant
       .exclude('api/superadmin/(.*)', 'api/public/(.*)', 'api/tenant/self-service/(.*)')
       .forRoutes('*');
   }
