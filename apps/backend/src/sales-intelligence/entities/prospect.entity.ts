@@ -10,19 +10,19 @@ export class Prospect {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column()
+  @Column({ name: 'full_name' })
   fullName!: string;
 
   @Column({ nullable: true })
   email?: string;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, name: 'job_title' })
   jobTitle?: string;
 
   @Column({ nullable: true })
   seniority?: string;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, name: 'linkedin_url' })
   linkedinUrl?: string;
 
   @Column({ nullable: true })
@@ -35,13 +35,12 @@ export class Prospect {
   @Column({ name: 'company_id', nullable: true })
   companyId?: string;
 
-  /** JSON grezzo dall'API di enrichment (RocketReach / Apollo) */
-  @Column({ type: 'jsonb', nullable: true })
+  @Column({ type: 'jsonb', nullable: true, name: 'raw_enrichment_data' })
   rawEnrichmentData?: Record<string, unknown>;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt!: Date;
 }

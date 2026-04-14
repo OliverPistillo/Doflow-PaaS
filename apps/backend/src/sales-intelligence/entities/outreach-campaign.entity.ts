@@ -46,31 +46,27 @@ export class OutreachCampaign {
   @Column({ name: 'prospect_id' })
   prospectId!: string;
 
-  /** Output step 5 — Gemini analisi strategica */
-  @Column({ type: 'jsonb', nullable: true })
+  @Column({ type: 'jsonb', nullable: true, name: 'strategic_analysis' })
   strategicAnalysis?: StrategicAnalysis;
 
-  /** Output step 6 — 3 varianti email generate da Gemini */
-  @Column({ type: 'jsonb', default: [] })
+  @Column({ type: 'jsonb', default: [], name: 'email_variants' })
   emailVariants!: EmailVariant[];
 
   @Column({ type: 'varchar', default: 'generated' })
   status!: CampaignStatus;
 
-  /** ID del deal su HubSpot (futuro) */
-  @Column({ nullable: true })
+  @Column({ nullable: true, name: 'crm_deal_id' })
   crmDealId?: string;
 
-  @Column({ type: 'timestamp', nullable: true })
-  sentAt?: Date;
-
-  /** BullMQ job ID — utile per debug */
-  @Column({ nullable: true })
+  @Column({ nullable: true, name: 'job_id' })
   jobId?: string;
 
-  @CreateDateColumn()
+  @Column({ type: 'timestamp with time zone', nullable: true, name: 'sent_at' })
+  sentAt?: Date;
+
+  @CreateDateColumn({ name: 'generated_at' })
   generatedAt!: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt!: Date;
 }

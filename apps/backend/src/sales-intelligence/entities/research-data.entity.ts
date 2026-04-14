@@ -25,20 +25,18 @@ export class ResearchData {
   @Column({ name: 'prospect_id' })
   prospectId!: string;
 
-  @Column({ type: 'jsonb', default: [] })
+  @Column({ type: 'jsonb', default: [], name: 'news_items' })
   newsItems!: NewsItem[];
 
-  @Column({ type: 'jsonb', default: [] })
+  @Column({ type: 'jsonb', default: [], name: 'press_releases' })
   pressReleases!: NewsItem[];
 
-  /** Testo sintetizzato — questo è ciò che viene passato a Gemini nel prompt */
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text', nullable: true, name: 'synthesized_context' })
   synthesizedContext?: string;
 
-  /** Query usate per il web search */
-  @Column({ type: 'jsonb', default: [] })
+  @Column({ type: 'jsonb', default: [], name: 'search_queries' })
   searchQueries!: string[];
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'fetched_at' })
   fetchedAt!: Date;
 }

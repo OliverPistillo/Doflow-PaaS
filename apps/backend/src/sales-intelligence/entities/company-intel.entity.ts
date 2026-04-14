@@ -19,31 +19,30 @@ export class CompanyIntel {
   @Column({ nullable: true })
   industry?: string;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, name: 'employee_count' })
   employeeCount?: number;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, name: 'annual_revenue' })
   annualRevenue?: string;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, name: 'linkedin_url' })
   linkedinUrl?: string;
 
   @Column({ nullable: true })
   country?: string;
 
-  @Column({ type: 'jsonb', nullable: true })
+  @Column({ type: 'jsonb', nullable: true, name: 'tech_stack' })
   techStack?: string[];
 
-  @Column({ type: 'jsonb', nullable: true })
+  @Column({ type: 'jsonb', nullable: true, name: 'funding_info' })
   fundingInfo?: Record<string, unknown>;
 
-  /** Timestamp dell'ultimo arricchimento — usato per cache (TTL 24h) */
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp with time zone', nullable: true, name: 'enriched_at' })
   enrichedAt?: Date;
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt!: Date;
 }
