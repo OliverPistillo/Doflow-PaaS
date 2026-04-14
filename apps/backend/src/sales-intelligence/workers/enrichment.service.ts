@@ -2,7 +2,7 @@
 //
 // Apollo.io endpoints usati:
 //   POST api/v1/organizations/enrich          → dati aziendali completi
-//   POST api/v1/mixed_people/organization_top_people → persone che lavorano nell'azienda
+//   POST api/v1/mixed_people/api_search → persone per dominio (seniority filter)
 //
 // Variabile d'ambiente richiesta: APOLLO_API_KEY
 //
@@ -265,7 +265,7 @@ export class EnrichmentService {
     return data.organization;
   }
 
-  // ─── Apollo: mixed_people/organization_top_people ─────────────────────────────
+  // ─── Apollo: mixed_people/api_search (ricerca persone per dominio) ──────────────
 
   private async fetchTopPeople(organizationId: string, domain: string): Promise<ApolloPerson[]> {
     const cacheKey = `si:apollo:people:${domain}`;
@@ -275,9 +275,9 @@ export class EnrichmentService {
       return JSON.parse(cached);
     }
 
-    this.logger.log(`[Apollo] mixed_people/organization_top_people → ${domain}`);
+    this.logger.log(`[Apollo] mixed_people/api_search → ${domain}`);
 
-    const res = await fetch('https://api.apollo.io/api/v1/mixed_people/organization_top_people', {
+    const res = await fetch('https://api.apollo.io/api/v1/mixed_people/api_search', {
       method: 'POST',
       headers: {
         'Content-Type':  'application/json',
@@ -285,25 +285,24 @@ export class EnrichmentService {
         'X-Api-Key':     this.apolloKey,
       },
       body: JSON.stringify({
-        organization_id: organizationId,
-        // Filtra per ruoli decisionali
-        person_titles: [
-          'CEO', 'CTO', 'COO', 'CFO', 'CMO', 'Founder', 'Co-Founder',
-          'VP', 'Vice President', 'Director', 'Head of', 'Manager',
-        ],
+        // Cerca per dominio azienda — funziona anche senza organization_id
+        organization_domains: [domain],
+        person_seniorities: ['c_suite', 'founder', 'vp', 'director', 'manager'],
         per_page: 10,
+        page: 1,
       }),
     });
 
     if (!res.ok) {
       const body = await res.text();
-      this.logger.warn(`[Apollo] organization_top_people HTTP ${res.status}: ${body}`);
-      // Non bloccante — se fallisce restituiamo lista vuota
+      this.logger.warn(`[Apollo] mixed_people/api_search HTTP ${res.status}: ${body}`);
       return [];
     }
 
     const data: ApolloTopPeopleResponse = await res.json();
     const people = data.people ?? [];
+
+    this.logger.log(`[Apollo] Trovate ${people.length} persone per ${domain}`);
 
     await this.redisService.getClient().set(
       cacheKey,
