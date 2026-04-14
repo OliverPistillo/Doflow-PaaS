@@ -93,6 +93,8 @@ export interface CompanyLookupResult {
   fundingEvents?: ApolloFundingEvent[];
   /** Lista persone — max 10, ordinate per seniority */
   people: ApolloPerson[];
+  /** true se Apollo non ha dati per questo dominio */
+  notFoundInApollo?: boolean;
 }
 
 export interface EnrichedProspect {
@@ -149,6 +151,18 @@ export class EnrichmentService {
 
   async lookupCompany(domain: string): Promise<CompanyLookupResult> {
     const org    = await this.fetchOrganization(domain);
+
+    // Apollo non ha questo dominio — restituisce dati minimi senza bloccare
+    if (!org) {
+      return {
+        apolloOrgId:  '',
+        name:         domain,
+        domain,
+        people:       [],
+        notFoundInApollo: true,
+      };
+    }
+
     const people = await this.fetchTopPeople(org.id, domain);
 
     return {
@@ -174,8 +188,9 @@ export class EnrichmentService {
 
   async enrich(dto: AnalyzeProspectDto): Promise<EnrichedProspect> {
     // Prende i dati aziendali (dalla cache se disponibile)
+    // org può essere null se Apollo non ha dati per questo dominio
     const org   = await this.fetchOrganization(dto.domain);
-    const saved = await this.upsertCompany(org, dto.domain);
+    const saved = await this.upsertCompany(org ?? null, dto.domain);
 
     // Il prospect viene dal form (già selezionato dall'utente nella UI)
     const prospect = await this.upsertProspect(dto, saved.id);
@@ -207,7 +222,7 @@ export class EnrichmentService {
 
   // ─── Apollo: organizations/enrich ────────────────────────────────────────────
 
-  private async fetchOrganization(domain: string): Promise<ApolloOrganization> {
+  private async fetchOrganization(domain: string): Promise<ApolloOrganization | null> {
     const cacheKey = `si:apollo:org:${domain}`;
     const cached   = await this.redisService.getClient().get(cacheKey);
     if (cached) {
@@ -236,9 +251,8 @@ export class EnrichmentService {
 
     const data: ApolloOrgResponse = await res.json();
     if (!data.organization) {
-      throw new InternalServerErrorException(
-        `[Apollo] Nessun risultato per il dominio "${domain}". Verifica che il dominio sia corretto.`,
-      );
+      this.logger.warn(`[Apollo] Nessun risultato per il dominio "${domain}" — azienda non trovata nel database Apollo`);
+      return null;
     }
 
     await this.redisService.getClient().set(
@@ -303,21 +317,26 @@ export class EnrichmentService {
 
   // ─── DB helpers ───────────────────────────────────────────────────────────────
 
-  private async upsertCompany(org: ApolloOrganization, domain: string): Promise<CompanyIntel> {
-    const data = {
-      name:        org.name,
+  private async upsertCompany(org: ApolloOrganization | null, domain: string): Promise<CompanyIntel> {
+    // Se Apollo non ha dati, salva solo il dominio e il nome
+    const data = org ? {
+      name:         org.name,
       domain,
-      industry:    org.industry,
+      industry:     org.industry,
       employeeCount: org.estimated_num_employees,
       annualRevenue: org.annual_revenue_printed,
-      country:     org.country,
-      linkedinUrl: org.linkedin_url,
-      techStack:   (org.technologies ?? []).map(t => t.name),
+      country:      org.country,
+      linkedinUrl:  org.linkedin_url,
+      techStack:    (org.technologies ?? []).map(t => t.name),
       fundingInfo: {
         events: org.funding_events ?? [],
         total:  org.total_funding_printed,
         stage:  org.latest_funding_stage,
       },
+      enrichedAt: new Date(),
+    } : {
+      name:      domain,
+      domain,
       enrichedAt: new Date(),
     };
 

@@ -48,6 +48,7 @@ interface CompanyLookupResult {
   fundingStage?: string;
   totalFunding?: string;
   people: ApolloPerson[];
+  notFoundInApollo?: boolean;
 }
 
 interface PainPoint {
@@ -592,7 +593,22 @@ export default function SalesIntelligencePage() {
                   )}
                 </div>
 
-                {lookupResult.people.length === 0 ? (
+                {lookupResult.notFoundInApollo ? (
+                  <Card className="border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800">
+                    <CardContent className="pt-5 pb-5">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Dominio non trovato in Apollo</p>
+                          <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                            Apollo non ha dati per <strong>{lookupResult.domain}</strong>. Puoi comunque procedere inserendo
+                            manualmente i dati del prospect nel campo email qui sotto e avviando l&apos;analisi AI con le informazioni disponibili.
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : lookupResult.people.length === 0 ? (
                   <Card className="border-dashed">
                     <CardContent className="pt-6 pb-6 text-center text-sm text-muted-foreground">
                       <User className="w-8 h-8 mx-auto mb-2 opacity-30" />
@@ -640,6 +656,18 @@ export default function SalesIntelligencePage() {
                     <Button onClick={handleAnalyze} className="gap-2">
                       <Sparkles className="w-4 h-4" />
                       Avvia analisi per {selectedPerson.name}
+                    </Button>
+                  </div>
+                )}
+
+                {lookupResult.notFoundInApollo && !selectedPerson && customEmail && (
+                  <div className="flex justify-end pt-2">
+                    <Button onClick={() => {
+                      setSelectedPerson({ id: 'manual', name: customEmail.split('@')[0], email: customEmail });
+                      handleAnalyze();
+                    }} className="gap-2" variant="outline">
+                      <Sparkles className="w-4 h-4" />
+                      Avvia analisi con dati manuali
                     </Button>
                   </div>
                 )}
