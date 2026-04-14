@@ -69,8 +69,7 @@ export class SalesIntelProcessor extends WorkerHost {
     if (job.data.userId) {
       await this.notificationsService.notifyUser(
         job.data.userId,
-        'si:complete',
-        { jobId: job.id, campaignId: campaign.id },
+        { event: 'si:complete', jobId: job.id, campaignId: campaign.id },
       );
     }
 
