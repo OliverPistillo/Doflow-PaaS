@@ -6,10 +6,8 @@ import SiteBuilderWizard from './SiteBuilderWizard';
 
 export default function SitebuilderClient() {
   return (
-    // Qui puoi inserire eventuali context provider specifici per il sitebuilder
-    // o un layout wrapper se serve, altrimenti renderizzi direttamente il Wizard.
-    <div className="sitebuilder-container">
+    <main className="min-h-screen bg-neutral-950 text-neutral-50">
       <SiteBuilderWizard />
-    </div>
+    </main>
   );
 }

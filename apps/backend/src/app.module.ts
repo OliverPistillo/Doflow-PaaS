@@ -148,6 +148,7 @@ import { CompanyIntel }     from './sales-intelligence/entities/company-intel.en
 import { Prospect }         from './sales-intelligence/entities/prospect.entity';
 import { ResearchData }     from './sales-intelligence/entities/research-data.entity';
 import { OutreachCampaign } from './sales-intelligence/entities/outreach-campaign.entity';
+import { SiteGenModule } from './sitegen/sitegen.module';
 
 @Module({
   imports: [
@@ -249,7 +250,7 @@ import { OutreachCampaign } from './sales-intelligence/entities/outreach-campaig
     }),
 
     // --- FEATURE MODULES ---
-    SiteBuilderModule,
+    SiteGenModule,
     SalesIntelligenceModule,
   ],
 
