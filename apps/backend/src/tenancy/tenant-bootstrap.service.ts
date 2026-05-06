@@ -68,10 +68,50 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
 
     await ds.query(`CREATE SCHEMA IF NOT EXISTS "${s}"`);
 
-    // Tabelle clonate da public (eredita struttura + indici)
-    await ds.query(`CREATE TABLE IF NOT EXISTS "${s}".users    (LIKE public.users    INCLUDING ALL)`);
-    await ds.query(`CREATE TABLE IF NOT EXISTS "${s}".invites  (LIKE public.invites  INCLUDING ALL)`);
-    await ds.query(`CREATE TABLE IF NOT EXISTS "${s}".audit_log(LIKE public.audit_log INCLUDING ALL)`);
+    // ── Tabelle per-schema con DDL esplicita ──────────────────────────────────
+    // Manteniamo la definizione qui (e non con LIKE public.X INCLUDING ALL) così
+    // che future migrazioni del public schema non debbano essere ripropgate a mano.
+    // Quando si aggiorna una tabella, aggiornare sia la migration InitialPublicSchema
+    // che questo metodo.
+    await ds.query(`
+      CREATE TABLE IF NOT EXISTS "${s}".users (
+        id            UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+        email         TEXT         NOT NULL UNIQUE,
+        password_hash TEXT,
+        role          TEXT         NOT NULL DEFAULT 'user',
+        mfa_enabled   BOOLEAN      DEFAULT false,
+        mfa_secret    TEXT,
+        is_active     BOOLEAN      DEFAULT true,
+        created_at    TIMESTAMP    DEFAULT NOW(),
+        updated_at    TIMESTAMP    DEFAULT NOW()
+      )
+    `);
+    await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_users_email" ON "${s}".users(lower(email))`);
+
+    await ds.query(`
+      CREATE TABLE IF NOT EXISTS "${s}".invites (
+        id          UUID      PRIMARY KEY DEFAULT uuid_generate_v4(),
+        email       TEXT      NOT NULL,
+        token       TEXT      NOT NULL UNIQUE,
+        role        TEXT      NOT NULL DEFAULT 'user',
+        accepted_at TIMESTAMP,
+        expires_at  TIMESTAMP,
+        created_at  TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await ds.query(`
+      CREATE TABLE IF NOT EXISTS "${s}".audit_log (
+        id          BIGSERIAL    PRIMARY KEY,
+        actor_email TEXT,
+        action      TEXT         NOT NULL,
+        target      TEXT,
+        ip_address  TEXT,
+        user_agent  TEXT,
+        metadata    JSONB        DEFAULT '{}'::jsonb,
+        created_at  TIMESTAMP    DEFAULT NOW()
+      )
+    `);
 
     // Tabella file metadata (S3)
     await ds.query(`

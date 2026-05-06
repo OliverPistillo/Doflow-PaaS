@@ -24,7 +24,7 @@ export function PageShell({ children, className, padded = true }: PageShellProps
   return (
     <div
       className={cn(
-        "flex flex-col gap-6 animate-fade-in",
+        "doflow-page-shell flex flex-col gap-6 animate-fade-in",
         padded && "p-4 sm:p-6 lg:p-8",
         className
       )}
@@ -45,15 +45,16 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-      <div className="min-w-0">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground truncate">{title}</h1>
+    <div className="df-page-hero flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
+      <div className="min-w-0 space-y-3">
+        <div className="df-page-eyebrow">Doflow Workspace</div>
+        <h1 className="df-page-title truncate">{title}</h1>
         {description && (
-          <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
+          <p className="df-page-description">{description}</p>
         )}
       </div>
       {actions && (
-        <div className="flex items-center gap-2 shrink-0">{actions}</div>
+        <div className="flex items-center gap-2 shrink-0 flex-wrap lg:justify-end">{actions}</div>
       )}
     </div>
   );
@@ -88,7 +89,7 @@ export function LoadingState({ rows = 5, centered = false, label }: LoadingState
       </div>
       {/* Row skeletons */}
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="flex items-center gap-3 p-4 rounded-nav border border-border/50 bg-card">
+        <div key={i} className="df-glass-panel flex items-center gap-3 p-4 rounded-card">
           <Skeleton className="h-10 w-10 rounded-nav shrink-0" />
           <div className="flex-1 space-y-1.5">
             <Skeleton className="h-4 w-3/4" />
@@ -106,7 +107,7 @@ export function LoadingState({ rows = 5, centered = false, label }: LoadingState
 
 export function TableLoadingState({ cols = 4, rows = 6 }: { cols?: number; rows?: number }) {
   return (
-    <div className="rounded-card border border-border overflow-hidden" role="status" aria-label="Caricamento...">
+    <div className="df-glass-panel overflow-hidden" role="status" aria-label="Caricamento...">
       {/* Header */}
       <div className="flex items-center gap-4 px-6 py-3 bg-muted/40 border-b border-border">
         {Array.from({ length: cols }).map((_, i) => (
@@ -142,7 +143,7 @@ export function ErrorState({
   onRetry,
 }: ErrorStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[30vh] gap-4 rounded-card border border-dashed border-border p-10 bg-card">
+    <div className="df-glass-panel flex flex-col items-center justify-center min-h-[30vh] gap-4 border-dashed p-10">
       <div className="h-14 w-14 rounded-full bg-destructive/10 flex items-center justify-center">
         <AlertTriangle className="h-7 w-7 text-destructive" aria-hidden="true" />
       </div>
@@ -176,7 +177,7 @@ export function EmptyState({
   icon: Icon = PackageOpen,
 }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[24vh] gap-3 rounded-card border border-dashed border-border p-8 bg-card/50">
+    <div className="df-glass-panel flex flex-col items-center justify-center min-h-[24vh] gap-3 border-dashed p-8">
       <Icon className="h-10 w-10 text-muted-foreground/30" aria-hidden="true" />
       <div className="text-center">
         <p className="font-semibold text-foreground">{title}</p>
@@ -194,7 +195,7 @@ export function KpiSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" role="status" aria-label="Caricamento metriche...">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="rounded-card border border-border bg-card p-5 space-y-3">
+        <div key={i} className="df-kpi-card p-5 space-y-3">
           <div className="flex items-center justify-between">
             <Skeleton className="h-3 w-24" />
             <Skeleton className="h-8 w-8 rounded-nav" />

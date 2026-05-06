@@ -60,7 +60,7 @@ function NavItem({
             <TooltipContent side="right" className="max-w-[220px] text-xs leading-snug">
               {lockMsg ?? `Disponibile con il piano ${PLAN_META[minPlan].label}`}
               <div className="mt-1.5">
-                <a href="/billing" className="text-indigo-400 font-semibold flex items-center gap-1">
+                <a href="/billing" className="text-primary font-semibold flex items-center gap-1">
                   <Sparkles className="h-3 w-3" />
                   {PLAN_META[minPlan].upgradeLabel ?? "Aggiorna piano"}
                 </a>
@@ -79,10 +79,10 @@ function NavItem({
         isActive={active}
         tooltip={label}
         className={cn(
-          "gap-3 transition-all duration-150",
+          "gap-3 transition-all duration-150 rounded-nav",
           active
-            ? "font-semibold bg-sidebar-accent text-sidebar-accent-foreground"
-            : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50",
+            ? "font-semibold bg-gradient-to-r from-primary/15 to-chart-4/10 text-primary shadow-sm"
+            : "text-muted-foreground hover:text-primary hover:bg-primary/10",
         )}
       >
         <Link href={href}>
@@ -145,7 +145,7 @@ export function TenantSidebar({
             </div>
           </div>
           <div className="hidden group-data-[collapsible=icon]:flex items-center justify-center w-full h-full">
-            <div className="h-8 w-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-black text-sm select-none shadow">
+            <div className="h-8 w-8 bg-gradient-to-br from-primary to-chart-4 rounded-xl flex items-center justify-center text-white font-black text-sm select-none shadow-button">
               D
             </div>
           </div>
@@ -204,7 +204,7 @@ export function TenantSidebar({
             <div className="flex items-center gap-1.5 mt-1">
               <div className="h-1.5 flex-1 bg-muted rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-indigo-400 rounded-full transition-all"
+                  className="h-full bg-gradient-to-r from-primary to-chart-4 rounded-full transition-all"
                   style={{
                     width: `${Math.min(100, (tenantInfo.storageUsedMb / (tenantInfo.storageLimitGb * 1024)) * 100).toFixed(0)}%`,
                   }}
@@ -227,14 +227,14 @@ export function TenantSidebar({
                   className="data-[state=open]:bg-sidebar-accent hover:bg-sidebar-accent/50 transition-colors"
                 >
                   <Avatar className="h-8 w-8 rounded-lg border border-border">
-                    <AvatarFallback className="rounded-lg bg-indigo-100 text-indigo-700 font-bold text-xs">
+                    <AvatarFallback className="rounded-lg bg-primary/10 text-primary font-bold text-xs">
                       {user?.initials ?? "DF"}
                     </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight ml-1">
                     <span className="truncate font-semibold text-foreground">{user?.email ?? "…"}</span>
                     <span className="truncate text-xs text-muted-foreground flex items-center gap-1">
-                      <BadgeCheck className="h-3 w-3 text-indigo-500" />{user?.role}
+                      <BadgeCheck className="h-3 w-3 text-primary" />{user?.role}
                     </span>
                   </div>
                   <ChevronsUpDown className="ml-auto size-4 text-muted-foreground/50" />
@@ -248,7 +248,7 @@ export function TenantSidebar({
                 <DropdownMenuLabel className="p-0 font-normal">
                   <div className="flex items-center gap-2 px-2 py-2">
                     <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarFallback className="rounded-lg bg-indigo-100 text-indigo-700 font-bold text-xs">
+                      <AvatarFallback className="rounded-lg bg-primary/10 text-primary font-bold text-xs">
                         {user?.initials ?? "DF"}
                       </AvatarFallback>
                     </Avatar>
@@ -285,7 +285,7 @@ export function TenantSidebar({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={logout}
-                  className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/20 cursor-pointer"
+                  className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
                 >
                   <LogOut className="mr-2 h-4 w-4" />Disconnetti
                 </DropdownMenuItem>

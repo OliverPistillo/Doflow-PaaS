@@ -10,12 +10,15 @@ type AuditMetadata = Record<string, unknown>;
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
 
-  constructor(private readonly notifications: NotificationsService) {}
+  constructor(
+    private readonly notifications: NotificationsService,
+    private readonly dataSource: DataSource,
+  ) {}
 
   private getConn(req: Request): DataSource {
     const conn = (req as any).tenantConnection as DataSource | undefined;
-    if (!conn) throw new Error('No tenant connection on request');
-    return conn;
+    // Fallback to global DataSource for public endpoints (signup, etc.)
+    return conn || this.dataSource;
   }
 
   private getTenantSchema(req: Request): string {

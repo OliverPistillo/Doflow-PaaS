@@ -139,12 +139,15 @@ export class EnrichmentService {
   ) {
     const key = process.env.APOLLO_API_KEY;
     if (!key) {
-      throw new InternalServerErrorException(
+      this.logger.warn(
         '[SalesIntel] APOLLO_API_KEY non configurata. ' +
-        'Aggiungila in Coolify → Environment Variables → APOLLO_API_KEY',
+        'Il modulo Sales Intelligence è in modalità degradata (enrichment disabilitato). ' +
+        'Aggiungi APOLLO_API_KEY nel file .env per abilitare Apollo.io.',
       );
+      this.apolloKey = '';
+    } else {
+      this.apolloKey = key;
     }
-    this.apolloKey = key;
   }
 
   // ─── STEP A: lookup azienda + lista persone (chiamato dal controller lookup) ─

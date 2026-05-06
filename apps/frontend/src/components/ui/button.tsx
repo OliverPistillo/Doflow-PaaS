@@ -31,7 +31,7 @@ const buttonVariants = cva(
       variant: {
         // ── Primary (Figma: elm/button/mainbutton) ────────────────
         default:
-          "bg-primary text-primary-foreground shadow-button hover:opacity-90 hover:-translate-y-px active:translate-y-0",
+          "bg-gradient-to-br from-primary via-primary to-chart-4 text-primary-foreground shadow-button hover:shadow-lg hover:opacity-95 hover:-translate-y-px active:translate-y-0",
 
         // ── Destructive ───────────────────────────────────────────
         destructive:
@@ -39,11 +39,11 @@ const buttonVariants = cva(
 
         // ── Outline (ghost with border) ───────────────────────────
         outline:
-          "border border-border bg-card text-foreground shadow-sm hover:bg-secondary hover:text-foreground",
+          "border border-border/70 bg-card/65 text-foreground shadow-sm backdrop-blur-xl hover:bg-primary/10 hover:border-primary/30 hover:text-primary",
 
         // ── Secondary (Figma: card-gray bg) ───────────────────────
         secondary:
-          "bg-secondary text-secondary-foreground shadow-sm hover:opacity-80",
+          "bg-secondary/70 text-secondary-foreground shadow-sm backdrop-blur-xl hover:bg-secondary hover:-translate-y-px",
 
         // ── Ghost ─────────────────────────────────────────────────
         ghost:

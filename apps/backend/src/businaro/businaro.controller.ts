@@ -1,9 +1,12 @@
 import { Controller, Post, Body, Get, UseGuards, Request, HttpException, HttpStatus } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
 @UseGuards(AuthGuard('jwt'))
 @Controller('businaro')
 export class BusinaroController {
+  private readonly logger = new Logger(BusinaroController.name);
+
   
   // --- 1. DASHBOARD DATA ---
   @Get('dashboard/stats')
@@ -30,7 +33,7 @@ export class BusinaroController {
   // --- 2. MAGAZZINO: PICKING ---
   @Post('warehouse/pick')
   async pickItem(@Body() body: { jobOrderCode: string; sku: string; quantity: number }) {
-    console.log(`[WMS] Picking: ${body.quantity}x ${body.sku} per Commessa ${body.jobOrderCode}`);
+    this.logger.log(`[WMS] Picking: ${body.quantity}x ${body.sku} per Commessa ${body.jobOrderCode}`);
     
     // LOGICA REALE:
     // 1. Trova JobOrder (se non esiste -> Errore)
@@ -44,14 +47,14 @@ export class BusinaroController {
   // --- 3. MAGAZZINO: MOVE ---
   @Post('warehouse/move')
   async moveItem(@Body() body: { fromLocationCode: string; toLocationCode: string; sku: string; quantity: number }) {
-    console.log(`[WMS] Move: ${body.sku} da ${body.fromLocationCode} a ${body.toLocationCode}`);
+    this.logger.log(`[WMS] Move: ${body.sku} da ${body.fromLocationCode} a ${body.toLocationCode}`);
     return { success: true, message: "Spostamento effettuato" };
   }
 
   // --- 4. ASSEMBLAGGIO: CONSUME ---
   @Post('assembly/consume')
   async consumeItem(@Body() body: { jobOrderCode: string; sku: string; quantity: number }) {
-     console.log(`[ASSEMBLY] Consumo: ${body.sku} su ${body.jobOrderCode}`);
+     this.logger.log(`[ASSEMBLY] Consumo: ${body.sku} su ${body.jobOrderCode}`);
      
      if (body.quantity > 100) {
         throw new HttpException('Quantità eccessiva per singolo consumo', HttpStatus.BAD_REQUEST);
@@ -63,7 +66,7 @@ export class BusinaroController {
   // --- 5. MACCHINE UTENSILI: TRANSFORM ---
   @Post('production/machine-tools/transform')
   async transformItem(@Body() body: { sourceSku: string; targetSku: string; quantity: number }) {
-     console.log(`[CNC] Trasformazione: ${body.sourceSku} -> ${body.targetSku}`);
+     this.logger.log(`[CNC] Trasformazione: ${body.sourceSku} -> ${body.targetSku}`);
      return { success: true, produced: body.targetSku };
   }
 }

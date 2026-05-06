@@ -2,6 +2,8 @@
 import { DataSource } from 'typeorm';
 
 export class TenantConnectionManager {
+  private readonly logger = new Logger(TenantConnectionManager.name);
+
   private static connectionMap = new Map<string, DataSource>();
 
   static async getOrCreate(schema: string): Promise<DataSource> {
@@ -21,7 +23,7 @@ export class TenantConnectionManager {
     this.connectionMap.set(key, ds);
 
     // eslint-disable-next-line no-console
-    console.log(`✅ Tenant connection ready → schema: ${key}`);
+    this.logger.log(`✅ Tenant connection ready → schema: ${key}`);
 
     return ds;
   }

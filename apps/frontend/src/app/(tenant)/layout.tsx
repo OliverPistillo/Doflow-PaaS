@@ -28,10 +28,10 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
       <TenantSidebar variant={sidebarVariant} collapsible={collapsible} />
-      <SidebarInset>
+      <SidebarInset className="doflow-app-frame">
 
         {/* ── HEADER ── */}
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/95 backdrop-blur-sm px-4 sticky top-0 z-10">
+        <header className="doflow-app-header flex h-14 shrink-0 items-center gap-2 px-4 sticky top-0 z-10">
           <SidebarTrigger className="-ml-1" aria-label="Toggle menu" />
           <div className="h-5 w-px bg-border" aria-hidden="true" />
 
@@ -61,7 +61,7 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* ── CONTENUTO ── */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="doflow-app-main flex-1 overflow-y-auto">
           {children}
         </main>
       </SidebarInset>

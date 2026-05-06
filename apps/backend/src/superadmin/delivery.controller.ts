@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { DeliveryService } from './delivery.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateTaskDto, UpdateTaskDto } from './dto/delivery.dto';
@@ -7,6 +8,8 @@ import { Roles } from './superadmin-dashboard.controller'; // Riutilizziamo il d
 @Controller('superadmin/delivery')
 @UseGuards(JwtAuthGuard)
 export class DeliveryController {
+  private readonly logger = new Logger(DeliveryController.name);
+
   constructor(private readonly service: DeliveryService) {}
 
   @Get('tasks')
@@ -17,13 +20,13 @@ export class DeliveryController {
   @Post('tasks')
   async createTask(@Body() body: CreateTaskDto) {
     // --- LOG DI DEBUG ---
-    console.log('Tentativo creazione Task. Dati ricevuti:', body);
+    this.logger.log('Tentativo creazione Task. Dati ricevuti:', body);
     try {
       const result = await this.service.create(body);
-      console.log('Task creato con successo:', result);
+      this.logger.log('Task creato con successo:', result);
       return result;
     } catch (error) {
-      console.error('ERRORE CREAZIONE TASK:', error);
+      this.logger.error('ERRORE CREAZIONE TASK:', error);
       throw error; // Rilancia l'errore al frontend
     }
   }

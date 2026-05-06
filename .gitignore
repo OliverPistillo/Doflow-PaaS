@@ -20,3 +20,44 @@ infra/certbot/conf/accounts/
 *.crt
 *.p12
 *.pfx
+# Environment
+.env
+.env.local
+.env.*.local
+apps/*/.env
+apps/*/.env.local
+
+# Certbot / LE certificates (MUST NOT be committed)
+infra/certbot/
+*.pem
+*.key
+
+# Build artifacts
+dist/
+.next/
+*.tsbuildinfo
+
+# Logs
+*.log
+/var/log/doflow/
+
+# Test artifacts
+test_UI_*.json
+/app/test_reports/
+
+# Editor
+.vscode/
+.idea/
+apps/frontend/.next/cache/webpack/server-production/0.pack
+apps/frontend/.next/cache/webpack/server-production/0.pack
+apps/frontend/.next/cache/webpack/server-production/0.pack
+apps/frontend/.next/cache/webpack/client-production/0.pack
+apps/frontend/.next/cache/webpack/client-production/0.pack
+.pnpm-store/v10/files/0f/cc91375d7266a945e31aa914d676c4292478826421532bc7894c1ca680d4d183a497f627353b79085f22d1e8c9a3476c816d75c879e7fe971ea013a5e5dc6f
+.pnpm-store/v10/files/bf/91fc37aa5337afb7c9b841ff5fd61464b046cc557a7f45809629b2e85b6cc3bd5c0f2cd5abdc9c62f27db7d78dfd48c584777f9eaf0a97513fed7845de3f8f
+node_modules/.pnpm/@next+swc-linux-x64-musl@14.2.33/node_modules/@next/swc-linux-x64-musl/next-swc.linux-x64-musl.node
+node_modules/.pnpm/@next+swc-linux-x64-gnu@14.2.33/node_modules/@next/swc-linux-x64-gnu/next-swc.linux-x64-gnu.node
+
+# AI Agent memory — contiene credenziali di test, NON committare
+memory/
+!memory/.gitkeep

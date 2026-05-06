@@ -6,9 +6,9 @@ import { ResearchData } from '../entities/research-data.entity';
 import { StrategicAnalysis } from '../entities/outreach-campaign.entity';
 
 const DEFAULT_SOLUTIONS_CATALOG = `
-- DoFlow PaaS: piattaforma no-code per generazione automatica di siti WordPress
-- Sitebuilder AI: creazione siti con AI in 5 minuti a partire da un brief
-- Multi-tenant SaaS: gestione clienti con dashboard dedicata, white-label
+- DoFlow SaaS CRM: piattaforma multi-tenant modulare per gestione clienti, vendite e operations
+- Sistema moduli Odoo-style: CRM, preventivi, fatture, attività, supporto, HR e verticali settoriali
+- Multi-tenant SaaS: gestione clienti con dashboard dedicata e piani modulari
 - Automazioni CRM: trigger su lead, deal stage, notifiche automatiche
 `;
 

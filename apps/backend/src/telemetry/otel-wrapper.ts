@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 export type TelemetryEvent = {
   type: string;
   ip?: string | null;
@@ -12,6 +13,6 @@ export class OtelWrapper {
       ...event,
       timestamp: event.timestamp ?? new Date().toISOString(),
     };
-    console.log('[TELEMETRY]', JSON.stringify(enriched));
+    new Logger('Telemetry').log(JSON.stringify(enriched));
   }
 }

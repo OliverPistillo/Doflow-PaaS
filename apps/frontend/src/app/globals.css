@@ -454,3 +454,381 @@
 }
 .animate-fadeIn    { animation: fadeIn    0.4s ease both; }
 .animate-fadeInUp  { animation: fadeInUp  0.45s cubic-bezier(0.22,1,0.36,1) both; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   DOFLOW MODERN UI — unified glass/gradient product shell
+   Portato dal nuovo signup/onboarding a tenant app + superadmin.
+═══════════════════════════════════════════════════════════════════ */
+:root {
+  --df-modern-bg-1: 214 100% 98%;
+  --df-modern-bg-2: 258 100% 98%;
+  --df-modern-blob-blue: 217 91% 60%;
+  --df-modern-blob-violet: 263 91% 66%;
+  --df-modern-panel: 0 0% 100%;
+  --df-modern-panel-border: 220 70% 91%;
+  --df-modern-panel-shadow: 0 22px 70px rgba(23, 37, 84, 0.10);
+  --df-modern-panel-shadow-hover: 0 28px 90px rgba(23, 37, 84, 0.16);
+}
+.dark {
+  --df-modern-bg-1: 222 47% 8%;
+  --df-modern-bg-2: 231 40% 11%;
+  --df-modern-blob-blue: 217 91% 60%;
+  --df-modern-blob-violet: 263 91% 66%;
+  --df-modern-panel: 222 35% 14%;
+  --df-modern-panel-border: 217 30% 23%;
+  --df-modern-panel-shadow: 0 24px 90px rgba(0, 0, 0, 0.34);
+  --df-modern-panel-shadow-hover: 0 30px 105px rgba(0, 0, 0, 0.48);
+}
+
+.doflow-app-frame {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 12% -12%, hsl(var(--df-modern-blob-blue) / 0.14), transparent 34rem),
+    radial-gradient(circle at 92% 6%, hsl(var(--df-modern-blob-violet) / 0.13), transparent 32rem),
+    linear-gradient(135deg, hsl(var(--df-modern-bg-1)), hsl(var(--df-modern-bg-2)) 58%, hsl(var(--background)));
+}
+.dark .doflow-app-frame {
+  background:
+    radial-gradient(circle at 8% -10%, hsl(var(--df-modern-blob-blue) / 0.17), transparent 34rem),
+    radial-gradient(circle at 92% 3%, hsl(var(--df-modern-blob-violet) / 0.15), transparent 34rem),
+    linear-gradient(135deg, hsl(222 47% 7%), hsl(230 40% 10%) 52%, hsl(222 32% 11%));
+}
+.doflow-app-frame::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.42;
+  background-image:
+    linear-gradient(hsl(var(--foreground) / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--foreground) / 0.045) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, black, transparent 80%);
+}
+.dark .doflow-app-frame::before { opacity: 0.22; }
+.doflow-app-frame > * { position: relative; z-index: 1; }
+
+.doflow-app-header {
+  border-bottom: 1px solid hsl(var(--border) / 0.55) !important;
+  background: hsl(var(--background) / 0.72) !important;
+  backdrop-filter: blur(20px) saturate(1.22);
+  -webkit-backdrop-filter: blur(20px) saturate(1.22);
+}
+.dark .doflow-app-header {
+  background: hsl(222 36% 10% / 0.74) !important;
+}
+.doflow-app-main {
+  position: relative;
+  z-index: 1;
+}
+
+.doflow-page-shell {
+  max-width: 1600px;
+  width: 100%;
+  margin-inline: auto;
+}
+.df-page-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  padding: 22px;
+  border: 1px solid hsl(var(--border) / 0.58);
+  background:
+    linear-gradient(135deg, hsl(var(--card) / 0.86), hsl(var(--card) / 0.58)),
+    radial-gradient(circle at 88% 12%, hsl(var(--primary) / 0.18), transparent 18rem),
+    radial-gradient(circle at 14% 0%, hsl(var(--chart-4) / 0.13), transparent 16rem);
+  box-shadow: var(--df-modern-panel-shadow);
+  backdrop-filter: blur(18px) saturate(1.18);
+  -webkit-backdrop-filter: blur(18px) saturate(1.18);
+}
+.df-page-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    linear-gradient(hsl(var(--foreground) / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--foreground) / 0.035) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(120deg, black 0%, transparent 70%);
+}
+.df-page-hero > * { position: relative; z-index: 1; }
+.dark .df-page-hero {
+  border-color: hsl(var(--border) / 0.72);
+  background:
+    linear-gradient(135deg, hsl(var(--card) / 0.72), hsl(var(--card) / 0.38)),
+    radial-gradient(circle at 88% 12%, hsl(var(--primary) / 0.18), transparent 18rem),
+    radial-gradient(circle at 14% 0%, hsl(var(--chart-4) / 0.13), transparent 16rem);
+}
+.df-page-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.10);
+  border: 1px solid hsl(var(--primary) / 0.18);
+}
+.df-page-eyebrow::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--chart-4)));
+  box-shadow: 0 0 18px hsl(var(--primary) / 0.55);
+}
+.df-page-title {
+  font-size: clamp(2rem, 3.6vw, 3.7rem);
+  line-height: .96;
+  letter-spacing: -0.055em;
+  font-weight: 900;
+  color: hsl(var(--foreground));
+}
+.df-page-description {
+  max-width: 58rem;
+  font-size: 0.98rem;
+  line-height: 1.65;
+  color: hsl(var(--muted-foreground));
+}
+
+.df-glass-panel,
+.glass-card,
+.df-card {
+  border: 1px solid hsl(var(--df-modern-panel-border) / 0.78) !important;
+  background:
+    linear-gradient(145deg, hsl(var(--df-modern-panel) / 0.88), hsl(var(--df-modern-panel) / 0.64)) !important;
+  box-shadow: var(--df-modern-panel-shadow) !important;
+  backdrop-filter: blur(18px) saturate(1.16);
+  -webkit-backdrop-filter: blur(18px) saturate(1.16);
+}
+.dark .df-glass-panel,
+.dark .glass-card,
+.dark .df-card {
+  background:
+    linear-gradient(145deg, hsl(var(--df-modern-panel) / 0.70), hsl(var(--df-modern-panel) / 0.40)) !important;
+}
+.df-glass-panel-hover {
+  transition: transform .18s ease, box-shadow .22s ease, border-color .22s ease, background .22s ease;
+}
+.df-glass-panel-hover:hover {
+  transform: translateY(-2px);
+  border-color: hsl(var(--primary) / 0.30) !important;
+  box-shadow: var(--df-modern-panel-shadow-hover) !important;
+}
+.df-card-gray,
+.df-soft-panel {
+  border: 1px solid hsl(var(--border) / 0.56);
+  background: hsl(var(--card) / 0.52);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.dark .df-card-gray,
+.dark .df-soft-panel {
+  background: hsl(var(--card) / 0.34);
+}
+
+.df-gradient-text {
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--chart-4)) 62%, hsl(var(--chart-3)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.df-kpi-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  border: 1px solid hsl(var(--border) / 0.56);
+  background:
+    linear-gradient(145deg, hsl(var(--card) / 0.78), hsl(var(--card) / 0.46)),
+    radial-gradient(circle at top right, hsl(var(--primary) / 0.12), transparent 13rem);
+  box-shadow: var(--df-modern-panel-shadow);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.df-kpi-card::after {
+  content: "";
+  position: absolute;
+  inset-inline: 18px;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, hsl(var(--primary) / .58), hsl(var(--chart-4) / .55), transparent);
+  opacity: .9;
+}
+.df-icon-bubble {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.16), hsl(var(--chart-4) / 0.14));
+  color: hsl(var(--primary));
+  border: 1px solid hsl(var(--primary) / 0.14);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.48);
+}
+.dark .df-icon-bubble { box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.08); }
+
+/* shadcn/radix primitives: modernizza menu, dialog, popover, sheet senza toccare ogni pagina */
+[data-radix-popper-content-wrapper] .bg-popover,
+[role="dialog"].bg-background,
+[role="dialog"] .bg-background {
+  backdrop-filter: blur(20px) saturate(1.16);
+  -webkit-backdrop-filter: blur(20px) saturate(1.16);
+}
+
+/* Tabelle e tab principali: più premium e leggibili */
+.doflow-page-shell table,
+.dashboard-content table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.doflow-page-shell thead tr,
+.dashboard-content thead tr {
+  background: hsl(var(--primary) / 0.055);
+}
+.doflow-page-shell tbody tr,
+.dashboard-content tbody tr {
+  transition: background-color .16s ease, transform .16s ease;
+}
+.doflow-page-shell tbody tr:hover,
+.dashboard-content tbody tr:hover {
+  background: hsl(var(--primary) / 0.045);
+}
+
+/* Sidebar feel più vicino a signup/onboarding: compatto, vetro, active pill */
+[data-sidebar="sidebar"] {
+  background: hsl(var(--card) / 0.70) !important;
+  backdrop-filter: blur(20px) saturate(1.18);
+  -webkit-backdrop-filter: blur(20px) saturate(1.18);
+}
+.dark [data-sidebar="sidebar"] {
+  background: hsl(222 36% 10% / 0.76) !important;
+}
+[data-sidebar="menu-button"][data-active="true"],
+[data-sidebar="menu-button"][data-state="active"] {
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.16), hsl(var(--chart-4) / 0.12)) !important;
+  color: hsl(var(--primary)) !important;
+  box-shadow: inset 0 0 0 1px hsl(var(--primary) / .16);
+}
+
+/* Route speciali già dark: usa lo stesso font/feel senza duplicare local style ovunque */
+[data-testid="signup-page"],
+[data-testid="onboarding-page"] {
+  font-family: 'Outfit', 'Nunito Sans', var(--font-sans, system-ui), sans-serif;
+}
+
+/* Uniforma anche le pagine tenant che non usano ancora PageShell */
+.doflow-app-main > .flex-1[class*="space-y-"] {
+  max-width: 1600px;
+  width: 100%;
+  margin-inline: auto;
+}
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child:not([role="dialog"]):not([data-radix-popper-content-wrapper]) {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  padding: 20px;
+  border: 1px solid hsl(var(--border) / 0.58);
+  background:
+    linear-gradient(135deg, hsl(var(--card) / 0.82), hsl(var(--card) / 0.52)),
+    radial-gradient(circle at 88% 14%, hsl(var(--primary) / 0.16), transparent 16rem),
+    radial-gradient(circle at 12% 0%, hsl(var(--chart-4) / 0.12), transparent 14rem);
+  box-shadow: var(--df-modern-panel-shadow);
+  backdrop-filter: blur(18px) saturate(1.18);
+  -webkit-backdrop-filter: blur(18px) saturate(1.18);
+}
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child h1,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child h2 {
+  font-size: clamp(1.7rem, 2.6vw, 2.9rem);
+  line-height: 1;
+  letter-spacing: -0.045em;
+  font-weight: 900;
+}
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child h1::before,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child h2::before {
+  content: "Workspace";
+  display: block;
+  width: max-content;
+  margin-bottom: 10px;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.10);
+  border: 1px solid hsl(var(--primary) / 0.18);
+}
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child p {
+  max-width: 52rem;
+  line-height: 1.6;
+}
+
+/* Kanban/list card non basate sul componente Card */
+.doflow-app-main .bg-card.border.rounded-xl,
+.doflow-app-main .border.rounded-xl,
+.doflow-app-main .rounded-2xl.border {
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 12px 38px rgba(23, 37, 84, 0.08);
+}
+.dark .doflow-app-main .bg-card.border.rounded-xl,
+.dark .doflow-app-main .border.rounded-xl,
+.dark .doflow-app-main .rounded-2xl.border {
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.22);
+}
+
+/* Superadmin legacy pages */
+.dashboard-content > div:first-child:not(.kpi-grid):not(.charts-grid),
+.dashboard-content > section:first-child {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  padding: 20px;
+  border: 1px solid hsl(var(--border) / 0.58);
+  background:
+    linear-gradient(135deg, hsl(var(--card) / 0.82), hsl(var(--card) / 0.52)),
+    radial-gradient(circle at 90% 10%, hsl(var(--primary) / 0.16), transparent 16rem),
+    radial-gradient(circle at 12% 0%, hsl(var(--chart-4) / 0.12), transparent 14rem);
+  box-shadow: var(--df-modern-panel-shadow);
+  backdrop-filter: blur(18px) saturate(1.18);
+  -webkit-backdrop-filter: blur(18px) saturate(1.18);
+}
+.dashboard-content > div:first-child h1,
+.dashboard-content > div:first-child h2,
+.dashboard-content > section:first-child h1,
+.dashboard-content > section:first-child h2 {
+  font-size: clamp(1.7rem, 2.6vw, 2.9rem);
+  line-height: 1;
+  letter-spacing: -0.045em;
+  font-weight: 900;
+}
+.dashboard-content > div:first-child h1::before,
+.dashboard-content > div:first-child h2::before,
+.dashboard-content > section:first-child h1::before,
+.dashboard-content > section:first-child h2::before {
+  content: "Control Plane";
+  display: block;
+  width: max-content;
+  margin-bottom: 10px;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.10);
+  border: 1px solid hsl(var(--primary) / 0.18);
+}

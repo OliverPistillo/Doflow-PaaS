@@ -213,13 +213,6 @@ export const SUPERADMIN_SIDEBAR: SidebarConfig = [
         href: "/superadmin/delivery/calendar",
         icon: CalendarDays,
       },
-      {
-        kind: "leaf",
-        label: "Site Generator",
-        href: "/superadmin/sitebuilder",
-        icon: Globe,
-        badge: "NEW",
-      },
     ],
   },
 

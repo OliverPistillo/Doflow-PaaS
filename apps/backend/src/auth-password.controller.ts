@@ -5,6 +5,7 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { DataSource } from 'typeorm';
 import { randomBytes, createHash } from 'crypto';
@@ -30,6 +31,8 @@ function hashToken(rawToken: string): string {
 
 @Controller('auth')
 export class AuthPasswordController {
+  private readonly logger = new Logger(AuthPasswordController.name);
+
   constructor(
     private readonly mail: MailService,
   ) {}
@@ -91,7 +94,7 @@ export class AuthPasswordController {
       rawToken,
     )}`;
 
-    console.log(
+    this.logger.log(
       `[DOFLOW][RESET-PASSWORD] email=${email} tenant=${tenantId} link=${resetLink}`,
     );
 

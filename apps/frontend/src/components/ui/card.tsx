@@ -14,8 +14,7 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      // Figma: bg-white, rounded-[24px], shadow-card
-      "bg-card text-card-foreground rounded-card shadow-card",
+      "df-glass-panel df-glass-panel-hover text-card-foreground rounded-card",
       className
     )}
     {...props}
@@ -106,7 +105,7 @@ const GrayCard = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "bg-figma-gray dark:bg-card rounded-card border border-transparent dark:border-border",
+      "df-soft-panel rounded-card",
       className
     )}
     {...props}

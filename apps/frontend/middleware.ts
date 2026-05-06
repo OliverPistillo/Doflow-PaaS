@@ -17,9 +17,11 @@ function extractTenantFromPath(pathname: string): string | null {
   const reserved = new Set([
     'login',
     'logout',
+    'signup',
     'superadmin',
     'admin',
     'dashboard',
+    'onboarding',
     'forgot-password',
     'reset-password',
     'terms',

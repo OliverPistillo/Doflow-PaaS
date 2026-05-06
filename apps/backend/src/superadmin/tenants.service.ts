@@ -4,6 +4,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { randomBytes } from 'crypto';
@@ -19,6 +20,8 @@ import { buildWelcomeEmail, buildPasswordResetAdminEmail } from '../mail/email-t
 
 @Injectable()
 export class TenantsService {
+  private readonly logger = new Logger(TenantsService.name);
+
   private readonly WHITELIST_KEY = 'df:sys:tenant_whitelist';
 
   constructor(
@@ -124,14 +127,14 @@ export class TenantsService {
         await this.mailService.sendMail({ to: dto.email, subject, html, text });
       } catch (mailErr) {
         // Email non bloccante: il tenant è già creato
-        console.error('⚠️ Tenant creato ma errore invio email:', mailErr);
+        this.logger.error('⚠️ Tenant creato ma errore invio email:', mailErr);
       }
 
       return { ...savedTenant, tempPassword };
 
     } catch (err) {
       await queryRunner.rollbackTransaction();
-      console.error('Errore creazione tenant:', err);
+      this.logger.error('Errore creazione tenant:', err);
       throw new InternalServerErrorException('Errore durante il provisioning del tenant');
     } finally {
       await queryRunner.release();
@@ -171,7 +174,7 @@ export class TenantsService {
 
     } catch (err) {
       await queryRunner.rollbackTransaction();
-      console.error('Errore eliminazione tenant:', err);
+      this.logger.error('Errore eliminazione tenant:', err);
       throw new InternalServerErrorException("Errore durante l'eliminazione");
     } finally {
       await queryRunner.release();
@@ -210,7 +213,7 @@ export class TenantsService {
       });
       await this.mailService.sendMail({ to: email, subject, html, text });
     } catch (mailErr) {
-      console.error('⚠️ Password resettata ma errore invio email:', mailErr);
+      this.logger.error('⚠️ Password resettata ma errore invio email:', mailErr);
     }
 
     return { tempPassword: newPass };

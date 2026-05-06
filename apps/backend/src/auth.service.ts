@@ -217,13 +217,8 @@ export class AuthService {
         }
     }
 
-    const tenants = await this.listActiveTenants(conn);
-    for (const t of tenants) {
-      try {
-        return await this.loginInTenant(conn, t, email, password);
-      } catch {}
-    }
-
+    // Remove tenant-scan fallback to prevent timing-based tenant enumeration attacks.
+    // If user is not in public.users directory, login fails with generic error.
     throw new UnauthorizedException('Credenziali non valide');
   }
 
