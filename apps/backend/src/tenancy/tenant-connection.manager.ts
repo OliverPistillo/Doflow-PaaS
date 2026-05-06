@@ -1,8 +1,9 @@
 // apps/backend/src/tenancy/tenant-connection.manager.ts
+import { Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 
 export class TenantConnectionManager {
-  private readonly logger = new Logger(TenantConnectionManager.name);
+  private static readonly logger = new Logger(TenantConnectionManager.name);
 
   private static connectionMap = new Map<string, DataSource>();
 

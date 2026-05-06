@@ -5,6 +5,7 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server } from 'ws';
+import { Logger } from '@nestjs/common';
 import { IncomingMessage } from 'http';
 import { NotificationsService } from './notifications.service';
 
