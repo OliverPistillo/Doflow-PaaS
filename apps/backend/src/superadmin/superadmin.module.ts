@@ -7,6 +7,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { AuthModule } from '../auth/auth.module';
 import { MailModule } from '../mail/mail.module';
+import { TenancyModule } from '../tenancy/tenancy.module';
 
 // ── Controllers ──────────────────────────────────────────────────────────────
 import { SuperadminUsersController } from './superadmin-users.controller';
@@ -84,6 +85,7 @@ import { BackupSchedule } from './entities/backup-schedule.entity';
   imports: [
     AuthModule,
     MailModule,
+    TenancyModule,
     TypeOrmModule.forFeature([
       PlatformDeal,
       DeliveryTask,
