@@ -45,16 +45,16 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    <div className="df-page-hero flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
-      <div className="min-w-0 space-y-3">
+    <div className="df-page-hero flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+      <div className="min-w-0 space-y-4">
         <div className="df-page-eyebrow">Doflow Workspace</div>
-        <h1 className="df-page-title truncate">{title}</h1>
+        <h1 className="df-page-title truncate tracking-tight">{title}</h1>
         {description && (
-          <p className="df-page-description">{description}</p>
+          <p className="df-page-description text-balance">{description}</p>
         )}
       </div>
       {actions && (
-        <div className="flex items-center gap-2 shrink-0 flex-wrap lg:justify-end">{actions}</div>
+        <div className="flex items-center gap-3 shrink-0 flex-wrap lg:justify-end pb-1">{actions}</div>
       )}
     </div>
   );
@@ -143,13 +143,13 @@ export function ErrorState({
   onRetry,
 }: ErrorStateProps) {
   return (
-    <div className="df-glass-panel flex flex-col items-center justify-center min-h-[30vh] gap-4 border-dashed p-10">
-      <div className="h-14 w-14 rounded-full bg-destructive/10 flex items-center justify-center">
-        <AlertTriangle className="h-7 w-7 text-destructive" aria-hidden="true" />
+    <div className="df-glass-panel flex flex-col items-center justify-center min-h-[30vh] gap-6 border-dashed p-10">
+      <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center">
+        <AlertTriangle className="h-8 w-8 text-destructive" aria-hidden="true" />
       </div>
-      <div className="text-center max-w-sm">
-        <h3 className="font-bold text-foreground">{title}</h3>
-        <p className="text-sm text-muted-foreground mt-1">{message}</p>
+      <div className="text-center max-w-sm space-y-2">
+        <h3 className="text-lg font-bold text-foreground">{title}</h3>
+        <p className="text-sm text-muted-foreground leading-relaxed">{message}</p>
       </div>
       {onRetry && (
         <Button variant="outline" onClick={onRetry} className="gap-2">
@@ -177,11 +177,13 @@ export function EmptyState({
   icon: Icon = PackageOpen,
 }: EmptyStateProps) {
   return (
-    <div className="df-glass-panel flex flex-col items-center justify-center min-h-[24vh] gap-3 border-dashed p-8">
-      <Icon className="h-10 w-10 text-muted-foreground/30" aria-hidden="true" />
-      <div className="text-center">
-        <p className="font-semibold text-foreground">{title}</p>
-        <p className="text-sm text-muted-foreground mt-0.5">{message}</p>
+    <div className="df-glass-panel flex flex-col items-center justify-center min-h-[24vh] gap-4 border-dashed p-10">
+      <div className="df-icon-bubble h-14 w-14">
+        <Icon className="h-7 w-7 text-primary/60" aria-hidden="true" />
+      </div>
+      <div className="text-center max-w-xs space-y-1">
+        <p className="text-lg font-bold text-foreground">{title}</p>
+        <p className="text-sm text-muted-foreground leading-relaxed">{message}</p>
       </div>
       {action}
     </div>

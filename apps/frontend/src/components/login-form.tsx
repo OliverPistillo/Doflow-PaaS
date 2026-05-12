@@ -200,11 +200,12 @@ export function LoginForm() {
         .df-primary{
           width:100%;height:44px;border-radius:12px;border:none;cursor:pointer;
           font-size:14px;font-weight:600;font-family:var(--font-sans);
-          color:#fff;background:var(--df-accent);
-          box-shadow:var(--shadow-button);
+          color:#fff;
+          background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--chart-4)));
+          box-shadow: var(--shadow-button);
           transition:all .2s;letter-spacing:.01em;
         }
-        .df-primary:hover:not(:disabled){background:#4E4EC8;transform:translateY(-1px);box-shadow:0 12px 28px -16px rgba(91,91,214,.75)}
+        .df-primary:hover:not(:disabled){opacity:0.9;transform:translateY(-1px);box-shadow:0 12px 28px -16px rgba(91,91,214,.75)}
         .df-primary:active:not(:disabled){transform:translateY(0)}
         .df-primary:disabled{opacity:.6;cursor:not-allowed}
         .df-social{
