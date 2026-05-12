@@ -173,13 +173,18 @@ export class SignupService {
         where: { minTier: 'STARTER' as any },
       });
       const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-      for (const mod of starterModules) {
-        await queryRunner.manager.save(TenantSubscription, {
-          tenantId: savedTenant.id,
-          moduleKey: mod.key,
-          status: 'TRIAL',
-          trialEndsAt,
-        });
+
+      const subscriptions = starterModules.map((mod) => {
+        const sub = new TenantSubscription();
+        sub.tenantId = savedTenant.id;
+        sub.moduleKey = mod.key;
+        sub.status = 'TRIAL';
+        sub.trialEndsAt = trialEndsAt;
+        return sub;
+      });
+
+      if (subscriptions.length > 0) {
+        await queryRunner.manager.save(subscriptions);
       }
 
       await queryRunner.commitTransaction();

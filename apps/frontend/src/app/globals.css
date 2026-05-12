@@ -970,11 +970,11 @@ body {
   border-radius: var(--radius-card);
   border: 1px solid hsl(var(--border));
   background:
-    linear-gradient(135deg, hsl(var(--card)), hsl(var(--secondary) / .70)),
+    linear-gradient(135deg, hsl(var(--card) / 0.8), hsl(var(--secondary) / .60)),
     radial-gradient(circle at 92% 10%, hsl(var(--primary) / .10), transparent 15rem);
   box-shadow: var(--shadow-card);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
 }
 .df-page-hero::after { opacity: .18; }
 
@@ -1008,16 +1008,16 @@ body {
 .df-card,
 .df-kpi-card {
   border: 1px solid hsl(var(--border)) !important;
-  background: hsl(var(--card)) !important;
+  background: hsl(var(--card) / 0.8) !important;
   box-shadow: var(--shadow-card) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
 }
 .dark .df-glass-panel,
 .dark .glass-card,
 .dark .df-card,
 .dark .df-kpi-card {
-  background: hsl(var(--card)) !important;
+  background: hsl(var(--card) / 0.8) !important;
 }
 .df-glass-panel-hover:hover {
   transform: translateY(-1px);
@@ -1032,9 +1032,9 @@ body {
 .df-soft-panel,
 .df-card-gray {
   border: 1px solid hsl(var(--border));
-  background: hsl(var(--secondary));
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  background: hsl(var(--secondary) / 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .df-gradient-text {
@@ -1046,13 +1046,13 @@ body {
 
 /* Sidebar: look da review deck — surface pulita, active pill solida */
 [data-sidebar="sidebar"] {
-  background: hsl(var(--sidebar-background)) !important;
+  background: hsl(var(--sidebar-background) / 0.8) !important;
   border-color: hsl(var(--sidebar-border)) !important;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
 }
 .dark [data-sidebar="sidebar"] {
-  background: hsl(var(--sidebar-background)) !important;
+  background: hsl(var(--sidebar-background) / 0.8) !important;
 }
 [data-sidebar="group-label"] {
   font-family: var(--font-mono);
@@ -1067,9 +1067,9 @@ body {
 }
 [data-sidebar="menu-button"][data-active="true"],
 [data-sidebar="menu-button"][data-state="active"] {
-  background: hsl(var(--sidebar-primary)) !important;
-  color: hsl(var(--sidebar-primary-foreground)) !important;
-  box-shadow: none !important;
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--chart-4))) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  box-shadow: var(--shadow-sm) !important;
 }
 [data-sidebar="menu-button"][data-active="true"] svg,
 [data-sidebar="menu-button"][data-state="active"] svg {
