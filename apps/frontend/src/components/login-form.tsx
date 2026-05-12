@@ -8,38 +8,57 @@ import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 
 import {
-  AlertDialog, AlertDialogContent, AlertDialogHeader,
-  AlertDialogTitle, AlertDialogDescription,
-  AlertDialogFooter, AlertDialogAction,
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
 } from "@/components/ui/alert-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import { Eye, EyeOff, Loader2, AlertCircle, Mail, Lock } from "lucide-react";
 
 const MAIN_DB_NAME = "public";
 
 type JwtPayload = {
-  email?: string; role?: string; tenantId?: string;
-  tenant_id?: string; tenantSlug?: string; authStage?: string; mfa_pending?: boolean;
+  email?: string;
+  role?: string;
+  tenantId?: string;
+  tenant_id?: string;
+  tenantSlug?: string;
+  authStage?: string;
+  mfa_pending?: boolean;
 };
 
 function parseJwtPayload(token: string): JwtPayload | null {
   try {
     const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
     return JSON.parse(atob(base64)) as JwtPayload;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function normalizeRole(role?: string) {
-  const r = String(role ?? "").toUpperCase().replace(/[^A-Z_]/g, "");
+  const r = String(role ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z_]/g, "");
   if (["OWNER", "SUPERADMIN", "SUPER_ADMIN"].includes(r)) return "SUPER_ADMIN";
   return "USER";
 }
@@ -49,30 +68,66 @@ function isMfaPending(payload?: any) {
 }
 
 const loginSchema = z.object({
-  email: z.string().min(1, "L'email è obbligatoria").email("Inserisci un'email valida"),
+  email: z
+    .string()
+    .min(1, "L'email è obbligatoria")
+    .email("Inserisci un'email valida"),
   password: z.string().min(1, "La password è obbligatoria"),
   rememberMe: z.boolean().optional(),
 });
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 type LoginResponse = {
-  token: string; error?: string; message?: string;
+  token: string;
+  error?: string;
+  message?: string;
   mfa?: { required?: boolean; pending?: boolean; redirect?: string };
-  user?: { tenantSlug?: string; tenant_id?: string; schema?: string; role?: string };
+  user?: {
+    tenantSlug?: string;
+    tenant_id?: string;
+    schema?: string;
+    role?: string;
+  };
 };
 
 function getHostContext() {
-  const host = typeof window !== "undefined" ? window.location.hostname.toLowerCase() : "app.doflow.it";
-  const isAppHost = host.startsWith("app.") || host.startsWith("admin.") || host === "doflow.it" || host.includes("localhost");
-  const subdomain = host.endsWith(".doflow.it") ? host.replace(".doflow.it", "").split(".")[0] : null;
-  const tenantSub = !isAppHost && subdomain && !["app","admin","api","www"].includes(subdomain) ? subdomain : null;
+  const host =
+    typeof window !== "undefined"
+      ? window.location.hostname.toLowerCase()
+      : "app.doflow.it";
+  const isAppHost =
+    host.startsWith("app.") ||
+    host.startsWith("admin.") ||
+    host === "doflow.it" ||
+    host.includes("localhost");
+  const subdomain = host.endsWith(".doflow.it")
+    ? host.replace(".doflow.it", "").split(".")[0]
+    : null;
+  const tenantSub =
+    !isAppHost &&
+    subdomain &&
+    !["app", "admin", "api", "www"].includes(subdomain)
+      ? subdomain
+      : null;
   return { host, isAppHost, tenantSub };
 }
 
 const SLIDES = [
-  { tag: "CRM & Pipeline", title: "Tutto il tuo business\nin un unico posto.", desc: "Gestisci lead, opportunità e clienti con una pipeline visuale. Zero fogli Excel, zero caos." },
-  { tag: "Fatturazione automatica", title: "Preventivi e fatture\nin pochi secondi.", desc: "Genera documenti professionali, invia via email e tieni traccia dei pagamenti in automatico." },
-  { tag: "Analytics in tempo reale", title: "Dati chiari,\ndecisioni migliori.", desc: "Dashboard in tempo reale su vendite, performance e KPI. Tutte le metriche che contano davvero." },
+  {
+    tag: "CRM & Pipeline",
+    title: "Tutto il tuo business\nin un unico posto.",
+    desc: "Gestisci lead, opportunità e clienti con una pipeline visuale. Zero fogli Excel, zero caos.",
+  },
+  {
+    tag: "Fatturazione automatica",
+    title: "Preventivi e fatture\nin pochi secondi.",
+    desc: "Genera documenti professionali, invia via email e tieni traccia dei pagamenti in automatico.",
+  },
+  {
+    tag: "Analytics in tempo reale",
+    title: "Dati chiari,\ndecisioni migliori.",
+    desc: "Dashboard in tempo reale su vendite, performance e KPI. Tutte le metriche che contano davvero.",
+  },
 ];
 
 const STATS = [
@@ -86,11 +141,20 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = React.useState(false);
   const [generalError, setGeneralError] = React.useState<string | null>(null);
   const [showTenantRedirect, setShowTenantRedirect] = React.useState(false);
-  const [tenantRedirectUrl, setTenantRedirectUrl] = React.useState<string | null>(null);
-  const [tenantDialogMode, setTenantDialogMode] = React.useState<"redirect" | "info">("redirect");
+  const [tenantRedirectUrl, setTenantRedirectUrl] = React.useState<
+    string | null
+  >(null);
+  const [tenantDialogMode, setTenantDialogMode] = React.useState<
+    "redirect" | "info"
+  >("redirect");
   const [slideIdx, setSlideIdx] = React.useState(0);
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginFormValues>({
+  const {
+    register,
+    handleSubmit,
+    control,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "", rememberMe: false },
   });
@@ -106,7 +170,9 @@ export function LoginForm() {
       const next = (params.get("next") || "").toLowerCase();
       const goMfa = next === "mfa" || isMfaPending(payload);
       if (tenantSlug && tenantSlug !== "public") {
-        window.location.href = goMfa ? `/${tenantSlug}/mfa` : `/${tenantSlug}/dashboard`;
+        window.location.href = goMfa
+          ? `/${tenantSlug}/mfa`
+          : `/${tenantSlug}/dashboard`;
       } else {
         window.location.href = goMfa ? `/mfa` : `/dashboard`;
       }
@@ -114,13 +180,18 @@ export function LoginForm() {
   }, []);
 
   React.useEffect(() => {
-    const id = setInterval(() => setSlideIdx((s) => (s + 1) % SLIDES.length), 5000);
+    const id = setInterval(
+      () => setSlideIdx((s) => (s + 1) % SLIDES.length),
+      5000,
+    );
     return () => clearInterval(id);
   }, []);
 
   React.useEffect(() => {
     if (!showTenantRedirect || !tenantRedirectUrl) return;
-    const t = setTimeout(() => { window.location.href = tenantRedirectUrl; }, 2000);
+    const t = setTimeout(() => {
+      window.location.href = tenantRedirectUrl;
+    }, 2000);
     return () => clearTimeout(t);
   }, [showTenantRedirect, tenantRedirectUrl]);
 
@@ -132,8 +203,15 @@ export function LoginForm() {
       const headers: Record<string, string> = {};
       if (isAppHost) headers["x-doflow-tenant-id"] = MAIN_DB_NAME;
       const data = await apiFetch<LoginResponse>("/auth/login", {
-        method: "POST", auth: false, headers,
-        body: JSON.stringify({ email: values.email, password: values.password, realm, tenantSlug: tenantSub ?? undefined }),
+        method: "POST",
+        auth: false,
+        headers,
+        body: JSON.stringify({
+          email: values.email,
+          password: values.password,
+          realm,
+          tenantSlug: tenantSub ?? undefined,
+        }),
       });
       if (data?.error) throw new Error(data.error || data.message);
       if (!data?.token) throw new Error("Token di accesso mancante");
@@ -142,29 +220,59 @@ export function LoginForm() {
       const role = normalizeRole(payload?.role);
       let targetTenant = "public";
       if (data.user?.schema || data.user?.tenantSlug || data.user?.tenant_id) {
-        targetTenant = (data.user.schema || data.user.tenantSlug || data.user.tenant_id || "public").toLowerCase();
-      } else if (payload?.tenantSlug || payload?.tenantId || payload?.tenant_id) {
-        targetTenant = (payload.tenantSlug || payload.tenantId || payload.tenant_id || "public").toLowerCase();
+        targetTenant = (
+          data.user.schema ||
+          data.user.tenantSlug ||
+          data.user.tenant_id ||
+          "public"
+        ).toLowerCase();
+      } else if (
+        payload?.tenantSlug ||
+        payload?.tenantId ||
+        payload?.tenant_id
+      ) {
+        targetTenant = (
+          payload.tenantSlug ||
+          payload.tenantId ||
+          payload.tenant_id ||
+          "public"
+        ).toLowerCase();
       }
       const mfaRequired = data?.mfa?.required === true || isMfaPending(payload);
       if (mfaRequired) {
         window.localStorage.setItem("doflow_token", token);
         if (isAppHost) {
           if (targetTenant !== "public" && /^[a-z0-9_]+$/i.test(targetTenant)) {
-            setTenantRedirectUrl(`https://${targetTenant}.doflow.it/login?accessToken=${encodeURIComponent(token)}&next=mfa`);
-            setTenantDialogMode("redirect"); setShowTenantRedirect(true); return;
+            setTenantRedirectUrl(
+              `https://${targetTenant}.doflow.it/login?accessToken=${encodeURIComponent(token)}&next=mfa`,
+            );
+            setTenantDialogMode("redirect");
+            setShowTenantRedirect(true);
+            return;
           }
-          router.push(`/mfa`); return;
+          router.push(`/mfa`);
+          return;
         }
-        router.push(tenantSub ? `/${tenantSub}/mfa` : `/mfa`); return;
+        router.push(tenantSub ? `/${tenantSub}/mfa` : `/mfa`);
+        return;
       }
-      if (role === "SUPER_ADMIN") { window.localStorage.setItem("doflow_token", token); router.push("/superadmin"); return; }
+      if (role === "SUPER_ADMIN") {
+        window.localStorage.setItem("doflow_token", token);
+        router.push("/superadmin");
+        return;
+      }
       if (isAppHost) {
         if (targetTenant !== "public" && /^[a-z0-9_]+$/i.test(targetTenant)) {
-          setTenantRedirectUrl(`https://${targetTenant}.doflow.it/login?accessToken=${encodeURIComponent(token)}`);
-          setTenantDialogMode("redirect"); setShowTenantRedirect(true); return;
+          setTenantRedirectUrl(
+            `https://${targetTenant}.doflow.it/login?accessToken=${encodeURIComponent(token)}`,
+          );
+          setTenantDialogMode("redirect");
+          setShowTenantRedirect(true);
+          return;
         }
-        window.localStorage.setItem("doflow_token", token); router.push("/dashboard"); return;
+        window.localStorage.setItem("doflow_token", token);
+        router.push("/dashboard");
+        return;
       }
       window.localStorage.setItem("doflow_token", token);
       router.push(tenantSub ? `/${tenantSub}/dashboard` : "/dashboard");
@@ -266,23 +374,46 @@ export function LoginForm() {
         .df-wave-wrap { animation: dfFlow 20s linear infinite; }
       `}</style>
 
-      <AlertDialog open={showTenantRedirect} onOpenChange={setShowTenantRedirect}>
+      <AlertDialog
+        open={showTenantRedirect}
+        onOpenChange={setShowTenantRedirect}
+      >
         <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[22px] font-bold">Accesso al dominio aziendale</AlertDialogTitle>
+            <AlertDialogTitle className="text-[22px] font-bold">
+              Accesso al dominio aziendale
+            </AlertDialogTitle>
             <AlertDialogDescription className="text-[15px]">
               {tenantDialogMode === "redirect" ? (
-                <>Accesso effettuato. Ti stiamo reindirizzando al tuo spazio aziendale.
+                <>
+                  Accesso effettuato. Ti stiamo reindirizzando al tuo spazio
+                  aziendale.
                   <div className="flex items-center gap-2 mt-4 p-3 bg-gray-50 rounded-xl text-sm text-gray-500">
-                    <Loader2 className="h-4 w-4 animate-spin"/><span>Reindirizzamento in corso...</span>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Reindirizzamento in corso...</span>
                   </div>
                 </>
-              ) : <>Questo account appartiene a un tenant aziendale. Accedi dal dominio della tua azienda.</>}
+              ) : (
+                <>
+                  Questo account appartiene a un tenant aziendale. Accedi dal
+                  dominio della tua azienda.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            {!tenantRedirectUrl && <AlertDialogAction onClick={() => setShowTenantRedirect(false)}>Ok</AlertDialogAction>}
-            {tenantRedirectUrl && <AlertDialogAction onClick={() => window.location.href = tenantRedirectUrl!}>Vai ora</AlertDialogAction>}
+            {!tenantRedirectUrl && (
+              <AlertDialogAction onClick={() => setShowTenantRedirect(false)}>
+                Ok
+              </AlertDialogAction>
+            )}
+            {tenantRedirectUrl && (
+              <AlertDialogAction
+                onClick={() => (window.location.href = tenantRedirectUrl!)}
+              >
+                Vai ora
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -290,18 +421,27 @@ export function LoginForm() {
       <div className="df-wrap flex min-h-screen items-center justify-center bg-background p-6 md:p-10">
         <div className="w-full max-w-[1060px]">
           <div className="grid lg:grid-cols-[420px_1fr] lg:gap-8 items-center">
-
             {/* LEFT */}
             <div className="flex flex-col justify-center px-4 py-10 md:px-6 lg:px-8">
               <div className="mx-auto w-full max-w-[360px] space-y-6">
-
                 <div className="df-a df-a1">
-                  <Image src="/doflow_logo.svg" alt="Doflow" width={160} height={44} className="h-11 w-auto" priority/>
+                  <Image
+                    src="/doflow_logo.svg"
+                    alt="Doflow"
+                    width={160}
+                    height={44}
+                    className="h-11 w-auto"
+                    priority
+                  />
                 </div>
 
                 <div className="df-a df-a2 space-y-1">
-                  <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-foreground">Accedi al tuo account</h1>
-                  <p className="text-[15px] text-muted-foreground">Inserisci le tue credenziali per continuare.</p>
+                  <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-foreground">
+                    Accedi al tuo account
+                  </h1>
+                  <p className="text-[15px] text-muted-foreground">
+                    Inserisci le tue credenziali per continuare.
+                  </p>
                 </div>
 
                 {/* Google OAuth */}
@@ -311,7 +451,7 @@ export function LoginForm() {
                     className="df-social"
                     aria-label="Accedi con Google"
                     data-testid="login-google-btn"
-                    style={{width:"100%"}}
+                    style={{ width: "100%" }}
                     onClick={() => {
                       const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api";
                       const origin = apiBase.replace(/\/api\/?$/, "");
@@ -319,73 +459,220 @@ export function LoginForm() {
                     }}
                   >
                     <svg width="17" height="17" viewBox="0 0 18 18" fill="none">
-                      <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908C16.658 14.233 17.64 11.925 17.64 9.2z" fill="#4285F4"/>
-                      <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
-                      <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-                      <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+                      <path
+                        d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908C16.658 14.233 17.64 11.925 17.64 9.2z"
+                        fill="#4285F4"
+                      />
+                      <path
+                        d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"
+                        fill="#34A853"
+                      />
+                      <path
+                        d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
+                        fill="#FBBC05"
+                      />
+                      <path
+                        d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
+                        fill="#EA4335"
+                      />
                     </svg>
                     Continua con Google
                   </button>
                   <div className="df-divider">oppure continua con email</div>
                 </div>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-
+                <form
+                  onSubmit={handleSubmit(onSubmit)}
+                  className="space-y-4"
+                  noValidate
+                >
                   {/* Email */}
                   <div className="df-a df-a4 grid gap-1.5">
-                    <Label htmlFor="email" className="text-[13px] font-medium text-foreground">Indirizzo Email</Label>
-                    <div style={{position:"relative"}}>
-                      <Mail size={15} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
-                      <input id="email" type="email" placeholder="nome@azienda.it" disabled={isSubmitting}
-                        className={cn("df-input", errors.email && "err")} {...register("email")}/>
+                    <Label
+                      htmlFor="email"
+                      className="text-[13px] font-medium text-foreground"
+                    >
+                      Indirizzo Email
+                    </Label>
+                    <div style={{ position: "relative" }}>
+                      <Mail
+                        size={15}
+                        aria-hidden
+                        style={{
+                          position: "absolute",
+                          left: 12,
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          color: "#9ca3af",
+                          pointerEvents: "none",
+                        }}
+                      />
+                      <input
+                        id="email"
+                        type="email"
+                        placeholder="nome@azienda.it"
+                        disabled={isSubmitting}
+                        className={cn("df-input", errors.email && "err")}
+                        {...register("email")}
+                      />
                     </div>
-                    {errors.email && <p role="alert" className="text-[12px] text-red-500 font-medium">{errors.email.message}</p>}
+                    {errors.email && (
+                      <p
+                        role="alert"
+                        className="text-[12px] text-red-500 font-medium"
+                      >
+                        {errors.email.message}
+                      </p>
+                    )}
                   </div>
 
                   {/* Password */}
                   <div className="df-a df-a5 grid gap-1.5">
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                      <Label htmlFor="password" className="text-[13px] font-medium text-foreground">Password</Label>
-                      <Link href="/forgot-password" className="text-[12px] font-semibold text-primary hover:underline">
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <Label
+                        htmlFor="password"
+                        className="text-[13px] font-medium text-foreground"
+                      >
+                        Password
+                      </Label>
+                      <Link
+                        href="/forgot-password"
+                        className="text-[12px] font-semibold text-primary hover:underline"
+                      >
                         Password dimenticata?
                       </Link>
                     </div>
-                    <div style={{position:"relative"}}>
-                      <Lock size={15} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
-                      <input id="password" type={showPassword ? "text" : "password"} placeholder="••••••••"
-                        disabled={isSubmitting} className={cn("df-input", errors.password && "err")} {...register("password")}/>
-                      <button type="button" onClick={() => setShowPassword(!showPassword)} disabled={isSubmitting}
-                        aria-label={showPassword ? "Nascondi" : "Mostra"}
-                        style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}>
-                        {showPassword ? <EyeOff size={16} aria-hidden/> : <Eye size={16} aria-hidden/>}
-                      </button>
+                    <div style={{ position: "relative" }}>
+                      <Lock
+                        size={15}
+                        aria-hidden
+                        style={{
+                          position: "absolute",
+                          left: 12,
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          color: "#9ca3af",
+                          pointerEvents: "none",
+                        }}
+                      />
+                      <input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        disabled={isSubmitting}
+                        className={cn("df-input", errors.password && "err")}
+                        {...register("password")}
+                      />
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            disabled={isSubmitting}
+                            aria-label={showPassword ? "Nascondi" : "Mostra"}
+                            style={{
+                              position: "absolute",
+                              right: 12,
+                              top: "50%",
+                              transform: "translateY(-50%)",
+                              color: "#9ca3af",
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              padding: 0,
+                              display: "flex",
+                            }}
+                          >
+                            {showPassword ? (
+                              <EyeOff size={16} aria-hidden />
+                            ) : (
+                              <Eye size={16} aria-hidden />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          {showPassword
+                            ? "Nascondi password"
+                            : "Mostra password"}
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
-                    {errors.password && <p role="alert" className="text-[12px] text-red-500 font-medium">{errors.password.message}</p>}
+                    {errors.password && (
+                      <p
+                        role="alert"
+                        className="text-[12px] text-red-500 font-medium"
+                      >
+                        {errors.password.message}
+                      </p>
+                    )}
                   </div>
 
                   {/* Remember me */}
-                  <div className="df-a df-a5" style={{display:"flex",alignItems:"center",gap:10}}>
-                    <input type="checkbox" id="rememberMe"
-                      style={{width:16,height:16,borderRadius:4,accentColor:"#5B5BD6",cursor:"pointer",flexShrink:0}}
-                      {...register("rememberMe")}/>
-                    <Label htmlFor="rememberMe" className="text-[13px] text-muted-foreground cursor-pointer select-none">
+                  <div
+                    className="df-a df-a5"
+                    style={{ display: "flex", alignItems: "center", gap: 10 }}
+                  >
+                    <Controller
+                      name="rememberMe"
+                      control={control}
+                      render={({ field }) => (
+                        <Checkbox
+                          id="rememberMe"
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={isSubmitting}
+                          style={{ cursor: "pointer", flexShrink: 0 }}
+                        />
+                      )}
+                    />
+                    <Label
+                      htmlFor="rememberMe"
+                      className="text-[13px] text-muted-foreground cursor-pointer select-none"
+                    >
                       Ricordami per 30 giorni
                     </Label>
                   </div>
 
                   {generalError && (
-                    <div role="alert" className="flex items-center gap-2.5 rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-600 border border-red-100">
-                      <AlertCircle size={15} className="shrink-0" aria-hidden/><span>{generalError}</span>
+                    <div
+                      role="alert"
+                      className="flex items-center gap-2.5 rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-600 border border-red-100"
+                    >
+                      <AlertCircle size={15} className="shrink-0" aria-hidden />
+                      <span>{generalError}</span>
                     </div>
                   )}
 
                   <div className="df-a df-a6">
-                    <button type="submit" disabled={isSubmitting} className="df-primary">
-                      {isSubmitting
-                        ? <span style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden/>Accesso in corso...
-                          </span>
-                        : "Accedi"}
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="df-primary"
+                    >
+                      {isSubmitting ? (
+                        <span
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: 8,
+                          }}
+                        >
+                          <Loader2
+                            className="h-4 w-4 animate-spin"
+                            aria-hidden
+                          />
+                          Accesso in corso...
+                        </span>
+                      ) : (
+                        "Accedi"
+                      )}
                     </button>
                   </div>
                 </form>
@@ -393,93 +680,231 @@ export function LoginForm() {
                 <div className="df-a df-a7 space-y-3 text-center">
                   <p className="text-[13px] text-gray-500">
                     Non hai un account?{" "}
-                    <Link href="/register" className="font-semibold text-foreground hover:underline">Registrati gratis</Link>
+                    <Link
+                      href="/register"
+                      className="font-semibold text-foreground hover:underline"
+                    >
+                      Registrati gratis
+                    </Link>
                   </p>
                   <p className="text-[11px] text-gray-400 leading-relaxed">
                     Accedendo accetti i{" "}
-                    <Link href="/terms" className="underline underline-offset-2 hover:text-foreground">Termini</Link>
-                    {" "}e la{" "}
-                    <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">Privacy Policy</Link>.
+                    <Link
+                      href="/terms"
+                      className="underline underline-offset-2 hover:text-foreground"
+                    >
+                      Termini
+                    </Link>{" "}
+                    e la{" "}
+                    <Link
+                      href="/privacy"
+                      className="underline underline-offset-2 hover:text-foreground"
+                    >
+                      Privacy Policy
+                    </Link>
+                    .
                   </p>
                 </div>
               </div>
             </div>
 
             {/* RIGHT — floating card */}
-            <div className="relative hidden lg:flex flex-col justify-between overflow-hidden p-10 rounded-[24px]"
-              style={{background:"linear-gradient(135deg, #1B1B22 0%, #2E2A48 50%, #5B5BD6 130%)",minHeight:"740px",boxShadow:"var(--shadow-lg)"}}>
-              <div className="absolute inset-0 df-grid-bg"/>
-              <div className="absolute top-0 right-0 w-96 h-96 pointer-events-none"
-                style={{background:"radial-gradient(circle at 80% 10%,rgba(138,108,241,.22) 0%,transparent 60%)"}}/>
-              <div className="absolute bottom-0 left-0 w-96 h-64 pointer-events-none"
-                style={{background:"radial-gradient(circle at 20% 90%,rgba(91,91,214,.16) 0%,transparent 60%)"}}/>
+            <div
+              className="relative hidden lg:flex flex-col justify-between overflow-hidden p-10 rounded-[24px]"
+              style={{
+                background:
+                  "linear-gradient(135deg, #1B1B22 0%, #2E2A48 50%, #5B5BD6 130%)",
+                minHeight: "740px",
+                boxShadow: "var(--shadow-lg)",
+              }}
+            >
+              <div className="absolute inset-0 df-grid-bg" />
+              <div
+                className="absolute top-0 right-0 w-96 h-96 pointer-events-none"
+                style={{
+                  background:
+                    "radial-gradient(circle at 80% 10%,rgba(138,108,241,.22) 0%,transparent 60%)",
+                }}
+              />
+              <div
+                className="absolute bottom-0 left-0 w-96 h-64 pointer-events-none"
+                style={{
+                  background:
+                    "radial-gradient(circle at 20% 90%,rgba(91,91,214,.16) 0%,transparent 60%)",
+                }}
+              />
               {/* Frame overlay */}
-              <div className="absolute inset-[10px] rounded-[20px] pointer-events-none"
-                style={{border:"1.5px solid rgba(255,255,255,.1)",boxShadow:"inset 0 0 0 1px rgba(255,255,255,.04)"}}/>
+              <div
+                className="absolute inset-[10px] rounded-[20px] pointer-events-none"
+                style={{
+                  border: "1.5px solid rgba(255,255,255,.1)",
+                  boxShadow: "inset 0 0 0 1px rgba(255,255,255,.04)",
+                }}
+              />
 
               {/* Wave animation at bottom */}
-              <div className="absolute bottom-0 left-0 w-full overflow-hidden z-0" style={{height:160}}>
-                <div className="df-wave-wrap" style={{width:"200%",height:"100%",position:"relative"}}>
-                  <svg className="df-wave-svg df-wave3" viewBox="0 0 1080 160" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M0,90 C180,50 360,130 540,90 C720,50 900,130 1080,90 L1080,160 L0,160 Z" fill="rgba(138,108,241,.07)"/>
+              <div
+                className="absolute bottom-0 left-0 w-full overflow-hidden z-0"
+                style={{ height: 160 }}
+              >
+                <div
+                  className="df-wave-wrap"
+                  style={{
+                    width: "200%",
+                    height: "100%",
+                    position: "relative",
+                  }}
+                >
+                  <svg
+                    className="df-wave-svg df-wave3"
+                    viewBox="0 0 1080 160"
+                    preserveAspectRatio="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M0,90 C180,50 360,130 540,90 C720,50 900,130 1080,90 L1080,160 L0,160 Z"
+                      fill="rgba(138,108,241,.07)"
+                    />
                   </svg>
-                  <svg className="df-wave-svg df-wave2" viewBox="0 0 1080 160" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M0,80 C150,40 300,120 450,80 C600,40 750,120 900,80 C1000,50 1060,90 1080,80 L1080,160 L0,160 Z" fill="rgba(91,91,214,.08)"/>
+                  <svg
+                    className="df-wave-svg df-wave2"
+                    viewBox="0 0 1080 160"
+                    preserveAspectRatio="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M0,80 C150,40 300,120 450,80 C600,40 750,120 900,80 C1000,50 1060,90 1080,80 L1080,160 L0,160 Z"
+                      fill="rgba(91,91,214,.08)"
+                    />
                   </svg>
-                  <svg className="df-wave-svg df-wave1" viewBox="0 0 1080 160" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M0,60 C120,20 240,100 360,60 C480,20 600,100 720,60 C840,20 960,100 1080,60 L1080,160 L0,160 Z" fill="rgba(236,236,251,.09)"/>
+                  <svg
+                    className="df-wave-svg df-wave1"
+                    viewBox="0 0 1080 160"
+                    preserveAspectRatio="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      d="M0,60 C120,20 240,100 360,60 C480,20 600,100 720,60 C840,20 960,100 1080,60 L1080,160 L0,160 Z"
+                      fill="rgba(236,236,251,.09)"
+                    />
                   </svg>
                 </div>
               </div>
 
               {/* Logo */}
               <div className="relative z-10">
-                <Image src="/doflow_logo.svg" alt="Doflow" width={130} height={36}
-                  className="h-9 w-auto brightness-0 invert opacity-80"/>
+                <Image
+                  src="/doflow_logo.svg"
+                  alt="Doflow"
+                  width={130}
+                  height={36}
+                  className="h-9 w-auto brightness-0 invert opacity-80"
+                />
               </div>
 
               {/* Feature card */}
               <div className="relative z-10 space-y-5">
                 <div className="df-card df-slide-anim" key={slideIdx}>
-                  <span style={{
-                    display:"inline-block",fontSize:11,fontWeight:700,letterSpacing:"0.08em",
-                    textTransform:"uppercase",padding:"4px 12px",borderRadius:999,
-                    background:"rgba(255,255,255,.12)",color:"#ECECFB",marginBottom:16
-                  }}>{slide.tag}</span>
-                  <h2 style={{fontSize:26,fontWeight:800,color:"#fff",lineHeight:1.25,marginBottom:12,whiteSpace:"pre-line"}}>
+                  <span
+                    style={{
+                      display: "inline-block",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      padding: "4px 12px",
+                      borderRadius: 999,
+                      background: "rgba(255,255,255,.12)",
+                      color: "#ECECFB",
+                      marginBottom: 16,
+                    }}
+                  >
+                    {slide.tag}
+                  </span>
+                  <h2
+                    style={{
+                      fontSize: 26,
+                      fontWeight: 800,
+                      color: "#fff",
+                      lineHeight: 1.25,
+                      marginBottom: 12,
+                      whiteSpace: "pre-line",
+                    }}
+                  >
                     {slide.title}
                   </h2>
-                  <p style={{fontSize:14,lineHeight:1.65,color:"rgba(255,255,255,.55)"}}>
+                  <p
+                    style={{
+                      fontSize: 14,
+                      lineHeight: 1.65,
+                      color: "rgba(255,255,255,.55)",
+                    }}
+                  >
                     {slide.desc}
                   </p>
                 </div>
 
                 {/* Dots */}
-                <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                  {SLIDES.map((_,i) => (
-                    <button key={i} onClick={() => setSlideIdx(i)} aria-label={`Slide ${i+1}`}
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  {SLIDES.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setSlideIdx(i)}
+                      aria-label={`Slide ${i + 1}`}
                       className={cn("df-dot", i === slideIdx && "active")}
-                      style={{width: i === slideIdx ? 22 : 6}}/>
+                      style={{ width: i === slideIdx ? 22 : 6 }}
+                    />
                   ))}
                 </div>
               </div>
 
               {/* Stats */}
               <div className="relative z-10">
-                <p style={{fontSize:11,fontWeight:600,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,.3)",marginBottom:12}}>
+                <p
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    color: "rgba(255,255,255,.3)",
+                    marginBottom: 12,
+                  }}
+                >
                   Perché scegliere Doflow
                 </p>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
-                  {STATS.map(s => (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3,1fr)",
+                    gap: 10,
+                  }}
+                >
+                  {STATS.map((s) => (
                     <div key={s.label} className="df-stat">
-                      <p style={{fontSize:22,fontWeight:800,color:"#fff",lineHeight:1}}>{s.value}</p>
-                      <p style={{fontSize:11,color:"rgba(255,255,255,.4)",marginTop:4}}>{s.label}</p>
+                      <p
+                        style={{
+                          fontSize: 22,
+                          fontWeight: 800,
+                          color: "#fff",
+                          lineHeight: 1,
+                        }}
+                      >
+                        {s.value}
+                      </p>
+                      <p
+                        style={{
+                          fontSize: 11,
+                          color: "rgba(255,255,255,.4)",
+                          marginTop: 4,
+                        }}
+                      >
+                        {s.label}
+                      </p>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
-
           </div>
         </div>
       </div>
