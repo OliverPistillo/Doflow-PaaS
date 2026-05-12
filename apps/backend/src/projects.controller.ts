@@ -13,6 +13,7 @@ import { DataSource } from 'typeorm';
 import { hasRoleAtLeast, Role } from './roles';
 import { AuditService } from './audit.service';
 import { ProjectsEventsService } from './realtime/projects-events.service';
+import { RequireFeature } from './feature-access/feature-access.decorator';
 
 type CreateProjectBody = {
   name: string;
@@ -42,6 +43,7 @@ type TaskRow = {
   updated_at: string;
 };
 
+@RequireFeature('ops.kanban')
 @Controller('projects')
 export class ProjectsController {
   constructor(

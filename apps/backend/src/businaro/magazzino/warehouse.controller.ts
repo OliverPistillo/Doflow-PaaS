@@ -12,7 +12,9 @@ import { BusinaroDepartment } from '../common/enums';
 // IMPORTANTE: questi helper esistono già nel tuo progetto
 // Adattali al nome reale: in struttura vedo "tenant-helpers.ts"
 import { getTenantConn } from '../../tenant-helpers';
+import { RequireFeature } from '../../feature-access/feature-access.decorator';
 
+@RequireFeature('vert.manufacturing')
 @Controller('businaro/warehouse')
 @UseGuards(BusinaroDepartmentGuard)
 export class BusinaroWarehouseController {

@@ -1,7 +1,9 @@
 import { Controller, Post, Body, Get, UseGuards, Request, HttpException, HttpStatus } from '@nestjs/common';
 import { Logger } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import { RequireFeature } from '../feature-access/feature-access.decorator';
 
+@RequireFeature('vert.manufacturing')
 @UseGuards(AuthGuard('jwt'))
 @Controller('businaro')
 export class BusinaroController {

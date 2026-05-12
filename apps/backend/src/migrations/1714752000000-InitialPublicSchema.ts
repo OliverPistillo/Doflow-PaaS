@@ -24,6 +24,11 @@ export class InitialPublicSchema1714752000000 implements MigrationInterface {
         password_hash TEXT,
         role          TEXT         NOT NULL DEFAULT 'user',
         tenant_id     TEXT,
+        full_name     TEXT,
+        auth_provider TEXT         NOT NULL DEFAULT 'password',
+        google_id     TEXT,
+        avatar_url    TEXT,
+        email_verified_at TIMESTAMP,
         mfa_enabled   BOOLEAN      DEFAULT false,
         mfa_secret    TEXT,
         is_active     BOOLEAN      DEFAULT true,
@@ -36,6 +41,9 @@ export class InitialPublicSchema1714752000000 implements MigrationInterface {
     );
     await queryRunner.query(
       `CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON public.users(tenant_id)`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON public.users(google_id) WHERE google_id IS NOT NULL`,
     );
 
     // ─── public.invites ────────────────────────────────────────

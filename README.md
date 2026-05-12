@@ -309,7 +309,8 @@ Il middleware setta `req.tenantConnection` con la connessione TypeORM al schema 
 - **Wizard di signup 3-step**: Account → Azienda → Conferma, con slug auto-generato + validazione live
 - **Onboarding Odoo-style**: 10 settori pre-configurati che pre-selezionano automaticamente i moduli giusti per quel business
 - **Tier-aware locking**: i moduli sopra il tuo piano sono mostrati con lucchetto (drive di upselling)
-- **Dashboard dinamica**: composta dai widget dei moduli attivi, riconfigurabile
+- **Backend feature enforcement**: le API protette verificano tenant attivo, piano minimo e subscription modulo `ACTIVE/TRIAL`; il lucchetto UI non è l'unica barriera
+- **Dashboard dinamica**: composta dai widget dei moduli attivi, riconfigurabile; il backend rifiuta widget sopra piano nel salvataggio layout
 - **Design dark/glassmorphism**: gradient blu→viola, blur 16px, micro-animazioni `cubic-bezier(0.22,1,0.36,1)`
 - **Font**: Outfit per signup/onboarding (display moderno), Nunito Sans per app interne
 - **Responsive desktop-first** con breakpoint mobile completi
@@ -394,6 +395,7 @@ JWT_SECRET=<64-char-hex-string>
 
 # Public URLs
 PUBLIC_API_URL=https://api.tuodominio.com/api
+APP_BASE_URL=https://app.tuodominio.com
 
 # Google OAuth (https://console.cloud.google.com/)
 GOOGLE_OAUTH_CLIENT_ID=<your-client-id>.apps.googleusercontent.com
@@ -424,7 +426,7 @@ JWT_SECRET=<dev-secret>
 JWT_EXPIRES_IN=15m
 GOOGLE_OAUTH_CLIENT_ID=...
 GOOGLE_OAUTH_CLIENT_SECRET=...
-GOOGLE_OAUTH_REDIRECT_URI=http://localhost:3000/auth/google/callback
+GOOGLE_OAUTH_REDIRECT_URI=http://localhost:4000/api/auth/google/callback
 APP_BASE_URL=http://localhost:3000
 ```
 
@@ -462,6 +464,21 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 | GET | `/api/tenant/self-service/onboarding/status` | Stato onboarding (per redirect) |
 | GET | `/api/tenant/self-service/notifications` | Notifiche tenant |
 | GET | `/api/tenant/self-service/tickets` | Lista ticket di supporto |
+
+### Enforcement piani/moduli
+
+Le route annotate con `@RequireFeature('module.key')` sono bloccate lato backend se il tenant non ha:
+
+1. tenant attivo in `public.tenants`;
+2. `plan_tier` sufficiente rispetto a `public.platform_modules.minTier`;
+3. subscription `ACTIVE` o `TRIAL` non scaduta in `public.tenant_subscriptions`.
+
+Esempi già protetti:
+
+- `crm.sales-intel` → `/api/sales-intel/*`
+- `ops.kanban` → `/api/projects/*`
+- `vert.beauty` → `/api/clienti`, `/api/trattamenti`, `/api/appuntamenti`, `/api/federicanerone/settings`
+- `vert.manufacturing` → `/api/businaro/*`
 
 ### Superadmin (richiede ruolo `superadmin`)
 

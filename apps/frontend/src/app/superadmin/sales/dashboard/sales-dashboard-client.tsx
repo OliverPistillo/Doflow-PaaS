@@ -77,7 +77,7 @@ function KpiCard({
           </div>
         </div>
         
-        <h3 className="text-3xl font-black mt-3 tracking-tight tabular-nums" style={{ fontFamily: "'Urbanist', sans-serif" }}>
+        <h3 className="text-3xl font-black mt-3 tracking-tight tabular-nums" style={{ fontFamily: "var(--font-sans)" }}>
           {value}
         </h3>
         
@@ -220,7 +220,7 @@ export default function SalesDashboardClient() {
               <p className="text-sm font-bold uppercase tracking-wider opacity-70">
                 In chiusura (Mese corrente o selezionato)
               </p>
-              <p className="text-3xl font-black mt-1" style={{ fontFamily: "'Urbanist', sans-serif" }}>
+              <p className="text-3xl font-black mt-1" style={{ fontFamily: "var(--font-sans)" }}>
                 {data.kpi.dealsClosingThisMonth}{' '}
                 <span className="text-lg font-medium opacity-80">deals critici</span>
               </p>
@@ -270,7 +270,7 @@ export default function SalesDashboardClient() {
                       borderRadius: '12px',
                       border: '1px solid hsl(var(--border))',
                       boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
-                      fontFamily: "'Urbanist', sans-serif",
+                      fontFamily: "var(--font-sans)",
                       color: 'hsl(var(--foreground))'
                     }}
                     formatter={(val: unknown) => [formatCurrency(Number(val) || 0), 'Valore']}
@@ -313,7 +313,7 @@ export default function SalesDashboardClient() {
                         borderRadius: '8px',
                         border: '1px solid hsl(var(--border))',
                         backgroundColor: 'hsl(var(--card))',
-                        fontFamily: "'Urbanist', sans-serif",
+                        fontFamily: "var(--font-sans)",
                         color: 'hsl(var(--foreground))'
                       }}
                     />
@@ -367,7 +367,7 @@ export default function SalesDashboardClient() {
                       backgroundColor: 'hsl(var(--card))',
                       borderRadius: '12px',
                       border: '1px solid hsl(var(--border))',
-                      fontFamily: "'Urbanist', sans-serif",
+                      fontFamily: "var(--font-sans)",
                       color: 'hsl(var(--foreground))'
                     }}
                     formatter={(val: unknown) => [formatCurrency(Number(val) || 0), 'Valore']}

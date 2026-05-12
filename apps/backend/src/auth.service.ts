@@ -201,7 +201,8 @@ export class AuthService {
     if (directoryLookup.length > 0) {
         const userMap = directoryLookup[0];
         
-        if (!userMap.tenant_id || userMap.tenant_id === 'public' || ['superadmin', 'owner'].includes(userMap.role)) {
+        const mappedRole = String(userMap.role || '').toLowerCase();
+        if (!userMap.tenant_id || userMap.tenant_id === 'public' || ['superadmin', 'super_admin'].includes(mappedRole)) {
              return this.loginInTenant(conn, 'public', email, password);
         }
 

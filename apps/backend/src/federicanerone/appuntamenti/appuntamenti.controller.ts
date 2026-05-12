@@ -2,7 +2,9 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res } fr
 import { Request, Response } from 'express';
 import { assertAuthenticated, assertFedericaTenant, getTenantConn, respondError } from '../../tenant-helpers';
 import { AppuntamentiService, CreateAppuntamentoDto, UpdateAppuntamentoDto } from './appuntamenti.service';
+import { RequireFeature } from '../../feature-access/feature-access.decorator';
 
+@RequireFeature('vert.beauty')
 @Controller('appuntamenti')
 export class AppuntamentiController {
   constructor(private readonly service: AppuntamentiService) {}

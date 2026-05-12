@@ -25,7 +25,14 @@ export class TenantSelfServiceController {
 
   private getTenantId(req: Request): string {
     const user = (req as any).user;
-    return (req as any).tenantId || user?.tenantId || user?.tenant_id || 'public';
+    const jwtTenant = user?.tenantId || user?.tenant_id;
+    const routedTenant = (req as any).tenantId;
+
+    // Per il portale self-service il tenant autenticato è la fonte autorevole.
+    // Su app.doflow.it/localhost il middleware risolve spesso `public`; se lo
+    // preferiamo al JWT, un nuovo owner appena registrato non vede il wizard.
+    if (jwtTenant && jwtTenant !== 'public') return jwtTenant;
+    return routedTenant || jwtTenant || 'public';
   }
 
   private async findTenant(tenantIdentifier: string) {
@@ -34,6 +41,17 @@ export class TenantSelfServiceController {
       .createQueryBuilder('t')
       .where('t.id::text = :id OR t.slug = :id OR t.schemaName = :id', { id: tenantIdentifier })
       .getOne();
+  }
+
+
+  private isSubscriptionActive(sub: TenantSubscription): boolean {
+    if (!['ACTIVE', 'TRIAL'].includes(sub.status)) return false;
+
+    const now = Date.now();
+    if (sub.expiresAt && new Date(sub.expiresAt).getTime() <= now) return false;
+    if (sub.status === 'TRIAL' && sub.trialEndsAt && new Date(sub.trialEndsAt).getTime() <= now) return false;
+
+    return true;
   }
 
   /** Info piano del tenant corrente */
@@ -70,7 +88,7 @@ export class TenantSelfServiceController {
     const allModules = await this.moduleRepo.find({ order: { category: 'ASC', name: 'ASC' } });
 
     return {
-      active: subs.filter(s => s.status === 'ACTIVE' || s.status === 'TRIAL').map(s => ({
+      active: subs.filter(s => this.isSubscriptionActive(s)).map(s => ({
         key: s.moduleKey,
         name: s.module?.name || s.moduleKey,
         category: s.module?.category,
@@ -86,7 +104,7 @@ export class TenantSelfServiceController {
         minTier: m.minTier,
         priceMonthly: m.priceMonthly,
         isBeta: m.isBeta,
-        isActive: subs.some(s => s.moduleKey === m.key && (s.status === 'ACTIVE' || s.status === 'TRIAL')),
+        isActive: subs.some(s => s.moduleKey === m.key && this.isSubscriptionActive(s)),
       })),
     };
   }
@@ -154,7 +172,7 @@ export class TenantSelfServiceController {
         } else if (existing.status === 'CANCELLED' || existing.status === 'EXPIRED') {
           await this.subRepo.update(existing.id, { status: 'ACTIVE' });
         }
-      } else if (existing && existing.status === 'ACTIVE') {
+      } else if (existing && (existing.status === 'ACTIVE' || existing.status === 'TRIAL')) {
         await this.subRepo.update(existing.id, { status: 'CANCELLED' });
       }
     }

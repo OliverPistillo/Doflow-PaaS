@@ -2,7 +2,7 @@
 // Refactored 1:1 dal Figma:
 //   elm/general/field/gray → bg #f4f9fd, border-radius 14px, no border in default
 //   Search field           → bg white, radius 14px, shadow-card
-//   Font: 16px SemiBold Nunito Sans, color #0a1629 | placeholder #7d8592
+//   Font: 16px SemiBold Inter, color #0E0E0C | placeholder #6B6A63
 
 import * as React from "react";
 import { cn } from "@/lib/utils";

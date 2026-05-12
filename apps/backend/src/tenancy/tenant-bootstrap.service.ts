@@ -79,6 +79,11 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
         email         TEXT         NOT NULL UNIQUE,
         password_hash TEXT,
         role          TEXT         NOT NULL DEFAULT 'user',
+        full_name     TEXT,
+        auth_provider TEXT         NOT NULL DEFAULT 'password',
+        google_id     TEXT,
+        avatar_url    TEXT,
+        email_verified_at TIMESTAMP,
         mfa_enabled   BOOLEAN      DEFAULT false,
         mfa_secret    TEXT,
         is_active     BOOLEAN      DEFAULT true,
@@ -86,7 +91,13 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
         updated_at    TIMESTAMP    DEFAULT NOW()
       )
     `);
+    await ds.query(`ALTER TABLE "${s}".users ADD COLUMN IF NOT EXISTS full_name TEXT`);
+    await ds.query(`ALTER TABLE "${s}".users ADD COLUMN IF NOT EXISTS auth_provider TEXT NOT NULL DEFAULT 'password'`);
+    await ds.query(`ALTER TABLE "${s}".users ADD COLUMN IF NOT EXISTS google_id TEXT`);
+    await ds.query(`ALTER TABLE "${s}".users ADD COLUMN IF NOT EXISTS avatar_url TEXT`);
+    await ds.query(`ALTER TABLE "${s}".users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP`);
     await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_users_email" ON "${s}".users(lower(email))`);
+    await ds.query(`CREATE UNIQUE INDEX IF NOT EXISTS "idx_${s}_users_google_id" ON "${s}".users(google_id) WHERE google_id IS NOT NULL`);
 
     await ds.query(`
       CREATE TABLE IF NOT EXISTS "${s}".invites (

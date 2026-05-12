@@ -71,8 +71,7 @@ export default function RegisterPage() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800&display=swap');
-        .dfr-wrap * { font-family:'Urbanist',sans-serif; }
+        .dfr-wrap * { font-family:var(--font-sans); }
         @keyframes dfrUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
         .dfr-a{animation:dfrUp .45s ease both}
         .dfr-a1{animation-delay:.04s}.dfr-a2{animation-delay:.08s}.dfr-a3{animation-delay:.12s}
@@ -80,36 +79,36 @@ export default function RegisterPage() {
         .dfr-a7{animation-delay:.28s}.dfr-a8{animation-delay:.32s}
         .dfr-input{
           display:block;width:100%;height:44px;border-radius:12px;
-          border:1.5px solid #e5e7eb;background:#f9fafb;
-          font-size:14px;font-family:'Urbanist',sans-serif;
-          padding:0 44px 0 40px;outline:none;color:#111827;
+          border:1px solid var(--df-line-2);background:var(--df-surface);
+          font-size:14px;font-family:var(--font-sans);
+          padding:0 44px 0 40px;outline:none;color:var(--df-ink);
           transition:border-color .18s,background .18s,box-shadow .18s;
         }
-        .dfr-input::placeholder{color:#9ca3af}
-        .dfr-input:focus{background:#fff;border-color:#1a2332;box-shadow:0 0 0 3px rgba(26,35,50,.09)}
+        .dfr-input::placeholder{color:var(--df-muted-2)}
+        .dfr-input:focus{background:#fff;border-color:var(--df-accent);box-shadow:0 0 0 3px rgba(91,91,214,.12)}
         .dfr-input.err{border-color:#ef4444}
         .dfr-input.err:focus{box-shadow:0 0 0 3px rgba(239,68,68,.1)}
         .dfr-input-no-icon{padding-left:14px}
         .dfr-primary{
           width:100%;height:44px;border-radius:12px;border:none;cursor:pointer;
-          font-size:14px;font-weight:700;font-family:'Urbanist',sans-serif;
-          color:#fff;background:#1a2332;
-          box-shadow:0 4px 14px rgba(26,35,50,.3);
+          font-size:14px;font-weight:600;font-family:var(--font-sans);
+          color:#fff;background:var(--df-accent);
+          box-shadow:var(--shadow-button);
           transition:all .2s;
         }
-        .dfr-primary:hover:not(:disabled){background:#243045;transform:translateY(-1px);box-shadow:0 6px 20px rgba(26,35,50,.35)}
+        .dfr-primary:hover:not(:disabled){background:#4E4EC8;transform:translateY(-1px);box-shadow:0 12px 28px -16px rgba(91,91,214,.75)}
         .dfr-primary:active:not(:disabled){transform:translateY(0)}
         .dfr-primary:disabled{opacity:.6;cursor:not-allowed}
         .dfr-social{
-          flex:1;height:42px;border-radius:12px;border:1.5px solid #e5e7eb;
-          background:#fff;cursor:pointer;display:flex;align-items:center;
+          flex:1;height:42px;border-radius:12px;border:1px solid var(--df-line);
+          background:var(--df-surface);cursor:pointer;display:flex;align-items:center;
           justify-content:center;gap:7px;font-size:13px;font-weight:600;
-          font-family:'Urbanist',sans-serif;color:#374151;
+          font-family:var(--font-sans);color:var(--df-ink-2);
           transition:border-color .15s,background .15s;
         }
-        .dfr-social:hover{border-color:#d1d5db;background:#f9fafb}
-        .dfr-divider{display:flex;align-items:center;gap:10px;color:#9ca3af;font-size:12px;font-weight:500}
-        .dfr-divider::before,.dfr-divider::after{content:'';flex:1;height:1px;background:#e5e7eb}
+        .dfr-social:hover{border-color:var(--df-line-2);background:var(--df-surface-2)}
+        .dfr-divider{display:flex;align-items:center;gap:10px;color:var(--df-muted-2);font-size:11px;font-family:var(--font-mono);font-weight:500;text-transform:uppercase;letter-spacing:.12em}
+        .dfr-divider::before,.dfr-divider::after{content:'';flex:1;height:1px;background:var(--df-line)}
         .dfr-grid-bg{
           background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),
             linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);
@@ -119,7 +118,7 @@ export default function RegisterPage() {
         .dfr-check{
           width:20px;height:20px;border-radius:6px;flex-shrink:0;margin-top:1px;
           display:flex;align-items:center;justify-content:center;
-          background:rgba(59,130,246,.15);
+          background:rgba(91,91,214,.16);
         }
         .dfr-testimonial{
           background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
@@ -127,17 +126,17 @@ export default function RegisterPage() {
         }
         .dfr-success{
           border-radius:16px;padding:20px;text-align:center;
-          background:#f0fdf4;border:1.5px solid #86efac;
+          background:#DCFCE7;border:1px solid #86efac;
         }
       `}</style>
 
-      <div className="dfr-wrap flex min-h-screen items-center justify-center bg-[#edf0f4] p-4 md:p-8">
+      <div className="dfr-wrap flex min-h-screen items-center justify-center bg-background p-4 md:p-8">
         <div className="w-full max-w-[1060px] overflow-hidden rounded-[26px]"
           style={{boxShadow:"0 24px 80px rgba(0,0,0,.16),0 4px 16px rgba(0,0,0,.08)"}}>
           <div className="grid lg:grid-cols-[480px_1fr]">
 
             {/* LEFT: form */}
-            <div className="flex flex-col justify-center bg-white px-8 py-10 md:px-10 lg:px-12">
+            <div className="flex flex-col justify-center bg-card px-8 py-10 md:px-10 lg:px-12">
               <div className="mx-auto w-full max-w-[380px] space-y-5">
 
                 <div className="dfr-a dfr-a1">
@@ -145,8 +144,8 @@ export default function RegisterPage() {
                 </div>
 
                 <div className="dfr-a dfr-a2 space-y-1">
-                  <h1 className="text-[24px] font-bold tracking-tight text-gray-900">Crea il tuo account</h1>
-                  <p className="text-[13.5px] text-gray-500">14 giorni gratis, nessuna carta richiesta.</p>
+                  <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-foreground">Crea il tuo account</h1>
+                  <p className="text-[15px] text-muted-foreground">14 giorni gratis, nessuna carta richiesta.</p>
                 </div>
 
                 {success ? (
@@ -184,7 +183,7 @@ export default function RegisterPage() {
                       {/* Nome + Azienda */}
                       <div className="dfr-a dfr-a4" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                         <div className="grid gap-1.5">
-                          <Label htmlFor="name" className="text-[13px] font-semibold text-gray-700">Nome *</Label>
+                          <Label htmlFor="name" className="text-[13px] font-medium text-foreground">Nome *</Label>
                           <div style={{position:"relative"}}>
                             <User size={14} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
                             <input id="name" type="text" placeholder="Mario Rossi" disabled={isSubmitting}
@@ -193,7 +192,7 @@ export default function RegisterPage() {
                           {errors.name && <p role="alert" className="text-[11px] text-red-500 font-medium">{errors.name.message}</p>}
                         </div>
                         <div className="grid gap-1.5">
-                          <Label htmlFor="company" className="text-[13px] font-semibold text-gray-700">Azienda</Label>
+                          <Label htmlFor="company" className="text-[13px] font-medium text-foreground">Azienda</Label>
                           <div style={{position:"relative"}}>
                             <Building2 size={14} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
                             <input id="company" type="text" placeholder="Acme Srl" disabled={isSubmitting}
@@ -204,7 +203,7 @@ export default function RegisterPage() {
 
                       {/* Email */}
                       <div className="dfr-a dfr-a5 grid gap-1.5">
-                        <Label htmlFor="reg-email" className="text-[13px] font-semibold text-gray-700">Email *</Label>
+                        <Label htmlFor="reg-email" className="text-[13px] font-medium text-foreground">Email *</Label>
                         <div style={{position:"relative"}}>
                           <Mail size={14} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
                           <input id="reg-email" type="email" placeholder="nome@azienda.it" disabled={isSubmitting}
@@ -216,7 +215,7 @@ export default function RegisterPage() {
                       {/* Password */}
                       <div className="dfr-a dfr-a6" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                         <div className="grid gap-1.5">
-                          <Label htmlFor="reg-password" className="text-[13px] font-semibold text-gray-700">Password *</Label>
+                          <Label htmlFor="reg-password" className="text-[13px] font-medium text-foreground">Password *</Label>
                           <div style={{position:"relative"}}>
                             <Lock size={14} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
                             <input id="reg-password" type={showPwd ? "text" : "password"} placeholder="Min. 8 caratteri"
@@ -229,7 +228,7 @@ export default function RegisterPage() {
                           {errors.password && <p role="alert" className="text-[11px] text-red-500 font-medium">{errors.password.message}</p>}
                         </div>
                         <div className="grid gap-1.5">
-                          <Label htmlFor="confirmPassword" className="text-[13px] font-semibold text-gray-700">Conferma *</Label>
+                          <Label htmlFor="confirmPassword" className="text-[13px] font-medium text-foreground">Conferma *</Label>
                           <div style={{position:"relative"}}>
                             <Lock size={14} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
                             <input id="confirmPassword" type={showConfirm ? "text" : "password"} placeholder="Ripeti password"
@@ -246,13 +245,13 @@ export default function RegisterPage() {
                       {/* Accept terms */}
                       <div className="dfr-a dfr-a7" style={{display:"flex",alignItems:"flex-start",gap:10}}>
                         <input type="checkbox" id="acceptTerms"
-                          style={{width:16,height:16,borderRadius:4,accentColor:"#1a2332",cursor:"pointer",flexShrink:0,marginTop:2}}
+                          style={{width:16,height:16,borderRadius:4,accentColor:"#5B5BD6",cursor:"pointer",flexShrink:0,marginTop:2}}
                           {...register("acceptTerms")}/>
-                        <Label htmlFor="acceptTerms" className="text-[12.5px] text-gray-500 cursor-pointer leading-relaxed">
+                        <Label htmlFor="acceptTerms" className="text-[12.5px] text-muted-foreground cursor-pointer leading-relaxed">
                           Accetto i{" "}
-                          <Link href="/terms" className="font-semibold text-[#1a2332] hover:underline">Termini di Servizio</Link>
+                          <Link href="/terms" className="font-semibold text-foreground hover:underline">Termini di Servizio</Link>
                           {" "}e la{" "}
-                          <Link href="/privacy" className="font-semibold text-[#1a2332] hover:underline">Privacy Policy</Link>
+                          <Link href="/privacy" className="font-semibold text-foreground hover:underline">Privacy Policy</Link>
                         </Label>
                       </div>
                       {errors.acceptTerms && <p role="alert" className="text-[11px] text-red-500 font-medium -mt-2">{errors.acceptTerms.message}</p>}
@@ -274,9 +273,9 @@ export default function RegisterPage() {
                       </div>
                     </form>
 
-                    <p className="text-center text-[13px] text-gray-500 dfr-a dfr-a8">
+                    <p className="text-center text-[13px] text-muted-foreground dfr-a dfr-a8">
                       Hai già un account?{" "}
-                      <Link href="/login" className="font-semibold text-[#1a2332] hover:underline">Accedi</Link>
+                      <Link href="/login" className="font-semibold text-foreground hover:underline">Accedi</Link>
                     </p>
                   </>
                 )}
@@ -285,12 +284,12 @@ export default function RegisterPage() {
 
             {/* RIGHT */}
             <div className="relative hidden lg:flex flex-col justify-between overflow-hidden p-10"
-              style={{background:"#1a2332",minHeight:"640px"}}>
+              style={{background:"linear-gradient(135deg, #1B1B22 0%, #2E2A48 50%, #5B5BD6 130%)",minHeight:"640px"}}>
               <div className="absolute inset-0 dfr-grid-bg"/>
               <div className="absolute top-0 right-0 w-96 h-96 pointer-events-none"
-                style={{background:"radial-gradient(circle at 80% 10%,rgba(59,130,246,.22) 0%,transparent 60%)"}}/>
+                style={{background:"radial-gradient(circle at 80% 10%,rgba(138,108,241,.22) 0%,transparent 60%)"}}/>
               <div className="absolute bottom-0 left-0 w-96 h-64 pointer-events-none"
-                style={{background:"radial-gradient(circle at 20% 90%,rgba(99,102,241,.15) 0%,transparent 60%)"}}/>
+                style={{background:"radial-gradient(circle at 20% 90%,rgba(91,91,214,.16) 0%,transparent 60%)"}}/>
 
               <div className="relative z-10">
                 <Image src="/doflow_logo.svg" alt="Doflow" width={90} height={24}
@@ -307,7 +306,7 @@ export default function RegisterPage() {
                       <div key={i} className="dfr-bullet">
                         <div className="dfr-check">
                           <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-                            <path d="M2 6l3 3 5-5" stroke="#60a5fa" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                            <path d="M2 6l3 3 5-5" stroke="#ECECFB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
                           </svg>
                         </div>
                         <p style={{fontSize:14,color:"rgba(255,255,255,.75)",lineHeight:1.5}}>{b}</p>
@@ -321,7 +320,7 @@ export default function RegisterPage() {
                     &ldquo;{TESTIMONIAL.quote}&rdquo;
                   </p>
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <div style={{width:36,height:36,borderRadius:"50%",background:"rgba(59,130,246,.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#93c5fd",flexShrink:0}}>
+                    <div style={{width:36,height:36,borderRadius:"50%",background:"rgba(91,91,214,.24)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#ECECFB",flexShrink:0}}>
                       {TESTIMONIAL.author[0]}
                     </div>
                     <div>

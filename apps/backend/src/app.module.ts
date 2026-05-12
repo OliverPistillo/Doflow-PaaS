@@ -45,6 +45,7 @@ import { SuperadminAuditController } from './audit.controller';
 import { FileStorageService } from './file-storage.service';
 import { ProjectsEventsService } from './realtime/projects-events.service';
 import { TrafficGuard } from './traffic-control/traffic.guard';
+import { FeatureAccessGuard } from './feature-access/feature-access.guard';
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 import { TenancyMiddleware } from './tenancy/tenancy.middleware';
@@ -130,6 +131,7 @@ import { OutreachCampaign } from './sales-intelligence/entities/outreach-campaig
     FileStorageService,
     ProjectsEventsService,
     { provide: APP_GUARD, useClass: TrafficGuard },
+    { provide: APP_GUARD, useClass: FeatureAccessGuard },
   ],
 })
 export class AppModule implements NestModule {

@@ -11,7 +11,9 @@ import { BusinaroProductionService } from './production.service';
 
 // CORREZIONE QUI: ../../ per tornare alla root di src
 import { getTenantConn } from '../../tenant-helpers';
+import { RequireFeature } from '../../feature-access/feature-access.decorator';
 
+@RequireFeature('vert.manufacturing')
 @Controller('businaro/production')
 @UseGuards(BusinaroDepartmentGuard)
 export class BusinaroProductionController {

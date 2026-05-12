@@ -1,5 +1,5 @@
 // apps/backend/src/auth/dto/signup-tenant.dto.ts
-import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength, Matches } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength, Matches, ValidateIf } from 'class-validator';
 
 export class SignupTenantDto {
   // Account fields
@@ -7,9 +7,18 @@ export class SignupTenantDto {
   @IsNotEmpty()
   email!: string;
 
+  @ValidateIf((o: SignupTenantDto) => !o.googleSignupToken)
   @IsString()
   @MinLength(8, { message: 'La password deve avere almeno 8 caratteri' })
-  password!: string;
+  password?: string;
+
+  /**
+   * Token firmato dal backend dopo callback Google.
+   * Permette la creazione tenant senza password, senza fidarsi dei query param del frontend.
+   */
+  @IsString()
+  @IsOptional()
+  googleSignupToken?: string;
 
   @IsString()
   @IsOptional()

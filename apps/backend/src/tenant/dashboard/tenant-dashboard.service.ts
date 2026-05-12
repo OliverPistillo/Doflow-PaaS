@@ -1,12 +1,61 @@
-import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, Logger, InternalServerErrorException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { safeSchema } from '../../common/schema.utils';
+import { DASHBOARD_WIDGET_MIN_PLAN, normalizePlan, planIncludes, PlanTier } from '../../feature-access/dashboard-widget-access';
 
 @Injectable()
 export class TenantDashboardService {
   private readonly logger = new Logger(TenantDashboardService.name);
 
   constructor(private readonly dataSource: DataSource) {}
+
+  private async getTenantPlan(schema: string): Promise<PlanTier> {
+    if (!schema || schema === 'public') return 'ENTERPRISE';
+
+    const rows = await this.dataSource.query(
+      `SELECT plan_tier AS "planTier"
+       FROM public.tenants
+       WHERE schema_name = $1 OR slug = $1 OR id::text = $1
+       LIMIT 1`,
+      [schema],
+    );
+
+    return normalizePlan(rows[0]?.planTier);
+  }
+
+  private assertWidgetsAllowed(plan: PlanTier, widgets: WidgetInput[]) {
+    const violations: Array<{ widget: string; requiredPlan: PlanTier }> = [];
+    const unknown: string[] = [];
+
+    for (const widget of widgets || []) {
+      const key = String(widget.moduleKey || widget.i || '').trim();
+      const required = DASHBOARD_WIDGET_MIN_PLAN[key];
+      if (!key || !required) {
+        unknown.push(key || '(empty)');
+        continue;
+      }
+      if (!planIncludes(plan, required)) {
+        violations.push({ widget: key, requiredPlan: required });
+      }
+    }
+
+    if (unknown.length > 0) {
+      throw new BadRequestException({
+        error: 'UNKNOWN_DASHBOARD_WIDGET',
+        widgets: unknown,
+        message: 'Widget dashboard non riconosciuto.',
+      });
+    }
+
+    if (violations.length > 0) {
+      throw new ForbiddenException({
+        error: 'DASHBOARD_WIDGET_PLAN_REQUIRED',
+        currentPlan: plan,
+        violations,
+        message: 'Il layout contiene widget non inclusi nel piano attuale.',
+      });
+    }
+  }
 
   // ─────────────────────────────────────────────────────────────
   //  GET LAYOUT
@@ -40,7 +89,11 @@ export class TenantDashboardService {
       [userId],
     );
 
-    return rows as WidgetRow[];
+    const plan = await this.getTenantPlan(safe);
+    return (rows as WidgetRow[]).filter((w) => {
+      const required = DASHBOARD_WIDGET_MIN_PLAN[w.moduleKey || w.i];
+      return required ? planIncludes(plan, required) : false;
+    });
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -69,6 +122,9 @@ export class TenantDashboardService {
         `Run tenant bootstrap to provision the schema correctly.`,
       );
     }
+
+    const plan = await this.getTenantPlan(safe);
+    this.assertWidgetsAllowed(plan, widgets);
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();

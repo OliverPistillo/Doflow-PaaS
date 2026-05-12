@@ -13,10 +13,10 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        // Figma usa "Nunito Sans" come font system principale
+        // Doflow UI Review: Inter come font principale
         sans: [
-          "'Nunito Sans'",
           "var(--font-sans)",
+          "'Inter'",
           "ui-sans-serif",
           "system-ui",
           "sans-serif",
@@ -56,11 +56,11 @@ const config: Config = {
       // ── Colors (tutte semantiche → CSS vars) ───────────────────────
       colors: {
         // Figma raw primitives (usati solo dove si vuole il valore esatto)
-        "figma-blue":    "#052136",
-        "figma-bg":      "#f4f9fd",
-        "figma-dark":    "#052136",
-        "figma-muted":   "#7d8592",
-        "figma-gray":    "#f4f9fd",
+        "figma-blue":    "#5B5BD6",
+        "figma-bg":      "#FAFAF7",
+        "figma-dark":    "#0E0E0C",
+        "figma-muted":   "#6B6A63",
+        "figma-gray":    "#F4F3EE",
 
         // shadcn/ui semantic colors
         background:    "hsl(var(--background))",

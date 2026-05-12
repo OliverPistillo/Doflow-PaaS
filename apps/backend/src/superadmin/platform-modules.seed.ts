@@ -135,6 +135,11 @@ export class PlatformModulesSeedService implements OnApplicationBootstrap {
           password_hash TEXT,
           role          TEXT         NOT NULL DEFAULT 'user',
           tenant_id     TEXT,
+          full_name     TEXT,
+          auth_provider TEXT         NOT NULL DEFAULT 'password',
+          google_id     TEXT,
+          avatar_url    TEXT,
+          email_verified_at TIMESTAMP,
           mfa_enabled   BOOLEAN      DEFAULT false,
           mfa_secret    TEXT,
           is_active     BOOLEAN      DEFAULT true,
@@ -142,6 +147,13 @@ export class PlatformModulesSeedService implements OnApplicationBootstrap {
           updated_at    TIMESTAMP    DEFAULT NOW()
         )
       `);
+
+      await this.dataSource.query(`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS full_name TEXT`);
+      await this.dataSource.query(`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS auth_provider TEXT NOT NULL DEFAULT 'password'`);
+      await this.dataSource.query(`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS google_id TEXT`);
+      await this.dataSource.query(`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS avatar_url TEXT`);
+      await this.dataSource.query(`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP`);
+      await this.dataSource.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON public.users(google_id) WHERE google_id IS NOT NULL`);
 
       await this.dataSource.query(`
         CREATE TABLE IF NOT EXISTS public.invites (

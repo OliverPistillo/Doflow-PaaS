@@ -50,11 +50,11 @@ export default function FedericaClientLayout({ children }: { children: React.Rea
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background text-foreground">
+      <div className="tenant-fed doflow-app-frame flex min-h-screen w-full text-foreground">
         <FedericaSidebar />
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-14 items-center gap-3 border-b bg-background/95 backdrop-blur px-4 sticky top-0 z-10">
+          <header className="doflow-app-header flex h-14 items-center gap-3 px-4 sticky top-0 z-10">
             <SidebarTrigger />
             <div className="h-5 w-px bg-border" />
             <div className="min-w-0 flex-1">
@@ -66,7 +66,7 @@ export default function FedericaClientLayout({ children }: { children: React.Rea
             </div>
           </header>
 
-          <main className="flex-1 p-6">{children}</main>
+          <main className="doflow-app-main flex-1 p-6">{children}</main>
         </div>
       </div>
     </SidebarProvider>

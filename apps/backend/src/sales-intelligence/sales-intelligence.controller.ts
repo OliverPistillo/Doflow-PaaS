@@ -11,7 +11,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OutreachCampaign } from './entities/outreach-campaign.entity';
 import { EnrichmentService } from './workers/enrichment.service';
+import { RequireFeature } from '../feature-access/feature-access.decorator';
 
+@RequireFeature('crm.sales-intel')
 @Controller('sales-intel')
 export class SalesIntelligenceController {
   constructor(

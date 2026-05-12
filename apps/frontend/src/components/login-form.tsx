@@ -1,5 +1,5 @@
 // apps/frontend/src/components/login-form.tsx
-// Design: split-panel (form sx / brand panel dx #1a2332)
+// Design: split editorial allineato a Doflow UI Review v2
 // Logica auth: 100% invariata
 
 "use client";
@@ -178,8 +178,7 @@ export function LoginForm() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800&display=swap');
-        .df-wrap * { font-family:'Urbanist',sans-serif; }
+        .df-wrap * { font-family:var(--font-sans); }
         @keyframes dfUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
         .df-a{animation:dfUp .45s ease both}
         .df-a1{animation-delay:.04s}.df-a2{animation-delay:.09s}.df-a3{animation-delay:.13s}
@@ -188,36 +187,36 @@ export function LoginForm() {
         .df-slide-anim{animation:dfSlide .5s ease both}
         .df-input{
           display:block;width:100%;height:44px;border-radius:12px;
-          border:1.5px solid #e5e7eb;background:#f9fafb;
-          font-size:14px;font-family:'Urbanist',sans-serif;
+          border:1px solid var(--df-line-2);background:var(--df-surface);
+          font-size:14px;font-family:var(--font-sans);
           padding:0 44px 0 40px;outline:none;
           transition:border-color .18s,background .18s,box-shadow .18s;
-          color:#111827;
+          color:var(--df-ink);
         }
-        .df-input::placeholder{color:#9ca3af}
-        .df-input:focus{background:#fff;border-color:#1a2332;box-shadow:0 0 0 3px rgba(26,35,50,.09)}
+        .df-input::placeholder{color:var(--df-muted-2)}
+        .df-input:focus{background:#fff;border-color:var(--df-accent);box-shadow:0 0 0 3px rgba(91,91,214,.12)}
         .df-input.err{border-color:#ef4444}
         .df-input.err:focus{box-shadow:0 0 0 3px rgba(239,68,68,.1)}
         .df-primary{
           width:100%;height:44px;border-radius:12px;border:none;cursor:pointer;
-          font-size:14px;font-weight:700;font-family:'Urbanist',sans-serif;
-          color:#fff;background:#1a2332;
-          box-shadow:0 4px 14px rgba(26,35,50,.3);
+          font-size:14px;font-weight:600;font-family:var(--font-sans);
+          color:#fff;background:var(--df-accent);
+          box-shadow:var(--shadow-button);
           transition:all .2s;letter-spacing:.01em;
         }
-        .df-primary:hover:not(:disabled){background:#243045;transform:translateY(-1px);box-shadow:0 6px 20px rgba(26,35,50,.35)}
+        .df-primary:hover:not(:disabled){background:#4E4EC8;transform:translateY(-1px);box-shadow:0 12px 28px -16px rgba(91,91,214,.75)}
         .df-primary:active:not(:disabled){transform:translateY(0)}
         .df-primary:disabled{opacity:.6;cursor:not-allowed}
         .df-social{
-          flex:1;height:42px;border-radius:12px;border:1.5px solid #e5e7eb;
-          background:#fff;cursor:pointer;display:flex;align-items:center;
+          flex:1;height:42px;border-radius:12px;border:1px solid var(--df-line);
+          background:var(--df-surface);cursor:pointer;display:flex;align-items:center;
           justify-content:center;gap:7px;font-size:13px;font-weight:600;
-          font-family:'Urbanist',sans-serif;color:#374151;
+          font-family:var(--font-sans);color:var(--df-ink-2);
           transition:border-color .15s,background .15s;
         }
-        .df-social:hover{border-color:#d1d5db;background:#f9fafb}
-        .df-divider{display:flex;align-items:center;gap:10px;color:#9ca3af;font-size:12px;font-weight:500}
-        .df-divider::before,.df-divider::after{content:'';flex:1;height:1px;background:#e5e7eb}
+        .df-social:hover{border-color:var(--df-line-2);background:var(--df-surface-2)}
+        .df-divider{display:flex;align-items:center;gap:10px;color:var(--df-muted-2);font-size:11px;font-family:var(--font-mono);font-weight:500;text-transform:uppercase;letter-spacing:.12em}
+        .df-divider::before,.df-divider::after{content:'';flex:1;height:1px;background:var(--df-line)}
         .df-grid-bg{
           background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),
             linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);
@@ -287,7 +286,7 @@ export function LoginForm() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="df-wrap flex min-h-screen items-center justify-center bg-[#edf0f4] p-6 md:p-10">
+      <div className="df-wrap flex min-h-screen items-center justify-center bg-background p-6 md:p-10">
         <div className="w-full max-w-[1060px]">
           <div className="grid lg:grid-cols-[420px_1fr] lg:gap-8 items-center">
 
@@ -300,8 +299,8 @@ export function LoginForm() {
                 </div>
 
                 <div className="df-a df-a2 space-y-1">
-                  <h1 className="text-[24px] font-bold tracking-tight text-gray-900">Accedi al tuo account</h1>
-                  <p className="text-[13.5px] text-gray-500">Inserisci le tue credenziali per continuare.</p>
+                  <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-foreground">Accedi al tuo account</h1>
+                  <p className="text-[15px] text-muted-foreground">Inserisci le tue credenziali per continuare.</p>
                 </div>
 
                 {/* Google OAuth */}
@@ -333,7 +332,7 @@ export function LoginForm() {
 
                   {/* Email */}
                   <div className="df-a df-a4 grid gap-1.5">
-                    <Label htmlFor="email" className="text-[13px] font-semibold text-gray-700">Indirizzo Email</Label>
+                    <Label htmlFor="email" className="text-[13px] font-medium text-foreground">Indirizzo Email</Label>
                     <div style={{position:"relative"}}>
                       <Mail size={15} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
                       <input id="email" type="email" placeholder="nome@azienda.it" disabled={isSubmitting}
@@ -345,8 +344,8 @@ export function LoginForm() {
                   {/* Password */}
                   <div className="df-a df-a5 grid gap-1.5">
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                      <Label htmlFor="password" className="text-[13px] font-semibold text-gray-700">Password</Label>
-                      <Link href="/forgot-password" className="text-[12px] font-semibold text-[#1a2332] hover:underline">
+                      <Label htmlFor="password" className="text-[13px] font-medium text-foreground">Password</Label>
+                      <Link href="/forgot-password" className="text-[12px] font-semibold text-primary hover:underline">
                         Password dimenticata?
                       </Link>
                     </div>
@@ -366,9 +365,9 @@ export function LoginForm() {
                   {/* Remember me */}
                   <div className="df-a df-a5" style={{display:"flex",alignItems:"center",gap:10}}>
                     <input type="checkbox" id="rememberMe"
-                      style={{width:16,height:16,borderRadius:4,accentColor:"#1a2332",cursor:"pointer",flexShrink:0}}
+                      style={{width:16,height:16,borderRadius:4,accentColor:"#5B5BD6",cursor:"pointer",flexShrink:0}}
                       {...register("rememberMe")}/>
-                    <Label htmlFor="rememberMe" className="text-[13px] text-gray-600 cursor-pointer select-none">
+                    <Label htmlFor="rememberMe" className="text-[13px] text-muted-foreground cursor-pointer select-none">
                       Ricordami per 30 giorni
                     </Label>
                   </div>
@@ -393,13 +392,13 @@ export function LoginForm() {
                 <div className="df-a df-a7 space-y-3 text-center">
                   <p className="text-[13px] text-gray-500">
                     Non hai un account?{" "}
-                    <Link href="/register" className="font-semibold text-[#1a2332] hover:underline">Registrati gratis</Link>
+                    <Link href="/register" className="font-semibold text-foreground hover:underline">Registrati gratis</Link>
                   </p>
                   <p className="text-[11px] text-gray-400 leading-relaxed">
                     Accedendo accetti i{" "}
-                    <Link href="/terms" className="underline underline-offset-2 hover:text-gray-600">Termini</Link>
+                    <Link href="/terms" className="underline underline-offset-2 hover:text-foreground">Termini</Link>
                     {" "}e la{" "}
-                    <Link href="/privacy" className="underline underline-offset-2 hover:text-gray-600">Privacy Policy</Link>.
+                    <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">Privacy Policy</Link>.
                   </p>
                 </div>
               </div>
@@ -407,12 +406,12 @@ export function LoginForm() {
 
             {/* RIGHT — floating card */}
             <div className="relative hidden lg:flex flex-col justify-between overflow-hidden p-10 rounded-[24px]"
-              style={{background:"#1a2332",minHeight:"740px",boxShadow:"0 24px 80px rgba(0,0,0,.22),0 4px 16px rgba(0,0,0,.1)"}}>
+              style={{background:"linear-gradient(135deg, #1B1B22 0%, #2E2A48 50%, #5B5BD6 130%)",minHeight:"740px",boxShadow:"var(--shadow-lg)"}}>
               <div className="absolute inset-0 df-grid-bg"/>
               <div className="absolute top-0 right-0 w-96 h-96 pointer-events-none"
-                style={{background:"radial-gradient(circle at 80% 10%,rgba(59,130,246,.22) 0%,transparent 60%)"}}/>
+                style={{background:"radial-gradient(circle at 80% 10%,rgba(138,108,241,.22) 0%,transparent 60%)"}}/>
               <div className="absolute bottom-0 left-0 w-96 h-64 pointer-events-none"
-                style={{background:"radial-gradient(circle at 20% 90%,rgba(99,102,241,.15) 0%,transparent 60%)"}}/>
+                style={{background:"radial-gradient(circle at 20% 90%,rgba(91,91,214,.16) 0%,transparent 60%)"}}/>
               {/* Frame overlay */}
               <div className="absolute inset-[10px] rounded-[20px] pointer-events-none"
                 style={{border:"1.5px solid rgba(255,255,255,.1)",boxShadow:"inset 0 0 0 1px rgba(255,255,255,.04)"}}/>
@@ -421,13 +420,13 @@ export function LoginForm() {
               <div className="absolute bottom-0 left-0 w-full overflow-hidden z-0" style={{height:160}}>
                 <div className="df-wave-wrap" style={{width:"200%",height:"100%",position:"relative"}}>
                   <svg className="df-wave-svg df-wave3" viewBox="0 0 1080 160" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M0,90 C180,50 360,130 540,90 C720,50 900,130 1080,90 L1080,160 L0,160 Z" fill="rgba(99,102,241,.06)"/>
+                    <path d="M0,90 C180,50 360,130 540,90 C720,50 900,130 1080,90 L1080,160 L0,160 Z" fill="rgba(138,108,241,.07)"/>
                   </svg>
                   <svg className="df-wave-svg df-wave2" viewBox="0 0 1080 160" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M0,80 C150,40 300,120 450,80 C600,40 750,120 900,80 C1000,50 1060,90 1080,80 L1080,160 L0,160 Z" fill="rgba(59,130,246,.07)"/>
+                    <path d="M0,80 C150,40 300,120 450,80 C600,40 750,120 900,80 C1000,50 1060,90 1080,80 L1080,160 L0,160 Z" fill="rgba(91,91,214,.08)"/>
                   </svg>
                   <svg className="df-wave-svg df-wave1" viewBox="0 0 1080 160" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M0,60 C120,20 240,100 360,60 C480,20 600,100 720,60 C840,20 960,100 1080,60 L1080,160 L0,160 Z" fill="rgba(96,165,250,.09)"/>
+                    <path d="M0,60 C120,20 240,100 360,60 C480,20 600,100 720,60 C840,20 960,100 1080,60 L1080,160 L0,160 Z" fill="rgba(236,236,251,.09)"/>
                   </svg>
                 </div>
               </div>
@@ -444,7 +443,7 @@ export function LoginForm() {
                   <span style={{
                     display:"inline-block",fontSize:11,fontWeight:700,letterSpacing:"0.08em",
                     textTransform:"uppercase",padding:"4px 12px",borderRadius:999,
-                    background:"rgba(59,130,246,.18)",color:"#93c5fd",marginBottom:16
+                    background:"rgba(255,255,255,.12)",color:"#ECECFB",marginBottom:16
                   }}>{slide.tag}</span>
                   <h2 style={{fontSize:26,fontWeight:800,color:"#fff",lineHeight:1.25,marginBottom:12,whiteSpace:"pre-line"}}>
                     {slide.title}

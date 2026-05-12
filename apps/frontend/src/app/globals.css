@@ -1,5 +1,5 @@
 /* Percorso: apps/frontend/src/app/globals.css */
-@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,300;0,6..12,400;0,6..12,600;0,6..12,700;0,6..12,800;1,6..12,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -11,128 +11,161 @@
      LIGHT THEME — DoFlow CRM (Figma: CRM-Workroom-Community)
      Valori estratti 1:1 dal file Figma node-id="0:1"
      ─────────────────────────────────────────────────────────────────
-     Figma Palette:
-       Background body:  #f4f9fd  → hsl(208 68% 97%)
-       Card white:       #ffffff
-       Card gray:        #f4f9fd
-       Primary blue:     #052136  → hsl(214 100% 62%)
-       Text dark:        #0a1629  → hsl(220 82% 10%)
-       Text muted:       #7d8592  → hsl(218 8% 54%)
-       Sidebar card bg:  #ffffff  (rounded-[24px])
-       Active section:   #052136  at 10% opacity
+     UI Review Palette:
+       Background body:  #FAFAF7
+       Card white:       #FFFFFF
+       Card warm gray:   #F4F3EE
+       Accent indigo:    #5B5BD6
+       Accent violet:    #8A6CF1
+       Text dark:        #0E0E0C
+       Text muted:       #6B6A63
   ═══════════════════════════════════════════════════════════════════ */
   :root {
-    /* ── Figma raw primitives ──────────────────────────────────────── */
-    --figma-blue:          #052136;
-    --figma-bg:            #f4f9fd;
-    --figma-card-white:    #ffffff;
-    --figma-card-gray:     #f4f9fd;
-    --figma-text-dark:     #052136;
-    --figma-text-muted:    #7d8592;
-    --figma-support-card:  #052136;   /* lightblue card at 10% */
+    /* ═══════════════════════════════════════════════════════════════
+       DOFLOW UI V2 — tokens da Doflow UI Review
+       Neutral warm base + indigo/violet accent, tenant-ready.
+    ═══════════════════════════════════════════════════════════════ */
+    --df-bg:        #FAFAF7;
+    --df-surface:   #FFFFFF;
+    --df-surface-2: #F4F3EE;
+    --df-ink:       #0E0E0C;
+    --df-ink-2:     #1F1E1A;
+    --df-muted:     #6B6A63;
+    --df-muted-2:   #9C9A91;
+    --df-line:      #E7E5DD;
+    --df-line-2:    #DBD8CD;
 
-    /* ── shadcn/ui semantic tokens (mapped from Figma) ────────────── */
-    --background:           208 68% 97%;   /* #f4f9fd */
-    --foreground:           220 82% 10%;   /* #0a1629 */
+    --df-accent:      #5B5BD6;
+    --df-accent-2:    #8A6CF1;
+    --df-accent-soft: #ECECFB;
+    --df-accent-ink:  #2E2E8A;
 
-    --card:                 0 0% 100%;     /* #ffffff */
-    --card-foreground:      220 82% 10%;
+    --df-success: #16A34A;
+    --df-warn:    #D97706;
+    --df-danger:  #DC2626;
+    --df-info:    #2563EB;
+
+    --df-fed-accent:      #B69559;
+    --df-fed-accent-2:    #C9AD78;
+    --df-fed-accent-soft: #F5EEDD;
+    --df-businaro-accent: #1E3A8A;
+    --df-businaro-accent-2: #3B82F6;
+
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-serif: 'Instrument Serif', Georgia, serif;
+
+    /* shadcn/ui semantic tokens */
+    --background:           60 23% 97%;   /* #FAFAF7 */
+    --foreground:           60 8% 5%;     /* #0E0E0C */
+
+    --card:                 0 0% 100%;
+    --card-foreground:      60 8% 5%;
 
     --popover:              0 0% 100%;
-    --popover-foreground:   220 82% 10%;
+    --popover-foreground:   60 8% 5%;
 
-    --primary:              214 100% 62%;  /* #052136 */
+    --primary:              240 61% 60%;  /* #5B5BD6 */
     --primary-foreground:   0 0% 100%;
 
-    --secondary:            208 68% 97%;   /* #f4f9fd (card gray) */
-    --secondary-foreground: 220 82% 10%;
+    --secondary:            50 21% 94%;   /* #F4F3EE */
+    --secondary-foreground: 48 9% 11%;
 
-    --muted:                208 40% 95%;
-    --muted-foreground:     218 8% 54%;    /* #7d8592 */
+    --muted:                50 21% 94%;
+    --muted-foreground:     51 4% 40%;    /* #6B6A63 */
 
-    --accent:               214 100% 62%;
-    --accent-foreground:    0 0% 100%;
-
-    --destructive:          0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border:               214 20% 90%;
-    --input:                0 0% 100%;
-    --ring:                 214 100% 62%;
-
-    /* ── Radius scale — Figma uses 24px cards / 14px buttons / 10px nav ── */
-    --radius:               0.875rem;      /* 14px — button base */
-    --radius-card:          1.5rem;        /* 24px — card/panel */
-    --radius-nav:           0.625rem;      /* 10px — sidebar active section */
-    --radius-badge:         0.25rem;       /* 4px  — level badge */
-
-    /* ── Sidebar ─────────────────────────────────────────────────── */
-    --sidebar-background:            208 68% 99%;
-    --sidebar-foreground:            220 82% 10%;
-    --sidebar-primary:               214 100% 62%;
-    --sidebar-primary-foreground:    0 0% 100%;
-    --sidebar-accent:                214 100% 62%;   /* used at /10 opacity */
-    --sidebar-accent-foreground:     214 100% 62%;   /* text stays blue */
-    --sidebar-border:                214 20% 92%;
-    --sidebar-ring:                  214 100% 62%;
-
-    /* ── Card shadow (Figma: 0px 6px 58px 0px rgba(196,203,214,0.10)) ── */
-    --shadow-card:     0px 6px 58px 0px rgba(196, 203, 214, 0.10);
-    --shadow-button:   0px 6px 12px 0px rgba(63, 140, 255, 0.26);
-    --shadow-sm:       0 1px 4px rgba(0, 0, 0, 0.06);
-    --shadow-md:       0 2px 10px rgba(0, 0, 0, 0.10);
-
-    /* ── Chart colors ─────────────────────────────────────────────── */
-    --chart-1:              214 100% 62%;
-    --chart-2:              152 60% 42%;
-    --chart-3:              28  90% 58%;
-    --chart-4:              339 80% 55%;
-    --chart-5:              54  90% 52%;
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════
-     DARK THEME — Warm Olive-Black (DoFlow product dark)
-  ═══════════════════════════════════════════════════════════════════ */
-  .dark {
-    --background:           220 25% 10%;
-    --foreground:           210 30% 94%;
-
-    --card:                 220 20% 14%;
-    --card-foreground:      210 30% 94%;
-
-    --popover:              220 20% 14%;
-    --popover-foreground:   210 30% 94%;
-
-    --primary:              214 100% 65%;
-    --primary-foreground:   0 0% 100%;
-
-    --secondary:            220 18% 20%;
-    --secondary-foreground: 210 20% 75%;
-
-    --muted:                220 18% 18%;
-    --muted-foreground:     218 8% 52%;
-
-    --accent:               214 100% 65%;
-    --accent-foreground:    0 0% 100%;
+    --accent:               240 63% 95%;  /* #ECECFB */
+    --accent-foreground:    240 50% 36%;  /* #2E2E8A */
 
     --destructive:          0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border:               220 14% 22%;
-    --input:                220 20% 18%;
-    --ring:                 214 100% 65%;
+    --border:               48 17% 89%;   /* #E7E5DD */
+    --input:                47 17% 83%;   /* #DBD8CD */
+    --ring:                 240 61% 60%;
 
-    --sidebar-background:   220 25% 10%;
-    --sidebar-foreground:   210 30% 90%;
-    --sidebar-primary:      214 100% 65%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent:       214 100% 65%;
-    --sidebar-accent-foreground: 214 100% 65%;
-    --sidebar-border:       220 14% 22%;
-    --sidebar-ring:         214 100% 65%;
+    --radius:               0.875rem;     /* 14px */
+    --radius-card:          1.25rem;      /* 20px */
+    --radius-nav:           0.625rem;     /* 10px */
+    --radius-badge:         999px;
 
-    --shadow-card:     0px 6px 24px 0px rgba(0, 0, 0, 0.35);
-    --shadow-button:   0px 6px 12px 0px rgba(63, 140, 255, 0.30);
+    --sidebar-background:            0 0% 100%;
+    --sidebar-foreground:            48 9% 11%;
+    --sidebar-primary:               60 8% 5%;
+    --sidebar-primary-foreground:    60 23% 97%;
+    --sidebar-accent:                50 21% 94%;
+    --sidebar-accent-foreground:     60 8% 5%;
+    --sidebar-border:                48 17% 89%;
+    --sidebar-ring:                  240 61% 60%;
+
+    --shadow-card:     0 4px 16px -4px rgba(15,15,12,.08), 0 2px 6px rgba(15,15,12,.04);
+    --shadow-button:   0 10px 24px -14px rgba(91, 91, 214, .55);
+    --shadow-sm:       0 1px 2px rgba(15,15,12,.04), 0 1px 1px rgba(15,15,12,.03);
+    --shadow-md:       0 12px 34px -20px rgba(15,15,12,.24), 0 4px 14px -8px rgba(15,15,12,.10);
+    --shadow-lg:       0 24px 60px -20px rgba(15,15,12,.18), 0 8px 24px -8px rgba(15,15,12,.08);
+
+    --chart-1:              240 61% 60%;
+    --chart-2:              152 72% 36%;
+    --chart-3:              32 95% 44%;
+    --chart-4:              255 82% 68%;
+    --chart-5:              217 91% 60%;
+  }
+
+  .dark {
+    --df-bg:        #0B0B0E;
+    --df-surface:   #131318;
+    --df-surface-2: #1B1B22;
+    --df-ink:       #F5F4EE;
+    --df-ink-2:     #E5E4DC;
+    --df-muted:     #9A9A93;
+    --df-muted-2:   #6E6E68;
+    --df-line:      #25252D;
+    --df-line-2:    #2F2F38;
+    --df-accent-soft: #1F1F3A;
+    --df-accent-ink:  #BDBDF6;
+
+    --background:           240 12% 5%;
+    --foreground:           48 26% 95%;
+
+    --card:                 240 11% 8%;
+    --card-foreground:      48 26% 95%;
+
+    --popover:              240 11% 8%;
+    --popover-foreground:   48 26% 95%;
+
+    --primary:              240 61% 66%;
+    --primary-foreground:   0 0% 100%;
+
+    --secondary:            240 11% 12%;
+    --secondary-foreground: 48 18% 88%;
+
+    --muted:                240 11% 12%;
+    --muted-foreground:     60 3% 59%;
+
+    --accent:               240 31% 17%;
+    --accent-foreground:    240 74% 85%;
+
+    --destructive:          0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border:               240 10% 16%;
+    --input:                240 9% 20%;
+    --ring:                 240 61% 66%;
+
+    --sidebar-background:   240 11% 8%;
+    --sidebar-foreground:   48 18% 88%;
+    --sidebar-primary:      48 26% 95%;
+    --sidebar-primary-foreground: 240 12% 5%;
+    --sidebar-accent:       240 11% 12%;
+    --sidebar-accent-foreground: 48 26% 95%;
+    --sidebar-border:       240 10% 16%;
+    --sidebar-ring:         240 61% 66%;
+
+    --shadow-card:     0 8px 24px rgba(0,0,0,.45);
+    --shadow-button:   0 10px 24px -14px rgba(138, 108, 241, .65);
+    --shadow-sm:       0 1px 2px rgba(0,0,0,.40);
+    --shadow-md:       0 18px 52px rgba(0,0,0,.32);
+    --shadow-lg:       0 24px 60px rgba(0,0,0,.55);
   }
 
   /* ── Tailwind base resets ─────────────────────────────────────── */
@@ -140,8 +173,7 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    /* Figma uses Nunito Sans — added via Google Fonts above */
-    font-family: 'Nunito Sans', var(--font-sans, system-ui), sans-serif;
+    font-family: var(--font-sans);
     background-color: hsl(var(--background));
     min-height: 100vh;
     overflow-x: hidden;
@@ -722,7 +754,7 @@
 /* Route speciali già dark: usa lo stesso font/feel senza duplicare local style ovunque */
 [data-testid="signup-page"],
 [data-testid="onboarding-page"] {
-  font-family: 'Outfit', 'Nunito Sans', var(--font-sans, system-ui), sans-serif;
+  font-family: var(--font-sans);
 }
 
 /* Uniforma anche le pagine tenant che non usano ancora PageShell */
@@ -831,4 +863,264 @@
   color: hsl(var(--primary));
   background: hsl(var(--primary) / 0.10);
   border: 1px solid hsl(var(--primary) / 0.18);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   DOFLOW UI REVIEW RESTYLING — applicazione finale sopra il pass moderno
+   Mantiene la struttura CRM/SaaS, ma porta la UI al linguaggio v2:
+   warm neutral, Inter, indigo accent, active nav solida, tenant variants.
+═══════════════════════════════════════════════════════════════════ */
+:root {
+  color-scheme: light;
+  --df-modern-bg-1: 60 23% 97%;
+  --df-modern-bg-2: 50 21% 94%;
+  --df-modern-blob-blue: 240 61% 60%;
+  --df-modern-blob-violet: 255 82% 68%;
+  --df-modern-panel: 0 0% 100%;
+  --df-modern-panel-border: 48 17% 89%;
+  --df-modern-panel-shadow: var(--shadow-card);
+  --df-modern-panel-shadow-hover: var(--shadow-md);
+}
+.dark {
+  color-scheme: dark;
+  --df-modern-bg-1: 240 12% 5%;
+  --df-modern-bg-2: 240 11% 8%;
+  --df-modern-panel: 240 11% 8%;
+  --df-modern-panel-border: 240 10% 16%;
+}
+
+html,
+body {
+  font-family: var(--font-sans);
+  background: hsl(var(--background));
+}
+
+/* Tenant brand switches from the review deck */
+.tenant-fed,
+.federica-theme,
+[data-tenant="federicanerone"] {
+  --primary: 38 35% 53%;       /* #B69559 */
+  --ring: 38 35% 53%;
+  --accent: 42 61% 91%;        /* #F5EEDD */
+  --accent-foreground: 38 58% 28%;
+  --chart-4: 39 45% 63%;       /* #C9AD78 */
+  --sidebar-primary: 38 35% 53%;
+  --sidebar-primary-foreground: 0 0% 100%;
+}
+.theme-businaro,
+[data-tenant="businaro"] {
+  --primary: 221 64% 33%;      /* #1E3A8A */
+  --ring: 221 64% 33%;
+  --chart-4: 217 91% 60%;      /* #3B82F6 */
+  --accent: 214 95% 93%;
+  --accent-foreground: 221 64% 27%;
+  --sidebar-primary: 221 64% 33%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --aurora-bg:
+    radial-gradient(circle at 12% -10%, hsl(217 91% 60% / .12), transparent 32rem),
+    radial-gradient(circle at 90% 0%, hsl(221 64% 33% / .10), transparent 30rem),
+    linear-gradient(135deg, hsl(var(--background)), hsl(var(--secondary)) 58%, hsl(var(--background)));
+}
+.dark .theme-businaro {
+  --aurora-bg:
+    radial-gradient(circle at 10% -10%, hsl(217 91% 60% / .18), transparent 34rem),
+    radial-gradient(circle at 90% 0%, hsl(221 64% 43% / .16), transparent 32rem),
+    linear-gradient(135deg, hsl(240 12% 5%), hsl(240 11% 8%) 58%, hsl(240 11% 7%));
+}
+
+.doflow-app-frame {
+  background:
+    radial-gradient(circle at 12% -8%, hsl(var(--primary) / 0.08), transparent 31rem),
+    radial-gradient(circle at 94% 2%, hsl(var(--chart-4) / 0.075), transparent 31rem),
+    linear-gradient(135deg, hsl(var(--background)), hsl(var(--secondary)) 60%, hsl(var(--background)));
+}
+.dark .doflow-app-frame {
+  background:
+    radial-gradient(circle at 10% -8%, hsl(var(--primary) / 0.12), transparent 32rem),
+    radial-gradient(circle at 92% 3%, hsl(var(--chart-4) / 0.11), transparent 32rem),
+    linear-gradient(135deg, hsl(var(--background)), hsl(var(--card)) 55%, hsl(var(--background)));
+}
+.doflow-app-frame::before {
+  opacity: .28;
+  background-image:
+    linear-gradient(hsl(var(--foreground) / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--foreground) / 0.035) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+.dark .doflow-app-frame::before { opacity: .18; }
+
+.doflow-app-header,
+.glass {
+  background: hsl(var(--background) / .82) !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+  backdrop-filter: blur(12px) saturate(1.04);
+  -webkit-backdrop-filter: blur(12px) saturate(1.04);
+  box-shadow: none;
+}
+.dark .doflow-app-header,
+.dark .glass {
+  background: hsl(var(--background) / .78) !important;
+}
+
+.df-page-hero,
+.dashboard-content > div:first-child:not(.kpi-grid):not(.charts-grid),
+.dashboard-content > section:first-child,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child:not([role="dialog"]):not([data-radix-popper-content-wrapper]) {
+  border-radius: var(--radius-card);
+  border: 1px solid hsl(var(--border));
+  background:
+    linear-gradient(135deg, hsl(var(--card)), hsl(var(--secondary) / .70)),
+    radial-gradient(circle at 92% 10%, hsl(var(--primary) / .10), transparent 15rem);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.df-page-hero::after { opacity: .18; }
+
+.df-page-title,
+.dashboard-content > div:first-child h1,
+.dashboard-content > div:first-child h2,
+.dashboard-content > section:first-child h1,
+.dashboard-content > section:first-child h2,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child h1,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child h2 {
+  letter-spacing: -0.045em;
+  font-weight: 800;
+}
+.df-page-eyebrow,
+.dashboard-content > div:first-child h1::before,
+.dashboard-content > div:first-child h2::before,
+.dashboard-content > section:first-child h1::before,
+.dashboard-content > section:first-child h2::before,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child h1::before,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child h2::before {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: hsl(var(--primary));
+  background: hsl(var(--accent));
+  border: 1px solid hsl(var(--border));
+  box-shadow: none;
+}
+
+.df-glass-panel,
+.glass-card,
+.df-card,
+.df-kpi-card {
+  border: 1px solid hsl(var(--border)) !important;
+  background: hsl(var(--card)) !important;
+  box-shadow: var(--shadow-card) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.dark .df-glass-panel,
+.dark .glass-card,
+.dark .df-card,
+.dark .df-kpi-card {
+  background: hsl(var(--card)) !important;
+}
+.df-glass-panel-hover:hover {
+  transform: translateY(-1px);
+  border-color: hsl(var(--input)) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.df-kpi-card::after {
+  inset-inline: 20px;
+  background: linear-gradient(90deg, transparent, hsl(var(--primary) / .45), transparent);
+}
+
+.df-soft-panel,
+.df-card-gray {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--secondary));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.df-gradient-text {
+  background: linear-gradient(135deg, hsl(var(--foreground)), hsl(var(--primary)) 58%, hsl(var(--chart-4)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Sidebar: look da review deck — surface pulita, active pill solida */
+[data-sidebar="sidebar"] {
+  background: hsl(var(--sidebar-background)) !important;
+  border-color: hsl(var(--sidebar-border)) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.dark [data-sidebar="sidebar"] {
+  background: hsl(var(--sidebar-background)) !important;
+}
+[data-sidebar="group-label"] {
+  font-family: var(--font-mono);
+  letter-spacing: .14em;
+  font-size: 10.5px;
+  color: hsl(var(--muted-foreground) / .72) !important;
+}
+[data-sidebar="menu-button"] {
+  border-radius: var(--radius-nav) !important;
+  font-weight: 500;
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+[data-sidebar="menu-button"][data-active="true"],
+[data-sidebar="menu-button"][data-state="active"] {
+  background: hsl(var(--sidebar-primary)) !important;
+  color: hsl(var(--sidebar-primary-foreground)) !important;
+  box-shadow: none !important;
+}
+[data-sidebar="menu-button"][data-active="true"] svg,
+[data-sidebar="menu-button"][data-state="active"] svg {
+  color: currentColor !important;
+}
+[data-sidebar="menu-button"]:not([data-active="true"]):hover {
+  background: hsl(var(--secondary)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+.tenant-fed [data-sidebar="menu-button"][data-active="true"],
+[data-tenant="federicanerone"] [data-sidebar="menu-button"][data-active="true"],
+.theme-businaro [data-sidebar="menu-button"][data-active="true"] {
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+/* Tables from review: mono uppercase headers, soft hover */
+.doflow-page-shell thead tr,
+.dashboard-content thead tr {
+  background: hsl(var(--secondary));
+}
+.doflow-page-shell th,
+.dashboard-content th {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+}
+.doflow-page-shell tbody tr:hover,
+.dashboard-content tbody tr:hover {
+  background: hsl(var(--secondary) / .72);
+}
+
+/* Badges/pills */
+.rounded-badge,
+.df-level-badge {
+  border-radius: 999px;
+}
+
+/* Brand wordmark helper for places where no image logo is available */
+.doflow-wordmark {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: hsl(var(--foreground));
+}
+
+/* Login/signup/onboarding stay dramatic but inherit the new font system. */
+[data-testid="signup-page"],
+[data-testid="onboarding-page"] {
+  font-family: var(--font-sans);
 }
