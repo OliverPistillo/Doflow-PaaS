@@ -32,7 +32,7 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
 
         {/* ── HEADER ── */}
         <header className="doflow-app-header flex h-14 shrink-0 items-center gap-2 px-4 sticky top-0 z-10">
-          <SidebarTrigger className="-ml-1" aria-label="Toggle menu" />
+          <SidebarTrigger className="-ml-1" />
           <div className="h-5 w-px bg-border" aria-hidden="true" />
 
           {/* ✅ Cmd+K Search — visibile da sm in su */}
