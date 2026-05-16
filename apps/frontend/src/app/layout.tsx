@@ -6,6 +6,7 @@ import './globals.css';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const inter = Inter({
   subsets: ['latin'],
@@ -36,8 +37,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           disableTransitionOnChange={false}
           storageKey="doflow_theme"   // ← persiste in localStorage con chiave specifica
         >
-          {children}
-          <Toaster />
+          <TooltipProvider delayDuration={400}>
+            {children}
+            <Toaster />
+          </TooltipProvider>
         </ThemeProvider>
       </body>
     </html>
