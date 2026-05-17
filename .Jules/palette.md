@@ -1,0 +1,3 @@
+## 2025-05-17 - [Global Tooltip Configuration]
+**Learning:** Radix UI's `Tooltip` components require a `TooltipProvider` to be present in the component tree. Implementing it at the root layout (`apps/frontend/src/app/layout.tsx`) prevents redundant provider declarations in sub-layouts, ensuring consistent behavior (like `delayDuration`) and avoiding potential state conflicts or hydration issues across the app.
+**Action:** Always verify if a global `TooltipProvider` exists in the root layout before adding tooltips. If not, centralize it there instead of adding local providers to individual components or nested layouts.

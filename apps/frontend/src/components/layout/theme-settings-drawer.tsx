@@ -14,6 +14,7 @@ import {
   Sheet, SheetContent, SheetDescription,
   SheetFooter, SheetHeader, SheetTitle, SheetTrigger,
 } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSidebar } from "@/components/ui/sidebar";
 import {
   useAppSettings,
@@ -240,14 +241,19 @@ export function ThemeSettingsDrawer() {
 
   return (
     <Sheet>
-      <SheetTrigger asChild>
-        <button
-          className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          aria-label="Impostazioni aspetto"
-        >
-          <Settings className="h-4 w-4" />
-        </button>
-      </SheetTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <SheetTrigger asChild>
+            <button
+              className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label="Impostazioni aspetto"
+            >
+              <Settings className="h-4 w-4" />
+            </button>
+          </SheetTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Impostazioni aspetto</TooltipContent>
+      </Tooltip>
 
       <SheetContent className="flex flex-col gap-0 px-0">
         <SheetHeader className="px-6 pb-4 text-start border-b">
