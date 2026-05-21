@@ -19,6 +19,11 @@ import { UserNav } from "@/components/layout/user-nav";
 import { ThemeSettingsDrawer } from "@/components/layout/theme-settings-drawer";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getDoFlowUser } from "@/lib/jwt";
 import { PlanProvider } from "@/contexts/PlanContext";
@@ -70,6 +75,8 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
                   <Bell className="h-4 w-4" aria-hidden="true" />
                   <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-rose-500 rounded-full" aria-hidden="true" />
                 </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" align="center">
               </Link>
             </TooltipTrigger>
             <TooltipContent>Notifiche</TooltipContent>

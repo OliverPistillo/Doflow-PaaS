@@ -1,3 +1,6 @@
+## 2025-05-15 - Dynamic Tooltips for Sidebar Control
+**Learning:** Tooltips should be context-aware; providing different labels for different states (e.g., 'Expand' vs 'Collapse') improves clarity for icon-only controls.
+**Action:** Always check if an icon-only control has multiple states and implement dynamic tooltips using Radix UI's `Tooltip` and component state.
 ## 2025-05-14 - Tooltips and Localization for Persistent UI
 **Learning:** Adding tooltips to icon-only buttons in the persistent UI (Sidebar, Header) significantly improves discoverability and accessibility, especially when paired with localized ARIA labels and keyboard shortcut hints. Using a global `TooltipProvider` in the root layout ensures consistent behavior across the application.
 **Action:** Always wrap the root layout in a `TooltipProvider` and provide dynamic tooltips for state-dependent toggles (like the Sidebar trigger).

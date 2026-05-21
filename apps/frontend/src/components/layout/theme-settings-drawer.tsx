@@ -17,6 +17,11 @@ import {
 } from "@/components/ui/sheet";
 import { useSidebar } from "@/components/ui/sidebar";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   useAppSettings,
   type SidebarVariant,
   type SidebarCollapsible,
@@ -252,6 +257,9 @@ export function ThemeSettingsDrawer() {
             </button>
           </SheetTrigger>
         </TooltipTrigger>
+        <TooltipContent side="bottom" align="center">
+          Impostazioni aspetto
+        </TooltipContent>
         <TooltipContent>Impostazioni aspetto</TooltipContent>
       </Tooltip>
 

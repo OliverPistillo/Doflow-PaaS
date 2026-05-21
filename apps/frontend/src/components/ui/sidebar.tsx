@@ -297,6 +297,11 @@ const SidebarTrigger = React.forwardRef<
           {...props}
         >
           <PanelLeft />
+          <span className="sr-only">Toggle Sidebar</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right" align="center">
+        {state === "collapsed" ? "Espandi sidebar" : "Comprimi sidebar"}
           <span className="sr-only">{label}</span>
         </Button>
       </TooltipTrigger>
