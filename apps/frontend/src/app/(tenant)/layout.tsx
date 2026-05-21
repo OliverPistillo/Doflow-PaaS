@@ -19,6 +19,7 @@ import { UserNav } from "@/components/layout/user-nav";
 import { ThemeSettingsDrawer } from "@/components/layout/theme-settings-drawer";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getDoFlowUser } from "@/lib/jwt";
 import { PlanProvider } from "@/contexts/PlanContext";
 import { AppSettingsProvider, useAppSettings } from "@/contexts/AppSettingsContext";
@@ -37,6 +38,7 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
 
         {/* ── HEADER ── */}
         <header className="doflow-app-header flex h-14 shrink-0 items-center gap-2 px-4 sticky top-0 z-10">
+          <SidebarTrigger className="-ml-1" />
           <Tooltip>
             <TooltipTrigger asChild>
               <SidebarTrigger className="-ml-1" aria-label="Toggle menu" />
@@ -53,6 +55,9 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Notifiche */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link href="/notifications">
           <Link href="/notifications">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -65,6 +70,10 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
                   <Bell className="h-4 w-4" aria-hidden="true" />
                   <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-rose-500 rounded-full" aria-hidden="true" />
                 </Button>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent>Notifiche</TooltipContent>
+          </Tooltip>
               </TooltipTrigger>
               <TooltipContent>
                 Notifiche
