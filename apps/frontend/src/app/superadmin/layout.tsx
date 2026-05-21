@@ -18,6 +18,7 @@ import {
 import { getDoFlowUser, getInitials } from "@/lib/jwt";
 import { Shield, LogOut, User, Bell } from "lucide-react";
 import { useTheme } from "next-themes";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 const SearchTriggerButton = dynamic(
   () => import("@/components/ui/global-search").then((m) => m.SearchTriggerButton),
   { ssr: false, loading: () => <div className="w-8 h-8" /> }
@@ -90,20 +91,26 @@ function getPageTitle(p: string | null): string {
 function AnimatedTrigger() {
   const { state, toggleSidebar } = useSidebar();
   const isOpen = state === "expanded";
+  const tooltipText = isOpen ? "Comprimi sidebar" : "Espandi sidebar";
   return (
-    <button
-      onClick={toggleSidebar}
-      className={`h-9 w-9 rounded-nav flex items-center justify-center relative text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring ${isOpen ? "text-foreground" : ""}`}
-      aria-label={isOpen ? "Comprimi sidebar" : "Espandi sidebar"}
-    >
-      <svg className="icon-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <rect x="3"  y="3"  width="7" height="7" rx="1.5"/><rect x="14" y="3"  width="7" height="7" rx="1.5"/>
-        <rect x="3"  y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
-      </svg>
-      <svg className="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><polyline points="14 8 11 12 14 16"/>
-      </svg>
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          onClick={toggleSidebar}
+          className={`h-9 w-9 rounded-nav flex items-center justify-center relative text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring ${isOpen ? "text-foreground" : ""}`}
+          aria-label={tooltipText}
+        >
+          <svg className="icon-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3"  y="3"  width="7" height="7" rx="1.5"/><rect x="14" y="3"  width="7" height="7" rx="1.5"/>
+            <rect x="3"  y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+          </svg>
+          <svg className="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><polyline points="14 8 11 12 14 16"/>
+          </svg>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right">{tooltipText}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -111,23 +118,29 @@ function AnimatedTrigger() {
 
 function AnimatedThemeToggle() {
   const { setTheme, resolvedTheme } = useTheme();
+  const tooltipText = resolvedTheme === "dark" ? "Passa a Light Mode" : "Passa a Dark Mode";
   return (
-    <button
-      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-      className="h-9 w-9 rounded-nav flex items-center justify-center relative overflow-hidden bg-card/60 hover:bg-primary/10 text-foreground backdrop-blur-xl border border-border/50 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      aria-label={resolvedTheme === "dark" ? "Passa a Light Mode" : "Passa a Dark Mode"}
-    >
-      <svg className="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="5"/>
-        <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-      </svg>
-      <svg className="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-      </svg>
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+          className="h-9 w-9 rounded-nav flex items-center justify-center relative overflow-hidden bg-card/60 hover:bg-primary/10 text-foreground backdrop-blur-xl border border-border/50 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={tooltipText}
+        >
+          <svg className="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+          <svg className="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>{tooltipText}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -199,13 +212,18 @@ function SuperAdminHeader() {
 
       {/* Right */}
       <div className="flex items-center gap-2 shrink-0">
-        <button
-          className="relative h-9 w-9 rounded-nav bg-card/60 border border-border/50 backdrop-blur-xl flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Notifiche"
-        >
-          <Bell className="h-4 w-4" aria-hidden="true" />
-          <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-destructive rounded-full" aria-label="Nuove notifiche" />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className="relative h-9 w-9 rounded-nav bg-card/60 border border-border/50 backdrop-blur-xl flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Notifiche"
+            >
+              <Bell className="h-4 w-4" aria-hidden="true" />
+              <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-destructive rounded-full" aria-label="Nuove notifiche" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Notifiche</TooltipContent>
+        </Tooltip>
         <AnimatedThemeToggle />
         <UserNav />
       </div>

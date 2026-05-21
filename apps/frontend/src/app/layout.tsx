@@ -42,6 +42,7 @@ export default function RootLayout({
           storageKey="doflow_theme" // ← persiste in localStorage con chiave specifica
         >
           <TooltipProvider>
+          <TooltipProvider delayDuration={400}>
             {children}
             <Toaster />
           </TooltipProvider>

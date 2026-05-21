@@ -9,11 +9,22 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   SidebarProvider, SidebarTrigger, SidebarInset,
 } from "@/components/ui/sidebar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { TenantSidebar } from "@/components/layout/tenant-sidebar";
 import { UserNav } from "@/components/layout/user-nav";
 import { ThemeSettingsDrawer } from "@/components/layout/theme-settings-drawer";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getDoFlowUser } from "@/lib/jwt";
 import { PlanProvider } from "@/contexts/PlanContext";
 import { AppSettingsProvider, useAppSettings } from "@/contexts/AppSettingsContext";
@@ -32,7 +43,15 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
 
         {/* ── HEADER ── */}
         <header className="doflow-app-header flex h-14 shrink-0 items-center gap-2 px-4 sticky top-0 z-10">
-          <SidebarTrigger className="-ml-1" aria-label="Toggle menu" />
+          <SidebarTrigger className="-ml-1" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <SidebarTrigger className="-ml-1" aria-label="Toggle menu" />
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              Espandi/Comprimi menu
+            </TooltipContent>
+          </Tooltip>
           <div className="h-5 w-px bg-border" aria-hidden="true" />
 
           {/* ✅ Cmd+K Search — visibile da sm in su */}
@@ -41,20 +60,45 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Notifiche */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link href="/notifications">
           <Link href="/notifications">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative text-muted-foreground hover:text-foreground"
-              aria-label="Notifiche"
-            >
-              <Bell className="h-4 w-4" aria-hidden="true" />
-              <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-rose-500 rounded-full" aria-hidden="true" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative text-muted-foreground hover:text-foreground"
+                  aria-label="Notifiche"
+                >
+                  <Bell className="h-4 w-4" aria-hidden="true" />
+                  <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-rose-500 rounded-full" aria-hidden="true" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" align="center">
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent>Notifiche</TooltipContent>
+          </Tooltip>
+              </TooltipTrigger>
+              <TooltipContent>
+                Notifiche
+              </TooltipContent>
+            </Tooltip>
           </Link>
 
           {/* Theme Settings drawer */}
-          <ThemeSettingsDrawer />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>
+                <ThemeSettingsDrawer />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              Impostazioni aspetto
+            </TooltipContent>
+          </Tooltip>
 
           {/* User menu */}
           <UserNav />
