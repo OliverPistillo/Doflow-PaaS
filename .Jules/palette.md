@@ -1,3 +1,6 @@
+## 2025-05-17 - [Global Tooltip Configuration]
+**Learning:** Radix UI's `Tooltip` components require a `TooltipProvider` to be present in the component tree. Implementing it at the root layout (`apps/frontend/src/app/layout.tsx`) prevents redundant provider declarations in sub-layouts, ensuring consistent behavior (like `delayDuration`) and avoiding potential state conflicts or hydration issues across the app.
+**Action:** Always verify if a global `TooltipProvider` exists in the root layout before adding tooltips. If not, centralize it there instead of adding local providers to individual components or nested layouts.
 ## 2025-05-14 - Redundant Accessibility in Interactive Elements
 **Learning:** Adding both an `aria-label` and an internal `sr-only` span to the same button causes screen readers to announce the label twice. Standardizing on one method (preferably `sr-only` for complex icons) ensures a cleaner experience for users with assistive technologies.
 **Action:** Use only one accessibility labeling method per interactive element. In Radix-based components, favor internal hidden spans when the button wraps an icon.
