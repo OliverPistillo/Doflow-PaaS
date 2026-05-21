@@ -1,3 +1,6 @@
+## 2026-05-13 - Add global tooltips to icon-only layout buttons
+**Learning:** Icon-only buttons (Sidebar toggle, Notifications, Theme Settings) in global layouts lack immediate textual context for sighted users. Providing tooltips significantly improves the intuitiveness of the interface without cluttering it with text labels.
+**Action:** Always wrap global icon-only actions in a Tooltip component, ensuring labels are localized and consistent with existing UI patterns.
 ## 2026-05-12 - [UX Consistency & Accessibility]
 **Learning:** Some core pages like `LoginForm` were found to use native HTML elements (like `input type="checkbox"`) instead of the shared design system components (`Checkbox`). Additionally, `TooltipProvider` was missing from the root layout, preventing the use of accessible tooltips across the application.
 **Action:** Always verify if a themed component exists in `src/components/ui` before using native elements. Ensure `TooltipProvider` is present in the root layout to support contextual help for icon-only buttons.

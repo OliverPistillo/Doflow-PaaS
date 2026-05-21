@@ -275,6 +275,8 @@ const SidebarTrigger = React.forwardRef<
   React.ElementRef<typeof Button>,
   React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
+  const { state, toggleSidebar } = useSidebar()
+  const label = state === "expanded" ? "Comprimi sidebar" : "Espandi sidebar"
   const { toggleSidebar, state } = useSidebar()
   const tooltipText = state === "expanded" ? "Comprimi sidebar" : "Espandi sidebar"
   const label = state === "expanded" ? "Comprimi sidebar" : "Espandi sidebar"
