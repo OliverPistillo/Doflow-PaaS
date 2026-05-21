@@ -3,11 +3,15 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
-import { ShieldCheck, RefreshCw, QrCode, Lock, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, RefreshCw, QrCode, Lock, CheckCircle2, ArrowLeft } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
 
@@ -212,21 +216,23 @@ export default function TenantMfaPage() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
-                <Lock className="h-5 w-5" />
-              </div>
-              <Input
-                className="pl-10 text-center text-2xl tracking-[0.5em] font-mono h-14 border-slate-300 focus:border-indigo-500 focus:ring-indigo-500"
-                maxLength={6}
-                placeholder="000000"
-                value={code}
-                onChange={(e) => setCode(normalizeCode(e.target.value))}
-                autoFocus
-                disabled={submitting}
-              />
-            </div>
+          <div className="space-y-2 flex flex-col items-center">
+            <InputOTP
+              maxLength={6}
+              value={code}
+              onChange={(v) => setCode(normalizeCode(v))}
+              disabled={submitting}
+              aria-label="Codice di verifica a 6 cifre"
+            >
+              <InputOTPGroup>
+                <InputOTPSlot index={0} />
+                <InputOTPSlot index={1} />
+                <InputOTPSlot index={2} />
+                <InputOTPSlot index={3} />
+                <InputOTPSlot index={4} />
+                <InputOTPSlot index={5} />
+              </InputOTPGroup>
+            </InputOTP>
           </div>
 
           <Button 
@@ -250,9 +256,10 @@ export default function TenantMfaPage() {
         <div className="mt-8 pt-6 border-t border-slate-100 text-center">
           <Button 
             variant="link" 
-            className="text-xs text-slate-400 hover:text-slate-600" 
+            className="text-xs text-slate-400 hover:text-slate-600 gap-1"
             onClick={() => router.replace(tenantSlug ? `/${tenantSlug}/login` : "/login")}
           >
+            <ArrowLeft className="h-3 w-3" />
             Torna al login
           </Button>
         </div>

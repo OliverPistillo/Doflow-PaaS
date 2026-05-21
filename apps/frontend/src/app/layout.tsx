@@ -38,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           storageKey="doflow_theme"   // ← persiste in localStorage con chiave specifica
         >
           <TooltipProvider>
+          <TooltipProvider delayDuration={400}>
             {children}
             <Toaster />
           </TooltipProvider>

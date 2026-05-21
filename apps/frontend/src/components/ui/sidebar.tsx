@@ -279,6 +279,8 @@ const SidebarTrigger = React.forwardRef<
 >(({ className, onClick, ...props }, ref) => {
   const { toggleSidebar, state } = useSidebar()
   const label = state === "expanded" ? "Comprimi sidebar" : "Espandi sidebar"
+  const isCollapsed = state === "collapsed"
+  const label = isCollapsed ? "Espandi sidebar" : "Comprimi sidebar"
 
   return (
     <Tooltip>
@@ -301,6 +303,19 @@ const SidebarTrigger = React.forwardRef<
       </TooltipTrigger>
       <TooltipContent side="right" align="center">
         {label}
+          <span className="sr-only">Toggle Sidebar</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right" align="center">
+        {state === "collapsed" ? "Espandi sidebar" : "Comprimi sidebar"}
+          <span className="sr-only">{label}</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right" align="center" className="hidden md:block">
+        {label}
+        <kbd className="ml-2 font-mono text-[10px] bg-primary-foreground/20 rounded px-1 py-0.5">
+          ⌘B
+        </kbd>
       </TooltipContent>
     </Tooltip>
   )
