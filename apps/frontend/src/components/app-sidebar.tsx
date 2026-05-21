@@ -25,6 +25,7 @@ import {
   SidebarMenuItem,
   SidebarSeparator,
 } from '@/components/ui/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 type Role = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'USER';
 
@@ -172,22 +173,26 @@ export function AppSidebar(props: AppSidebarProps) {
       <SidebarHeader>
         {/* SOLO LOGO */}
         <div className="flex items-center justify-center px-2 py-2">
-          <button
-            type="button"
-            onClick={() => router.push(homePath)}
-            className="rounded-md p-1 hover:bg-sidebar-accent focus:outline-none focus:ring-2 focus:ring-sidebar-ring"
-            aria-label="Home"
-            title="Home"
-          >
-            <Image
-              src="/doflow_logo.svg"
-              alt="Doflow"
-              width={22}
-              height={22}
-              className="shrink-0"
-              priority
-            />
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => router.push(homePath)}
+                className="rounded-md p-1 hover:bg-sidebar-accent focus:outline-none focus:ring-2 focus:ring-sidebar-ring"
+                aria-label="Home"
+              >
+                <Image
+                  src="/doflow_logo.svg"
+                  alt="Doflow"
+                  width={22}
+                  height={22}
+                  className="shrink-0"
+                  priority
+                />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Home</TooltipContent>
+          </Tooltip>
         </div>
         <SidebarSeparator />
       </SidebarHeader>
@@ -225,16 +230,20 @@ export function AppSidebar(props: AppSidebarProps) {
               </div>
             </div>
 
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Logout"
-              title="Logout"
-              onClick={onLogout}
-              className="shrink-0"
-            >
-              <LogOut className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Logout"
+                  onClick={onLogout}
+                  className="shrink-0"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Logout</TooltipContent>
+            </Tooltip>
           </div>
         </div>
       </SidebarFooter>

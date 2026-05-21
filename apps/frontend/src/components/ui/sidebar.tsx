@@ -136,25 +136,23 @@ const SidebarProvider = React.forwardRef<
 
     return (
       <SidebarContext.Provider value={contextValue}>
-        <TooltipProvider delayDuration={0}>
-          <div
-            style={
-              {
-                "--sidebar-width": SIDEBAR_WIDTH,
-                "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
-                ...style,
-              } as React.CSSProperties
-            }
-            className={cn(
-              "group/sidebar-wrapper flex min-h-svh w-full has-[[data-variant=inset]]:bg-sidebar",
-              className
-            )}
-            ref={ref}
-            {...props}
-          >
-            {children}
-          </div>
-        </TooltipProvider>
+        <div
+          style={
+            {
+              "--sidebar-width": SIDEBAR_WIDTH,
+              "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
+              ...style,
+            } as React.CSSProperties
+          }
+          className={cn(
+            "group/sidebar-wrapper flex min-h-svh w-full has-[[data-variant=inset]]:bg-sidebar",
+            className
+          )}
+          ref={ref}
+          {...props}
+        >
+          {children}
+        </div>
       </SidebarContext.Provider>
     )
   }
@@ -279,6 +277,11 @@ const SidebarTrigger = React.forwardRef<
 >(({ className, onClick, ...props }, ref) => {
   const { state, toggleSidebar } = useSidebar()
   const label = state === "expanded" ? "Comprimi sidebar" : "Espandi sidebar"
+  const { toggleSidebar, state } = useSidebar()
+  const tooltipText = state === "expanded" ? "Comprimi sidebar" : "Espandi sidebar"
+  const label = state === "expanded" ? "Comprimi sidebar" : "Espandi sidebar"
+  const isCollapsed = state === "collapsed"
+  const label = isCollapsed ? "Espandi sidebar" : "Comprimi sidebar"
 
   return (
     <Tooltip>
@@ -296,11 +299,28 @@ const SidebarTrigger = React.forwardRef<
           {...props}
         >
           <PanelLeft />
+          <span className="sr-only">{tooltipText}</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right">{tooltipText}</TooltipContent>
           <span className="sr-only">{label}</span>
         </Button>
       </TooltipTrigger>
       <TooltipContent side="right" align="center">
         {label}
+          <span className="sr-only">Toggle Sidebar</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right" align="center">
+        {state === "collapsed" ? "Espandi sidebar" : "Comprimi sidebar"}
+          <span className="sr-only">{label}</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right" align="center" className="hidden md:block">
+        {label}
+        <kbd className="ml-2 font-mono text-[10px] bg-primary-foreground/20 rounded px-1 py-0.5">
+          ⌘B
+        </kbd>
       </TooltipContent>
     </Tooltip>
   )
