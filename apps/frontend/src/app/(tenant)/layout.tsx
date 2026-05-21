@@ -9,6 +9,11 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   SidebarProvider, SidebarTrigger, SidebarInset,
 } from "@/components/ui/sidebar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { TenantSidebar } from "@/components/layout/tenant-sidebar";
 import { UserNav } from "@/components/layout/user-nav";
 import { ThemeSettingsDrawer } from "@/components/layout/theme-settings-drawer";
@@ -34,6 +39,14 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
         {/* ── HEADER ── */}
         <header className="doflow-app-header flex h-14 shrink-0 items-center gap-2 px-4 sticky top-0 z-10">
           <SidebarTrigger className="-ml-1" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <SidebarTrigger className="-ml-1" aria-label="Toggle menu" />
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              Espandi/Comprimi menu
+            </TooltipContent>
+          </Tooltip>
           <div className="h-5 w-px bg-border" aria-hidden="true" />
 
           {/* ✅ Cmd+K Search — visibile da sm in su */}
@@ -45,6 +58,9 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
           <Tooltip>
             <TooltipTrigger asChild>
               <Link href="/notifications">
+          <Link href="/notifications">
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -58,9 +74,24 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
             </TooltipTrigger>
             <TooltipContent>Notifiche</TooltipContent>
           </Tooltip>
+              </TooltipTrigger>
+              <TooltipContent>
+                Notifiche
+              </TooltipContent>
+            </Tooltip>
+          </Link>
 
           {/* Theme Settings drawer */}
-          <ThemeSettingsDrawer />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>
+                <ThemeSettingsDrawer />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              Impostazioni aspetto
+            </TooltipContent>
+          </Tooltip>
 
           {/* User menu */}
           <UserNav />
