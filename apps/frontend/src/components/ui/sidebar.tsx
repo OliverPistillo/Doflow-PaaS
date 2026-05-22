@@ -276,10 +276,6 @@ const SidebarTrigger = React.forwardRef<
   React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
   const { state, toggleSidebar } = useSidebar()
-  const label = state === "expanded" ? "Comprimi sidebar" : "Espandi sidebar"
-  const { toggleSidebar, state } = useSidebar()
-  const tooltipText = state === "expanded" ? "Comprimi sidebar" : "Espandi sidebar"
-  const label = state === "expanded" ? "Comprimi sidebar" : "Espandi sidebar"
   const isCollapsed = state === "collapsed"
   const label = isCollapsed ? "Espandi sidebar" : "Comprimi sidebar"
 
@@ -299,20 +295,6 @@ const SidebarTrigger = React.forwardRef<
           {...props}
         >
           <PanelLeft />
-          <span className="sr-only">{tooltipText}</span>
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="right">{tooltipText}</TooltipContent>
-          <span className="sr-only">{label}</span>
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="right" align="center">
-        {label}
-          <span className="sr-only">Toggle Sidebar</span>
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="right" align="center">
-        {state === "collapsed" ? "Espandi sidebar" : "Comprimi sidebar"}
           <span className="sr-only">{label}</span>
         </Button>
       </TooltipTrigger>
@@ -820,6 +802,8 @@ const SidebarMenuSubButton = React.forwardRef<
 })
 SidebarMenuSubButton.displayName = "SidebarMenuSubButton"
 
+const SidebarMenuSeparator = SidebarSeparator
+
 export {
   Sidebar,
   SidebarContent,
@@ -847,6 +831,3 @@ export {
   SidebarTrigger,
   useSidebar,
 }
-
-// Re-export alias for separators inside menu
-const SidebarMenuSeparator = SidebarSeparator
