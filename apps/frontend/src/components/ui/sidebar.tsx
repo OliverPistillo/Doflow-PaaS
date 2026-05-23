@@ -276,10 +276,6 @@ const SidebarTrigger = React.forwardRef<
   React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
   const { state, toggleSidebar } = useSidebar()
-  const label = state === "expanded" ? "Comprimi sidebar" : "Espandi sidebar"
-  const { toggleSidebar, state } = useSidebar()
-  const tooltipText = state === "expanded" ? "Comprimi sidebar" : "Espandi sidebar"
-  const label = state === "expanded" ? "Comprimi sidebar" : "Espandi sidebar"
   const isCollapsed = state === "collapsed"
   const label = isCollapsed ? "Espandi sidebar" : "Comprimi sidebar"
 
@@ -291,7 +287,10 @@ const SidebarTrigger = React.forwardRef<
           data-sidebar="trigger"
           variant="ghost"
           size="icon"
-          className={cn("h-9 w-9 text-muted-foreground hover:text-foreground", className)}
+          className={cn(
+            "h-9 w-9 text-muted-foreground hover:text-foreground",
+            className,
+          )}
           onClick={(event) => {
             onClick?.(event)
             toggleSidebar()
@@ -299,20 +298,6 @@ const SidebarTrigger = React.forwardRef<
           {...props}
         >
           <PanelLeft />
-          <span className="sr-only">{tooltipText}</span>
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="right">{tooltipText}</TooltipContent>
-          <span className="sr-only">{label}</span>
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="right" align="center">
-        {label}
-          <span className="sr-only">Toggle Sidebar</span>
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="right" align="center">
-        {state === "collapsed" ? "Espandi sidebar" : "Comprimi sidebar"}
           <span className="sr-only">{label}</span>
         </Button>
       </TooltipTrigger>

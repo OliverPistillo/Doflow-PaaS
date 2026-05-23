@@ -8,14 +8,12 @@
 import { type SVGProps } from "react";
 import { Settings, CircleCheck, RotateCcw } from "lucide-react";
 import { useTheme } from "next-themes";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Root as RadioGroup, Item as RadioItem } from "@radix-ui/react-radio-group";
 import { Button } from "@/components/ui/button";
 import {
   Sheet, SheetContent, SheetDescription,
   SheetFooter, SheetHeader, SheetTitle, SheetTrigger,
 } from "@/components/ui/sheet";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSidebar } from "@/components/ui/sidebar";
 import {
   Tooltip,
@@ -261,7 +259,6 @@ export function ThemeSettingsDrawer() {
         <TooltipContent side="bottom" align="center">
           Impostazioni aspetto
         </TooltipContent>
-        <TooltipContent>Impostazioni aspetto</TooltipContent>
       </Tooltip>
 
       <SheetContent className="flex flex-col gap-0 px-0">
