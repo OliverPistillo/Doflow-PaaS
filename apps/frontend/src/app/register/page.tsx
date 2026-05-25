@@ -7,10 +7,16 @@ import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
 import { Eye, EyeOff, Loader2, AlertCircle, Mail, Lock, User, Building2 } from "lucide-react";
@@ -49,7 +55,7 @@ export default function RegisterPage() {
   const [generalError, setGeneralError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState(false);
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<RegisterFormValues>({
+  const { register, handleSubmit, control, formState: { errors, isSubmitting } } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: { name: "", company: "", email: "", password: "", confirmPassword: "", acceptTerms: false },
   });
@@ -220,10 +226,19 @@ export default function RegisterPage() {
                             <Lock size={14} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
                             <input id="reg-password" type={showPwd ? "text" : "password"} placeholder="Min. 8 caratteri"
                               disabled={isSubmitting} className={cn("dfr-input", errors.password && "err")} {...register("password")}/>
-                            <button type="button" onClick={() => setShowPwd(!showPwd)} aria-label="Toggle password"
-                              style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}>
-                              {showPwd ? <EyeOff size={15}/> : <Eye size={15}/>}
-                            </button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button type="button" onClick={() => setShowPwd(!showPwd)}
+                                  aria-label={showPwd ? "Nascondi password" : "Mostra password"}
+                                  disabled={isSubmitting}
+                                  style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}>
+                                  {showPwd ? <EyeOff size={15}/> : <Eye size={15}/>}
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                {showPwd ? "Nascondi password" : "Mostra password"}
+                              </TooltipContent>
+                            </Tooltip>
                           </div>
                           {errors.password && <p role="alert" className="text-[11px] text-red-500 font-medium">{errors.password.message}</p>}
                         </div>
@@ -233,10 +248,19 @@ export default function RegisterPage() {
                             <Lock size={14} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
                             <input id="confirmPassword" type={showConfirm ? "text" : "password"} placeholder="Ripeti password"
                               disabled={isSubmitting} className={cn("dfr-input", errors.confirmPassword && "err")} {...register("confirmPassword")}/>
-                            <button type="button" onClick={() => setShowConfirm(!showConfirm)} aria-label="Toggle confirm"
-                              style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}>
-                              {showConfirm ? <EyeOff size={15}/> : <Eye size={15}/>}
-                            </button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button type="button" onClick={() => setShowConfirm(!showConfirm)}
+                                  aria-label={showConfirm ? "Nascondi password" : "Mostra password"}
+                                  disabled={isSubmitting}
+                                  style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}>
+                                  {showConfirm ? <EyeOff size={15}/> : <Eye size={15}/>}
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                {showConfirm ? "Nascondi password" : "Mostra password"}
+                              </TooltipContent>
+                            </Tooltip>
                           </div>
                           {errors.confirmPassword && <p role="alert" className="text-[11px] text-red-500 font-medium">{errors.confirmPassword.message}</p>}
                         </div>
@@ -244,9 +268,19 @@ export default function RegisterPage() {
 
                       {/* Accept terms */}
                       <div className="dfr-a dfr-a7" style={{display:"flex",alignItems:"flex-start",gap:10}}>
-                        <input type="checkbox" id="acceptTerms"
-                          style={{width:16,height:16,borderRadius:4,accentColor:"#5B5BD6",cursor:"pointer",flexShrink:0,marginTop:2}}
-                          {...register("acceptTerms")}/>
+                        <Controller
+                          name="acceptTerms"
+                          control={control}
+                          render={({ field }) => (
+                            <Checkbox
+                              id="acceptTerms"
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              disabled={isSubmitting}
+                              style={{marginTop:2}}
+                            />
+                          )}
+                        />
                         <Label htmlFor="acceptTerms" className="text-[12.5px] text-muted-foreground cursor-pointer leading-relaxed">
                           Accetto i{" "}
                           <Link href="/terms" className="font-semibold text-foreground hover:underline">Termini di Servizio</Link>
