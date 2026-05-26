@@ -29,7 +29,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
@@ -276,8 +275,7 @@ const SidebarTrigger = React.forwardRef<
   React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
   const { state, toggleSidebar } = useSidebar()
-  const isCollapsed = state === "collapsed"
-  const label = isCollapsed ? "Espandi sidebar" : "Comprimi sidebar"
+  const label = state === "collapsed" ? "Espandi sidebar" : "Comprimi sidebar"
 
   return (
     <Tooltip>
@@ -805,6 +803,8 @@ const SidebarMenuSubButton = React.forwardRef<
 })
 SidebarMenuSubButton.displayName = "SidebarMenuSubButton"
 
+const SidebarMenuSeparator = SidebarSeparator
+
 export {
   Sidebar,
   SidebarContent,
@@ -832,6 +832,3 @@ export {
   SidebarTrigger,
   useSidebar,
 }
-
-// Re-export alias for separators inside menu
-const SidebarMenuSeparator = SidebarSeparator

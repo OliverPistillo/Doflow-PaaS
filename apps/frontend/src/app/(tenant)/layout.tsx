@@ -48,21 +48,17 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
           {/* Notifiche */}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative text-muted-foreground hover:text-foreground"
-                aria-label="Notifiche"
-                asChild
-              >
-                <Link href="/notifications">
+              <Link href="/notifications">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative text-muted-foreground hover:text-foreground"
+                  aria-label="Notifiche"
+                >
                   <Bell className="h-4 w-4" aria-hidden="true" />
-                  <span
-                    className="absolute top-2 right-2 h-1.5 w-1.5 bg-rose-500 rounded-full"
-                    aria-hidden="true"
-                  />
-                </Link>
-              </Button>
+                  <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-rose-500 rounded-full" aria-hidden="true" />
+                </Button>
+              </Link>
             </TooltipTrigger>
             <TooltipContent side="bottom" align="center">
               Notifiche
