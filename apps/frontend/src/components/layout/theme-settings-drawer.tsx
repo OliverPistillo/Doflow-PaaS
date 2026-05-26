@@ -11,6 +11,11 @@ import { useTheme } from "next-themes";
 import { Root as RadioGroup, Item as RadioItem } from "@radix-ui/react-radio-group";
 import { Button } from "@/components/ui/button";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Sheet, SheetContent, SheetDescription,
   SheetFooter, SheetHeader, SheetTitle, SheetTrigger,
 } from "@/components/ui/sheet";
