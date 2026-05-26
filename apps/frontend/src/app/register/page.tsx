@@ -229,11 +229,9 @@ export default function RegisterPage() {
                               disabled={isSubmitting} className={cn("dfr-input", errors.password && "err")} {...register("password")}/>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <button type="button" onClick={() => setShowPwd(!showPwd)}
-                                  disabled={isSubmitting}
-                                  aria-label={showPwd ? "Nascondi" : "Mostra"}
-                                  style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}>
-                                  {showPwd ? <EyeOff size={16}/> : <Eye size={16}/>}
+                                <button type="button" onClick={() => setShowPwd(!showPwd)} aria-label={showPwd ? "Nascondi" : "Mostra"}
+                                  style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}>
+                                  {showPwd ? <EyeOff size={15}/> : <Eye size={15}/>}
                                 </button>
                               </TooltipTrigger>
                               <TooltipContent side="top">
@@ -251,11 +249,9 @@ export default function RegisterPage() {
                               disabled={isSubmitting} className={cn("dfr-input", errors.confirmPassword && "err")} {...register("confirmPassword")}/>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <button type="button" onClick={() => setShowConfirm(!showConfirm)}
-                                  disabled={isSubmitting}
-                                  aria-label={showConfirm ? "Nascondi" : "Mostra"}
-                                  style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}>
-                                  {showConfirm ? <EyeOff size={16}/> : <Eye size={16}/>}
+                                <button type="button" onClick={() => setShowConfirm(!showConfirm)} aria-label={showConfirm ? "Nascondi" : "Mostra"}
+                                  style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}>
+                                  {showConfirm ? <EyeOff size={15}/> : <Eye size={15}/>}
                                 </button>
                               </TooltipTrigger>
                               <TooltipContent side="top">
