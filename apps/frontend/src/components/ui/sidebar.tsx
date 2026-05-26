@@ -29,7 +29,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
@@ -287,7 +286,10 @@ const SidebarTrigger = React.forwardRef<
           data-sidebar="trigger"
           variant="ghost"
           size="icon"
-          className={cn("h-9 w-9 text-muted-foreground hover:text-foreground", className)}
+          className={cn(
+            "h-9 w-9 text-muted-foreground hover:text-foreground",
+            className,
+          )}
           onClick={(event) => {
             onClick?.(event)
             toggleSidebar()
