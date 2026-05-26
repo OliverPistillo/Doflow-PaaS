@@ -10,8 +10,8 @@ import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Tooltip,
@@ -192,8 +192,8 @@ export default function RegisterPage() {
                         <div className="grid gap-1.5">
                           <Label htmlFor="name" className="text-[13px] font-medium text-foreground">Nome *</Label>
                           <div style={{position:"relative"}}>
-                            <User size={14} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none",zIndex:10}}/>
-                            <Input id="name" type="text" placeholder="Mario Rossi" disabled={isSubmitting}
+                            <User size={15} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
+                            <input id="name" type="text" placeholder="Mario Rossi" disabled={isSubmitting}
                               className={cn("dfr-input", errors.name && "err")} {...register("name")}/>
                           </div>
                           {errors.name && <p role="alert" className="text-[11px] text-red-500 font-medium">{errors.name.message}</p>}
@@ -201,8 +201,8 @@ export default function RegisterPage() {
                         <div className="grid gap-1.5">
                           <Label htmlFor="company" className="text-[13px] font-medium text-foreground">Azienda</Label>
                           <div style={{position:"relative"}}>
-                            <Building2 size={14} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none",zIndex:10}}/>
-                            <Input id="company" type="text" placeholder="Acme Srl" disabled={isSubmitting}
+                            <Building2 size={15} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
+                            <input id="company" type="text" placeholder="Acme Srl" disabled={isSubmitting}
                               className="dfr-input" {...register("company")}/>
                           </div>
                         </div>
@@ -212,8 +212,8 @@ export default function RegisterPage() {
                       <div className="dfr-a dfr-a5 grid gap-1.5">
                         <Label htmlFor="reg-email" className="text-[13px] font-medium text-foreground">Email *</Label>
                         <div style={{position:"relative"}}>
-                          <Mail size={14} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none",zIndex:10}}/>
-                          <Input id="reg-email" type="email" placeholder="nome@azienda.it" disabled={isSubmitting}
+                          <Mail size={15} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
+                          <input id="reg-email" type="email" placeholder="nome@azienda.it" disabled={isSubmitting}
                             className={cn("dfr-input", errors.email && "err")} {...register("email")}/>
                         </div>
                         {errors.email && <p role="alert" className="text-[11px] text-red-500 font-medium">{errors.email.message}</p>}
@@ -224,15 +224,16 @@ export default function RegisterPage() {
                         <div className="grid gap-1.5">
                           <Label htmlFor="reg-password" className="text-[13px] font-medium text-foreground">Password *</Label>
                           <div style={{position:"relative"}}>
-                            <Lock size={14} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none",zIndex:10}}/>
-                            <Input id="reg-password" type={showPwd ? "text" : "password"} placeholder="Min. 8 caratteri"
+                            <Lock size={15} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
+                            <input id="reg-password" type={showPwd ? "text" : "password"} placeholder="Min. 8 caratteri"
                               disabled={isSubmitting} className={cn("dfr-input", errors.password && "err")} {...register("password")}/>
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button type="button" onClick={() => setShowPwd(!showPwd)}
-                                  aria-label={showPwd ? "Nascondi password" : "Mostra password"}
-                                  style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",zIndex:10}}>
-                                  {showPwd ? <EyeOff size={15}/> : <Eye size={15}/>}
+                                  disabled={isSubmitting}
+                                  aria-label={showPwd ? "Nascondi" : "Mostra"}
+                                  style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}>
+                                  {showPwd ? <EyeOff size={16}/> : <Eye size={16}/>}
                                 </button>
                               </TooltipTrigger>
                               <TooltipContent side="top">
@@ -245,15 +246,16 @@ export default function RegisterPage() {
                         <div className="grid gap-1.5">
                           <Label htmlFor="confirmPassword" className="text-[13px] font-medium text-foreground">Conferma *</Label>
                           <div style={{position:"relative"}}>
-                            <Lock size={14} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none",zIndex:10}}/>
-                            <Input id="confirmPassword" type={showConfirm ? "text" : "password"} placeholder="Ripeti password"
+                            <Lock size={15} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
+                            <input id="confirmPassword" type={showConfirm ? "text" : "password"} placeholder="Ripeti password"
                               disabled={isSubmitting} className={cn("dfr-input", errors.confirmPassword && "err")} {...register("confirmPassword")}/>
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button type="button" onClick={() => setShowConfirm(!showConfirm)}
-                                  aria-label={showConfirm ? "Nascondi password" : "Mostra password"}
-                                  style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex",zIndex:10}}>
-                                  {showConfirm ? <EyeOff size={15}/> : <Eye size={15}/>}
+                                  disabled={isSubmitting}
+                                  aria-label={showConfirm ? "Nascondi" : "Mostra"}
+                                  style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}>
+                                  {showConfirm ? <EyeOff size={16}/> : <Eye size={16}/>}
                                 </button>
                               </TooltipTrigger>
                               <TooltipContent side="top">
@@ -276,7 +278,7 @@ export default function RegisterPage() {
                               checked={field.value}
                               onCheckedChange={field.onChange}
                               disabled={isSubmitting}
-                              style={{ marginTop: 2 }}
+                              style={{ cursor: "pointer", flexShrink: 0, marginTop: 2 }}
                             />
                           )}
                         />
