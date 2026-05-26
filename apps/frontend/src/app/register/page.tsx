@@ -229,7 +229,9 @@ export default function RegisterPage() {
                               disabled={isSubmitting} className={cn("dfr-input", errors.password && "err")} {...register("password")}/>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <button type="button" onClick={() => setShowPwd(!showPwd)} aria-label={showPwd ? "Nascondi" : "Mostra"}
+                                <button type="button" onClick={() => setShowPwd(!showPwd)}
+                                  aria-label={showPwd ? "Nascondi password" : "Mostra password"}
+                                  disabled={isSubmitting}
                                   style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}>
                                   {showPwd ? <EyeOff size={15}/> : <Eye size={15}/>}
                                 </button>
@@ -249,7 +251,9 @@ export default function RegisterPage() {
                               disabled={isSubmitting} className={cn("dfr-input", errors.confirmPassword && "err")} {...register("confirmPassword")}/>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <button type="button" onClick={() => setShowConfirm(!showConfirm)} aria-label={showConfirm ? "Nascondi" : "Mostra"}
+                                <button type="button" onClick={() => setShowConfirm(!showConfirm)}
+                                  aria-label={showConfirm ? "Nascondi password" : "Mostra password"}
+                                  disabled={isSubmitting}
                                   style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}>
                                   {showConfirm ? <EyeOff size={15}/> : <Eye size={15}/>}
                                 </button>
@@ -274,7 +278,7 @@ export default function RegisterPage() {
                               checked={field.value}
                               onCheckedChange={field.onChange}
                               disabled={isSubmitting}
-                              style={{ cursor: "pointer", flexShrink: 0, marginTop: 2 }}
+                              style={{marginTop:2}}
                             />
                           )}
                         />
