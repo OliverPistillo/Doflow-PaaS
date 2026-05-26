@@ -29,7 +29,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
@@ -805,6 +804,8 @@ const SidebarMenuSubButton = React.forwardRef<
 })
 SidebarMenuSubButton.displayName = "SidebarMenuSubButton"
 
+const SidebarMenuSeparator = SidebarSeparator
+
 export {
   Sidebar,
   SidebarContent,
@@ -832,6 +833,3 @@ export {
   SidebarTrigger,
   useSidebar,
 }
-
-// Re-export alias for separators inside menu
-const SidebarMenuSeparator = SidebarSeparator
