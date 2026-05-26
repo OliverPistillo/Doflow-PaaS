@@ -60,7 +60,9 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
                 </Button>
               </Link>
             </TooltipTrigger>
-            <TooltipContent>Notifiche</TooltipContent>
+            <TooltipContent side="bottom" align="center">
+              Notifiche
+            </TooltipContent>
           </Tooltip>
 
           {/* Theme Settings drawer */}
