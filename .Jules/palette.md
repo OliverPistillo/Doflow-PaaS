@@ -26,3 +26,6 @@
 ## 2025-05-15 - Global Tooltip Provider and Ref Handling
 **Learning:** In Next.js applications using Radix UI/shadcn, it's more efficient and prevents state conflicts to place a single `TooltipProvider` at the root layout rather than repeating it in every page or component. Additionally, when wrapping complex or third-party components (like `ThemeSettingsDrawer`) in a `TooltipTrigger`, using a `div` wrapper ensures the tooltip works even if the component doesn't correctly forward its ref.
 **Action:** Always check if a root `TooltipProvider` exists before adding new tooltips. Use a `div` wrapper inside `TooltipTrigger` for custom components to avoid "Function components cannot be given refs" warnings or silent failures.
+## 2026-05-13 - [Modernizing Legacy Auth Pages]
+**Learning:** Legacy auth pages (like the original `forgot-password`) that use hardcoded dark themes (zinc-700/800, bg-black) clash with the modernized "warm neutral" and glassmorphism design system. Modernizing these pages requires wrapping them in the `doflow-app-frame`, using `df-glass-panel` for containers, and replacing raw HTML elements with themed `Input` and `Button` components.
+**Action:** Always check for legacy hardcoded styles in auth-related pages and replace them with the design system's utility classes and components to ensure theme consistency and better UX.
