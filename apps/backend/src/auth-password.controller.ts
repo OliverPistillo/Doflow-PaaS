@@ -166,7 +166,6 @@ export class AuthPasswordController {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // 🔧 QUI il fix: niente updated_at (la colonna non esiste)
     await conn.query(
       `
       update "${tenantId}".users
