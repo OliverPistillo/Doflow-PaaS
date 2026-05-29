@@ -29,3 +29,7 @@
 ## 2026-05-13 - [Modernizing Legacy Auth Pages]
 **Learning:** Legacy auth pages (like the original `forgot-password`) that use hardcoded dark themes (zinc-700/800, bg-black) clash with the modernized "warm neutral" and glassmorphism design system. Modernizing these pages requires wrapping them in the `doflow-app-frame`, using `df-glass-panel` for containers, and replacing raw HTML elements with themed `Input` and `Button` components.
 **Action:** Always check for legacy hardcoded styles in auth-related pages and replace them with the design system's utility classes and components to ensure theme consistency and better UX.
+
+## 2026-05-20 - [Accessible MFA Setup Fallback]
+**Learning:** Providing a "Copy Secret" feature alongside the MFA QR code is a critical accessibility and UX improvement. It ensures users who cannot scan images (due to device limitations or visual impairments) have a seamless path to manually configure their authenticator app.
+**Action:** Always include a one-click copy button for manual entry codes in setup flows, using the design system's `toast` for immediate success feedback.
