@@ -33,3 +33,7 @@
 ## 2026-05-20 - [Accessible MFA Setup Fallback]
 **Learning:** Providing a "Copy Secret" feature alongside the MFA QR code is a critical accessibility and UX improvement. It ensures users who cannot scan images (due to device limitations or visual impairments) have a seamless path to manually configure their authenticator app.
 **Action:** Always include a one-click copy button for manual entry codes in setup flows, using the design system's `toast` for immediate success feedback.
+
+## 2026-05-21 - [Semantic Theming & Tooltip Ref Forwarding]
+**Learning:** Modernizing legacy components requires replacing hardcoded brand colors (e.g., `indigo-600`) with semantic tokens (`primary`) for theme compatibility. Additionally, when wrapping custom functional components in a `TooltipTrigger`, a `div` wrapper is often necessary to avoid ref-forwarding issues if the component doesn't explicitly implement `React.forwardRef`.
+**Action:** Always prefer semantic tokens for colors and use a `div` wrapper for tooltips around complex custom components.
