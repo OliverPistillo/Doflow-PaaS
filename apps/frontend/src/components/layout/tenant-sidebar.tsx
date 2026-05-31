@@ -20,7 +20,7 @@ import {
   DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getDoFlowUser, getInitials } from "@/lib/jwt";
 import { usePlan } from "@/contexts/PlanContext";
 import { SIDEBAR_GROUPS, PLAN_META, type PlanTier, planIncludes } from "@/lib/plans";
@@ -46,28 +46,26 @@ function NavItem({
   if (isLocked) {
     return (
       <SidebarMenuItem>
-        <TooltipProvider delayDuration={200}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center gap-3 pl-3 pr-2 py-2 rounded-lg cursor-not-allowed opacity-40 select-none w-full">
-                <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="flex-1 text-sm text-muted-foreground group-data-[collapsible=icon]:hidden">{label}</span>
-                <span className="group-data-[collapsible=icon]:hidden">
-                  <PlanBadge plan={minPlan} />
-                </span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="right" className="max-w-[220px] text-xs leading-snug">
-              {lockMsg ?? `Disponibile con il piano ${PLAN_META[minPlan].label}`}
-              <div className="mt-1.5">
-                <a href="/billing" className="text-primary font-semibold flex items-center gap-1">
-                  <Sparkles className="h-3 w-3" />
-                  {PLAN_META[minPlan].upgradeLabel ?? "Aggiorna piano"}
-                </a>
-              </div>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center gap-3 pl-3 pr-2 py-2 rounded-lg cursor-not-allowed opacity-40 select-none w-full">
+              <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="flex-1 text-sm text-muted-foreground group-data-[collapsible=icon]:hidden">{label}</span>
+              <span className="group-data-[collapsible=icon]:hidden">
+                <PlanBadge plan={minPlan} />
+              </span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="max-w-[220px] text-xs leading-snug">
+            {lockMsg ?? `Disponibile con il piano ${PLAN_META[minPlan].label}`}
+            <div className="mt-1.5">
+              <a href="/billing" className="text-primary font-semibold flex items-center gap-1">
+                <Sparkles className="h-3 w-3" />
+                {PLAN_META[minPlan].upgradeLabel ?? "Aggiorna piano"}
+              </a>
+            </div>
+          </TooltipContent>
+        </Tooltip>
       </SidebarMenuItem>
     );
   }
