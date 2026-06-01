@@ -37,3 +37,7 @@
 ## 2026-05-21 - [Semantic Theming & Tooltip Ref Forwarding]
 **Learning:** Modernizing legacy components requires replacing hardcoded brand colors (e.g., `indigo-600`) with semantic tokens (`primary`) for theme compatibility. Additionally, when wrapping custom functional components in a `TooltipTrigger`, a `div` wrapper is often necessary to avoid ref-forwarding issues if the component doesn't explicitly implement `React.forwardRef`.
 **Action:** Always prefer semantic tokens for colors and use a `div` wrapper for tooltips around complex custom components.
+
+## 2026-05-22 - [Standardized Layouts & Semantic Tokens]
+**Learning:** Modernizing fragmented legacy pages (like Settings) using shared layout components (`PageShell`, `PageHeader`) and semantic tokens (`primary`, `destructive`) instead of hardcoded colors ensures consistent padding, visual language, and theme compatibility (e.g., dark mode) across the app.
+**Action:** Always refactor legacy pages to use `PageShell` and semantic tokens to maintain design system integrity.

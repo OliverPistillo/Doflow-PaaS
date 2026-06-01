@@ -23,6 +23,10 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import {
+  PageShell,
+  PageHeader,
+} from "@/components/ui/page-shell";
+import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
@@ -114,8 +118,8 @@ export default function SettingsPage() {
   }) => (
     <div className={`flex items-center justify-between py-4 ${last ? "" : "border-b"}`}>
       <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-900/20">
-          <Icon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+        <div className="df-icon-bubble h-9 w-9">
+          <Icon className="h-4 w-4" />
         </div>
         <div>
           <div className="text-sm font-medium">{label}</div>
@@ -129,15 +133,11 @@ export default function SettingsPage() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex-1 space-y-5 p-4 md:p-6 pt-4 animate-in fade-in duration-500">
-
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Impostazioni</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Gestisci il tuo profilo, le preferenze e la sicurezza
-        </p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Impostazioni"
+        description="Gestisci il tuo profilo, le preferenze e la sicurezza"
+      />
 
       <Tabs defaultValue="profile" className="space-y-5">
         <TabsList>
@@ -159,7 +159,7 @@ export default function SettingsPage() {
               {/* Avatar */}
               <div className="flex items-center gap-4">
                 <Avatar className="h-16 w-16">
-                  <AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 text-xl font-bold">
+                  <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">
                     {user?.initials ?? "DF"}
                   </AvatarFallback>
                 </Avatar>
@@ -215,7 +215,6 @@ export default function SettingsPage() {
                 <Button
                   onClick={handleSaveProfile}
                   disabled={saving}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
                   {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
                   {saving ? "Salvataggio…" : "Salva modifiche"}
@@ -355,12 +354,12 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-red-200 dark:border-red-900/50">
+          <Card className="border-destructive/30">
             <CardContent className="pt-5 pb-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-50 dark:bg-red-900/20">
-                    <LogOut className="h-4 w-4 text-red-600 dark:text-red-400" />
+                  <div className="df-icon-bubble h-9 w-9 bg-destructive/10 border-destructive/20 text-destructive">
+                    <LogOut className="h-4 w-4" />
                   </div>
                   <div>
                     <div className="text-sm font-medium">Disconnetti</div>
@@ -370,7 +369,7 @@ export default function SettingsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900/50 dark:hover:bg-red-900/20"
+                  className="text-destructive border-destructive/20 hover:bg-destructive/10"
                   onClick={() => setShowLogout(true)}
                 >
                   Disconnetti
@@ -389,10 +388,10 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-5">
               {/* Current plan */}
-              <div className="flex items-center justify-between p-4 rounded-xl border-2 border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-900/10">
+              <div className="flex items-center justify-between p-4 rounded-xl border-2 border-primary/20 bg-primary/5">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-900/30">
-                    <Sparkles className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                  <div className="df-icon-bubble h-11 w-11">
+                    <Sparkles className="h-5 w-5" />
                   </div>
                   <div>
                     <div className="font-semibold text-lg">Piano {meta.label}</div>
@@ -404,7 +403,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 {meta.nextPlan && (
-                  <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" size="sm">
+                  <Button size="sm">
                     <Sparkles className="mr-1.5 h-4 w-4" /> {meta.upgradeLabel}
                   </Button>
                 )}
@@ -421,7 +420,7 @@ export default function SettingsPage() {
                   </div>
                   <Progress
                     value={(tenantInfo.storageUsedMb / (tenantInfo.storageLimitGb * 1024)) * 100}
-                    className="h-2 [&>div]:bg-indigo-500"
+                    className="h-2 [&>div]:bg-primary"
                   />
                 </div>
               )}
@@ -451,12 +450,12 @@ export default function SettingsPage() {
                   return (
                     <div
                       key={tier}
-                      className={`rounded-xl border-2 p-4 transition-colors ${isActive ? "border-indigo-400 dark:border-indigo-600 bg-indigo-50/30 dark:bg-indigo-900/10" : "border-border"}`}
+                      className={`rounded-xl border-2 p-4 transition-colors ${isActive ? "border-primary/40 bg-primary/5" : "border-border"}`}
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div className="font-semibold">{tierMeta.label}</div>
                         {isActive && (
-                          <Badge variant="secondary" className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border-0 text-[10px]">
+                          <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-[10px]">
                             ATTIVO
                           </Badge>
                         )}
@@ -465,7 +464,7 @@ export default function SettingsPage() {
                       <ul className="space-y-1.5">
                         {tierMeta.features.map((f) => (
                           <li key={f} className="text-sm text-muted-foreground flex items-center gap-2">
-                            <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0" />
+                            <div className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
                             {f}
                           </li>
                         ))}
@@ -497,13 +496,13 @@ export default function SettingsPage() {
             <AlertDialogCancel>Annulla</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleLogout}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Disconnetti
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }
