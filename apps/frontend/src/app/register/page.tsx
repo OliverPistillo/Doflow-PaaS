@@ -230,7 +230,7 @@ export default function RegisterPage() {
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button type="button" onClick={() => setShowPwd(!showPwd)}
-                                  aria-label={showPwd ? "Nascondi password" : "Mostra password"}
+                                  aria-label={showPwd ? "Nascondi" : "Mostra"}
                                   disabled={isSubmitting}
                                   style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}>
                                   {showPwd ? <EyeOff size={15}/> : <Eye size={15}/>}
@@ -252,7 +252,7 @@ export default function RegisterPage() {
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button type="button" onClick={() => setShowConfirm(!showConfirm)}
-                                  aria-label={showConfirm ? "Nascondi password" : "Mostra password"}
+                                  aria-label={showConfirm ? "Nascondi" : "Mostra"}
                                   disabled={isSubmitting}
                                   style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}>
                                   {showConfirm ? <EyeOff size={15}/> : <Eye size={15}/>}
