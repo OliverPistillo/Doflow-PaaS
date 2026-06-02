@@ -253,7 +253,6 @@ export default function TenantsPage() {
         className: "bg-emerald-50 border-emerald-200 text-emerald-800"
       });
 
-      // --- FIX: Mostra la password se restituita dal backend ---
       if (res?.tempPassword) {
         alert(
           `✅ TENANT CREATO CON SUCCESSO!\n\n` +
