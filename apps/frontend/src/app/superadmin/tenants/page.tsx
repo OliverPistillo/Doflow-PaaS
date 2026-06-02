@@ -254,7 +254,7 @@ export default function TenantsPage() {
       });
 
       if (res?.tempPassword) {
-        alert(
+        window.alert(
           `✅ TENANT CREATO CON SUCCESSO!\n\n` +
           `Ecco le credenziali Admin per ${res.name || newTenant.name}:\n\n` +
           `Email: ${newTenant.email}\n` +
