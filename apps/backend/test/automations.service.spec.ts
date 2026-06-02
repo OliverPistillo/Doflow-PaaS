@@ -24,7 +24,7 @@ describe('AutomationsService', () => {
     },
     isActive: true,
     executionCount: 0,
-    lastExecutedAt: null,
+    lastExecutedAt: undefined,
   };
 
   const notifRule: Partial<AutomationRule> = {

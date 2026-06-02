@@ -47,10 +47,7 @@ export class FileStorageService {
     return conn;
   }
 
-  // ... (Tieni il tuo metodo probe() esistente, è perfetto) ...
   async probe(): Promise<{ status: StorageProbeStatus; latency_ms: number; message?: string }> {
-      // ... (copia incolla il tuo codice probe qui) ...
-      // Per brevità non lo ripeto, ma mantienilo uguale al tuo file originale
       const t0 = Date.now();
       try {
         await this.s3.send(new HeadBucketCommand({ Bucket: this.bucket }));
