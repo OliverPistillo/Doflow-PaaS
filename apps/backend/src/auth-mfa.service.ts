@@ -5,13 +5,7 @@ import * as speakeasy from 'speakeasy';
 import * as QRCode from 'qrcode';
 import * as jwt from 'jsonwebtoken';
 import { Role } from './roles';
-
-function safeSchema(input: string): string {
-  const s = String(input || '').trim().toLowerCase();
-  if (!s) return 'public';
-  if (!/^[a-z0-9_]+$/.test(s)) return 'public';
-  return s;
-}
+import { safeSchema } from './common/schema.utils';
 
 function nowIso() {
   return new Date().toISOString();
@@ -27,7 +21,7 @@ export class AuthMfaService {
 
   private getTenantId(req: Request): string {
     const tenantId = (req as any).tenantId as string | undefined;
-    return safeSchema(tenantId ?? 'public');
+    return safeSchema(tenantId ?? 'public', 'AuthMfaService');
   }
 
   private signToken(payload: any, expiresIn: string) {
@@ -42,7 +36,7 @@ export class AuthMfaService {
       {
         sub: userId,
         email,
-        tenantId: safeSchema(tenantId),
+        tenantId: safeSchema(tenantId, 'AuthMfaService'),
         tenantSlug,
         role,
       },
@@ -55,7 +49,7 @@ export class AuthMfaService {
       {
         sub: userId,
         email,
-        tenantId: safeSchema(tenantId),
+        tenantId: safeSchema(tenantId, 'AuthMfaService'),
         tenantSlug,
         role,
         mfa_pending: true,
@@ -76,7 +70,7 @@ export class AuthMfaService {
     const rows = await conn.query(
       `
       select id, email, role, mfa_enabled, mfa_secret, mfa_verified_at, mfa_failed_attempts, mfa_locked_until
-      from ${tenantId}.users
+      from "${tenantId}"."users"
       where id = $1
       limit 1
       `,
@@ -116,7 +110,7 @@ export class AuthMfaService {
     // salva secret (base32) ma NON abilitiamo finché non verifica
     await conn.query(
       `
-      update ${tenantId}.users
+      update "${tenantId}"."users"
       set mfa_secret = $1,
           mfa_enabled = false,
           mfa_verified_at = null,
@@ -162,7 +156,7 @@ export class AuthMfaService {
     const rows = await conn.query(
       `
       select id, email, role, mfa_enabled, mfa_secret, mfa_verified_at, mfa_failed_attempts, mfa_locked_until
-      from ${tenantId}.users
+      from "${tenantId}"."users"
       where id = $1
       limit 1
       `,
@@ -196,7 +190,7 @@ export class AuthMfaService {
 
       await conn.query(
         `
-        update ${tenantId}.users
+        update "${tenantId}"."users"
         set mfa_failed_attempts = $1,
             mfa_locked_until = $2
         where id = $3
@@ -214,7 +208,7 @@ export class AuthMfaService {
       // completing enrollment
       await conn.query(
         `
-        update ${tenantId}.users
+        update "${tenantId}"."users"
         set mfa_enabled = true,
             mfa_verified_at = $1,
             mfa_failed_attempts = 0,
@@ -227,7 +221,7 @@ export class AuthMfaService {
       // challenge success
       await conn.query(
         `
-        update ${tenantId}.users
+        update "${tenantId}"."users"
         set mfa_failed_attempts = 0,
             mfa_locked_until = null
         where id = $1
