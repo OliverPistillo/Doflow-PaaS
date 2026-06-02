@@ -5,6 +5,7 @@ import * as crypto from 'crypto';
 import { AuditService } from './audit.service';
 import { hasRoleAtLeast, Role } from './roles';
 import { MailService } from './mail/mail.service';
+import { safeSchema } from './common/schema.utils';
 
 type InviteBody = {
   email: string;
@@ -35,13 +36,7 @@ export class TenantAdminController {
   private getTenantId(req: Request): string {
     const tenantId = (req as any).tenantId as string | undefined;
     const tid = tenantId ?? 'public';
-
-    // Protezione SQL Injection estrema
-    if (!/^[a-z0-9_]+$/.test(tid)) {
-       throw new Error('Invalid tenant ID detected (potential SQL injection attempt)');
-    }
-    
-    return tid;
+    return safeSchema(tid, 'TenantAdminController');
   }
 
   // ✅ HELPER: Blocca chiamate su contesto 'public' (Control Plane)

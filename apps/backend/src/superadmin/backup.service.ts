@@ -132,9 +132,7 @@ export class BackupService implements OnModuleInit {
       },
     });
 
-    for (const b of old) {
-      try { await this.deleteBackup(b.id); } catch {}
-    }
+    await Promise.allSettled(old.map(b => this.deleteBackup(b.id)));
 
     if (old.length > 0) {
       this.logger.log(`🗑️ Retention: eliminati ${old.length} backup più vecchi di ${s.retentionDays} giorni.`);

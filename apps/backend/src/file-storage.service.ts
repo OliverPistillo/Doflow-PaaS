@@ -10,6 +10,7 @@ import { randomUUID } from 'crypto';
 import { DataSource } from 'typeorm';
 import { Request } from 'express';
 import { Readable } from 'stream';
+import { safeSchema } from './common/schema.utils';
 
 type StorageProbeStatus = 'ok' | 'warn' | 'down';
 
@@ -36,7 +37,7 @@ export class FileStorageService {
 
   private getTenantId(req: Request): string {
     const tenantId = (req as any).tenantId as string | undefined;
-    return tenantId ?? 'public';
+    return safeSchema(tenantId ?? 'public', 'FileStorageService');
   }
 
   private getConn(req: Request): DataSource {
@@ -127,10 +128,12 @@ export class FileStorageService {
    * Recupera lo stream di un file da S3 verificando la tenancy.
    */
   async downloadFileStream(tenantId: string, key: string) {
+    const safeTenantId = safeSchema(tenantId, 'FileStorageService.downloadFileStream');
+
     // SECURITY CHECK 1: Path Traversal & Isolation
     // Verifichiamo che la chiave richiesta inizi con l'ID del tenant corrente.
     // Nessuno può scaricare "tenantB/segreto.pdf" se è loggato come "tenantA".
-    if (!key.startsWith(`${tenantId}/`)) {
+    if (!key.startsWith(`${safeTenantId}/`)) {
         this.logger.warn(`Security Alert: Tenant ${tenantId} tried to access ${key}`);
         throw new ForbiddenException('Access Denied: File belongs to another tenant');
     }

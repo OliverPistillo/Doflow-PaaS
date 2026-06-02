@@ -58,7 +58,7 @@ export class AutomationRule {
   executionCount!: number;
 
   @Column({ name: 'last_executed_at', type: 'timestamp', nullable: true })
-  lastExecutedAt!: Date;
+  lastExecutedAt!: Date | null;
 
   /** Cron expression per trigger SCHEDULED */
   @Column({ name: 'cron_expression', nullable: true })
