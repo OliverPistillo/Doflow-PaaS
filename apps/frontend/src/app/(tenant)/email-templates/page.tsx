@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import DOMPurify from "dompurify";
 import { Mail, Plus, Search, Send, Copy, Trash2, Edit2, Eye,
   BarChart2, Star, Tag, ChevronRight, Code, Braces, Variable } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -165,7 +166,7 @@ function TemplateSheet({ t, onClose }: { t: Template; onClose: () => void }) {
             {tab === "preview" ? (
               <div
                 className="bg-muted/30 rounded-lg px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap border border-border/40"
-                dangerouslySetInnerHTML={{ __html: renderedBody }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderedBody) }}
               />
             ) : (
               <pre className="bg-muted/30 rounded-lg px-4 py-3 text-xs font-mono leading-relaxed whitespace-pre-wrap border border-border/40 overflow-x-auto">
