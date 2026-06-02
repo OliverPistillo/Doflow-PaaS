@@ -18,7 +18,7 @@ interface EventCreateDialogProps {
 export function EventCreateDialog({ isOpen, onClose, onSuccess, defaultDate }: EventCreateDialogProps) {
   const [formData, setFormData] = useState({
     title: "",
-    date: defaultDate ? defaultDate.toISOString().split('T')[0] : "",
+    date: defaultDate ? defaultDate.toLocaleDateString("en-CA") : "",
     type: "meeting",
     description: ""
   });
