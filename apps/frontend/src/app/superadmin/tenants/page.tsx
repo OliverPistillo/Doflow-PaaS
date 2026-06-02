@@ -257,7 +257,7 @@ export default function TenantsPage() {
 
       // --- FIX: Mostra la password se restituita dal backend ---
       if (res?.tempPassword) {
-        alert(
+        window.alert(
           `✅ TENANT CREATO CON SUCCESSO!\n\n` +
           `Ecco le credenziali Admin per ${res.name || newTenant.name}:\n\n` +
           `Email: ${newTenant.email}\n` +
