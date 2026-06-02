@@ -14,6 +14,7 @@ import { hasRoleAtLeast, Role } from './roles';
 import { AuditService } from './audit.service';
 import { ProjectsEventsService } from './realtime/projects-events.service';
 import { RequireFeature } from './feature-access/feature-access.decorator';
+import { safeSchema } from './common/schema.utils';
 
 type CreateProjectBody = {
   name: string;
@@ -61,7 +62,7 @@ export class ProjectsController {
 
   private getTenantId(req: Request): string {
     const tenantId = (req as any).tenantId as string | undefined;
-    return tenantId ?? 'public';
+    return safeSchema(tenantId ?? 'public', 'ProjectsController');
   }
 
   private getAuthUser(req: Request) {
