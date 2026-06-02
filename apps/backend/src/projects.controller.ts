@@ -16,6 +16,14 @@ import { ProjectsEventsService } from './realtime/projects-events.service';
 import { RequireFeature } from './feature-access/feature-access.decorator';
 import { safeSchema } from './common/schema.utils';
 
+export enum TaskStatus {
+  BACKLOG = 'BACKLOG',
+  TODO = 'TODO',
+  IN_PROGRESS = 'IN_PROGRESS',
+  REVIEW = 'REVIEW',
+  DONE = 'DONE',
+}
+
 type CreateProjectBody = {
   name: string;
   description?: string;
@@ -29,7 +37,7 @@ type CreateTaskBody = {
 };
 
 type UpdateTaskStatusBody = {
-  status?: string;
+  status?: TaskStatus | string;
 };
 
 type TaskRow = {
@@ -296,13 +304,7 @@ export class ProjectsController {
       return res.status(400).json({ error: 'status required' });
     }
 
-    const allowedStatuses = [
-      'BACKLOG',
-      'TODO',
-      'IN_PROGRESS',
-      'REVIEW',
-      'DONE',
-    ];
+    const allowedStatuses = Object.values(TaskStatus) as string[];
     if (!allowedStatuses.includes(rawStatus)) {
       return res.status(400).json({ error: 'invalid status' });
     }
