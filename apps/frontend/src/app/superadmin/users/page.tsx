@@ -66,7 +66,6 @@ type GlobalUser = {
   tenant_slug?: string;
   tenant_schema?: string;
   is_active: boolean;
-  // FIX: Unificato tutto a mfa_enabled per coerenza backend
   mfa_enabled?: boolean;  
   created_at: string;
 };
@@ -382,8 +381,6 @@ export default function SuperadminUsersPage() {
 
   const toggleMfa = async (u: GlobalUser) => {
     try {
-      // ✅ Normalizzazione: public usa 'mfa_enabled', tenant usa 'mfa_enabled'.
-      
       const currentVal = u.mfa_enabled ?? false;
       const patchData = {
         mfa_enabled: !currentVal   // for both tenant and global
