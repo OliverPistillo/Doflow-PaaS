@@ -1,4 +1,5 @@
 import { Controller, Post, Body, Get, UseGuards, Request, HttpException, HttpStatus } from '@nestjs/common';
+import { Request as ExpressRequest } from 'express';
 import { Logger } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { RequireFeature } from '../feature-access/feature-access.decorator';
@@ -12,8 +13,7 @@ export class BusinaroController {
   
   // --- 1. DASHBOARD DATA ---
   @Get('dashboard/stats')
-  // FIX: Aggiunto ': any' a req per risolvere l'errore TypeScript "implicit any"
-  async getDashboardStats(@Request() req: any) {
+  async getDashboardStats(@Request() req: ExpressRequest) {
     // Qui dovresti interrogare il DB (Prisma) usando req.user per il tenant
     
     return {
