@@ -107,13 +107,15 @@ export class PlatformNotificationsService {
       if (dto.targetTenantId) {
         await this.realtime.broadcastToTenant(dto.targetTenantId, wsPayload);
       } else {
-        // Broadcast globale: invia a tutti i tenant attivi
+        // Broadcast globale: invia a tutti i tenant attivi in parallelo
         const tenants = await this.tenantRepo.find({ where: { isActive: true } });
-        for (const t of tenants) {
-          await this.realtime.broadcastToTenant(t.id, wsPayload);
-        }
+        const broadcastPromises = tenants.map(t =>
+          this.realtime.broadcastToTenant(t.id, wsPayload),
+        );
         // Anche al canale superadmin
-        await this.realtime.broadcastToTenant('global', wsPayload);
+        broadcastPromises.push(this.realtime.broadcastToTenant('global', wsPayload));
+
+        await Promise.all(broadcastPromises);
       }
     }
 

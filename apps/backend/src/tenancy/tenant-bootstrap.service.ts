@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap, BadRequestException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { Role } from '../roles';
@@ -62,7 +62,12 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
 
   async ensureTenantTables(ds: DataSource, schema: string) {
     // FIX: safeSchema unificato — lancia eccezione su slug non valido
-    const s = safeSchema(schema, 'TenantBootstrapService.ensureTenantTables');
+    let s: string;
+    try {
+      s = safeSchema(schema, 'TenantBootstrapService.ensureTenantTables');
+    } catch (e: any) {
+      throw new BadRequestException(e.message);
+    }
 
     this.logger.log(`Provisioning schema: "${s}"`);
 
@@ -161,7 +166,12 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
   }
 
   async seedFirstAdmin(ds: DataSource, schema: string, email: string, password: string) {
-    const s = safeSchema(schema, 'TenantBootstrapService.seedFirstAdmin');
+    let s: string;
+    try {
+      s = safeSchema(schema, 'TenantBootstrapService.seedFirstAdmin');
+    } catch (e: any) {
+      throw new BadRequestException(e.message);
+    }
 
     const existing = await ds.query(
       `SELECT id FROM "${s}".users WHERE email = $1 LIMIT 1`,

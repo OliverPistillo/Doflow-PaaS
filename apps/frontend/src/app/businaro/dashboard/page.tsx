@@ -8,7 +8,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress"; 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { tenantFetch } from "@/lib/tenant-fetch";
 
 export default function BusinaroDashboard() {
   const [stats, setStats] = useState<any>(null);
@@ -17,8 +16,6 @@ export default function BusinaroDashboard() {
   useEffect(() => {
     async function loadData() {
       try {
-        // const res = await tenantFetch("/api/businaro/dashboard/stats");
-        // if (res.ok) setStats(await res.json());
         // MOCK DATA PER VEDERE L'UI SUBITO
         setTimeout(() => {
              setStats({
