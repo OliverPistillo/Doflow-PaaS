@@ -173,7 +173,6 @@ export default function TenantsPage() {
   const loadTenants = async () => {
     setFetchState({ status: "loading" });
     try {
-      // FIX: Rimosso /v2/ per uniformità
       const data = await apiFetch<Record<string, unknown>>("/superadmin/tenants");
       const list = Array.isArray(data?.tenants) ? data.tenants : [];
 
@@ -242,7 +241,6 @@ export default function TenantsPage() {
 
     setIsCreating(true);
     try {
-      // FIX: Rimosso /v2/ e aggiunto il tipo per intercettare la password
       const res = await apiFetch<{ tempPassword?: string; name: string }>("/superadmin/tenants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
