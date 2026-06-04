@@ -45,3 +45,6 @@
 ## 2026-05-23 - [OTP Chunking & Descriptive Auth Tooltips]
 **Learning:** Dividing a long numeric input (like a 6-digit MFA code) into smaller "chunks" using a separator reduces cognitive load and helps users verify their entry more accurately. Additionally, standardizing on descriptive tooltip labels for authentication-related actions (e.g., "Mostra password" instead of just "Mostra") provides better clarity and accessibility across the application.
 **Action:** Use 'InputOTPSeparator' to split numeric codes into groups of 3. Always prefer descriptive tooltip labels (Action + Object) for sensitive interactions in authentication flows.
+## 2026-06-04 - [Centralized Platform-Aware Shortcuts]
+**Learning:** Hardcoding platform-specific symbols like '⌘' in tooltips and ARIA labels provides a poor experience for non-Mac users. Using a centralized hook to detect the platform allows for dynamic, accessible shortcuts (e.g., 'Ctrl+K' vs '⌘K') and descriptive ARIA labels (e.g., 'Control+K' vs 'Command+K') that improve clarity for all users.
+**Action:** Always use the 'usePlatform' hook for any component that displays or handles keyboard shortcuts to ensure consistent cross-platform behavior and better accessibility.
