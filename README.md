@@ -315,6 +315,11 @@ Il middleware setta `req.tenantConnection` con la connessione TypeORM al schema 
 - **Font**: Outfit per signup/onboarding (display moderno), Nunito Sans per app interne
 - **Responsive desktop-first** con breakpoint mobile completi
 - **`data-testid` universale**: ogni elemento interattivo ha un test ID per E2E test
+- **Shell applicativa tenant e superadmin** con background gradient, griglia sottile e ambient blobs
+- **Header glass bar** per tenant e superadmin con blur e border morbido
+- **Componenti aggiornati**: `PageShell`, `PageHeader`, `Card`, `Button` con hero premium, glass panel, border, shadow, hover lift e gradient
+- **Sidebar premium**: active pill gradient, logo icon premium, colori semantic token
+- **Stati UI allineati**: Loading, empty, error e skeleton states allineati al nuovo stile SaaS
 
 ---
 
