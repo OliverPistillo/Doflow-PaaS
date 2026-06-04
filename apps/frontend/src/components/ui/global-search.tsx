@@ -23,6 +23,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { usePlatform } from "@/hooks/use-platform";
 import {
   LayoutDashboard, Users, FileText, ShoppingCart, Building2,
   Settings, BarChart3, CalendarDays, Receipt, ListTodo,
@@ -201,6 +202,7 @@ export function SearchTriggerButton({
   context?: "tenant" | "superadmin";
 }) {
   const { open, setOpen, groups, navigate } = useSearch(context);
+  const { modifierKey, modifierLabel } = usePlatform();
 
   return (
     <>
@@ -218,12 +220,12 @@ export function SearchTriggerButton({
               "transition-colors duration-150",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             ].join(" ")}
-            aria-label="Cerca (⌘K)"
+            aria-label={`Cerca (${modifierLabel}+K)`}
           >
             <Search className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <span>Cerca…</span>
             <kbd className="ml-2 font-mono text-[10px] bg-background border border-border rounded px-1.5 py-0.5 text-muted-foreground/70" aria-hidden="true">
-              ⌘K
+              {modifierKey}K
             </kbd>
           </button>
         </TooltipTrigger>
@@ -231,7 +233,7 @@ export function SearchTriggerButton({
           <p className="flex items-center gap-2">
             Cerca
             <kbd className="font-mono text-[10px] bg-primary-foreground/20 rounded px-1 py-0.5">
-              ⌘K
+              {modifierKey}K
             </kbd>
           </p>
         </TooltipContent>

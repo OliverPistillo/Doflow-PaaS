@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getDoFlowUser, getInitials } from "@/lib/jwt";
+import { usePlatform } from "@/hooks/use-platform";
 import { Shield, LogOut, User, Bell } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -91,12 +92,8 @@ function getPageTitle(p: string | null): string {
 
 function AnimatedTrigger() {
   const { state, toggleSidebar } = useSidebar();
+  const { isMac } = usePlatform();
   const isOpen = state === "expanded";
-  const [isMac, setIsMac] = React.useState(false);
-
-  React.useEffect(() => {
-    setIsMac(navigator.userAgent.toUpperCase().indexOf("MAC") >= 0);
-  }, []);
 
   const tooltipText = isOpen ? "Comprimi sidebar" : "Espandi sidebar";
   return (
