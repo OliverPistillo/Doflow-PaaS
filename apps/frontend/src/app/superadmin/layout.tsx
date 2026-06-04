@@ -15,6 +15,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getDoFlowUser, getInitials } from "@/lib/jwt";
 import { Shield, LogOut, User, Bell } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -91,6 +92,12 @@ function getPageTitle(p: string | null): string {
 function AnimatedTrigger() {
   const { state, toggleSidebar } = useSidebar();
   const isOpen = state === "expanded";
+  const [isMac, setIsMac] = React.useState(false);
+
+  React.useEffect(() => {
+    setIsMac(navigator.userAgent.toUpperCase().indexOf("MAC") >= 0);
+  }, []);
+
   const tooltipText = isOpen ? "Comprimi sidebar" : "Espandi sidebar";
   return (
     <Tooltip>
@@ -109,7 +116,10 @@ function AnimatedTrigger() {
           </svg>
         </button>
       </TooltipTrigger>
-      <TooltipContent side="right">{tooltipText}</TooltipContent>
+      <TooltipContent side="right" className="flex items-center gap-2">
+        {tooltipText}
+        <kbd className="font-mono text-[10px] bg-primary-foreground/20 rounded px-1 py-0.5">{isMac ? "⌘B" : "Ctrl+B"}</kbd>
+      </TooltipContent>
     </Tooltip>
   );
 }
@@ -163,10 +173,14 @@ function UserNav() {
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <button
-              className="h-9 w-9 rounded-nav bg-primary/10 text-primary flex items-center justify-center font-bold text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring hover:bg-primary/20 transition-colors"
+              className="h-9 w-9 rounded-nav ring-2 ring-border/40 hover:ring-primary/20 focus-visible:ring-ring focus-visible:outline-none transition-all"
               aria-label="Menu utente"
             >
-              <span aria-hidden="true">{user?.initials ?? "SA"}</span>
+              <Avatar className="h-9 w-9">
+                <AvatarFallback className="bg-primary/10 text-primary font-bold text-[13px]">
+                  {user?.initials ?? "SA"}
+                </AvatarFallback>
+              </Avatar>
             </button>
           </DropdownMenuTrigger>
         </TooltipTrigger>

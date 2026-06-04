@@ -277,6 +277,11 @@ const SidebarTrigger = React.forwardRef<
   const { state, toggleSidebar } = useSidebar()
   const isCollapsed = state === "collapsed"
   const label = isCollapsed ? "Espandi sidebar" : "Comprimi sidebar"
+  const [isMac, setIsMac] = React.useState(false)
+
+  React.useEffect(() => {
+    setIsMac(navigator.userAgent.toUpperCase().indexOf("MAC") >= 0)
+  }, [])
 
   return (
     <Tooltip>
@@ -303,7 +308,7 @@ const SidebarTrigger = React.forwardRef<
       <TooltipContent side="right" align="center" className="hidden md:block">
         {label}
         <kbd className="ml-2 font-mono text-[10px] bg-primary-foreground/20 rounded px-1 py-0.5">
-          ⌘B
+          {isMac ? "⌘B" : "Ctrl+B"}
         </kbd>
       </TooltipContent>
     </Tooltip>
