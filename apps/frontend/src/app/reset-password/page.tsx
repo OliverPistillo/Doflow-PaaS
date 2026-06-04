@@ -192,7 +192,7 @@ export default function ResetPasswordPage() {
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent side="top">
-                          {showPassword ? 'Nascondi' : 'Mostra'}
+                          {showPassword ? 'Nascondi password' : 'Mostra password'}
                         </TooltipContent>
                       </Tooltip>
                     </div>
@@ -227,7 +227,7 @@ export default function ResetPasswordPage() {
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent side="top">
-                          {showPassword2 ? 'Nascondi' : 'Mostra'}
+                          {showPassword2 ? 'Nascondi password' : 'Mostra password'}
                         </TooltipContent>
                       </Tooltip>
                     </div>

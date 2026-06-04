@@ -9,8 +9,14 @@ import { Button } from "@/components/ui/button";
 import {
   InputOTP,
   InputOTPGroup,
+  InputOTPSeparator,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { LoadingState } from "@/components/ui/page-shell";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
@@ -223,15 +229,22 @@ export default function TenantMfaPage() {
                 <code className="flex-1 font-mono text-[13px] text-foreground break-all select-all">
                   {secret}
                 </code>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-primary"
-                  onClick={handleCopySecret}
-                  aria-label="Copia segreto"
-                >
-                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-primary"
+                      onClick={handleCopySecret}
+                      aria-label="Copia segreto"
+                    >
+                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    Copia segreto
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </div>
           </div>
@@ -251,6 +264,9 @@ export default function TenantMfaPage() {
                 <InputOTPSlot index={0} />
                 <InputOTPSlot index={1} />
                 <InputOTPSlot index={2} />
+              </InputOTPGroup>
+              <InputOTPSeparator />
+              <InputOTPGroup>
                 <InputOTPSlot index={3} />
                 <InputOTPSlot index={4} />
                 <InputOTPSlot index={5} />

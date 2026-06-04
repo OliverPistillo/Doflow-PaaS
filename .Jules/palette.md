@@ -41,3 +41,7 @@
 ## 2026-05-22 - [Standardized Layouts & Semantic Tokens]
 **Learning:** Modernizing fragmented legacy pages (like Settings) using shared layout components (`PageShell`, `PageHeader`) and semantic tokens (`primary`, `destructive`) instead of hardcoded colors ensures consistent padding, visual language, and theme compatibility (e.g., dark mode) across the app.
 **Action:** Always refactor legacy pages to use `PageShell` and semantic tokens to maintain design system integrity.
+
+## 2026-05-23 - [OTP Chunking & Descriptive Auth Tooltips]
+**Learning:** Dividing a long numeric input (like a 6-digit MFA code) into smaller "chunks" using a separator reduces cognitive load and helps users verify their entry more accurately. Additionally, standardizing on descriptive tooltip labels for authentication-related actions (e.g., "Mostra password" instead of just "Mostra") provides better clarity and accessibility across the application.
+**Action:** Use 'InputOTPSeparator' to split numeric codes into groups of 3. Always prefer descriptive tooltip labels (Action + Object) for sensitive interactions in authentication flows.
