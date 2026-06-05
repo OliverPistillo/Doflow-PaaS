@@ -48,3 +48,7 @@
 ## 2026-06-04 - [Centralized Platform-Aware Shortcuts]
 **Learning:** Hardcoding platform-specific symbols like '⌘' in tooltips and ARIA labels provides a poor experience for non-Mac users. Using a centralized hook to detect the platform allows for dynamic, accessible shortcuts (e.g., 'Ctrl+K' vs '⌘K') and descriptive ARIA labels (e.g., 'Control+K' vs 'Command+K') that improve clarity for all users.
 **Action:** Always use the 'usePlatform' hook for any component that displays or handles keyboard shortcuts to ensure consistent cross-platform behavior and better accessibility.
+
+## 2026-06-05 - [Auth Flow Friction & Redirection Feedback]
+**Learning:** Adding 'autoFocus' to the primary input of authentication forms (Login/Register) reduces friction by allowing users to type immediately. For post-action states (like successful registration), providing a clear, animated, and accessible success container (using 'role="status"') with a loading indicator for the redirect process improves perceived performance and user confidence.
+**Action:** Always include 'autoFocus' on the first field of interactive forms. Use an animated success state with 'role="status"' and redirection feedback for critical auth transitions.

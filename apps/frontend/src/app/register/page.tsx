@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
-import { Eye, EyeOff, Loader2, AlertCircle, Mail, Lock, User, Building2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, AlertCircle, Mail, Lock, User, Building2, CheckCircle2 } from "lucide-react";
 
 const registerSchema = z.object({
   name: z.string().min(2, "Inserisci il tuo nome"),
@@ -131,10 +131,6 @@ export default function RegisterPage() {
           background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
           border-radius:18px;padding:24px;backdrop-filter:blur(10px);
         }
-        .dfr-success{
-          border-radius:16px;padding:20px;text-align:center;
-          background:#DCFCE7;border:1px solid #86efac;
-        }
       `}</style>
 
       <div className="dfr-wrap flex min-h-screen items-center justify-center bg-background p-4 md:p-8">
@@ -156,10 +152,21 @@ export default function RegisterPage() {
                 </div>
 
                 {success ? (
-                  <div className="dfr-success dfr-a dfr-a3">
-                    <p className="text-[20px] mb-1">🎉</p>
-                    <p className="font-bold text-green-800 text-[15px]">Account creato con successo!</p>
-                    <p className="text-[13px] text-green-600 mt-1">Ti stiamo reindirizzando al login...</p>
+                  <div className="text-center space-y-6 py-6 animate-fadeInUp" role="status">
+                    <div className="flex justify-center">
+                      <div className="df-icon-bubble h-16 w-16">
+                        <CheckCircle2 className="h-8 w-8 text-primary" aria-hidden="true" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <h2 className="text-2xl font-bold text-foreground">Account creato con successo!</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Il tuo account è pronto. Ti stiamo reindirizzando alla pagina di login...
+                      </p>
+                    </div>
+                    <div className="flex justify-center">
+                      <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                    </div>
                   </div>
                 ) : (
                   <>
@@ -193,7 +200,7 @@ export default function RegisterPage() {
                           <Label htmlFor="name" className="text-[13px] font-medium text-foreground">Nome *</Label>
                           <div style={{position:"relative"}}>
                             <User size={15} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
-                            <input id="name" type="text" placeholder="Mario Rossi" disabled={isSubmitting}
+                            <input id="name" type="text" placeholder="Mario Rossi" disabled={isSubmitting} autoFocus
                               className={cn("dfr-input", errors.name && "err")} {...register("name")}/>
                           </div>
                           {errors.name && <p role="alert" className="text-[11px] text-red-500 font-medium">{errors.name.message}</p>}
