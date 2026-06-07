@@ -49,6 +49,10 @@
 **Learning:** Hardcoding platform-specific symbols like '⌘' in tooltips and ARIA labels provides a poor experience for non-Mac users. Using a centralized hook to detect the platform allows for dynamic, accessible shortcuts (e.g., 'Ctrl+K' vs '⌘K') and descriptive ARIA labels (e.g., 'Control+K' vs 'Command+K') that improve clarity for all users.
 **Action:** Always use the 'usePlatform' hook for any component that displays or handles keyboard shortcuts to ensure consistent cross-platform behavior and better accessibility.
 
+## 2026-06-07 - [Keyboard Accessibility for Hover-Revealed Actions]
+**Learning:** Icon-only buttons that are revealed on hover (e.g., copy buttons) are inaccessible to keyboard users if they don't have a focus state reveal. Using `group-focus-within:opacity-100` alongside `group-hover:opacity-100` ensures these utilities are discoverable and usable via Tab navigation. Additionally, they MUST have an `aria-label` for screen readers.
+**Action:** Always ensure hover-only UI elements have a corresponding focus-within trigger and explicit ARIA labels.
+
 ## 2026-06-06 - [Flicker Prevention in Parameter-Dependent Pages]
 **Learning:** To prevent flickering of "Invalid Link" or "Error" states on pages that depend on URL parameters (like tokens), using an `initializing` state that remains `true` until `useEffect` has finished reading from the URL ensures a smooth, professional entrance.
 **Action:** Always use an `initializing` state with a centered loader for any page that conditionally renders error states based on URL parameter presence.
