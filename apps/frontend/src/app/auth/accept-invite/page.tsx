@@ -10,15 +10,15 @@ import {
   Eye,
   EyeOff,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  CheckCircle2
 } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://api.doflow.it';
+import { apiFetch } from '@/lib/api';
 
 function nextPathByRole(role: string) {
   const r = (role || '').toLowerCase();
@@ -46,6 +46,7 @@ export default function AcceptInvitePage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -66,38 +67,23 @@ export default function AcceptInvitePage() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/api/auth/accept-invite`, {
+      const data = await apiFetch<AcceptInviteSuccess>('/auth/accept-invite', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store',
+        auth: false,
         body: JSON.stringify({ token: inviteToken, password }),
       });
 
-      const text = await res.text();
-      
-      let data: AcceptInviteSuccess | AcceptInviteError | null = null;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        // ok
-      }
-
-      if (!res.ok) {
-        const msg =
-          (data && 'error' in data ? data.error : null) ||
-          text ||
-          `Errore accettazione invito (HTTP ${res.status})`;
-        throw new Error(msg);
-      }
-
-      if (!data || !('token' in data) || !data.token || !data.user) {
+      if (!data || !data.token || !data.user) {
         throw new Error('Risposta backend non valida (token/user mancanti).');
       }
 
       localStorage.setItem('doflow_token', data.token);
+      setSuccess(true);
 
       const target = nextPathByRole(data.user.role);
-      router.push(target);
+      setTimeout(() => {
+        router.push(target);
+      }, 2500);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Errore sconosciuto');
     } finally {
@@ -135,6 +121,23 @@ export default function AcceptInvitePage() {
                   <p className="text-sm text-muted-foreground leading-relaxed">
                     Token mancante. Richiedi un nuovo invito all’amministratore.
                   </p>
+                </div>
+              </div>
+            ) : success ? (
+              <div className="text-center space-y-6 py-6 animate-in fade-in zoom-in duration-500" role="status">
+                <div className="flex justify-center">
+                  <div className="df-icon-bubble h-16 w-16">
+                    <CheckCircle2 className="h-8 w-8 text-primary" aria-hidden="true" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-bold text-foreground">Account attivato!</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Il tuo account è pronto. Ti stiamo reindirizzando...
+                  </p>
+                </div>
+                <div className="flex justify-center">
+                  <Loader2 className="h-5 w-5 text-primary animate-spin" />
                 </div>
               </div>
             ) : (
