@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { Role } from '../roles';
@@ -61,8 +61,13 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
   // ── Provisioning schema ──────────────────────────────────────────────────
 
   async ensureTenantTables(ds: DataSource, schema: string) {
-    // FIX: safeSchema unificato — lancia eccezione su slug non valido
-    const s = safeSchema(schema, 'TenantBootstrapService.ensureTenantTables');
+    let s: string;
+    try {
+      // FIX: safeSchema unificato — lancia eccezione su slug non valido
+      s = safeSchema(schema, 'TenantBootstrapService.ensureTenantTables');
+    } catch (e: any) {
+      throw new BadRequestException(e.message);
+    }
 
     this.logger.log(`Provisioning schema: "${s}"`);
 
