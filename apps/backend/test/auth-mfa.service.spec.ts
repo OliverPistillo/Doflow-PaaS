@@ -126,7 +126,7 @@ describe('AuthMfaService', () => {
       expect(mockQuery).toHaveBeenCalledTimes(2); // One for select, one for update
       expect(mockQuery).toHaveBeenNthCalledWith(
         2,
-        expect.stringContaining('update test_tenant.users'),
+        expect.stringContaining('update "test_tenant"."users"'),
         ['mock-base32-secret', userId],
       );
 
