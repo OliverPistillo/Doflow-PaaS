@@ -69,7 +69,7 @@ export class TenantsService {
     const schemaName = normalizeSlugToSchema(dto.slug);
 
     // FIX 🔴: crypto.randomBytes al posto di Math.random()
-    const tempPassword = generateSecurePassword();
+    const tempPassword = randomBytes(8).toString('hex');
     const hashedPassword = await bcrypt.hash(tempPassword, 12);
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -188,7 +188,7 @@ export class TenantsService {
     if (!tenant) throw new NotFoundException();
 
     // FIX 🔴: crypto.randomBytes al posto di Math.random()
-    const newPass = generateSecurePassword();
+    const newPass = randomBytes(8).toString('hex');
     const hash    = await bcrypt.hash(newPass, 12);
 
     // Aggiorna in entrambi gli schema (atomicamente con Promise.all)
@@ -220,13 +220,3 @@ export class TenantsService {
   }
 }
 
-// ─── Helpers privati ─────────────────────────────────────────────
-
-/**
- * FIX 🔴: Genera una password temporanea crittograficamente sicura.
- * Usa crypto.randomBytes invece di Math.random() (PRNG non sicuro).
- */
-function generateSecurePassword(): string {
-  // 16 byte casuali → 22 caratteri base64url + suffisso per garantire complessità
-  return randomBytes(16).toString('base64url').slice(0, 16) + 'A1!';
-}
