@@ -26,3 +26,7 @@
 ## 2025-05-15 - Global Tooltip Provider and Ref Handling
 **Learning:** In Next.js applications using Radix UI/shadcn, it's more efficient and prevents state conflicts to place a single `TooltipProvider` at the root layout rather than repeating it in every page or component. Additionally, when wrapping complex or third-party components (like `ThemeSettingsDrawer`) in a `TooltipTrigger`, using a `div` wrapper ensures the tooltip works even if the component doesn't correctly forward its ref.
 **Action:** Always check if a root `TooltipProvider` exists before adding new tooltips. Use a `div` wrapper inside `TooltipTrigger` for custom components to avoid "Function components cannot be given refs" warnings or silent failures.
+
+## 2025-05-20 - [Platform-Aware Keyboard Shortcuts]
+**Learning:** Hardcoding Macintosh symbols (⌘) or "Ctrl" text for keyboard shortcuts alienates users on other platforms. Implementing a platform-aware hook (detecting `window.navigator.platform`) allows for dynamic rendering of symbols (⌘ vs Ctrl) and labels (Command vs Control), significantly improving accessibility and clarity for all users.
+**Action:** Use a centralized `usePlatform` hook to determine the correct modifier key and label for shortcuts. When providing accessibility labels (like `aria-label`), favor full text (e.g., "Control + K") over symbols or abbreviations for better screen reader support.

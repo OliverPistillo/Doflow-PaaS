@@ -23,6 +23,7 @@ import {
   Settings, BarChart3, CalendarDays, Receipt, ListTodo,
   Package, Wallet, Shield, Activity, Search,
 } from "lucide-react";
+import { usePlatform } from "@/hooks/use-platform";
 
 // ─── Tipi ─────────────────────────────────────────────────────────────────────
 
@@ -196,6 +197,7 @@ export function SearchTriggerButton({
   context?: "tenant" | "superadmin";
 }) {
   const { open, setOpen, groups, navigate } = useSearch(context);
+  const { modifierKey, modifierLabel } = usePlatform();
 
   return (
     <>
@@ -211,12 +213,12 @@ export function SearchTriggerButton({
           "transition-colors duration-150",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         ].join(" ")}
-        aria-label="Apri ricerca globale (Ctrl+K)"
+        aria-label={`Apri ricerca globale (${modifierLabel} + K)`}
       >
         <Search className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span>Cerca…</span>
         <kbd className="ml-2 font-mono text-[10px] bg-background border border-border rounded px-1.5 py-0.5 text-muted-foreground/70">
-          ⌘K
+          {modifierKey}K
         </kbd>
       </button>
 
@@ -230,7 +232,7 @@ export function SearchTriggerButton({
           "transition-colors",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         ].join(" ")}
-        aria-label="Apri ricerca (Ctrl+K)"
+        aria-label={`Apri ricerca (${modifierLabel} + K)`}
       >
         <Search className="h-4 w-4" aria-hidden="true" />
       </button>
