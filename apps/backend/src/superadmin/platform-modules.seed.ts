@@ -89,24 +89,18 @@ export class PlatformModulesSeedService implements OnApplicationBootstrap {
   }
 
   private async seedModules() {
+    const existingModules = await this.moduleRepo.find();
+    const existingMap = new Map(existingModules.map(m => [m.key, m]));
+
     let inserted = 0;
     let updated = 0;
+    const promises: Promise<any>[] = [];
+
     for (const m of MODULES) {
-      const existing = await this.moduleRepo.findOne({ where: { key: m.key } });
+      const existing = existingMap.get(m.key);
       if (existing) {
         // Update mutable fields (name/description/price) but keep ID stable
-        await this.moduleRepo.update({ key: m.key }, {
-          name: m.name,
-          description: m.description,
-          category: m.category,
-          minTier: m.minTier,
-          priceMonthly: m.priceMonthly,
-          isBeta: m.isBeta || false,
-        });
-        updated++;
-      } else {
-        await this.moduleRepo.save(this.moduleRepo.create({
-          key: m.key,
+        promises.push(this.moduleRepo.update({ key: m.key }, {
           name: m.name,
           description: m.description,
           category: m.category,
@@ -114,9 +108,21 @@ export class PlatformModulesSeedService implements OnApplicationBootstrap {
           priceMonthly: m.priceMonthly,
           isBeta: m.isBeta || false,
         }));
+        updated++;
+      } else {
+        promises.push(this.moduleRepo.save(this.moduleRepo.create({
+          key: m.key,
+          name: m.name,
+          description: m.description,
+          category: m.category,
+          minTier: m.minTier,
+          priceMonthly: m.priceMonthly,
+          isBeta: m.isBeta || false,
+        })));
         inserted++;
       }
     }
+    await Promise.all(promises);
     this.logger.log(`📦 Platform modules seed: ${inserted} inseriti, ${updated} aggiornati (totale: ${MODULES.length})`);
   }
 
