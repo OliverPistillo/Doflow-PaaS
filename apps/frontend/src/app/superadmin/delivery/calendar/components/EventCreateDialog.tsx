@@ -27,8 +27,6 @@ export function EventCreateDialog({ isOpen, onClose, onSuccess, defaultDate }: E
   // Aggiorna la data se cambia la selezione nel calendario
   React.useEffect(() => {
      if(defaultDate) {
-         // FIX: Usa la data locale invece di toISOString() che usa UTC
-         // "en-CA" restituisce il formato YYYY-MM-DD rispettando il fuso orario locale
          const localDate = defaultDate.toLocaleDateString("en-CA");
          setFormData(prev => ({ ...prev, date: localDate }));
      }
