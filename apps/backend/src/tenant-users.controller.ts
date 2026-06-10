@@ -1,7 +1,6 @@
 import { Body, Controller, Get, Post, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { DataSource } from 'typeorm';
-import { safeSchema } from './common/schema.utils';
 
 type CreateUserDto = {
   email: string;
@@ -19,7 +18,7 @@ export class TenantUsersController {
 
   private getTenantId(req: Request): string {
     const tenantId = (req as any).tenantId as string | undefined;
-    return safeSchema(tenantId ?? 'public', 'TenantUsersController');
+    return tenantId ?? 'public';
   }
 
   @Get()
@@ -32,7 +31,7 @@ export class TenantUsersController {
 
     const rows = await conn.query(
       `select id, email, created_at, '${tenantId}' as schema
-      from "${tenantId}".users
+      from ${tenantId}.users
       order by id`
     );
 
@@ -50,7 +49,7 @@ export class TenantUsersController {
     const tenantId = this.getTenantId(req);
 
     const row = await conn.query(
-      `insert into "${tenantId}".users (email)
+      `insert into ${tenantId}.users (email)
       values ($1)
       returning id, email, created_at, '${tenantId}' as schema`,
       [body.email]

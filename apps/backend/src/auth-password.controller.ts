@@ -11,11 +11,10 @@ import { DataSource } from 'typeorm';
 import { randomBytes, createHash } from 'crypto';
 import * as bcrypt from 'bcryptjs'; // namespace import — sicuro con qualsiasi bundler/tsconfig
 import { MailService } from './mail/mail.service';
-import { safeSchema } from './common/schema.utils';
 
 function getTenantId(req: Request): string {
   const tenantId = (req as any).tenantId as string | undefined;
-  return safeSchema(tenantId ?? 'public', 'AuthPasswordController');
+  return tenantId ?? 'public';
 }
 
 function getTenantConn(req: Request): DataSource {

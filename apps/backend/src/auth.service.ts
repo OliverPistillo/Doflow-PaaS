@@ -121,7 +121,7 @@ export class AuthService {
     if (t !== 'public') {
       // FIX: Ricerca indistruttibile
       const tenantRow = await conn.query(
-        `select slug from public.tenants where id::text = $1 OR slug = $1 OR schema_name = $1 limit 1`,
+        `select slug from public.tenants where schema_name = $1 OR id::text = $1 limit 1`,
         [t],
       );
       if (tenantRow[0]?.slug) realSlug = tenantRow[0].slug;
@@ -208,8 +208,8 @@ export class AuthService {
 
         // FIX: Ricerca indistruttibile per evitare l'errore del cast UUID
         const tenantRow = await conn.query(
-          `select schema_name from public.tenants where id::text = $1 OR slug = $1 OR schema_name = $1 limit 1`,
-          [userMap.tenant_id]
+            `select schema_name from public.tenants where id::text = $1 OR slug = $1 OR schema_name = $1 limit 1`,
+            [userMap.tenant_id]
         );
 
         if (tenantRow.length > 0) {
@@ -287,7 +287,7 @@ export class AuthService {
 
     let realSlug = t;
     if (t !== 'public') {
-       const tr = await conn.query(`select slug from public.tenants where id::text = $1 OR slug = $1 OR schema_name = $1 limit 1`, [t]);
+       const tr = await conn.query(`select slug from public.tenants where schema_name = $1 OR id::text = $1 limit 1`, [t]);
        if(tr[0]) realSlug = tr[0].slug;
     }
 
@@ -315,7 +315,7 @@ export class AuthService {
     const tenantId = this.getTenantId(req);
     let realSlug = tenantId;
     if (tenantId !== 'public') {
-      const tenantRow = await conn.query(`select slug from public.tenants where id::text = $1 OR slug = $1 OR schema_name = $1 limit 1`, [tenantId]);
+      const tenantRow = await conn.query(`select slug from public.tenants where schema_name = $1 OR id::text = $1 limit 1`, [tenantId]);
       if (tenantRow[0]?.slug) realSlug = tenantRow[0].slug;
     }
     await this.assertTenantActive(conn, tenantId);
@@ -342,7 +342,7 @@ export class AuthService {
     const tenantId = this.getTenantId(req);
     let realSlug = tenantId;
     if (tenantId !== 'public') {
-      const tenantRow = await conn.query(`select slug from public.tenants where id::text = $1 OR slug = $1 OR schema_name = $1 limit 1`, [tenantId]);
+      const tenantRow = await conn.query(`select slug from public.tenants where schema_name = $1 OR id::text = $1 limit 1`, [tenantId]);
       if (tenantRow[0]?.slug) realSlug = tenantRow[0].slug;
     }
     await this.assertTenantActive(conn, tenantId);

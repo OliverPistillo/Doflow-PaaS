@@ -19,12 +19,6 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { usePlatform } from "@/hooks/use-platform";
-import {
   LayoutDashboard, Users, FileText, ShoppingCart, Building2,
   Settings, BarChart3, CalendarDays, Receipt, ListTodo,
   Package, Wallet, Shield, Activity, Search,
@@ -202,64 +196,44 @@ export function SearchTriggerButton({
   context?: "tenant" | "superadmin";
 }) {
   const { open, setOpen, groups, navigate } = useSearch(context);
-  const { modifierKey, modifierLabel } = usePlatform();
 
   return (
     <>
       {/* Trigger visibile su md+ */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            onClick={() => setOpen(true)}
-            className={[
-              "hidden md:flex items-center gap-2",
-              "h-9 px-3 rounded-nav",
-              "bg-muted/60 border border-border/50",
-              "text-sm text-muted-foreground",
-              "hover:bg-muted hover:text-foreground hover:border-border",
-              "transition-colors duration-150",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            ].join(" ")}
-            aria-label={`Cerca (${modifierLabel}+K)`}
-          >
-            <Search className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <span>Cerca…</span>
-            <kbd className="ml-2 font-mono text-[10px] bg-background border border-border rounded px-1.5 py-0.5 text-muted-foreground/70" aria-hidden="true">
-              {modifierKey}K
-            </kbd>
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" align="start">
-          <p className="flex items-center gap-2">
-            Cerca
-            <kbd className="font-mono text-[10px] bg-primary-foreground/20 rounded px-1 py-0.5">
-              {modifierKey}K
-            </kbd>
-          </p>
-        </TooltipContent>
-      </Tooltip>
+      <button
+        onClick={() => setOpen(true)}
+        className={[
+          "hidden md:flex items-center gap-2",
+          "h-9 px-3 rounded-nav",
+          "bg-muted/60 border border-border/50",
+          "text-sm text-muted-foreground",
+          "hover:bg-muted hover:text-foreground hover:border-border",
+          "transition-colors duration-150",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        ].join(" ")}
+        aria-label="Apri ricerca globale (Ctrl+K)"
+      >
+        <Search className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <span>Cerca…</span>
+        <kbd className="ml-2 font-mono text-[10px] bg-background border border-border rounded px-1.5 py-0.5 text-muted-foreground/70">
+          ⌘K
+        </kbd>
+      </button>
 
       {/* Mobile: solo icona */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            onClick={() => setOpen(true)}
-            className={[
-              "flex md:hidden items-center justify-center",
-              "h-9 w-9 rounded-nav",
-              "text-muted-foreground hover:text-foreground hover:bg-muted",
-              "transition-colors",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            ].join(" ")}
-            aria-label="Cerca"
-          >
-            <Search className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          Cerca
-        </TooltipContent>
-      </Tooltip>
+      <button
+        onClick={() => setOpen(true)}
+        className={[
+          "flex md:hidden items-center justify-center",
+          "h-9 w-9 rounded-nav",
+          "text-muted-foreground hover:text-foreground hover:bg-muted",
+          "transition-colors",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        ].join(" ")}
+        aria-label="Apri ricerca (Ctrl+K)"
+      >
+        <Search className="h-4 w-4" aria-hidden="true" />
+      </button>
 
       {/* Dialog — unica istanza */}
       <CommandPalette

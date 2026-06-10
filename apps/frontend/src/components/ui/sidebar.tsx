@@ -14,7 +14,6 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { PanelLeft } from "lucide-react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
-import { usePlatform } from "@/hooks/use-platform"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -276,7 +275,6 @@ const SidebarTrigger = React.forwardRef<
   React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
   const { state, toggleSidebar } = useSidebar()
-  const { isMac } = usePlatform()
   const isCollapsed = state === "collapsed"
   const label = isCollapsed ? "Espandi sidebar" : "Comprimi sidebar"
 
@@ -305,7 +303,7 @@ const SidebarTrigger = React.forwardRef<
       <TooltipContent side="right" align="center" className="hidden md:block">
         {label}
         <kbd className="ml-2 font-mono text-[10px] bg-primary-foreground/20 rounded px-1 py-0.5">
-          {isMac ? "⌘B" : "Ctrl+B"}
+          ⌘B
         </kbd>
       </TooltipContent>
     </Tooltip>

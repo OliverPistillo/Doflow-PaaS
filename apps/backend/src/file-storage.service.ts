@@ -10,7 +10,6 @@ import { randomUUID } from 'crypto';
 import { DataSource } from 'typeorm';
 import { Request } from 'express';
 import { Readable } from 'stream';
-import { safeSchema } from './common/schema.utils';
 
 type StorageProbeStatus = 'ok' | 'warn' | 'down';
 
@@ -37,7 +36,7 @@ export class FileStorageService {
 
   private getTenantId(req: Request): string {
     const tenantId = (req as any).tenantId as string | undefined;
-    return safeSchema(tenantId ?? 'public', 'FileStorageService');
+    return tenantId ?? 'public';
   }
 
   private getConn(req: Request): DataSource {
@@ -48,7 +47,10 @@ export class FileStorageService {
     return conn;
   }
 
+  // ... (Tieni il tuo metodo probe() esistente, è perfetto) ...
   async probe(): Promise<{ status: StorageProbeStatus; latency_ms: number; message?: string }> {
+      // ... (copia incolla il tuo codice probe qui) ...
+      // Per brevità non lo ripeto, ma mantienilo uguale al tuo file originale
       const t0 = Date.now();
       try {
         await this.s3.send(new HeadBucketCommand({ Bucket: this.bucket }));
@@ -125,12 +127,10 @@ export class FileStorageService {
    * Recupera lo stream di un file da S3 verificando la tenancy.
    */
   async downloadFileStream(tenantId: string, key: string) {
-    const safeTenantId = safeSchema(tenantId, 'FileStorageService.downloadFileStream');
-
     // SECURITY CHECK 1: Path Traversal & Isolation
     // Verifichiamo che la chiave richiesta inizi con l'ID del tenant corrente.
     // Nessuno può scaricare "tenantB/segreto.pdf" se è loggato come "tenantA".
-    if (!key.startsWith(`${safeTenantId}/`)) {
+    if (!key.startsWith(`${tenantId}/`)) {
         this.logger.warn(`Security Alert: Tenant ${tenantId} tried to access ${key}`);
         throw new ForbiddenException('Access Denied: File belongs to another tenant');
     }

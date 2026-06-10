@@ -2,23 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, FormEvent } from 'react';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Lock,
-  Eye,
-  EyeOff,
-  Loader2,
-  AlertCircle,
-  CheckCircle2
-} from 'lucide-react';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { apiFetch } from '@/lib/api';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://api.doflow.it';
 
 function nextPathByRole(role: string) {
   const r = (role || '').toLowerCase();
@@ -27,6 +12,7 @@ function nextPathByRole(role: string) {
   return '/projects';
 }
 
+// 1. Definiamo i tipi di risposta attesi
 type AcceptInviteSuccess = {
   token: string;
   user: { id: number | string; email: string; role: string; tenantId?: string };
@@ -37,22 +23,17 @@ type AcceptInviteError = { error: string };
 export default function AcceptInvitePage() {
   const router = useRouter();
 
-  const [initializing, setInitializing] = useState(true);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showPassword2, setShowPassword2] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       setInviteToken(params.get('token'));
-      setInitializing(false);
     }
   }, []);
 
@@ -67,23 +48,41 @@ export default function AcceptInvitePage() {
     setLoading(true);
 
     try {
-      const data = await apiFetch<AcceptInviteSuccess>('/auth/accept-invite', {
+      const res = await fetch(`${API_BASE}/api/auth/accept-invite`, {
         method: 'POST',
-        auth: false,
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
         body: JSON.stringify({ token: inviteToken, password }),
       });
 
-      if (!data || !data.token || !data.user) {
+      const text = await res.text();
+
+      // 2. Usiamo l'unione di tipi invece di any
+      let data: AcceptInviteSuccess | AcceptInviteError | null = null;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        // ok, gestiamo sotto
+      }
+
+      if (!res.ok) {
+        // 3. Controllo sicuro con "in" per estrarre l'errore
+        const msg =
+          (data && 'error' in data ? data.error : null) ||
+          text ||
+          `Errore accettazione invito (HTTP ${res.status})`;
+        throw new Error(msg);
+      }
+
+      // 4. Controllo sicuro per confermare che sia una risposta di successo
+      if (!data || !('token' in data) || !data.token || !data.user) {
         throw new Error('Risposta backend non valida (token/user mancanti).');
       }
 
       localStorage.setItem('doflow_token', data.token);
-      setSuccess(true);
 
       const target = nextPathByRole(data.user.role);
-      setTimeout(() => {
-        router.push(target);
-      }, 2500);
+      router.push(target);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Errore sconosciuto');
     } finally {
@@ -91,165 +90,67 @@ export default function AcceptInvitePage() {
     }
   };
 
-  if (initializing) {
+  if (!inviteToken) {
     return (
-      <div className="doflow-app-frame">
-        <main className="min-h-screen flex items-center justify-center p-6">
-          <div className="flex flex-col items-center gap-3 animate-pulse">
-            <Loader2 className="h-8 w-8 text-primary animate-spin" />
-            <p className="text-sm text-muted-foreground">Caricamento in corso...</p>
-          </div>
-        </main>
-      </div>
+      <main className="min-h-screen flex items-center justify-center bg-black text-white p-6">
+        <div className="max-w-md w-full border border-zinc-800 rounded-lg p-6 bg-zinc-900/50">
+          <h1 className="text-xl font-semibold mb-2">Link non valido</h1>
+          <p className="text-sm text-zinc-400">
+            Token mancante. Richiedi un nuovo invito all’amministratore.
+          </p>
+        </div>
+      </main>
     );
   }
 
   return (
-    <div className="doflow-app-frame">
-      <main className="min-h-screen flex items-center justify-center p-6">
-        <div className="w-full max-w-md space-y-4">
-          <div className="df-glass-panel p-8 animate-fadeInUp">
-            {!inviteToken ? (
-              <div className="text-center space-y-6 py-4">
-                <div className="flex justify-center">
-                  <div className="h-12 w-12 rounded-full bg-destructive/10 flex items-center justify-center">
-                    <AlertCircle className="h-6 w-6 text-destructive" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <h1 className="text-xl font-bold">Link non valido</h1>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    Token mancante. Richiedi un nuovo invito all’amministratore.
-                  </p>
-                </div>
-              </div>
-            ) : success ? (
-              <div className="text-center space-y-6 py-6 animate-in fade-in zoom-in duration-500" role="status">
-                <div className="flex justify-center">
-                  <div className="df-icon-bubble h-16 w-16">
-                    <CheckCircle2 className="h-8 w-8 text-primary" aria-hidden="true" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <h2 className="text-2xl font-bold text-foreground">Account attivato!</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Il tuo account è pronto. Ti stiamo reindirizzando...
-                  </p>
-                </div>
-                <div className="flex justify-center">
-                  <Loader2 className="h-5 w-5 text-primary animate-spin" />
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="text-center mb-6 space-y-2">
-                  <h1 className="text-2xl font-bold">Attiva account</h1>
-                  <p className="text-sm text-muted-foreground">
-                    Imposta una password per completare la registrazione.
-                  </p>
-                </div>
+    <main className="min-h-screen flex items-center justify-center p-6 bg-black text-white">
+      <div className="w-full max-w-md border border-zinc-800 rounded-lg p-6 bg-zinc-900/50">
+        <h1 className="text-2xl font-bold mb-2 text-center">Attiva account</h1>
+        <p className="text-sm text-gray-400 text-center mb-6">
+          Imposta una password per completare la registrazione.
+        </p>
 
-                <form onSubmit={handleSubmit} className="space-y-5">
-                  <div className="space-y-4">
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="password">Password</Label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" size={15} />
-                        <Input
-                          id="password"
-                          type={showPassword ? 'text' : 'password'}
-                          required
-                          minLength={8}
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          className="pl-10 pr-10"
-                          placeholder="••••••••"
-                          disabled={loading}
-                          autoFocus
-                        />
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-muted-foreground hover:text-foreground z-10"
-                              onClick={() => setShowPassword(!showPassword)}
-                              aria-label={showPassword ? 'Nascondi' : 'Mostra'}
-                            >
-                              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top">
-                            {showPassword ? 'Nascondi password' : 'Mostra password'}
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="password2">Ripeti password</Label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground z-10" size={15} />
-                        <Input
-                          id="password2"
-                          type={showPassword2 ? 'text' : 'password'}
-                          required
-                          minLength={8}
-                          value={password2}
-                          onChange={(e) => setPassword2(e.target.value)}
-                          className="pl-10 pr-10"
-                          placeholder="••••••••"
-                          disabled={loading}
-                        />
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent text-muted-foreground hover:text-foreground z-10"
-                              onClick={() => setShowPassword2(!showPassword2)}
-                              aria-label={showPassword2 ? 'Nascondi' : 'Mostra'}
-                            >
-                              {showPassword2 ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top">
-                            {showPassword2 ? 'Nascondi password' : 'Mostra password'}
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </div>
-                  </div>
-
-                  {error && (
-                    <div role="alert" className="text-xs text-destructive border border-destructive/40 rounded px-3 py-2 flex items-center gap-2 bg-destructive/5 animate-in fade-in slide-in-from-top-1">
-                      <AlertCircle size={14} className="shrink-0" />
-                      {error}
-                    </div>
-                  )}
-
-                  <Button
-                    type="submit"
-                    disabled={loading || !password || !password2}
-                    className="w-full"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Attivazione...
-                      </>
-                    ) : (
-                      'Attiva e entra'
-                    )}
-                  </Button>
-                </form>
-              </>
-            )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="text-xs uppercase text-gray-500">Password</label>
+            <input
+              type="password"
+              minLength={8}
+              required
+              className="w-full bg-black border border-zinc-700 rounded px-3 py-2"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
           </div>
-        </div>
-      </main>
-    </div>
+
+          <div>
+            <label className="text-xs uppercase text-gray-500">Ripeti password</label>
+            <input
+              type="password"
+              minLength={8}
+              required
+              className="w-full bg-black border border-zinc-700 rounded px-3 py-2"
+              value={password2}
+              onChange={(e) => setPassword2(e.target.value)}
+            />
+          </div>
+
+          {error && (
+            <div className="text-xs text-red-400 border border-red-900/50 rounded p-2 bg-red-900/10">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-white text-black font-bold py-2 rounded hover:bg-gray-200 disabled:opacity-50"
+          >
+            {loading ? 'Attivazione...' : 'Attiva e entra'}
+          </button>
+        </form>
+      </div>
+    </main>
   );
 }
