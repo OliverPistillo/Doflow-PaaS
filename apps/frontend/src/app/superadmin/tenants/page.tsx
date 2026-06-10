@@ -20,9 +20,7 @@ import {
   Loader2,
   Globe,
   Mail,
-  Trash2,
-  Copy,
-  Check
+  Trash2
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -71,13 +69,6 @@ type ResetModalState = {
   tenantId: string;
   email: string;
   result?: string;
-};
-
-type CreationSuccessModalState = {
-  open: boolean;
-  name: string;
-  email: string;
-  password?: string;
 };
 
 type FetchState =
@@ -147,9 +138,7 @@ export default function TenantsPage() {
 
   // Modali
   const [resetModal, setResetModal] = useState<ResetModalState | null>(null);
-  const [creationSuccessModal, setCreationSuccessModal] = useState<CreationSuccessModalState | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // --- STATI CREAZIONE ---
   const [newTenant, setNewTenant] = useState({ name: "", slug: "", email: "", plan: "STARTER" });
@@ -184,6 +173,7 @@ export default function TenantsPage() {
   const loadTenants = async () => {
     setFetchState({ status: "loading" });
     try {
+      // FIX: Rimosso /v2/ per uniformità
       const data = await apiFetch<Record<string, unknown>>("/superadmin/tenants");
       const list = Array.isArray(data?.tenants) ? data.tenants : [];
 
@@ -215,24 +205,6 @@ export default function TenantsPage() {
   }, []);
 
   // --- AZIONI ---
-
-  const copyToClipboard = async (text: string, id: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedId(id);
-      toast({
-        title: "Copiato!",
-        description: "La password è stata copiata negli appunti.",
-      });
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch (err) {
-      toast({
-        title: "Errore",
-        description: "Impossibile copiare negli appunti.",
-        variant: "destructive",
-      });
-    }
-  };
 
   // NUOVA AZIONE: Sospensione/Riattivazione Reale
   const handleToggleStatus = async (tenantId: string, currentStatus: boolean) => {
@@ -270,6 +242,7 @@ export default function TenantsPage() {
 
     setIsCreating(true);
     try {
+      // FIX: Rimosso /v2/ e aggiunto il tipo per intercettare la password
       const res = await apiFetch<{ tempPassword?: string; name: string }>("/superadmin/tenants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -282,13 +255,15 @@ export default function TenantsPage() {
         className: "bg-emerald-50 border-emerald-200 text-emerald-800"
       });
 
+      // --- FIX: Mostra la password se restituita dal backend ---
       if (res?.tempPassword) {
-        setCreationSuccessModal({
-          open: true,
-          name: res.name || newTenant.name,
-          email: newTenant.email,
-          password: res.tempPassword,
-        });
+        alert(
+          `✅ TENANT CREATO CON SUCCESSO!\n\n` +
+          `Ecco le credenziali Admin per ${res.name || newTenant.name}:\n\n` +
+          `Email: ${newTenant.email}\n` +
+          `Password: ${res.tempPassword}\n\n` +
+          `⚠️ COPIA QUESTA PASSWORD ORA. Non sarà più visibile.\n(È stata inviata anche via email)`
+        );
       }
 
       setIsCreateOpen(false);
@@ -775,7 +750,7 @@ export default function TenantsPage() {
                 </Button>
               </div>
             ) : (
-              <div className="mt-4 bg-foreground text-background p-6 rounded-2xl text-center shadow-lg relative group">
+              <div className="mt-4 bg-foreground text-background p-6 rounded-2xl text-center shadow-lg">
                 <div className="text-xs text-muted-foreground mb-2 uppercase tracking-widest font-bold">
                   Credenziali
                 </div>
@@ -785,77 +760,8 @@ export default function TenantsPage() {
                 <div className="text-xs text-muted-foreground mt-4">
                   Copia la password ora. Dopo chiudo la porta e butto via la chiave.
                 </div>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="absolute top-2 right-2 text-muted-foreground hover:text-emerald-400 hover:bg-emerald-400/10 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
-                  onClick={() => resetModal.result && copyToClipboard(resetModal.result, 'reset-pwd')}
-                  aria-label="Copia password"
-                >
-                  {copiedId === 'reset-pwd' ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
-                </Button>
               </div>
             )}
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* CREATION SUCCESS MODAL */}
-      {creationSuccessModal && (
-        <Dialog open={creationSuccessModal.open} onOpenChange={(v) => !v && setCreationSuccessModal(null)}>
-          <DialogContent className="sm:max-w-md rounded-2xl">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                Tenant Creato con Successo!
-              </DialogTitle>
-              <DialogDescription>
-                L'ambiente per <b>{creationSuccessModal.name}</b> è pronto.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4 py-4">
-              <div className="grid gap-1">
-                <Label className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Email Amministratore</Label>
-                <div className="p-2 bg-muted rounded-md font-mono text-sm border border-border">
-                  {creationSuccessModal.email}
-                </div>
-              </div>
-
-              <div className="grid gap-1">
-                <Label className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Password Temporanea</Label>
-                <div className="relative group">
-                  <div className="p-4 bg-foreground text-background rounded-xl text-center shadow-lg">
-                    <div className="text-2xl font-mono font-black tracking-wider text-emerald-400">
-                      {creationSuccessModal.password}
-                    </div>
-                  </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="absolute top-2 right-2 text-muted-foreground hover:text-emerald-400 hover:bg-emerald-400/10 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
-                    onClick={() => creationSuccessModal.password && copyToClipboard(creationSuccessModal.password, 'create-pwd')}
-                    aria-label="Copia password"
-                  >
-                    {copiedId === 'create-pwd' ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs">
-                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                <p>
-                  <b>Attenzione:</b> Copia la password ora. Non sarà più visibile in seguito.
-                  Una copia è stata inviata anche via email all'amministratore.
-                </p>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setCreationSuccessModal(null)}>
-                Ho copiato la password
-              </Button>
-            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}

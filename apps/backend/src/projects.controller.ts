@@ -14,15 +14,6 @@ import { hasRoleAtLeast, Role } from './roles';
 import { AuditService } from './audit.service';
 import { ProjectsEventsService } from './realtime/projects-events.service';
 import { RequireFeature } from './feature-access/feature-access.decorator';
-import { safeSchema } from './common/schema.utils';
-
-export enum TaskStatus {
-  BACKLOG = 'BACKLOG',
-  TODO = 'TODO',
-  IN_PROGRESS = 'IN_PROGRESS',
-  REVIEW = 'REVIEW',
-  DONE = 'DONE',
-}
 
 type CreateProjectBody = {
   name: string;
@@ -37,7 +28,7 @@ type CreateTaskBody = {
 };
 
 type UpdateTaskStatusBody = {
-  status?: TaskStatus | string;
+  status?: string;
 };
 
 type TaskRow = {
@@ -70,7 +61,7 @@ export class ProjectsController {
 
   private getTenantId(req: Request): string {
     const tenantId = (req as any).tenantId as string | undefined;
-    return safeSchema(tenantId ?? 'public', 'ProjectsController');
+    return tenantId ?? 'public';
   }
 
   private getAuthUser(req: Request) {
@@ -304,7 +295,13 @@ export class ProjectsController {
       return res.status(400).json({ error: 'status required' });
     }
 
-    const allowedStatuses = Object.values(TaskStatus) as string[];
+    const allowedStatuses = [
+      'BACKLOG',
+      'TODO',
+      'IN_PROGRESS',
+      'REVIEW',
+      'DONE',
+    ];
     if (!allowedStatuses.includes(rawStatus)) {
       return res.status(400).json({ error: 'invalid status' });
     }

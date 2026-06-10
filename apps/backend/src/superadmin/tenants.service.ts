@@ -100,6 +100,7 @@ export class TenantsService {
       );
 
       // 4. Admin nella directory globale (public.users)
+      // FIX: usa savedTenant.id (UUID) — garantisce JOIN corretta nel login routing
       await queryRunner.query(
         `INSERT INTO public.users
            (email, role, password_hash, tenant_id, is_active, created_at, updated_at)

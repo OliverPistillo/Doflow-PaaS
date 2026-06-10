@@ -18,7 +18,7 @@ interface EventCreateDialogProps {
 export function EventCreateDialog({ isOpen, onClose, onSuccess, defaultDate }: EventCreateDialogProps) {
   const [formData, setFormData] = useState({
     title: "",
-    date: defaultDate ? defaultDate.toLocaleDateString("en-CA") : "",
+    date: defaultDate ? defaultDate.toISOString().split('T')[0] : "",
     type: "meeting",
     description: ""
   });
@@ -27,6 +27,8 @@ export function EventCreateDialog({ isOpen, onClose, onSuccess, defaultDate }: E
   // Aggiorna la data se cambia la selezione nel calendario
   React.useEffect(() => {
      if(defaultDate) {
+         // FIX: Usa la data locale invece di toISOString() che usa UTC
+         // "en-CA" restituisce il formato YYYY-MM-DD rispettando il fuso orario locale
          const localDate = defaultDate.toLocaleDateString("en-CA");
          setFormData(prev => ({ ...prev, date: localDate }));
      }

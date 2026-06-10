@@ -78,16 +78,7 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
           </Tooltip>
 
           {/* User menu */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div>
-                <UserNav />
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" align="end">
-              Account
-            </TooltipContent>
-          </Tooltip>
+          <UserNav />
         </header>
 
         {/* ── CONTENUTO ── */}

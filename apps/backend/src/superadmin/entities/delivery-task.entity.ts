@@ -19,11 +19,11 @@ export class DeliveryTask {
   dueDate!: string | null; // Usiamo string per evitare problemi di parsing TS
 
   // FIX: Usiamo stringa semplice invece di enum per evitare conflitti
-  @Column({ type: 'varchar', default: 'Media' })
+  @Column({ default: 'Media' })
   priority!: string;
 
   // FIX: Usiamo stringa semplice
-  @Column({ type: 'varchar', default: 'todo' })
+  @Column({ default: 'todo' })
   status!: string;
 
   @Column({ type: 'text', nullable: true })

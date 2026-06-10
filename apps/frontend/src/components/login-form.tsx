@@ -512,7 +512,6 @@ export function LoginForm() {
                         type="email"
                         placeholder="nome@azienda.it"
                         disabled={isSubmitting}
-                        autoFocus
                         className={cn("df-input", errors.email && "err")}
                         {...register("email")}
                       />

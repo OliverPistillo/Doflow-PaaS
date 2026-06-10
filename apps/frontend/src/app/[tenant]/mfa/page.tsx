@@ -3,21 +3,15 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
-import { ShieldCheck, RefreshCw, QrCode, Lock, CheckCircle2, ArrowLeft, Copy, Check } from "lucide-react";
+import { ShieldCheck, RefreshCw, QrCode, Lock, CheckCircle2, ArrowLeft } from "lucide-react";
 
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   InputOTP,
   InputOTPGroup,
-  InputOTPSeparator,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { LoadingState } from "@/components/ui/page-shell";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
 
@@ -173,80 +167,50 @@ export default function TenantMfaPage() {
   // RENDER
   // ==========================================
 
-  const [copied, setCopied] = useState(false);
-
-  const handleCopySecret = () => {
-    if (!secret) return;
-    navigator.clipboard.writeText(secret);
-    setCopied(true);
-    toast({
-      title: "Segreto copiato",
-      description: "Il codice segreto è stato copiato negli appunti.",
-    });
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   if (loading) {
     return (
-      <div className="doflow-app-frame min-h-screen flex items-center justify-center">
-        <LoadingState centered label="Caricamento sicurezza..." />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center text-slate-500 animate-pulse">
+          <RefreshCw className="h-8 w-8 mx-auto mb-2 animate-spin" />
+          <p>Caricamento sicurezza...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="doflow-app-frame min-h-screen flex items-center justify-center p-4">
-      <div className="df-glass-panel w-full max-w-md p-8 animate-fadeInUp">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md p-8 shadow-xl border-slate-200 bg-white">
         
         {/* Header Icon */}
-        <div className="flex flex-col items-center text-center space-y-4 mb-8">
-          <div className="df-icon-bubble h-16 w-16">
+        <div className="flex flex-col items-center text-center space-y-4 mb-6">
+          <div className="p-3 bg-indigo-100 rounded-full text-indigo-600">
             {mode === "SETUP" ? <QrCode className="h-8 w-8" /> : <ShieldCheck className="h-8 w-8" />}
           </div>
-          <div className="space-y-1">
-            <h1 className="text-2xl font-bold text-foreground">
-              {mode === "SETUP" ? "Configura MFA" : "Verifica Accesso"}
-            </h1>
-            <p className="text-sm text-muted-foreground px-4">
-              {mode === "SETUP"
-                ? "Per proteggere il tuo account, scansiona il QR code con la tua app Authenticator."
-                : "Inserisci il codice a 6 cifre generato dalla tua app di autenticazione."}
-            </p>
-          </div>
+          <h1 className="text-2xl font-bold text-slate-900">
+            {mode === "SETUP" ? "Configura MFA" : "Verifica Accesso"}
+          </h1>
+          <p className="text-sm text-slate-500 px-4">
+            {mode === "SETUP"
+              ? "Per proteggere il tuo account, scansiona il QR code con la tua app Authenticator (Google/Microsoft)."
+              : "Inserisci il codice a 6 cifre generato dalla tua app di autenticazione."}
+          </p>
         </div>
 
         {/* QR Code Section (Solo SETUP) */}
         {mode === "SETUP" && qrCode && (
-          <div className="flex flex-col items-center mb-8 animate-in fade-in zoom-in duration-300">
-            <div className="p-2 bg-white rounded-2xl shadow-sm ring-1 ring-border mb-6">
-              <Image src={qrCode} alt="QR Code" width={180} height={180} priority className="rounded-xl" />
+          <div className="flex flex-col items-center mb-6 animate-in fade-in zoom-in duration-300">
+            <div className="border-4 border-white shadow-lg rounded-xl overflow-hidden">
+              <Image src={qrCode} alt="QR Code" width={180} height={180} priority />
             </div>
             
             {/* Fallback Text */}
-            <div className="w-full space-y-3">
-              <p className="text-xs text-center text-muted-foreground">Non riesci a scansionare?</p>
-              <div className="flex items-center gap-2 p-3 bg-secondary/50 rounded-xl border border-border group transition-colors hover:bg-secondary">
-                <code className="flex-1 font-mono text-[13px] text-foreground break-all select-all">
-                  {secret}
-                </code>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-primary"
-                      onClick={handleCopySecret}
-                      aria-label="Copia segreto"
-                    >
-                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    Copia segreto
-                  </TooltipContent>
-                </Tooltip>
+            <details className="mt-4 text-xs text-slate-400 cursor-pointer text-center w-full">
+              <summary className="hover:text-indigo-600 transition-colors">Non riesci a scansionare?</summary>
+              <div className="mt-2 p-3 bg-slate-100 rounded border border-slate-200 font-mono break-all select-all text-slate-600">
+                {secret}
               </div>
-            </div>
+            </details>
           </div>
         )}
 
@@ -264,9 +228,6 @@ export default function TenantMfaPage() {
                 <InputOTPSlot index={0} />
                 <InputOTPSlot index={1} />
                 <InputOTPSlot index={2} />
-              </InputOTPGroup>
-              <InputOTPSeparator />
-              <InputOTPGroup>
                 <InputOTPSlot index={3} />
                 <InputOTPSlot index={4} />
                 <InputOTPSlot index={5} />
@@ -276,7 +237,7 @@ export default function TenantMfaPage() {
 
           <Button 
             type="submit" 
-            className="w-full h-11 text-base font-semibold transition-all shadow-md hover:shadow-lg"
+            className="w-full h-12 text-lg font-semibold bg-indigo-600 hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg"
             disabled={submitting || code.length !== 6}
           >
             {submitting ? (
@@ -292,18 +253,17 @@ export default function TenantMfaPage() {
         </form>
 
         {/* Footer Actions */}
-        <div className="mt-8 pt-6 border-t border-border text-center">
+        <div className="mt-8 pt-6 border-t border-slate-100 text-center">
           <Button 
-            variant="ghost"
-            size="sm"
-            className="text-xs text-muted-foreground hover:text-foreground gap-2"
+            variant="link"
+            className="text-xs text-slate-400 hover:text-slate-600 gap-1"
             onClick={() => router.replace(tenantSlug ? `/${tenantSlug}/login` : "/login")}
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
+            <ArrowLeft className="h-3 w-3" />
             Torna al login
           </Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

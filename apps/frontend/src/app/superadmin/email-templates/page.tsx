@@ -122,9 +122,7 @@ export default function EmailTemplatesPage() {
       const res = await apiFetch<{ subject: string; html: string }>("/superadmin/email-templates/preview", {
         method: "POST", body: JSON.stringify({ slug: tpl.slug, testData }),
       });
-      // Import DOMPurify dynamically to avoid SSR issues
-      const DOMPurify = (await import("dompurify")).default;
-      setPreviewSheet({ open: true, html: DOMPurify.sanitize(res.html, { WHOLE_DOCUMENT: true }) });
+      setPreviewSheet({ open: true, html: res.html });
     } catch (e: any) {
       toast({ title: "Errore preview", description: e.message, variant: "destructive" });
     }

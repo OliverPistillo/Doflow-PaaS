@@ -13,8 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { EmptyState } from "@/components/ui/page-shell";
 import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -163,14 +161,7 @@ export default function Page() {
       <div className="hidden md:flex flex-col w-48 border-r border-border/50 bg-muted/10 p-3 gap-0.5 shrink-0">
         <div className="flex items-center justify-between px-2 mb-2">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">Casella</p>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="Aggiorna messaggi">
-                <RefreshCw className="h-3 w-3" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Aggiorna</TooltipContent>
-          </Tooltip>
+          <Button variant="ghost" size="icon" className="h-6 w-6"><RefreshCw className="h-3 w-3" /></Button>
         </div>
         {LABELS.map(lbl => {
           const count = labelCount(lbl);
@@ -226,12 +217,9 @@ export default function Page() {
         {/* List */}
         <div className="flex-1 overflow-y-auto divide-y divide-border/30">
           {filtered.length === 0 ? (
-            <div className="py-12">
-              <EmptyState
-                title="Nessun messaggio"
-                message="Non abbiamo trovato messaggi che corrispondano alla tua ricerca o filtro."
-                icon={Inbox}
-              />
+            <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+              <Inbox className="h-10 w-10 text-muted-foreground/30 mb-3" />
+              <p className="text-sm text-muted-foreground">Nessun messaggio trovato.</p>
             </div>
           ) : (
             filtered.map(m => (
@@ -281,20 +269,12 @@ export default function Page() {
                   </div>
                 </div>
 
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      className="shrink-0 self-start mt-0.5 focus-visible:ring-2 focus-visible:ring-ring rounded-sm outline-none"
-                      onClick={e => { e.stopPropagation(); toggleStar(m.id); }}
-                      aria-label={m.starred ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
-                    >
-                      <Star className={cn("h-3.5 w-3.5 transition-colors", m.starred ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40 hover:text-amber-400")} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="left">
-                    {m.starred ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
-                  </TooltipContent>
-                </Tooltip>
+                <button
+                  className="shrink-0 self-start mt-0.5"
+                  onClick={e => { e.stopPropagation(); toggleStar(m.id); }}
+                >
+                  <Star className={cn("h-3.5 w-3.5 transition-colors", m.starred ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40 hover:text-amber-400")} />
+                </button>
               </div>
             ))
           )}
@@ -306,28 +286,18 @@ export default function Page() {
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Toolbar */}
           <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border/50 bg-card/50">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={() => setSelected(null)} aria-label="Torna alla lista">
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Torna alla lista</TooltipContent>
-            </Tooltip>
+            <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={() => setSelected(null)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
             <div className="flex items-center gap-1 ml-auto">
               {[
-                { icon: Reply, label: "Rispondi", action: () => setShowReply(true) },
-                { icon: Archive, label: "Archivia", action: () => setSelected(null) },
-                { icon: Trash2, label: "Elimina", action: () => setSelected(null) },
+                { icon: Reply,   label: "Rispondi",  action: () => setShowReply(true) },
+                { icon: Archive, label: "Archivia",  action: () => setSelected(null) },
+                { icon: Trash2,  label: "Elimina",   action: () => setSelected(null) },
               ].map(btn => (
-                <Tooltip key={btn.label}>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={btn.label} onClick={btn.action}>
-                      <btn.icon className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">{btn.label}</TooltipContent>
-                </Tooltip>
+                <Button key={btn.label} variant="ghost" size="icon" className="h-8 w-8" title={btn.label} onClick={btn.action}>
+                  <btn.icon className="h-4 w-4" />
+                </Button>
               ))}
             </div>
           </div>
@@ -384,14 +354,9 @@ export default function Page() {
               <div className="flex items-center gap-2 mb-2 text-xs text-muted-foreground">
                 <Reply className="h-3.5 w-3.5" />
                 Risposta a <span className="font-medium text-foreground">{selected.from}</span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-5 w-5 ml-auto" aria-label="Chiudi risposta" onClick={() => setShowReply(false)}>
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">Chiudi</TooltipContent>
-                </Tooltip>
+                <Button variant="ghost" size="icon" className="h-5 w-5 ml-auto" onClick={() => setShowReply(false)}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
               </div>
               <Textarea
                 placeholder="Scrivi la tua risposta..."
@@ -420,11 +385,10 @@ export default function Page() {
         </div>
       ) : (
         <div className="hidden md:flex flex-1 items-center justify-center">
-          <EmptyState
-            title="Seleziona un messaggio"
-            message="Scegli una conversazione dalla lista per leggerne il contenuto."
-            icon={Inbox}
-          />
+          <div className="text-center text-muted-foreground">
+            <Inbox className="h-14 w-14 mx-auto mb-3 opacity-20" />
+            <p className="text-sm">Seleziona un messaggio per leggerlo</p>
+          </div>
         </div>
       )}
     </div>

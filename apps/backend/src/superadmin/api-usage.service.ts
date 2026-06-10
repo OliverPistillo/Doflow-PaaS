@@ -147,13 +147,9 @@ export class ApiUsageService {
     const keys = await client.keys('df:rl:*');
 
     const entries: { key: string; tokens: string | null }[] = [];
-    const sampleKeys = keys.slice(0, 50);
-
-    if (sampleKeys.length > 0) {
-      const vals = await client.mget(sampleKeys);
-      for (let i = 0; i < sampleKeys.length; i++) {
-        entries.push({ key: sampleKeys[i], tokens: vals[i] });
-      }
+    for (const key of keys.slice(0, 50)) {
+      const val = await client.get(key);
+      entries.push({ key, tokens: val });
     }
 
     return {

@@ -157,31 +157,25 @@ export class TenantSelfServiceController {
     const selected = new Set(body.selectedModules || []);
     const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
 
-    const existingSubs = await this.subRepo.find({ where: { tenantId } });
-    const existingSubsMap = new Map(existingSubs.map(s => [s.moduleKey, s]));
-    const operations: Promise<any>[] = [];
-
     for (const mod of allModules) {
       const allowed = (tierRank[mod.minTier] ?? 0) <= userTierRank;
       const wantActive = allowed && selected.has(mod.key);
-      const existing = existingSubsMap.get(mod.key);
+      const existing = await this.subRepo.findOne({ where: { tenantId, moduleKey: mod.key } });
 
       if (wantActive) {
         if (!existing) {
-          operations.push(this.subRepo.save(this.subRepo.create({
+          await this.subRepo.save(this.subRepo.create({
             tenantId, moduleKey: mod.key,
             status: mod.priceMonthly > 0 ? 'TRIAL' : 'ACTIVE',
             trialEndsAt: mod.priceMonthly > 0 ? trialEndsAt : null as any,
-          })));
+          }));
         } else if (existing.status === 'CANCELLED' || existing.status === 'EXPIRED') {
-          operations.push(this.subRepo.update(existing.id, { status: 'ACTIVE' }));
+          await this.subRepo.update(existing.id, { status: 'ACTIVE' });
         }
       } else if (existing && (existing.status === 'ACTIVE' || existing.status === 'TRIAL')) {
-        operations.push(this.subRepo.update(existing.id, { status: 'CANCELLED' }));
+        await this.subRepo.update(existing.id, { status: 'CANCELLED' });
       }
     }
-
-    await Promise.all(operations);
 
     // Persist onboarding state (raw query — table created in seed bootstrap)
     await this.subRepo.manager.query(
