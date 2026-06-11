@@ -194,7 +194,8 @@ export default function RegisterPage() {
                           <div style={{position:"relative"}}>
                             <User size={15} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
                             <input id="name" type="text" placeholder="Mario Rossi" disabled={isSubmitting}
-                              className={cn("dfr-input", errors.name && "err")} {...register("name")}/>
+                              className={cn("dfr-input", errors.name && "err")} {...register("name")}
+                              autoFocus />
                           </div>
                           {errors.name && <p role="alert" className="text-[11px] text-red-500 font-medium">{errors.name.message}</p>}
                         </div>

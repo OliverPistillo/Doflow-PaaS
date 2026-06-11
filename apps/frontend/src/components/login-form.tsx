@@ -514,6 +514,7 @@ export function LoginForm() {
                         disabled={isSubmitting}
                         className={cn("df-input", errors.email && "err")}
                         {...register("email")}
+                        autoFocus
                       />
                     </div>
                     {errors.email && (
@@ -575,7 +576,7 @@ export function LoginForm() {
                             type="button"
                             onClick={() => setShowPassword(!showPassword)}
                             disabled={isSubmitting}
-                            aria-label={showPassword ? "Nascondi" : "Mostra"}
+                            aria-label={showPassword ? "Nascondi password" : "Mostra password"}
                             style={{
                               position: "absolute",
                               right: 12,

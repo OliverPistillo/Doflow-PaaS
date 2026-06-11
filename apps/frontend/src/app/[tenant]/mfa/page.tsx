@@ -3,15 +3,21 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
-import { ShieldCheck, RefreshCw, QrCode, Lock, CheckCircle2, ArrowLeft } from "lucide-react";
+import { ShieldCheck, RefreshCw, QrCode, Lock, CheckCircle2, ArrowLeft, Copy, Check } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   InputOTP,
   InputOTPGroup,
+  InputOTPSeparator,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
 
@@ -47,6 +53,7 @@ export default function TenantMfaPage() {
   // Input Utente
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // ==========================================
   // 1. INIT: Controlla Token e Stage
@@ -106,8 +113,26 @@ export default function TenantMfaPage() {
   };
 
   // ==========================================
-  // 3. SUBMIT: Confirm o Verify
+  // 3. ACTIONS
   // ==========================================
+  const handleCopySecret = async () => {
+    if (!secret) return;
+    try {
+      await navigator.clipboard.writeText(secret);
+      setCopied(true);
+      toast({
+        description: "Codice segreto copiato negli appunti.",
+      });
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      toast({
+        title: "Errore",
+        description: "Impossibile copiare il codice.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!code || code.length < 6) return;
@@ -205,12 +230,31 @@ export default function TenantMfaPage() {
             </div>
             
             {/* Fallback Text */}
-            <details className="mt-4 text-xs text-slate-400 cursor-pointer text-center w-full">
-              <summary className="hover:text-indigo-600 transition-colors">Non riesci a scansionare?</summary>
-              <div className="mt-2 p-3 bg-slate-100 rounded border border-slate-200 font-mono break-all select-all text-slate-600">
-                {secret}
+            <div className="mt-4 w-full">
+              <p className="text-[11px] text-slate-400 text-center mb-2">Non riesci a scansionare? Usa il codice segreto:</p>
+              <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded-lg group">
+                <code className="flex-1 text-[11px] font-mono text-slate-600 px-2 truncate">
+                  {secret}
+                </code>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                      onClick={handleCopySecret}
+                      aria-label="Copia codice segreto"
+                    >
+                      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {copied ? "Copiato!" : "Copia segreto"}
+                  </TooltipContent>
+                </Tooltip>
               </div>
-            </details>
+            </div>
           </div>
         )}
 
@@ -223,11 +267,15 @@ export default function TenantMfaPage() {
               onChange={(v) => setCode(normalizeCode(v))}
               disabled={submitting}
               aria-label="Codice di verifica a 6 cifre"
+              autoFocus
             >
               <InputOTPGroup>
                 <InputOTPSlot index={0} />
                 <InputOTPSlot index={1} />
                 <InputOTPSlot index={2} />
+              </InputOTPGroup>
+              <InputOTPSeparator />
+              <InputOTPGroup>
                 <InputOTPSlot index={3} />
                 <InputOTPSlot index={4} />
                 <InputOTPSlot index={5} />

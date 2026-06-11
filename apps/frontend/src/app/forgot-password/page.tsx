@@ -81,6 +81,7 @@ export default function ForgotPasswordPage() {
                     className="w-full pl-10 pr-3 py-2 rounded bg-black border border-zinc-700 text-sm focus:border-white transition-colors outline-none"
                     placeholder="nome@azienda.it"
                     disabled={submitting}
+                    autoFocus
                   />
                 </div>
               </div>
