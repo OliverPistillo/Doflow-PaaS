@@ -9,6 +9,7 @@ import { ChevronLeft, ChevronRight, CalendarDays, Plus, Loader2, Trash2 } from '
 import { cn } from '@/lib/utils';
 import { apiFetch } from "@/lib/api";
 import { useConfirm } from "@/hooks/useConfirm";
+import { useToast } from "@/hooks/use-toast";
 import { EventCreateDialog } from './components/EventCreateDialog';
 import {
   Tooltip,
@@ -45,6 +46,7 @@ export default function ProjectCalendarPage() {
   const [events, setEvents] = React.useState<ProjectEvent[]>([]);
   const [loading, setLoading] = React.useState(true);
   const { ConfirmDialog, confirm } = useConfirm();
+  const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
 
   // Caricamento Eventi
@@ -56,6 +58,11 @@ export default function ProjectCalendarPage() {
       setEvents(res);
     } catch (e) {
       console.error(e);
+      toast({
+        title: 'Errore',
+        description: 'Impossibile caricare gli eventi',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
@@ -76,7 +83,14 @@ export default function ProjectCalendarPage() {
       try {
           await apiFetch(`/superadmin/calendar/events/${id}`, { method: "DELETE" });
           loadEvents();
-      } catch(err) { console.error(err); }
+      } catch(err) {
+          console.error(err);
+          toast({
+              title: 'Errore',
+              description: "Impossibile eliminare l'evento",
+              variant: 'destructive',
+          });
+      }
   };
 
   // Generazione Griglia Giorni
