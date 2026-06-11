@@ -4,7 +4,14 @@ import { BarChart3, Users, DollarSign, Activity } from "lucide-react";
 
 // --- WIDGET DI ESEMPIO (Placeholder) ---
 // In un sistema reale, questi sarebbero componenti complessi importati
-const KpiWidget = ({ title, value, icon: Icon, color }: any) => (
+interface KpiWidgetProps {
+  title: string;
+  value: string | number;
+  icon: React.ElementType;
+  color: string;
+}
+
+const KpiWidget = ({ title, value, icon: Icon, color }: KpiWidgetProps) => (
   <Card className="h-full border-l-4" style={{ borderLeftColor: color }}>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
       <CardTitle className="text-sm font-medium text-muted-foreground uppercase">{title}</CardTitle>
