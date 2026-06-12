@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, FormEvent } from 'react';
+import { Loader2, CheckCircle2 } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://api.doflow.it';
 
@@ -29,6 +30,7 @@ export default function AcceptInvitePage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -82,7 +84,10 @@ export default function AcceptInvitePage() {
       localStorage.setItem('doflow_token', data.token);
 
       const target = nextPathByRole(data.user.role);
-      router.push(target);
+      setSuccess(true);
+      setTimeout(() => {
+        router.push(target);
+      }, 2000);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Errore sconosciuto');
     } finally {
@@ -111,45 +116,65 @@ export default function AcceptInvitePage() {
           Imposta una password per completare la registrazione.
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="text-xs uppercase text-gray-500">Password</label>
-            <input
-              type="password"
-              minLength={8}
-              required
-              className="w-full bg-black border border-zinc-700 rounded px-3 py-2"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="text-xs uppercase text-gray-500">Ripeti password</label>
-            <input
-              type="password"
-              minLength={8}
-              required
-              className="w-full bg-black border border-zinc-700 rounded px-3 py-2"
-              value={password2}
-              onChange={(e) => setPassword2(e.target.value)}
-            />
-          </div>
-
-          {error && (
-            <div className="text-xs text-red-400 border border-red-900/50 rounded p-2 bg-red-900/10">
-              {error}
+        {success ? (
+          <div className="flex flex-col items-center justify-center py-8 animate-fadeInUp" role="status">
+            <div className="df-icon-bubble h-16 w-16 mb-4">
+              <CheckCircle2 className="h-8 w-8" aria-hidden="true" />
             </div>
-          )}
+            <p className="text-lg font-bold">Password impostata!</p>
+            <p className="text-sm text-zinc-400 mt-1">Verrai reindirizzato tra un momento...</p>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="password" title="Password" className="text-xs uppercase text-gray-500">Password</label>
+              <input
+                id="password"
+                type="password"
+                minLength={8}
+                required
+                className="w-full bg-black border border-zinc-700 rounded px-3 py-2 focus:border-white transition-colors outline-none"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoFocus
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-white text-black font-bold py-2 rounded hover:bg-gray-200 disabled:opacity-50"
-          >
-            {loading ? 'Attivazione...' : 'Attiva e entra'}
-          </button>
-        </form>
+            <div>
+              <label htmlFor="password-confirm" title="Ripeti password" className="text-xs uppercase text-gray-500">Ripeti password</label>
+              <input
+                id="password-confirm"
+                type="password"
+                minLength={8}
+                required
+                className="w-full bg-black border border-zinc-700 rounded px-3 py-2 focus:border-white transition-colors outline-none"
+                value={password2}
+                onChange={(e) => setPassword2(e.target.value)}
+              />
+            </div>
+
+            {error && (
+              <div className="text-xs text-red-400 border border-red-900/50 rounded p-2 bg-red-900/10">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-white text-black font-bold py-2 rounded hover:bg-gray-200 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Attivazione...
+                </>
+              ) : (
+                'Attiva e entra'
+              )}
+            </button>
+          </form>
+        )}
       </div>
     </main>
   );
