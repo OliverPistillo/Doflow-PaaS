@@ -20,7 +20,9 @@ import {
   Loader2,
   Globe,
   Mail,
-  Trash2
+  Trash2,
+  Copy,
+  Check
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -69,6 +71,8 @@ type ResetModalState = {
   tenantId: string;
   email: string;
   result?: string;
+  title?: string;
+  description?: string;
 };
 
 type FetchState =
@@ -139,6 +143,7 @@ export default function TenantsPage() {
   // Modali
   const [resetModal, setResetModal] = useState<ResetModalState | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // --- STATI CREAZIONE ---
   const [newTenant, setNewTenant] = useState({ name: "", slug: "", email: "", plan: "STARTER" });
@@ -207,6 +212,16 @@ export default function TenantsPage() {
   // --- AZIONI ---
 
   // NUOVA AZIONE: Sospensione/Riattivazione Reale
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    toast({
+      title: "Copiato!",
+      description: "Password copiata negli appunti.",
+    });
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const handleToggleStatus = async (tenantId: string, currentStatus: boolean) => {
     const actionLabel = currentStatus ? "sospendere" : "riattivare";
     const ok = await confirm({
@@ -257,13 +272,14 @@ export default function TenantsPage() {
 
       // --- FIX: Mostra la password se restituita dal backend ---
       if (res?.tempPassword) {
-        alert(
-          `✅ TENANT CREATO CON SUCCESSO!\n\n` +
-          `Ecco le credenziali Admin per ${res.name || newTenant.name}:\n\n` +
-          `Email: ${newTenant.email}\n` +
-          `Password: ${res.tempPassword}\n\n` +
-          `⚠️ COPIA QUESTA PASSWORD ORA. Non sarà più visibile.\n(È stata inviata anche via email)`
-        );
+        setResetModal({
+          open: true,
+          tenantId: "new",
+          email: newTenant.email,
+          result: res.tempPassword,
+          title: "Tenant Creato con Successo!",
+          description: `Ecco le credenziali Admin per ${res.name || newTenant.name}. Copia la password ora: non sarà più visibile.`
+        });
       }
 
       setIsCreateOpen(false);
@@ -324,7 +340,12 @@ export default function TenantsPage() {
         },
       );
 
-      setResetModal({ ...resetModal, result: data.tempPassword });
+      setResetModal({
+        ...resetModal,
+        result: data.tempPassword,
+        title: "Reset Password Amministratore",
+        description: `Generazione nuove credenziali per ${resetModal.email}.`
+      });
       toast({
         title: "Successo",
         description: "Password rigenerata con successo.",
@@ -734,9 +755,11 @@ export default function TenantsPage() {
         <Dialog open={resetModal.open} onOpenChange={(v) => !v && setResetModal(null)}>
           <DialogContent className="sm:max-w-md rounded-2xl">
             <DialogHeader>
-              <DialogTitle>Reset Password Amministratore</DialogTitle>
+            <DialogTitle>{resetModal.title || "Reset Password Amministratore"}</DialogTitle>
               <DialogDescription>
-                Generazione nuove credenziali per <b>{resetModal.email}</b>.
+              {resetModal.description || (
+                <>Generazione nuove credenziali per <b>{resetModal.email}</b>.</>
+              )}
               </DialogDescription>
             </DialogHeader>
 
@@ -754,8 +777,19 @@ export default function TenantsPage() {
                 <div className="text-xs text-muted-foreground mb-2 uppercase tracking-widest font-bold">
                   Credenziali
                 </div>
-                <div className="text-3xl font-mono font-black tracking-wider select-all cursor-text text-emerald-400">
-                  {resetModal.result}
+                <div className="flex items-center justify-center gap-4">
+                  <div className="text-3xl font-mono font-black tracking-wider select-all cursor-text text-emerald-400">
+                    {resetModal.result}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-400/10"
+                    onClick={() => copyToClipboard(resetModal.result!)}
+                    aria-label="Copia password"
+                  >
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </Button>
                 </div>
                 <div className="text-xs text-muted-foreground mt-4">
                   Copia la password ora. Dopo chiudo la porta e butto via la chiave.
