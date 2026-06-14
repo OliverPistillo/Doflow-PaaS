@@ -30,3 +30,7 @@
 ## 2025-05-20 - [Platform-Aware Keyboard Shortcuts]
 **Learning:** Hardcoding Macintosh symbols (⌘) or "Ctrl" text for keyboard shortcuts alienates users on other platforms. Implementing a platform-aware hook (detecting `window.navigator.platform`) allows for dynamic rendering of symbols (⌘ vs Ctrl) and labels (Command vs Control), significantly improving accessibility and clarity for all users.
 **Action:** Use a centralized `usePlatform` hook to determine the correct modifier key and label for shortcuts. When providing accessibility labels (like `aria-label`), favor full text (e.g., "Control + K") over symbols or abbreviations for better screen reader support.
+
+## 2026-05-21 - [Delightful Auth Redirects]
+**Learning:** Abrupt redirects after critical actions like accepting an invite can be jarring and leave users unsure if the action succeeded. Implementing a temporary success state (2s) with the design system's checkmark pattern (`df-icon-bubble` + `animate-fadeInUp`) provides delightful feedback and ensures the user feels in control.
+**Action:** Always implement a brief success state before automatic redirects in critical authentication or destructive flows.
