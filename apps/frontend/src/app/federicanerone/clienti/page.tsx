@@ -4,6 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api';
 import { useConfirm } from '@/hooks/useConfirm';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -78,6 +79,7 @@ export default function FedericaClientiPage() {
   const [clients, setClients] = React.useState<Cliente[]>([]);
   const [stats, setStats] = React.useState<StatsData | null>(null);
   const { ConfirmDialog, confirm } = useConfirm();
+  const { toast } = useToast();
   
   const [loading, setLoading] = React.useState(false);
   const [search, setSearch] = React.useState('');
@@ -140,7 +142,8 @@ export default function FedericaClientiPage() {
       setIsOpen(false);
       void loadData();
     } catch (e) {
-      alert('Errore salvataggio');
+      console.error(e);
+      toast({ title: "Errore salvataggio", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     }
   };
 
@@ -155,7 +158,10 @@ export default function FedericaClientiPage() {
     try {
       await apiFetch(`/clienti/${id}`, { method: 'DELETE' });
       void loadData();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      toast({ title: "Errore eliminazione", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    }
   };
 
   // --- CALCOLO KPI LOCALI ---
