@@ -46,6 +46,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -454,8 +461,10 @@ export default function TenantsPage() {
             {/* TOOLBAR */}
             <div className="flex flex-col md:flex-row gap-4 bg-card p-4 rounded-2xl border border-border shadow-sm">
                 <div className="relative flex-1">
+                <Label htmlFor="tenant-search" className="sr-only">Cerca tenant</Label>
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
+                    id="tenant-search"
                     placeholder="Cerca azienda, slug o schema DB..."
                     className="pl-9 border-border"
                     value={search}
@@ -465,15 +474,19 @@ export default function TenantsPage() {
 
                 <div className="flex items-center gap-2">
                 <Filter className="h-4 w-4 text-muted-foreground" />
-                <select
-                    className="h-10 rounded-md border border-border bg-card px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                <Select
                     value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "suspended")}
+                    onValueChange={(value) => setStatusFilter(value as "all" | "active" | "suspended")}
                 >
-                    <option value="all">Tutti gli stati</option>
-                    <option value="active">Solo attivi</option>
-                    <option value="suspended">Sospesi</option>
-                </select>
+                    <SelectTrigger className="w-[160px] border-border bg-card">
+                        <SelectValue placeholder="Tutti gli stati" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Tutti gli stati</SelectItem>
+                        <SelectItem value="active">Solo attivi</SelectItem>
+                        <SelectItem value="suspended">Sospesi</SelectItem>
+                    </SelectContent>
+                </Select>
                 </div>
             </div>
 
@@ -583,7 +596,7 @@ export default function TenantsPage() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleImpersonate(t.id)}
-                                className="hidden group-hover:flex h-8 text-primary hover:text-primary hover:bg-primary/10"
+                                className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity h-8 text-primary hover:text-primary hover:bg-primary/10"
                             >
                                 <Eye className="h-4 w-4 mr-2" />
                                 Entra
@@ -591,7 +604,7 @@ export default function TenantsPage() {
 
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Azioni tenant">
                                     <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                                 </DropdownMenuTrigger>
@@ -702,16 +715,19 @@ export default function TenantsPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="plan">Piano</Label>
-                <select
-                  id="plan"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                <Select
                   value={newTenant.plan}
-                  onChange={(e) => setNewTenant({ ...newTenant, plan: e.target.value })}
+                  onValueChange={(value) => setNewTenant({ ...newTenant, plan: value })}
                 >
-                  <option value="STARTER">Starter</option>
-                  <option value="PRO">Pro</option>
-                  <option value="ENTERPRISE">Enterprise</option>
-                </select>
+                  <SelectTrigger id="plan" className="w-full">
+                    <SelectValue placeholder="Seleziona piano" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="STARTER">Starter</SelectItem>
+                    <SelectItem value="PRO">Pro</SelectItem>
+                    <SelectItem value="ENTERPRISE">Enterprise</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="grid gap-2">
