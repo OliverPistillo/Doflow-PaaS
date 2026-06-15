@@ -30,6 +30,7 @@ import { TenantModule } from './tenant/tenant.module';
 import { FedericaNeroneModule } from './federicanerone/federicanerone.module';
 import { BusinaroModule } from './businaro/businaro.module';
 import { SalesIntelligenceModule } from './sales-intelligence/sales-intelligence.module';
+import { BillingModule } from './billing/billing.module';
 
 // ── Root-level controllers (non appartengono a nessun sotto-modulo) ───────────
 import { AppController } from './app.controller';
@@ -114,6 +115,7 @@ import { OutreachCampaign } from './sales-intelligence/entities/outreach-campaig
     FedericaNeroneModule,
     BusinaroModule,
     SalesIntelligenceModule,
+    BillingModule,
   ],
 
   controllers: [
@@ -153,6 +155,7 @@ export class AppModule implements NestModule {
         'api/auth/check-slug',
         'api/auth/google',
         'api/auth/google/(.*)',
+        'api/billing/webhook',
       )
       .forRoutes('*');
   }

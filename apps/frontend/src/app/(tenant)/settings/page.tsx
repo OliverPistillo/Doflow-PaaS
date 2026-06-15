@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { tenantFetch } from "@/lib/tenant-fetch";
 import {
   User, Mail, Phone, Building2, Bell, BellOff,
   Moon, Sun, Globe, Lock, Shield, Key, Eye, EyeOff,
@@ -36,11 +37,14 @@ import { useToast } from "@/hooks/use-toast";
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { plan, meta, tenantInfo } = usePlan();
-  const { toast } = useToast();
+
 
   const [user, setUser] = useState<{ email: string; role: string; initials: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const { toast } = useToast();
+
 
   // Profile form state
   const [profile, setProfile] = useState({
@@ -89,6 +93,34 @@ export default function SettingsPage() {
     await new Promise((r) => setTimeout(r, 800));
     setSaving(false);
     toast({ title: "Profilo aggiornato ✓", description: "Le modifiche sono state salvate." });
+  };
+
+
+  const handleCheckout = async (tier: string) => {
+    try {
+      setCheckoutLoading(tier);
+      const res = await tenantFetch('/billing/create-checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planTier: tier }),
+      });
+      if (!res.ok) {
+        throw new Error('Errore durante la creazione del checkout');
+      }
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('URL di checkout non valido');
+      }
+    } catch (error) {
+      toast({
+        title: 'Errore',
+        description: 'Impossibile avviare il checkout. Riprova più tardi.',
+        variant: 'destructive',
+      });
+      setCheckoutLoading(null);
+    }
   };
 
   const handleLogout = () => {
@@ -404,7 +436,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 {meta.nextPlan && (
-                  <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" size="sm">
+                  <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" size="sm" onClick={() => handleCheckout(meta.nextPlan || "PRO")} disabled={!!checkoutLoading}>
                     <Sparkles className="mr-1.5 h-4 w-4" /> {meta.upgradeLabel}
                   </Button>
                 )}
@@ -471,8 +503,8 @@ export default function SettingsPage() {
                         ))}
                       </ul>
                       {!isActive && (
-                        <Button variant="outline" className="w-full mt-4" size="sm">
-                          {tier === "ENTERPRISE" ? "Contattaci" : "Passa a " + tierMeta.label}
+                        <Button variant="outline" className="w-full mt-4" size="sm" onClick={() => handleCheckout(tier)} disabled={!!checkoutLoading}>
+                          {checkoutLoading === tier ? "Attendere..." : (tier === "ENTERPRISE" ? "Contattaci / Passa a Enterprise" : "Passa a " + tierMeta.label)}
                         </Button>
                       )}
                     </div>
