@@ -82,7 +82,7 @@ export default function PrivacyPage() {
               </p>
             </section>
 
-            <p className="pt-8 text-sm italic">Ultimo aggiornamento: Giugno 2024</p>
+            <p className="pt-8 text-sm italic">Ultimo aggiornamento: Giugno 2026</p>
           </div>
         </PageShell>
       </div>
