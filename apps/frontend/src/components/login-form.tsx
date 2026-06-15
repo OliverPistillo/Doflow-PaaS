@@ -285,200 +285,95 @@ export function LoginForm() {
 
   return (
     <>
-      <style>{`
-        .df-wrap * { font-family:var(--font-sans); }
+      <style dangerouslySetInnerHTML={{ __html: `
         @keyframes dfUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
         .df-a{animation:dfUp .45s ease both}
         .df-a1{animation-delay:.04s}.df-a2{animation-delay:.09s}.df-a3{animation-delay:.13s}
         .df-a4{animation-delay:.17s}.df-a5{animation-delay:.21s}.df-a6{animation-delay:.25s}.df-a7{animation-delay:.29s}
         @keyframes dfSlide { from{opacity:0;transform:translateX(10px)} to{opacity:1;transform:translateX(0)} }
         .df-slide-anim{animation:dfSlide .5s ease both}
-        .df-input{
-          display:block;width:100%;height:44px;border-radius:12px;
-          border:1px solid var(--df-line-2);background:var(--df-surface);
-          font-size:14px;font-family:var(--font-sans);
-          padding:0 44px 0 40px;outline:none;
-          transition:border-color .18s,background .18s,box-shadow .18s;
-          color:var(--df-ink);
+        .df-dot {
+          height: 6px; border-radius: 999px; background: rgba(255,255,255,.2);
+          transition: all .3s ease;
         }
-        .df-input::placeholder{color:var(--df-muted-2)}
-        .df-input:focus{background:#fff;border-color:var(--df-accent);box-shadow:0 0 0 3px rgba(91,91,214,.12)}
-        .df-input.err{border-color:#ef4444}
-        .df-input.err:focus{box-shadow:0 0 0 3px rgba(239,68,68,.1)}
-        .df-primary{
-          width:100%;height:44px;border-radius:12px;border:none;cursor:pointer;
-          font-size:14px;font-weight:600;font-family:var(--font-sans);
-          color:#fff;
-          background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--chart-4)));
-          box-shadow: var(--shadow-button);
-          transition:all .2s;letter-spacing:.01em;
+        .df-dot.active {
+          background: #fff; box-shadow: 0 0 8px rgba(255,255,255,.4);
         }
-        .df-primary:hover:not(:disabled){opacity:0.9;transform:translateY(-1px);box-shadow:0 12px 28px -16px rgba(91,91,214,.75)}
-        .df-primary:active:not(:disabled){transform:translateY(0)}
-        .df-primary:disabled{opacity:.6;cursor:not-allowed}
-        .df-social{
-          flex:1;height:42px;border-radius:12px;border:1px solid var(--df-line);
-          background:var(--df-surface);cursor:pointer;display:flex;align-items:center;
-          justify-content:center;gap:7px;font-size:13px;font-weight:600;
-          font-family:var(--font-sans);color:var(--df-ink-2);
-          transition:border-color .15s,background .15s;
-        }
-        .df-social:hover{border-color:var(--df-line-2);background:var(--df-surface-2)}
-        .df-divider{display:flex;align-items:center;gap:10px;color:var(--df-muted-2);font-size:11px;font-family:var(--font-mono);font-weight:500;text-transform:uppercase;letter-spacing:.12em}
-        .df-divider::before,.df-divider::after{content:'';flex:1;height:1px;background:var(--df-line)}
-        .df-grid-bg{
-          background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),
-            linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);
-          background-size:36px 36px;
-        }
-        .df-stat{
-          background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);
-          border-radius:14px;padding:14px 10px;text-align:center;
-          backdrop-filter:blur(8px);
-        }
-        .df-card{
-          background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
-          border-radius:20px;padding:28px;backdrop-filter:blur(10px);
-        }
-        .df-dot{
-          border-radius:999px;cursor:pointer;
-          border:none;background:rgba(255,255,255,.25);
-          transition:all .3s;height:5px;
-        }
-        .df-dot.active{background:#60a5fa;width:22px!important}
+      `}} />
 
-        /* ── Wave animation ── */
-        @keyframes dfWave1 {
-          0%   { d: path("M0,60 C120,20 240,100 360,60 C480,20 600,100 720,60 C840,20 960,100 1080,60 L1080,200 L0,200 Z"); }
-          50%  { d: path("M0,80 C120,40 240,120 360,80 C480,40 600,120 720,80 C840,40 960,120 1080,80 L1080,200 L0,200 Z"); }
-          100% { d: path("M0,60 C120,20 240,100 360,60 C480,20 600,100 720,60 C840,20 960,100 1080,60 L1080,200 L0,200 Z"); }
-        }
-        @keyframes dfWave2 {
-          0%   { d: path("M0,80 C150,40 300,120 450,80 C600,40 750,120 900,80 C1000,50 1060,90 1080,80 L1080,200 L0,200 Z"); }
-          50%  { d: path("M0,50 C150,90 300,30 450,70 C600,110 750,30 900,70 C1000,100 1060,50 1080,60 L1080,200 L0,200 Z"); }
-          100% { d: path("M0,80 C150,40 300,120 450,80 C600,40 750,120 900,80 C1000,50 1060,90 1080,80 L1080,200 L0,200 Z"); }
-        }
-        @keyframes dfWave3 {
-          0%   { d: path("M0,90 C180,50 360,130 540,90 C720,50 900,130 1080,90 L1080,200 L0,200 Z"); }
-          50%  { d: path("M0,70 C180,110 360,30 540,70 C720,110 900,30 1080,70 L1080,200 L0,200 Z"); }
-          100% { d: path("M0,90 C180,50 360,130 540,90 C720,50 900,130 1080,90 L1080,200 L0,200 Z"); }
-        }
-        @keyframes dfFlow {
-          0%   { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        .df-wave-svg { position:absolute; bottom:0; left:0; width:200%; height:160px; }
-        .df-wave1 path { animation: dfWave1 6s ease-in-out infinite; }
-        .df-wave2 path { animation: dfWave2 9s ease-in-out infinite; }
-        .df-wave3 path { animation: dfWave3 12s ease-in-out infinite; }
-        .df-wave-wrap { animation: dfFlow 20s linear infinite; }
-      `}</style>
-
+      {/* TENANT DIALOG */}
       <AlertDialog
         open={showTenantRedirect}
         onOpenChange={setShowTenantRedirect}
       >
-        <AlertDialogContent className="rounded-2xl">
+        <AlertDialogContent className="max-w-[400px] df-glass-panel rounded-2xl p-6 border shadow-xl">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[22px] font-bold">
-              Accesso al dominio aziendale
+            <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2">
+              <Loader2 className="w-6 h-6 animate-spin" />
+            </div>
+            <AlertDialogTitle className="text-center text-[19px] font-bold tracking-tight">
+              Reindirizzamento
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-[15px]">
-              {tenantDialogMode === "redirect" ? (
-                <>
-                  Accesso effettuato. Ti stiamo reindirizzando al tuo spazio
-                  aziendale.
-                  <div className="flex items-center gap-2 mt-4 p-3 bg-gray-50 rounded-xl text-sm text-gray-500">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Reindirizzamento in corso...</span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  Questo account appartiene a un tenant aziendale. Accedi dal
-                  dominio della tua azienda.
-                </>
-              )}
+            <AlertDialogDescription className="text-center text-[14px] text-muted-foreground leading-relaxed mt-2">
+              Stiamo preparando l'accesso al tuo workspace aziendale. Attendere
+              prego...
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            {!tenantRedirectUrl && (
-              <AlertDialogAction onClick={() => setShowTenantRedirect(false)}>
-                Ok
-              </AlertDialogAction>
-            )}
-            {tenantRedirectUrl && (
-              <AlertDialogAction
-                onClick={() => (window.location.href = tenantRedirectUrl!)}
-              >
-                Vai ora
-              </AlertDialogAction>
-            )}
-          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="df-wrap flex min-h-screen items-center justify-center bg-background p-6 md:p-10">
-        <div className="w-full max-w-[1060px]">
-          <div className="grid lg:grid-cols-[420px_1fr] lg:gap-8 items-center">
-            {/* LEFT */}
-            <div className="flex flex-col justify-center px-4 py-10 md:px-6 lg:px-8">
-              <div className="mx-auto w-full max-w-[360px] space-y-6">
+      <div className="min-h-screen doflow-app-frame flex items-center justify-center p-4 lg:p-6">
+        <div className="w-full max-w-[1200px] df-glass-panel rounded-[32px] overflow-hidden">
+          <div className="grid lg:grid-cols-2 min-h-[640px]">
+            {/* LEFT — form area */}
+            <div className="flex flex-col justify-center px-6 py-12 lg:px-16 xl:px-20 relative z-10 bg-background/50 lg:bg-transparent backdrop-blur-md lg:backdrop-blur-none">
+              <div className="w-full max-w-[400px] mx-auto space-y-6">
                 <div className="df-a df-a1">
                   <Image
                     src="/doflow_logo.svg"
                     alt="Doflow"
-                    width={160}
-                    height={44}
-                    className="h-11 w-auto"
-                    priority
+                    width={110}
+                    height={30}
+                    className="h-7 w-auto dark:invert"
                   />
                 </div>
 
                 <div className="df-a df-a2 space-y-1">
-                  <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-foreground">
-                    Accedi al tuo account
+                  <h1 className="text-3xl font-bold tracking-tight mb-2">
+                    Bentornato
                   </h1>
-                  <p className="text-[15px] text-muted-foreground">
-                    Inserisci le tue credenziali per continuare.
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Accedi per gestire il tuo workspace.
                   </p>
                 </div>
 
-                {/* Google OAuth */}
                 <div className="df-a df-a3 space-y-3">
                   <button
                     type="button"
-                    className="df-social"
+                    className="w-full flex items-center justify-center gap-2 h-11 rounded-xl bg-background border border-input shadow-sm text-sm font-medium hover:bg-secondary/50 transition-colors"
                     aria-label="Accedi con Google"
                     data-testid="login-google-btn"
-                    style={{ width: "100%" }}
                     onClick={() => {
-                      const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api";
-                      const origin = apiBase.replace(/\/api\/?$/, "");
+                      const origin =
+                        typeof window !== "undefined"
+                          ? window.location.origin
+                          : "";
                       window.location.href = `${origin}/api/auth/google`;
                     }}
                   >
-                    <svg width="17" height="17" viewBox="0 0 18 18" fill="none">
-                      <path
-                        d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908C16.658 14.233 17.64 11.925 17.64 9.2z"
-                        fill="#4285F4"
-                      />
-                      <path
-                        d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"
-                        fill="#34A853"
-                      />
-                      <path
-                        d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
-                        fill="#FBBC05"
-                      />
-                      <path
-                        d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
-                        fill="#EA4335"
-                      />
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                      <path d="M17.64 9.20455C17.64 8.56636 17.5827 7.95273 17.4764 7.36364H9V10.845H13.8436C13.635 11.97 13.0009 12.9232 12.0477 13.5614V15.8195H14.9564C16.6582 14.2527 17.64 11.9455 17.64 9.20455Z" fill="#4285F4"/>
+                      <path d="M9 18C11.43 18 13.4673 17.1941 14.9564 15.8195L12.0477 13.5614C11.2418 14.1014 10.2109 14.4205 9 14.4205C6.65591 14.4205 4.67182 12.8373 3.96409 10.71H0.957275V13.0418C2.43818 15.9832 5.48182 18 9 18Z" fill="#34A853"/>
+                      <path d="M3.96409 10.71C3.78409 10.17 3.68182 9.59318 3.68182 9C3.68182 8.40682 3.78409 7.83 3.96409 7.29V4.95818H0.957275C0.347727 6.17318 0 7.54773 0 9C0 10.4523 0.347727 11.8268 0.957275 13.0418L3.96409 10.71Z" fill="#FBBC05"/>
+                      <path d="M9 3.57955C10.3214 3.57955 11.5077 4.03364 12.4405 4.92545L15.0218 2.34409C13.4632 0.891818 11.4259 0 9 0C5.48182 0 2.43818 2.01682 0.957275 4.95818L3.96409 7.29C4.67182 5.16273 6.65591 3.57955 9 3.57955Z" fill="#EA4335"/>
                     </svg>
                     Continua con Google
                   </button>
-                  <div className="df-divider">oppure continua con email</div>
+                  <div className="relative flex items-center py-4">
+                    <div className="flex-grow border-t border-border"></div>
+                    <span className="flex-shrink-0 mx-4 text-xs text-muted-foreground uppercase tracking-widest">oppure con email</span>
+                    <div className="flex-grow border-t border-border"></div>
+                  </div>
                 </div>
 
                 <form
@@ -486,139 +381,80 @@ export function LoginForm() {
                   className="space-y-4"
                   noValidate
                 >
-                  {/* Email */}
                   <div className="df-a df-a4 grid gap-1.5">
-                    <Label
-                      htmlFor="email"
-                      className="text-[13px] font-medium text-foreground"
-                    >
-                      Indirizzo Email
-                    </Label>
-                    <div style={{ position: "relative" }}>
-                      <Mail
-                        size={15}
-                        aria-hidden
-                        style={{
-                          position: "absolute",
-                          left: 12,
-                          top: "50%",
-                          transform: "translateY(-50%)",
-                          color: "#9ca3af",
-                          pointerEvents: "none",
-                        }}
-                      />
+                    <Label htmlFor="email" className="text-[13px] font-medium">Email</Label>
+                    <div className="relative">
+                      <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" aria-hidden />
                       <input
                         id="email"
                         type="email"
                         placeholder="nome@azienda.it"
                         disabled={isSubmitting}
-                        className={cn("df-input", errors.email && "err")}
+                        className={cn(
+                          "w-full h-11 pl-9 pr-4 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all",
+                          errors.email ? "border-destructive focus:ring-destructive/20 focus:border-destructive" : "border-input hover:border-muted-foreground/30"
+                        )}
                         {...register("email")}
                         autoFocus
                       />
                     </div>
                     {errors.email && (
-                      <p
-                        role="alert"
-                        className="text-[12px] text-red-500 font-medium"
-                      >
+                      <p role="alert" className="text-[11px] text-destructive font-medium">
                         {errors.email.message}
                       </p>
                     )}
                   </div>
 
-                  {/* Password */}
                   <div className="df-a df-a5 grid gap-1.5">
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <Label
-                        htmlFor="password"
-                        className="text-[13px] font-medium text-foreground"
-                      >
-                        Password
-                      </Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="password" className="text-[13px] font-medium">Password</Label>
                       <Link
-                        href="/forgot-password"
-                        className="text-[12px] font-semibold text-primary hover:underline"
+                        href="/auth/forgot-password"
+                        className="text-[12px] font-medium text-primary hover:text-primary/80 transition-colors"
                       >
-                        Password dimenticata?
+                        Dimenticata?
                       </Link>
                     </div>
-                    <div style={{ position: "relative" }}>
-                      <Lock
-                        size={15}
-                        aria-hidden
-                        style={{
-                          position: "absolute",
-                          left: 12,
-                          top: "50%",
-                          transform: "translateY(-50%)",
-                          color: "#9ca3af",
-                          pointerEvents: "none",
-                        }}
-                      />
+                    <div className="relative">
+                      <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" aria-hidden />
                       <input
                         id="password"
                         type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
+                        placeholder="La tua password"
                         disabled={isSubmitting}
-                        className={cn("df-input", errors.password && "err")}
+                        className={cn(
+                          "w-full h-11 pl-9 pr-10 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all",
+                          errors.password ? "border-destructive focus:ring-destructive/20 focus:border-destructive" : "border-input hover:border-muted-foreground/30"
+                        )}
                         {...register("password")}
                       />
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            disabled={isSubmitting}
-                            aria-label={showPassword ? "Nascondi password" : "Mostra password"}
-                            style={{
-                              position: "absolute",
-                              right: 12,
-                              top: "50%",
-                              transform: "translateY(-50%)",
-                              color: "#9ca3af",
-                              background: "none",
-                              border: "none",
-                              cursor: "pointer",
-                              padding: 0,
-                              display: "flex",
-                            }}
-                          >
-                            {showPassword ? (
-                              <EyeOff size={16} aria-hidden />
-                            ) : (
-                              <Eye size={16} aria-hidden />
-                            )}
-                          </button>
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer flex">
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              aria-label={showPassword ? "Nascondi password" : "Mostra password"}
+                              disabled={isSubmitting}
+                              className="focus:outline-none p-1 rounded-sm focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                            </button>
+                          </div>
                         </TooltipTrigger>
                         <TooltipContent side="top">
-                          {showPassword
-                            ? "Nascondi password"
-                            : "Mostra password"}
+                          {showPassword ? "Nascondi password" : "Mostra password"}
                         </TooltipContent>
                       </Tooltip>
                     </div>
                     {errors.password && (
-                      <p
-                        role="alert"
-                        className="text-[12px] text-red-500 font-medium"
-                      >
+                      <p role="alert" className="text-[11px] text-destructive font-medium">
                         {errors.password.message}
                       </p>
                     )}
                   </div>
 
-                  {/* Remember me */}
-                  <div
-                    className="df-a df-a5"
-                    style={{ display: "flex", alignItems: "center", gap: 10 }}
-                  >
+                  <div className="df-a df-a5 flex items-center gap-2 mt-2">
                     <Controller
                       name="rememberMe"
                       control={control}
@@ -628,49 +464,35 @@ export function LoginForm() {
                           checked={field.value}
                           onCheckedChange={field.onChange}
                           disabled={isSubmitting}
-                          style={{ cursor: "pointer", flexShrink: 0 }}
                         />
                       )}
                     />
                     <Label
                       htmlFor="rememberMe"
-                      className="text-[13px] text-muted-foreground cursor-pointer select-none"
+                      className="text-[13px] text-muted-foreground font-normal cursor-pointer select-none"
                     >
                       Ricordami per 30 giorni
                     </Label>
                   </div>
 
                   {generalError && (
-                    <div
-                      role="alert"
-                      className="flex items-center gap-2.5 rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-600 border border-red-100"
-                    >
+                    <div role="alert" className="flex items-center gap-2.5 rounded-xl bg-destructive/10 px-4 py-3 text-[13px] text-destructive border border-destructive/20">
                       <AlertCircle size={15} className="shrink-0" aria-hidden />
                       <span>{generalError}</span>
                     </div>
                   )}
 
-                  <div className="df-a df-a6">
+                  <div className="df-a df-a6 pt-2">
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="df-primary"
+                      className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-semibold text-sm shadow-sm hover:bg-primary/90 transition-all hover:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none"
                     >
                       {isSubmitting ? (
-                        <span
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: 8,
-                          }}
-                        >
-                          <Loader2
-                            className="h-4 w-4 animate-spin"
-                            aria-hidden
-                          />
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
                           Accesso in corso...
-                        </span>
+                        </>
                       ) : (
                         "Accedi"
                       )}
@@ -678,8 +500,8 @@ export function LoginForm() {
                   </div>
                 </form>
 
-                <div className="df-a df-a7 space-y-3 text-center">
-                  <p className="text-[13px] text-gray-500">
+                <div className="df-a df-a7 space-y-3 text-center mt-6">
+                  <p className="text-[13px] text-muted-foreground">
                     Non hai un account?{" "}
                     <Link
                       href="/register"
@@ -688,7 +510,7 @@ export function LoginForm() {
                       Registrati gratis
                     </Link>
                   </p>
-                  <p className="text-[11px] text-gray-400 leading-relaxed">
+                  <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
                     Accedendo accetti i{" "}
                     <Link
                       href="/terms"
@@ -709,91 +531,9 @@ export function LoginForm() {
               </div>
             </div>
 
-            {/* RIGHT — floating card */}
-            <div
-              className="relative hidden lg:flex flex-col justify-between overflow-hidden p-10 rounded-[24px]"
-              style={{
-                background:
-                  "linear-gradient(135deg, #1B1B22 0%, #2E2A48 50%, #5B5BD6 130%)",
-                minHeight: "740px",
-                boxShadow: "var(--shadow-lg)",
-              }}
-            >
-              <div className="absolute inset-0 df-grid-bg" />
-              <div
-                className="absolute top-0 right-0 w-96 h-96 pointer-events-none"
-                style={{
-                  background:
-                    "radial-gradient(circle at 80% 10%,rgba(138,108,241,.22) 0%,transparent 60%)",
-                }}
-              />
-              <div
-                className="absolute bottom-0 left-0 w-96 h-64 pointer-events-none"
-                style={{
-                  background:
-                    "radial-gradient(circle at 20% 90%,rgba(91,91,214,.16) 0%,transparent 60%)",
-                }}
-              />
-              {/* Frame overlay */}
-              <div
-                className="absolute inset-[10px] rounded-[20px] pointer-events-none"
-                style={{
-                  border: "1.5px solid rgba(255,255,255,.1)",
-                  boxShadow: "inset 0 0 0 1px rgba(255,255,255,.04)",
-                }}
-              />
-
-              {/* Wave animation at bottom */}
-              <div
-                className="absolute bottom-0 left-0 w-full overflow-hidden z-0"
-                style={{ height: 160 }}
-              >
-                <div
-                  className="df-wave-wrap"
-                  style={{
-                    width: "200%",
-                    height: "100%",
-                    position: "relative",
-                  }}
-                >
-                  <svg
-                    className="df-wave-svg df-wave3"
-                    viewBox="0 0 1080 160"
-                    preserveAspectRatio="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M0,90 C180,50 360,130 540,90 C720,50 900,130 1080,90 L1080,160 L0,160 Z"
-                      fill="rgba(138,108,241,.07)"
-                    />
-                  </svg>
-                  <svg
-                    className="df-wave-svg df-wave2"
-                    viewBox="0 0 1080 160"
-                    preserveAspectRatio="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M0,80 C150,40 300,120 450,80 C600,40 750,120 900,80 C1000,50 1060,90 1080,80 L1080,160 L0,160 Z"
-                      fill="rgba(91,91,214,.08)"
-                    />
-                  </svg>
-                  <svg
-                    className="df-wave-svg df-wave1"
-                    viewBox="0 0 1080 160"
-                    preserveAspectRatio="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M0,60 C120,20 240,100 360,60 C480,20 600,100 720,60 C840,20 960,100 1080,60 L1080,160 L0,160 Z"
-                      fill="rgba(236,236,251,.09)"
-                    />
-                  </svg>
-                </div>
-              </div>
-
-              {/* Logo */}
-              <div className="relative z-10">
+            {/* RIGHT — premium hero card */}
+            <div className="hidden lg:flex relative overflow-hidden flex-col justify-center p-10 xl:p-14 df-page-hero rounded-none border-0 rounded-r-[32px]">
+              <div className="absolute top-10 right-10 z-10">
                 <Image
                   src="/doflow_logo.svg"
                   alt="Doflow"
@@ -802,107 +542,52 @@ export function LoginForm() {
                   className="h-9 w-auto brightness-0 invert opacity-80"
                 />
               </div>
+              <div className="max-w-[420px] mx-auto w-full space-y-12 relative z-10 mt-10">
+                {/* Feature card */}
+                <div className="space-y-6">
+                  <div className="df-glass-panel rounded-2xl p-8 df-slide-anim border-0 bg-black/10" key={slideIdx}>
+                    <span className="df-page-eyebrow mb-5">
+                      {slide.tag}
+                    </span>
+                    <h2 className="text-[28px] font-bold text-white mb-4 whitespace-pre-line leading-[1.25] tracking-[-0.02em]">
+                      {slide.title}
+                    </h2>
+                    <p className="text-[15px] text-white/70 leading-[1.6]">
+                      {slide.desc}
+                    </p>
+                  </div>
 
-              {/* Feature card */}
-              <div className="relative z-10 space-y-5">
-                <div className="df-card df-slide-anim" key={slideIdx}>
-                  <span
-                    style={{
-                      display: "inline-block",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: "0.08em",
-                      textTransform: "uppercase",
-                      padding: "4px 12px",
-                      borderRadius: 999,
-                      background: "rgba(255,255,255,.12)",
-                      color: "#ECECFB",
-                      marginBottom: 16,
-                    }}
-                  >
-                    {slide.tag}
-                  </span>
-                  <h2
-                    style={{
-                      fontSize: 26,
-                      fontWeight: 800,
-                      color: "#fff",
-                      lineHeight: 1.25,
-                      marginBottom: 12,
-                      whiteSpace: "pre-line",
-                    }}
-                  >
-                    {slide.title}
-                  </h2>
-                  <p
-                    style={{
-                      fontSize: 14,
-                      lineHeight: 1.65,
-                      color: "rgba(255,255,255,.55)",
-                    }}
-                  >
-                    {slide.desc}
+                  {/* Dots */}
+                  <div className="flex gap-2 items-center px-1">
+                    {SLIDES.map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setSlideIdx(i)}
+                        aria-label={`Slide ${i + 1}`}
+                        className={cn("df-dot", i === slideIdx && "active")}
+                        style={{ width: i === slideIdx ? 22 : 6 }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Stats */}
+                <div>
+                  <p className="text-[11px] font-semibold tracking-wider uppercase text-white/50 mb-3">
+                    I numeri di Doflow
                   </p>
-                </div>
-
-                {/* Dots */}
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  {SLIDES.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setSlideIdx(i)}
-                      aria-label={`Slide ${i + 1}`}
-                      className={cn("df-dot", i === slideIdx && "active")}
-                      style={{ width: i === slideIdx ? 22 : 6 }}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Stats */}
-              <div className="relative z-10">
-                <p
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 600,
-                    letterSpacing: "0.1em",
-                    textTransform: "uppercase",
-                    color: "rgba(255,255,255,.3)",
-                    marginBottom: 12,
-                  }}
-                >
-                  Perché scegliere Doflow
-                </p>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(3,1fr)",
-                    gap: 10,
-                  }}
-                >
-                  {STATS.map((s) => (
-                    <div key={s.label} className="df-stat">
-                      <p
-                        style={{
-                          fontSize: 22,
-                          fontWeight: 800,
-                          color: "#fff",
-                          lineHeight: 1,
-                        }}
-                      >
-                        {s.value}
-                      </p>
-                      <p
-                        style={{
-                          fontSize: 11,
-                          color: "rgba(255,255,255,.4)",
-                          marginTop: 4,
-                        }}
-                      >
-                        {s.label}
-                      </p>
-                    </div>
-                  ))}
+                  <div className="grid grid-cols-3 gap-3">
+                    {STATS.map((s) => (
+                      <div key={s.label} className="df-glass-panel border-0 bg-black/10 rounded-xl p-5 text-center">
+                        <p className="text-2xl font-bold text-white leading-none">
+                          {s.value}
+                        </p>
+                        <p className="text-[12px] text-white/60 mt-2">
+                          {s.label}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
