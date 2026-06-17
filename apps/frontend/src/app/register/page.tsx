@@ -77,45 +77,86 @@ export default function RegisterPage() {
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes dfUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-        .df-a{animation:dfUp .45s ease both}
-        .df-a1{animation-delay:.04s}.df-a2{animation-delay:.09s}.df-a3{animation-delay:.13s}
-        .df-a4{animation-delay:.17s}.df-a5{animation-delay:.21s}.df-a6{animation-delay:.25s}.df-a7{animation-delay:.29s}
-        @keyframes dfSlide { from{opacity:0;transform:translateX(10px)} to{opacity:1;transform:translateX(0)} }
-        .df-slide-anim{animation:dfSlide .5s ease both}
-        .df-dot {
-          height: 6px; border-radius: 999px; background: rgba(255,255,255,.2);
-          transition: all .3s ease;
+      <style>{`
+        .dfr-wrap * { font-family:var(--font-sans); }
+        @keyframes dfrUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+        .dfr-a{animation:dfrUp .45s ease both}
+        .dfr-a1{animation-delay:.04s}.dfr-a2{animation-delay:.08s}.dfr-a3{animation-delay:.12s}
+        .dfr-a4{animation-delay:.16s}.dfr-a5{animation-delay:.20s}.dfr-a6{animation-delay:.24s}
+        .dfr-a7{animation-delay:.28s}.dfr-a8{animation-delay:.32s}
+        .dfr-input{
+          display:block;width:100%;height:44px;border-radius:12px;
+          border:1px solid var(--df-line-2);background:var(--df-surface);
+          font-size:14px;font-family:var(--font-sans);
+          padding:0 44px 0 40px;outline:none;color:var(--df-ink);
+          transition:border-color .18s,background .18s,box-shadow .18s;
         }
-        .df-dot.active {
-          background: #fff; box-shadow: 0 0 8px rgba(255,255,255,.4);
+        .dfr-input::placeholder{color:var(--df-muted-2)}
+        .dfr-input:focus{background:#fff;border-color:var(--df-accent);box-shadow:0 0 0 3px rgba(91,91,214,.12)}
+        .dfr-input.err{border-color:#ef4444}
+        .dfr-input.err:focus{box-shadow:0 0 0 3px rgba(239,68,68,.1)}
+        .dfr-input-no-icon{padding-left:14px}
+        .dfr-primary{
+          width:100%;height:44px;border-radius:12px;border:none;cursor:pointer;
+          font-size:14px;font-weight:600;font-family:var(--font-sans);
+          color:#fff;background:var(--df-accent);
+          box-shadow:var(--shadow-button);
+          transition:all .2s;
+        }
+        .dfr-primary:hover:not(:disabled){background:#4E4EC8;transform:translateY(-1px);box-shadow:0 12px 28px -16px rgba(91,91,214,.75)}
+        .dfr-primary:active:not(:disabled){transform:translateY(0)}
+        .dfr-primary:disabled{opacity:.6;cursor:not-allowed}
+        .dfr-social{
+          flex:1;height:42px;border-radius:12px;border:1px solid var(--df-line);
+          background:var(--df-surface);cursor:pointer;display:flex;align-items:center;
+          justify-content:center;gap:7px;font-size:13px;font-weight:600;
+          font-family:var(--font-sans);color:var(--df-ink-2);
+          transition:border-color .15s,background .15s;
+        }
+        .dfr-social:hover{border-color:var(--df-line-2);background:var(--df-surface-2)}
+        .dfr-divider{display:flex;align-items:center;gap:10px;color:var(--df-muted-2);font-size:11px;font-family:var(--font-mono);font-weight:500;text-transform:uppercase;letter-spacing:.12em}
+        .dfr-divider::before,.dfr-divider::after{content:'';flex:1;height:1px;background:var(--df-line)}
+        .dfr-grid-bg{
+          background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),
+            linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);
+          background-size:36px 36px;
+        }
+        .dfr-bullet{display:flex;align-items:flex-start;gap:10px}
+        .dfr-check{
+          width:20px;height:20px;border-radius:6px;flex-shrink:0;margin-top:1px;
+          display:flex;align-items:center;justify-content:center;
+          background:rgba(91,91,214,.16);
+        }
+        .dfr-testimonial{
+          background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+          border-radius:18px;padding:24px;backdrop-filter:blur(10px);
         }
         .dfr-success{
           border-radius:16px;padding:20px;text-align:center;
           background:#DCFCE7;border:1px solid #86efac;
         }
-      `}} />
+      `}</style>
 
-      <div className="min-h-screen doflow-app-frame flex items-center justify-center p-4 lg:p-6">
-        <div className="w-full max-w-[1200px] df-glass-panel rounded-[32px] overflow-hidden">
-          <div className="grid lg:grid-cols-2 min-h-[640px]">
+      <div className="dfr-wrap flex min-h-screen items-center justify-center bg-background p-4 md:p-8">
+        <div className="w-full max-w-[1060px] overflow-hidden rounded-[26px]"
+          style={{boxShadow:"0 24px 80px rgba(0,0,0,.16),0 4px 16px rgba(0,0,0,.08)"}}>
+          <div className="grid lg:grid-cols-[480px_1fr]">
 
             {/* LEFT: form */}
-            <div className="flex flex-col justify-center px-6 py-12 lg:px-16 xl:px-20 relative z-10 bg-background/50 lg:bg-transparent backdrop-blur-md lg:backdrop-blur-none">
-              <div className="w-full max-w-[400px] mx-auto space-y-6">
+            <div className="flex flex-col justify-center bg-card px-8 py-10 md:px-10 lg:px-12">
+              <div className="mx-auto w-full max-w-[380px] space-y-5">
 
-                <div className="df-a df-a1">
-                  <Image src="/doflow_logo.svg" alt="Doflow" width={110} height={30} className="h-7 w-auto dark:invert" priority/>
+                <div className="dfr-a dfr-a1">
+                  <Image src="/doflow_logo.svg" alt="Doflow" width={120} height={32} className="h-8 w-auto" priority/>
                 </div>
 
-                <div className="df-a df-a2 space-y-1">
-                  <h1 className="text-3xl font-bold tracking-tight mb-2">Crea il tuo account</h1>
-                  <p className="text-sm text-muted-foreground leading-relaxed">14 giorni gratis, nessuna carta richiesta.</p>
+                <div className="dfr-a dfr-a2 space-y-1">
+                  <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-foreground">Crea il tuo account</h1>
+                  <p className="text-[15px] text-muted-foreground">14 giorni gratis, nessuna carta richiesta.</p>
                 </div>
 
                 {success ? (
-                  <div className="dfr-success df-a df-a3">
+                  <div className="dfr-success dfr-a dfr-a3">
                     <p className="text-[20px] mb-1">🎉</p>
                     <p className="font-bold text-green-800 text-[15px]">Account creato con successo!</p>
                     <p className="text-[13px] text-green-600 mt-1">Ti stiamo reindirizzando al login...</p>
@@ -123,114 +164,112 @@ export default function RegisterPage() {
                 ) : (
                   <>
                     {/* Social */}
-                    <div className="df-a df-a3 space-y-3">
+                    <div className="dfr-a dfr-a3 space-y-3">
                       <div style={{display:"flex",gap:10}}>
-                        <button type="button" className="w-full flex items-center justify-center gap-2 h-11 rounded-xl bg-background border border-input shadow-sm text-sm font-medium hover:bg-secondary/50 transition-colors" aria-label="Registrati con Google">
-                          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                            <path d="M17.64 9.20455C17.64 8.56636 17.5827 7.95273 17.4764 7.36364H9V10.845H13.8436C13.635 11.97 13.0009 12.9232 12.0477 13.5614V15.8195H14.9564C16.6582 14.2527 17.64 11.9455 17.64 9.20455Z" fill="#4285F4"/>
-                            <path d="M9 18C11.43 18 13.4673 17.1941 14.9564 15.8195L12.0477 13.5614C11.2418 14.1014 10.2109 14.4205 9 14.4205C6.65591 14.4205 4.67182 12.8373 3.96409 10.71H0.957275V13.0418C2.43818 15.9832 5.48182 18 9 18Z" fill="#34A853"/>
-                            <path d="M3.96409 10.71C3.78409 10.17 3.68182 9.59318 3.68182 9C3.68182 8.40682 3.78409 7.83 3.96409 7.29V4.95818H0.957275C0.347727 6.17318 0 7.54773 0 9C0 10.4523 0.347727 11.8268 0.957275 13.0418L3.96409 10.71Z" fill="#FBBC05"/>
-                            <path d="M9 3.57955C10.3214 3.57955 11.5077 4.03364 12.4405 4.92545L15.0218 2.34409C13.4632 0.891818 11.4259 0 9 0C5.48182 0 2.43818 2.01682 0.957275 4.95818L3.96409 7.29C4.67182 5.16273 6.65591 3.57955 9 3.57955Z" fill="#EA4335"/>
+                        <button type="button" className="dfr-social" aria-label="Registrati con Google">
+                          <svg width="17" height="17" viewBox="0 0 18 18" fill="none">
+                            <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908C16.658 14.233 17.64 11.925 17.64 9.2z" fill="#4285F4"/>
+                            <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
+                            <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
+                            <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
                           </svg>
                           Google
                         </button>
+                        <button type="button" className="dfr-social" aria-label="Registrati con GitHub">
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/>
+                          </svg>
+                          GitHub
+                        </button>
                       </div>
-                      <div className="relative flex items-center py-6">
-                        <div className="flex-grow border-t border-border"></div>
-                        <span className="flex-shrink-0 mx-4 text-xs text-muted-foreground uppercase tracking-widest">oppure registrati con email</span>
-                        <div className="flex-grow border-t border-border"></div>
-                      </div>
+                      <div className="dfr-divider">oppure registrati con email</div>
                     </div>
 
-                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-3.5" noValidate>
 
                       {/* Nome + Azienda */}
-                      <div className="df-a df-a4 grid grid-cols-2 gap-3">
+                      <div className="dfr-a dfr-a4" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                         <div className="grid gap-1.5">
-                          <Label htmlFor="name" className="text-[13px] font-medium">Nome *</Label>
-                          <div className="relative">
-                            <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" aria-hidden />
+                          <Label htmlFor="name" className="text-[13px] font-medium text-foreground">Nome *</Label>
+                          <div style={{position:"relative"}}>
+                            <User size={15} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
                             <input id="name" type="text" placeholder="Mario Rossi" disabled={isSubmitting}
-                              className={cn("w-full h-11 pl-9 pr-4 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all", errors.name ? "border-destructive focus:ring-destructive/20 focus:border-destructive" : "border-input hover:border-muted-foreground/30")} {...register("name")}
+                              className={cn("dfr-input", errors.name && "err")} {...register("name")}
                               autoFocus />
                           </div>
-                          {errors.name && <p role="alert" className="text-[11px] text-destructive font-medium">{errors.name.message}</p>}
+                          {errors.name && <p role="alert" className="text-[11px] text-red-500 font-medium">{errors.name.message}</p>}
                         </div>
                         <div className="grid gap-1.5">
-                          <Label htmlFor="company" className="text-[13px] font-medium">Azienda</Label>
-                          <div className="relative">
-                            <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" aria-hidden />
+                          <Label htmlFor="company" className="text-[13px] font-medium text-foreground">Azienda</Label>
+                          <div style={{position:"relative"}}>
+                            <Building2 size={15} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
                             <input id="company" type="text" placeholder="Acme Srl" disabled={isSubmitting}
-                              className="w-full h-11 pl-9 pr-4 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all border-input hover:border-muted-foreground/30" {...register("company")}/>
+                              className="dfr-input" {...register("company")}/>
                           </div>
                         </div>
                       </div>
 
                       {/* Email */}
-                      <div className="df-a df-a5 grid gap-1.5">
-                        <Label htmlFor="reg-email" className="text-[13px] font-medium">Email *</Label>
-                        <div className="relative">
-                          <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" aria-hidden />
+                      <div className="dfr-a dfr-a5 grid gap-1.5">
+                        <Label htmlFor="reg-email" className="text-[13px] font-medium text-foreground">Email *</Label>
+                        <div style={{position:"relative"}}>
+                          <Mail size={15} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
                           <input id="reg-email" type="email" placeholder="nome@azienda.it" disabled={isSubmitting}
-                            className={cn("w-full h-11 pl-9 pr-4 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all", errors.email ? "border-destructive focus:ring-destructive/20 focus:border-destructive" : "border-input hover:border-muted-foreground/30")} {...register("email")}/>
+                            className={cn("dfr-input", errors.email && "err")} {...register("email")}/>
                         </div>
-                        {errors.email && <p role="alert" className="text-[11px] text-destructive font-medium">{errors.email.message}</p>}
+                        {errors.email && <p role="alert" className="text-[11px] text-red-500 font-medium">{errors.email.message}</p>}
                       </div>
 
                       {/* Password */}
-                      <div className="df-a df-a6 grid grid-cols-2 gap-3">
+                      <div className="dfr-a dfr-a6" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                         <div className="grid gap-1.5">
-                          <Label htmlFor="reg-password" className="text-[13px] font-medium">Password *</Label>
-                          <div className="relative">
-                            <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" aria-hidden />
+                          <Label htmlFor="reg-password" className="text-[13px] font-medium text-foreground">Password *</Label>
+                          <div style={{position:"relative"}}>
+                            <Lock size={15} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
                             <input id="reg-password" type={showPwd ? "text" : "password"} placeholder="Min. 8 caratteri"
-                              disabled={isSubmitting} className={cn("w-full h-11 pl-9 pr-10 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all", errors.password ? "border-destructive focus:ring-destructive/20 focus:border-destructive" : "border-input hover:border-muted-foreground/30")} {...register("password")}/>
+                              disabled={isSubmitting} className={cn("dfr-input", errors.password && "err")} {...register("password")}/>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer flex">
-                                  <button type="button" onClick={() => setShowPwd(!showPwd)}
-                                    aria-label={showPwd ? "Nascondi password" : "Mostra password"}
-                                    disabled={isSubmitting}
-                                    className="focus:outline-none p-1 rounded-sm focus-visible:ring-2 focus-visible:ring-ring">
-                                    {showPwd ? <EyeOff size={15}/> : <Eye size={15}/>}
-                                  </button>
-                                </div>
+                                <button type="button" onClick={() => setShowPwd(!showPwd)}
+                                  aria-label={showPwd ? "Nascondi password" : "Mostra password"}
+                                  disabled={isSubmitting}
+                                  style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}>
+                                  {showPwd ? <EyeOff size={15}/> : <Eye size={15}/>}
+                                </button>
                               </TooltipTrigger>
                               <TooltipContent side="top">
                                 {showPwd ? "Nascondi password" : "Mostra password"}
                               </TooltipContent>
                             </Tooltip>
                           </div>
-                          {errors.password && <p role="alert" className="text-[11px] text-destructive font-medium">{errors.password.message}</p>}
+                          {errors.password && <p role="alert" className="text-[11px] text-red-500 font-medium">{errors.password.message}</p>}
                         </div>
                         <div className="grid gap-1.5">
-                          <Label htmlFor="confirmPassword" className="text-[13px] font-medium">Conferma *</Label>
-                          <div className="relative">
-                            <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" aria-hidden />
+                          <Label htmlFor="confirmPassword" className="text-[13px] font-medium text-foreground">Conferma *</Label>
+                          <div style={{position:"relative"}}>
+                            <Lock size={15} aria-hidden style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",pointerEvents:"none"}}/>
                             <input id="confirmPassword" type={showConfirm ? "text" : "password"} placeholder="Ripeti password"
-                              disabled={isSubmitting} className={cn("w-full h-11 pl-9 pr-10 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all", errors.confirmPassword ? "border-destructive focus:ring-destructive/20 focus:border-destructive" : "border-input hover:border-muted-foreground/30")} {...register("confirmPassword")}/>
+                              disabled={isSubmitting} className={cn("dfr-input", errors.confirmPassword && "err")} {...register("confirmPassword")}/>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer flex">
-                                  <button type="button" onClick={() => setShowConfirm(!showConfirm)}
-                                    aria-label={showConfirm ? "Nascondi password" : "Mostra password"}
-                                    disabled={isSubmitting}
-                                    className="focus:outline-none p-1 rounded-sm focus-visible:ring-2 focus-visible:ring-ring">
-                                    {showConfirm ? <EyeOff size={15}/> : <Eye size={15}/>}
-                                  </button>
-                                </div>
+                                <button type="button" onClick={() => setShowConfirm(!showConfirm)}
+                                  aria-label={showConfirm ? "Nascondi password" : "Mostra password"}
+                                  disabled={isSubmitting}
+                                  style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"#9ca3af",background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}>
+                                  {showConfirm ? <EyeOff size={15}/> : <Eye size={15}/>}
+                                </button>
                               </TooltipTrigger>
                               <TooltipContent side="top">
                                 {showConfirm ? "Nascondi password" : "Mostra password"}
                               </TooltipContent>
                             </Tooltip>
                           </div>
-                          {errors.confirmPassword && <p role="alert" className="text-[11px] text-destructive font-medium">{errors.confirmPassword.message}</p>}
+                          {errors.confirmPassword && <p role="alert" className="text-[11px] text-red-500 font-medium">{errors.confirmPassword.message}</p>}
                         </div>
                       </div>
 
                       {/* Accept terms */}
-                      <div className="df-a df-a7 flex items-start gap-2 pt-2">
+                      <div className="dfr-a dfr-a7" style={{display:"flex",alignItems:"flex-start",gap:10}}>
                         <Controller
                           name="acceptTerms"
                           control={control}
@@ -240,7 +279,7 @@ export default function RegisterPage() {
                               checked={field.value}
                               onCheckedChange={field.onChange}
                               disabled={isSubmitting}
-                              className="mt-0.5"
+                              style={{marginTop:2}}
                             />
                           )}
                         />
@@ -251,26 +290,26 @@ export default function RegisterPage() {
                           <Link href="/privacy" className="font-semibold text-foreground hover:underline">Privacy Policy</Link>
                         </Label>
                       </div>
-                      {errors.acceptTerms && <p role="alert" className="text-[11px] text-destructive font-medium -mt-2">{errors.acceptTerms.message}</p>}
+                      {errors.acceptTerms && <p role="alert" className="text-[11px] text-red-500 font-medium -mt-2">{errors.acceptTerms.message}</p>}
 
                       {generalError && (
-                        <div role="alert" className="flex items-center gap-2.5 rounded-xl bg-destructive/10 px-4 py-3 text-[13px] text-destructive border border-destructive/20">
-                          <AlertCircle size={15} className="shrink-0" aria-hidden/><span>{generalError}</span>
+                        <div role="alert" className="flex items-center gap-2.5 rounded-xl bg-red-50 px-4 py-3 text-[13px] text-red-600 border border-red-100">
+                          <AlertCircle size={14} className="shrink-0"/><span>{generalError}</span>
                         </div>
                       )}
 
-                      <div className="df-a df-a6 pt-2">
-                        <button type="submit" disabled={isSubmitting} className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-semibold text-sm shadow-sm hover:bg-primary/90 transition-all hover:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none">
+                      <div className="dfr-a dfr-a8">
+                        <button type="submit" disabled={isSubmitting} className="dfr-primary">
                           {isSubmitting
-                            ? <>
+                            ? <span style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
                                 <Loader2 className="h-4 w-4 animate-spin"/>Creazione account...
-                              </>
+                              </span>
                             : "Crea account gratuito"}
                         </button>
                       </div>
                     </form>
 
-                    <p className="df-a df-a7 space-y-3 text-center mt-6 text-[13px] text-muted-foreground">
+                    <p className="text-center text-[13px] text-muted-foreground dfr-a dfr-a8">
                       Hai già un account?{" "}
                       <Link href="/login" className="font-semibold text-foreground hover:underline">Accedi</Link>
                     </p>
@@ -279,51 +318,59 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            {/* RIGHT — premium hero card */}
-            <div className="hidden lg:flex relative overflow-hidden flex-col justify-center p-10 xl:p-14 df-page-hero rounded-none border-0 rounded-r-[32px]">
-              <div className="absolute top-10 right-10 z-10">
-                <Image src="/doflow_logo.svg" alt="Doflow" width={130} height={36} className="h-9 w-auto brightness-0 invert opacity-80"/>
+            {/* RIGHT */}
+            <div className="relative hidden lg:flex flex-col justify-between overflow-hidden p-10"
+              style={{background:"linear-gradient(135deg, #1B1B22 0%, #2E2A48 50%, #5B5BD6 130%)",minHeight:"640px"}}>
+              <div className="absolute inset-0 dfr-grid-bg"/>
+              <div className="absolute top-0 right-0 w-96 h-96 pointer-events-none"
+                style={{background:"radial-gradient(circle at 80% 10%,rgba(138,108,241,.22) 0%,transparent 60%)"}}/>
+              <div className="absolute bottom-0 left-0 w-96 h-64 pointer-events-none"
+                style={{background:"radial-gradient(circle at 20% 90%,rgba(91,91,214,.16) 0%,transparent 60%)"}}/>
+
+              <div className="relative z-10">
+                <Image src="/doflow_logo.svg" alt="Doflow" width={90} height={24}
+                  className="h-6 w-auto brightness-0 invert opacity-75"/>
               </div>
 
-              <div className="max-w-[420px] mx-auto w-full space-y-12 relative z-10 mt-10">
-                <div className="space-y-6">
-                  <div className="df-glass-panel rounded-2xl p-8 border-0 bg-black/10">
-                    <span className="df-page-eyebrow mb-5">
-                      Incluso nella prova gratuita
-                    </span>
-                    <div className="space-y-4">
-                      {BULLETS.map((b,i) => (
-                        <div key={i} className="flex items-start gap-3">
-                          <div className="w-5 h-5 rounded-md flex-shrink-0 mt-0.5 flex items-center justify-center bg-white/10 text-white">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                          </div>
-                          <p className="text-[15px] text-white/70 leading-[1.6]">{b}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="df-glass-panel border-0 bg-black/10 rounded-2xl p-6 mt-6">
-                    <p className="text-[15px] italic text-white/70 leading-relaxed mb-4">
-                      &ldquo;{TESTIMONIAL.quote}&rdquo;
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-[15px] font-bold text-white flex-shrink-0">
-                        {TESTIMONIAL.author[0]}
-                      </div>
-                      <div>
-                        <p className="text-[14px] font-bold text-white">{TESTIMONIAL.author}</p>
-                        <p className="text-[12px] text-white/50">{TESTIMONIAL.role}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
+              <div className="relative z-10 space-y-6">
                 <div>
-                  <p className="text-[12px] text-white/40 text-center">
-                    Unisciti a centinaia di aziende italiane che usano Doflow ogni giorno.
+                  <p style={{fontSize:11,fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:"rgba(255,255,255,.35)",marginBottom:8}}>
+                    Incluso nella prova gratuita
                   </p>
+                  <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                    {BULLETS.map((b,i) => (
+                      <div key={i} className="dfr-bullet">
+                        <div className="dfr-check">
+                          <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                            <path d="M2 6l3 3 5-5" stroke="#ECECFB" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </div>
+                        <p style={{fontSize:14,color:"rgba(255,255,255,.75)",lineHeight:1.5}}>{b}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+
+                <div className="dfr-testimonial">
+                  <p style={{fontSize:14,lineHeight:1.7,color:"rgba(255,255,255,.7)",fontStyle:"italic",marginBottom:16}}>
+                    &ldquo;{TESTIMONIAL.quote}&rdquo;
+                  </p>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div style={{width:36,height:36,borderRadius:"50%",background:"rgba(91,91,214,.24)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,color:"#ECECFB",flexShrink:0}}>
+                      {TESTIMONIAL.author[0]}
+                    </div>
+                    <div>
+                      <p style={{fontSize:13,fontWeight:700,color:"#fff"}}>{TESTIMONIAL.author}</p>
+                      <p style={{fontSize:12,color:"rgba(255,255,255,.4)"}}>{TESTIMONIAL.role}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="relative z-10">
+                <p style={{fontSize:12,color:"rgba(255,255,255,.3)",textAlign:"center"}}>
+                  Unisciti a centinaia di aziende italiane che usano Doflow ogni giorno.
+                </p>
               </div>
             </div>
 
