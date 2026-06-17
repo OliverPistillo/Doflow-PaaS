@@ -143,74 +143,25 @@ function SignupPageInner() {
 
   return (
     <div className="min-h-screen bg-[#0a1628] text-white relative overflow-hidden font-[Outfit,sans-serif]" data-testid="signup-page">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
-        .signup-bg::before, .signup-bg::after {
-          content: ""; position: absolute; border-radius: 50%; filter: blur(120px); pointer-events: none;
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes dfUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+        .df-a{animation:dfUp .45s ease both}
+        .df-a1{animation-delay:.04s}.df-a2{animation-delay:.09s}.df-a3{animation-delay:.13s}
+        .df-a4{animation-delay:.17s}.df-a5{animation-delay:.21s}.df-a6{animation-delay:.25s}.df-a7{animation-delay:.29s}
+        @keyframes dfSlide { from{opacity:0;transform:translateX(10px)} to{opacity:1;transform:translateX(0)} }
+        .df-slide-anim{animation:dfSlide .5s ease both}
+        .df-dot {
+          height: 6px; border-radius: 999px; background: rgba(255,255,255,.2);
+          transition: all .3s ease;
         }
-        .signup-bg::before { width:600px; height:600px; background:rgba(59,130,246,.15); top:-200px; right:-200px; }
-        .signup-bg::after  { width:500px; height:500px; background:rgba(168,85,247,.12); bottom:-150px; left:-150px; }
-        .signup-grid {
-          background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),
-                            linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);
-          background-size: 48px 48px;
+        .df-dot.active {
+          background: #fff; box-shadow: 0 0 8px rgba(255,255,255,.4);
         }
-        .glass {
-          background: rgba(255,255,255,.04); backdrop-filter: blur(16px);
-          border: 1px solid rgba(255,255,255,.08);
+        .dfr-success{
+          border-radius:16px;padding:20px;text-align:center;
+          background:#DCFCE7;border:1px solid #86efac;
         }
-        @keyframes fadeUp { from { opacity:0; transform:translateY(12px) } to { opacity:1; transform:translateY(0) } }
-        .anim-fade { animation: fadeUp .45s cubic-bezier(.22,1,.36,1) both; }
-        .input-mod {
-          width:100%; height:48px; border-radius:12px; padding:0 16px 0 44px;
-          background: rgba(255,255,255,.05); border:1.5px solid rgba(255,255,255,.1);
-          color:#fff; font-size:15px; outline:none;
-          transition:border-color .18s, background .18s, box-shadow .18s;
-        }
-        .input-mod::placeholder { color: rgba(255,255,255,.35); }
-        .input-mod:focus { background: rgba(255,255,255,.07); border-color:#60a5fa; box-shadow: 0 0 0 4px rgba(96,165,250,.12); }
-        .input-mod.err { border-color: #f87171; }
-        .btn-primary {
-          width:100%; height:48px; border-radius:12px; border:0; cursor:pointer;
-          font-size:15px; font-weight:700; color:#0a1628;
-          background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
-          transition: transform .15s, box-shadow .15s, opacity .15s;
-        }
-        .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(96,165,250,.35); }
-        .btn-primary:disabled { opacity:.45; cursor:not-allowed; }
-        .btn-secondary {
-          height:48px; padding: 0 22px; border-radius:12px; cursor:pointer;
-          background: rgba(255,255,255,.06); border:1.5px solid rgba(255,255,255,.1);
-          color:#fff; font-size:14px; font-weight:600;
-          display:inline-flex; align-items:center; gap:8px;
-          transition: background .15s, border-color .15s;
-        }
-        .btn-secondary:hover { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.2); }
-        .plan-card {
-          padding: 22px; border-radius: 18px; cursor: pointer;
-          background: rgba(255,255,255,.04); border:1.5px solid rgba(255,255,255,.08);
-          transition: all .2s ease;
-          position: relative; overflow: hidden;
-        }
-        .plan-card:hover { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.16); transform: translateY(-2px); }
-        .plan-card.selected {
-          border-color: #60a5fa; background: rgba(96,165,250,.08);
-          box-shadow: 0 0 0 1px #60a5fa, 0 12px 40px rgba(96,165,250,.18);
-        }
-        .step-pill {
-          display:inline-flex; align-items:center; gap:8px;
-          padding:6px 14px; border-radius:999px;
-          background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08);
-          font-size:12px; font-weight:600; color: rgba(255,255,255,.7);
-        }
-        .step-pill.active {
-          background: linear-gradient(135deg, rgba(96,165,250,.2), rgba(168,85,247,.2));
-          border-color: rgba(96,165,250,.4); color: #fff;
-        }
-        .step-pill.done {
-          background: rgba(34,197,94,.15); border-color: rgba(34,197,94,.3); color: #86efac;
-        }
-      `}</style>
+      `}} />
 
       <div className="signup-bg signup-grid absolute inset-0 -z-10" />
 
@@ -272,10 +223,10 @@ function SignupPageInner() {
                     Continua con Google
                   </button>
 
-                  <div className="flex items-center gap-3 text-xs text-white/40 font-medium">
-                    <div className="flex-1 h-px bg-white/10" />
-                    <span>oppure con email</span>
-                    <div className="flex-1 h-px bg-white/10" />
+                  <div className="relative flex items-center py-6">
+                    <div className="flex-grow border-t border-border"></div>
+                    <span className="flex-shrink-0 mx-4 text-xs text-muted-foreground uppercase tracking-widest">oppure con email</span>
+                    <div className="flex-grow border-t border-border"></div>
                   </div>
 
                   <div className="space-y-4">
