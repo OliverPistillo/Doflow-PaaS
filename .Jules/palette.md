@@ -34,3 +34,7 @@
 ## 2026-05-21 - [Delightful Auth Redirects]
 **Learning:** Abrupt redirects after critical actions like accepting an invite can be jarring and leave users unsure if the action succeeded. Implementing a temporary success state (2s) with the design system's checkmark pattern (`df-icon-bubble` + `animate-fadeInUp`) provides delightful feedback and ensures the user feels in control.
 **Action:** Always implement a brief success state before automatic redirects in critical authentication or destructive flows.
+
+## 2026-06-20 - [Standardizing MFA with V2 Design System]
+**Learning:** Hardcoded legacy styles (e.g., bg-slate-50, bg-indigo-600) in peripheral auth pages like MFA create a disjointed UX when the rest of the application has migrated to a glassmorphism-based design system. Always check for the 'doflow-app-frame' and 'df-glass-panel' patterns to ensure visual continuity.
+**Action:** Use 'df-glass-panel' for all authentication-related cards and 'df-icon-bubble' for primary header icons to maintain design system consistency.
