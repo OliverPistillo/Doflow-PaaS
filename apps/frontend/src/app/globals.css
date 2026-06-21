@@ -1232,6 +1232,12 @@ body {
   font-size: 26px;
   letter-spacing: -.03em;
 }
+.df-auth-logo-img {
+  display: block;
+  width: clamp(132px, 12vw, 178px);
+  height: auto;
+  filter: brightness(0) invert(1) drop-shadow(0 0 12px hsl(var(--primary) / .42));
+}
 .df-auth-logo-mark {
   width: 34px;
   height: 34px;
@@ -1330,6 +1336,10 @@ body {
   text-decoration: none;
   font-size: 14px;
   font-weight: 700;
+  font-family: inherit;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
   transition: color .25s;
 }
 .df-auth-tab.active { color: #fff; }
@@ -1463,6 +1473,17 @@ body {
 .df-auth-foot { text-align: center; font-size: 13px; color: var(--df-auth-muted); margin-top: 18px; line-height: 1.7; }
 .df-auth-foot a { color: hsl(var(--primary)); text-decoration: none; font-weight: 800; }
 .df-auth-foot a:hover { text-decoration: underline; }
+.df-auth-inline-action {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--primary));
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  padding: 0;
+}
+.df-auth-inline-action:hover { text-decoration: underline; }
 .df-auth-error {
   display: flex;
   align-items: flex-start;

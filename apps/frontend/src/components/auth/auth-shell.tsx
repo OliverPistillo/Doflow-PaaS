@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import FlowMascot from "./flow-mascot";
 
@@ -17,6 +18,8 @@ type AuthShellProps = {
   brandTitle?: React.ReactNode;
   brandDescription?: string;
   registerHref?: string;
+  loginHref?: string;
+  onModeChange?: (mode: AuthMode) => void;
 };
 
 const TRUST_PROPS = [
@@ -41,6 +44,8 @@ export function AuthShell({
   brandDescription =
     "CRM, funnel e automazioni intelligenti: il tuo lavoro finalmente scorre in un unico spazio.",
   registerHref = "/register",
+  loginHref = "/login",
+  onModeChange,
 }: AuthShellProps) {
   return (
     <main className="df-auth-page">
@@ -57,23 +62,15 @@ export function AuthShell({
       <div className="df-auth-layout">
         <section className="df-auth-brand" aria-label="Doflow">
           <Link href="/" className="df-auth-logo" aria-label="Vai alla home Doflow">
-            <svg className="df-auth-logo-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-              <defs>
-                <linearGradient id="dfAuthLogoGradient" x1="4" y1="6" x2="34" y2="34" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="hsl(var(--chart-4))" />
-                  <stop offset="1" stopColor="hsl(var(--primary))" />
-                </linearGradient>
-              </defs>
-              <path
-                d="M9 5c0-1 1-1.6 2-1.2 12 4 18 9 18 16.7C29 30 21 37 10 37c-1 0-2-.9-2-2V5z"
-                fill="url(#dfAuthLogoGradient)"
-              />
-              <path d="M14 12c8 1 11 4 11 8.5S22 28 15 29c4-3 5-5.4 5-8.5S18 14.5 14 12z" fill="hsl(240 12% 5%)" />
-            </svg>
-            <span>
-              <span className="df-auth-logo-do">Do</span>
-              <span className="df-auth-logo-flow">flow</span>
-            </span>
+            <Image
+              src="/doflow_logo.svg"
+              alt=""
+              aria-hidden="true"
+              width={178}
+              height={89}
+              priority
+              className="df-auth-logo-img"
+            />
           </Link>
 
           <div className="df-auth-stage">
@@ -102,12 +99,35 @@ export function AuthShell({
           <div className={cn("df-auth-card df-glass-panel", cardClassName)}>
             <div className="df-auth-tabs" data-mode={mode}>
               <span className="df-auth-tab-pill" aria-hidden="true" />
-              <Link href="/login" className={cn("df-auth-tab", mode === "login" && "active")} aria-current={mode === "login" ? "page" : undefined}>
-                Accedi
-              </Link>
-              <Link href={registerHref} className={cn("df-auth-tab", mode === "register" && "active")} aria-current={mode === "register" ? "page" : undefined}>
-                Registrati
-              </Link>
+              {onModeChange ? (
+                <>
+                  <button
+                    type="button"
+                    className={cn("df-auth-tab", mode === "login" && "active")}
+                    aria-pressed={mode === "login"}
+                    onClick={() => onModeChange("login")}
+                  >
+                    Accedi
+                  </button>
+                  <button
+                    type="button"
+                    className={cn("df-auth-tab", mode === "register" && "active")}
+                    aria-pressed={mode === "register"}
+                    onClick={() => onModeChange("register")}
+                  >
+                    Registrati
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link href={loginHref} className={cn("df-auth-tab", mode === "login" && "active")} aria-current={mode === "login" ? "page" : undefined}>
+                    Accedi
+                  </Link>
+                  <Link href={registerHref} className={cn("df-auth-tab", mode === "register" && "active")} aria-current={mode === "register" ? "page" : undefined}>
+                    Registrati
+                  </Link>
+                </>
+              )}
             </div>
 
             <div className="df-auth-head">

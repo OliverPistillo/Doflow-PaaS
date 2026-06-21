@@ -1,6 +1,6 @@
 // apps/frontend/src/app/login/page.tsx
-import { LoginForm } from "@/components/login-form"
+import { UnifiedAuthPage } from "@/components/auth/unified-auth-page";
 
 export default function LoginPage() {
-  return <LoginForm />
+  return <UnifiedAuthPage initialMode="login" />;
 }
