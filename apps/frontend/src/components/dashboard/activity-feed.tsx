@@ -56,16 +56,33 @@ export function ActivityFeed() {
   return (
     <Card className="col-span-1">
       <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-            <Activity className="h-5 w-5" />
+        <CardTitle className="text-lg flex items-center justify-between w-full">
+          <div className="flex items-center gap-2">
+            <Activity className="h-5 w-5 text-primary" />
             Live Activity
+          </div>
+          <div className="flex items-center gap-1.5" aria-hidden="true">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600/80">Live</span>
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent>
         <ScrollArea className="h-[350px] pr-4">
-          <div className="space-y-4">
+          <div className="space-y-4" role="log" aria-live="polite">
             {activities.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-8">In attesa di eventi...</p>
+              <div className="flex flex-col items-center justify-center py-12 text-center animate-fadeIn">
+                <div className="df-icon-bubble h-12 w-12 mb-4 opacity-50">
+                  <Activity className="h-6 w-6 text-primary/60" aria-hidden="true" />
+                </div>
+                <p className="text-sm font-semibold text-foreground">In attesa di attività...</p>
+                <p className="text-xs text-muted-foreground mt-1 px-4">
+                  Gli eventi in tempo reale appariranno qui man mano che avvengono.
+                </p>
+              </div>
             )}
             {activities.map((act) => (
               <div key={act.id} className="flex gap-3 items-start pb-3 border-b border-border last:border-0">
