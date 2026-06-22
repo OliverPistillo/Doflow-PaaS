@@ -2,7 +2,7 @@
 
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   Eye,
   KeyRound,
@@ -26,6 +26,11 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -134,10 +139,23 @@ const StatusPill = ({ isActive }: { isActive: boolean }) => {
 export default function TenantsPage() {
   const { toast } = useToast();
   const { ConfirmDialog, confirm } = useConfirm();
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // --- FIX HYDRATION ---
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+
+  // Keyboard shortcut for search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [fetchState, setFetchState] = useState<FetchState>({ status: "idle" });
@@ -465,11 +483,17 @@ export default function TenantsPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                     id="tenant-search"
+                    ref={searchInputRef}
                     placeholder="Cerca azienda, slug o schema DB..."
-                    className="pl-9 border-border"
+                    className="pl-9 pr-12 border-border"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                 />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:block">
+                  <kbd className="h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100 flex">
+                    <span className="text-xs">/</span>
+                  </kbd>
+                </div>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -592,22 +616,32 @@ export default function TenantsPage() {
 
                         <td className="px-6 py-4 text-right">
                             <div className="flex justify-end items-center gap-2">
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleImpersonate(t.id)}
-                                className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity h-8 text-primary hover:text-primary hover:bg-primary/10"
-                            >
-                                <Eye className="h-4 w-4 mr-2" />
-                                Entra
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleImpersonate(t.id)}
+                                    className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity h-8 text-primary hover:text-primary hover:bg-primary/10"
+                                >
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    Entra
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Impersona amministratore</TooltipContent>
+                            </Tooltip>
 
                             <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Azioni tenant">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                                </DropdownMenuTrigger>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Azioni tenant">
+                                          <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Altre azioni</TooltipContent>
+                                </Tooltip>
 
                                 <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Azioni Tenant</DropdownMenuLabel>
@@ -797,15 +831,20 @@ export default function TenantsPage() {
                   <div className="text-3xl font-mono font-black tracking-wider select-all cursor-text text-emerald-400">
                     {resetModal.result}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-400/10"
-                    onClick={() => copyToClipboard(resetModal.result!)}
-                    aria-label="Copia password"
-                  >
-                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-400/10"
+                        onClick={() => copyToClipboard(resetModal.result!)}
+                        aria-label="Copia password"
+                      >
+                        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Copia password</TooltipContent>
+                  </Tooltip>
                 </div>
                 <div className="text-xs text-muted-foreground mt-4">
                   Copia la password ora. Dopo chiudo la porta e butto via la chiave.
