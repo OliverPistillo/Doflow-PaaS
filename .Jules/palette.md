@@ -38,3 +38,7 @@
 ## 2026-06-20 - [Standardizing MFA with V2 Design System]
 **Learning:** Hardcoded legacy styles (e.g., bg-slate-50, bg-indigo-600) in peripheral auth pages like MFA create a disjointed UX when the rest of the application has migrated to a glassmorphism-based design system. Always check for the 'doflow-app-frame' and 'df-glass-panel' patterns to ensure visual continuity.
 **Action:** Use 'df-glass-panel' for all authentication-related cards and 'df-icon-bubble' for primary header icons to maintain design system consistency.
+
+## 2025-05-22 - [Dashboard Search Shortcut Pattern]
+**Learning:** In data-heavy management dashboards, providing a quick keyboard shortcut to focus the search input significantly improves the experience for power users. Using the '/' key (without modifiers) is a widely recognized convention. Pair this with a visual `<kbd>` hint and ensure the listener ignores triggers when focusing other inputs to avoid collision.
+**Action:** Standardize search inputs with a `/` shortcut and a visible keyboard hint. Use `useRef` to target the input and an event listener on the `window` object for the shortcut.
