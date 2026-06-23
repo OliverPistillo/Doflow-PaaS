@@ -247,7 +247,8 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     }
     const role     = String(user.role     ?? "").toLowerCase().trim();
     const tenantId = String(user.tenantId ?? "").toLowerCase().trim();
-    const isSuperAdmin = ["superadmin", "super_admin", "owner"].includes(role) || tenantId === "public";
+    // Regular owners (tenant owners) shouldn't be granted superadmin access, except when tenantId is public.
+    const isSuperAdmin = ["superadmin", "super_admin"].includes(role) || tenantId === "public";
     if (!isSuperAdmin) {
       if (!pathname.startsWith("/dashboard")) router.replace("/dashboard");
       return;
