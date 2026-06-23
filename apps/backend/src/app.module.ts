@@ -28,7 +28,7 @@ import { AuthModule } from './auth/auth.module';
 import { SuperadminModule } from './superadmin/superadmin.module';
 import { TenantModule } from './tenant/tenant.module';
 import { FedericaNeroneModule } from './federicanerone/federicanerone.module';
-import { BusinaroModule } from './businaro/businaro.module';
+
 import { SalesIntelligenceModule } from './sales-intelligence/sales-intelligence.module';
 import { BillingModule } from './billing/billing.module';
 
@@ -113,7 +113,7 @@ import { OutreachCampaign } from './sales-intelligence/entities/outreach-campaig
     SuperadminModule,
     TenantModule,
     FedericaNeroneModule,
-    BusinaroModule,
+
     SalesIntelligenceModule,
     BillingModule,
   ],

@@ -36,7 +36,7 @@ const RESERVED_SLUGS = new Set([
   'app', 'www', 'mail', 'ftp', 'doflow', 'tenant', 'tenants', 'system',
   'support', 'help', 'docs', 'blog', 'static', 'assets', 'cdn', 'staging',
   'prod', 'production', 'dev', 'development', 'test', 'demo', 'pg_catalog',
-  'information_schema', 'businaro', 'federicanerone',
+  'information_schema', 'federicanerone',
 ]);
 
 @Injectable()

@@ -48,8 +48,6 @@
     --df-fed-accent:      #B69559;
     --df-fed-accent-2:    #C9AD78;
     --df-fed-accent-soft: #F5EEDD;
-    --df-businaro-accent: #1E3A8A;
-    --df-businaro-accent-2: #3B82F6;
 
     --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -908,26 +906,6 @@ body {
   --sidebar-primary: 38 35% 53%;
   --sidebar-primary-foreground: 0 0% 100%;
 }
-.theme-businaro,
-[data-tenant="businaro"] {
-  --primary: 221 64% 33%;      /* #1E3A8A */
-  --ring: 221 64% 33%;
-  --chart-4: 217 91% 60%;      /* #3B82F6 */
-  --accent: 214 95% 93%;
-  --accent-foreground: 221 64% 27%;
-  --sidebar-primary: 221 64% 33%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --aurora-bg:
-    radial-gradient(circle at 12% -10%, hsl(217 91% 60% / .12), transparent 32rem),
-    radial-gradient(circle at 90% 0%, hsl(221 64% 33% / .10), transparent 30rem),
-    linear-gradient(135deg, hsl(var(--background)), hsl(var(--secondary)) 58%, hsl(var(--background)));
-}
-.dark .theme-businaro {
-  --aurora-bg:
-    radial-gradient(circle at 10% -10%, hsl(217 91% 60% / .18), transparent 34rem),
-    radial-gradient(circle at 90% 0%, hsl(221 64% 43% / .16), transparent 32rem),
-    linear-gradient(135deg, hsl(240 12% 5%), hsl(240 11% 8%) 58%, hsl(240 11% 7%));
-}
 
 .doflow-app-frame {
   background:
@@ -1080,8 +1058,7 @@ body {
   color: hsl(var(--foreground)) !important;
 }
 .tenant-fed [data-sidebar="menu-button"][data-active="true"],
-[data-tenant="federicanerone"] [data-sidebar="menu-button"][data-active="true"],
-.theme-businaro [data-sidebar="menu-button"][data-active="true"] {
+[data-tenant="federicanerone"] [data-sidebar="menu-button"][data-active="true"] {
   background: hsl(var(--primary)) !important;
   color: hsl(var(--primary-foreground)) !important;
 }
