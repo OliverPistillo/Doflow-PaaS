@@ -11,10 +11,9 @@ import {
   Post,
   Query,
   Req,
-  UseGuards,
+  Delete,
 } from '@nestjs/common';
 import { Request } from 'express';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
@@ -74,7 +73,6 @@ function safeLike(q: string) {
 ========================= */
 
 @Controller('superadmin')
-@UseGuards(JwtAuthGuard)
 export class SuperadminUsersController {
   private readonly logger = new Logger(SuperadminUsersController.name);
 
@@ -385,6 +383,42 @@ export class SuperadminUsersController {
 
   /* ==========================================================
        C) UPDATE UTENTE GLOBALE
+       PATCH /api/superadmin/users/:id
+   ========================================================== */
+  @Delete('users/:id')
+  async deleteGlobalUser(
+    @Req() req: Request,
+    @Param('id') id: string,
+  ) {
+    this.assertSuperAdmin(req);
+
+    try {
+      const rows = await this.dataSource.query(
+        `
+        delete from public.users
+        where id = $1
+        returning email
+        `,
+        [id],
+      );
+
+      if (!rows.length) throw new BadRequestException('User not found');
+
+      await this.auditPublic(req, {
+        action: 'GLOBAL_USER_DELETED',
+        targetEmail: rows[0].email,
+        metadata: { id },
+      });
+
+      return { success: true, email: rows[0].email };
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e;
+      this.logAndThrow500('DELETE /superadmin/users/:id', e);
+    }
+  }
+
+  /* ==========================================================
+       C.1) UPDATE UTENTE GLOBALE
        PATCH /api/superadmin/users/:id
    ========================================================== */
   @Patch('users/:id')
@@ -711,6 +745,51 @@ export class SuperadminUsersController {
 
   /* ==========================================================
        H) PATCH TENANT USER (MFA/Active) - **FIX 404**
+       PATCH /api/superadmin/tenants/:tenantId/users/:userId
+   ========================================================== */
+  @Delete('tenants/:tenantId/users/:userId')
+  async deleteTenantUser(
+    @Req() req: Request,
+    @Param('tenantId') tenantId: string,
+    @Param('userId') userId: string,
+  ) {
+    this.assertSuperAdmin(req);
+
+    const t = await this.getTenantById(tenantId);
+    if (!t) throw new BadRequestException('Tenant not found');
+
+    const schema = safeSchema(t.schema_name);
+    const tenantDs = await this.openTenantDs(schema);
+
+    try {
+      const rows = await tenantDs.query(
+        `
+        delete from "${schema}"."users"
+        where id = $1
+        returning email
+        `,
+        [userId],
+      );
+
+      if (!rows.length) throw new BadRequestException('User not found');
+
+      await this.auditTenant(tenantDs, schema, req, {
+        action: 'TENANT_USER_DELETED',
+        targetEmail: rows[0].email,
+        metadata: { id: userId },
+      });
+
+      return { success: true, email: rows[0].email };
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e;
+      this.logAndThrow500('DELETE /superadmin/tenants/:tenantId/users/:userId', e);
+    } finally {
+      if (tenantDs.isInitialized) await tenantDs.destroy();
+    }
+  }
+
+  /* ==========================================================
+       H.1) PATCH TENANT USER (MFA/Active)
        PATCH /api/superadmin/tenants/:tenantId/users/:userId
    ========================================================== */
   @Patch('tenants/:tenantId/users/:userId')
