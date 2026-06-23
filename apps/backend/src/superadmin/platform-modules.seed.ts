@@ -154,6 +154,7 @@ export class PlatformModulesSeedService implements OnApplicationBootstrap {
         )
       `);
 
+      await this.dataSource.query(`ALTER TABLE public.users ALTER COLUMN tenant_id DROP NOT NULL`);
       await this.dataSource.query(`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS full_name TEXT`);
       await this.dataSource.query(`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS auth_provider TEXT NOT NULL DEFAULT 'password'`);
       await this.dataSource.query(`ALTER TABLE public.users ADD COLUMN IF NOT EXISTS google_id TEXT`);
@@ -230,10 +231,13 @@ export class PlatformModulesSeedService implements OnApplicationBootstrap {
    */
   private async seedSuperadmin() {
     try {
-      const existing = await this.dataSource.query(
-        `SELECT id FROM public.users WHERE lower(email) = 'admin@doflow.local' LIMIT 1`,
+      // Verifica se esiste già ALMENO UN superadmin o admin
+      const existingSuperadmins = await this.dataSource.query(
+        `SELECT id FROM public.users WHERE role IN ('superadmin', 'admin') LIMIT 1`,
       );
-      if (existing.length > 0) return;
+      if (existingSuperadmins.length > 0) {
+        return;
+      }
 
       const hash = await bcrypt.hash('Admin123!', 12);
       await this.dataSource.query(
