@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { DataSource } from 'typeorm';
+import { safeSchema } from './common/schema.utils';
 
 type CreateUserDto = {
   email: string;
@@ -18,7 +19,7 @@ export class TenantUsersController {
 
   private getTenantId(req: Request): string {
     const tenantId = (req as any).tenantId as string | undefined;
-    return tenantId ?? 'public';
+    return safeSchema(tenantId ?? 'public', 'TenantUsersController');
   }
 
   @Get()
