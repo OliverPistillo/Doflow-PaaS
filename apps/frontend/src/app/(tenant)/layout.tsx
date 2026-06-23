@@ -109,7 +109,11 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
     const role     = String(user.role     ?? "").toLowerCase().trim();
     const tenantId = String(user.tenantId ?? "").toLowerCase().trim();
 
-    if (["superadmin", "super_admin", "owner"].includes(role) || tenantId === "public") {
+    // The user is a superadmin if their role is superadmin OR if their tenant is public (e.g. system owner)
+    // Regular tenant owners should be able to access the tenant dashboard.
+    const isSuperAdmin = ["superadmin", "super_admin"].includes(role) || tenantId === "public";
+
+    if (isSuperAdmin) {
       if (!pathname.startsWith("/superadmin")) router.replace("/superadmin");
       else setReady(true);
       return;

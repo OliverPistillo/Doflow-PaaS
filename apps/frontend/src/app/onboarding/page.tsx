@@ -104,7 +104,11 @@ export default function OnboardingPage() {
     if (!sector) return;
     const userTierRank = TIER_RANK[plan?.planTier || "STARTER"];
     // Auto-select all suggested modules that user can access
-    const newSet = new Set<string>(selectedModules);
+    // Instead of appending to existing selection, it resets the selected modules specifically for this sector, along with keeping trial modules (active modules).
+    const newSet = new Set<string>();
+    for (const m of modules) {
+      if (m.isActive) newSet.add(m.key);
+    }
     for (const key of sector.suggested) {
       const mod = modules.find(m => m.key === key);
       if (mod && TIER_RANK[mod.minTier] <= userTierRank) {
