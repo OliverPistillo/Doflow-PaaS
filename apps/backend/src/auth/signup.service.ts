@@ -146,7 +146,7 @@ export class SignupService {
       const ownerInsert = await queryRunner.query(
         `INSERT INTO "${schemaName}"."users"
            (email, role, password_hash, full_name, auth_provider, google_id, avatar_url, email_verified_at, is_active, created_at, updated_at)
-         VALUES ($1, 'owner', $2, $3, $4, $5, $6, CASE WHEN $5 IS NULL THEN NULL ELSE now() END, true, now(), now())
+         VALUES ($1, 'owner', $2, $3, $4, $5, $6, CASE WHEN $5::text IS NULL THEN NULL ELSE now() END, true, now(), now())
          RETURNING id, email, role, created_at`,
         [email, passwordHash, fullName, authProvider, googleSignup?.googleId || null, googleSignup?.picture || null],
       );
@@ -155,7 +155,7 @@ export class SignupService {
       await queryRunner.query(
         `INSERT INTO public.users
            (id, email, role, password_hash, tenant_id, full_name, auth_provider, google_id, avatar_url, email_verified_at, is_active, created_at, updated_at)
-         VALUES ($1, $2, 'owner', $3, $4, $5, $6, $7, $8, CASE WHEN $7 IS NULL THEN NULL ELSE now() END, true, now(), now())
+         VALUES ($1, $2, 'owner', $3, $4, $5, $6, $7, $8, CASE WHEN $7::text IS NULL THEN NULL ELSE now() END, true, now(), now())
          ON CONFLICT (email) DO UPDATE
            SET tenant_id = EXCLUDED.tenant_id,
                password_hash = EXCLUDED.password_hash,
