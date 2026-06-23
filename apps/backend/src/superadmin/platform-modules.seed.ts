@@ -68,8 +68,6 @@ const MODULES: SeedModule[] = [
   // ─── VERTICAL: BEAUTY (federicanerone) ──────────────────────
   { key: 'vert.beauty', name: 'Centro Estetico', description: 'Trattamenti, schede cliente, appuntamenti', category: ModuleCategory.HEALTH, minTier: ModuleTier.PRO, priceMonthly: 19 },
 
-  // ─── VERTICAL: MANUFACTURING (businaro) ─────────────────────
-  { key: 'vert.manufacturing', name: 'Produzione Industriale', description: 'Macchine utensili, assemblaggio, MES', category: ModuleCategory.CONSTRUCTION, minTier: ModuleTier.ENTERPRISE, priceMonthly: 49 },
 ];
 
 @Injectable()

@@ -478,7 +478,6 @@ Esempi già protetti:
 - `crm.sales-intel` → `/api/sales-intel/*`
 - `ops.kanban` → `/api/projects/*`
 - `vert.beauty` → `/api/clienti`, `/api/trattamenti`, `/api/appuntamenti`, `/api/federicanerone/settings`
-- `vert.manufacturing` → `/api/businaro/*`
 
 ### Superadmin (richiede ruolo `superadmin`)
 

@@ -48,7 +48,6 @@ export async function middleware(req: NextRequest, event: NextFetchEvent) {
   // ✅ Hint pathname per SSR tenant resolution
   headers.set('x-doflow-pathname', req.nextUrl.pathname);
 
-  // ✅ Se stai usando path-mode (/businaro/...), setta slug header
   const tenantFromPath = extractTenantFromPath(req.nextUrl.pathname);
   if (tenantFromPath) {
     headers.set('x-doflow-tenant-id', tenantFromPath);
