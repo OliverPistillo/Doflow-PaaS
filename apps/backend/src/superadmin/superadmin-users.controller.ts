@@ -11,10 +11,8 @@ import {
   Post,
   Query,
   Req,
-  UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
@@ -74,7 +72,6 @@ function safeLike(q: string) {
 ========================= */
 
 @Controller('superadmin')
-@UseGuards(JwtAuthGuard)
 export class SuperadminUsersController {
   private readonly logger = new Logger(SuperadminUsersController.name);
 
