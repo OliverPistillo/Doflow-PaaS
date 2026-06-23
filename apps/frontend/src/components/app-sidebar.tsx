@@ -59,8 +59,8 @@ function getToken(): string | null {
 
 function normalizeRole(r?: string): Role {
   const up = (r || '').toUpperCase();
-  if (up === 'SUPER_ADMIN' || up === 'SUPERADMIN' || up === 'OWNER') return 'SUPER_ADMIN';
-  if (up === 'ADMIN') return 'ADMIN';
+  if (up === 'SUPER_ADMIN' || up === 'SUPERADMIN') return 'SUPER_ADMIN';
+  if (up === 'OWNER' || up === 'ADMIN') return 'ADMIN';
   if (up === 'MANAGER') return 'MANAGER';
   return 'USER';
 }
