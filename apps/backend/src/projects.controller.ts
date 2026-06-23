@@ -14,6 +14,7 @@ import { hasRoleAtLeast, Role } from './roles';
 import { AuditService } from './audit.service';
 import { ProjectsEventsService } from './realtime/projects-events.service';
 import { RequireFeature } from './feature-access/feature-access.decorator';
+import { safeSchema } from './common/schema.utils';
 
 type CreateProjectBody = {
   name: string;
@@ -61,7 +62,7 @@ export class ProjectsController {
 
   private getTenantId(req: Request): string {
     const tenantId = (req as any).tenantId as string | undefined;
-    return tenantId ?? 'public';
+    return safeSchema(tenantId ?? 'public', 'ProjectsController');
   }
 
   private getAuthUser(req: Request) {
@@ -92,12 +93,12 @@ export class ProjectsController {
     }
 
     const conn = this.getConn(req);
-    const tenantId = this.getTenantId(req);
+    const schema = this.getTenantId(req);
 
     const rows = await conn.query(
       `
       select id, name, description, status, owner_email, created_at, updated_at
-      from ${tenantId}.projects
+      from "${schema}".projects
       order by id desc
       `,
     );
@@ -124,11 +125,11 @@ export class ProjectsController {
     }
 
     const conn = this.getConn(req);
-    const tenantId = this.getTenantId(req);
+    const schema = this.getTenantId(req);
 
     const rows = await conn.query(
       `
-      insert into ${tenantId}.projects (name, description, owner_email)
+      insert into "${schema}".projects (name, description, owner_email)
       values ($1, $2, $3)
       returning id, name, description, status, owner_email, created_at, updated_at
       `,
@@ -163,7 +164,7 @@ export class ProjectsController {
     }
 
     const conn = this.getConn(req);
-    const tenantId = this.getTenantId(req);
+    const schema = this.getTenantId(req);
 
     const rows = await conn.query(
       `
@@ -177,7 +178,7 @@ export class ProjectsController {
         due_date,
         created_at,
         updated_at
-      from ${tenantId}.tasks
+      from "${schema}".tasks
       where project_id = $1
       order by id
       `,
@@ -212,11 +213,11 @@ export class ProjectsController {
     }
 
     const conn = this.getConn(req);
-    const tenantId = this.getTenantId(req);
+    const schema = this.getTenantId(req);
 
     const rows = await conn.query(
       `
-      insert into ${tenantId}.tasks
+      insert into "${schema}".tasks
       (project_id, title, description, assignee_email, due_date)
       values ($1, $2, $3, $4, $5)
       returning
@@ -249,7 +250,7 @@ export class ProjectsController {
 
     // 🔥 evento realtime "task_created"
     await this.projectsEvents.taskCreated({
-      tenantId,
+      tenantId: schema,
       projectId: String(projectId),
       task: {
         id: String(task.id),
@@ -307,11 +308,11 @@ export class ProjectsController {
     }
 
     const conn = this.getConn(req);
-    const tenantId = this.getTenantId(req);
+    const schema = this.getTenantId(req);
 
     const rows = await conn.query(
       `
-      update ${tenantId}.tasks
+      update "${schema}".tasks
       set status = $1, updated_at = now()
       where id = $2 and project_id = $3
       returning
@@ -347,7 +348,7 @@ export class ProjectsController {
 
     // 🔥 evento realtime "task_status_changed"
     await this.projectsEvents.taskStatusChanged({
-      tenantId,
+      tenantId: schema,
       projectId: String(projectId),
       task: {
         // qui usiamo SEMPRE il taskId della route, non row.id
