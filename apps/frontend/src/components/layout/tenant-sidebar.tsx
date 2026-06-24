@@ -30,17 +30,21 @@ import { cn } from "@/lib/utils";
 // ─── NavItem con lock ─────────────────────────────────────────────────────────
 
 function NavItem({
-  href, label, icon: Icon, minPlan, lockMsg, activePlan,
+  href, label, icon: Icon, minPlan, moduleKey, lockMsg, activePlan,
 }: {
   href:       string;
   label:      string;
   icon:       React.ComponentType<{ className?: string }>;
   minPlan:    PlanTier;
+  moduleKey?: string;
   lockMsg?:   string;
   activePlan: PlanTier;
 }) {
   const pathname = usePathname();
-  const isLocked = !planIncludes(activePlan, minPlan);
+  const { activeModules } = usePlan();
+  const allowedByPlan = planIncludes(activePlan, minPlan);
+  const allowedByModule = !moduleKey || activeModules.has(moduleKey);
+  const isLocked = !allowedByPlan || !allowedByModule;
   const active   = !isLocked && (pathname === href || pathname.startsWith(href + "/"));
 
   if (isLocked) {
@@ -185,6 +189,7 @@ export function TenantSidebar({
                     label={mod.label}
                     icon={mod.icon}
                     minPlan={mod.minPlan}
+                    moduleKey={mod.moduleKey}
                     lockMsg={mod.lockMsg}
                     activePlan={plan}
                   />

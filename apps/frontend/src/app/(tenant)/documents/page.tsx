@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { FolderOpen, Upload, Search, Grid3X3, List, Download, Trash2,
   Share2, Star, MoreHorizontal, File, FileText, Sheet, Package,
   Image, Clock, Users, Eye, Plus } from "lucide-react";
@@ -13,10 +13,12 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { tenantFetch } from "@/lib/tenant-fetch";
+import { RequireTenantModule } from "@/components/auth/require-tenant-module";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type DocType = "pdf" | "docx" | "xlsx" | "fig" | "zip" | "pptx" | "png" | "jpg";
+type DocType = "pdf" | "docx" | "xlsx" | "fig" | "zip" | "pptx" | "png" | "jpg" | "unknown";
 
 interface Doc {
   id: number;
@@ -28,26 +30,11 @@ interface Doc {
   owner: string;
   shared: string[];
   starred: boolean;
+  originalName?: string;
+  key?: string;
 }
 
-// ─── Demo data ────────────────────────────────────────────────────────────────
-
-const DOCUMENTS: Doc[] = [
-  { id: 1,  name: "Contratto BigCorp SpA",           type: "pdf",  size: "2.4 MB",  folder: "Contratti",   modified: "2026-02-18", owner: "Marco R.",  shared: ["Giulia B.","Luca P."], starred: true },
-  { id: 2,  name: "Proposta StartupIO — v3",          type: "docx", size: "1.1 MB",  folder: "Proposte",    modified: "2026-02-19", owner: "Marco R.",  shared: ["Sara M."],             starred: true },
-  { id: 3,  name: "Brand Guidelines DesignStudio",    type: "pdf",  size: "8.7 MB",  folder: "Deliverables",modified: "2026-02-10", owner: "Luca P.",   shared: [],                      starred: false },
-  { id: 4,  name: "Preventivo SmartFactory — CRM",    type: "pdf",  size: "540 KB",  folder: "Preventivi",  modified: "2026-02-12", owner: "Giulia B.", shared: ["Marco R."],            starred: false },
-  { id: 5,  name: "Analisi competitor Q1 2026",       type: "xlsx", size: "3.2 MB",  folder: "Analisi",     modified: "2026-02-15", owner: "Sara M.",   shared: ["Marco R.","Giulia B."],starred: false },
-  { id: 6,  name: "Mockup App InnovateIT",            type: "fig",  size: "15.4 MB", folder: "Design",      modified: "2026-02-20", owner: "Marco R.",  shared: ["Luca P."],             starred: true },
-  { id: 7,  name: "Report vendite Gennaio",           type: "xlsx", size: "1.8 MB",  folder: "Report",      modified: "2026-02-05", owner: "Sara M.",   shared: ["Marco R."],            starred: false },
-  { id: 8,  name: "NDA MediaGroup Italia",            type: "pdf",  size: "320 KB",  folder: "Contratti",   modified: "2026-02-08", owner: "Marco R.",  shared: [],                      starred: false },
-  { id: 9,  name: "Wireframe Dashboard v2",           type: "fig",  size: "6.1 MB",  folder: "Design",      modified: "2026-02-17", owner: "Marco R.",  shared: ["Sara M.","Giulia B."], starred: false },
-  { id: 10, name: "Piano progetto BigCorp",           type: "docx", size: "890 KB",  folder: "Progetti",    modified: "2026-02-14", owner: "Giulia B.", shared: ["Marco R.","Sara M.","Luca P."], starred: true },
-  { id: 11, name: "Foto team offsite",                type: "zip",  size: "124 MB",  folder: "Media",       modified: "2026-01-28", owner: "Luca P.",   shared: [],                      starred: false },
-  { id: 12, name: "Manuale utente CRM DoFlow",        type: "pdf",  size: "4.5 MB",  folder: "Docs",        modified: "2026-02-20", owner: "Luca P.",   shared: ["Marco R.","Giulia B.","Sara M."], starred: false },
-];
-
-const FOLDERS = ["Tutti", "Contratti", "Proposte", "Preventivi", "Deliverables", "Analisi", "Design", "Report", "Progetti", "Media", "Docs"];
+const FOLDERS = ["Tutti", "Contratti", "Proposte", "Preventivi", "Deliverables", "Analisi", "Design", "Report", "Progetti", "Media", "Docs", "Generale"];
 
 // ─── File type config ─────────────────────────────────────────────────────────
 
@@ -60,19 +47,13 @@ const TYPE_CONFIG: Record<DocType, { icon: React.ComponentType<{className?: stri
   pptx: { icon: File,     color: "text-orange-600",  bg: "bg-orange-100 dark:bg-orange-950/40", label: "PowerPoint" },
   png:  { icon: Image,    color: "text-teal-600",    bg: "bg-teal-100 dark:bg-teal-950/40",     label: "PNG" },
   jpg:  { icon: Image,    color: "text-teal-600",    bg: "bg-teal-100 dark:bg-teal-950/40",     label: "JPG" },
+  unknown: { icon: File,  color: "text-slate-600",   bg: "bg-slate-100 dark:bg-slate-950/40",  label: "File" },
 };
 
 const AVATAR_COLORS: Record<string, string> = {
   "Marco R.": "bg-primary", "Giulia B.": "bg-emerald-500",
   "Luca P.": "bg-chart-4",  "Sara M.": "bg-rose-500",
 };
-
-// ─── Stats ────────────────────────────────────────────────────────────────────
-
-const totalSizeMB = DOCUMENTS.reduce((s, d) => {
-  const n = parseFloat(d.size);
-  return s + (d.size.includes("KB") ? n / 1024 : d.size.includes("GB") ? n * 1024 : n);
-}, 0);
 
 // ─── File card (grid view) ────────────────────────────────────────────────────
 
@@ -186,21 +167,66 @@ export default function Page() {
   const [search, setSearch]   = useState("");
   const [view, setView]       = useState<"grid" | "list">("grid");
   const [starred, setStarred] = useState(false);
+  const [documents, setDocuments] = useState<Doc[]>([]);
 
-  const filtered = useMemo(() => DOCUMENTS.filter(d => {
+  useEffect(() => {
+    let mounted = true;
+    tenantFetch("/api/files")
+      .then(res => res.json())
+      .then(data => {
+        if (!mounted || !data.files) return;
+        const formatted: Doc[] = data.files.map((f: any) => {
+          let t = "unknown";
+          const lowerName = (f.original_name || "").toLowerCase();
+          if (lowerName.endsWith(".pdf")) t = "pdf";
+          else if (lowerName.endsWith(".docx")) t = "docx";
+          else if (lowerName.endsWith(".xlsx")) t = "xlsx";
+          else if (lowerName.endsWith(".fig")) t = "fig";
+          else if (lowerName.endsWith(".zip")) t = "zip";
+          else if (lowerName.endsWith(".pptx")) t = "pptx";
+          else if (lowerName.endsWith(".png")) t = "png";
+          else if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg")) t = "jpg";
+
+          return {
+            id: f.id,
+            name: f.original_name,
+            originalName: f.original_name,
+            type: t as DocType,
+            size: `${(f.size / 1024 / 1024).toFixed(1)} MB`,
+            folder: "Generale", // Fallback, could map to a real folder if available in DB
+            modified: f.created_at,
+            owner: f.created_by || "Utente",
+            shared: [],
+            starred: false,
+            key: f.key,
+          };
+        });
+        setDocuments(formatted);
+      })
+      .catch(console.error);
+    return () => { mounted = false; };
+  }, []);
+
+  const filtered = useMemo(() => documents.filter(d => {
     if (starred && !d.starred)                                return false;
     if (folder !== "Tutti" && d.folder !== folder)            return false;
     if (search && !d.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  }), [folder, search, starred]);
+  }), [documents, folder, search, starred]);
 
   const folderCounts = useMemo(() => {
-    const m: Record<string, number> = { Tutti: DOCUMENTS.length };
-    for (const f of FOLDERS.slice(1)) m[f] = DOCUMENTS.filter(d => d.folder === f).length;
+    const m: Record<string, number> = { Tutti: documents.length };
+    for (const f of FOLDERS.slice(1)) m[f] = documents.filter(d => d.folder === f).length;
     return m;
-  }, []);
+  }, [documents]);
+
+  const totalSizeMB = useMemo(() => documents.reduce((s, d) => {
+    const n = parseFloat(d.size);
+    return s + (d.size.includes("KB") ? n / 1024 : d.size.includes("GB") ? n * 1024 : n);
+  }, 0), [documents]);
 
   return (
+    <RequireTenantModule moduleKey="docs.files">
     <div className="flex-1 flex overflow-hidden animate-in fade-in duration-500" style={{ height: "calc(100vh - 64px)" }}>
 
       {/* Sidebar folders */}
@@ -293,5 +319,6 @@ export default function Page() {
         </div>
       </div>
     </div>
+    </RequireTenantModule>
   );
 }

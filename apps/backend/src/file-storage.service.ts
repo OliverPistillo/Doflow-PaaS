@@ -35,6 +35,11 @@ export class FileStorageService {
   }
 
   private getTenantId(req: Request): string {
+    const authUser = (req as any).authUser || (req as any).user;
+    if (authUser?.tenantId && authUser.tenantId !== 'public') return authUser.tenantId;
+    if (authUser?.tenant_id && authUser.tenant_id !== 'public') return authUser.tenant_id;
+    if (authUser?.tenantSlug && authUser.tenantSlug !== 'public') return authUser.tenantSlug;
+
     const tenantId = (req as any).tenantId as string | undefined;
     return tenantId ?? 'public';
   }

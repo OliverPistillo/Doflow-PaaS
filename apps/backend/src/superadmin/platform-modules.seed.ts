@@ -33,6 +33,7 @@ const MODULES: SeedModule[] = [
   { key: 'fin.vat-reports', name: 'Report IVA & F24', description: 'Liquidazione IVA, esterometro, intrastat', category: ModuleCategory.FINANCE, minTier: ModuleTier.PRO, priceMonthly: 19 },
 
   // ─── OPERATIONS ─────────────────────────────────────────────
+  { key: 'docs.files', name: 'Documenti', description: 'Archivio file e documenti tenant', category: ModuleCategory.OPERATIONS, minTier: ModuleTier.STARTER, priceMonthly: 0 },
   { key: 'ops.tasks', name: 'Tasks & To-Do', description: 'Liste personali e di team', category: ModuleCategory.OPERATIONS, minTier: ModuleTier.STARTER, priceMonthly: 0 },
   { key: 'ops.kanban', name: 'Project Kanban', description: 'Board di progetto con drag & drop', category: ModuleCategory.OPERATIONS, minTier: ModuleTier.STARTER, priceMonthly: 0 },
   { key: 'ops.calendar', name: 'Calendario & Appuntamenti', description: 'Pianificazione visite, sync Google Calendar', category: ModuleCategory.OPERATIONS, minTier: ModuleTier.STARTER, priceMonthly: 0 },

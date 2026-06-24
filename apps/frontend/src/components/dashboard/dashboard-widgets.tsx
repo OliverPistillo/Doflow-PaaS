@@ -61,19 +61,16 @@ function cn(...classes: (string | undefined | false)[]) {
 // ─── STARTER WIDGETS ──────────────────────────────────────────────────────────
 
 export function W_KpiNewLeads() {
-  return <KpiCard title="Nuovi Lead" value="48" delta="+12.5%" up icon={Users} sub="vs. mese scorso" />;
+  return <KpiCard title="Nuovi Lead" value="0" delta="0%" up icon={Users} sub="vs. mese scorso" />;
 }
 export function W_KpiOpenOrders() {
-  return <KpiCard title="Ordini Aperti" value="23" delta="+5.2%" up icon={ShoppingCart} sub="in lavorazione" />;
+  return <KpiCard title="Ordini Aperti" value="0" delta="0%" up icon={ShoppingCart} sub="in lavorazione" />;
 }
 export function W_KpiQuoteValue() {
-  return <KpiCard title="Valore Preventivi" value="€ 18.400" delta="-3.1%" up={false} icon={FileText} sub="ultimi 30 giorni" />;
+  return <KpiCard title="Valore Preventivi" value="€ 0" delta="0%" up={false} icon={FileText} sub="ultimi 30 giorni" />;
 }
 
-const ordersTrendData = [
-  { g: "1 Mar", v: 8 }, { g: "7 Mar", v: 14 }, { g: "14 Mar", v: 11 },
-  { g: "21 Mar", v: 19 }, { g: "28 Mar", v: 23 }, { g: "Oggi", v: 17 },
-];
+const ordersTrendData: any[] = [];
 
 export function W_ChartOrdersTrend() {
   return (
@@ -104,14 +101,7 @@ export function W_ChartOrdersTrend() {
 }
 
 export function W_ListRecentQuotes() {
-  const quotes = [
-    { client: "Tecnologie Srl",   value: "€ 4.200",  status: "In attesa", cls: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400" },
-    { client: "Studio Bianchi",   value: "€ 1.800",  status: "Inviato",   cls: "bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400" },
-    { client: "Rossi & Partners", value: "€ 7.500",  status: "In attesa", cls: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400" },
-    { client: "Verde Trade",      value: "€ 950",    status: "Accettato", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400" },
-    { client: "Alfa Costruzioni", value: "€ 12.000", status: "In attesa", cls: "bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400" },
-    { client: "Neri Logistica",   value: "€ 3.300",  status: "Accettato", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400" },
-  ];
+const quotes: any[] = [];
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="pb-2">
@@ -147,21 +137,16 @@ export function W_ListRecentQuotes() {
 // ─── PRO WIDGETS ──────────────────────────────────────────────────────────────
 
 export function W_KpiRevenueMonth() {
-  return <KpiCard title="Fatturato del Mese" value="€ 34.820" delta="+8.2%" up icon={DollarSign} sub="obiettivo: € 40.000" />;
+  return <KpiCard title="Fatturato del Mese" value="€ 0" delta="0%" up icon={DollarSign} sub="obiettivo: € 40.000" />;
 }
 export function W_KpiCashflowOverdue() {
-  return <KpiCard title="Scaduto da Incassare" value="€ 7.340" delta="+2 fatt." up={false} icon={AlertTriangle} sub="richiede attenzione" />;
+  return <KpiCard title="Scaduto da Incassare" value="€ 0" delta="0 fatt." up={false} icon={AlertTriangle} sub="richiede attenzione" />;
 }
 export function W_KpiLowStock() {
-  return <KpiCard title="Prodotti Sotto Scorta" value="6" delta="+2" up={false} icon={Package} sub="vs. settimana scorsa" />;
+  return <KpiCard title="Prodotti Sotto Scorta" value="0" delta="0" up={false} icon={Package} sub="vs. settimana scorsa" />;
 }
 
-const incomeExpData = [
-  { m: "Gen", in: 28000, out: 18000 },
-  { m: "Feb", in: 31000, out: 22000 },
-  { m: "Mar", in: 34820, out: 19400 },
-  { m: "Apr", in: 29000, out: 21000 },
-];
+const incomeExpData: any[] = [];
 
 export function W_ChartIncomeVsExpenses() {
   return (
@@ -188,12 +173,7 @@ export function W_ChartIncomeVsExpenses() {
 }
 
 export function W_ListUnpaidInvoices() {
-  const invoices = [
-    { client: "Tecnologie Srl",   amount: "€ 3.200", days: "18 gg scaduta", red: true  },
-    { client: "Alfa Costruzioni", amount: "€ 7.800", days: "32 gg scaduta", red: true  },
-    { client: "Studio Bianchi",   amount: "€ 1.450", days: "5 gg scaduta",  red: false },
-    { client: "Verde Trade",      amount: "€ 920",   days: "Oggi",          red: false },
-  ];
+  const invoices: any[] = [];
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="pb-2">
@@ -226,12 +206,7 @@ export function W_ListUnpaidInvoices() {
 
 // ─── ENTERPRISE WIDGETS ───────────────────────────────────────────────────────
 
-const marketData = [
-  { name: "Nord Italia", value: 42, color: "#4f46e5" },
-  { name: "Centro",      value: 28, color: "#7c3aed" },
-  { name: "Sud",         value: 18, color: "#a78bfa" },
-  { name: "Estero",      value: 12, color: "#c4b5fd" },
-];
+const marketData: any[] = [];
 
 export function W_ChartMarketShare() {
   return (
@@ -263,13 +238,7 @@ export function W_ChartMarketShare() {
   );
 }
 
-const heatmapData = [
-  { r: "Lun", Gen: 12, Feb: 18, Mar: 22, Apr: 29 },
-  { r: "Mar", Gen: 19, Feb: 24, Mar: 31, Apr: 38 },
-  { r: "Mer", Gen: 8,  Feb: 15, Mar: 19, Apr: 24 },
-  { r: "Gio", Gen: 22, Feb: 28, Mar: 34, Apr: 41 },
-  { r: "Ven", Gen: 31, Feb: 35, Mar: 41, Apr: 52 },
-];
+const heatmapData: any[] = [];
 
 export function W_ChartSalesHeatmap() {
   return (
@@ -298,12 +267,7 @@ export function W_ChartSalesHeatmap() {
 }
 
 export function W_LeaderboardSellers() {
-  const sellers = [
-    { name: "Marco Ferri",   revenue: "€ 42.800", deals: 18, pct: 85 },
-    { name: "Anna Conti",    revenue: "€ 38.200", deals: 14, pct: 76 },
-    { name: "Luigi Moretti", revenue: "€ 29.400", deals: 11, pct: 58 },
-    { name: "Sara Russo",    revenue: "€ 22.100", deals: 9,  pct: 44 },
-  ];
+  const sellers: any[] = [];
   const medals = ["🥇", "🥈", "🥉", "4°"];
   return (
     <Card className="h-full flex flex-col">
@@ -319,7 +283,7 @@ export function W_LeaderboardSellers() {
               <span className="text-base w-5 text-center shrink-0">{medals[i]}</span>
               <Avatar className="h-7 w-7 shrink-0">
                 <AvatarFallback className="bg-indigo-100 text-indigo-700 font-bold text-[10px]">
-                  {s.name.split(" ").map((p) => p[0]).join("")}
+                  {s.name?.split(" ").map((p: string) => p[0]).join("")}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0">
@@ -356,13 +320,7 @@ export function W_KpiLeadConversionRate() {
   );
 }
 
-const funnelData = [
-  { stage: "Chiuso",    count: 18,  fill: "#4f46e5" },
-  { stage: "Trattativa",count: 31,  fill: "#6366f1" },
-  { stage: "Proposta",  count: 54,  fill: "#818cf8" },
-  { stage: "Qualificato",count: 79, fill: "#a5b4fc" },
-  { stage: "Nuovo",     count: 148, fill: "#c7d2fe" },
-];
+const funnelData: any[] = [];
 
 export function W_ChartLeadFunnel() {
   return (
@@ -404,13 +362,7 @@ export function W_ChartLeadFunnel() {
   );
 }
 
-const TOP_DEALS = [
-  { name: "Luxor Media SRL",      contact: "M. Bianchi",  value: "€ 42.000", stage: "Trattativa", stageColor: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" },
-  { name: "TechHub Napoli",       contact: "R. Silvestri", value: "€ 28.500", stage: "Proposta",   stageColor: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" },
-  { name: "Verde Costruzioni",    contact: "L. Rossi",    value: "€ 19.800", stage: "Proposta",   stageColor: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300" },
-  { name: "Alfa Capital Holding", contact: "S. Ferrari",  value: "€ 15.200", stage: "Qualificato",stageColor: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300" },
-  { name: "Neri Logistica SpA",   contact: "A. Conti",    value: "€ 11.400", stage: "Trattativa", stageColor: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" },
-];
+const TOP_DEALS: any[] = [];
 
 export function W_ListTopDeals() {
   return (
@@ -438,7 +390,7 @@ export function W_ListTopDeals() {
                   <div className="flex items-center gap-2.5">
                     <Avatar className="h-7 w-7 shrink-0">
                       <AvatarFallback className="bg-indigo-100 text-indigo-700 font-bold text-[10px] dark:bg-indigo-950/50 dark:text-indigo-300">
-                        {deal.contact.split(" ").map((p) => p[0]).join("")}
+                        {deal.contact?.split(" ").map((p: string) => p[0]).join("")}
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0">

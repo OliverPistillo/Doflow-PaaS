@@ -1,5 +1,7 @@
 // apps/frontend/src/lib/tenant-fetch.ts
 
+import { getDoFlowUser } from "@/lib/jwt";
+
 /**
  * Reserved path segments: non sono tenant slug.
  */
@@ -87,6 +89,10 @@ function getTenantIdForRequestServer(): string | null {
  */
 function getTenantIdForRequestClient(): string | null {
   if (typeof window === 'undefined') return null;
+
+  const user = getDoFlowUser();
+  if (user?.tenantSlug && user.tenantSlug !== "public") return user.tenantSlug;
+  if (user?.tenantId && user.tenantId !== "public") return user.tenantId;
 
   const hostTenant = getTenantFromHostString(window.location.host);
   const pathname = window.location.pathname;
