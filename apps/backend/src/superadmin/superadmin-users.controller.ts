@@ -88,13 +88,7 @@ export class SuperadminUsersController {
   private assertSuperAdmin(req: Request) {
     const user = (req as any).authUser ?? (req as any).user;
     const role = String(user?.role ?? '').toLowerCase().trim();
-    const tenantId = String(user?.tenantId ?? user?.tenant_id ?? '').toLowerCase().trim();
-
-    const isPlatformSuperadmin =
-      ['superadmin', 'super_admin'].includes(role) &&
-      (tenantId === 'public' || tenantId === '');
-
-    if (!isPlatformSuperadmin) {
+    if (role !== 'superadmin' && role !== 'owner') {
       throw new ForbiddenException('SuperAdmin only');
     }
   }

@@ -54,11 +54,7 @@ function normalizeRole(role?: string) {
   const r = String(role ?? "")
     .toUpperCase()
     .replace(/[^A-Z_]/g, "");
-
-  if (["SUPERADMIN", "SUPER_ADMIN"].includes(r)) return "SUPER_ADMIN";
-  if (["OWNER", "ADMIN"].includes(r)) return "ADMIN";
-  if (r === "MANAGER") return "MANAGER";
-
+  if (["OWNER", "SUPERADMIN", "SUPER_ADMIN"].includes(r)) return "SUPER_ADMIN";
   return "USER";
 }
 
