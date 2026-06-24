@@ -178,8 +178,8 @@ export class SignupService {
         const sub = new TenantSubscription();
         sub.tenantId = savedTenant.id;
         sub.moduleKey = mod.key;
-        sub.status = 'TRIAL';
-        sub.trialEndsAt = trialEndsAt;
+        sub.status = mod.priceMonthly > 0 ? 'TRIAL' : 'ACTIVE';
+        sub.trialEndsAt = mod.priceMonthly > 0 ? trialEndsAt : null as any;
         return sub;
       });
 

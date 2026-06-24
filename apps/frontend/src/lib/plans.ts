@@ -266,6 +266,7 @@ export interface SidebarModule {
   href:     string;
   icon:     LucideIcon;
   minPlan:  PlanTier;
+  moduleKey?: string;
   lockMsg?: string;
 }
 
@@ -496,6 +497,7 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
         href:    "/documents",
         icon:    FolderOpen,
         minPlan: "STARTER",
+        moduleKey: "docs.files",
       },
       {
         label:   "Firma Digitale",

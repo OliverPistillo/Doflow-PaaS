@@ -60,12 +60,7 @@ function getDisplayName(): string {
 // Figma: elm/card/gray cells (bg #f4f9fd, radius 24px)
 // Icon backgrounds use tinted primary variants instead of hardcoded colors
 
-const QUICK_KPIS = [
-  { label: "Nuovi lead oggi",    value: "7",        delta: "+3",   icon: Users,        iconClass: "text-primary",     bgClass: "bg-primary/10" },
-  { label: "Ordini in corso",    value: "23",       delta: "+5",   icon: ShoppingCart, iconClass: "text-chart-2",     bgClass: "bg-chart-2/10" },
-  { label: "Preventivi aperti", value: "€ 84.200", delta: "+12%", icon: FileText,     iconClass: "text-chart-5",     bgClass: "bg-chart-5/10" },
-  { label: "Fatturato mensile", value: "€ 41.600", delta: "+8%",  icon: TrendingUp,   iconClass: "text-chart-4",     bgClass: "bg-chart-4/10" },
-] as const;
+const QUICK_KPIS: any[] = [];
 
 function QuickKpiStrip() {
   return (
@@ -99,11 +94,7 @@ function QuickKpiStrip() {
 // ─── Alert Strip ──────────────────────────────────────────────────────────────
 // Figma-aligned: warm accent via CSS tokens, no hardcoded amber-*
 
-const NOTIFS = [
-  { text: "Preventivo PRV-2026-008 accettato da Luxor Media", time: "2 min fa",  dotClass: "bg-chart-2" },
-  { text: "Nuovo lead: Roberta Silvestri (Tech Solutions)",   time: "18 min fa", dotClass: "bg-primary" },
-  { text: "Fattura FT-2026-031 in scadenza domani",           time: "1 ora fa",  dotClass: "bg-chart-5" },
-];
+const NOTIFS: any[] = [];
 
 function AlertStrip() {
   const [visible, setVisible] = useState(true);
@@ -140,11 +131,7 @@ function AlertStrip() {
 // ─── Upcoming Strip ───────────────────────────────────────────────────────────
 // No hardcoded indigo/emerald/slate — uses semantic tokens
 
-const UPCOMING = [
-  { title: "Call con Marco Bianchi", time: "14:00", tag: "Meeting",  tagClass: "bg-primary/10 text-primary" },
-  { title: "Demo Luxor Media",       time: "16:30", tag: "Demo",     tagClass: "bg-chart-2/10 text-chart-2" },
-  { title: "Review Q2 pipeline",     time: "18:00", tag: "Interno",  tagClass: "bg-muted text-muted-foreground" },
-];
+const UPCOMING: any[] = [];
 
 function UpcomingStrip() {
   const today = new Date().toLocaleDateString("it-IT", {
