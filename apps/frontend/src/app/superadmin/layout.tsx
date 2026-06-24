@@ -159,14 +159,21 @@ function UserNav() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          className="h-9 w-9 rounded-nav bg-primary/10 text-primary flex items-center justify-center font-bold text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring hover:bg-primary/20 transition-colors"
-          aria-label="Menu utente"
-        >
-          <span aria-hidden="true">{user?.initials ?? "SA"}</span>
-        </button>
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="h-9 w-9 rounded-nav bg-primary/10 text-primary flex items-center justify-center font-bold text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring hover:bg-primary/20 transition-colors"
+              aria-label="Menu utente"
+            >
+              <span aria-hidden="true">{user?.initials ?? "SA"}</span>
+            </button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="end">
+          Account utente
+        </TooltipContent>
+      </Tooltip>
       <DropdownMenuContent align="end" className="w-56 rounded-card shadow-card border-border">
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col gap-1">

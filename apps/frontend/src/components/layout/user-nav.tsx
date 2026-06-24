@@ -14,6 +14,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { User, Settings, Moon, Sun, LogOut } from "lucide-react";
 import { getDoFlowUser, getInitials } from "@/lib/jwt";
@@ -41,20 +46,28 @@ export function UserNav() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          className="relative h-9 w-9 rounded-full ring-2 ring-slate-100 dark:ring-slate-800 hover:ring-indigo-200 focus:ring-indigo-300 focus-visible:outline-none"
-        >
-          <Avatar className="h-9 w-9">
-            <AvatarFallback className="bg-indigo-600 text-white font-bold text-sm">
-              {user?.initials ?? "DF"}
-            </AvatarFallback>
-          </Avatar>
-        </Button>
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              className="relative h-9 w-9 rounded-full ring-1 ring-border hover:ring-primary/30 transition-all focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <Avatar className="h-9 w-9">
+                <AvatarFallback className="bg-primary/10 text-primary font-bold text-[13px]">
+                  {user?.initials ?? "DF"}
+                </AvatarFallback>
+              </Avatar>
+              <span className="sr-only">Menu utente</span>
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="end">
+          Account utente
+        </TooltipContent>
+      </Tooltip>
 
-      <DropdownMenuContent className="w-56 rounded-xl shadow-lg" align="end" forceMount>
+      <DropdownMenuContent className="w-56 rounded-xl shadow-lg border-border" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1 py-0.5">
             <p className="text-sm font-semibold leading-none truncate">{user?.email ?? "..."}</p>
@@ -90,7 +103,7 @@ export function UserNav() {
 
         <DropdownMenuItem
           onClick={logout}
-          className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/20 cursor-pointer font-medium"
+          className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer font-medium"
         >
           <LogOut className="mr-2 h-4 w-4" />
           Disconnetti
