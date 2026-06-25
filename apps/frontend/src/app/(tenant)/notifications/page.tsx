@@ -4,15 +4,21 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  Loader2, Bell, CheckCheck, Info, AlertTriangle,
-  XCircle, CheckCircle2, Megaphone, Eye,
+  Bell, CheckCheck, Info, AlertTriangle,
+  XCircle, CheckCircle2, Megaphone, Eye, RefreshCw,
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useNotifications } from "@/hooks/useNotifications";
+import {
+  PageShell,
+  PageHeader,
+  LoadingState,
+  EmptyState,
+} from "@/components/ui/page-shell";
+import { cn } from "@/lib/utils";
 
 type Notification = {
   id: string; title: string; message: string; type: string;
@@ -76,61 +82,100 @@ export default function NotificationsPage() {
     } catch { /* silent */ }
   };
 
-  if (loading) {
-    return (
-      <div className="flex-1 p-4 md:p-6 flex justify-center items-center py-32">
-        <Loader2 className="animate-spin text-primary h-10 w-10" />
-      </div>
-    );
-  }
-
-  const unread = notifs.filter(n => !n.isRead).length;
+  const unreadCount = notifs.filter(n => !n.isRead).length;
 
   return (
-    <div className="flex-1 p-4 md:p-6 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2"><Bell className="h-6 w-6 text-primary" />Notifiche</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">{notifs.length} notifiche · {unread} non lette</p>
-        </div>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Notifiche"
+        description={`${notifs.length} notifiche totali · ${unreadCount} da leggere`}
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={load}
+            disabled={loading}
+            className="gap-2"
+          >
+            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+            Aggiorna
+          </Button>
+        }
+      />
 
-      <div className="space-y-2 max-w-3xl">
-        {notifs.map(n => {
-          const tc = TYPE_CONFIG[n.type] || TYPE_CONFIG.INFO;
-          const IconComp = tc.icon;
-          return (
-            <Card key={n.id} className={`transition-all duration-200 ${!n.isRead ? "border-l-2" : "opacity-70"}`}
-              style={!n.isRead ? { borderLeftColor: tc.color } : undefined}>
-              <CardContent className="p-4 flex items-start gap-3">
-                <div className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
-                  style={{ backgroundColor: `color-mix(in srgb, ${tc.color} 12%, transparent)`, color: tc.color }}>
-                  <IconComp className="h-4 w-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className={`font-semibold text-sm ${n.isRead ? "text-muted-foreground" : "text-foreground"}`}>{n.title}</h4>
-                    {!n.isRead && <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
-                  <span className="text-[10px] text-muted-foreground/60 mt-1 block">{new Date(n.createdAt).toLocaleString("it-IT")}</span>
-                </div>
-                {!n.isRead && (
-                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => markRead(n.id)}>
-                    <Eye className="h-4 w-4 text-muted-foreground" />
-                  </Button>
+      {loading ? (
+        <LoadingState rows={6} />
+      ) : notifs.length === 0 ? (
+        <EmptyState
+          title="Nessuna notifica"
+          message="Il tuo centro notifiche è vuoto. Ti avviseremo quando ci saranno novità."
+          icon={Bell}
+          action={
+            <Button variant="outline" onClick={load} className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Controlla ora
+            </Button>
+          }
+        />
+      ) : (
+        <div className="space-y-3 max-w-3xl animate-in fade-in slide-in-from-bottom-2 duration-500">
+          {notifs.map(n => {
+            const tc = TYPE_CONFIG[n.type] || TYPE_CONFIG.INFO;
+            const IconComp = tc.icon;
+            return (
+              <div
+                key={n.id}
+                className={cn(
+                  "df-glass-panel df-glass-panel-hover overflow-hidden transition-all duration-200",
+                  !n.isRead ? "border-l-4" : "opacity-80"
                 )}
-              </CardContent>
-            </Card>
-          );
-        })}
-        {notifs.length === 0 && (
-          <Card><CardContent className="py-16 text-center text-muted-foreground">
-            <Bell className="h-10 w-10 mx-auto mb-3 opacity-40" />
-            <p className="font-medium">Nessuna notifica</p>
-          </CardContent></Card>
-        )}
-      </div>
-    </div>
+                style={!n.isRead ? { borderLeftColor: tc.color } : undefined}
+              >
+                <CardContent className="p-4 flex items-start gap-4">
+                  <div
+                    className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
+                    style={{ backgroundColor: `color-mix(in srgb, ${tc.color} 12%, transparent)`, color: tc.color }}
+                  >
+                    <IconComp className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h4 className={cn(
+                        "font-bold text-[15px] leading-snug truncate",
+                        n.isRead ? "text-muted-foreground" : "text-foreground"
+                      )}>
+                        {n.title}
+                      </h4>
+                      {!n.isRead && <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2 leading-relaxed">{n.message}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                       <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground/60">
+                        {new Date(n.createdAt).toLocaleString("it-IT", {
+                          day: '2-digit', month: '2-digit', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                  {!n.isRead && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0 hover:bg-primary/10 hover:text-primary transition-colors"
+                      onClick={() => markRead(n.id)}
+                      title="Segna come letta"
+                    >
+                      <Eye className="h-4 w-4" />
+                      <span className="sr-only">Segna come letta</span>
+                    </Button>
+                  )}
+                </CardContent>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </PageShell>
   );
 }
