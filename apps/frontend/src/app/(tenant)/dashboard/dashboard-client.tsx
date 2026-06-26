@@ -36,6 +36,11 @@ import {
 } from "@/lib/plans";
 import { LockedFeature } from "@/components/ui/locked-feature";
 import { COMPONENT_MAP } from "@/components/dashboard/dashboard-widgets";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { getDoFlowUser } from "@/lib/jwt";
 
@@ -423,14 +428,21 @@ export default function DashboardClient() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowReset(true)}
-                title="Ripristina layout di default"
-              >
-                <RotateCcw className="h-4 w-4" aria-hidden="true" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowReset(true)}
+                    aria-label="Ripristina layout di default"
+                  >
+                    <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  Ripristina layout di default
+                </TooltipContent>
+              </Tooltip>
 
               <Button
                 variant="outline"
