@@ -9,6 +9,11 @@ import {
 } from "lucide-react";
 import { CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -159,16 +164,23 @@ export default function NotificationsPage() {
                     </div>
                   </div>
                   {!n.isRead && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-9 w-9 shrink-0 hover:bg-primary/10 hover:text-primary transition-colors"
-                      onClick={() => markRead(n.id)}
-                      title="Segna come letta"
-                    >
-                      <Eye className="h-4 w-4" />
-                      <span className="sr-only">Segna come letta</span>
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 shrink-0 hover:bg-primary/10 hover:text-primary transition-colors"
+                          onClick={() => markRead(n.id)}
+                          aria-label="Segna come letta"
+                        >
+                          <Eye className="h-4 w-4" aria-hidden="true" />
+                          <span className="sr-only">Segna come letta</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Segna come letta
+                      </TooltipContent>
+                    </Tooltip>
                   )}
                 </CardContent>
               </div>
