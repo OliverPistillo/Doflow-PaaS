@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import {
   Receipt, Plus, Search, Download, Send, Eye, Copy, Printer,
   CheckCircle2, Clock, AlertTriangle, XCircle, FileText, Edit2,
@@ -9,6 +9,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,6 +20,11 @@ import { Separator } from "@/components/ui/separator";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 import { PageShell, PageHeader, TableLoadingState, ErrorState } from "@/components/ui/page-shell";
@@ -233,6 +239,19 @@ export default function Page() {
   const [tab, setTab]         = useState("Tutti");
   const [search, setSearch]   = useState("");
   const [selected, setSel]    = useState<Invoice | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcut for search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const totalInvoiced = INVOICES.reduce((s, i) => s + i.total, 0);
   const totalPaid     = INVOICES.filter(i => i.status === "pagata").reduce((s, i) => s + i.total, 0);
@@ -302,8 +321,21 @@ export default function Page() {
           ))}
         </div>
         <div className="relative flex-1 sm:max-w-xs">
+          <Label htmlFor="invoice-search" className="sr-only">Cerca fatture</Label>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Cerca fatture..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
+          <Input
+            id="invoice-search"
+            ref={searchInputRef}
+            placeholder="Cerca fatture..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9 pr-10 h-9"
+          />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:block">
+            <kbd className="h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100 flex">
+              <span className="text-xs">/</span>
+            </kbd>
+          </div>
         </div>
       </div>
 
@@ -387,11 +419,23 @@ export default function Page() {
 
                   {/* Actions */}
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                            aria-label="Azioni fattura"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Azioni fattura
+                      </TooltipContent>
+                    </Tooltip>
                     <DropdownMenuContent align="end" className="w-40">
                       <DropdownMenuItem><Eye className="h-3.5 w-3.5 mr-2" /> Visualizza</DropdownMenuItem>
                       <DropdownMenuItem><Download className="h-3.5 w-3.5 mr-2" /> PDF</DropdownMenuItem>
