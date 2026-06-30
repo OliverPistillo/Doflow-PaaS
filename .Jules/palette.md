@@ -13,3 +13,7 @@
 ## 2026-06-28 - [Page Modernization & Search Accessibility]
 **Learning:** Modernizing secondary pages like Campaigns to use centralized components (PageShell, PageHeader) ensures a premium, cohesive UI across the platform. Integrating keyboard shortcuts (e.g., '/') for search focus is a high-impact UX win that must be paired with clear accessibility markers like <kbd> indicators and screen-reader-only labels. Icon-only actions must always be wrapped in Tooltips and made visible on focus for full keyboard navigability.
 **Action:** Prioritize wrapping icon-only detail triggers in Tooltips and use 'group-focus-within' to ensure visibility during keyboard navigation.
+
+## 2026-07-02 - [Modal-Aware Shortcuts & Visual Continuity]
+**Learning:** Global keyboard shortcuts (like '/' for search) must be modal-aware and input-aware to avoid disrupting user workflows when dialogs are open or other fields are active. When migrating legacy pages to new layout shells (like `PageShell`), explicitly preserving original entrance animation durations (e.g., 500ms) maintains the intended "delight" factor without sacrificing architecture quality.
+**Action:** Always check for `[role="dialog"]` or active inputs before triggering global shortcuts, and use Tailwind's `duration-XXX` classes to fine-tune entrance transitions.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Plus, Search, Building2, Calendar, MoreHorizontal,
   TrendingUp, DollarSign, Target, Users, Filter,
@@ -23,8 +23,15 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+
+import { PageShell, PageHeader } from "@/components/ui/page-shell";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -82,6 +89,23 @@ export default function DealsPage() {
   const [showCreate, setShowCreate]   = useState(false);
   const [newDeal, setNewDeal]         = useState({ title: "", company: "", value: "", stage: "nuovo" as Stage });
   const { toast } = useToast();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcut for search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Evitiamo di attivare la ricerca se l'utente sta scrivendo in un input o se c'è un modal aperto
+      const isInput = ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName || "");
+      const isModalOpen = document.querySelector('[role="dialog"]');
+
+      if (e.key === "/" && !isInput && !isModalOpen) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const filtered = deals.filter((d) => {
     if (!search) return true;
@@ -108,17 +132,13 @@ export default function DealsPage() {
   };
 
   return (
-    <div className="flex-1 space-y-5 p-4 md:p-6 pt-4 animate-in fade-in duration-500">
+    <PageShell className="duration-500">
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Pipeline Vendite</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {filtered.filter((d) => !["vinto","perso"].includes(d.stage)).length} deal attive · Pipeline {fmt(pipelineTotal)}
-          </p>
-        </div>
-        <div className="flex gap-2">
+      <PageHeader
+        title="Pipeline Vendite"
+        description={`${filtered.filter((d) => !["vinto","perso"].includes(d.stage)).length} deal attive · Pipeline ${fmt(pipelineTotal)}`}
+        actions={<>
           <Button variant="outline" size="sm" onClick={() => setView(view === "kanban" ? "list" : "kanban")}>
             {view === "kanban" ? <List className="h-4 w-4 mr-1.5" /> : <KanbanSquare className="h-4 w-4 mr-1.5" />}
             {view === "kanban" ? "Lista" : "Kanban"}
@@ -126,8 +146,8 @@ export default function DealsPage() {
           <Button onClick={() => setShowCreate(true)} className="bg-primary hover:bg-primary/90 text-white" size="sm">
             <Plus className="h-4 w-4 mr-1.5" /> Nuova Deal
           </Button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* KPI Strip */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -154,8 +174,21 @@ export default function DealsPage() {
 
       {/* Search */}
       <div className="relative max-w-xs">
+        <Label htmlFor="deal-search" className="sr-only">Cerca deal</Label>
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Cerca deal..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+        <Input
+          id="deal-search"
+          ref={searchInputRef}
+          placeholder="Cerca deal..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-9 pr-10"
+        />
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:block">
+          <kbd className="h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100 flex">
+            <span className="text-xs">/</span>
+          </kbd>
+        </div>
       </div>
 
       {/* KANBAN VIEW */}
@@ -293,11 +326,23 @@ export default function DealsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
+                                  aria-label="Azioni deal"
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              Azioni deal
+                            </TooltipContent>
+                          </Tooltip>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem><Edit2 className="mr-2 h-4 w-4" /> Modifica</DropdownMenuItem>
                             <DropdownMenuSeparator />
@@ -354,6 +399,6 @@ export default function DealsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }
