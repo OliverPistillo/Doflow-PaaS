@@ -13,3 +13,7 @@
 ## 2026-06-28 - [Page Modernization & Search Accessibility]
 **Learning:** Modernizing secondary pages like Campaigns to use centralized components (PageShell, PageHeader) ensures a premium, cohesive UI across the platform. Integrating keyboard shortcuts (e.g., '/') for search focus is a high-impact UX win that must be paired with clear accessibility markers like <kbd> indicators and screen-reader-only labels. Icon-only actions must always be wrapped in Tooltips and made visible on focus for full keyboard navigability.
 **Action:** Prioritize wrapping icon-only detail triggers in Tooltips and use 'group-focus-within' to ensure visibility during keyboard navigation.
+
+## 2026-07-01 - [Customers Page Modernization & Keyboard Accessibility]
+**Learning:** Refined search shortcut logic must prevent interference with browser shortcuts (Meta/Ctrl) and focus-stealing during active modal interactions (detected via Radix UI's role="dialog"). Keyboard accessibility for "hover-only" actions is best achieved by combining 'group-hover:opacity-100' with 'focus-visible:opacity-100' and 'Tooltip' wrappers for icon-only triggers.
+**Action:** Always include '!e.ctrlKey && !e.metaKey' in search shortcut listeners and ensure icon-only triggers are visible on focus and properly labeled with 'aria-label' and 'Tooltip'.
