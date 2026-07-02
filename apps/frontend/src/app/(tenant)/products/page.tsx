@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Plus, Search, Package, MoreHorizontal, Edit2, Trash2,
   Download, Upload, Filter, Grid3X3, List,
@@ -23,6 +23,11 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -62,6 +67,25 @@ export default function ProductsPage() {
   const [showCreate, setCreate]   = useState(false);
   const [form, setForm]           = useState({ name: "", sku: "", category: "", price: "", unit: "progetto", type: "servizio" as ProductType, description: "" });
   const { toast } = useToast();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcut for search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.key === "/" &&
+        !["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName || "") &&
+        !document.querySelector('[role="dialog"]') &&
+        !e.ctrlKey &&
+        !e.metaKey
+      ) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const filtered = products.filter((p) => {
     if (catFilter !== "all" && p.category !== catFilter) return false;
@@ -106,8 +130,21 @@ export default function ProductsPage() {
 
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         <div className="relative flex-1 max-w-sm">
+          <Label htmlFor="product-search" className="sr-only">Cerca prodotti</Label>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Cerca prodotti..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          <Input
+            id="product-search"
+            ref={searchInputRef}
+            placeholder="Cerca prodotti..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9 pr-10"
+          />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:block">
+            <kbd className="h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100 flex">
+              <span className="text-xs">/</span>
+            </kbd>
+          </div>
         </div>
         <Select value={catFilter} onValueChange={setCat}>
           <SelectTrigger className="w-[160px]"><SelectValue placeholder="Categoria" /></SelectTrigger>
@@ -124,9 +161,22 @@ export default function ProductsPage() {
             <SelectItem value="prodotto">Prodotti</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setView(view === "list" ? "grid" : "list")}>
-          {view === "list" ? <Grid3X3 className="h-4 w-4" /> : <List className="h-4 w-4" />}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => setView(view === "list" ? "grid" : "list")}
+              aria-label="Cambia visualizzazione"
+            >
+              {view === "list" ? <Grid3X3 className="h-4 w-4" /> : <List className="h-4 w-4" />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            Cambia visualizzazione
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       {view === "list" ? (
@@ -171,9 +221,23 @@ export default function ProductsPage() {
                   <TableCell className="text-sm text-muted-foreground">{p.taxRate}%</TableCell>
                   <TableCell>
                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100"><MoreHorizontal className="h-4 w-4" /></Button>
-                      </DropdownMenuTrigger>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                              aria-label="Azioni prodotto"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          Azioni prodotto
+                        </TooltipContent>
+                      </Tooltip>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem><Edit2 className="mr-2 h-4 w-4" /> Modifica</DropdownMenuItem>
                         <DropdownMenuSeparator />
