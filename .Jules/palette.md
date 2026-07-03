@@ -11,5 +11,5 @@
 **Action:** Always include a `<kbd>/</kbd>` indicator in search bars and ensure icon-only buttons are accessible to keyboard users via `focus-visible` and ARIA labels.
 
 ## 2026-06-28 - [Page Modernization & Search Accessibility]
-**Learning:** Modernizing secondary pages like Campaigns to use centralized components (PageShell, PageHeader) ensures a premium, cohesive UI across the platform. Integrating keyboard shortcuts (e.g., '/') for search focus is a high-impact UX win that must be paired with clear accessibility markers like <kbd> indicators and screen-reader-only labels. Icon-only actions must always be wrapped in Tooltips and made visible on focus for full keyboard navigability.
-**Action:** Prioritize wrapping icon-only detail triggers in Tooltips and use 'group-focus-within' to ensure visibility during keyboard navigation.
+**Learning:** Modernizing secondary pages like Campaigns and Customers to use centralized components (PageShell, PageHeader) ensures a premium, cohesive UI. Integrating the '/' keyboard shortcut for search focus is a high-impact UX win that must be paired with clear accessibility markers like <kbd> indicators and sr-only labels. Crucially, using `group-focus-within:opacity-100` ensures that action buttons (often hidden on hover) remain accessible to keyboard-only users.
+**Action:** Prioritize wrapping icon-only triggers in Tooltips and use `group-focus-within:opacity-100` to ensure visibility during keyboard navigation on interactive rows.

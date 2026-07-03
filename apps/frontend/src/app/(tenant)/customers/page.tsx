@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Plus, Search, Mail, Phone, Building2, MoreHorizontal,
   UserPlus, Download, Upload, Globe, TrendingUp,
@@ -9,6 +9,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -35,6 +40,7 @@ import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
+import { PageShell, PageHeader } from "@/components/ui/page-shell";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -118,6 +124,26 @@ export default function CustomersPage() {
   const [search, setSearch]         = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcut for search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.key === "/" &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        document.activeElement?.tagName !== "INPUT" &&
+        document.activeElement?.tagName !== "TEXTAREA" &&
+        !document.querySelector('[role="dialog"]')
+      ) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
   const [users, setUsers]           = useState(DEMO_USERS);
   const [leads, setLeads]           = useState(DEMO_LEADS);
   const [leadFilter, setLeadFilter] = useState<"all" | LeadStatus>("all");
@@ -152,26 +178,24 @@ export default function CustomersPage() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex-1 space-y-5 p-4 md:p-6 pt-4 animate-in fade-in duration-500">
+    <PageShell>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">CRM & Clienti</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Gestisci il tuo team e i potenziali clienti
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Download className="mr-1.5 h-4 w-4" /> Esporta
-          </Button>
-          <Button onClick={() => setShowCreate(true)} className="bg-primary hover:bg-primary/90 text-white" size="sm">
-            <UserPlus className="mr-1.5 h-4 w-4" />
-            {tab === "users" ? "Nuovo Utente" : "Nuovo Lead"}
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="CRM & Clienti"
+        description="Gestisci il tuo team e i potenziali clienti"
+        actions={
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm">
+              <Download className="mr-1.5 h-4 w-4" /> Esporta
+            </Button>
+            <Button onClick={() => setShowCreate(true)} className="bg-primary hover:bg-primary/90 text-white" size="sm">
+              <UserPlus className="mr-1.5 h-4 w-4" />
+              {tab === "users" ? "Nuovo Utente" : "Nuovo Lead"}
+            </Button>
+          </div>
+        }
+      />
 
       <Tabs value={tab} onValueChange={(v) => { setTab(v as typeof tab); setSearch(""); }}>
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
@@ -180,13 +204,21 @@ export default function CustomersPage() {
             <TabsTrigger value="leads">Lead ({leads.length})</TabsTrigger>
           </TabsList>
           <div className="relative flex-1 max-w-sm">
+            <Label htmlFor="customer-search" className="sr-only">Cerca</Label>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
+              id="customer-search"
+              ref={searchInputRef}
               placeholder={tab === "users" ? "Cerca utenti..." : "Cerca lead..."}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
+              className="pl-9 pr-10"
             />
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:block">
+              <kbd className="h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100 flex">
+                <span className="text-xs">/</span>
+              </kbd>
+            </div>
           </div>
           {tab === "leads" && (
             <Select value={leadFilter} onValueChange={(v) => setLeadFilter(v as typeof leadFilter)}>
@@ -232,11 +264,23 @@ export default function CustomersPage() {
                         {user.status === "active" ? "Attivo" : "Inattivo"}
                       </Badge>
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                                aria-label="Azioni utente"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            Azioni utente
+                          </TooltipContent>
+                        </Tooltip>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem><Edit2 className="mr-2 h-4 w-4" /> Modifica</DropdownMenuItem>
                           <DropdownMenuSeparator />
@@ -376,15 +420,23 @@ export default function CustomersPage() {
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost" size="icon"
-                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost" size="icon"
+                                  className="h-8 w-8 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                                  onClick={(e) => e.stopPropagation()}
+                                  aria-label="Azioni lead"
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              Azioni lead
+                            </TooltipContent>
+                          </Tooltip>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedLead(lead); }}>
                               <Eye className="mr-2 h-4 w-4" /> Dettagli
@@ -555,6 +607,6 @@ export default function CustomersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }
