@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Plus, Search, CheckCircle2, Circle, Clock, AlertCircle,
   MoreHorizontal, Star, Trash2, CalendarDays, Filter,
@@ -26,6 +26,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip, TooltipContent, TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -91,11 +94,30 @@ const STATUS_ORDER: TaskStatus[] = ["todo", "in_progress", "done"];
 export default function TasksPage() {
   const [tasks, setTasks]                 = useState<Task[]>(DEMO_TASKS);
   const [search, setSearch]               = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
   const [filterStatus, setFilterStatus]   = useState<"all" | TaskStatus>("all");
   const [filterPriority, setFilterPriority] = useState<"all" | TaskPriority>("all");
   const [showCreate, setShowCreate]       = useState(false);
   const [newTask, setNewTask]             = useState({ title: "", description: "", priority: "medium" as TaskPriority, assignee: "", due_date: "" });
   const { toast } = useToast();
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey) {
+        if (
+          document.activeElement?.tagName === "INPUT" ||
+          document.activeElement?.tagName === "TEXTAREA" ||
+          document.querySelector('[role="dialog"]')
+        ) {
+          return;
+        }
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // ── Filtered tasks ──
   const filtered = tasks.filter((t) => {
@@ -206,12 +228,20 @@ export default function TasksPage() {
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Label htmlFor="tasks-search" className="sr-only">Cerca task</Label>
           <Input
+            id="tasks-search"
+            ref={searchRef}
             placeholder="Cerca task..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="pl-9 pr-12"
           />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:block">
+            <kbd className="h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100 flex">
+              /
+            </kbd>
+          </div>
         </div>
 
         <Tabs value={filterStatus} onValueChange={(v) => setFilterStatus(v as typeof filterStatus)}>
@@ -269,9 +299,20 @@ export default function TasksPage() {
               return (
                 <TableRow key={task.id} className="group">
                   <TableCell>
-                    <button onClick={() => toggleStar(task.id)} className="opacity-60 hover:opacity-100 transition-opacity">
-                      <Star className={`h-4 w-4 ${task.starred ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
-                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => toggleStar(task.id)}
+                          className="opacity-60 hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none transition-opacity rounded-sm"
+                          aria-label={task.starred ? "Rimuovi dai preferiti" : "Aggiungi ai preferiti"}
+                        >
+                          <Star className={`h-4 w-4 ${task.starred ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {task.starred ? "Rimuovi stella" : "Aggiungi stella"}
+                      </TooltipContent>
+                    </Tooltip>
                   </TableCell>
                   <TableCell>
                     <div className="space-y-1">
@@ -322,11 +363,21 @@ export default function TasksPage() {
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                              aria-label="Azioni task"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>Azioni</TooltipContent>
+                      </Tooltip>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Azioni</DropdownMenuLabel>
                         <DropdownMenuSeparator />
