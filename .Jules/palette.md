@@ -13,3 +13,7 @@
 ## 2026-06-28 - [Page Modernization & Search Accessibility]
 **Learning:** Modernizing secondary pages like Campaigns to use centralized components (PageShell, PageHeader) ensures a premium, cohesive UI across the platform. Integrating keyboard shortcuts (e.g., '/') for search focus is a high-impact UX win that must be paired with clear accessibility markers like <kbd> indicators and screen-reader-only labels. Icon-only actions must always be wrapped in Tooltips and made visible on focus for full keyboard navigability.
 **Action:** Prioritize wrapping icon-only detail triggers in Tooltips and use 'group-focus-within' to ensure visibility during keyboard navigation.
+
+## 2026-06-29 - [CRM Modernization & Keyboard Accessibility]
+**Learning:** Modernizing management pages like Customers requires a holistic approach to accessibility. The combination of the '/' search shortcut (with `<kbd>` hint and `sr-only` labels) and making row-level actions visible on keyboard focus via `group-focus-within:opacity-100` ensures a premium experience for power users and assistive technology alike. Tooltips for icon-only actions provide necessary context that would otherwise be missing in high-density tables.
+**Action:** Combine shortcut discovery hints with focus-visible improvements for all data-heavy management interfaces.
