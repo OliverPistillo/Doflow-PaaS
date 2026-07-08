@@ -56,6 +56,10 @@ const EXISTING_TENANT_ROUTES = new Set([
   "/activity",
   "/analytics",
   "/billing",
+  "/briefings",
+  "/briefings/incomplete",
+  "/briefings/new",
+  "/briefings/templates",
   "/calendar",
   "/campaigns",
   "/changelog",
@@ -77,6 +81,12 @@ const EXISTING_TENANT_ROUTES = new Set([
   "/pipeline",
   "/projects",
   "/quotes",
+  "/quotes/accepted",
+  "/quotes/drafts",
+  "/quotes/new",
+  "/quotes/rejected",
+  "/quotes/sent",
+  "/quotes/service-templates",
   "/settings",
   "/settings/automations",
   "/settings/company",
@@ -131,21 +141,21 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
     {
       label: "Briefing",
       modules: [
-        item("Tutti i briefing", undefined, FileText, { comingSoon: true }),
-        item("Nuovo briefing", undefined, FileCheck2, { comingSoon: true }),
-        item("Incompleti", undefined, FileClock, { comingSoon: true }),
-        item("Template briefing", undefined, BookTemplate, { comingSoon: true }),
+        item("Tutti i briefing", "/briefings", FileText),
+        item("Nuovo briefing", "/briefings/new", FileCheck2),
+        item("Incompleti", "/briefings/incomplete", FileClock),
+        item("Template briefing", "/briefings/templates", BookTemplate),
       ],
     },
     {
       label: "Preventivi",
       modules: [
         item("Tutti", "/quotes", Send),
-        item("Bozze", undefined, FileText, { comingSoon: true }),
-        item("Inviati", undefined, MailCheck, { comingSoon: true }),
-        item("Accettati", undefined, FileCheck2, { comingSoon: true }),
-        item("Rifiutati", undefined, FileClock, { comingSoon: true }),
-        item("Template servizi", "/email-templates", BookTemplate),
+        item("Bozze", "/quotes/drafts", FileText),
+        item("Inviati", "/quotes/sent", MailCheck),
+        item("Accettati", "/quotes/accepted", FileCheck2),
+        item("Rifiutati", "/quotes/rejected", FileClock),
+        item("Template servizi", "/quotes/service-templates", BookTemplate),
       ],
     },
     {
@@ -242,16 +252,16 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
     {
       label: "Briefing",
       modules: [
-        item("Tutti i briefing", undefined, FileText, { comingSoon: true }),
-        item("Incompleti", undefined, FileClock, { comingSoon: true }),
+        item("Tutti i briefing", "/briefings", FileText),
+        item("Incompleti", "/briefings/incomplete", FileClock),
       ],
     },
     {
       label: "Preventivi",
       modules: [
         item("Tutti", "/quotes", Send),
-        item("Inviati", undefined, MailCheck, { comingSoon: true }),
-        item("Accettati", undefined, FileCheck2, { comingSoon: true }),
+        item("Inviati", "/quotes/sent", MailCheck),
+        item("Accettati", "/quotes/accepted", FileCheck2),
       ],
     },
     {
@@ -348,7 +358,7 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
     {
       label: "Briefing",
       modules: [
-        item("Tutti i briefing", undefined, FileText, { comingSoon: true }),
+        item("Tutti i briefing", "/briefings", FileText),
       ],
     },
     {

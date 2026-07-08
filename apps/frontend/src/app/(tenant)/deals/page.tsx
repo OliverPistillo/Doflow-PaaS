@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+import { FileCheck2, Send } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   CrmResourcePage,
   OPPORTUNITY_STAGE_OPTIONS,
@@ -46,6 +49,16 @@ export default function DealsPage() {
       filterKey="stage"
       filterOptions={OPPORTUNITY_STAGE_OPTIONS}
       emptyText="Nessuna opportunita reale ancora presente."
+      headerActions={(
+        <>
+          <Button asChild variant="outline">
+            <Link href="/briefings/new"><FileCheck2 className="mr-2 h-4 w-4" /> Crea briefing</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/quotes/new"><Send className="mr-2 h-4 w-4" /> Crea preventivo</Link>
+          </Button>
+        </>
+      )}
     />
   );
 }

@@ -10,6 +10,7 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock,
+  FileCheck2,
   FileText,
   FolderKanban,
   Handshake,
@@ -62,6 +63,10 @@ type DashboardSummary = {
     activeOpportunities: number;
     pipelineValue: number;
     sentQuotes: number;
+    acceptedQuotes?: number;
+    rejectedQuotes?: number;
+    sentQuoteValue?: number;
+    acceptedQuoteValue?: number;
     followUpsDue: number;
     wonDeals: number;
     lostDeals: number;
@@ -115,11 +120,14 @@ type DashboardSummary = {
   };
   operations: {
     missingMaterials: number;
+    incompleteBriefings?: number;
+    completedBriefings?: number;
     openClientReviews: number;
     upcomingDeliveries: number;
     recentComments: ActivityItem[];
     recentFiles: ActivityItem[];
     notifications: ActivityItem[];
+    sources?: SourceFlags;
   };
 };
 
@@ -170,6 +178,10 @@ function getFallbackSummary(): DashboardSummary {
       activeOpportunities: 0,
       pipelineValue: 0,
       sentQuotes: 0,
+      acceptedQuotes: 0,
+      rejectedQuotes: 0,
+      sentQuoteValue: 0,
+      acceptedQuoteValue: 0,
       followUpsDue: 0,
       wonDeals: 0,
       lostDeals: 0,
@@ -225,11 +237,14 @@ function getFallbackSummary(): DashboardSummary {
     },
     operations: {
       missingMaterials: 0,
+      incompleteBriefings: 0,
+      completedBriefings: 0,
       openClientReviews: 0,
       upcomingDeliveries: 0,
       recentComments: [],
       recentFiles: [],
       notifications: [],
+      sources: {},
     },
   };
 }
@@ -474,8 +489,8 @@ export default function DashboardClient() {
 
   const executiveActions = useMemo<QuickAction[]>(() => [
     { label: "Nuovo lead", href: "/leads", icon: Handshake },
-    { label: "Nuovo briefing", icon: FileText, disabled: true, note: "Briefing V2 in arrivo" },
-    { label: "Nuovo preventivo", href: "/quotes", icon: Send },
+    { label: "Nuovo briefing", href: "/briefings/new", icon: FileText },
+    { label: "Nuovo preventivo", href: "/quotes/new", icon: Send },
     { label: "Nuovo progetto", icon: FolderKanban, disabled: true, note: "Progetti V2 non persistenti in questa fase" },
     { label: "Invita dipendente", href: "/team", icon: UserPlus },
     { label: "Apri finance", href: "/invoices", icon: Wallet },
@@ -506,8 +521,18 @@ export default function DashboardClient() {
     { label: "Opportunità attive", value: summary.sales.activeOpportunities },
     { label: "Valore pipeline", value: formatCurrency(summary.sales.pipelineValue), hint: "Visibile solo a CEO/Admin" },
     { label: "Preventivi inviati", value: summary.sales.sentQuotes },
+    { label: "Preventivi accettati", value: summary.sales.acceptedQuotes || 0, tone: (summary.sales.acceptedQuotes || 0) > 0 ? "success" : "default" },
+    { label: "Preventivi rifiutati", value: summary.sales.rejectedQuotes || 0, tone: (summary.sales.rejectedQuotes || 0) > 0 ? "warning" : "default" },
+    { label: "Valore inviati", value: formatCurrency(summary.sales.sentQuoteValue || 0), hint: "Preventivi inviati/visti" },
+    { label: "Valore accettati", value: formatCurrency(summary.sales.acceptedQuoteValue || 0), tone: (summary.sales.acceptedQuoteValue || 0) > 0 ? "success" : "default" },
     { label: "Follow-up da fare", value: summary.sales.followUpsDue, tone: summary.sales.followUpsDue > 0 ? "warning" : "default" },
     { label: "Deal vinti / persi", value: `${summary.sales.wonDeals} / ${summary.sales.lostDeals}` },
+  ];
+
+  const briefingMetrics: Metric[] = [
+    { label: "Briefing incompleti", value: summary.operations.incompleteBriefings || 0, tone: (summary.operations.incompleteBriefings || 0) > 0 ? "warning" : "default" },
+    { label: "Briefing completati", value: summary.operations.completedBriefings || 0, tone: (summary.operations.completedBriefings || 0) > 0 ? "success" : "default" },
+    { label: "Materiali mancanti", value: summary.operations.missingMaterials, tone: summary.operations.missingMaterials > 0 ? "warning" : "default" },
   ];
 
   const projectMetrics: Metric[] = [
@@ -605,7 +630,15 @@ export default function DashboardClient() {
               icon={BarChart3}
               metrics={salesMetrics}
               sources={summary.sales.sources}
-              emptyText="Le tabelle CRM V2 per lead, deal e preventivi non sono ancora persistenti: zeri reali, nessun mock."
+              emptyText="Le tabelle CRM V2 commerciali non hanno ancora dati: zeri reali, nessun mock."
+            />
+            <SectionCard
+              title="Briefing e materiali"
+              description="Briefing cliente, review interna e materiali ancora da raccogliere."
+              icon={FileCheck2}
+              metrics={briefingMetrics}
+              sources={summary.operations.sources}
+              emptyText="Briefing e materiali sono collegati a tabelle reali; compariranno appena creati."
             />
             <SectionCard
               title="Progetti"
@@ -670,9 +703,10 @@ export default function DashboardClient() {
                 { label: "Task bloccati", value: summary.projects.blockedTasks, tone: summary.projects.blockedTasks > 0 ? "warning" : "default" },
                 { label: "Task del team", value: summary.team.openTasks },
                 { label: "Materiali mancanti", value: summary.operations.missingMaterials },
+                { label: "Briefing incompleti", value: summary.operations.incompleteBriefings || 0 },
                 { label: "Review cliente aperte", value: summary.operations.openClientReviews },
               ]}
-              sources={{ ...summary.projects.sources, ...summary.team.sources }}
+              sources={{ ...summary.projects.sources, ...summary.team.sources, ...summary.operations.sources }}
               emptyText="La vista PM non usa mock: progetti, task, materiali e review restano a zero finché non sono persistenti."
             />
             <SectionCard

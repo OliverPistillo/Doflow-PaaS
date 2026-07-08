@@ -133,6 +133,7 @@ export function CrmResourcePage({
   filterKey,
   filterOptions,
   emptyText,
+  headerActions,
 }: {
   title: string;
   description: string;
@@ -143,6 +144,7 @@ export function CrmResourcePage({
   filterKey?: string;
   filterOptions?: Array<{ value: string; label: string }>;
   emptyText: string;
+  headerActions?: ReactNode;
 }) {
   const [items, setItems] = useState<CrmRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -261,10 +263,13 @@ export function CrmResourcePage({
           <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          {createLabel}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {headerActions}
+          <Button onClick={openCreate}>
+            <Plus className="mr-2 h-4 w-4" />
+            {createLabel}
+          </Button>
+        </div>
       </div>
 
       <Card>
