@@ -12,6 +12,7 @@ import {
   seedDoflowBriefingQuoteTemplates,
 } from '../tenant/tenant-briefing-quotes-schema';
 import { ensureTenantProjectsTables } from '../tenant/tenant-projects-schema';
+import { ensureTenantFinanceTables } from '../tenant/tenant-finance-schema';
 
 const TENANT_SLUG = 'doflow';
 const TENANT_SCHEMA = 'doflow';
@@ -274,6 +275,7 @@ async function ensureTenantTables(ds: DataSource, schema: string) {
   await ensureTenantCrmCoreTables(ds, s);
   await ensureTenantBriefingQuoteTables(ds, s);
   await ensureTenantProjectsTables(ds, s);
+  await ensureTenantFinanceTables(ds, s);
 }
 
 async function ensureTenantRecord(ds: DataSource): Promise<{ id: string }> {

@@ -12,6 +12,8 @@ import { TenantQuotesController } from './tenant-quotes.controller';
 import { TenantQuotesService } from './tenant-quotes.service';
 import { TenantProjectsController } from './tenant-projects.controller';
 import { TenantProjectsService } from './tenant-projects.service';
+import { TenantFinanceController } from './tenant-finance.controller';
+import { TenantFinanceService } from './tenant-finance.service';
 
 import { Tenant } from '../superadmin/entities/tenant.entity';
 import { TenantSubscription } from '../superadmin/entities/tenant-subscription.entity';
@@ -39,7 +41,15 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantBriefingController,
     TenantQuotesController,
     TenantProjectsController,
+    TenantFinanceController,
   ],
-  providers: [TenantDashboardService, TenantCrmService, TenantBriefingService, TenantQuotesService, TenantProjectsService],
+  providers: [
+    TenantDashboardService,
+    TenantCrmService,
+    TenantBriefingService,
+    TenantQuotesService,
+    TenantProjectsService,
+    TenantFinanceService,
+  ],
 })
 export class TenantModule {}

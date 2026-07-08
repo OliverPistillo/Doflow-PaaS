@@ -591,25 +591,49 @@ export class TenantDashboardService {
     const invoiceTable = (await this.tableExists(schema, 'invoices')) ? 'invoices' : null;
     const invoiceHasStatus = Boolean(invoiceTable && (await this.columnExists(schema, invoiceTable, 'status')));
     const unpaidInvoiceWhere = invoiceHasStatus
-      ? `LOWER(COALESCE(status::text, '')) NOT IN ('paid', 'closed', 'cancelled')`
+      ? `LOWER(COALESCE(status::text, '')) NOT IN ('paid', 'closed', 'cancelled', 'void')`
       : 'TRUE';
+    const hasPayments = await this.tableExists(schema, 'payments');
+    const hasDeadlines = await this.tableExists(schema, 'financial_deadlines');
+    const hasProjectFinancialStatus = await this.tableExists(schema, 'project_financial_status');
 
     return {
       issuedInvoices: invoiceTable ? await this.countRows(schema, invoiceTable) : 0,
-      receivables: invoiceTable ? await this.countByOptionalStatus(schema, invoiceTable, ['sent', 'open', 'pending', 'unpaid']) : 0,
+      receivables: invoiceTable ? await this.countByOptionalStatus(schema, invoiceTable, ['issued', 'sent', 'partially_paid', 'overdue']) : 0,
       overdueInvoices: invoiceTable && (await this.columnExists(schema, invoiceTable, 'due_date'))
         ? await this.countRows(schema, invoiceTable, `due_date < current_date AND ${unpaidInvoiceWhere}`)
         : 0,
-      balanceToRequest: invoiceTable && (await this.columnExists(schema, invoiceTable, 'balance_due'))
-        ? await this.sumRows(schema, invoiceTable, 'balance_due', unpaidInvoiceWhere)
+      balanceToRequest: invoiceTable && (await this.columnExists(schema, invoiceTable, 'remaining_total'))
+        ? await this.sumRows(schema, invoiceTable, 'remaining_total', unpaidInvoiceWhere)
         : 0,
-      upcomingRenewals: await this.countRowsIfColumnExists(schema, 'renewals', 'renewal_date', `renewal_date BETWEEN current_date AND current_date + INTERVAL '30 days'`),
+      paymentsThisMonth: hasPayments
+        ? await this.sumRows(
+            schema,
+            'payments',
+            'amount',
+            `LOWER(COALESCE(status::text, '')) IN ('recorded', 'confirmed')
+             AND date_trunc('month', COALESCE(payment_date, created_at::date)::timestamp) = date_trunc('month', current_date::timestamp)`,
+          )
+        : 0,
+      totalOutstanding: invoiceTable && (await this.columnExists(schema, invoiceTable, 'remaining_total'))
+        ? await this.sumRows(schema, invoiceTable, 'remaining_total', unpaidInvoiceWhere)
+        : 0,
+      upcomingRenewals: await this.countRowsIfColumnExists(schema, 'renewals', 'due_date', `due_date BETWEEN current_date AND current_date + INTERVAL '30 days'`),
+      openFinanceDeadlines: hasDeadlines
+        ? await this.countByOptionalStatus(schema, 'financial_deadlines', ['open', 'overdue'])
+        : 0,
+      projectsWithOpenPayments: hasProjectFinancialStatus
+        ? await this.countByOptionalStatus(schema, 'project_financial_status', ['not_started', 'deposit_due', 'partially_paid', 'overdue'])
+        : 0,
       estimatedMargin: invoiceTable && (await this.columnExists(schema, invoiceTable, 'margin'))
         ? await this.sumRows(schema, invoiceTable, 'margin')
         : 0,
       sources: {
         invoices: Boolean(invoiceTable),
+        payments: hasPayments,
         renewals: await this.tableExists(schema, 'renewals'),
+        financialDeadlines: hasDeadlines,
+        projectFinancialStatus: hasProjectFinancialStatus,
       },
     };
   }
@@ -998,7 +1022,11 @@ interface DashboardFinanceSummary {
   receivables: number;
   overdueInvoices: number;
   balanceToRequest: number;
+  paymentsThisMonth: number;
+  totalOutstanding: number;
   upcomingRenewals: number;
+  openFinanceDeadlines: number;
+  projectsWithOpenPayments: number;
   estimatedMargin: number;
   sources: DashboardSourceFlags;
 }

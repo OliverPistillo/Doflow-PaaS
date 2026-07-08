@@ -7,6 +7,10 @@ import {
   createStandardProjectPlan,
   ensureTenantProjectsTables,
 } from './tenant-projects-schema';
+import {
+  ensureProjectFinancialStatusFromQuote,
+  ensureTenantFinanceTables,
+} from './tenant-finance-schema';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -274,6 +278,7 @@ export class TenantProjectsService {
     this.requireUuid(quoteId, 'ID preventivo');
     const schema = this.getSchema();
     await this.ensureSchema(schema);
+    await ensureTenantFinanceTables(this.dataSource, schema);
     const userId = this.userIdOrNull(user.id);
     const runner = this.dataSource.createQueryRunner();
     await runner.connect();
@@ -345,6 +350,14 @@ export class TenantProjectsService {
         );
       }
       await createStandardProjectPlan(runner, schema, projectId, quote.company_id || null, projectManagerId);
+      await ensureProjectFinancialStatusFromQuote(
+        runner,
+        schema,
+        projectId,
+        quote.id,
+        quote.company_id || null,
+        userId,
+      );
       await runner.commitTransaction();
       await this.audit(schema, user, 'project_created_from_quote', projectId, { quoteId });
       return { existing: false, project: await this.getProject(projectId) };
