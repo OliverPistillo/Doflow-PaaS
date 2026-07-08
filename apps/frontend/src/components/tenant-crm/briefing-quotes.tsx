@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2, Edit3, Eye, FileCheck2, FileText, Loader2, Plus, RefreshCw,
-  Search, Send, Trash2, XCircle,
+  Search, Send, Trash2, XCircle, FolderKanban,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -212,6 +212,7 @@ export function BriefingListPage({
   title?: string;
   description?: string;
 }) {
+  const router = useRouter();
   const [items, setItems] = useState<Row[]>([]);
   const [materials, setMaterials] = useState<Row[]>([]);
   const [selected, setSelected] = useState<Row | null>(null);
@@ -619,6 +620,7 @@ export function QuotesListPage({
   title?: string;
   description?: string;
 }) {
+  const router = useRouter();
   const [items, setItems] = useState<Row[]>([]);
   const [selected, setSelected] = useState<Row | null>(null);
   const [editing, setEditing] = useState<Row | null>(null);
@@ -723,6 +725,16 @@ export function QuotesListPage({
     await load();
   };
 
+  const createProjectFromQuote = async (row: Row) => {
+    if (row.status !== "accepted") return;
+    const result = await apiFetch<Row | { project?: Row; existing?: boolean }>(`/tenant/projects/from-quote/${row.id}`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    const project = "project" in result ? result.project : result;
+    router.push(project?.id ? `/projects/${project.id}` : "/projects");
+  };
+
   if (!canManageBriefingQuotes()) return <AccessDenied title="Preventivi" />;
 
   return (
@@ -788,6 +800,7 @@ export function QuotesListPage({
                           <Button size="sm" variant="outline" onClick={() => openEdit(row)}><Edit3 className="h-4 w-4" /></Button>
                           <Button size="sm" variant="outline" onClick={() => accept(row)} disabled={row.status === "accepted"}><CheckCircle2 className="h-4 w-4" /></Button>
                           <Button size="sm" variant="outline" onClick={() => reject(row)} disabled={row.status === "rejected"}><XCircle className="h-4 w-4" /></Button>
+                          {row.status === "accepted" ? <Button size="sm" variant="outline" onClick={() => createProjectFromQuote(row)}><FolderKanban className="h-4 w-4" /></Button> : null}
                           <Button size="sm" variant="outline" onClick={() => recalculate(row)}><RefreshCw className="h-4 w-4" /></Button>
                           <Select value={row.status || "draft"} onValueChange={(next) => updateStatus(row, next)}>
                             <SelectTrigger className="h-8 w-[130px]"><SelectValue /></SelectTrigger>
@@ -822,7 +835,10 @@ export function QuotesListPage({
               <div className="rounded-lg border p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="font-semibold">Righe preventivo</h3>
-                  <Button size="sm" variant="outline" onClick={() => recalculate(selected)}><RefreshCw className="mr-2 h-4 w-4" /> Ricalcola</Button>
+                  <div className="flex gap-2">
+                    {selected.status === "accepted" ? <Button size="sm" variant="outline" onClick={() => createProjectFromQuote(selected)}><FolderKanban className="mr-2 h-4 w-4" /> Crea progetto</Button> : null}
+                    <Button size="sm" variant="outline" onClick={() => recalculate(selected)}><RefreshCw className="mr-2 h-4 w-4" /> Ricalcola</Button>
+                  </div>
                 </div>
                 {(selected.items || []).length === 0 ? (
                   <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">Nessuna riga ancora inserita.</div>

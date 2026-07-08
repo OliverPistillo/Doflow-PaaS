@@ -491,20 +491,20 @@ export default function DashboardClient() {
     { label: "Nuovo lead", href: "/leads", icon: Handshake },
     { label: "Nuovo briefing", href: "/briefings/new", icon: FileText },
     { label: "Nuovo preventivo", href: "/quotes/new", icon: Send },
-    { label: "Nuovo progetto", icon: FolderKanban, disabled: true, note: "Progetti V2 non persistenti in questa fase" },
+    { label: "Nuovo progetto", href: "/projects/new", icon: FolderKanban },
     { label: "Invita dipendente", href: "/team", icon: UserPlus },
     { label: "Apri finance", href: "/invoices", icon: Wallet },
   ], []);
 
   const managerActions = useMemo<QuickAction[]>(() => [
-    { label: "Apri task", href: "/tasks", icon: CheckCircle2 },
-    { label: "Calendario consegne", href: "/calendar", icon: CalendarDays },
-    { label: "File e materiali", href: "/documents", icon: FileText },
+    { label: "Apri task", href: "/projects/tasks", icon: CheckCircle2 },
+    { label: "Calendario consegne", href: "/projects/timeline", icon: CalendarDays },
+    { label: "File e materiali", href: "/projects/files", icon: FileText },
   ], []);
 
   const employeeActions = useMemo<QuickAction[]>(() => [
-    { label: "I miei task", href: "/tasks", icon: CheckCircle2 },
-    { label: "File necessari", href: "/documents", icon: FileText },
+    { label: "I miei task", href: "/projects/tasks", icon: CheckCircle2 },
+    { label: "File necessari", href: "/projects/files", icon: FileText },
     { label: "Notifiche", href: "/notifications", icon: MessageSquare },
   ], []);
 
@@ -646,7 +646,7 @@ export default function DashboardClient() {
               icon={FolderKanban}
               metrics={projectMetrics}
               sources={summary.projects.sources}
-              emptyText="Progetti, task e milestone saranno collegati quando le tabelle V2 saranno disponibili."
+              emptyText="Progetti, task e milestone sono collegati a Projects V2: compariranno appena creati."
             />
             {summary.finance ? (
               <SectionCard
@@ -664,7 +664,7 @@ export default function DashboardClient() {
               icon={Users}
               metrics={teamMetrics}
               sources={summary.team.sources}
-              emptyText="Utenti e inviti sono reali; task e workload restano a zero finché non esistono tabelle task tenant."
+              emptyText="Utenti e inviti sono reali; task e workload arrivano da Projects V2 quando presenti."
             >
               {summary.team.workload.length > 0 ? (
                 <div className="space-y-2">
