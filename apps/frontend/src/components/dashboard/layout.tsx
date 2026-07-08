@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 import { apiFetch } from '@/lib/api';
+import { getTenantAppUrl } from '@/lib/tenant-url';
 import { ChevronRight, ExternalLink, Search, Shield } from 'lucide-react';
 
 type Role = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'USER';
@@ -119,7 +120,15 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
   }, [tenants, tenantQuery]);
 
   function openTenant(slug: string) {
-    window.location.assign(`https://${slug}.doflow.it/admin/users`);
+    window.location.assign(`${getTenantAppUrl(slug)}/admin/users`);
+  }
+
+  function tenantHostLabel(slug: string) {
+    try {
+      return new URL(getTenantAppUrl(slug)).host;
+    } catch {
+      return `${slug}.doflow.it`;
+    }
   }
 
   return (
@@ -207,7 +216,7 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
                     >
                       <div className="min-w-0">
                         <div className="text-sm font-medium truncate">{t.name}</div>
-                        <div className="text-[11px] text-muted-foreground truncate">{t.slug}.doflow.it</div>
+                        <div className="text-[11px] text-muted-foreground truncate">{tenantHostLabel(t.slug)}</div>
                       </div>
 
                       <ExternalLink className="h-4 w-4 text-muted-foreground" />

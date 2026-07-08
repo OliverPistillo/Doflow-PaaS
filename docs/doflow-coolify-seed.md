@@ -16,6 +16,12 @@ Impostare nell'ambiente backend di Coolify:
 - `DATABASE_URL`: connessione PostgreSQL reale del backend.
 - `DOFLOW_CEO_PASSWORD`: password iniziale per `oliver@doflow.it` e `daniele@doflow.it`.
 - `NODE_ENV`: normalmente `production`, oppure il valore reale usato dall'app backend.
+- `APP_URL` / `FRONTEND_URL` / `APP_BASE_URL`: usare `https://app.doflow.it` quando servono URL applicativi generati dal backend.
+- `TENANT_BASE_DOMAIN`: usare `doflow.it` se l'ambiente genera URL tenant su sottodominio.
+- `NEXT_PUBLIC_APP_URL`: usare `https://app.doflow.it` nel frontend.
+- `NEXT_PUBLIC_BASE_DOMAIN`: usare `doflow.it` nel frontend se configurato.
+
+`app.doflow.it` resta il dominio principale dell'app e del CRM esistente: non e' un host dedicato esclusivamente al tenant interno `doflow`. Il tenant `doflow` usa `app.doflow.it` solo come host applicativo/post-login; il tenant effettivo viene determinato da JWT/sessione/header tenant. Gli altri tenant continuano a usare la logica esistente a sottodominio, per esempio `https://{slug}.doflow.it`, dove prevista.
 
 Usare una password iniziale robusta. Dopo il primo accesso, cambiarla o ruotarla se richiesto dalla policy interna.
 

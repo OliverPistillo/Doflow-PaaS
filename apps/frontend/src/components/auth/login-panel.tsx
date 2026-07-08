@@ -11,6 +11,11 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
+import {
+  getTenantLoginUrl,
+  isInternalDoflowTenant,
+  normalizeTenantSlug,
+} from "@/lib/tenant-url";
 
 import {
   AlertDialog,
@@ -161,13 +166,14 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
       window.localStorage.removeItem("doflow_token");
       window.localStorage.setItem("doflow_token", tokenFromUrl);
       const payload = parseJwtPayload(tokenFromUrl);
-      const tenantSlug = payload?.tenantSlug || payload?.tenantId;
+      const tenantSlug = normalizeTenantSlug(payload?.tenantSlug || payload?.tenantId || payload?.tenant_id);
       const next = (params.get("next") || "").toLowerCase();
       const goMfa = next === "mfa" || isMfaPending(payload);
       if (tenantSlug && tenantSlug !== "public") {
+        const tenantPath = isInternalDoflowTenant(tenantSlug) ? "" : `/${tenantSlug}`;
         window.location.href = goMfa
-          ? `/${tenantSlug}/mfa`
-          : `/${tenantSlug}/dashboard`;
+          ? `${tenantPath}/mfa`
+          : `${tenantPath}/dashboard`;
       } else {
         window.location.href = goMfa ? `/mfa` : `/dashboard`;
       }
@@ -226,9 +232,11 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
         window.localStorage.setItem("doflow_token", token);
         if (isAppHost) {
           if (targetTenant !== "public" && /^[a-z0-9_]+$/i.test(targetTenant)) {
-            setTenantRedirectUrl(
-              `https://${targetTenant}.doflow.it/login?accessToken=${encodeURIComponent(token)}&next=mfa`,
-            );
+            if (isInternalDoflowTenant(targetTenant)) {
+              router.push("/mfa");
+              return;
+            }
+            setTenantRedirectUrl(getTenantLoginUrl(targetTenant, token, "mfa"));
             setTenantDialogMode("redirect");
             setShowTenantRedirect(true);
             return;
@@ -246,9 +254,12 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
       }
       if (isAppHost) {
         if (targetTenant !== "public" && /^[a-z0-9_]+$/i.test(targetTenant)) {
-          setTenantRedirectUrl(
-            `https://${targetTenant}.doflow.it/login?accessToken=${encodeURIComponent(token)}`,
-          );
+          if (isInternalDoflowTenant(targetTenant)) {
+            window.localStorage.setItem("doflow_token", token);
+            router.push("/dashboard");
+            return;
+          }
+          setTenantRedirectUrl(getTenantLoginUrl(targetTenant, token));
           setTenantDialogMode("redirect");
           setShowTenantRedirect(true);
           return;
