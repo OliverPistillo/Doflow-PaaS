@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   CalendarDays, CheckCircle2, Clock, Edit3, Eye, FileText, FolderKanban,
   FolderOpen, KanbanSquare, Loader2, MessageSquare, Plus, Search, Trash2,
-  UserPlus, Users,
+  Receipt, UserPlus, Users,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,8 @@ import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
 import { shortDate } from "@/components/tenant-crm/crm-core";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { canUseFinanceFrontend } from "@/components/tenant-finance/finance-core";
 
 type Row = Record<string, any>;
 type ListResponse<T = Row> = { items: T[]; total?: number; limit?: number; offset?: number };
@@ -495,6 +497,7 @@ export function ProjectCreatePage() {
 
 export function ProjectDetailPage({ projectId }: { projectId: string }) {
   const router = useRouter();
+  const { toast } = useToast();
   const { relations } = useProjectRelations(true, true);
   const [project, setProject] = useState<Row | null>(null);
   const [milestones, setMilestones] = useState<Row[]>([]);
@@ -511,6 +514,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
   const [memberForm, setMemberForm] = useState<Record<string, any>>({ user_id: "", role: "member" });
   const [commentForm, setCommentForm] = useState<Record<string, any>>({ body: "", visibility: "internal" });
   const [fileForm, setFileForm] = useState<Record<string, any>>({ file_id: "", type: "other", visibility: "internal" });
+  const [creatingInvoice, setCreatingInvoice] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -638,6 +642,33 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
     await load();
   };
 
+  const createInvoiceFromProject = async () => {
+    if (!project) return;
+    const endpoint = `/tenant/finance/invoices/from-project/${project.id}`;
+    setCreatingInvoice(true);
+    setError(null);
+    try {
+      if (process.env.NODE_ENV === "development") {
+        console.info(`[projects] POST ${endpoint}`);
+      }
+      const result = await apiFetch<Row | { invoice?: Row; existing?: boolean }>(endpoint, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      toast({
+        title: result && typeof result === "object" && "existing" in result && result.existing ? "Fattura gia esistente" : "Fattura creata",
+        description: "Apro l'area fatture Finance V2.",
+      });
+      router.push("/finance/invoices");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Errore creazione fattura da progetto";
+      setError(message);
+      toast({ title: "Fattura non creata", description: message, variant: "destructive" });
+    } finally {
+      setCreatingInvoice(false);
+    }
+  };
+
   if (!canReadProjects()) return <AccessDenied />;
   if (loading) return <div className="flex flex-1 justify-center py-24 text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Caricamento progetto...</div>;
   if (error || !project) return <div className="flex-1 p-4 md:p-6"><ErrorBox error={error || "Progetto non trovato"} /></div>;
@@ -651,6 +682,12 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
           <p className="mt-1 text-sm text-muted-foreground">{project.company_name || "Cliente non collegato"} · {labelFor(project.type, PROJECT_TYPES)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {canUseFinanceFrontend() ? (
+            <Button variant="outline" onClick={createInvoiceFromProject} disabled={creatingInvoice}>
+              {creatingInvoice ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Receipt className="mr-2 h-4 w-4" />}
+              Crea fattura da progetto
+            </Button>
+          ) : null}
           <StateBadge value={project.status} options={PROJECT_STATUSES} />
           <StateBadge value={project.priority} options={PRIORITIES} />
           {canManageProjects() ? <Button onClick={openEdit}><Edit3 className="mr-2 h-4 w-4" /> Modifica</Button> : null}

@@ -88,7 +88,11 @@ type DashboardSummary = {
     receivables: number;
     overdueInvoices: number;
     balanceToRequest: number;
+    paymentsThisMonth?: number;
+    totalOutstanding?: number;
     upcomingRenewals: number;
+    openFinanceDeadlines?: number;
+    projectsWithOpenPayments?: number;
     estimatedMargin: number;
     sources: SourceFlags;
   };
@@ -204,7 +208,11 @@ function getFallbackSummary(): DashboardSummary {
           receivables: 0,
           overdueInvoices: 0,
           balanceToRequest: 0,
+          paymentsThisMonth: 0,
+          totalOutstanding: 0,
           upcomingRenewals: 0,
+          openFinanceDeadlines: 0,
+          projectsWithOpenPayments: 0,
           estimatedMargin: 0,
           sources: {},
         }
@@ -493,7 +501,7 @@ export default function DashboardClient() {
     { label: "Nuovo preventivo", href: "/quotes/new", icon: Send },
     { label: "Nuovo progetto", href: "/projects/new", icon: FolderKanban },
     { label: "Invita dipendente", href: "/team", icon: UserPlus },
-    { label: "Apri finance", href: "/invoices", icon: Wallet },
+    { label: "Apri finance", href: "/finance", icon: Wallet },
   ], []);
 
   const managerActions = useMemo<QuickAction[]>(() => [
@@ -566,8 +574,11 @@ export default function DashboardClient() {
     { label: "Da incassare", value: summary.finance.receivables },
     { label: "Fatture scadute", value: summary.finance.overdueInvoices, tone: summary.finance.overdueInvoices > 0 ? "danger" : "default" },
     { label: "Saldo da richiedere", value: formatCurrency(summary.finance.balanceToRequest) },
+    { label: "Incassi mese", value: formatCurrency(summary.finance.paymentsThisMonth || 0), tone: (summary.finance.paymentsThisMonth || 0) > 0 ? "success" : "default" },
+    { label: "Totale da incassare", value: formatCurrency(summary.finance.totalOutstanding || 0) },
     { label: "Rinnovi prossimi", value: summary.finance.upcomingRenewals },
-    { label: "Margine stimato", value: formatCurrency(summary.finance.estimatedMargin) },
+    { label: "Scadenze aperte", value: summary.finance.openFinanceDeadlines || 0, tone: (summary.finance.openFinanceDeadlines || 0) > 0 ? "warning" : "default" },
+    { label: "Progetti non saldati", value: summary.finance.projectsWithOpenPayments || 0 },
   ] : [];
 
   const personalMetrics: Metric[] = [

@@ -11,7 +11,7 @@ import {
   FolderKanban, FolderOpen, Handshake, KanbanSquare, Layers,
   LifeBuoy, LockKeyhole, LogOut, MailCheck, Moon,
   Plug, Receipt, Send, Settings, Sparkles, Sun, Timer, User,
-  UserCog, UserPlus, Users, UsersRound, Wallet, Workflow, Zap,
+  UserCog, UserPlus, Users, UsersRound, Wallet, Workflow, Zap, RefreshCw,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -71,6 +71,15 @@ const EXISTING_TENANT_ROUTES = new Set([
   "/documents",
   "/email-templates",
   "/expenses",
+  "/finance",
+  "/finance/deadlines",
+  "/finance/invoices",
+  "/finance/invoices/new",
+  "/finance/payments",
+  "/finance/projects",
+  "/finance/recurring-services",
+  "/finance/renewals",
+  "/finance/reports",
   "/forms",
   "/inbox",
   "/invoices",
@@ -217,11 +226,15 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
     {
       label: "Finance",
       modules: [
-        item("Fatture", "/invoices", Receipt, { minPlan: "PRO" }),
-        item("Pagamenti", "/payments", CreditCard, { minPlan: "ENTERPRISE" }),
-        item("Scadenze", undefined, FileClock, { minPlan: "PRO", comingSoon: true }),
+        item("Dashboard finance", "/finance", Wallet, { minPlan: "PRO" }),
+        item("Fatture", "/finance/invoices", Receipt, { minPlan: "PRO" }),
+        item("Pagamenti", "/finance/payments", CreditCard, { minPlan: "ENTERPRISE" }),
+        item("Scadenze", "/finance/deadlines", FileClock, { minPlan: "PRO" }),
+        item("Servizi ricorrenti", "/finance/recurring-services", RefreshCw, { minPlan: "PRO" }),
+        item("Rinnovi", "/finance/renewals", Clock, { minPlan: "PRO" }),
+        item("Stato progetti", "/finance/projects", FolderKanban, { minPlan: "ENTERPRISE" }),
+        item("Report economici", "/finance/reports", BarChart3, { minPlan: "ENTERPRISE" }),
         item("Margini", undefined, Wallet, { minPlan: "ENTERPRISE", comingSoon: true }),
-        item("Report economici", undefined, BarChart3, { minPlan: "ENTERPRISE", comingSoon: true }),
       ],
     },
     {

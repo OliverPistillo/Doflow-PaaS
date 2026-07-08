@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2, Edit3, Eye, FileCheck2, FileText, Loader2, Plus, RefreshCw,
-  Search, Send, Trash2, XCircle, FolderKanban,
+  Search, Send, Trash2, XCircle, FolderKanban, Receipt,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
 import { money, shortDate } from "@/components/tenant-crm/crm-core";
 import { useToast } from "@/hooks/use-toast";
+import { canUseFinanceFrontend } from "@/components/tenant-finance/finance-core";
 
 type Row = Record<string, any>;
 type ListResponse<T = Row> = { items: T[]; total: number; limit: number; offset: number };
@@ -654,9 +655,11 @@ export function QuotesListPage({
   const [error, setError] = useState<string | null>(null);
   const [acceptedQuoteCta, setAcceptedQuoteCta] = useState<Row | null>(null);
   const [creatingProjectId, setCreatingProjectId] = useState<string | null>(null);
+  const [creatingInvoiceId, setCreatingInvoiceId] = useState<string | null>(null);
   const [itemForm, setItemForm] = useState<Record<string, any>>({ name: "", quantity: 1, unit_price: 0, discount: 0, tax_rate: 0, billing_type: "one_time" });
   const { relations } = useRelations(true);
   const showMoney = canSeeEconomicValues();
+  const canCreateFinanceInvoice = canUseFinanceFrontend();
 
   const load = async () => {
     setLoading(true);
@@ -792,6 +795,33 @@ export function QuotesListPage({
     }
   };
 
+  const createInvoiceFromQuote = async (row: Row) => {
+    const endpoint = `/tenant/finance/invoices/from-quote/${row.id}`;
+    setCreatingInvoiceId(row.id);
+    setError(null);
+    try {
+      if (process.env.NODE_ENV === "development") {
+        console.info(`[quotes] POST ${endpoint}`);
+      }
+      const result = await apiFetch<Row | { invoice?: Row; existing?: boolean }>(endpoint, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      const invoice = result && typeof result === "object" && "invoice" in result ? result.invoice : result;
+      toast({
+        title: result && typeof result === "object" && "existing" in result && result.existing ? "Fattura gia esistente" : "Fattura creata",
+        description: "Apro l'area fatture Finance V2.",
+      });
+      router.push(invoice?.id ? "/finance/invoices" : "/finance/invoices");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Errore durante la creazione della fattura.";
+      setError(message);
+      toast({ title: "Fattura non creata", description: message, variant: "destructive" });
+    } finally {
+      setCreatingInvoiceId(null);
+    }
+  };
+
   if (!canManageBriefingQuotes()) return <AccessDenied title="Preventivi" />;
 
   return (
@@ -873,10 +903,18 @@ export function QuotesListPage({
                           <Button size="sm" variant="outline" onClick={() => accept(row)} disabled={row.status === "accepted"}><CheckCircle2 className="h-4 w-4" /></Button>
                           <Button size="sm" variant="outline" onClick={() => reject(row)} disabled={row.status === "rejected"}><XCircle className="h-4 w-4" /></Button>
                           {row.status === "accepted" ? (
-                            <Button size="sm" variant="outline" onClick={() => createProjectFromQuote(row)} disabled={creatingProjectId === row.id}>
-                              {creatingProjectId === row.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FolderKanban className="mr-2 h-4 w-4" />}
-                              Crea progetto
-                            </Button>
+                            <>
+                              <Button size="sm" variant="outline" onClick={() => createProjectFromQuote(row)} disabled={creatingProjectId === row.id}>
+                                {creatingProjectId === row.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FolderKanban className="mr-2 h-4 w-4" />}
+                                Crea progetto
+                              </Button>
+                              {canCreateFinanceInvoice ? (
+                                <Button size="sm" variant="outline" onClick={() => createInvoiceFromQuote(row)} disabled={creatingInvoiceId === row.id}>
+                                  {creatingInvoiceId === row.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Receipt className="mr-2 h-4 w-4" />}
+                                  Crea fattura da preventivo
+                                </Button>
+                              ) : null}
+                            </>
                           ) : null}
                           <Button size="sm" variant="outline" onClick={() => recalculate(row)}><RefreshCw className="h-4 w-4" /></Button>
                           <Select value={row.status || "draft"} onValueChange={(next) => updateStatus(row, next)}>
@@ -914,10 +952,18 @@ export function QuotesListPage({
                   <h3 className="font-semibold">Righe preventivo</h3>
                   <div className="flex gap-2">
                     {selected.status === "accepted" ? (
-                      <Button size="sm" variant="outline" onClick={() => createProjectFromQuote(selected)} disabled={creatingProjectId === selected.id}>
-                        {creatingProjectId === selected.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FolderKanban className="mr-2 h-4 w-4" />}
-                        Crea progetto
-                      </Button>
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => createProjectFromQuote(selected)} disabled={creatingProjectId === selected.id}>
+                          {creatingProjectId === selected.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FolderKanban className="mr-2 h-4 w-4" />}
+                          Crea progetto
+                        </Button>
+                        {canCreateFinanceInvoice ? (
+                          <Button size="sm" variant="outline" onClick={() => createInvoiceFromQuote(selected)} disabled={creatingInvoiceId === selected.id}>
+                            {creatingInvoiceId === selected.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Receipt className="mr-2 h-4 w-4" />}
+                            Crea fattura da preventivo
+                          </Button>
+                        ) : null}
+                      </>
                     ) : null}
                     <Button size="sm" variant="outline" onClick={() => recalculate(selected)}><RefreshCw className="mr-2 h-4 w-4" /> Ricalcola</Button>
                   </div>
