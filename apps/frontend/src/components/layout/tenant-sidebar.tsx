@@ -5,15 +5,22 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LogOut, Moon, Sun, User, ChevronsUpDown,
-  BadgeCheck, Sparkles, Settings,
+  BadgeCheck, BarChart3, Bell, BookTemplate,
+  Building2, CalendarDays, CheckSquare, ChevronsUpDown, ClipboardCheck,
+  Clock, Contact, CreditCard, FileCheck2, FileClock, FileText,
+  FolderKanban, FolderOpen, Handshake, KanbanSquare, Layers,
+  LifeBuoy, LockKeyhole, LogOut, MailCheck, Moon,
+  Plug, Receipt, Send, Settings, Sparkles, Sun, Timer, User,
+  UserCog, UserPlus, Users, UsersRound, Wallet, Workflow, Zap,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useTheme } from "next-themes";
 
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarHeader,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarRail,
   SidebarGroup, SidebarGroupLabel, SidebarGroupContent,
+  SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuGroup,
@@ -24,8 +31,334 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { getDoFlowUser, getInitials } from "@/lib/jwt";
 import { usePlan } from "@/contexts/PlanContext";
 import { SIDEBAR_GROUPS, PLAN_META, type PlanTier, planIncludes } from "@/lib/plans";
+import { getTenantRoleLabel } from "@/lib/roles";
 import { PlanBadge } from "@/components/ui/locked-feature";
 import { cn } from "@/lib/utils";
+
+type AgencyAudience = "executive" | "manager" | "employee" | "sales";
+
+type AgencyNavItem = {
+  label: string;
+  href?: string;
+  icon: LucideIcon;
+  minPlan?: PlanTier;
+  moduleKey?: string;
+  lockMsg?: string;
+  comingSoon?: boolean;
+};
+
+type AgencyNavGroup = {
+  label: string;
+  modules: AgencyNavItem[];
+};
+
+const EXISTING_TENANT_ROUTES = new Set([
+  "/activity",
+  "/analytics",
+  "/billing",
+  "/calendar",
+  "/campaigns",
+  "/changelog",
+  "/companies",
+  "/contacts",
+  "/customers",
+  "/dashboard",
+  "/deals",
+  "/documents",
+  "/email-templates",
+  "/expenses",
+  "/forms",
+  "/inbox",
+  "/invoices",
+  "/leads",
+  "/my-plan",
+  "/notifications",
+  "/payments",
+  "/pipeline",
+  "/projects",
+  "/quotes",
+  "/settings",
+  "/settings/automations",
+  "/settings/company",
+  "/settings/integrations",
+  "/settings/notifications",
+  "/settings/security",
+  "/support",
+  "/tasks",
+  "/tasks/board",
+  "/team",
+  "/team/roles",
+  "/timesheet",
+  "/activities",
+]);
+
+function dashboardAudienceFromRole(role?: string): AgencyAudience {
+  const r = String(role ?? "").toLowerCase().trim();
+
+  if (r === "owner" || r === "admin" || r === "superadmin" || r === "super_admin") {
+    return "executive";
+  }
+  if (r === "manager") return "manager";
+
+  // Futuro mapping sales: quando esisterà un ruolo tecnico o una capability sales,
+  // instradarlo qui verso "sales" senza cambiare la struttura del menu.
+  return "employee";
+}
+
+function item(
+  label: string,
+  href: string | undefined,
+  icon: LucideIcon,
+  options: Omit<AgencyNavItem, "label" | "href" | "icon"> = {},
+): AgencyNavItem {
+  return { label, href, icon, minPlan: "STARTER", ...options };
+}
+
+const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
+  executive: [
+    { label: "Dashboard", modules: [item("Dashboard", "/dashboard", BarChart3)] },
+    {
+      label: "CRM",
+      modules: [
+        item("Aziende", "/companies", Building2),
+        item("Contatti", "/contacts", Contact),
+        item("Lead", "/leads", UserPlus),
+        item("Opportunità", "/deals", Handshake),
+        item("Pipeline", "/pipeline", Layers),
+        item("Attività commerciali", "/activities", ClipboardCheck),
+      ],
+    },
+    {
+      label: "Briefing",
+      modules: [
+        item("Tutti i briefing", undefined, FileText, { comingSoon: true }),
+        item("Nuovo briefing", undefined, FileCheck2, { comingSoon: true }),
+        item("Incompleti", undefined, FileClock, { comingSoon: true }),
+        item("Template briefing", undefined, BookTemplate, { comingSoon: true }),
+      ],
+    },
+    {
+      label: "Preventivi",
+      modules: [
+        item("Tutti", "/quotes", Send),
+        item("Bozze", undefined, FileText, { comingSoon: true }),
+        item("Inviati", undefined, MailCheck, { comingSoon: true }),
+        item("Accettati", undefined, FileCheck2, { comingSoon: true }),
+        item("Rifiutati", undefined, FileClock, { comingSoon: true }),
+        item("Template servizi", "/email-templates", BookTemplate),
+      ],
+    },
+    {
+      label: "Progetti",
+      modules: [
+        item("Tutti i progetti", "/projects", FolderKanban, { minPlan: "PRO" }),
+        item("Kanban", "/tasks/board", KanbanSquare),
+        item("Timeline", undefined, Clock, { minPlan: "PRO", comingSoon: true }),
+        item("Calendario", "/calendar", CalendarDays),
+        item("Milestone", undefined, ClipboardCheck, { minPlan: "PRO", comingSoon: true }),
+        item("Task", "/tasks", CheckSquare),
+        item("File progetto", "/documents", FolderOpen, { moduleKey: "docs.files" }),
+      ],
+    },
+    {
+      label: "Clienti",
+      modules: [
+        item("Clienti attivi", "/companies", Users),
+        item("Portale cliente", undefined, UserCog, { comingSoon: true }),
+        item("Approvazioni", undefined, ClipboardCheck, { comingSoon: true }),
+        item("Materiali richiesti", undefined, FolderOpen, { comingSoon: true }),
+      ],
+    },
+    {
+      label: "Documenti",
+      modules: [
+        item("Contratti", "/documents", FileText, { moduleKey: "docs.files" }),
+        item("Scartoffie", undefined, FolderOpen, { comingSoon: true }),
+        item("Allegati", "/documents", FolderOpen, { moduleKey: "docs.files" }),
+        item("Template documenti", "/email-templates", BookTemplate),
+      ],
+    },
+    {
+      label: "Supporto",
+      modules: [
+        item("Ticket", "/support", LifeBuoy),
+        item("Manutenzioni", undefined, Workflow, { comingSoon: true }),
+        item("Rinnovi", undefined, Clock, { comingSoon: true }),
+        item("Report cliente", undefined, FileText, { comingSoon: true }),
+      ],
+    },
+    {
+      label: "Team",
+      modules: [
+        item("Dipendenti", "/team", UsersRound, { minPlan: "PRO" }),
+        item("Ruoli", "/team/roles", UserCog, { minPlan: "PRO" }),
+        item("Carichi lavoro", undefined, BarChart3, { minPlan: "PRO", comingSoon: true }),
+        item("Ore lavorate", "/timesheet", Timer, { minPlan: "PRO" }),
+        item("Calendario team", "/calendar", CalendarDays),
+      ],
+    },
+    {
+      label: "Finance",
+      modules: [
+        item("Fatture", "/invoices", Receipt, { minPlan: "PRO" }),
+        item("Pagamenti", "/payments", CreditCard, { minPlan: "ENTERPRISE" }),
+        item("Scadenze", undefined, FileClock, { minPlan: "PRO", comingSoon: true }),
+        item("Margini", undefined, Wallet, { minPlan: "ENTERPRISE", comingSoon: true }),
+        item("Report economici", undefined, BarChart3, { minPlan: "ENTERPRISE", comingSoon: true }),
+      ],
+    },
+    {
+      label: "Automazioni",
+      modules: [
+        item("Commerciali", "/settings/automations", Zap, { minPlan: "PRO" }),
+        item("Progetto", "/settings/automations", Workflow, { minPlan: "PRO" }),
+        item("Cliente", "/settings/automations", Workflow, { minPlan: "PRO" }),
+        item("Finance", "/settings/automations", Wallet, { minPlan: "PRO" }),
+      ],
+    },
+    {
+      label: "Impostazioni",
+      modules: [
+        item("Utenti", "/team", UsersRound, { minPlan: "PRO" }),
+        item("Permessi", "/team/roles", LockKeyhole, { minPlan: "PRO" }),
+        item("Template", "/email-templates", BookTemplate),
+        item("Integrazioni", "/settings/integrations", Plug, { minPlan: "PRO" }),
+        item("Notifiche", "/settings/notifications", Bell),
+      ],
+    },
+  ],
+  manager: [
+    { label: "Dashboard", modules: [item("Dashboard", "/dashboard", BarChart3)] },
+    {
+      label: "CRM",
+      modules: [
+        item("Aziende", "/companies", Building2),
+        item("Contatti", "/contacts", Contact),
+        item("Lead", "/leads", UserPlus),
+        item("Opportunità", "/deals", Handshake),
+        item("Pipeline", "/pipeline", Layers),
+      ],
+    },
+    {
+      label: "Briefing",
+      modules: [
+        item("Tutti i briefing", undefined, FileText, { comingSoon: true }),
+        item("Incompleti", undefined, FileClock, { comingSoon: true }),
+      ],
+    },
+    {
+      label: "Preventivi",
+      modules: [
+        item("Tutti", "/quotes", Send),
+        item("Inviati", undefined, MailCheck, { comingSoon: true }),
+        item("Accettati", undefined, FileCheck2, { comingSoon: true }),
+      ],
+    },
+    {
+      label: "Progetti",
+      modules: [
+        item("Tutti i progetti", "/projects", FolderKanban, { minPlan: "PRO" }),
+        item("Kanban", "/tasks/board", KanbanSquare),
+        item("Timeline", undefined, Clock, { minPlan: "PRO", comingSoon: true }),
+        item("Calendario", "/calendar", CalendarDays),
+        item("Milestone", undefined, ClipboardCheck, { minPlan: "PRO", comingSoon: true }),
+        item("Task", "/tasks", CheckSquare),
+        item("File progetto", "/documents", FolderOpen, { moduleKey: "docs.files" }),
+      ],
+    },
+    {
+      label: "Clienti",
+      modules: [
+        item("Clienti attivi", "/companies", Users),
+        item("Approvazioni", undefined, ClipboardCheck, { comingSoon: true }),
+        item("Materiali richiesti", undefined, FolderOpen, { comingSoon: true }),
+      ],
+    },
+    {
+      label: "Documenti",
+      modules: [
+        item("Contratti", "/documents", FileText, { moduleKey: "docs.files" }),
+        item("Allegati", "/documents", FolderOpen, { moduleKey: "docs.files" }),
+      ],
+    },
+    {
+      label: "Supporto",
+      modules: [
+        item("Ticket", "/support", LifeBuoy),
+        item("Manutenzioni", undefined, Workflow, { comingSoon: true }),
+        item("Rinnovi", undefined, Clock, { comingSoon: true }),
+      ],
+    },
+    {
+      label: "Team",
+      modules: [
+        item("Carichi lavoro", undefined, BarChart3, { minPlan: "PRO", comingSoon: true }),
+        item("Calendario team", "/calendar", CalendarDays),
+      ],
+    },
+  ],
+  employee: [
+    { label: "Dashboard", modules: [item("Dashboard", "/dashboard", BarChart3)] },
+    {
+      label: "Progetti",
+      modules: [
+        item("Progetti assegnati", "/projects", FolderKanban, { minPlan: "PRO" }),
+        item("Kanban", "/tasks/board", KanbanSquare),
+        item("Task", "/tasks", CheckSquare),
+        item("File progetto", "/documents", FolderOpen, { moduleKey: "docs.files" }),
+      ],
+    },
+    {
+      label: "Clienti",
+      modules: [
+        item("Materiali richiesti", undefined, FolderOpen, { comingSoon: true }),
+        item("Approvazioni", undefined, ClipboardCheck, { comingSoon: true }),
+      ],
+    },
+    {
+      label: "Documenti",
+      modules: [
+        item("Allegati", "/documents", FolderOpen, { moduleKey: "docs.files" }),
+      ],
+    },
+    {
+      label: "Supporto",
+      modules: [
+        item("Ticket", "/support", LifeBuoy),
+      ],
+    },
+    {
+      label: "Team",
+      modules: [
+        item("Calendario team", "/calendar", CalendarDays),
+      ],
+    },
+  ],
+  sales: [
+    { label: "Dashboard", modules: [item("Dashboard", "/dashboard", BarChart3)] },
+    {
+      label: "CRM",
+      modules: [
+        item("Lead", "/leads", UserPlus),
+        item("Opportunità", "/deals", Handshake),
+        item("Pipeline", "/pipeline", Layers),
+        item("Attività commerciali", "/activities", ClipboardCheck),
+      ],
+    },
+    {
+      label: "Briefing",
+      modules: [
+        item("Tutti i briefing", undefined, FileText, { comingSoon: true }),
+      ],
+    },
+    {
+      label: "Preventivi",
+      modules: [
+        item("Tutti", "/quotes", Send),
+      ],
+    },
+  ],
+};
 
 // ─── NavItem con lock ─────────────────────────────────────────────────────────
 
@@ -98,6 +431,145 @@ function NavItem({
   );
 }
 
+function AgencyNavItem({
+  item,
+  activePlan,
+}: {
+  item: AgencyNavItem;
+  activePlan: PlanTier;
+}) {
+  const pathname = usePathname();
+  const { activeModules } = usePlan();
+  const Icon = item.icon;
+  const minPlan = item.minPlan ?? "STARTER";
+  const routeExists = Boolean(item.href && EXISTING_TENANT_ROUTES.has(item.href));
+  const allowedByPlan = planIncludes(activePlan, minPlan);
+  const allowedByModule = !item.moduleKey || activeModules.has(item.moduleKey);
+  const isComingSoon = item.comingSoon || !routeExists;
+  const isLocked = !allowedByPlan || !allowedByModule || isComingSoon;
+  const active = Boolean(item.href && !isLocked && (pathname === item.href || pathname.startsWith(item.href + "/")));
+
+  const disabledReason = isComingSoon
+    ? "In arrivo"
+    : !allowedByModule
+      ? "Modulo non attivo"
+      : item.lockMsg ?? `Disponibile con il piano ${PLAN_META[minPlan].label}`;
+
+  if (isLocked) {
+    return (
+      <SidebarMenuSubItem>
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex min-h-8 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground/60 opacity-70 select-none">
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                <span className="group-data-[collapsible=icon]:hidden rounded-full border border-border px-1.5 py-0.5 text-[10px] font-semibold">
+                  {isComingSoon ? "In arrivo" : !allowedByModule ? "Modulo" : PLAN_META[minPlan].label}
+                </span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="max-w-[240px] text-xs leading-snug">
+              {disabledReason}
+              {!isComingSoon && allowedByModule ? (
+                <div className="mt-1.5">
+                  <a href="/billing" className="text-primary font-semibold flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" />
+                    {PLAN_META[minPlan].upgradeLabel ?? "Aggiorna piano"}
+                  </a>
+                </div>
+              ) : null}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </SidebarMenuSubItem>
+    );
+  }
+
+  return (
+    <SidebarMenuSubItem>
+      <SidebarMenuSubButton
+        asChild
+        isActive={active}
+        className={cn(
+          active
+            ? "font-semibold bg-primary/10 text-primary"
+            : "text-muted-foreground hover:text-primary hover:bg-primary/10",
+        )}
+      >
+        <Link href={item.href!}>
+          <Icon className="h-4 w-4 shrink-0" />
+          <span>{item.label}</span>
+        </Link>
+      </SidebarMenuSubButton>
+    </SidebarMenuSubItem>
+  );
+}
+
+function AgencyMenuGroup({
+  group,
+  activePlan,
+}: {
+  group: AgencyNavGroup;
+  activePlan: PlanTier;
+}) {
+  const pathname = usePathname();
+  const first = group.modules[0];
+  const GroupIcon = first?.icon ?? FolderOpen;
+  const hasActiveChild = group.modules.some((mod) => (
+    mod.href &&
+    EXISTING_TENANT_ROUTES.has(mod.href) &&
+    (pathname === mod.href || pathname.startsWith(mod.href + "/"))
+  ));
+
+  if (group.modules.length === 1 && first) {
+    return (
+      <SidebarGroup>
+        <SidebarGroupContent>
+          <SidebarMenu className="gap-0.5">
+            <NavItem
+              href={first.href ?? "/dashboard"}
+              label={first.label}
+              icon={first.icon}
+              minPlan={first.minPlan ?? "STARTER"}
+              moduleKey={first.moduleKey}
+              lockMsg={first.lockMsg}
+              activePlan={activePlan}
+            />
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    );
+  }
+
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel
+        className={cn(
+          "text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold px-3",
+          hasActiveChild && "text-primary/80",
+        )}
+      >
+        <GroupIcon className="mr-1.5 h-3.5 w-3.5" />
+        {group.label}
+      </SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          <SidebarMenuSub className="mx-2.5 border-l-border/70">
+            {group.modules.map((mod) => (
+              <AgencyNavItem
+                key={`${group.label}-${mod.label}`}
+                item={mod}
+                activePlan={activePlan}
+              />
+            ))}
+          </SidebarMenuSub>
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
 // ─── Props (variant e collapsible passati dal layout) ─────────────────────────
 
 interface TenantSidebarProps {
@@ -115,16 +587,18 @@ export function TenantSidebar({
   const { setTheme, theme } = useTheme();
   const { plan, meta, tenantInfo } = usePlan();
   const [user, setUser] = React.useState<{
-    email: string; role: string; initials: string;
+    email: string; role: string; initials: string; tenantSlug?: string; tenantId?: string;
   } | null>(null);
 
   React.useEffect(() => {
     const payload = getDoFlowUser();
     if (payload) {
       setUser({
-        email:    payload.email    ?? "utente",
-        role:     payload.role     ?? "user",
-        initials: getInitials(payload.email),
+        email:      payload.email      ?? "utente",
+        role:       payload.role       ?? "user",
+        initials:   getInitials(payload.email),
+        tenantSlug: payload.tenantSlug,
+        tenantId:   payload.tenantId,
       });
     }
   }, []);
@@ -133,6 +607,12 @@ export function TenantSidebar({
     window.localStorage.removeItem("doflow_token");
     router.push("/login");
   }, [router]);
+
+  const tenantSlug = String(tenantInfo?.slug || user?.tenantSlug || user?.tenantId || "").toLowerCase();
+  const isDoflowTenant = tenantSlug === "doflow";
+  const agencyAudience = dashboardAudienceFromRole(user?.role);
+  const agencyGroups = AGENCY_MENUS[agencyAudience];
+  const roleLabel = getTenantRoleLabel(user?.role);
 
   return (
     <Sidebar
@@ -175,29 +655,35 @@ export function TenantSidebar({
 
       {/* ── NAVIGAZIONE ── */}
       <SidebarContent className="pt-1">
-        {SIDEBAR_GROUPS.map((group) => (
-          <SidebarGroup key={group.label}>
-            <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold px-3">
-              {group.label}
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu className="gap-0.5">
-                {group.modules.map((mod) => (
-                  <NavItem
-                    key={mod.href}
-                    href={mod.href}
-                    label={mod.label}
-                    icon={mod.icon}
-                    minPlan={mod.minPlan}
-                    moduleKey={mod.moduleKey}
-                    lockMsg={mod.lockMsg}
-                    activePlan={plan}
-                  />
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+        {isDoflowTenant ? (
+          agencyGroups.map((group) => (
+            <AgencyMenuGroup key={group.label} group={group} activePlan={plan} />
+          ))
+        ) : (
+          SIDEBAR_GROUPS.map((group) => (
+            <SidebarGroup key={group.label}>
+              <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold px-3">
+                {group.label}
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu className="gap-0.5">
+                  {group.modules.map((mod) => (
+                    <NavItem
+                      key={mod.href}
+                      href={mod.href}
+                      label={mod.label}
+                      icon={mod.icon}
+                      minPlan={mod.minPlan}
+                      moduleKey={mod.moduleKey}
+                      lockMsg={mod.lockMsg}
+                      activePlan={plan}
+                    />
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          ))
+        )}
       </SidebarContent>
 
       {/* ── FOOTER ── */}
@@ -239,7 +725,7 @@ export function TenantSidebar({
                   <div className="grid flex-1 text-left text-sm leading-tight ml-1">
                     <span className="truncate font-semibold text-foreground">{user?.email ?? "…"}</span>
                     <span className="truncate text-xs text-muted-foreground flex items-center gap-1">
-                      <BadgeCheck className="h-3 w-3 text-primary" />{user?.role}
+                      <BadgeCheck className="h-3 w-3 text-primary" />{roleLabel}
                     </span>
                   </div>
                   <ChevronsUpDown className="ml-auto size-4 text-muted-foreground/50" />
@@ -259,7 +745,7 @@ export function TenantSidebar({
                     </Avatar>
                     <div className="grid flex-1 text-left text-sm leading-tight">
                       <span className="truncate font-semibold">{user?.email}</span>
-                      <span className="truncate text-xs text-muted-foreground">{user?.role}</span>
+                      <span className="truncate text-xs text-muted-foreground">{roleLabel}</span>
                     </div>
                   </div>
                 </DropdownMenuLabel>

@@ -4,6 +4,7 @@ import * as bcrypt from 'bcryptjs';
 import { Role } from '../roles';
 import { RedisService } from '../redis/redis.service';
 import { safeSchema } from '../common/schema.utils';
+import { ensureTenantCrmCoreTables } from '../tenant/tenant-crm-schema';
 
 @Injectable()
 export class TenantBootstrapService implements OnApplicationBootstrap {
@@ -161,6 +162,8 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
       `CREATE INDEX IF NOT EXISTS idx_widgets_user
        ON "${s}".dashboard_widgets(user_id)`,
     );
+
+    await ensureTenantCrmCoreTables(ds, s);
 
     this.logger.log(`Schema "${s}" provisioned successfully.`);
   }

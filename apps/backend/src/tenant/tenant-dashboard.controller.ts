@@ -8,6 +8,11 @@ import { SaveDashboardDto } from './dto/save-dashboard.dto';
 export class TenantDashboardController {
   constructor(private readonly dashboardService: TenantDashboardService) {}
 
+  @Get('summary')
+  async getSummary(): Promise<unknown> {
+    return this.dashboardService.getSummary();
+  }
+
   @Get()
   async getLayout() {
     return this.dashboardService.getLayout();

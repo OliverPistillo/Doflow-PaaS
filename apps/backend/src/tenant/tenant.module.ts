@@ -4,6 +4,8 @@ import { TenantController } from './tenant.controller';
 import { TenantDashboardController } from './tenant-dashboard.controller';
 import { TenantDashboardService } from './tenant-dashboard.service';
 import { TenantSelfServiceController } from './tenant-selfservice.controller';
+import { TenantCrmController } from './tenant-crm.controller';
+import { TenantCrmService } from './tenant-crm.service';
 
 import { Tenant } from '../superadmin/entities/tenant.entity';
 import { TenantSubscription } from '../superadmin/entities/tenant-subscription.entity';
@@ -23,7 +25,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
       SupportTicket,
     ])
   ],
-  controllers: [TenantController, TenantDashboardController, TenantSelfServiceController],
-  providers: [TenantDashboardService],
+  controllers: [TenantController, TenantDashboardController, TenantSelfServiceController, TenantCrmController],
+  providers: [TenantDashboardService, TenantCrmService],
 })
 export class TenantModule {}

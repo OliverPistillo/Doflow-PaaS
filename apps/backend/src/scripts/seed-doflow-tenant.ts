@@ -6,6 +6,7 @@ import { randomBytes } from 'crypto';
 import { DataSource } from 'typeorm';
 import Redis from 'ioredis';
 import { safeSchema } from '../common/schema.utils';
+import { ensureTenantCrmCoreTables } from '../tenant/tenant-crm-schema';
 
 const TENANT_SLUG = 'doflow';
 const TENANT_SCHEMA = 'doflow';
@@ -264,6 +265,8 @@ async function ensureTenantTables(ds: DataSource, schema: string) {
     )
   `);
   await ds.query(`CREATE INDEX IF NOT EXISTS idx_widgets_user ON "${s}".dashboard_widgets(user_id)`);
+
+  await ensureTenantCrmCoreTables(ds, s);
 }
 
 async function ensureTenantRecord(ds: DataSource): Promise<{ id: string }> {
