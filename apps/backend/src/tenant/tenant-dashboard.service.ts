@@ -320,6 +320,7 @@ export class TenantDashboardService {
     const opportunitiesTable = (await this.tableExists(schema, 'opportunities'))
       ? 'opportunities'
       : (await this.tableExists(schema, 'deals')) ? 'deals' : null;
+    const hasQuotes = await this.tableExists(schema, 'quotes');
 
     const opportunitiesActive = opportunitiesTable
       ? opportunitiesTable === 'opportunities'
@@ -345,7 +346,20 @@ export class TenantDashboardService {
       pipelineValue: includeEconomicValue && opportunitiesTable && valueColumn
         ? await this.sumRows(schema, opportunitiesTable, valueColumn)
         : 0,
-      sentQuotes: await this.countByOptionalStatus(schema, 'quotes', ['sent', 'pending', 'open']),
+      sentQuotes: await this.countByOptionalStatus(schema, 'quotes', ['sent', 'viewed', 'pending', 'open']),
+      acceptedQuotes: await this.countByOptionalStatus(schema, 'quotes', ['accepted']),
+      rejectedQuotes: await this.countByOptionalStatus(schema, 'quotes', ['rejected']),
+      sentQuoteValue: includeEconomicValue && hasQuotes
+        ? await this.sumRows(
+            schema,
+            'quotes',
+            'total',
+            `LOWER(COALESCE(status::text, '')) IN ('sent', 'viewed')`,
+          )
+        : 0,
+      acceptedQuoteValue: includeEconomicValue && hasQuotes
+        ? await this.sumRows(schema, 'quotes', 'total', `LOWER(COALESCE(status::text, '')) = 'accepted'`)
+        : 0,
       followUpsDue: await this.countDueFollowUps(schema),
       wonDeals: opportunitiesTable
         ? opportunitiesTable === 'opportunities'
@@ -360,8 +374,23 @@ export class TenantDashboardService {
       sources: {
         leads: await this.tableExists(schema, 'leads'),
         opportunities: Boolean(opportunitiesTable),
-        quotes: await this.tableExists(schema, 'quotes'),
-        followUps: await this.tableExists(schema, 'follow_ups'),
+        quotes: hasQuotes,
+        followUps: await this.tableExists(schema, 'follow_ups') || await this.tableExists(schema, 'commercial_activities'),
+      },
+    };
+  }
+
+  private async buildBriefingOperationsSummary(schema: string): Promise<DashboardBriefingOperationsSummary> {
+    const incompleteStatuses = ['draft', 'sent', 'partially_completed', 'internal_reviewed'];
+    const completedStatuses = ['completed', 'approved', 'converted_to_project'];
+
+    return {
+      incompleteBriefings: await this.countByOptionalStatus(schema, 'briefings', incompleteStatuses),
+      completedBriefings: await this.countByOptionalStatus(schema, 'briefings', completedStatuses),
+      missingMaterials: await this.countByOptionalStatus(schema, 'briefing_material_requests', ['missing', 'requested']),
+      sources: {
+        briefings: await this.tableExists(schema, 'briefings'),
+        briefingMaterialRequests: await this.tableExists(schema, 'briefing_material_requests'),
       },
     };
   }
@@ -624,6 +653,7 @@ export class TenantDashboardService {
       recentFiles,
       recentComments,
       notifications,
+      briefingOperations,
     ] = await Promise.all([
       this.buildSalesSummary(schema, showFinance),
       this.buildProjectsSummary(schema, user, audience),
@@ -633,6 +663,7 @@ export class TenantDashboardService {
       this.getRecentFiles(schema),
       this.getRecentComments(schema),
       this.getRecentNotifications(tenant, user.email),
+      this.buildBriefingOperationsSummary(schema),
     ]);
 
     const finance = showFinance
@@ -660,12 +691,15 @@ export class TenantDashboardService {
       customers,
       personal,
       operations: {
-        missingMaterials: 0,
+        missingMaterials: briefingOperations.missingMaterials,
+        incompleteBriefings: briefingOperations.incompleteBriefings,
+        completedBriefings: briefingOperations.completedBriefings,
         openClientReviews: 0,
         upcomingDeliveries: projects.upcomingDeliveries,
         recentComments,
         recentFiles,
         notifications,
+        sources: briefingOperations.sources,
       },
     };
   }
@@ -778,6 +812,10 @@ interface DashboardSalesSummary {
   activeOpportunities: number;
   pipelineValue: number;
   sentQuotes: number;
+  acceptedQuotes: number;
+  rejectedQuotes: number;
+  sentQuoteValue: number;
+  acceptedQuoteValue: number;
   followUpsDue: number;
   wonDeals: number;
   lostDeals: number;
@@ -841,6 +879,13 @@ interface DashboardActivityItem {
   createdAt: string | null;
 }
 
+interface DashboardBriefingOperationsSummary {
+  incompleteBriefings: number;
+  completedBriefings: number;
+  missingMaterials: number;
+  sources: DashboardSourceFlags;
+}
+
 interface TenantDashboardSummary {
   tenant: {
     id?: string;
@@ -863,10 +908,13 @@ interface TenantDashboardSummary {
   personal: DashboardPersonalSummary;
   operations: {
     missingMaterials: number;
+    incompleteBriefings: number;
+    completedBriefings: number;
     openClientReviews: number;
     upcomingDeliveries: number;
     recentComments: DashboardActivityItem[];
     recentFiles: DashboardActivityItem[];
     notifications: DashboardActivityItem[];
+    sources: DashboardSourceFlags;
   };
 }

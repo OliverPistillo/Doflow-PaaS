@@ -5,6 +5,7 @@ import { Role } from '../roles';
 import { RedisService } from '../redis/redis.service';
 import { safeSchema } from '../common/schema.utils';
 import { ensureTenantCrmCoreTables } from '../tenant/tenant-crm-schema';
+import { ensureTenantBriefingQuoteTables } from '../tenant/tenant-briefing-quotes-schema';
 
 @Injectable()
 export class TenantBootstrapService implements OnApplicationBootstrap {
@@ -121,6 +122,7 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
       CREATE TABLE IF NOT EXISTS "${s}".audit_log (
         id          BIGSERIAL    PRIMARY KEY,
         actor_email TEXT,
+        actor_role  TEXT,
         action      TEXT         NOT NULL,
         target      TEXT,
         ip_address  TEXT,
@@ -129,6 +131,7 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
         created_at  TIMESTAMP    DEFAULT NOW()
       )
     `);
+    await ds.query(`ALTER TABLE "${s}".audit_log ADD COLUMN IF NOT EXISTS actor_role TEXT`);
 
     // Tabella file metadata (S3)
     await ds.query(`
@@ -164,6 +167,7 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
     );
 
     await ensureTenantCrmCoreTables(ds, s);
+    await ensureTenantBriefingQuoteTables(ds, s);
 
     this.logger.log(`Schema "${s}" provisioned successfully.`);
   }
