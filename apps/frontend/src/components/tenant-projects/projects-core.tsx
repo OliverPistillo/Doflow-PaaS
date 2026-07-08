@@ -688,6 +688,14 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
               Crea fattura da progetto
             </Button>
           ) : null}
+          {canManageProjects() ? (
+            <Button variant="outline" asChild>
+              <Link href="/client-portal/projects">
+                <Users className="mr-2 h-4 w-4" />
+                Condividi con cliente
+              </Link>
+            </Button>
+          ) : null}
           <StateBadge value={project.status} options={PROJECT_STATUSES} />
           <StateBadge value={project.priority} options={PRIORITIES} />
           {canManageProjects() ? <Button onClick={openEdit}><Edit3 className="mr-2 h-4 w-4" /> Modifica</Button> : null}
