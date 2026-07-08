@@ -6,6 +6,7 @@ import { RedisService } from '../redis/redis.service';
 import { safeSchema } from '../common/schema.utils';
 import { ensureTenantCrmCoreTables } from '../tenant/tenant-crm-schema';
 import { ensureTenantBriefingQuoteTables } from '../tenant/tenant-briefing-quotes-schema';
+import { ensureTenantProjectsTables } from '../tenant/tenant-projects-schema';
 
 @Injectable()
 export class TenantBootstrapService implements OnApplicationBootstrap {
@@ -168,6 +169,7 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
 
     await ensureTenantCrmCoreTables(ds, s);
     await ensureTenantBriefingQuoteTables(ds, s);
+    await ensureTenantProjectsTables(ds, s);
 
     this.logger.log(`Schema "${s}" provisioned successfully.`);
   }

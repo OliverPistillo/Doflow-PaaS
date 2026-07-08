@@ -10,6 +10,8 @@ import {
   PlanTier,
 } from '../feature-access/dashboard-widget-access';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 @Injectable()
 export class TenantDashboardService {
   constructor(
@@ -253,6 +255,22 @@ export class TenantDashboardService {
 
   private async getRecentComments(schema: string): Promise<DashboardActivityItem[]> {
     const safe = safeSchema(schema, 'TenantDashboardService.getRecentComments');
+    if (await this.tableExists(safe, 'project_comments')) {
+      const rows = await this.dataSource.query(
+        `SELECT body AS title, created_at
+         FROM "${safe}".project_comments
+         WHERE deleted_at IS NULL
+         ORDER BY created_at DESC
+         LIMIT 5`,
+      );
+
+      return rows.map((row: any) => ({
+        title: String(row.title || 'Commento recente').slice(0, 120),
+        meta: 'Commento operativo',
+        createdAt: row.created_at || null,
+      }));
+    }
+
     if (!(await this.tableExists(safe, 'comments'))) return [];
 
     const titleColumn = (await this.columnExists(safe, 'comments', 'body')) ? 'body' : 'id::text';
@@ -294,17 +312,42 @@ export class TenantDashboardService {
   private async getTeamWorkload(schema: string): Promise<Array<{ assignee: string; openTasks: number }>> {
     const safe = safeSchema(schema, 'TenantDashboardService.getTeamWorkload');
     if (!(await this.tableExists(safe, 'tasks'))) return [];
-    if (!(await this.columnExists(safe, 'tasks', 'assignee_email'))) return [];
 
     const hasStatus = await this.columnExists(safe, 'tasks', 'status');
+    const hasDeletedAt = await this.columnExists(safe, 'tasks', 'deleted_at');
+    const deletedPredicate = hasDeletedAt ? 't.deleted_at IS NULL AND ' : '';
     const where = hasStatus
-      ? `WHERE LOWER(COALESCE(status::text, '')) NOT IN ('done', 'closed', 'resolved', 'completed')`
+      ? `WHERE ${deletedPredicate}LOWER(COALESCE(t.status::text, '')) NOT IN ('done', 'closed', 'resolved', 'completed')`
+      : hasDeletedAt ? 'WHERE t.deleted_at IS NULL' : '';
+
+    if (await this.columnExists(safe, 'tasks', 'assignee_id')) {
+      const rows = await this.dataSource.query(
+        `SELECT COALESCE(u.email, t.assignee_id::text, 'Non assegnato') AS assignee, COUNT(*)::int AS "openTasks"
+         FROM "${safe}".tasks t
+         LEFT JOIN "${safe}".users u ON u.id = t.assignee_id
+         ${where}
+         GROUP BY COALESCE(u.email, t.assignee_id::text, 'Non assegnato')
+         ORDER BY "openTasks" DESC, assignee ASC
+         LIMIT 8`,
+      );
+
+      return rows.map((row: any) => ({
+        assignee: row.assignee,
+        openTasks: Number(row.openTasks || 0),
+      }));
+    }
+
+    if (!(await this.columnExists(safe, 'tasks', 'assignee_email'))) return [];
+    const legacyDeletedPredicate = hasDeletedAt ? 'deleted_at IS NULL AND ' : '';
+    const legacyWhere = hasStatus
+      ? `WHERE ${legacyDeletedPredicate}LOWER(COALESCE(status::text, '')) NOT IN ('done', 'closed', 'resolved', 'completed')`
+      : hasDeletedAt ? 'WHERE deleted_at IS NULL'
       : '';
 
     const rows = await this.dataSource.query(
       `SELECT COALESCE(assignee_email, 'Non assegnato') AS assignee, COUNT(*)::int AS "openTasks"
        FROM "${safe}".tasks
-       ${where}
+       ${legacyWhere}
        GROUP BY COALESCE(assignee_email, 'Non assegnato')
        ORDER BY "openTasks" DESC, assignee ASC
        LIMIT 8`,
@@ -436,35 +479,110 @@ export class TenantDashboardService {
   private async buildProjectsSummary(schema: string, user: TenantDashboardAuthUser, audience: DashboardAudience): Promise<DashboardProjectsSummary> {
     const hasProjects = await this.tableExists(schema, 'projects');
     const hasTasks = await this.tableExists(schema, 'tasks');
-    const projectOwnerFilter = audience === 'manager' && user.email && hasProjects && (await this.columnExists(schema, 'projects', 'owner_email'))
-      ? { where: 'lower(owner_email) = lower($1)', params: [user.email] as unknown[] }
-      : { where: 'TRUE', params: [] as unknown[] };
+    const hasMilestones = await this.tableExists(schema, 'milestones');
+    const userUuid = UUID_RE.test(user.id) ? user.id : null;
+    const projectScopeParts: string[] = [];
+    const projectScopeParams: unknown[] = [];
+
+    if (audience !== 'executive' && hasProjects) {
+      if (userUuid && (await this.columnExists(schema, 'projects', 'project_manager_id'))) {
+        projectScopeParts.push('project_manager_id = $1');
+      }
+      if (userUuid && (await this.tableExists(schema, 'project_members'))) {
+        projectScopeParts.push(`EXISTS (
+          SELECT 1 FROM "${schema}".project_members pm
+          WHERE pm.project_id = projects.id AND pm.user_id = $1 AND pm.deleted_at IS NULL
+        )`);
+      }
+      if (userUuid && hasTasks && (await this.columnExists(schema, 'tasks', 'assignee_id'))) {
+        projectScopeParts.push(`EXISTS (
+          SELECT 1 FROM "${schema}".tasks t
+          WHERE t.project_id = projects.id AND t.assignee_id = $1 AND t.deleted_at IS NULL
+        )`);
+      }
+      if (projectScopeParts.length > 0) projectScopeParams.push(userUuid);
+    }
+
+    const projectScopeWhere = audience === 'executive'
+      ? 'TRUE'
+      : projectScopeParts.length > 0
+        ? `(${projectScopeParts.join(' OR ')})`
+        : audience === 'manager' && user.email && hasProjects && (await this.columnExists(schema, 'projects', 'owner_email'))
+          ? 'lower(owner_email) = lower($1)'
+          : 'FALSE';
+    const scopedProjectParams = projectScopeParts.length > 0
+      ? projectScopeParams
+      : projectScopeWhere.includes('$1') && user.email ? [user.email] : [];
+
+    const taskScopeWhere = audience === 'executive'
+      ? 'TRUE'
+      : userUuid && hasTasks && (await this.columnExists(schema, 'tasks', 'assignee_id'))
+        ? 'assignee_id = $1'
+        : 'FALSE';
+    const taskScopeParams = taskScopeWhere.includes('$1') ? [userUuid] as unknown[] : [];
+
+    const activeProjectStatuses = [
+      'to_start', 'kickoff', 'materials_collection', 'strategy', 'ux_ui', 'copy_content',
+      'development', 'internal_review', 'client_review', 'corrections', 'seo_performance',
+      'qa', 'publishing', 'training', 'maintenance', 'blocked', 'active', 'open', 'in_progress',
+    ];
+    const openTaskStatuses = ['todo', 'open', 'in_progress', 'review', 'backlog', 'ready', 'internal_review', 'client_review', 'blocked'];
 
     return {
       activeProjects: hasProjects
-        ? await this.countByOptionalStatus(schema, 'projects', ['active', 'open', 'in_progress'])
+        ? await this.countRows(
+            schema,
+            'projects',
+            `${projectScopeWhere} AND LOWER(COALESCE(status::text, '')) = ANY($${scopedProjectParams.length + 1}::text[])`,
+            [...scopedProjectParams, activeProjectStatuses],
+          )
         : 0,
       assignedProjects: hasProjects
-        ? await this.countRows(schema, 'projects', projectOwnerFilter.where, projectOwnerFilter.params)
+        ? await this.countRows(schema, 'projects', projectScopeWhere, scopedProjectParams)
         : 0,
-      lateProjects: await this.countLateProjects(schema, hasProjects),
+      lateProjects: hasProjects && (await this.columnExists(schema, 'projects', 'due_date'))
+        ? await this.countRows(
+            schema,
+            'projects',
+            `${projectScopeWhere} AND due_date < current_date AND LOWER(COALESCE(status::text, '')) NOT IN ('delivered', 'closed', 'done', 'completed')`,
+            scopedProjectParams,
+          )
+        : 0,
       blockedProjects: hasProjects && (await this.columnExists(schema, 'projects', 'status'))
-        ? await this.countByOptionalStatus(schema, 'projects', ['blocked'])
+        ? await this.countRows(schema, 'projects', `${projectScopeWhere} AND LOWER(COALESCE(status::text, '')) = 'blocked'`, scopedProjectParams)
         : 0,
-      upcomingMilestones: await this.countRowsIfColumnExists(schema, 'milestones', 'due_date', `due_date BETWEEN current_date AND current_date + INTERVAL '14 days'`),
+      upcomingMilestones: hasMilestones && (await this.columnExists(schema, 'milestones', 'due_date'))
+        ? audience === 'executive'
+          ? await this.countRows(schema, 'milestones', `due_date BETWEEN current_date AND current_date + INTERVAL '14 days'`)
+          : Number((await this.dataSource.query(
+              `SELECT COUNT(*)::int AS count
+               FROM "${schema}".milestones m
+               JOIN "${schema}".projects projects ON projects.id = m.project_id
+               WHERE m.deleted_at IS NULL
+                 AND projects.deleted_at IS NULL
+                 AND m.due_date BETWEEN current_date AND current_date + INTERVAL '14 days'
+                 AND ${projectScopeWhere}`,
+              scopedProjectParams,
+            ))[0]?.count || 0)
+        : 0,
       upcomingDeliveries: hasProjects && (await this.columnExists(schema, 'projects', 'due_date'))
-        ? await this.countRows(schema, 'projects', `due_date BETWEEN current_date AND current_date + INTERVAL '14 days'`)
+        ? await this.countRows(schema, 'projects', `${projectScopeWhere} AND due_date BETWEEN current_date AND current_date + INTERVAL '14 days'`, scopedProjectParams)
         : 0,
       blockedTasks: hasTasks && (await this.columnExists(schema, 'tasks', 'status'))
-        ? await this.countByOptionalStatus(schema, 'tasks', ['blocked'])
+        ? await this.countRows(schema, 'tasks', `${taskScopeWhere} AND LOWER(COALESCE(status::text, '')) = 'blocked'`, taskScopeParams)
         : 0,
-      dueTasks: hasTasks && (await this.columnExists(schema, 'tasks', 'due_date'))
-        ? await this.countRows(schema, 'tasks', `due_date BETWEEN current_date AND current_date + INTERVAL '7 days'`)
+      dueTasks: hasTasks && (await this.columnExists(schema, 'tasks', 'due_at'))
+        ? await this.countRows(
+            schema,
+            'tasks',
+            `${taskScopeWhere} AND due_at BETWEEN now() AND now() + INTERVAL '7 days' AND LOWER(COALESCE(status::text, '')) = ANY($${taskScopeParams.length + 1}::text[])`,
+            [...taskScopeParams, openTaskStatuses],
+          )
         : 0,
       sources: {
         projects: hasProjects,
         tasks: hasTasks,
-        milestones: await this.tableExists(schema, 'milestones'),
+        milestones: hasMilestones,
       },
     };
   }
@@ -505,11 +623,11 @@ export class TenantDashboardService {
     const pendingInvites = await this.countRows(schema, 'invites', 'accepted_at IS NULL AND (expires_at IS NULL OR expires_at > now())');
 
     return {
-      overdueTasks: hasTasks && (await this.columnExists(schema, 'tasks', 'due_date'))
-        ? await this.countRows(schema, 'tasks', `due_date < current_date AND ${openTaskWhere}`)
+      overdueTasks: hasTasks && (await this.columnExists(schema, 'tasks', 'due_at'))
+        ? await this.countRows(schema, 'tasks', `due_at < now() AND ${openTaskWhere}`)
         : 0,
       openTasks: hasTasks
-        ? await this.countByOptionalStatus(schema, 'tasks', ['todo', 'open', 'in_progress', 'review', 'backlog'])
+        ? await this.countByOptionalStatus(schema, 'tasks', ['todo', 'open', 'in_progress', 'review', 'backlog', 'ready', 'internal_review', 'client_review', 'blocked'])
         : 0,
       blockedTasks: hasTasks && (await this.columnExists(schema, 'tasks', 'status'))
         ? await this.countByOptionalStatus(schema, 'tasks', ['blocked'])
@@ -573,26 +691,67 @@ export class TenantDashboardService {
 
   private async buildPersonalSummary(schema: string, user: TenantDashboardAuthUser): Promise<DashboardPersonalSummary> {
     const email = user.email || '';
+    const userUuid = UUID_RE.test(user.id) ? user.id : null;
     const hasTasks = await this.tableExists(schema, 'tasks');
-    const hasAssignee = hasTasks && (await this.columnExists(schema, 'tasks', 'assignee_email'));
-    const assignedWhere = hasAssignee && email ? 'lower(assignee_email) = lower($1)' : 'FALSE';
-    const assignedParams = hasAssignee && email ? [email] : [];
+    const hasProjects = await this.tableExists(schema, 'projects');
+    const hasAssigneeId = hasTasks && (await this.columnExists(schema, 'tasks', 'assignee_id'));
+    const hasAssigneeEmail = hasTasks && (await this.columnExists(schema, 'tasks', 'assignee_email'));
+    const assignedWhere = hasAssigneeId && userUuid
+      ? 'assignee_id = $1'
+      : hasAssigneeEmail && email ? 'lower(assignee_email) = lower($1)' : 'FALSE';
+    const assignedParams = hasAssigneeId && userUuid
+      ? [userUuid] as unknown[]
+      : hasAssigneeEmail && email ? [email] as unknown[] : [];
+    const dueColumn = hasTasks && (await this.columnExists(schema, 'tasks', 'due_at'))
+      ? 'due_at'
+      : hasTasks && (await this.columnExists(schema, 'tasks', 'due_date')) ? 'due_date' : null;
+    const dueStart = dueColumn === 'due_date' ? 'current_date' : 'now()';
+    const dueEnd = dueColumn === 'due_date' ? `current_date + INTERVAL '7 days'` : `now() + INTERVAL '7 days'`;
+
+    let assignedProjects = 0;
+    if (hasProjects && userUuid) {
+      const parts: string[] = [];
+      if (await this.columnExists(schema, 'projects', 'project_manager_id')) {
+        parts.push('p.project_manager_id = $1');
+      }
+      if (await this.tableExists(schema, 'project_members')) {
+        parts.push(`EXISTS (
+          SELECT 1 FROM "${schema}".project_members pm
+          WHERE pm.project_id = p.id AND pm.user_id = $1 AND pm.deleted_at IS NULL
+        )`);
+      }
+      if (hasTasks && hasAssigneeId) {
+        parts.push(`EXISTS (
+          SELECT 1 FROM "${schema}".tasks t
+          WHERE t.project_id = p.id AND t.assignee_id = $1 AND t.deleted_at IS NULL
+        )`);
+      }
+      if (parts.length > 0) {
+        const rows = await this.dataSource.query(
+          `SELECT COUNT(*)::int AS count
+           FROM "${schema}".projects p
+           WHERE p.deleted_at IS NULL AND (${parts.join(' OR ')})`,
+          [userUuid],
+        );
+        assignedProjects = Number(rows[0]?.count || 0);
+      }
+    }
 
     return {
       myTasks: hasTasks ? await this.countRows(schema, 'tasks', assignedWhere, assignedParams) : 0,
-      dueSoon: hasTasks && hasAssignee && (await this.columnExists(schema, 'tasks', 'due_date'))
-        ? await this.countRows(schema, 'tasks', `${assignedWhere} AND due_date BETWEEN current_date AND current_date + INTERVAL '7 days'`, assignedParams)
+      dueSoon: hasTasks && dueColumn
+        ? await this.countRows(schema, 'tasks', `${assignedWhere} AND ${dueColumn} BETWEEN ${dueStart} AND ${dueEnd}`, assignedParams)
         : 0,
-      blockedTasks: hasTasks && hasAssignee && (await this.columnExists(schema, 'tasks', 'status'))
+      blockedTasks: hasTasks && (hasAssigneeId || hasAssigneeEmail) && (await this.columnExists(schema, 'tasks', 'status'))
         ? await this.countRows(schema, 'tasks', `${assignedWhere} AND LOWER(COALESCE(status::text, '')) = 'blocked'`, assignedParams)
         : 0,
-      assignedProjects: 0,
-      upcomingDeadlines: hasTasks && hasAssignee && (await this.columnExists(schema, 'tasks', 'due_date'))
-        ? await this.countRows(schema, 'tasks', `${assignedWhere} AND due_date >= current_date`, assignedParams)
+      assignedProjects,
+      upcomingDeadlines: hasTasks && dueColumn
+        ? await this.countRows(schema, 'tasks', `${assignedWhere} AND ${dueColumn} >= ${dueStart}`, assignedParams)
         : 0,
       sources: {
         tasks: hasTasks,
-        projects: await this.tableExists(schema, 'projects'),
+        projects: hasProjects,
       },
     };
   }
