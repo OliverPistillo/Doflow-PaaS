@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useRef, type ReactNode } from "react";
 import {
   Building2, CheckCircle2, Edit3, Loader2, Plus, Search, Trash2,
 } from "lucide-react";
@@ -12,6 +12,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { PageShell, PageHeader } from "@/components/ui/page-shell";
 import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
 import { cn } from "@/lib/utils";
@@ -158,6 +164,20 @@ export function CrmResourcePage({
   const [form, setForm] = useState<Record<string, any>>(() => emptyForm(fields));
   const [relations, setRelations] = useState<Record<string, CrmRow[]>>({});
   const showEconomic = canSeeEconomicValues();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isInput = ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName || "");
+      const isModal = document.querySelector('[role="dialog"]');
+      if (e.key === "/" && !isInput && !isModal && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const relationResources = useMemo(
     () => Array.from(new Set(fields.map((f) => f.relation).filter(Boolean))) as Array<NonNullable<CrmField["relation"]>>,
@@ -257,20 +277,20 @@ export function CrmResourcePage({
   };
 
   return (
-    <div className="flex-1 space-y-5 p-4 md:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {headerActions}
-          <Button onClick={openCreate}>
-            <Plus className="mr-2 h-4 w-4" />
-            {createLabel}
-          </Button>
-        </div>
-      </div>
+    <PageShell>
+      <PageHeader
+        title={title}
+        description={description}
+        actions={
+          <>
+            {headerActions}
+            <Button onClick={openCreate} className="bg-primary hover:bg-primary/90 text-white shrink-0">
+              <Plus className="mr-1.5 h-4 w-4" />
+              {createLabel}
+            </Button>
+          </>
+        }
+      />
 
       <Card>
         <CardHeader className="pb-4">
@@ -280,8 +300,21 @@ export function CrmResourcePage({
         <CardContent className="space-y-4">
           <div className="flex flex-col gap-3 md:flex-row">
             <div className="relative flex-1">
+              <Label htmlFor="crm-search" className="sr-only">Cerca</Label>
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cerca..." className="pl-9" />
+              <Input
+                id="crm-search"
+                ref={searchInputRef}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Cerca..."
+                className="pl-9 pr-10"
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:block">
+                <kbd className="h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100 flex">
+                  <span className="text-xs">/</span>
+                </kbd>
+              </div>
             </div>
             {filterKey && filterOptions ? (
               <Select value={filter} onValueChange={setFilter}>
@@ -330,16 +363,31 @@ export function CrmResourcePage({
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-2">
                           {resource === "activities" && !row.completed_at ? (
-                            <Button size="sm" variant="outline" onClick={() => completeActivity(row)}>
-                              <CheckCircle2 className="h-4 w-4" />
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button size="sm" variant="outline" onClick={() => completeActivity(row)} aria-label="Completa attività">
+                                  <CheckCircle2 className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Completa attività</TooltipContent>
+                            </Tooltip>
                           ) : null}
-                          <Button size="sm" variant="outline" onClick={() => openEdit(row)}>
-                            <Edit3 className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => remove(row)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="sm" variant="outline" onClick={() => openEdit(row)} aria-label="Modifica record">
+                                <Edit3 className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Modifica record</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="sm" variant="outline" onClick={() => remove(row)} aria-label="Elimina record">
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Elimina record</TooltipContent>
+                          </Tooltip>
                         </div>
                       </td>
                     </tr>
@@ -374,7 +422,7 @@ export function CrmResourcePage({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }
 
