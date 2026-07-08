@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { DataSource, QueryRunner } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
@@ -30,6 +30,8 @@ type AuthUser = { id: string; email?: string; role: string };
 
 @Injectable()
 export class TenantProjectsService {
+  private readonly logger = new Logger(TenantProjectsService.name);
+
   constructor(
     private readonly dataSource: DataSource,
     @Inject(REQUEST) private readonly request: any,
@@ -304,15 +306,18 @@ export class TenantProjectsService {
       const projectManagerId = body.project_manager_id && UUID_RE.test(String(body.project_manager_id))
         ? String(body.project_manager_id)
         : userId;
-      const projectType = String(quote.service_type || quote.briefing_type || body.type || 'custom').trim() || 'custom';
-      const name = String(body.name || quote.title || quote.opportunity_title || 'Nuovo progetto').trim();
+      const projectType = this.normalizeProjectType(quote.service_type || quote.briefing_type || body.type);
+      const name = this.normalizeProjectName(body.name || quote.title || quote.opportunity_title);
+      const status = this.normalizeProjectStatus(body.status);
+      const priority = this.normalizeProjectPriority(body.priority);
+      const progress = this.normalizeProjectProgress(body.progress);
       const projectRows = await runner.query(
         `INSERT INTO "${schema}".projects (
            company_id, contact_id, opportunity_id, briefing_id, quote_id,
-           name, description, type, status, priority, project_manager_id,
+           name, description, type, status, priority, progress, project_manager_id,
            created_by, updated_by, created_at, updated_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'to_start', $9, $10, $11, $11, now(), now())
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, now(), now())
          RETURNING id`,
         [
           quote.company_id || null,
@@ -323,7 +328,9 @@ export class TenantProjectsService {
           name,
           body.description || null,
           projectType,
-          PRIORITIES.includes(String(body.priority || 'medium')) ? body.priority : 'medium',
+          status,
+          priority,
+          progress,
           projectManagerId,
           userId,
         ],
@@ -344,6 +351,7 @@ export class TenantProjectsService {
     } catch (err) {
       await runner.rollbackTransaction();
       if (err instanceof BadRequestException || err instanceof NotFoundException || err instanceof ConflictException) throw err;
+      this.logProjectInsertError(err, 'create_from_quote');
       throw err;
     } finally {
       await runner.release();
@@ -805,18 +813,15 @@ export class TenantProjectsService {
       'project_manager_id', 'start_date', 'due_date', 'delivered_at', 'closed_at',
       'internal_notes', 'client_notes',
     ]);
-    if (!partial && !String(cleaned.name || '').trim()) throw new BadRequestException('name obbligatorio');
+    if (!partial || 'name' in cleaned) cleaned.name = this.normalizeProjectName(cleaned.name);
     for (const field of ['company_id', 'contact_id', 'opportunity_id', 'briefing_id', 'quote_id', 'project_manager_id']) {
       if (cleaned[field] === '') cleaned[field] = null;
       if (cleaned[field] && !UUID_RE.test(String(cleaned[field]))) throw new BadRequestException(`${field} non valido`);
     }
-    if (cleaned.status && !PROJECT_STATUSES.includes(String(cleaned.status))) throw new BadRequestException('Status progetto non valido');
-    if (cleaned.priority && !PRIORITIES.includes(String(cleaned.priority))) throw new BadRequestException('Priorita progetto non valida');
-    if ('progress' in cleaned) {
-      const progress = Number(cleaned.progress);
-      if (!Number.isFinite(progress)) throw new BadRequestException('progress non valido');
-      cleaned.progress = Math.max(0, Math.min(100, Math.trunc(progress)));
-    }
+    if (!partial || 'status' in cleaned) cleaned.status = this.normalizeProjectStatus(cleaned.status);
+    if (!partial || 'priority' in cleaned) cleaned.priority = this.normalizeProjectPriority(cleaned.priority);
+    if (!partial || 'progress' in cleaned) cleaned.progress = this.normalizeProjectProgress(cleaned.progress);
+    if ('type' in cleaned) cleaned.type = this.normalizeProjectType(cleaned.type);
     return cleaned;
   }
 
@@ -860,9 +865,70 @@ export class TenantProjectsService {
   }
 
   private async insertProject(schema: string, cleaned: Record<string, unknown>, userId: string | null, user: AuthUser) {
-    const row = await this.insertRow(schema, 'projects', { ...cleaned, created_by: userId, updated_by: userId });
-    await this.audit(schema, user, 'project_created', row.id, cleaned);
-    return this.getProject(row.id);
+    try {
+      const row = await this.insertRow(schema, 'projects', { ...cleaned, created_by: userId, updated_by: userId });
+      await this.audit(schema, user, 'project_created', row.id, cleaned);
+      return this.getProject(row.id);
+    } catch (err) {
+      this.logProjectInsertError(err, 'create_manual');
+      throw err;
+    }
+  }
+
+  private normalizeProjectName(value: unknown): string {
+    const name = String(value ?? '').trim();
+    return name || 'Nuovo progetto';
+  }
+
+  private normalizeProjectStatus(value: unknown): string {
+    const status = String(value ?? '').trim();
+    if (!status) return 'to_start';
+    if (!PROJECT_STATUSES.includes(status)) throw new BadRequestException('Status progetto non valido');
+    return status;
+  }
+
+  private normalizeProjectPriority(value: unknown): string {
+    const priority = String(value ?? '').trim();
+    if (!priority) return 'medium';
+    if (!PRIORITIES.includes(priority)) throw new BadRequestException('Priorita progetto non valida');
+    return priority;
+  }
+
+  private normalizeProjectProgress(value: unknown): number {
+    if (value === undefined || value === null || value === '') return 0;
+    const progress = Number(value);
+    if (!Number.isFinite(progress)) throw new BadRequestException('progress non valido');
+    return Math.max(0, Math.min(100, Math.trunc(progress)));
+  }
+
+  private normalizeProjectType(value: unknown): string {
+    const type = String(value ?? '').trim();
+    return type || 'custom';
+  }
+
+  private logProjectInsertError(err: unknown, context: string) {
+    const error = err as {
+      name?: string;
+      message?: string;
+      code?: string;
+      detail?: string;
+      table?: string;
+      column?: string;
+      constraint?: string;
+      schema?: string;
+    };
+    this.logger.error(
+      `Project insert failed (${context}): ${error?.message || String(err)}`,
+      JSON.stringify({
+        name: error?.name,
+        code: error?.code,
+        detail: error?.detail,
+        table: error?.table,
+        column: error?.column,
+        constraint: error?.constraint,
+        schema: error?.schema,
+      }),
+    );
   }
 
   private async createComment(schema: string, user: AuthUser, scope: Record<string, string>, body: Record<string, any>) {

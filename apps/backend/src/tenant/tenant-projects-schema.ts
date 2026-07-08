@@ -110,6 +110,15 @@ export async function ensureTenantProjectsTables(ds: DataSource, schema: string)
     'updated_at TIMESTAMPTZ DEFAULT now()',
     'deleted_at TIMESTAMPTZ',
   ]);
+  await ds.query(`UPDATE "${s}".projects SET status = 'to_start' WHERE status IS NULL`);
+  await ds.query(`UPDATE "${s}".projects SET priority = 'medium' WHERE priority IS NULL`);
+  await ds.query(`UPDATE "${s}".projects SET progress = 0 WHERE progress IS NULL`);
+  await ds.query(`ALTER TABLE "${s}".projects ALTER COLUMN status SET DEFAULT 'to_start'`);
+  await ds.query(`ALTER TABLE "${s}".projects ALTER COLUMN priority SET DEFAULT 'medium'`);
+  await ds.query(`ALTER TABLE "${s}".projects ALTER COLUMN progress SET DEFAULT 0`);
+  await ds.query(`ALTER TABLE "${s}".projects ALTER COLUMN status SET NOT NULL`);
+  await ds.query(`ALTER TABLE "${s}".projects ALTER COLUMN priority SET NOT NULL`);
+  await ds.query(`ALTER TABLE "${s}".projects ALTER COLUMN progress SET NOT NULL`);
 
   const projectRef = (await hasUuidId(ds, s, 'projects')) ? `REFERENCES "${s}".projects(id) ON DELETE CASCADE` : '';
 
