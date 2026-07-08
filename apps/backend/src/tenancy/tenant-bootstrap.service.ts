@@ -8,6 +8,7 @@ import { ensureTenantCrmCoreTables } from '../tenant/tenant-crm-schema';
 import { ensureTenantBriefingQuoteTables } from '../tenant/tenant-briefing-quotes-schema';
 import { ensureTenantProjectsTables } from '../tenant/tenant-projects-schema';
 import { ensureTenantFinanceTables } from '../tenant/tenant-finance-schema';
+import { ensureTenantClientPortalTables } from '../tenant/tenant-client-portal-schema';
 
 @Injectable()
 export class TenantBootstrapService implements OnApplicationBootstrap {
@@ -172,6 +173,7 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
     await ensureTenantBriefingQuoteTables(ds, s);
     await ensureTenantProjectsTables(ds, s);
     await ensureTenantFinanceTables(ds, s);
+    await ensureTenantClientPortalTables(ds, s);
 
     this.logger.log(`Schema "${s}" provisioned successfully.`);
   }
