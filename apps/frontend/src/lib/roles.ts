@@ -10,3 +10,16 @@ export function mapBackendRoleToLayout(role?: string): LayoutRole {
 
   return 'USER';
 }
+
+export function getTenantRoleLabel(role?: string, context: 'internal' | 'client' = 'internal'): string {
+  const r = (role ?? '').toLowerCase().trim();
+
+  if (r === 'superadmin' || r === 'super_admin') return 'Super Admin';
+  if (r === 'owner') return 'CEO';
+  if (r === 'admin') return 'Admin';
+  if (r === 'manager') return 'Project Manager';
+  if (r === 'editor' || r === 'user') return 'Dipendente';
+  if (r === 'viewer') return context === 'client' ? 'Cliente' : 'Viewer';
+
+  return role || 'Utente';
+}

@@ -32,6 +32,7 @@ export default function AcceptInvitePage() {
   const router = useRouter();
 
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [tenantSlug, setTenantSlug] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
@@ -46,6 +47,7 @@ export default function AcceptInvitePage() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       setInviteToken(params.get('token'));
+      setTenantSlug(params.get('tenant') || params.get('tenantSlug'));
       setInitializing(false);
     }
   }, []);
@@ -64,7 +66,7 @@ export default function AcceptInvitePage() {
       const data = await apiFetch<AcceptInviteSuccess>('/auth/accept-invite', {
         method: 'POST',
         auth: false,
-        body: JSON.stringify({ token: inviteToken, password }),
+        body: JSON.stringify({ token: inviteToken, password, tenant: tenantSlug }),
       });
 
       if (!data.token || !data.user) {

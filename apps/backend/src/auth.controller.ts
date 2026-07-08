@@ -22,6 +22,8 @@ type AuthBody = {
 type AcceptInviteBody = {
   token: string;
   password: string;
+  tenant?: string;
+  tenantSlug?: string;
 };
 
 type MfaConfirmBody = {
@@ -131,6 +133,7 @@ export class AuthController {
         req,
         body.token,
         body.password,
+        body.tenant || body.tenantSlug,
       );
 
       await this.auditService.log(req, {

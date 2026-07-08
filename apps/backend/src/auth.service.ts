@@ -337,14 +337,48 @@ export class AuthService {
     return { user: { ...user, tenantId, tenantSlug: realSlug, role: user.role }, token };
   }
 
-  async acceptInvite(req: Request, token: string, password: string) {
-    const conn = this.getConn(req);
-    const tenantId = this.getTenantId(req);
-    let realSlug = tenantId;
-    if (tenantId !== 'public') {
-      const tenantRow = await conn.query(`select slug from public.tenants where schema_name = $1 OR id::text = $1 limit 1`, [tenantId]);
-      if (tenantRow[0]?.slug) realSlug = tenantRow[0].slug;
+  private async resolveInviteTenant(req: Request, tenantRef?: string) {
+    const rawRef = String(tenantRef || '').trim().toLowerCase();
+    const routedTenant = this.getTenantId(req);
+    const lookupRef = rawRef || routedTenant;
+
+    if (lookupRef && lookupRef !== 'public') {
+      const rows = await this.dataSource.query(
+        `select id::text as id, slug, schema_name
+         from public.tenants
+         where id::text = $1 or slug = $1 or schema_name = $1
+         limit 1`,
+        [lookupRef],
+      );
+
+      if (rows[0]) {
+        return {
+          tenantPublicId: rows[0].id as string,
+          tenantId: safeSchema(rows[0].schema_name),
+          tenantSlug: rows[0].slug as string,
+          conn: this.dataSource,
+        };
+      }
     }
+
+    return {
+      tenantPublicId: null as string | null,
+      tenantId: routedTenant,
+      tenantSlug: routedTenant,
+      conn: this.getConn(req),
+    };
+  }
+
+  async acceptInvite(req: Request, token: string, password: string, tenantRef?: string) {
+    const inviteTenant = await this.resolveInviteTenant(req, tenantRef);
+    const conn = inviteTenant.conn;
+    const tenantId = inviteTenant.tenantId;
+    const realSlug = inviteTenant.tenantSlug || tenantId;
+
+    if (tenantId === 'public') {
+      throw new Error('Tenant required to accept invite');
+    }
+
     await this.assertTenantActive(conn, tenantId);
     const invites = await conn.query(
       `select id, email, role, accepted_at, expires_at from "${tenantId}"."invites" where token = $1 limit 1`,
@@ -363,6 +397,21 @@ export class AuthService {
     );
     const user = users[0];
     await conn.query(`update "${tenantId}"."invites" set accepted_at = now() where id = $1`, [invite.id]);
+
+    await this.dataSource.query(
+      `insert into public.users
+         (id, email, password_hash, role, tenant_id, auth_provider, is_active, created_at, updated_at)
+       values ($1, $2, $3, $4, $5, 'password', true, now(), now())
+       on conflict (email) do update
+         set password_hash = excluded.password_hash,
+             role = excluded.role,
+             tenant_id = excluded.tenant_id,
+             auth_provider = 'password',
+             is_active = true,
+             updated_at = now()`,
+      [user.id, user.email, passwordHash, user.role, inviteTenant.tenantPublicId || tenantId],
+    );
+
     const jwtToken = this.signToken(user.id, user.email, tenantId, realSlug, user.role as Role);
     return { user: { ...user, tenantId, tenantSlug: realSlug }, token: jwtToken };
   }

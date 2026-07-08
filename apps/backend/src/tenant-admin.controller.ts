@@ -66,6 +66,22 @@ export class TenantAdminController {
     return authUser;
   }
 
+  private async getTenantSlug(conn: DataSource, schema: string): Promise<string> {
+    const rows = await conn.query(
+      `select slug from public.tenants where schema_name = $1 or slug = $1 limit 1`,
+      [schema],
+    );
+    return rows[0]?.slug || schema;
+  }
+
+  private async getTenantPublicId(conn: DataSource, schema: string): Promise<string | null> {
+    const rows = await conn.query(
+      `select id::text as id from public.tenants where schema_name = $1 or slug = $1 limit 1`,
+      [schema],
+    );
+    return rows[0]?.id || null;
+  }
+
   @Get('users')
   async listAll(@Req() req: Request, @Res() res: Response) {
     // 🛡️ Guard: Tenant Context
@@ -179,7 +195,8 @@ export class TenantAdminController {
     });
 
     const baseUrl = process.env.APP_BASE_URL ?? 'https://app.doflow.it';
-    const acceptUrl = `${baseUrl}/auth/accept-invite?token=${invite.token}`;
+    const tenantSlug = await this.getTenantSlug(conn, tenantId);
+    const acceptUrl = `${baseUrl}/auth/accept-invite?tenant=${encodeURIComponent(tenantSlug)}&token=${invite.token}`;
 
     try {
       this.logger.log(`Tentativo invio email a ${invite.email}...`);
@@ -241,7 +258,8 @@ export class TenantAdminController {
     }
 
     const baseUrl = process.env.APP_BASE_URL ?? 'https://app.doflow.it';
-    const acceptUrl = `${baseUrl}/auth/accept-invite?token=${invite.token}`;
+    const tenantSlug = await this.getTenantSlug(conn, tenantId);
+    const acceptUrl = `${baseUrl}/auth/accept-invite?tenant=${encodeURIComponent(tenantSlug)}&token=${invite.token}`;
 
     try {
       await this.mailService.sendInviteEmail({
@@ -289,8 +307,8 @@ export class TenantAdminController {
       return res.status(400).json({ error: 'Cannot change role for an invite. Accept invite first.' });
     }
 
-    const userId = Number(raw);
-    if (Number.isNaN(userId)) {
+    const userId = raw.trim();
+    if (!userId) {
       return res.status(400).json({ error: 'Invalid user id' });
     }
 
@@ -323,6 +341,15 @@ export class TenantAdminController {
       metadata: { oldRole, newRole: updated.role },
     });
 
+    const tenantPublicId = await this.getTenantPublicId(conn, tenantId);
+    await conn.query(
+      `update public.users
+       set role = $1, updated_at = now()
+       where lower(email) = lower($2)
+         and (tenant_id = $3 or tenant_id = $4)`,
+      [body.role, updated.email, tenantPublicId, tenantId],
+    );
+
     return res.json({ status: 'ok', user: updated });
   }
 
@@ -353,9 +380,8 @@ export class TenantAdminController {
         [rawId],
       );
     } else {
-      // rawId è numerico
-      const userId = Number(rawId);
-      if (Number.isNaN(userId)) return res.status(400).json({ error: 'Invalid user id' });
+      const userId = rawId.trim();
+      if (!userId) return res.status(400).json({ error: 'Invalid user id' });
 
       result = await conn.query(
         `delete from "${tenantId}".users where id = $1 returning id, email`,
@@ -374,6 +400,16 @@ export class TenantAdminController {
       targetEmail: deletedEmail,
       metadata: { deletedId: id, type: isInvite ? 'invite' : 'user' },
     });
+
+    if (isUser) {
+      const tenantPublicId = await this.getTenantPublicId(conn, tenantId);
+      await conn.query(
+        `delete from public.users
+         where lower(email) = lower($1)
+           and (tenant_id = $2 or tenant_id = $3)`,
+        [deletedEmail, tenantPublicId, tenantId],
+      );
+    }
 
     return res.json({ status: 'ok', deletedId: id });
   }
