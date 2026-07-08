@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
 import { money, shortDate } from "@/components/tenant-crm/crm-core";
+import { useToast } from "@/hooks/use-toast";
 
 type Row = Record<string, any>;
 type ListResponse<T = Row> = { items: T[]; total: number; limit: number; offset: number };
@@ -159,6 +160,27 @@ function RelationSelect({
 
 function toBody(form: Record<string, any>) {
   return Object.fromEntries(Object.entries(form).filter(([, value]) => value !== "" && value !== undefined));
+}
+
+function projectFromConversionResult(result: Row | { project?: Row; existing?: boolean }) {
+  if (result && typeof result === "object" && "project" in result) return result.project || null;
+  return result as Row;
+}
+
+function conversionErrorMessage(err: unknown) {
+  const message = err instanceof Error ? err.message : String(err || "");
+  const lower = message.toLowerCase();
+
+  if (lower.includes("preventivo non accettato") || lower.includes("400")) {
+    return "Il preventivo deve essere accettato prima di creare il progetto.";
+  }
+  if (lower.includes("già esistente") || lower.includes("gia esistente") || lower.includes("409")) {
+    return "Il progetto esiste già. Apro il progetto collegato se il backend lo restituisce.";
+  }
+  if (lower.includes("401") || lower.includes("403") || lower.includes("forbidden") || lower.includes("unauthorized") || lower.includes("permess")) {
+    return "Non hai i permessi per creare un progetto da questo preventivo.";
+  }
+  return message || "Errore durante la creazione del progetto.";
 }
 
 async function loadList(path: string, params?: URLSearchParams) {
@@ -621,6 +643,7 @@ export function QuotesListPage({
   description?: string;
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [items, setItems] = useState<Row[]>([]);
   const [selected, setSelected] = useState<Row | null>(null);
   const [editing, setEditing] = useState<Row | null>(null);
@@ -629,6 +652,8 @@ export function QuotesListPage({
   const [status, setStatus] = useState(initialStatus || "__all__");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [acceptedQuoteCta, setAcceptedQuoteCta] = useState<Row | null>(null);
+  const [creatingProjectId, setCreatingProjectId] = useState<string | null>(null);
   const [itemForm, setItemForm] = useState<Record<string, any>>({ name: "", quantity: 1, unit_price: 0, discount: 0, tax_rate: 0, billing_type: "one_time" });
   const { relations } = useRelations(true);
   const showMoney = canSeeEconomicValues();
@@ -664,6 +689,15 @@ export function QuotesListPage({
   const updateStatus = async (row: Row, next: string) => {
     await apiFetch(`/tenant/quotes/${row.id}/status`, { method: "PATCH", body: JSON.stringify({ status: next }) });
     await load();
+    if (selected?.id === row.id) await loadQuote({ ...row, status: next });
+    if (next === "accepted") {
+      const updated = { ...row, status: "accepted" };
+      setAcceptedQuoteCta(updated);
+      toast({
+        title: "Preventivo accettato",
+        description: "Ora puoi creare il progetto operativo collegato.",
+      });
+    }
   };
 
   const openEdit = (row: Row) => {
@@ -690,6 +724,11 @@ export function QuotesListPage({
     await apiFetch(`/tenant/quotes/${row.id}/accept`, { method: "PATCH", body: JSON.stringify({}) });
     await load();
     if (selected?.id === row.id) await loadQuote(row);
+    setAcceptedQuoteCta({ ...row, status: "accepted" });
+    toast({
+      title: "Preventivo accettato",
+      description: "Ora puoi creare il progetto operativo collegato.",
+    });
   };
 
   const reject = async (row: Row) => {
@@ -727,12 +766,30 @@ export function QuotesListPage({
 
   const createProjectFromQuote = async (row: Row) => {
     if (row.status !== "accepted") return;
-    const result = await apiFetch<Row | { project?: Row; existing?: boolean }>(`/tenant/projects/from-quote/${row.id}`, {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-    const project = "project" in result ? result.project : result;
-    router.push(project?.id ? `/projects/${project.id}` : "/projects");
+    const endpoint = `/tenant/projects/from-quote/${row.id}`;
+    setCreatingProjectId(row.id);
+    setError(null);
+    try {
+      if (process.env.NODE_ENV === "development") {
+        console.info(`[quotes] POST ${endpoint}`);
+      }
+      const result = await apiFetch<Row | { project?: Row; existing?: boolean }>(endpoint, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      const project = projectFromConversionResult(result);
+      toast({
+        title: result && typeof result === "object" && "existing" in result && result.existing ? "Progetto già esistente" : "Progetto creato",
+        description: "Apro la scheda progetto con milestone e task iniziali.",
+      });
+      router.push(project?.id ? `/projects/${project.id}` : "/projects");
+    } catch (err) {
+      const message = conversionErrorMessage(err);
+      setError(message);
+      toast({ title: "Conversione non riuscita", description: message, variant: "destructive" });
+    } finally {
+      setCreatingProjectId(null);
+    }
   };
 
   if (!canManageBriefingQuotes()) return <AccessDenied title="Preventivi" />;
@@ -763,6 +820,21 @@ export function QuotesListPage({
             </Select>
           </div>
           <ErrorBox error={error} />
+          {acceptedQuoteCta ? (
+            <div className="flex flex-col gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="font-semibold text-emerald-700 dark:text-emerald-300">Preventivo accettato.</p>
+                <p className="text-muted-foreground">Vuoi creare subito il progetto operativo collegato a “{acceptedQuoteCta.title}”?</p>
+              </div>
+              <Button
+                onClick={() => createProjectFromQuote(acceptedQuoteCta)}
+                disabled={creatingProjectId === acceptedQuoteCta.id}
+              >
+                {creatingProjectId === acceptedQuoteCta.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FolderKanban className="mr-2 h-4 w-4" />}
+                Crea progetto
+              </Button>
+            </div>
+          ) : null}
           {loading ? (
             <div className="flex justify-center py-16 text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Caricamento...</div>
           ) : items.length === 0 ? (
@@ -800,7 +872,12 @@ export function QuotesListPage({
                           <Button size="sm" variant="outline" onClick={() => openEdit(row)}><Edit3 className="h-4 w-4" /></Button>
                           <Button size="sm" variant="outline" onClick={() => accept(row)} disabled={row.status === "accepted"}><CheckCircle2 className="h-4 w-4" /></Button>
                           <Button size="sm" variant="outline" onClick={() => reject(row)} disabled={row.status === "rejected"}><XCircle className="h-4 w-4" /></Button>
-                          {row.status === "accepted" ? <Button size="sm" variant="outline" onClick={() => createProjectFromQuote(row)}><FolderKanban className="h-4 w-4" /></Button> : null}
+                          {row.status === "accepted" ? (
+                            <Button size="sm" variant="outline" onClick={() => createProjectFromQuote(row)} disabled={creatingProjectId === row.id}>
+                              {creatingProjectId === row.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FolderKanban className="mr-2 h-4 w-4" />}
+                              Crea progetto
+                            </Button>
+                          ) : null}
                           <Button size="sm" variant="outline" onClick={() => recalculate(row)}><RefreshCw className="h-4 w-4" /></Button>
                           <Select value={row.status || "draft"} onValueChange={(next) => updateStatus(row, next)}>
                             <SelectTrigger className="h-8 w-[130px]"><SelectValue /></SelectTrigger>
@@ -836,7 +913,12 @@ export function QuotesListPage({
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="font-semibold">Righe preventivo</h3>
                   <div className="flex gap-2">
-                    {selected.status === "accepted" ? <Button size="sm" variant="outline" onClick={() => createProjectFromQuote(selected)}><FolderKanban className="mr-2 h-4 w-4" /> Crea progetto</Button> : null}
+                    {selected.status === "accepted" ? (
+                      <Button size="sm" variant="outline" onClick={() => createProjectFromQuote(selected)} disabled={creatingProjectId === selected.id}>
+                        {creatingProjectId === selected.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FolderKanban className="mr-2 h-4 w-4" />}
+                        Crea progetto
+                      </Button>
+                    ) : null}
                     <Button size="sm" variant="outline" onClick={() => recalculate(selected)}><RefreshCw className="mr-2 h-4 w-4" /> Ricalcola</Button>
                   </div>
                 </div>
