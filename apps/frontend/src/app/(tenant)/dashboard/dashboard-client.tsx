@@ -9,7 +9,6 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   CheckCircle2,
-  ClipboardCheck,
   Clock,
   FileCheck2,
   FileText,
@@ -127,11 +126,6 @@ type DashboardSummary = {
     missingMaterials: number;
     incompleteBriefings?: number;
     completedBriefings?: number;
-    openClientReviews: number;
-    pendingClientApprovals?: number;
-    clientMaterialsRequested?: number;
-    recentClientCommentsCount?: number;
-    pendingClientInvites?: number;
     upcomingDeliveries: number;
     recentComments: ActivityItem[];
     recentFiles: ActivityItem[];
@@ -252,11 +246,6 @@ function getFallbackSummary(): DashboardSummary {
       missingMaterials: 0,
       incompleteBriefings: 0,
       completedBriefings: 0,
-      openClientReviews: 0,
-      pendingClientApprovals: 0,
-      clientMaterialsRequested: 0,
-      recentClientCommentsCount: 0,
-      pendingClientInvites: 0,
       upcomingDeliveries: 0,
       recentComments: [],
       recentFiles: [],
@@ -578,13 +567,6 @@ export default function DashboardClient() {
     { label: "Upsell possibili", value: summary.customers.upsellOpportunities },
   ];
 
-  const clientPortalMetrics: Metric[] = [
-    { label: "Approvazioni cliente pendenti", value: summary.operations.pendingClientApprovals || summary.operations.openClientReviews || 0, tone: (summary.operations.pendingClientApprovals || summary.operations.openClientReviews || 0) > 0 ? "warning" : "default" },
-    { label: "Materiali cliente richiesti", value: summary.operations.clientMaterialsRequested || 0, tone: (summary.operations.clientMaterialsRequested || 0) > 0 ? "warning" : "default" },
-    { label: "Commenti cliente recenti", value: summary.operations.recentClientCommentsCount || 0 },
-    { label: "Inviti cliente pending", value: summary.operations.pendingClientInvites || 0 },
-  ];
-
   const financeMetrics: Metric[] = summary.finance ? [
     { label: "Fatture emesse", value: summary.finance.issuedInvoices },
     { label: "Da incassare", value: summary.finance.receivables },
@@ -713,14 +695,6 @@ export default function DashboardClient() {
             sources={summary.customers.sources}
             emptyText="Ticket support è letto se disponibile; clienti, manutenzioni e upsell attendono tabelle CRM V2 reali."
           />
-          <SectionCard
-            title="Portale cliente"
-            description="Approvazioni, materiali, commenti e inviti cliente condivisi dal portale."
-            icon={ClipboardCheck}
-            metrics={clientPortalMetrics}
-            sources={summary.operations.sources}
-            emptyText="Il portale cliente usa tabelle reali: comparirà appena condividi account, progetti o richieste."
-          />
           <QuickActions actions={executiveActions} />
         </>
       ) : null}
@@ -739,9 +713,6 @@ export default function DashboardClient() {
                 { label: "Task del team", value: summary.team.openTasks },
                 { label: "Materiali mancanti", value: summary.operations.missingMaterials },
                 { label: "Briefing incompleti", value: summary.operations.incompleteBriefings || 0 },
-                { label: "Review cliente aperte", value: summary.operations.openClientReviews },
-                { label: "Commenti cliente recenti", value: summary.operations.recentClientCommentsCount || 0 },
-                { label: "Inviti cliente pending", value: summary.operations.pendingClientInvites || 0 },
               ]}
               sources={{ ...summary.projects.sources, ...summary.team.sources, ...summary.operations.sources }}
               emptyText="La vista PM non usa mock: progetti, task, materiali e review restano a zero finché non sono persistenti."

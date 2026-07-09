@@ -438,46 +438,6 @@ export class TenantDashboardService {
     };
   }
 
-  private async buildClientPortalOperationsSummary(schema: string, includeClientPortal: boolean): Promise<DashboardClientPortalOperationsSummary> {
-    if (!includeClientPortal) {
-      return {
-        pendingClientApprovals: 0,
-        clientMaterialsRequested: 0,
-        recentClientComments: 0,
-        pendingClientInvites: 0,
-        sources: {
-          clientPortalAccounts: await this.tableExists(schema, 'client_portal_accounts'),
-          clientApprovalRequests: await this.tableExists(schema, 'client_approval_requests'),
-          clientMaterialRequests: await this.tableExists(schema, 'client_material_requests'),
-          clientPortalComments: await this.tableExists(schema, 'client_portal_comments'),
-          clientPortalInvites: await this.tableExists(schema, 'client_portal_invites'),
-        },
-      };
-    }
-
-    return {
-      pendingClientApprovals: await this.countByOptionalStatus(schema, 'client_approval_requests', ['pending']),
-      clientMaterialsRequested: await this.countByOptionalStatus(schema, 'client_material_requests', ['requested']),
-      recentClientComments: await this.countRows(
-        schema,
-        'client_portal_comments',
-        `created_at >= now() - INTERVAL '14 days' AND LOWER(COALESCE(visibility::text, '')) IN ('client', 'internal_response')`,
-      ),
-      pendingClientInvites: await this.countRows(
-        schema,
-        'client_portal_invites',
-        `LOWER(COALESCE(status::text, '')) = 'pending' AND expires_at > now()`,
-      ),
-      sources: {
-        clientPortalAccounts: await this.tableExists(schema, 'client_portal_accounts'),
-        clientApprovalRequests: await this.tableExists(schema, 'client_approval_requests'),
-        clientMaterialRequests: await this.tableExists(schema, 'client_material_requests'),
-        clientPortalComments: await this.tableExists(schema, 'client_portal_comments'),
-        clientPortalInvites: await this.tableExists(schema, 'client_portal_invites'),
-      },
-    };
-  }
-
   private async countRowsIfColumnExists(schema: string, table: string, column: string, where: string): Promise<number> {
     if (!(await this.tableExists(schema, table))) return 0;
     if (!(await this.columnExists(schema, table, column))) return 0;
@@ -877,7 +837,6 @@ export class TenantDashboardService {
       recentComments,
       notifications,
       briefingOperations,
-      clientPortalOperations,
     ] = await Promise.all([
       this.buildSalesSummary(schema, showFinance),
       this.buildProjectsSummary(schema, user, audience),
@@ -888,7 +847,6 @@ export class TenantDashboardService {
       this.getRecentComments(schema),
       this.getRecentNotifications(tenant, user.email),
       this.buildBriefingOperationsSummary(schema),
-      this.buildClientPortalOperationsSummary(schema, audience === 'executive' || audience === 'manager'),
     ]);
 
     const finance = showFinance
@@ -919,18 +877,12 @@ export class TenantDashboardService {
         missingMaterials: briefingOperations.missingMaterials,
         incompleteBriefings: briefingOperations.incompleteBriefings,
         completedBriefings: briefingOperations.completedBriefings,
-        openClientReviews: clientPortalOperations.pendingClientApprovals,
-        pendingClientApprovals: clientPortalOperations.pendingClientApprovals,
-        clientMaterialsRequested: clientPortalOperations.clientMaterialsRequested,
-        recentClientCommentsCount: clientPortalOperations.recentClientComments,
-        pendingClientInvites: clientPortalOperations.pendingClientInvites,
         upcomingDeliveries: projects.upcomingDeliveries,
         recentComments,
         recentFiles,
         notifications,
         sources: {
           ...briefingOperations.sources,
-          ...clientPortalOperations.sources,
         },
       },
     };
@@ -1122,14 +1074,6 @@ interface DashboardBriefingOperationsSummary {
   sources: DashboardSourceFlags;
 }
 
-interface DashboardClientPortalOperationsSummary {
-  pendingClientApprovals: number;
-  clientMaterialsRequested: number;
-  recentClientComments: number;
-  pendingClientInvites: number;
-  sources: DashboardSourceFlags;
-}
-
 interface TenantDashboardSummary {
   tenant: {
     id?: string;
@@ -1154,11 +1098,6 @@ interface TenantDashboardSummary {
     missingMaterials: number;
     incompleteBriefings: number;
     completedBriefings: number;
-    openClientReviews: number;
-    pendingClientApprovals: number;
-    clientMaterialsRequested: number;
-    recentClientCommentsCount: number;
-    pendingClientInvites: number;
     upcomingDeliveries: number;
     recentComments: DashboardActivityItem[];
     recentFiles: DashboardActivityItem[];

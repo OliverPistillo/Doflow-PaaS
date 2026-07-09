@@ -9,7 +9,7 @@ import {
   Building2, CalendarDays, CheckSquare, ChevronsUpDown, ClipboardCheck,
   Clock, Contact, CreditCard, FileCheck2, FileClock, FileText,
   FolderKanban, FolderOpen, Handshake, KanbanSquare, Layers,
-  LifeBuoy, LockKeyhole, LogOut, MailCheck, MessageSquare, Moon,
+  LifeBuoy, LockKeyhole, LogOut, MailCheck, Moon,
   Plug, Receipt, Send, Settings, Sparkles, Sun, Timer, User,
   UserCog, UserPlus, Users, UsersRound, Wallet, Workflow, Zap, RefreshCw,
 } from "lucide-react";
@@ -63,13 +63,6 @@ const EXISTING_TENANT_ROUTES = new Set([
   "/calendar",
   "/campaigns",
   "/changelog",
-  "/client-portal",
-  "/client-portal/accounts",
-  "/client-portal/approvals",
-  "/client-portal/comments",
-  "/client-portal/invites",
-  "/client-portal/material-requests",
-  "/client-portal/projects",
   "/companies",
   "/contacts",
   "/customers",
@@ -197,19 +190,7 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
       label: "Clienti",
       modules: [
         item("Clienti attivi", "/companies", Users),
-        item("Portale cliente", "/client-portal", UserCog),
-        item("Approvazioni", "/client-portal/approvals", ClipboardCheck),
-        item("Materiali richiesti", "/client-portal/material-requests", FolderOpen),
-      ],
-    },
-    {
-      label: "Portale cliente",
-      modules: [
-        item("Dashboard portale", "/client-portal", UserCog),
-        item("Account clienti", "/client-portal/accounts", Users),
-        item("Inviti", "/client-portal/invites", MailCheck),
-        item("Accessi progetto", "/client-portal/projects", FolderKanban),
-        item("Commenti", "/client-portal/comments", MessageSquare),
+        item("Materiali richiesti", "/briefings/incomplete", FolderOpen),
       ],
     },
     {
@@ -317,18 +298,7 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
       label: "Clienti",
       modules: [
         item("Clienti attivi", "/companies", Users),
-        item("Portale cliente", "/client-portal", UserCog),
-        item("Approvazioni", "/client-portal/approvals", ClipboardCheck),
-        item("Materiali richiesti", "/client-portal/material-requests", FolderOpen),
-      ],
-    },
-    {
-      label: "Portale cliente",
-      modules: [
-        item("Account clienti", "/client-portal/accounts", Users),
-        item("Inviti", "/client-portal/invites", MailCheck),
-        item("Accessi progetto", "/client-portal/projects", FolderKanban),
-        item("Commenti", "/client-portal/comments", MessageSquare),
+        item("Materiali richiesti", "/briefings/incomplete", FolderOpen),
       ],
     },
     {

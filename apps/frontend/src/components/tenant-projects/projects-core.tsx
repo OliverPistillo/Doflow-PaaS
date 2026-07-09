@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   CalendarDays, CheckCircle2, Clock, Edit3, Eye, FileText, FolderKanban,
   FolderOpen, KanbanSquare, Loader2, MessageSquare, Plus, Search, Trash2,
-  Receipt, UserPlus, Users,
+  Receipt, UserPlus,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -101,7 +101,6 @@ const MEMBER_ROLES: Option[] = [
 
 const COMMENT_VISIBILITIES: Option[] = [
   { value: "internal", label: "Interno" },
-  { value: "client", label: "Cliente" },
   { value: "private", label: "Privato" },
 ];
 
@@ -688,14 +687,6 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
               Crea fattura da progetto
             </Button>
           ) : null}
-          {canManageProjects() ? (
-            <Button variant="outline" asChild>
-              <Link href="/client-portal/projects">
-                <Users className="mr-2 h-4 w-4" />
-                Condividi con cliente
-              </Link>
-            </Button>
-          ) : null}
           <StateBadge value={project.status} options={PROJECT_STATUSES} />
           <StateBadge value={project.priority} options={PRIORITIES} />
           {canManageProjects() ? <Button onClick={openEdit}><Edit3 className="mr-2 h-4 w-4" /> Modifica</Button> : null}
@@ -839,7 +830,7 @@ function MembersPanel({ items, form, setForm, onCreate, onDelete }: { items: Row
 
 function CommentsPanel({ items, form, setForm, onCreate, onDelete }: { items: Row[]; form: Record<string, any>; setForm: (updater: (prev: Record<string, any>) => Record<string, any>) => void; onCreate: () => void; onDelete: (row: Row) => void }) {
   const visibleItems = roleIsViewer() ? [] : items.filter((row) => row.visibility !== "private" || canSeeSensitiveTeamData());
-  return <Card><CardHeader><CardTitle className="text-lg">Commenti</CardTitle><CardDescription>Note operative interne e commenti cliente.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 md:grid-cols-[1fr_180px_auto]"><Textarea value={form.body || ""} onChange={(e) => setForm((p) => ({ ...p, body: e.target.value }))} placeholder="Scrivi un commento operativo..." /><SelectField value={form.visibility} options={COMMENT_VISIBILITIES.filter((o) => canSeeSensitiveTeamData() || o.value !== "private")} placeholder="Visibilità" onChange={(v) => setForm((p) => ({ ...p, visibility: v }))} /><Button onClick={onCreate} disabled={!form.body}><MessageSquare className="mr-2 h-4 w-4" /> Commenta</Button></div>{visibleItems.length === 0 ? <EmptyState>Nessun commento reale.</EmptyState> : <div className="space-y-2">{visibleItems.map((row) => <div key={row.id} className="rounded-lg border p-3"><div className="flex items-start justify-between gap-3"><div><p className="whitespace-pre-wrap text-sm">{row.body}</p><p className="mt-2 text-xs text-muted-foreground">{row.created_by_email || row.created_by || "Utente"} · {labelFor(row.visibility, COMMENT_VISIBILITIES)} · {shortDate(row.created_at)}</p></div><Button size="sm" variant="outline" onClick={() => onDelete(row)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div></div>)}</div>}</CardContent></Card>;
+  return <Card><CardHeader><CardTitle className="text-lg">Commenti</CardTitle><CardDescription>Note operative interne del team.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="grid gap-3 md:grid-cols-[1fr_180px_auto]"><Textarea value={form.body || ""} onChange={(e) => setForm((p) => ({ ...p, body: e.target.value }))} placeholder="Scrivi un commento operativo..." /><SelectField value={form.visibility} options={COMMENT_VISIBILITIES.filter((o) => canSeeSensitiveTeamData() || o.value !== "private")} placeholder="Visibilità" onChange={(v) => setForm((p) => ({ ...p, visibility: v }))} /><Button onClick={onCreate} disabled={!form.body}><MessageSquare className="mr-2 h-4 w-4" /> Commenta</Button></div>{visibleItems.length === 0 ? <EmptyState>Nessun commento reale.</EmptyState> : <div className="space-y-2">{visibleItems.map((row) => <div key={row.id} className="rounded-lg border p-3"><div className="flex items-start justify-between gap-3"><div><p className="whitespace-pre-wrap text-sm">{row.body}</p><p className="mt-2 text-xs text-muted-foreground">{row.created_by_email || row.created_by || "Utente"} · {labelFor(row.visibility, COMMENT_VISIBILITIES)} · {shortDate(row.created_at)}</p></div><Button size="sm" variant="outline" onClick={() => onDelete(row)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div></div>)}</div>}</CardContent></Card>;
 }
 
 function FilesPanel({ items, form, setForm, onCreate, onDelete }: { items: Row[]; form: Record<string, any>; setForm: (updater: (prev: Record<string, any>) => Record<string, any>) => void; onCreate: () => void; onDelete: (row: Row) => void }) {
