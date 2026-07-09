@@ -10,6 +10,7 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   CheckCircle2,
+  ClipboardCheck,
   Clock,
   FileCheck2,
   FileText,
@@ -68,6 +69,28 @@ type ReportsSummary = {
   currentMonthNewLeads: number;
   currentMonthAcceptedQuotes: number;
   currentMonthOverdueTasks: number;
+  sources?: SourceFlags;
+};
+
+type ContractsSummary = {
+  totalContracts: number;
+  draftContracts: number;
+  sentContracts: number;
+  waitingSignatureContracts: number;
+  signedContracts: number;
+  expiringContracts: number;
+  overdueContracts: number;
+  recentContracts: ActivityItem[];
+  sources?: SourceFlags;
+};
+
+type PaperworkSummary = {
+  openDossiers: number;
+  blockedDossiers: number;
+  overdueDossiers: number;
+  missingItems: number;
+  dueSoonItems: number;
+  recentDossiers: ActivityItem[];
   sources?: SourceFlags;
 };
 
@@ -172,6 +195,8 @@ type DashboardSummary = {
     notifications: ActivityItem[];
     documentsSummary?: DocumentsSummary;
     reportsSummary?: ReportsSummary;
+    contractsSummary?: ContractsSummary;
+    paperworkSummary?: PaperworkSummary;
     sources?: SourceFlags;
   };
 };
@@ -325,6 +350,26 @@ function getFallbackSummary(): DashboardSummary {
         currentMonthNewLeads: 0,
         currentMonthAcceptedQuotes: 0,
         currentMonthOverdueTasks: 0,
+        sources: {},
+      },
+      contractsSummary: {
+        totalContracts: 0,
+        draftContracts: 0,
+        sentContracts: 0,
+        waitingSignatureContracts: 0,
+        signedContracts: 0,
+        expiringContracts: 0,
+        overdueContracts: 0,
+        recentContracts: [],
+        sources: {},
+      },
+      paperworkSummary: {
+        openDossiers: 0,
+        blockedDossiers: 0,
+        overdueDossiers: 0,
+        missingItems: 0,
+        dueSoonItems: 0,
+        recentDossiers: [],
         sources: {},
       },
       sources: {},
@@ -840,6 +885,104 @@ export default function DashboardClient() {
     </SectionCard>
   );
 
+  const contractsSummary = summary.operations.contractsSummary || {
+    totalContracts: 0,
+    draftContracts: 0,
+    sentContracts: 0,
+    waitingSignatureContracts: 0,
+    signedContracts: 0,
+    expiringContracts: 0,
+    overdueContracts: 0,
+    recentContracts: [],
+    sources: {},
+  };
+
+  const contractsCard = (
+    <SectionCard
+      title="Contratti"
+      description="Contratti, stati firma e scadenze amministrative interne."
+      icon={FileCheck2}
+      metrics={[
+        { label: "Totali", value: contractsSummary.totalContracts || 0 },
+        { label: "Bozze", value: contractsSummary.draftContracts || 0 },
+        { label: "Inviati", value: contractsSummary.sentContracts || 0 },
+        { label: "In attesa firma", value: contractsSummary.waitingSignatureContracts || 0, tone: (contractsSummary.waitingSignatureContracts || 0) > 0 ? "warning" : "default" },
+        { label: "Firmati", value: contractsSummary.signedContracts || 0, tone: (contractsSummary.signedContracts || 0) > 0 ? "success" : "default" },
+        { label: "In scadenza", value: contractsSummary.expiringContracts || 0, tone: (contractsSummary.expiringContracts || 0) > 0 ? "warning" : "default" },
+        { label: "Scaduti", value: contractsSummary.overdueContracts || 0, tone: (contractsSummary.overdueContracts || 0) > 0 ? "danger" : "default" },
+      ]}
+      sources={contractsSummary.sources || { contracts: (contractsSummary.totalContracts || 0) > 0 }}
+      emptyText="Nessun contratto presente."
+    >
+      <div className="space-y-3">
+        {contractsSummary.recentContracts?.length ? (
+          <div className="space-y-2">
+            {contractsSummary.recentContracts.slice(0, 5).map((item, index) => (
+              <div key={`${item.title}-${index}`} className="flex items-start justify-between gap-3 rounded-nav bg-muted/40 px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-foreground">{item.title}</p>
+                  <p className="line-clamp-1 text-xs text-muted-foreground">{item.meta || "Contratto interno"}</p>
+                </div>
+                <span className="shrink-0 text-xs text-muted-foreground">{formatDate(item.createdAt)}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm"><Link href="/contracts">Apri contratti</Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/contracts/new">Nuovo contratto</Link></Button>
+        </div>
+      </div>
+    </SectionCard>
+  );
+
+  const paperworkSummary = summary.operations.paperworkSummary || {
+    openDossiers: 0,
+    blockedDossiers: 0,
+    overdueDossiers: 0,
+    missingItems: 0,
+    dueSoonItems: 0,
+    recentDossiers: [],
+    sources: {},
+  };
+
+  const paperworkCard = (
+    <SectionCard
+      title="Scartoffie"
+      description="Dossier amministrativi, checklist documentali e scadenze operative."
+      icon={ClipboardCheck}
+      metrics={[
+        { label: "Dossier aperti", value: paperworkSummary.openDossiers || 0 },
+        { label: "Bloccati", value: paperworkSummary.blockedDossiers || 0, tone: (paperworkSummary.blockedDossiers || 0) > 0 ? "danger" : "default" },
+        { label: "Scaduti", value: paperworkSummary.overdueDossiers || 0, tone: (paperworkSummary.overdueDossiers || 0) > 0 ? "danger" : "default" },
+        { label: "Item mancanti", value: paperworkSummary.missingItems || 0, tone: (paperworkSummary.missingItems || 0) > 0 ? "warning" : "default" },
+        { label: "Item in scadenza", value: paperworkSummary.dueSoonItems || 0, tone: (paperworkSummary.dueSoonItems || 0) > 0 ? "warning" : "default" },
+      ]}
+      sources={paperworkSummary.sources || { paperwork: (paperworkSummary.openDossiers || 0) > 0 }}
+      emptyText="Nessun dossier amministrativo presente."
+    >
+      <div className="space-y-3">
+        {paperworkSummary.recentDossiers?.length ? (
+          <div className="space-y-2">
+            {paperworkSummary.recentDossiers.slice(0, 5).map((item, index) => (
+              <div key={`${item.title}-${index}`} className="flex items-start justify-between gap-3 rounded-nav bg-muted/40 px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-foreground">{item.title}</p>
+                  <p className="line-clamp-1 text-xs text-muted-foreground">{item.meta || "Dossier amministrativo"}</p>
+                </div>
+                <span className="shrink-0 text-xs text-muted-foreground">{formatDate(item.createdAt)}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm"><Link href="/paperwork">Apri scartoffie</Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/paperwork/new">Nuovo dossier</Link></Button>
+        </div>
+      </div>
+    </SectionCard>
+  );
+
   const notificationsCard = (
     <SectionCard
       title="Attenzione richiesta"
@@ -990,6 +1133,8 @@ export default function DashboardClient() {
             {notificationsCard}
             {documentsCard}
             {reportsCard}
+            {contractsCard}
+            {paperworkCard}
           </div>
           <SectionCard
             title="Clienti"
@@ -1036,6 +1181,8 @@ export default function DashboardClient() {
             {notificationsCard}
             {documentsCard}
             {reportsCard}
+            {contractsCard}
+            {paperworkCard}
           </div>
           <FinanceLockedNotice />
           <div className="grid gap-4 lg:grid-cols-3">
@@ -1074,6 +1221,8 @@ export default function DashboardClient() {
             {notificationsCard}
             {documentsCard}
             {reportsCard}
+            {contractsCard}
+            {paperworkCard}
           </div>
           <FinanceLockedNotice />
           <div className="grid gap-4 lg:grid-cols-3">

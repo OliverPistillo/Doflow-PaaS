@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
-  CheckCircle2, Edit3, Eye, FileCheck2, FileText, Loader2, Plus, RefreshCw,
+  CheckCircle2, ClipboardCheck, Edit3, Eye, FileCheck2, FileText, Loader2, Plus, RefreshCw,
   Search, Send, Trash2, XCircle, FolderKanban, Receipt,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,8 @@ import { getDoFlowUser } from "@/lib/jwt";
 import { money, shortDate } from "@/components/tenant-crm/crm-core";
 import { useToast } from "@/hooks/use-toast";
 import { canUseFinanceFrontend } from "@/components/tenant-finance/finance-core";
+import { contractsApi } from "@/lib/tenant-contracts-api";
+import { paperworkApi } from "@/lib/tenant-paperwork-api";
 
 type Row = Record<string, any>;
 type ListResponse<T = Row> = { items: T[]; total: number; limit: number; offset: number };
@@ -165,6 +167,11 @@ function toBody(form: Record<string, any>) {
 
 function projectFromConversionResult(result: Row | { project?: Row; existing?: boolean }) {
   if (result && typeof result === "object" && "project" in result) return result.project || null;
+  return result as Row;
+}
+
+function entityFromConversionResult(result: Row | Record<string, any>, key: string) {
+  if (result && typeof result === "object" && key in result) return result[key] || null;
   return result as Row;
 }
 
@@ -656,6 +663,8 @@ export function QuotesListPage({
   const [acceptedQuoteCta, setAcceptedQuoteCta] = useState<Row | null>(null);
   const [creatingProjectId, setCreatingProjectId] = useState<string | null>(null);
   const [creatingInvoiceId, setCreatingInvoiceId] = useState<string | null>(null);
+  const [creatingContractId, setCreatingContractId] = useState<string | null>(null);
+  const [creatingDossierId, setCreatingDossierId] = useState<string | null>(null);
   const [itemForm, setItemForm] = useState<Record<string, any>>({ name: "", quantity: 1, unit_price: 0, discount: 0, tax_rate: 0, billing_type: "one_time" });
   const { relations } = useRelations(true);
   const showMoney = canSeeEconomicValues();
@@ -822,6 +831,47 @@ export function QuotesListPage({
     }
   };
 
+  const createContractFromQuote = async (row: Row) => {
+    if (row.status !== "accepted") return;
+    setCreatingContractId(row.id);
+    setError(null);
+    try {
+      const result = await contractsApi.fromQuote(row.id);
+      const contract = entityFromConversionResult(result, "contract");
+      toast({
+        title: result && typeof result === "object" && "existing" in result && result.existing ? "Contratto già presente" : "Contratto creato",
+        description: "Apro la scheda contratto collegata al preventivo.",
+      });
+      router.push(contract?.id ? `/contracts/${contract.id}` : "/contracts");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Errore durante la creazione del contratto.";
+      setError(message);
+      toast({ title: "Contratto non creato", description: message, variant: "destructive" });
+    } finally {
+      setCreatingContractId(null);
+    }
+  };
+
+  const createDossierFromQuote = async (row: Row) => {
+    setCreatingDossierId(row.id);
+    setError(null);
+    try {
+      const result = await paperworkApi.fromQuote(row.id);
+      const dossier = entityFromConversionResult(result, "dossier");
+      toast({
+        title: result && typeof result === "object" && "existing" in result && result.existing ? "Dossier già presente" : "Dossier creato",
+        description: "Apro il dossier amministrativo collegato al preventivo.",
+      });
+      router.push(dossier?.id ? `/paperwork/dossiers/${dossier.id}` : "/paperwork/dossiers");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Errore durante la creazione del dossier.";
+      setError(message);
+      toast({ title: "Dossier non creato", description: message, variant: "destructive" });
+    } finally {
+      setCreatingDossierId(null);
+    }
+  };
+
   if (!canManageBriefingQuotes()) return <AccessDenied title="Preventivi" />;
 
   return (
@@ -862,6 +912,14 @@ export function QuotesListPage({
               >
                 {creatingProjectId === acceptedQuoteCta.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FolderKanban className="mr-2 h-4 w-4" />}
                 Crea progetto
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => createContractFromQuote(acceptedQuoteCta)}
+                disabled={creatingContractId === acceptedQuoteCta.id}
+              >
+                {creatingContractId === acceptedQuoteCta.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+                Crea contratto
               </Button>
             </div>
           ) : null}
@@ -907,6 +965,14 @@ export function QuotesListPage({
                               <Button size="sm" variant="outline" onClick={() => createProjectFromQuote(row)} disabled={creatingProjectId === row.id}>
                                 {creatingProjectId === row.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FolderKanban className="mr-2 h-4 w-4" />}
                                 Crea progetto
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => createContractFromQuote(row)} disabled={creatingContractId === row.id}>
+                                {creatingContractId === row.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+                                Crea contratto
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => createDossierFromQuote(row)} disabled={creatingDossierId === row.id}>
+                                {creatingDossierId === row.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardCheck className="mr-2 h-4 w-4" />}
+                                Crea dossier
                               </Button>
                               {canCreateFinanceInvoice ? (
                                 <Button size="sm" variant="outline" onClick={() => createInvoiceFromQuote(row)} disabled={creatingInvoiceId === row.id}>
@@ -956,6 +1022,14 @@ export function QuotesListPage({
                         <Button size="sm" variant="outline" onClick={() => createProjectFromQuote(selected)} disabled={creatingProjectId === selected.id}>
                           {creatingProjectId === selected.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FolderKanban className="mr-2 h-4 w-4" />}
                           Crea progetto
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => createContractFromQuote(selected)} disabled={creatingContractId === selected.id}>
+                          {creatingContractId === selected.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+                          Crea contratto
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => createDossierFromQuote(selected)} disabled={creatingDossierId === selected.id}>
+                          {creatingDossierId === selected.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardCheck className="mr-2 h-4 w-4" />}
+                          Crea dossier
                         </Button>
                         {canCreateFinanceInvoice ? (
                           <Button size="sm" variant="outline" onClick={() => createInvoiceFromQuote(selected)} disabled={creatingInvoiceId === selected.id}>

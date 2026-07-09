@@ -67,6 +67,10 @@ const EXISTING_TENANT_ROUTES = new Set([
   "/changelog",
   "/companies",
   "/contacts",
+  "/contracts",
+  "/contracts/new",
+  "/contracts/templates",
+  "/contracts/templates/new",
   "/customers",
   "/dashboard",
   "/deals",
@@ -93,6 +97,10 @@ const EXISTING_TENANT_ROUTES = new Set([
   "/notifications/digest",
   "/notifications/preferences",
   "/notifications/rules",
+  "/paperwork",
+  "/paperwork/dossiers",
+  "/paperwork/dossiers/new",
+  "/paperwork/new",
   "/payments",
   "/pipeline",
   "/projects",
@@ -223,6 +231,16 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
         item("Tutti", "/documents", FileText, { moduleKey: "docs.files" }),
         item("Cartelle", "/documents/folders", FolderOpen, { moduleKey: "docs.files" }),
         item("Carica", "/documents/upload", FileCheck2, { moduleKey: "docs.files" }),
+      ],
+    },
+    {
+      label: "Amministrazione",
+      modules: [
+        item("Contratti", "/contracts", FileCheck2, { minPlan: "PRO" }),
+        item("Nuovo contratto", "/contracts/new", FileText, { minPlan: "PRO" }),
+        item("Template contratti", "/contracts/templates", BookTemplate, { minPlan: "PRO" }),
+        item("Scartoffie", "/paperwork", ClipboardCheck, { minPlan: "PRO" }),
+        item("Dossier", "/paperwork/dossiers", FolderOpen, { minPlan: "PRO" }),
       ],
     },
     {
@@ -358,6 +376,15 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
       ],
     },
     {
+      label: "Amministrazione",
+      modules: [
+        item("Contratti", "/contracts", FileCheck2, { minPlan: "PRO" }),
+        item("Template contratti", "/contracts/templates", BookTemplate, { minPlan: "PRO" }),
+        item("Scartoffie", "/paperwork", ClipboardCheck, { minPlan: "PRO" }),
+        item("Dossier", "/paperwork/dossiers", FolderOpen, { minPlan: "PRO" }),
+      ],
+    },
+    {
       label: "Supporto",
       modules: [
         item("Ticket", "/support", LifeBuoy),
@@ -425,6 +452,14 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
         item("Tutti", "/documents", FileText, { moduleKey: "docs.files" }),
         item("Cartelle", "/documents/folders", FolderOpen, { moduleKey: "docs.files" }),
         item("Carica", "/documents/upload", FileCheck2, { moduleKey: "docs.files" }),
+      ],
+    },
+    {
+      label: "Amministrazione",
+      modules: [
+        item("Contratti", "/contracts", FileCheck2, { minPlan: "PRO" }),
+        item("Scartoffie", "/paperwork", ClipboardCheck, { minPlan: "PRO" }),
+        item("Dossier", "/paperwork/dossiers", FolderOpen, { minPlan: "PRO" }),
       ],
     },
     {

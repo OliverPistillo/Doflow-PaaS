@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  CalendarDays, CheckCircle2, Clock, Edit3, Eye, FileText, FolderKanban,
+  CalendarDays, CheckCircle2, ClipboardCheck, Clock, Edit3, Eye, FileText, FolderKanban,
   FolderOpen, KanbanSquare, Loader2, MessageSquare, Plus, Search, Trash2,
   Receipt, UserPlus,
 } from "lucide-react";
@@ -26,6 +26,8 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { canUseFinanceFrontend } from "@/components/tenant-finance/finance-core";
 import { categoryLabel, formatBytes, formatDateTime } from "@/components/tenant-documents/document-utils";
+import { contractsApi } from "@/lib/tenant-contracts-api";
+import { paperworkApi } from "@/lib/tenant-paperwork-api";
 
 type Row = Record<string, any>;
 type ListResponse<T = Row> = { items: T[]; total?: number; limit?: number; offset?: number };
@@ -517,6 +519,8 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
   const [commentForm, setCommentForm] = useState<Record<string, any>>({ body: "", visibility: "internal" });
   const [fileForm, setFileForm] = useState<Record<string, any>>({ file_id: "", type: "other", visibility: "internal" });
   const [creatingInvoice, setCreatingInvoice] = useState(false);
+  const [creatingContract, setCreatingContract] = useState(false);
+  const [creatingDossier, setCreatingDossier] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -673,6 +677,48 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
     }
   };
 
+  const createContractFromProject = async () => {
+    if (!project) return;
+    setCreatingContract(true);
+    setError(null);
+    try {
+      const result = await contractsApi.fromProject(project.id);
+      const contract = (result && typeof result === "object" && "contract" in result ? result.contract : result) as Row | null;
+      toast({
+        title: result && typeof result === "object" && "existing" in result && result.existing ? "Contratto già presente" : "Contratto creato",
+        description: "Apro il contratto collegato al progetto.",
+      });
+      router.push(contract?.id ? `/contracts/${contract.id}` : "/contracts");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Errore creazione contratto da progetto";
+      setError(message);
+      toast({ title: "Contratto non creato", description: message, variant: "destructive" });
+    } finally {
+      setCreatingContract(false);
+    }
+  };
+
+  const createDossierFromProject = async () => {
+    if (!project) return;
+    setCreatingDossier(true);
+    setError(null);
+    try {
+      const result = await paperworkApi.fromProject(project.id);
+      const dossier = (result && typeof result === "object" && "dossier" in result ? result.dossier : result) as Row | null;
+      toast({
+        title: result && typeof result === "object" && "existing" in result && result.existing ? "Dossier già presente" : "Dossier creato",
+        description: "Apro il dossier amministrativo collegato al progetto.",
+      });
+      router.push(dossier?.id ? `/paperwork/dossiers/${dossier.id}` : "/paperwork/dossiers");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Errore creazione dossier da progetto";
+      setError(message);
+      toast({ title: "Dossier non creato", description: message, variant: "destructive" });
+    } finally {
+      setCreatingDossier(false);
+    }
+  };
+
   if (!canReadProjects()) return <AccessDenied />;
   if (loading) return <div className="flex flex-1 justify-center py-24 text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Caricamento progetto...</div>;
   if (error || !project) return <div className="flex-1 p-4 md:p-6"><ErrorBox error={error || "Progetto non trovato"} /></div>;
@@ -686,6 +732,14 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
           <p className="mt-1 text-sm text-muted-foreground">{project.company_name || "Cliente non collegato"} · {labelFor(project.type, PROJECT_TYPES)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={createContractFromProject} disabled={creatingContract}>
+            {creatingContract ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+            Crea contratto
+          </Button>
+          <Button variant="outline" onClick={createDossierFromProject} disabled={creatingDossier}>
+            {creatingDossier ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardCheck className="mr-2 h-4 w-4" />}
+            Crea dossier
+          </Button>
           {canUseFinanceFrontend() ? (
             <Button variant="outline" onClick={createInvoiceFromProject} disabled={creatingInvoice}>
               {creatingInvoice ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Receipt className="mr-2 h-4 w-4" />}
