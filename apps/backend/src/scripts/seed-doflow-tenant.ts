@@ -34,6 +34,7 @@ import {
   ensureTenantContractsTables,
   seedDoflowContractTemplates,
 } from '../tenant/tenant-contracts-schema';
+import { seedTenantAutomationTemplatesAndRules } from '../tenant/tenant-automations-schema';
 
 const TENANT_SLUG = 'doflow';
 const TENANT_SCHEMA = 'doflow';
@@ -306,6 +307,7 @@ async function ensureTenantTables(ds: DataSource, schema: string) {
   await seedTenantKpiTargets(ds, s);
   await ensureTenantContractsTables(ds, s);
   await seedDoflowContractTemplates(ds, s);
+  await seedTenantAutomationTemplatesAndRules(ds, s);
 }
 
 async function ensureTenantRecord(ds: DataSource): Promise<{ id: string }> {

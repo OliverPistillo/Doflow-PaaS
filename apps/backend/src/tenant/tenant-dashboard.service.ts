@@ -1256,6 +1256,76 @@ export class TenantDashboardService {
     };
   }
 
+  private async buildAutomationsSummary(schema: string, user: TenantDashboardAuthUser): Promise<DashboardAutomationsSummary> {
+    const safe = safeSchema(schema, 'TenantDashboardService.buildAutomationsSummary');
+    const hasRules = await this.tableExists(safe, 'automation_rules');
+    const hasRuns = await this.tableExists(safe, 'automation_runs');
+    const hasActions = await this.tableExists(safe, 'automation_action_logs');
+    if (!hasRules) {
+      return {
+        totalRules: 0,
+        enabledRules: 0,
+        failedRunsToday: 0,
+        successfulRunsToday: 0,
+        actionsToday: 0,
+        lastRunAt: null,
+        dueRules: 0,
+        automationRisksCount: 0,
+        sources: { automation_rules: false, automation_runs: hasRuns, automation_action_logs: hasActions },
+      };
+    }
+    const financeWhere = this.canViewFinance(user.role)
+      ? 'TRUE'
+      : `category <> 'finance' AND trigger_type <> ALL($1::text[])`;
+    const params = this.canViewFinance(user.role)
+      ? []
+      : [['invoice_due_soon', 'invoice_overdue', 'financial_deadline_due_soon', 'renewal_due_soon', 'recurring_service_due_soon']];
+    const rules = await this.dataSource.query(
+      `SELECT
+         COUNT(*)::int AS "totalRules",
+         COUNT(*) FILTER (WHERE is_enabled = true)::int AS "enabledRules",
+         COUNT(*) FILTER (WHERE is_enabled = true AND run_mode IN ('scheduled', 'hybrid') AND (next_run_at IS NULL OR next_run_at <= now()))::int AS "dueRules"
+       FROM "${safe}".automation_rules
+       WHERE deleted_at IS NULL AND ${financeWhere}`,
+      params,
+    );
+    const runs = hasRuns
+      ? await this.dataSource.query(
+          `SELECT
+             COUNT(*) FILTER (WHERE r.status = 'failed')::int AS "failedRunsToday",
+             COUNT(*) FILTER (WHERE r.status IN ('success', 'partial_success'))::int AS "successfulRunsToday",
+             MAX(r.started_at) AS "lastRunAt"
+           FROM "${safe}".automation_runs r
+           LEFT JOIN "${safe}".automation_rules ar ON ar.id = r.rule_id
+           WHERE r.started_at >= CURRENT_DATE
+             AND (ar.id IS NULL OR (${this.canViewFinance(user.role) ? 'TRUE' : `ar.category <> 'finance' AND ar.trigger_type <> ALL($1::text[])`}))`,
+          params,
+        )
+      : [{ failedRunsToday: 0, successfulRunsToday: 0, lastRunAt: null }];
+    const actions = hasActions
+      ? await this.dataSource.query(
+          `SELECT COUNT(*)::int AS "actionsToday"
+           FROM "${safe}".automation_action_logs a
+           LEFT JOIN "${safe}".automation_rules ar ON ar.id = a.rule_id
+           WHERE a.created_at >= CURRENT_DATE
+             AND (ar.id IS NULL OR (${this.canViewFinance(user.role) ? 'TRUE' : `ar.category <> 'finance' AND ar.trigger_type <> ALL($1::text[])`}))`,
+          params,
+        )
+      : [{ actionsToday: 0 }];
+    const failedRunsToday = Number(runs[0]?.failedRunsToday || 0);
+    return {
+      totalRules: Number(rules[0]?.totalRules || 0),
+      enabledRules: Number(rules[0]?.enabledRules || 0),
+      failedRunsToday,
+      successfulRunsToday: Number(runs[0]?.successfulRunsToday || 0),
+      actionsToday: Number(actions[0]?.actionsToday || 0),
+      lastRunAt: runs[0]?.lastRunAt || null,
+      dueRules: Number(rules[0]?.dueRules || 0),
+      automationRisksCount: failedRunsToday,
+      sources: { automation_rules: true, automation_runs: hasRuns, automation_action_logs: hasActions },
+    };
+  }
+
   async getSummary(): Promise<TenantDashboardSummary> {
     const schema = this.getTenantSchema();
     const user = this.getAuthUser();
@@ -1279,6 +1349,7 @@ export class TenantDashboardService {
       reportsSummary,
       contractsSummary,
       paperworkSummary,
+      automationsSummary,
     ] = await Promise.all([
       this.buildSalesSummary(schema, showFinance),
       this.buildProjectsSummary(schema, user, audience),
@@ -1295,6 +1366,7 @@ export class TenantDashboardService {
       this.buildReportsSummary(schema, user),
       this.buildContractsSummary(schema),
       this.buildPaperworkSummary(schema),
+      this.buildAutomationsSummary(schema, user),
     ]);
 
     const finance = showFinance
@@ -1339,6 +1411,7 @@ export class TenantDashboardService {
         reportsSummary,
         contractsSummary,
         paperworkSummary,
+        automationsSummary,
         sources: {
           ...briefingOperations.sources,
           ...notificationSummary.sources,
@@ -1346,6 +1419,7 @@ export class TenantDashboardService {
           ...reportsSummary.sources,
           ...contractsSummary.sources,
           ...paperworkSummary.sources,
+          ...automationsSummary.sources,
         },
       },
     };
@@ -1601,6 +1675,18 @@ interface DashboardPaperworkSummary {
   sources: DashboardSourceFlags;
 }
 
+interface DashboardAutomationsSummary {
+  totalRules: number;
+  enabledRules: number;
+  failedRunsToday: number;
+  successfulRunsToday: number;
+  actionsToday: number;
+  lastRunAt: string | null;
+  dueRules: number;
+  automationRisksCount: number;
+  sources: DashboardSourceFlags;
+}
+
 interface TenantDashboardSummary {
   tenant: {
     id?: string;
@@ -1639,6 +1725,7 @@ interface TenantDashboardSummary {
     reportsSummary: DashboardReportsSummary;
     contractsSummary: DashboardContractsSummary;
     paperworkSummary: DashboardPaperworkSummary;
+    automationsSummary: DashboardAutomationsSummary;
     sources: DashboardSourceFlags;
   };
 }

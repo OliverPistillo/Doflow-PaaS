@@ -596,6 +596,53 @@ export class TenantReportsService {
     const overdueContracts = await this.countRows(schema, 'contracts', `due_date < current_date AND status NOT IN ('signed', 'active', 'cancelled', 'archived')`);
     const openPaperworkDossiers = await this.countRows(schema, 'paperwork_dossiers', `status IN ('open', 'in_progress', 'waiting')`);
     const missingPaperworkItems = await this.countRows(schema, 'paperwork_items', `status = 'missing' AND is_required = true`);
+    const hasAutomationRules = await this.tableExists(schema, 'automation_rules');
+    const hasAutomationRuns = await this.tableExists(schema, 'automation_runs');
+    const hasAutomationActions = await this.tableExists(schema, 'automation_action_logs');
+    const automationVisibility = canFinance
+      ? 'TRUE'
+      : `category <> 'finance' AND trigger_type <> ALL($1::text[])`;
+    const automationParams = canFinance ? [] : [['invoice_due_soon', 'invoice_overdue', 'financial_deadline_due_soon', 'renewal_due_soon', 'recurring_service_due_soon']];
+    const automationsEnabled = hasAutomationRules ? await this.countRows(schema, 'automation_rules', `is_enabled = true AND ${automationVisibility}`, automationParams) : 0;
+    const automationsDisabled = hasAutomationRules ? await this.countRows(schema, 'automation_rules', `is_enabled = false AND ${automationVisibility}`, automationParams) : 0;
+    const dueAutomationRules = hasAutomationRules
+      ? await this.countRows(schema, 'automation_rules', `is_enabled = true AND run_mode IN ('scheduled', 'hybrid') AND (next_run_at IS NULL OR next_run_at <= now()) AND ${automationVisibility}`, automationParams)
+      : 0;
+    const automationRunsFailed = hasAutomationRuns
+      ? Number((await this.dataSource.query(
+          `SELECT COUNT(*)::int AS count
+           FROM "${schema}".automation_runs r
+           LEFT JOIN "${schema}".automation_rules ar ON ar.id = r.rule_id
+           WHERE r.started_at >= CURRENT_DATE
+             AND r.status = 'failed'
+             AND (ar.id IS NULL OR (${canFinance ? 'TRUE' : `ar.category <> 'finance' AND ar.trigger_type <> ALL($1::text[])`}))`,
+          automationParams,
+        ))[0]?.count || 0)
+      : 0;
+    const automationActionsToday = hasAutomationActions
+      ? Number((await this.dataSource.query(
+          `SELECT COUNT(*)::int AS count
+           FROM "${schema}".automation_action_logs a
+           LEFT JOIN "${schema}".automation_rules ar ON ar.id = a.rule_id
+           WHERE a.created_at >= CURRENT_DATE
+             AND (ar.id IS NULL OR (${canFinance ? 'TRUE' : `ar.category <> 'finance' AND ar.trigger_type <> ALL($1::text[])`}))`,
+          automationParams,
+        ))[0]?.count || 0)
+      : 0;
+    const topFailedAutomationRules = hasAutomationRuns
+      ? await this.dataSource.query(
+          `SELECT ar.id, ar.name, ar.category, ar.trigger_type, COUNT(r.id)::int AS failed_runs
+           FROM "${schema}".automation_runs r
+           JOIN "${schema}".automation_rules ar ON ar.id = r.rule_id
+           WHERE r.started_at >= CURRENT_DATE - INTERVAL '7 days'
+             AND r.status = 'failed'
+             AND ${canFinance ? 'TRUE' : `ar.category <> 'finance' AND ar.trigger_type <> ALL($1::text[])`}
+           GROUP BY ar.id, ar.name, ar.category, ar.trigger_type
+           ORDER BY failed_runs DESC
+           LIMIT 5`,
+          automationParams,
+        )
+      : [];
     const dailyDigestAvailable = await this.countRows(schema, 'notification_digests', `digest_date = CURRENT_DATE`) > 0;
     const openRisks = [
       ...(await this.recentRows(schema, 'projects', ['id', 'name', 'status', 'due_date'], `LOWER(COALESCE(status, '')) = 'blocked'`, [], 5)).map((row) => ({ type: 'project_blocked', ...row })),
@@ -617,6 +664,14 @@ export class TenantReportsService {
       overdueContracts,
       openPaperworkDossiers,
       missingPaperworkItems,
+      automations: {
+        enabled: automationsEnabled,
+        disabled: automationsDisabled,
+        failedRunsToday: automationRunsFailed,
+        actionsToday: automationActionsToday,
+        dueRules: dueAutomationRules,
+        topFailedRules: topFailedAutomationRules,
+      },
       openRisks,
       dailyDigestAvailable,
       sources: {
@@ -630,6 +685,9 @@ export class TenantReportsService {
         contracts: await this.tableExists(schema, 'contracts'),
         paperwork_dossiers: await this.tableExists(schema, 'paperwork_dossiers'),
         paperwork_items: await this.tableExists(schema, 'paperwork_items'),
+        automation_rules: hasAutomationRules,
+        automation_runs: hasAutomationRuns,
+        automation_action_logs: hasAutomationActions,
       },
     };
   }
