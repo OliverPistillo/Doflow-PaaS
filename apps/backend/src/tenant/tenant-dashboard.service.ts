@@ -240,8 +240,29 @@ export class TenantDashboardService {
     );
   }
 
-  private async getRecentFiles(schema: string): Promise<DashboardActivityItem[]> {
+  private documentVisibilityWhere(user: TenantDashboardAuthUser, alias = 'd'): string {
+    if (this.canViewFinance(user.role)) return 'TRUE';
+    return `(${alias}.visibility <> 'finance' AND COALESCE(${alias}.category, '') NOT IN ('finance', 'invoice', 'receipt') AND COALESCE(${alias}.entity_type, '') NOT IN ('invoice', 'payment', 'deadline', 'renewal', 'recurring_service'))`;
+  }
+
+  private async getRecentFiles(schema: string, user: TenantDashboardAuthUser): Promise<DashboardActivityItem[]> {
     const safe = safeSchema(schema, 'TenantDashboardService.getRecentFiles');
+    if (await this.tableExists(safe, 'documents')) {
+      const rows = await this.dataSource.query(
+        `SELECT title, original_filename, category, created_at
+         FROM "${safe}".documents d
+         WHERE d.deleted_at IS NULL AND d.status = 'active' AND ${this.documentVisibilityWhere(user, 'd')}
+         ORDER BY d.created_at DESC
+         LIMIT 5`,
+      );
+
+      return rows.map((row: any) => ({
+        title: row.title || row.original_filename || 'Documento caricato',
+        meta: row.category ? `Documento ${row.category}` : 'Documento interno',
+        createdAt: row.created_at || null,
+      }));
+    }
+
     if (!(await this.tableExists(safe, 'files'))) return [];
 
     const rows = await this.dataSource.query(
@@ -409,6 +430,57 @@ export class TenantDashboardService {
         : 0,
       todayDigestAvailable: digestRows.length > 0,
       sources: { notifications: hasNotifications, notificationDigests: hasDigests },
+    };
+  }
+
+  private async buildDocumentsSummary(schema: string, user: TenantDashboardAuthUser): Promise<DashboardDocumentsSummary> {
+    const safe = safeSchema(schema, 'TenantDashboardService.buildDocumentsSummary');
+    const hasDocuments = await this.tableExists(safe, 'documents');
+    if (!hasDocuments || !this.canViewInternalNotifications(user.role)) {
+      return {
+        totalDocuments: 0,
+        recentDocuments: [],
+        projectDocuments: 0,
+        financeDocuments: 0,
+        storageUsedBytes: 0,
+        sources: { documents: hasDocuments },
+      };
+    }
+
+    const visibility = this.documentVisibilityWhere(user, 'd');
+    const count = async (extra = 'TRUE') => Number((await this.dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM "${safe}".documents d
+       WHERE d.deleted_at IS NULL AND d.status <> 'deleted' AND ${visibility} AND ${extra}`,
+    ))[0]?.count || 0);
+    const recentRows = await this.dataSource.query(
+      `SELECT title, original_filename, category, created_at
+       FROM "${safe}".documents d
+       WHERE d.deleted_at IS NULL AND d.status = 'active' AND ${visibility}
+       ORDER BY d.created_at DESC
+       LIMIT 5`,
+    );
+    const storageRows = await this.dataSource.query(
+      `SELECT COALESCE(SUM(size_bytes), 0)::bigint AS bytes
+       FROM "${safe}".documents d
+       WHERE d.deleted_at IS NULL AND d.status <> 'deleted' AND ${visibility}`,
+    );
+
+    return {
+      totalDocuments: await count(),
+      recentDocuments: recentRows.map((row: any) => ({
+        title: row.title || row.original_filename || 'Documento',
+        meta: row.category ? `Documento ${row.category}` : 'Documento interno',
+        createdAt: row.created_at || null,
+      })),
+      projectDocuments: await count(`(d.entity_type = 'project' OR EXISTS (
+        SELECT 1 FROM "${safe}".document_links dl
+        WHERE dl.document_id = d.id AND dl.entity_type = 'project' AND dl.deleted_at IS NULL
+      ))`),
+      financeDocuments: this.canViewFinance(user.role)
+        ? await count(`(d.visibility = 'finance' OR d.category IN ('finance', 'invoice', 'receipt'))`)
+        : 0,
+      storageUsedBytes: Number(storageRows[0]?.bytes || 0),
+      sources: { documents: hasDocuments },
     };
   }
 
@@ -941,6 +1013,7 @@ export class TenantDashboardService {
       platformNotifications,
       tenantNotifications,
       notificationSummary,
+      documentsSummary,
       briefingOperations,
     ] = await Promise.all([
       this.buildSalesSummary(schema, showFinance),
@@ -948,11 +1021,12 @@ export class TenantDashboardService {
       this.buildTeamSummary(schema),
       this.buildCustomersSummary(schema, tenant),
       this.buildPersonalSummary(schema, user),
-      this.getRecentFiles(schema),
+      this.getRecentFiles(schema, user),
       this.getRecentComments(schema),
       this.getRecentNotifications(tenant, user.email),
       this.getRecentTenantNotifications(schema, user),
       this.buildNotificationsSummary(schema, user),
+      this.buildDocumentsSummary(schema, user),
       this.buildBriefingOperationsSummary(schema),
     ]);
 
@@ -994,9 +1068,11 @@ export class TenantDashboardService {
         recentComments,
         recentFiles,
         notifications: tenantNotifications.length > 0 ? tenantNotifications : platformNotifications,
+        documentsSummary,
         sources: {
           ...briefingOperations.sources,
           ...notificationSummary.sources,
+          ...documentsSummary.sources,
         },
       },
     };
@@ -1198,6 +1274,15 @@ interface DashboardNotificationsSummary {
   sources: DashboardSourceFlags;
 }
 
+interface DashboardDocumentsSummary {
+  totalDocuments: number;
+  recentDocuments: DashboardActivityItem[];
+  projectDocuments: number;
+  financeDocuments: number;
+  storageUsedBytes: number;
+  sources: DashboardSourceFlags;
+}
+
 interface TenantDashboardSummary {
   tenant: {
     id?: string;
@@ -1232,6 +1317,7 @@ interface TenantDashboardSummary {
     recentComments: DashboardActivityItem[];
     recentFiles: DashboardActivityItem[];
     notifications: DashboardActivityItem[];
+    documentsSummary: DashboardDocumentsSummary;
     sources: DashboardSourceFlags;
   };
 }

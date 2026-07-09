@@ -112,6 +112,29 @@ export class FileStorageService {
     return rows[0];
   }
 
+  getBucketName(): string {
+    return this.bucket;
+  }
+
+  async uploadBuffer(key: string, file: Express.Multer.File) {
+    await this.s3.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+      }),
+    );
+
+    this.logger.log(`Object uploaded: ${key} (${file.size} bytes)`);
+    return {
+      bucket: this.bucket,
+      key,
+      contentType: file.mimetype,
+      size: file.size,
+    };
+  }
+
   async listFiles(req: Request) {
     const tenantId = this.getTenantId(req);
     const conn = this.getConn(req);
@@ -167,6 +190,35 @@ export class FileStorageService {
         }
         this.logger.error('S3 Download Error', err);
         throw err;
+    }
+  }
+
+  async downloadObjectStream(key: string) {
+    try {
+      const command = new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      });
+
+      const item = await this.s3.send(command);
+      return {
+        stream: item.Body as Readable,
+        contentType: item.ContentType,
+        contentLength: item.ContentLength,
+      };
+    } catch (e: unknown) {
+      type AwsErrorLike = Error & {
+        $metadata?: {
+          httpStatusCode?: number;
+        };
+      };
+      const err = e as AwsErrorLike;
+
+      if (err.name === 'NoSuchKey' || err.$metadata?.httpStatusCode === 404) {
+        throw new NotFoundException('File not found in storage');
+      }
+      this.logger.error('S3 Download Error', err);
+      throw err;
     }
   }
 }

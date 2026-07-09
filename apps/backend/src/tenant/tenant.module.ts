@@ -16,6 +16,9 @@ import { TenantFinanceController } from './tenant-finance.controller';
 import { TenantFinanceService } from './tenant-finance.service';
 import { TenantNotificationsController } from './tenant-notifications.controller';
 import { TenantNotificationsService } from './tenant-notifications.service';
+import { TenantDocumentsController } from './tenant-documents.controller';
+import { TenantDocumentsService } from './tenant-documents.service';
+import { FileStorageService } from '../file-storage.service';
 
 import { Tenant } from '../superadmin/entities/tenant.entity';
 import { TenantSubscription } from '../superadmin/entities/tenant-subscription.entity';
@@ -45,6 +48,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantProjectsController,
     TenantFinanceController,
     TenantNotificationsController,
+    TenantDocumentsController,
   ],
   providers: [
     TenantDashboardService,
@@ -54,6 +58,8 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantProjectsService,
     TenantFinanceService,
     TenantNotificationsService,
+    TenantDocumentsService,
+    FileStorageService,
   ],
 })
 export class TenantModule {}
