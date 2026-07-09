@@ -13,3 +13,7 @@
 ## 2026-06-28 - [Page Modernization & Search Accessibility]
 **Learning:** Modernizing secondary pages like Campaigns to use centralized components (PageShell, PageHeader) ensures a premium, cohesive UI across the platform. Integrating keyboard shortcuts (e.g., '/') for search focus is a high-impact UX win that must be paired with clear accessibility markers like <kbd> indicators and screen-reader-only labels. Icon-only actions must always be wrapped in Tooltips and made visible on focus for full keyboard navigability.
 **Action:** Prioritize wrapping icon-only detail triggers in Tooltips and use 'group-focus-within' to ensure visibility during keyboard navigation.
+
+## 2026-06-29 - [Centralized CRM Modernization]
+**Learning:** Modernizing a shared component like `CrmResourcePage` allows for sweeping UX and accessibility improvements across multiple routes (Companies, Contacts, Deals, Leads) with minimal code changes. Ensuring that search inputs have a globally consistent '/' shortcut and visual kbd indicator reinforces platform-wide muscle memory. Wrapping shared table actions in Tooltips with descriptive ARIA labels immediately elevates the accessibility of all CRM-based pages.
+**Action:** When a design pattern is repeated across multiple pages, prefer modernizing the shared core component (e.g., `CrmResourcePage`) to ensure consistency and maintainability.
