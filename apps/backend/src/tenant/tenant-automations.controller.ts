@@ -22,9 +22,9 @@ export class TenantAutomationsController {
     return this.service.seedBaseTemplates();
   }
 
-  @Get('templates/:id')
-  template(@Param('id') id: string) {
-    return this.service.getTemplate(id);
+  @Get('templates/:templateId')
+  template(@Param('templateId') templateId: string) {
+    return this.service.getTemplate(templateId);
   }
 
   @Get('rules')
@@ -37,34 +37,44 @@ export class TenantAutomationsController {
     return this.service.createRule(body || {});
   }
 
-  @Get('rules/:id')
-  rule(@Param('id') id: string) {
-    return this.service.getRule(id);
+  @Patch('rules/:ruleId/enable')
+  enableRule(@Param('ruleId') ruleId: string) {
+    return this.service.setEnabled(ruleId, true);
   }
 
-  @Patch('rules/:id')
-  updateRule(@Param('id') id: string, @Body() body: Record<string, any>) {
-    return this.service.updateRule(id, body || {});
+  @Patch('rules/:ruleId/disable')
+  disableRule(@Param('ruleId') ruleId: string) {
+    return this.service.setEnabled(ruleId, false);
   }
 
-  @Delete('rules/:id')
-  deleteRule(@Param('id') id: string) {
-    return this.service.deleteRule(id);
+  @Post('rules/:ruleId/run')
+  runRule(@Param('ruleId') ruleId: string, @Body() body: Record<string, unknown>) {
+    return this.service.runRuleFromRequest(ruleId, body || {});
   }
 
-  @Patch('rules/:id/enable')
-  enableRule(@Param('id') id: string) {
-    return this.service.setEnabled(id, true);
+  @Get('rules/:ruleId/runs')
+  ruleRuns(@Param('ruleId') ruleId: string, @Query() query: Record<string, any>) {
+    return this.service.listRuleRuns(ruleId, query || {});
   }
 
-  @Patch('rules/:id/disable')
-  disableRule(@Param('id') id: string) {
-    return this.service.setEnabled(id, false);
+  @Get('rules/:ruleId/export')
+  exportRule(@Param('ruleId') ruleId: string) {
+    return this.service.exportRule(ruleId);
   }
 
-  @Post('rules/:id/run')
-  runRule(@Param('id') id: string, @Body() body: Record<string, unknown>) {
-    return this.service.runRuleFromRequest(id, body || {});
+  @Get('rules/:ruleId')
+  rule(@Param('ruleId') ruleId: string) {
+    return this.service.getRule(ruleId);
+  }
+
+  @Patch('rules/:ruleId')
+  updateRule(@Param('ruleId') ruleId: string, @Body() body: Record<string, any>) {
+    return this.service.updateRule(ruleId, body || {});
+  }
+
+  @Delete('rules/:ruleId')
+  deleteRule(@Param('ruleId') ruleId: string) {
+    return this.service.deleteRule(ruleId);
   }
 
   @Post('run-due')
@@ -82,19 +92,19 @@ export class TenantAutomationsController {
     return this.service.listRuns(query || {});
   }
 
-  @Get('runs/:id')
-  run(@Param('id') id: string) {
-    return this.service.getRun(id);
+  @Get('runs/:runId/actions')
+  runActions(@Param('runId') runId: string) {
+    return this.service.listRunActions(runId);
   }
 
-  @Get('rules/:id/runs')
-  ruleRuns(@Param('id') id: string, @Query() query: Record<string, any>) {
-    return this.service.listRuleRuns(id, query || {});
+  @Get('runs/:runId/export')
+  exportRun(@Param('runId') runId: string) {
+    return this.service.exportRun(runId);
   }
 
-  @Get('runs/:id/actions')
-  runActions(@Param('id') id: string) {
-    return this.service.listRunActions(id);
+  @Get('runs/:runId')
+  run(@Param('runId') runId: string) {
+    return this.service.getRun(runId);
   }
 
   @Get('activity')
@@ -107,9 +117,9 @@ export class TenantAutomationsController {
     return this.service.listDedupe(query || {});
   }
 
-  @Delete('dedupe/:id')
-  deleteDedupe(@Param('id') id: string) {
-    return this.service.deleteDedupe(id);
+  @Delete('dedupe/:dedupeId')
+  deleteDedupe(@Param('dedupeId') dedupeId: string) {
+    return this.service.deleteDedupe(dedupeId);
   }
 
   @Get('options')
@@ -117,13 +127,4 @@ export class TenantAutomationsController {
     return this.service.options();
   }
 
-  @Get('rules/:id/export')
-  exportRule(@Param('id') id: string) {
-    return this.service.exportRule(id);
-  }
-
-  @Get('runs/:id/export')
-  exportRun(@Param('id') id: string) {
-    return this.service.exportRun(id);
-  }
 }

@@ -44,6 +44,62 @@ describe('TenantAutomationsService', () => {
     expect(query.mock.calls[0][0]).toContain("category <> 'finance'");
     expect(query.mock.calls[0][1]).toEqual(expect.arrayContaining([expect.arrayContaining(['invoice_overdue'])]));
   });
+
+  it('gestisce una rule appena creata con UUID valido su get/enable/disable/run/export', async () => {
+    const ruleId = '4f52eac3-aee6-4d27-ab51-48632ca2df2a';
+    const storedRule: Record<string, any> = {
+      id: ruleId,
+      template_id: null,
+      name: 'Manual noop',
+      description: null,
+      category: 'general',
+      trigger_type: 'manual_run',
+      trigger_config: {},
+      conditions: null,
+      actions: [{ type: 'noop' }],
+      schedule_config: null,
+      is_enabled: false,
+      run_mode: 'manual',
+      priority: 'medium',
+      cooldown_minutes: 60,
+      max_runs_per_day: 50,
+      created_by: '11111111-1111-4111-8111-111111111111',
+      updated_by: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const query = jest.fn(async (sql: string, params: unknown[] = []) => {
+      const compact = sql.replace(/\s+/g, ' ');
+      if (compact.includes('INSERT INTO "doflow".automation_rules') && compact.includes('RETURNING *')) {
+        return [storedRule];
+      }
+      if (compact.includes('SELECT id, template_id, name') && compact.includes('FROM "doflow".automation_rules') && compact.includes('WHERE id = $1')) {
+        expect(params[0]).toBe(ruleId);
+        return [storedRule];
+      }
+      if (compact.includes('UPDATE "doflow".automation_rules SET is_enabled')) {
+        storedRule.is_enabled = params[1];
+        return [{ ...storedRule }];
+      }
+      if (compact.includes('INSERT INTO "doflow".automation_activity')) return [];
+      return [];
+    });
+    const service = new TenantAutomationsService(
+      { query } as any,
+      { createNotification: jest.fn().mockResolvedValue({ created: true }) } as any,
+      { user: { sub: '11111111-1111-4111-8111-111111111111', role: 'owner', tenantId: 'doflow' } },
+    );
+    jest.spyOn(service as any, 'ensureSchema').mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'runRule').mockResolvedValue({ id: '33333333-3333-4333-8333-333333333333', status: 'success' });
+
+    const created = await service.createRule({ name: 'Manual noop', trigger_type: 'manual_run', actions: [{ type: 'noop' }] });
+    expect(created.id).toBe(ruleId);
+    await expect(service.getRule(ruleId)).resolves.toMatchObject({ id: ruleId });
+    await expect(service.setEnabled(ruleId, true)).resolves.toMatchObject({ id: ruleId, is_enabled: true });
+    await expect(service.setEnabled(ruleId, false)).resolves.toMatchObject({ id: ruleId, is_enabled: false });
+    await expect(service.runRuleFromRequest(ruleId, {})).resolves.toMatchObject({ status: 'success' });
+    await expect(service.exportRule(ruleId)).resolves.toMatchObject({ rule: expect.objectContaining({ id: ruleId }) });
+  });
 });
 
 describe('seedTenantAutomationTemplatesAndRules', () => {
