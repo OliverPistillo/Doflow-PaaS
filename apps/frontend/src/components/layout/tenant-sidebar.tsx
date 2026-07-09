@@ -57,6 +57,13 @@ type AgencyNavGroup = {
 const EXISTING_TENANT_ROUTES = new Set([
   "/activity",
   "/analytics",
+  "/automations",
+  "/automations/activity",
+  "/automations/dedupe",
+  "/automations/rules",
+  "/automations/rules/new",
+  "/automations/runs",
+  "/automations/templates",
   "/billing",
   "/briefings",
   "/briefings/incomplete",
@@ -130,7 +137,6 @@ const EXISTING_TENANT_ROUTES = new Set([
   "/reports/targets",
   "/reports/team",
   "/settings",
-  "/settings/automations",
   "/settings/company",
   "/settings/integrations",
   "/settings/notifications",
@@ -296,10 +302,12 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
     {
       label: "Automazioni",
       modules: [
-        item("Commerciali", "/settings/automations", Zap, { minPlan: "PRO" }),
-        item("Progetto", "/settings/automations", Workflow, { minPlan: "PRO" }),
-        item("Cliente", "/settings/automations", Workflow, { minPlan: "PRO" }),
-        item("Finance", "/settings/automations", Wallet, { minPlan: "PRO" }),
+        item("Panoramica", "/automations", Workflow, { minPlan: "PRO" }),
+        item("Template", "/automations/templates", BookTemplate, { minPlan: "PRO" }),
+        item("Regole", "/automations/rules", Zap, { minPlan: "PRO" }),
+        item("Esecuzioni", "/automations/runs", Timer, { minPlan: "PRO" }),
+        item("Dedupe", "/automations/dedupe", Layers, { minPlan: "PRO" }),
+        item("Activity", "/automations/activity", ClipboardCheck, { minPlan: "PRO" }),
       ],
     },
     {
@@ -419,6 +427,15 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
       ],
     },
     {
+      label: "Automazioni",
+      modules: [
+        item("Panoramica", "/automations", Workflow, { minPlan: "PRO" }),
+        item("Regole", "/automations/rules", Zap, { minPlan: "PRO" }),
+        item("Esecuzioni", "/automations/runs", Timer, { minPlan: "PRO" }),
+        item("Activity", "/automations/activity", ClipboardCheck, { minPlan: "PRO" }),
+      ],
+    },
+    {
       label: "Notifiche",
       modules: [
         item("Tutte", "/notifications", Bell),
@@ -485,6 +502,14 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
         item("Team", "/reports/team", UsersRound, { minPlan: "PRO" }),
         item("Documenti", "/reports/documents", FileText, { minPlan: "PRO" }),
         item("Operatività", "/reports/operations", Workflow, { minPlan: "PRO" }),
+      ],
+    },
+    {
+      label: "Automazioni",
+      modules: [
+        item("Panoramica", "/automations", Workflow, { minPlan: "PRO" }),
+        item("Regole", "/automations/rules", Zap, { minPlan: "PRO" }),
+        item("Esecuzioni", "/automations/runs", Timer, { minPlan: "PRO" }),
       ],
     },
     {

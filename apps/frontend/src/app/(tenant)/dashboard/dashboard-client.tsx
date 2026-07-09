@@ -24,6 +24,7 @@ import {
   UserPlus,
   Users,
   Wallet,
+  Workflow,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -91,6 +92,18 @@ type PaperworkSummary = {
   missingItems: number;
   dueSoonItems: number;
   recentDossiers: ActivityItem[];
+  sources?: SourceFlags;
+};
+
+type AutomationsSummary = {
+  totalRules: number;
+  enabledRules: number;
+  failedRunsToday: number;
+  successfulRunsToday: number;
+  actionsToday: number;
+  lastRunAt: string | null;
+  dueRules: number;
+  automationRisksCount: number;
   sources?: SourceFlags;
 };
 
@@ -197,6 +210,7 @@ type DashboardSummary = {
     reportsSummary?: ReportsSummary;
     contractsSummary?: ContractsSummary;
     paperworkSummary?: PaperworkSummary;
+    automationsSummary?: AutomationsSummary;
     sources?: SourceFlags;
   };
 };
@@ -370,6 +384,17 @@ function getFallbackSummary(): DashboardSummary {
         missingItems: 0,
         dueSoonItems: 0,
         recentDossiers: [],
+        sources: {},
+      },
+      automationsSummary: {
+        totalRules: 0,
+        enabledRules: 0,
+        failedRunsToday: 0,
+        successfulRunsToday: 0,
+        actionsToday: 0,
+        lastRunAt: null,
+        dueRules: 0,
+        automationRisksCount: 0,
         sources: {},
       },
       sources: {},
@@ -885,6 +910,44 @@ export default function DashboardClient() {
     </SectionCard>
   );
 
+  const automationsSummary = summary.operations.automationsSummary || {
+    totalRules: 0,
+    enabledRules: 0,
+    failedRunsToday: 0,
+    successfulRunsToday: 0,
+    actionsToday: 0,
+    lastRunAt: null,
+    dueRules: 0,
+    automationRisksCount: 0,
+    sources: {},
+  };
+
+  const automationsCard = (
+    <SectionCard
+      title="Automazioni"
+      description="Regole interne, run manuali/schedulati e controlli dedupe senza integrazioni esterne."
+      icon={Workflow}
+      metrics={[
+        { label: "Regole totali", value: automationsSummary.totalRules || 0 },
+        { label: "Regole abilitate", value: automationsSummary.enabledRules || 0, tone: (automationsSummary.enabledRules || 0) > 0 ? "success" : "default" },
+        { label: "Run falliti oggi", value: automationsSummary.failedRunsToday || 0, tone: (automationsSummary.failedRunsToday || 0) > 0 ? "danger" : "default" },
+        { label: "Run ok oggi", value: automationsSummary.successfulRunsToday || 0 },
+        { label: "Azioni oggi", value: automationsSummary.actionsToday || 0 },
+        { label: "Regole dovute", value: automationsSummary.dueRules || 0, tone: (automationsSummary.dueRules || 0) > 0 ? "warning" : "default" },
+        { label: "Rischi", value: automationsSummary.automationRisksCount || 0, tone: (automationsSummary.automationRisksCount || 0) > 0 ? "danger" : "default" },
+        { label: "Ultimo run", value: automationsSummary.lastRunAt ? formatDate(automationsSummary.lastRunAt) : "Nessuno" },
+      ]}
+      sources={automationsSummary.sources || { automations: (automationsSummary.totalRules || 0) > 0 }}
+      emptyText="Nessuna automazione configurata."
+    >
+      <div className="flex flex-wrap gap-2">
+        <Button asChild variant="outline" size="sm"><Link href="/automations">Apri automazioni</Link></Button>
+        <Button asChild variant="outline" size="sm"><Link href="/automations/rules">Regole</Link></Button>
+        <Button asChild variant="outline" size="sm"><Link href="/automations/runs">Esecuzioni</Link></Button>
+      </div>
+    </SectionCard>
+  );
+
   const contractsSummary = summary.operations.contractsSummary || {
     totalContracts: 0,
     draftContracts: 0,
@@ -1133,6 +1196,7 @@ export default function DashboardClient() {
             {notificationsCard}
             {documentsCard}
             {reportsCard}
+            {automationsCard}
             {contractsCard}
             {paperworkCard}
           </div>
@@ -1181,6 +1245,7 @@ export default function DashboardClient() {
             {notificationsCard}
             {documentsCard}
             {reportsCard}
+            {automationsCard}
             {contractsCard}
             {paperworkCard}
           </div>
@@ -1221,6 +1286,7 @@ export default function DashboardClient() {
             {notificationsCard}
             {documentsCard}
             {reportsCard}
+            {automationsCard}
             {contractsCard}
             {paperworkCard}
           </div>
