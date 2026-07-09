@@ -66,6 +66,11 @@ export class TenantDashboardService {
     return normalized === 'owner' || normalized === 'admin' || normalized === 'superadmin' || normalized === 'super_admin';
   }
 
+  private canViewInternalNotifications(role: string): boolean {
+    const normalized = role.toLowerCase().trim();
+    return ['owner', 'admin', 'superadmin', 'super_admin', 'manager', 'editor', 'user'].includes(normalized);
+  }
+
   private async getTenantIdentity(schema: string): Promise<TenantDashboardTenant> {
     if (!schema || schema === 'public') {
       return { schema: 'public', identifiers: ['public'] };
@@ -307,6 +312,104 @@ export class TenantDashboardService {
       meta: row.message || 'Notifica piattaforma',
       createdAt: row.created_at || null,
     }));
+  }
+
+  private notificationVisibilityWhere(user: TenantDashboardAuthUser, startParam: number): { sql: string; params: unknown[] } {
+    const financeTypes = [
+      'invoice_overdue',
+      'invoice_due',
+      'payment_received',
+      'renewal_due',
+      'recurring_due',
+      'financial_deadline_due',
+    ];
+    if (this.canViewFinance(user.role)) return { sql: 'TRUE', params: [] };
+
+    const userUuid = UUID_RE.test(user.id) ? user.id : null;
+    const params: unknown[] = [];
+    const parts: string[] = [];
+    if (userUuid) {
+      params.push(userUuid);
+      parts.push(`recipient_user_id = $${startParam}`);
+    }
+    if (user.role === 'manager') {
+      params.push(user.role);
+      parts.push(`LOWER(COALESCE(recipient_role, '')) = LOWER($${startParam + params.length - 1})`);
+    }
+    const targetSql = parts.length > 0 ? `(${parts.join(' OR ')})` : 'FALSE';
+    params.push(financeTypes);
+    return {
+      sql: `${targetSql} AND type <> ALL($${startParam + params.length - 1}::text[])`,
+      params,
+    };
+  }
+
+  private async getRecentTenantNotifications(schema: string, user: TenantDashboardAuthUser): Promise<DashboardActivityItem[]> {
+    const safe = safeSchema(schema, 'TenantDashboardService.getRecentTenantNotifications');
+    if (!(await this.tableExists(safe, 'notifications'))) return [];
+    if (!this.canViewInternalNotifications(user.role)) return [];
+    const visibility = this.notificationVisibilityWhere(user, 1);
+    const rows = await this.dataSource.query(
+      `SELECT title, body, priority, created_at
+       FROM "${safe}".notifications
+       WHERE deleted_at IS NULL AND ${visibility.sql}
+       ORDER BY created_at DESC
+       LIMIT 5`,
+      visibility.params,
+    );
+    return rows.map((row: any) => ({
+      title: row.title || 'Notifica',
+      meta: row.body || `Priorita ${row.priority || 'medium'}`,
+      createdAt: row.created_at || null,
+    }));
+  }
+
+  private async buildNotificationsSummary(schema: string, user: TenantDashboardAuthUser): Promise<DashboardNotificationsSummary> {
+    const safe = safeSchema(schema, 'TenantDashboardService.buildNotificationsSummary');
+    const hasNotifications = await this.tableExists(safe, 'notifications');
+    const hasDigests = await this.tableExists(safe, 'notification_digests');
+    if (!hasNotifications || !this.canViewInternalNotifications(user.role)) {
+      return {
+        unreadNotifications: 0,
+        urgentNotifications: 0,
+        taskOverdueNotifications: 0,
+        financeNotifications: 0,
+        assignedTaskNotifications: 0,
+        todayDigestAvailable: false,
+        sources: { notifications: hasNotifications, notificationDigests: hasDigests },
+      };
+    }
+
+    const visibility = this.notificationVisibilityWhere(user, 1);
+    const base = `deleted_at IS NULL AND ${visibility.sql}`;
+    const params = visibility.params;
+    const count = async (extra: string, extraParams: unknown[] = []) => Number((await this.dataSource.query(
+      `SELECT COUNT(*)::int AS count FROM "${safe}".notifications WHERE ${base} AND ${extra}`,
+      [...params, ...extraParams],
+    ))[0]?.count || 0);
+    const userUuid = UUID_RE.test(user.id) ? user.id : null;
+    const financeTypes = ['invoice_overdue', 'invoice_due', 'payment_received', 'renewal_due', 'recurring_due', 'financial_deadline_due'];
+    const digestRows = hasDigests ? await this.dataSource.query(
+      `SELECT 1 FROM "${safe}".notification_digests
+       WHERE deleted_at IS NULL AND digest_date = current_date
+         AND (($1::uuid IS NOT NULL AND user_id = $1::uuid) OR LOWER(COALESCE(role, '')) = LOWER($2))
+       LIMIT 1`,
+      [userUuid, user.role],
+    ) : [];
+
+    return {
+      unreadNotifications: await count(`status = 'unread'`),
+      urgentNotifications: await count(`status = 'unread' AND priority = 'urgent'`),
+      taskOverdueNotifications: await count(`status = 'unread' AND type = 'task_overdue'`),
+      financeNotifications: this.canViewFinance(user.role)
+        ? await count(`status = 'unread' AND type = ANY($${params.length + 1}::text[])`, [financeTypes])
+        : 0,
+      assignedTaskNotifications: userUuid
+        ? await count(`recipient_user_id = $${params.length + 1} AND entity_type = 'task'`, [userUuid])
+        : 0,
+      todayDigestAvailable: digestRows.length > 0,
+      sources: { notifications: hasNotifications, notificationDigests: hasDigests },
+    };
   }
 
   private async getTeamWorkload(schema: string): Promise<Array<{ assignee: string; openTasks: number }>> {
@@ -835,7 +938,9 @@ export class TenantDashboardService {
       personal,
       recentFiles,
       recentComments,
-      notifications,
+      platformNotifications,
+      tenantNotifications,
+      notificationSummary,
       briefingOperations,
     ] = await Promise.all([
       this.buildSalesSummary(schema, showFinance),
@@ -846,6 +951,8 @@ export class TenantDashboardService {
       this.getRecentFiles(schema),
       this.getRecentComments(schema),
       this.getRecentNotifications(tenant, user.email),
+      this.getRecentTenantNotifications(schema, user),
+      this.buildNotificationsSummary(schema, user),
       this.buildBriefingOperationsSummary(schema),
     ]);
 
@@ -878,11 +985,18 @@ export class TenantDashboardService {
         incompleteBriefings: briefingOperations.incompleteBriefings,
         completedBriefings: briefingOperations.completedBriefings,
         upcomingDeliveries: projects.upcomingDeliveries,
+        unreadNotifications: notificationSummary.unreadNotifications,
+        urgentNotifications: notificationSummary.urgentNotifications,
+        taskOverdueNotifications: notificationSummary.taskOverdueNotifications,
+        financeNotifications: notificationSummary.financeNotifications,
+        assignedTaskNotifications: notificationSummary.assignedTaskNotifications,
+        todayDigestAvailable: notificationSummary.todayDigestAvailable,
         recentComments,
         recentFiles,
-        notifications,
+        notifications: tenantNotifications.length > 0 ? tenantNotifications : platformNotifications,
         sources: {
           ...briefingOperations.sources,
+          ...notificationSummary.sources,
         },
       },
     };
@@ -1074,6 +1188,16 @@ interface DashboardBriefingOperationsSummary {
   sources: DashboardSourceFlags;
 }
 
+interface DashboardNotificationsSummary {
+  unreadNotifications: number;
+  urgentNotifications: number;
+  taskOverdueNotifications: number;
+  financeNotifications: number;
+  assignedTaskNotifications: number;
+  todayDigestAvailable: boolean;
+  sources: DashboardSourceFlags;
+}
+
 interface TenantDashboardSummary {
   tenant: {
     id?: string;
@@ -1099,6 +1223,12 @@ interface TenantDashboardSummary {
     incompleteBriefings: number;
     completedBriefings: number;
     upcomingDeliveries: number;
+    unreadNotifications: number;
+    urgentNotifications: number;
+    taskOverdueNotifications: number;
+    financeNotifications: number;
+    assignedTaskNotifications: number;
+    todayDigestAvailable: boolean;
     recentComments: DashboardActivityItem[];
     recentFiles: DashboardActivityItem[];
     notifications: DashboardActivityItem[];
