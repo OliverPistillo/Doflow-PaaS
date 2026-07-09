@@ -1171,6 +1171,91 @@ export class TenantDashboardService {
     };
   }
 
+  private async buildContractsSummary(schema: string): Promise<DashboardContractsSummary> {
+    const safe = safeSchema(schema, 'TenantDashboardService.buildContractsSummary');
+    const hasContracts = await this.tableExists(safe, 'contracts');
+    if (!hasContracts) {
+      return {
+        totalContracts: 0,
+        draftContracts: 0,
+        sentContracts: 0,
+        waitingSignatureContracts: 0,
+        signedContracts: 0,
+        expiringContracts: 0,
+        overdueContracts: 0,
+        recentContracts: [],
+        sources: { contracts: false },
+      };
+    }
+    const rows = await this.dataSource.query(
+      `SELECT
+         COUNT(*)::int AS "totalContracts",
+         COUNT(*) FILTER (WHERE status = 'draft')::int AS "draftContracts",
+         COUNT(*) FILTER (WHERE status = 'sent')::int AS "sentContracts",
+         COUNT(*) FILTER (WHERE signature_status IN ('internal_pending', 'client_pending', 'partially_signed'))::int AS "waitingSignatureContracts",
+         COUNT(*) FILTER (WHERE status IN ('signed', 'active') OR signature_status = 'completed')::int AS "signedContracts",
+         COUNT(*) FILTER (WHERE renewal_date BETWEEN current_date AND current_date + INTERVAL '30 days')::int AS "expiringContracts",
+         COUNT(*) FILTER (WHERE due_date < current_date AND status NOT IN ('signed', 'active', 'cancelled', 'archived'))::int AS "overdueContracts"
+       FROM "${safe}".contracts
+       WHERE deleted_at IS NULL`,
+    );
+    const recentContracts = await this.dataSource.query(
+      `SELECT title, contract_number AS meta, created_at AS "createdAt"
+       FROM "${safe}".contracts
+       WHERE deleted_at IS NULL
+       ORDER BY created_at DESC
+       LIMIT 5`,
+    );
+    return { ...rows[0], recentContracts, sources: { contracts: true } };
+  }
+
+  private async buildPaperworkSummary(schema: string): Promise<DashboardPaperworkSummary> {
+    const safe = safeSchema(schema, 'TenantDashboardService.buildPaperworkSummary');
+    const hasDossiers = await this.tableExists(safe, 'paperwork_dossiers');
+    const hasItems = await this.tableExists(safe, 'paperwork_items');
+    if (!hasDossiers) {
+      return {
+        openDossiers: 0,
+        blockedDossiers: 0,
+        overdueDossiers: 0,
+        missingItems: 0,
+        dueSoonItems: 0,
+        recentDossiers: [],
+        sources: { paperwork_dossiers: false, paperwork_items: hasItems },
+      };
+    }
+    const dossierRows = await this.dataSource.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE status IN ('open', 'in_progress', 'waiting'))::int AS "openDossiers",
+         COUNT(*) FILTER (WHERE status = 'blocked')::int AS "blockedDossiers",
+         COUNT(*) FILTER (WHERE due_date < current_date AND status NOT IN ('completed', 'archived'))::int AS "overdueDossiers"
+       FROM "${safe}".paperwork_dossiers
+       WHERE deleted_at IS NULL`,
+    );
+    const itemRows = hasItems
+      ? await this.dataSource.query(
+          `SELECT
+             COUNT(*) FILTER (WHERE status = 'missing' AND is_required = true)::int AS "missingItems",
+             COUNT(*) FILTER (WHERE due_date BETWEEN current_date AND current_date + INTERVAL '7 days' AND status NOT IN ('approved', 'not_applicable'))::int AS "dueSoonItems"
+           FROM "${safe}".paperwork_items
+           WHERE deleted_at IS NULL`,
+        )
+      : [{ missingItems: 0, dueSoonItems: 0 }];
+    const recentDossiers = await this.dataSource.query(
+      `SELECT title, dossier_type AS meta, created_at AS "createdAt"
+       FROM "${safe}".paperwork_dossiers
+       WHERE deleted_at IS NULL
+       ORDER BY created_at DESC
+       LIMIT 5`,
+    );
+    return {
+      ...dossierRows[0],
+      ...itemRows[0],
+      recentDossiers,
+      sources: { paperwork_dossiers: true, paperwork_items: hasItems },
+    };
+  }
+
   async getSummary(): Promise<TenantDashboardSummary> {
     const schema = this.getTenantSchema();
     const user = this.getAuthUser();
@@ -1192,6 +1277,8 @@ export class TenantDashboardService {
       documentsSummary,
       briefingOperations,
       reportsSummary,
+      contractsSummary,
+      paperworkSummary,
     ] = await Promise.all([
       this.buildSalesSummary(schema, showFinance),
       this.buildProjectsSummary(schema, user, audience),
@@ -1206,6 +1293,8 @@ export class TenantDashboardService {
       this.buildDocumentsSummary(schema, user),
       this.buildBriefingOperationsSummary(schema),
       this.buildReportsSummary(schema, user),
+      this.buildContractsSummary(schema),
+      this.buildPaperworkSummary(schema),
     ]);
 
     const finance = showFinance
@@ -1248,11 +1337,15 @@ export class TenantDashboardService {
         notifications: tenantNotifications.length > 0 ? tenantNotifications : platformNotifications,
         documentsSummary,
         reportsSummary,
+        contractsSummary,
+        paperworkSummary,
         sources: {
           ...briefingOperations.sources,
           ...notificationSummary.sources,
           ...documentsSummary.sources,
           ...reportsSummary.sources,
+          ...contractsSummary.sources,
+          ...paperworkSummary.sources,
         },
       },
     };
@@ -1486,6 +1579,28 @@ interface DashboardReportsSummary {
   sources: DashboardSourceFlags;
 }
 
+interface DashboardContractsSummary {
+  totalContracts: number;
+  draftContracts: number;
+  sentContracts: number;
+  waitingSignatureContracts: number;
+  signedContracts: number;
+  expiringContracts: number;
+  overdueContracts: number;
+  recentContracts: DashboardActivityItem[];
+  sources: DashboardSourceFlags;
+}
+
+interface DashboardPaperworkSummary {
+  openDossiers: number;
+  blockedDossiers: number;
+  overdueDossiers: number;
+  missingItems: number;
+  dueSoonItems: number;
+  recentDossiers: DashboardActivityItem[];
+  sources: DashboardSourceFlags;
+}
+
 interface TenantDashboardSummary {
   tenant: {
     id?: string;
@@ -1522,6 +1637,8 @@ interface TenantDashboardSummary {
     notifications: DashboardActivityItem[];
     documentsSummary: DashboardDocumentsSummary;
     reportsSummary: DashboardReportsSummary;
+    contractsSummary: DashboardContractsSummary;
+    paperworkSummary: DashboardPaperworkSummary;
     sources: DashboardSourceFlags;
   };
 }

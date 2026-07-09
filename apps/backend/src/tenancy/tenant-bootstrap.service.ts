@@ -19,6 +19,10 @@ import {
   ensureTenantReportsTables,
   seedTenantKpiTargets,
 } from '../tenant/tenant-reports-schema';
+import {
+  ensureTenantContractsTables,
+  seedDoflowContractTemplates,
+} from '../tenant/tenant-contracts-schema';
 
 @Injectable()
 export class TenantBootstrapService implements OnApplicationBootstrap {
@@ -190,6 +194,8 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
     await syncTenantUsersToTeamMembers(ds, s);
     await ensureTenantReportsTables(ds, s);
     await seedTenantKpiTargets(ds, s);
+    await ensureTenantContractsTables(ds, s);
+    await seedDoflowContractTemplates(ds, s);
 
     this.logger.log(`Schema "${s}" provisioned successfully.`);
   }

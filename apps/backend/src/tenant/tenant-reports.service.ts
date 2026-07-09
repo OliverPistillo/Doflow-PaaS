@@ -592,10 +592,16 @@ export class TenantReportsService {
     const overdueTasks = await this.countRows(schema, 'tasks', `due_at IS NOT NULL AND due_at < now() AND LOWER(COALESCE(status, '')) <> 'done'`);
     const blockedProjects = await this.countRows(schema, 'projects', `LOWER(COALESCE(status, '')) = 'blocked'`);
     const staleQuotes = await this.countRows(schema, 'quotes', `LOWER(COALESCE(status, '')) = 'sent' AND updated_at < now() - interval '7 days'`);
+    const contractsWaitingSignature = await this.countRows(schema, 'contracts', `signature_status IN ('internal_pending', 'client_pending', 'partially_signed')`);
+    const overdueContracts = await this.countRows(schema, 'contracts', `due_date < current_date AND status NOT IN ('signed', 'active', 'cancelled', 'archived')`);
+    const openPaperworkDossiers = await this.countRows(schema, 'paperwork_dossiers', `status IN ('open', 'in_progress', 'waiting')`);
+    const missingPaperworkItems = await this.countRows(schema, 'paperwork_items', `status = 'missing' AND is_required = true`);
     const dailyDigestAvailable = await this.countRows(schema, 'notification_digests', `digest_date = CURRENT_DATE`) > 0;
     const openRisks = [
       ...(await this.recentRows(schema, 'projects', ['id', 'name', 'status', 'due_date'], `LOWER(COALESCE(status, '')) = 'blocked'`, [], 5)).map((row) => ({ type: 'project_blocked', ...row })),
       ...(await this.recentRows(schema, 'tasks', ['id', 'title', 'status', 'due_at'], `due_at IS NOT NULL AND due_at < now() AND LOWER(COALESCE(status, '')) <> 'done'`, [], 5)).map((row) => ({ type: 'task_overdue', ...row })),
+      ...(await this.recentRows(schema, 'contracts', ['id', 'title', 'status', 'signature_status', 'due_date'], `due_date < current_date AND status NOT IN ('signed', 'active', 'cancelled', 'archived')`, [], 5)).map((row) => ({ type: 'contract_overdue', ...row })),
+      ...(await this.recentRows(schema, 'paperwork_dossiers', ['id', 'title', 'status', 'due_date'], `status = 'blocked' OR (due_date < current_date AND status NOT IN ('completed', 'archived'))`, [], 5)).map((row) => ({ type: 'paperwork_risk', ...row })),
     ].slice(0, 10);
     return {
       unreadNotifications,
@@ -607,6 +613,10 @@ export class TenantReportsService {
       overdueTasks,
       blockedProjects,
       staleQuotes,
+      contractsWaitingSignature,
+      overdueContracts,
+      openPaperworkDossiers,
+      missingPaperworkItems,
       openRisks,
       dailyDigestAvailable,
       sources: {
@@ -617,6 +627,9 @@ export class TenantReportsService {
         tasks: await this.tableExists(schema, 'tasks'),
         projects: await this.tableExists(schema, 'projects'),
         quotes: await this.tableExists(schema, 'quotes'),
+        contracts: await this.tableExists(schema, 'contracts'),
+        paperwork_dossiers: await this.tableExists(schema, 'paperwork_dossiers'),
+        paperwork_items: await this.tableExists(schema, 'paperwork_items'),
       },
     };
   }
@@ -632,6 +645,13 @@ export class TenantReportsService {
     const customersWithUpcomingRenewals = await this.countRows(schema, 'companies', `id IN (SELECT company_id FROM "${schema}".renewals WHERE deleted_at IS NULL AND company_id IS NOT NULL AND due_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 30 AND LOWER(COALESCE(status, '')) = ANY($1::text[]))`, [['upcoming', 'reminded']]);
     const customersWithUnpaidInvoices = canFinance
       ? await this.countRows(schema, 'companies', `id IN (SELECT company_id FROM "${schema}".invoices WHERE deleted_at IS NULL AND company_id IS NOT NULL AND remaining_total > 0)`)
+      : 0;
+    const hasContracts = await this.tableExists(schema, 'contracts');
+    const customersWithActiveContracts = hasContracts
+      ? await this.countRows(schema, 'companies', `id IN (SELECT company_id FROM "${schema}".contracts WHERE deleted_at IS NULL AND company_id IS NOT NULL AND status IN ('signed', 'active'))`)
+      : 0;
+    const customersWithExpiringContracts = hasContracts
+      ? await this.countRows(schema, 'companies', `id IN (SELECT company_id FROM "${schema}".contracts WHERE deleted_at IS NULL AND company_id IS NOT NULL AND renewal_date BETWEEN current_date AND current_date + INTERVAL '30 days')`)
       : 0;
     const upsellCandidates = await this.recentRows(
       schema,
@@ -657,6 +677,8 @@ export class TenantReportsService {
       customersWithRecurringServices,
       customersWithUpcomingRenewals,
       customersWithUnpaidInvoices,
+      customersWithActiveContracts,
+      customersWithExpiringContracts,
       upsellCandidates,
       sources: {
         companies: await this.tableExists(schema, 'companies'),
@@ -664,6 +686,7 @@ export class TenantReportsService {
         recurring_services: await this.tableExists(schema, 'recurring_services'),
         renewals: await this.tableExists(schema, 'renewals'),
         invoices: canFinance && await this.tableExists(schema, 'invoices'),
+        contracts: hasContracts,
       },
     };
   }
