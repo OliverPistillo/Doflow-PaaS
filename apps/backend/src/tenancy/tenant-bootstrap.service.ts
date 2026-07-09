@@ -10,6 +10,11 @@ import { ensureTenantProjectsTables } from '../tenant/tenant-projects-schema';
 import { ensureTenantFinanceTables } from '../tenant/tenant-finance-schema';
 import { seedTenantNotificationRules } from '../tenant/tenant-notifications-schema';
 import { ensureTenantDocumentsTables } from '../tenant/tenant-documents-schema';
+import {
+  ensureTenantTeamTables,
+  seedTenantTeamSkills,
+  syncTenantUsersToTeamMembers,
+} from '../tenant/tenant-team-schema';
 
 @Injectable()
 export class TenantBootstrapService implements OnApplicationBootstrap {
@@ -176,6 +181,9 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
     await ensureTenantFinanceTables(ds, s);
     await seedTenantNotificationRules(ds, s);
     await ensureTenantDocumentsTables(ds, s);
+    await ensureTenantTeamTables(ds, s);
+    await seedTenantTeamSkills(ds, s);
+    await syncTenantUsersToTeamMembers(ds, s);
 
     this.logger.log(`Schema "${s}" provisioned successfully.`);
   }

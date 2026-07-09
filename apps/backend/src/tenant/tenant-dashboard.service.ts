@@ -813,13 +813,46 @@ export class TenantDashboardService {
     };
   }
 
-  private async buildTeamSummary(schema: string): Promise<DashboardTeamSummary> {
+  private async buildTeamSummary(schema: string, user: TenantDashboardAuthUser): Promise<DashboardTeamSummary> {
     const hasTasks = await this.tableExists(schema, 'tasks');
+    const hasTeamMembers = await this.tableExists(schema, 'team_members');
+    const hasTimeEntries = await this.tableExists(schema, 'time_entries');
     const taskHasStatus = hasTasks && (await this.columnExists(schema, 'tasks', 'status'));
     const openTaskWhere = taskHasStatus
       ? `LOWER(COALESCE(status::text, '')) NOT IN ('done', 'closed', 'resolved', 'completed')`
       : 'TRUE';
     const pendingInvites = await this.countRows(schema, 'invites', 'accepted_at IS NULL AND (expires_at IS NULL OR expires_at > now())');
+    const workload = hasTeamMembers
+      ? await this.getEnhancedTeamWorkload(schema, user)
+      : await this.getTeamWorkload(schema);
+    const activeTeamMembers = hasTeamMembers ? await this.countByOptionalStatus(schema, 'team_members', ['active']) : 0;
+    const availableTeamMembers = hasTeamMembers ? await this.countRows(schema, 'team_members', `availability_status = 'available'`) : 0;
+    const unavailableTeamMembers = hasTeamMembers ? await this.countRows(schema, 'team_members', `availability_status <> 'available'`) : 0;
+    const overloadedMembers = workload.filter((item: any) => item.isOverloaded).length;
+    const capacityRows = hasTeamMembers ? await this.dataSource.query(
+      `SELECT COALESCE(SUM(COALESCE(capacity_hours_per_week,
+        CASE WHEN employment_type IN ('contractor', 'external') THEN 20 ELSE 40 END
+      )), 0)::numeric AS total
+       FROM "${schema}".team_members
+       WHERE deleted_at IS NULL AND status = 'active'`,
+    ) : [{ total: 0 }];
+    const timeRows = hasTimeEntries ? await this.dataSource.query(
+      `SELECT
+        COALESCE(SUM(duration_minutes) FILTER (WHERE entry_date >= date_trunc('week', current_date)::date), 0)::int AS week,
+        COALESCE(SUM(duration_minutes) FILTER (WHERE entry_date >= date_trunc('month', current_date)::date), 0)::int AS month,
+        COUNT(*) FILTER (WHERE status = 'submitted')::int AS pending
+       FROM "${schema}".time_entries
+       WHERE deleted_at IS NULL`,
+    ) : [{ week: 0, month: 0, pending: 0 }];
+    const costRows = hasTimeEntries && hasTeamMembers && this.canViewFinance(user.role) ? await this.dataSource.query(
+      `SELECT COALESCE(SUM((te.duration_minutes::numeric / 60) * tm.hourly_rate_cents::numeric), 0)::numeric AS cents
+       FROM "${schema}".time_entries te
+       JOIN "${schema}".team_members tm ON tm.id = te.team_member_id
+       WHERE te.deleted_at IS NULL
+         AND tm.deleted_at IS NULL
+         AND te.entry_date >= date_trunc('month', current_date)::date
+         AND tm.hourly_rate_cents IS NOT NULL`,
+    ) : [{ cents: 0 }];
 
     return {
       overdueTasks: hasTasks && (await this.columnExists(schema, 'tasks', 'due_at'))
@@ -831,16 +864,105 @@ export class TenantDashboardService {
       blockedTasks: hasTasks && (await this.columnExists(schema, 'tasks', 'status'))
         ? await this.countByOptionalStatus(schema, 'tasks', ['blocked'])
         : 0,
-      workload: await this.getTeamWorkload(schema),
-      blockedCollaborators: 0,
+      workload: workload.slice(0, 5).map((item: any) => ({
+        assignee: item.assignee || item.display_name || item.email || 'Team',
+        openTasks: Number(item.openTasks || 0),
+        ...item,
+      })),
+      blockedCollaborators: overloadedMembers,
       pendingInvites,
       activeUsers: await this.countRows(schema, 'users', 'COALESCE(is_active, true) = true'),
+      teamMembers: hasTeamMembers ? await this.countRows(schema, 'team_members') : 0,
+      activeTeamMembers,
+      availableTeamMembers,
+      unavailableTeamMembers,
+      overloadedMembers,
+      totalCapacityHours: Number(capacityRows[0]?.total || 0),
+      loggedHoursThisWeek: Math.round(Number(timeRows[0]?.week || 0) / 60),
+      loggedHoursThisMonth: Math.round(Number(timeRows[0]?.month || 0) / 60),
+      pendingTimeEntries: Number(timeRows[0]?.pending || 0),
+      overdueTasksByTeam: workload.reduce((sum: number, item: any) => sum + Number(item.overdueTasks || 0), 0),
+      costEstimateThisMonth: this.canViewFinance(user.role) ? Math.round(Number(costRows[0]?.cents || 0)) : undefined,
       sources: {
         users: await this.tableExists(schema, 'users'),
         invites: await this.tableExists(schema, 'invites'),
         tasks: hasTasks,
+        teamMembers: hasTeamMembers,
+        timeEntries: hasTimeEntries,
       },
     };
+  }
+
+  private async getEnhancedTeamWorkload(schema: string, user: TenantDashboardAuthUser): Promise<Array<Record<string, any>>> {
+    const safe = safeSchema(schema, 'TenantDashboardService.getEnhancedTeamWorkload');
+    if (!(await this.tableExists(safe, 'team_members'))) return [];
+    const hasTasks = await this.tableExists(safe, 'tasks');
+    const hasProjectMembers = await this.tableExists(safe, 'project_members');
+    const hasTimeEntries = await this.tableExists(safe, 'time_entries');
+    const rows = await this.dataSource.query(
+      `SELECT id, user_id, email, display_name, operational_role, status, availability_status,
+              employment_type, capacity_hours_per_week
+       FROM "${safe}".team_members
+       WHERE deleted_at IS NULL
+       ORDER BY display_name ASC
+       LIMIT 100`,
+    );
+
+    const result: Array<Record<string, any>> = [];
+    for (const row of rows) {
+      const userId = UUID_RE.test(String(row.user_id || '')) ? row.user_id : null;
+      const capacity = Number(row.capacity_hours_per_week || (['contractor', 'external'].includes(String(row.employment_type || '')) ? 20 : 40));
+      const taskRows = hasTasks && userId ? await this.dataSource.query(
+        `SELECT
+          COUNT(*) FILTER (WHERE deleted_at IS NULL AND lower(COALESCE(status, '')) NOT IN ('done', 'closed', 'completed'))::int AS open,
+          COUNT(*) FILTER (WHERE deleted_at IS NULL AND lower(COALESCE(status, '')) NOT IN ('done', 'closed', 'completed') AND due_at < now())::int AS overdue,
+          COUNT(*) FILTER (WHERE deleted_at IS NULL AND lower(COALESCE(status, '')) NOT IN ('done', 'closed', 'completed') AND due_at BETWEEN now() AND now() + INTERVAL '7 days')::int AS soon,
+          COUNT(DISTINCT project_id) FILTER (WHERE deleted_at IS NULL AND project_id IS NOT NULL)::int AS projects
+         FROM "${safe}".tasks
+         WHERE assignee_id = $1`,
+        [userId],
+      ) : [{ open: 0, overdue: 0, soon: 0, projects: 0 }];
+      const projectRows = hasProjectMembers && userId ? await this.dataSource.query(
+        `SELECT COUNT(DISTINCT pm.project_id)::int AS count
+         FROM "${safe}".project_members pm
+         JOIN "${safe}".projects p ON p.id = pm.project_id
+         WHERE pm.deleted_at IS NULL AND p.deleted_at IS NULL
+           AND pm.user_id = $1
+           AND lower(COALESCE(p.status, '')) NOT IN ('closed', 'delivered')`,
+        [userId],
+      ) : [{ count: 0 }];
+      const timeRows = hasTimeEntries ? await this.dataSource.query(
+        `SELECT
+          COALESCE(SUM(duration_minutes) FILTER (WHERE entry_date >= date_trunc('week', current_date)::date), 0)::int AS week,
+          COALESCE(SUM(duration_minutes) FILTER (WHERE entry_date >= date_trunc('month', current_date)::date), 0)::int AS month
+         FROM "${safe}".time_entries
+         WHERE deleted_at IS NULL AND team_member_id = $1`,
+        [row.id],
+      ) : [{ week: 0, month: 0 }];
+      const openTasks = Number(taskRows[0]?.open || 0);
+      const loggedHoursThisWeek = Number(timeRows[0]?.week || 0) / 60;
+      const utilizationPercent = Math.min(999, Math.round(((loggedHoursThisWeek + openTasks * 2) / Math.max(capacity, 1)) * 100));
+      result.push({
+        team_member_id: row.id,
+        assignee: row.display_name || row.email,
+        display_name: row.display_name,
+        email: row.email,
+        operational_role: row.operational_role,
+        status: row.status,
+        availability_status: row.availability_status,
+        capacity_hours_per_week: capacity,
+        openTasks,
+        overdueTasks: Number(taskRows[0]?.overdue || 0),
+        dueSoonTasks: Number(taskRows[0]?.soon || 0),
+        activeProjects: Number(projectRows[0]?.count || 0) || Number(taskRows[0]?.projects || 0),
+        loggedMinutesThisWeek: Number(timeRows[0]?.week || 0),
+        loggedMinutesThisMonth: Number(timeRows[0]?.month || 0),
+        utilizationPercent,
+        isOverloaded: utilizationPercent >= 100,
+      });
+    }
+
+    return result.sort((a, b) => Number(b.utilizationPercent || 0) - Number(a.utilizationPercent || 0));
   }
 
   private async buildCustomersSummary(schema: string, tenant: TenantDashboardTenant): Promise<DashboardCustomersSummary> {
@@ -1018,7 +1140,7 @@ export class TenantDashboardService {
     ] = await Promise.all([
       this.buildSalesSummary(schema, showFinance),
       this.buildProjectsSummary(schema, user, audience),
-      this.buildTeamSummary(schema),
+      this.buildTeamSummary(schema, user),
       this.buildCustomersSummary(schema, tenant),
       this.buildPersonalSummary(schema, user),
       this.getRecentFiles(schema, user),
@@ -1226,10 +1348,21 @@ interface DashboardTeamSummary {
   overdueTasks: number;
   openTasks: number;
   blockedTasks: number;
-  workload: Array<{ assignee: string; openTasks: number }>;
+  workload: Array<Record<string, any> & { assignee: string; openTasks: number }>;
   blockedCollaborators: number;
   pendingInvites: number;
   activeUsers: number;
+  teamMembers?: number;
+  activeTeamMembers?: number;
+  availableTeamMembers?: number;
+  unavailableTeamMembers?: number;
+  overloadedMembers?: number;
+  totalCapacityHours?: number;
+  loggedHoursThisWeek?: number;
+  loggedHoursThisMonth?: number;
+  pendingTimeEntries?: number;
+  overdueTasksByTeam?: number;
+  costEstimateThisMonth?: number;
   sources: DashboardSourceFlags;
 }
 

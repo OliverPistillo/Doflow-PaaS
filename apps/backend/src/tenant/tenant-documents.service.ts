@@ -16,7 +16,7 @@ const CATEGORIES = [
 const STATUSES = ['active', 'archived', 'deleted'];
 const ENTITY_TYPES = [
   'company', 'contact', 'lead', 'opportunity', 'briefing', 'quote', 'project', 'task',
-  'milestone', 'invoice', 'payment', 'deadline', 'renewal', 'recurring_service',
+  'milestone', 'team_member', 'invoice', 'payment', 'deadline', 'renewal', 'recurring_service',
 ];
 const RELATION_TYPES = ['attachment', 'source', 'output', 'contract', 'invoice', 'quote', 'asset', 'reference'];
 const SORT_COLUMNS = ['created_at', 'updated_at', 'title', 'size_bytes', 'category'];
