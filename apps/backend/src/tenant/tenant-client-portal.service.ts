@@ -128,10 +128,21 @@ export class TenantClientPortalService {
   private async getClientContext(body?: Record<string, any>): Promise<ClientContext> {
     const auth = String(this.request.headers?.authorization || '');
     if (!auth.toLowerCase().startsWith('bearer ')) throw new UnauthorizedException('Token portale cliente richiesto');
+    const token = auth.slice(7).trim();
+    if (!token || token === 'undefined' || token === 'null') {
+      throw new UnauthorizedException('Token portale cliente richiesto');
+    }
     let payload: any;
     try {
-      payload = jwt.verify(auth.slice(7), this.getJwtSecret()) as any;
-    } catch {
+      payload = jwt.verify(token, this.getJwtSecret()) as any;
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        const err = error as { name?: string; message?: string };
+        console.warn('[client-portal] Invalid client token', {
+          name: err?.name,
+          message: err?.message,
+        });
+      }
       throw new UnauthorizedException('Token portale cliente non valido');
     }
     if (payload?.type !== 'client_portal' || !payload.account_id) {

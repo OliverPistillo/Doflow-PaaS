@@ -20,6 +20,8 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   clearClientPortalToken,
   clientPortalFetch,
+  extractClientPortalAccessToken,
+  getClientPortalSessionExpiredMessage,
   getClientPortalToken,
   setClientPortalToken,
 } from "@/lib/client-portal-api";
@@ -126,16 +128,21 @@ export function ClientLoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    const message = getClientPortalSessionExpiredMessage();
+    if (message) setError(message);
+  }, []);
+
   const login = async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await clientPortalFetch<{ accessToken: string }>("/tenant/client-portal/auth/login", {
+      const data = await clientPortalFetch<{ accessToken?: string }>("/tenant/client-portal/auth/login", {
         method: "POST",
         auth: false,
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, tenant: "doflow" }),
       });
-      setClientPortalToken(data.accessToken);
+      setClientPortalToken(extractClientPortalAccessToken(data));
       router.push("/client/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Credenziali non valide");
@@ -172,12 +179,12 @@ export function ClientAcceptInvitePage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await clientPortalFetch<{ accessToken: string }>("/tenant/client-portal/auth/accept-invite", {
+      const data = await clientPortalFetch<{ accessToken?: string }>("/tenant/client-portal/auth/accept-invite", {
         method: "POST",
         auth: false,
         body: JSON.stringify({ token, name: form.name || undefined, password: form.password || undefined, tenant: "doflow" }),
       });
-      setClientPortalToken(data.accessToken);
+      setClientPortalToken(extractClientPortalAccessToken(data));
       router.push("/client/dashboard");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Invito non valido";
