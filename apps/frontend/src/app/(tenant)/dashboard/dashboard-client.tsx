@@ -38,6 +38,7 @@ import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
 import { getTenantRoleLabel } from "@/lib/roles";
 import { cn } from "@/lib/utils";
+import { formatBytes as formatDocumentBytes } from "@/components/tenant-documents/document-utils";
 
 type DashboardAudience = "executive" | "manager" | "employee";
 
@@ -47,6 +48,15 @@ type ActivityItem = {
   title: string;
   meta: string;
   createdAt: string | null;
+};
+
+type DocumentsSummary = {
+  totalDocuments: number;
+  recentDocuments: ActivityItem[];
+  projectDocuments: number;
+  financeDocuments: number;
+  storageUsedBytes: number;
+  sources?: SourceFlags;
 };
 
 type DashboardSummary = {
@@ -137,6 +147,7 @@ type DashboardSummary = {
     recentComments: ActivityItem[];
     recentFiles: ActivityItem[];
     notifications: ActivityItem[];
+    documentsSummary?: DocumentsSummary;
     sources?: SourceFlags;
   };
 };
@@ -263,6 +274,14 @@ function getFallbackSummary(): DashboardSummary {
       recentComments: [],
       recentFiles: [],
       notifications: [],
+      documentsSummary: {
+        totalDocuments: 0,
+        recentDocuments: [],
+        projectDocuments: 0,
+        financeDocuments: 0,
+        storageUsedBytes: 0,
+        sources: {},
+      },
       sources: {},
     },
   };
@@ -631,6 +650,83 @@ export default function DashboardClient() {
     },
   ];
 
+  const documentsSummary = summary.operations.documentsSummary || {
+    totalDocuments: 0,
+    recentDocuments: [],
+    projectDocuments: 0,
+    financeDocuments: 0,
+    storageUsedBytes: 0,
+    sources: {},
+  };
+
+  const documentMetrics: Metric[] = [
+    { label: "Documenti totali", value: documentsSummary.totalDocuments || 0 },
+    { label: "Documenti progetto", value: documentsSummary.projectDocuments || 0 },
+    ...(summary.user.canViewFinance
+      ? [{ label: "Documenti finance", value: documentsSummary.financeDocuments || 0 } satisfies Metric]
+      : []),
+    { label: "Spazio usato", value: formatDocumentBytes(documentsSummary.storageUsedBytes || 0) },
+  ];
+
+  const recentDocuments = documentsSummary.recentDocuments?.length
+    ? documentsSummary.recentDocuments
+    : summary.operations.recentFiles;
+
+  const documentsCard = (
+    <SectionCard
+      title="Documenti"
+      description="Archivio interno tenant-scoped per allegati, contratti, asset, documenti progetto e finance dove autorizzato."
+      icon={FileText}
+      metrics={documentMetrics}
+      sources={{
+        documents:
+          (documentsSummary.totalDocuments || 0) > 0 ||
+          (documentsSummary.projectDocuments || 0) > 0 ||
+          (summary.user.canViewFinance && (documentsSummary.financeDocuments || 0) > 0),
+      }}
+      emptyText="Nessun documento caricato."
+    >
+      <div className="space-y-3">
+        {recentDocuments.length > 0 ? (
+          <div className="space-y-2">
+            {recentDocuments.slice(0, 3).map((item, index) => {
+              const documentItem = item as ActivityItem & {
+                original_filename?: string;
+                category?: string;
+                created_at?: string | null;
+              };
+              const title = documentItem.title || documentItem.original_filename || "Documento";
+              const meta = documentItem.meta || [documentItem.original_filename, documentItem.category].filter(Boolean).join(" · ");
+              const createdAt = documentItem.createdAt || documentItem.created_at || null;
+
+              return (
+                <div key={`${title}-${index}`} className="flex items-start justify-between gap-3 rounded-nav bg-muted/40 px-3 py-2 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-foreground">{title}</p>
+                    <p className="line-clamp-1 text-xs text-muted-foreground">{meta || "Documento interno"}</p>
+                  </div>
+                  <span className="shrink-0 text-xs text-muted-foreground">{formatDate(createdAt)}</span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-nav border border-dashed border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+            Nessun documento caricato.
+          </div>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href="/documents">Apri documenti</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/documents/upload">Carica documento</Link>
+          </Button>
+        </div>
+      </div>
+    </SectionCard>
+  );
+
   const notificationsCard = (
     <SectionCard
       title="Attenzione richiesta"
@@ -774,6 +870,7 @@ export default function DashboardClient() {
               ) : null}
             </SectionCard>
             {notificationsCard}
+            {documentsCard}
           </div>
           <SectionCard
             title="Clienti"
@@ -818,6 +915,7 @@ export default function DashboardClient() {
               emptyText="Calendario e milestone saranno popolati da tabelle progetto/task reali."
             />
             {notificationsCard}
+            {documentsCard}
           </div>
           <FinanceLockedNotice />
           <div className="grid gap-4 lg:grid-cols-3">
@@ -854,6 +952,7 @@ export default function DashboardClient() {
               emptyText="File, commenti e notifiche compaiono solo se esistono dati reali per il tenant."
             />
             {notificationsCard}
+            {documentsCard}
           </div>
           <FinanceLockedNotice />
           <div className="grid gap-4 lg:grid-cols-3">

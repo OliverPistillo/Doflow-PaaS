@@ -20,10 +20,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
+import { listDocumentsForEntity, type TenantDocument } from "@/lib/tenant-documents-api";
 import { shortDate } from "@/components/tenant-crm/crm-core";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { canUseFinanceFrontend } from "@/components/tenant-finance/finance-core";
+import { categoryLabel, formatBytes, formatDateTime } from "@/components/tenant-documents/document-utils";
 
 type Row = Record<string, any>;
 type ListResponse<T = Row> = { items: T[]; total?: number; limit?: number; offset?: number };
@@ -504,6 +506,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
   const [members, setMembers] = useState<Row[]>([]);
   const [comments, setComments] = useState<Row[]>([]);
   const [files, setFiles] = useState<Row[]>([]);
+  const [projectDocuments, setProjectDocuments] = useState<TenantDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -519,13 +522,14 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
     setLoading(true);
     setError(null);
     try {
-      const [projectData, milestonesData, tasksData, membersData, commentsData, filesData] = await Promise.all([
+      const [projectData, milestonesData, tasksData, membersData, commentsData, filesData, documentsData] = await Promise.all([
         apiFetch<Row>(`/tenant/projects/${projectId}`),
         loadList(`/tenant/projects/${projectId}/milestones`).catch(() => ({ items: [] })),
         loadList(`/tenant/projects/${projectId}/tasks`).catch(() => ({ items: [] })),
         loadList(`/tenant/projects/${projectId}/members`).catch(() => ({ items: [] })),
         loadList(`/tenant/projects/${projectId}/comments`).catch(() => ({ items: [] })),
         loadList(`/tenant/projects/${projectId}/files`).catch(() => ({ items: [] })),
+        listDocumentsForEntity("project", projectId, { limit: 5 }).catch(() => ({ items: [] })),
       ]);
       setProject(projectData);
       setMilestones(milestonesData.items || []);
@@ -533,6 +537,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
       setMembers(membersData.items || []);
       setComments(commentsData.items || []);
       setFiles(filesData.items || []);
+      setProjectDocuments(documentsData.items || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore caricamento progetto");
     } finally {
@@ -736,6 +741,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
           <CommentsPanel items={comments} form={commentForm} setForm={setCommentForm} onCreate={addComment} onDelete={deleteComment} />
         </TabsContent>
         <TabsContent value="files">
+          <ProjectDocumentsPanel projectId={projectId} items={projectDocuments} />
           <FilesPanel items={files} form={fileForm} setForm={setFileForm} onCreate={addFile} onDelete={deleteFile} />
         </TabsContent>
       </Tabs>
@@ -835,6 +841,51 @@ function CommentsPanel({ items, form, setForm, onCreate, onDelete }: { items: Ro
 
 function FilesPanel({ items, form, setForm, onCreate, onDelete }: { items: Row[]; form: Record<string, any>; setForm: (updater: (prev: Record<string, any>) => Record<string, any>) => void; onCreate: () => void; onDelete: (row: Row) => void }) {
   return <Card><CardHeader><CardTitle className="text-lg">File progetto</CardTitle><CardDescription>Collegamento file esistenti via file_id. Upload completo non incluso in questa fase.</CardDescription></CardHeader><CardContent className="space-y-4">{canManageProjects() ? <div className="grid gap-3 md:grid-cols-[1fr_180px_180px_auto]"><Input value={form.file_id || ""} onChange={(e) => setForm((p) => ({ ...p, file_id: e.target.value }))} placeholder="UUID file_id" /><SelectField value={form.type} options={FILE_TYPES} placeholder="Tipo file" onChange={(v) => setForm((p) => ({ ...p, type: v }))} /><SelectField value={form.visibility} options={COMMENT_VISIBILITIES} placeholder="Visibilità" onChange={(v) => setForm((p) => ({ ...p, visibility: v }))} /><Button onClick={onCreate} disabled={!form.file_id}><FolderOpen className="mr-2 h-4 w-4" /> Collega</Button></div> : null}{items.length === 0 ? <EmptyState>Nessun file collegato. Il collegamento file resta reale, ma l'upload non viene simulato.</EmptyState> : <div className="space-y-2">{items.map((row) => <div key={row.id} className="flex items-center justify-between rounded-lg border p-3"><div><p className="font-mono text-sm">{row.file_id}</p><p className="text-xs text-muted-foreground">{labelFor(row.type, FILE_TYPES)} · {labelFor(row.visibility, FILE_VISIBILITIES)}</p></div>{canManageProjects() ? <Button size="sm" variant="outline" onClick={() => onDelete(row)}><Trash2 className="h-4 w-4 text-destructive" /></Button> : null}</div>)}</div>}</CardContent></Card>;
+}
+
+function ProjectDocumentsPanel({ projectId, items }: { projectId: string; items: TenantDocument[] }) {
+  return (
+    <Card className="mb-4">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <CardTitle className="text-lg">Documenti progetto</CardTitle>
+          <CardDescription>Documenti interni collegati al progetto tramite il nuovo archivio Documenti.</CardDescription>
+        </div>
+        <Button asChild variant="outline" size="sm">
+          <Link href={`/documents/upload?entity_type=project&entity_id=${projectId}&category=project_asset`}>
+            <FileText className="mr-2 h-4 w-4" />
+            Carica documento progetto
+          </Link>
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {items.length === 0 ? (
+          <EmptyState>Nessun documento progetto collegato.</EmptyState>
+        ) : (
+          <div className="space-y-2">
+            {items.map((document) => (
+              <div key={document.id} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <Link href={`/documents/${document.id}`} className="truncate font-semibold text-primary hover:underline">
+                    {document.title}
+                  </Link>
+                  <p className="text-xs text-muted-foreground">
+                    {categoryLabel(document.category)} · {formatBytes(document.size_bytes)} · {formatDateTime(document.created_at)}
+                  </p>
+                </div>
+                <Button asChild size="sm" variant="outline">
+                  <Link href={`/documents/${document.id}`}>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Apri
+                  </Link>
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 const FILE_VISIBILITIES = COMMENT_VISIBILITIES;

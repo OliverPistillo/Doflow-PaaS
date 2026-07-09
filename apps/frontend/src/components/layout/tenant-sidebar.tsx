@@ -71,6 +71,8 @@ const EXISTING_TENANT_ROUTES = new Set([
   "/dashboard",
   "/deals",
   "/documents",
+  "/documents/folders",
+  "/documents/upload",
   "/email-templates",
   "/expenses",
   "/finance",
@@ -201,10 +203,9 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
     {
       label: "Documenti",
       modules: [
-        item("Contratti", "/documents", FileText, { moduleKey: "docs.files" }),
-        item("Scartoffie", undefined, FolderOpen, { comingSoon: true }),
-        item("Allegati", "/documents", FolderOpen, { moduleKey: "docs.files" }),
-        item("Template documenti", "/email-templates", BookTemplate),
+        item("Tutti", "/documents", FileText, { moduleKey: "docs.files" }),
+        item("Cartelle", "/documents/folders", FolderOpen, { moduleKey: "docs.files" }),
+        item("Carica", "/documents/upload", FileCheck2, { moduleKey: "docs.files" }),
       ],
     },
     {
@@ -317,8 +318,9 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
     {
       label: "Documenti",
       modules: [
-        item("Contratti", "/documents", FileText, { moduleKey: "docs.files" }),
-        item("Allegati", "/documents", FolderOpen, { moduleKey: "docs.files" }),
+        item("Tutti", "/documents", FileText, { moduleKey: "docs.files" }),
+        item("Cartelle", "/documents/folders", FolderOpen, { moduleKey: "docs.files" }),
+        item("Carica", "/documents/upload", FileCheck2, { moduleKey: "docs.files" }),
       ],
     },
     {
@@ -367,7 +369,9 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
     {
       label: "Documenti",
       modules: [
-        item("Allegati", "/documents", FolderOpen, { moduleKey: "docs.files" }),
+        item("Tutti", "/documents", FileText, { moduleKey: "docs.files" }),
+        item("Cartelle", "/documents/folders", FolderOpen, { moduleKey: "docs.files" }),
+        item("Carica", "/documents/upload", FileCheck2, { moduleKey: "docs.files" }),
       ],
     },
     {
