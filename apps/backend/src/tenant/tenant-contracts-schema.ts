@@ -432,6 +432,7 @@ export async function seedDoflowContractTemplates(ds: DataSource, schema: string
       await ds.query(
         `UPDATE "${s}".contract_templates
          SET name = $1,
+             slug = $2,
              category = $3,
              description = $4,
              body_markdown = $5,
