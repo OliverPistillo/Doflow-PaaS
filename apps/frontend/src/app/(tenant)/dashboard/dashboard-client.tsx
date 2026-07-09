@@ -59,6 +59,18 @@ type DocumentsSummary = {
   sources?: SourceFlags;
 };
 
+type ReportsSummary = {
+  kpiTargetsConfigured: number;
+  reportsAvailable: string[];
+  executiveRisksCount: number;
+  lastSnapshotAt: string | null;
+  currentMonthRevenue?: number;
+  currentMonthNewLeads: number;
+  currentMonthAcceptedQuotes: number;
+  currentMonthOverdueTasks: number;
+  sources?: SourceFlags;
+};
+
 type DashboardSummary = {
   tenant: { id?: string; slug?: string; schema: string };
   user: {
@@ -159,6 +171,7 @@ type DashboardSummary = {
     recentFiles: ActivityItem[];
     notifications: ActivityItem[];
     documentsSummary?: DocumentsSummary;
+    reportsSummary?: ReportsSummary;
     sources?: SourceFlags;
   };
 };
@@ -301,6 +314,17 @@ function getFallbackSummary(): DashboardSummary {
         projectDocuments: 0,
         financeDocuments: 0,
         storageUsedBytes: 0,
+        sources: {},
+      },
+      reportsSummary: {
+        kpiTargetsConfigured: 0,
+        reportsAvailable: [],
+        executiveRisksCount: 0,
+        lastSnapshotAt: null,
+        currentMonthRevenue: 0,
+        currentMonthNewLeads: 0,
+        currentMonthAcceptedQuotes: 0,
+        currentMonthOverdueTasks: 0,
         sources: {},
       },
       sources: {},
@@ -758,6 +782,64 @@ export default function DashboardClient() {
     </SectionCard>
   );
 
+  const reportsSummary = summary.operations.reportsSummary || {
+    kpiTargetsConfigured: 0,
+    reportsAvailable: [],
+    executiveRisksCount: 0,
+    lastSnapshotAt: null,
+    currentMonthRevenue: 0,
+    currentMonthNewLeads: 0,
+    currentMonthAcceptedQuotes: 0,
+    currentMonthOverdueTasks: 0,
+    sources: {},
+  };
+
+  const reportsAvailableCount = Array.isArray(reportsSummary.reportsAvailable)
+    ? reportsSummary.reportsAvailable.length
+    : Number(reportsSummary.reportsAvailable || 0);
+
+  const reportMetrics: Metric[] = [
+    { label: "Report disponibili", value: reportsAvailableCount },
+    { label: "Target KPI", value: reportsSummary.kpiTargetsConfigured || 0 },
+    { label: "Rischi direzionali", value: reportsSummary.executiveRisksCount || 0, tone: (reportsSummary.executiveRisksCount || 0) > 0 ? "warning" : "default" },
+    { label: "Nuovi lead mese", value: reportsSummary.currentMonthNewLeads || 0 },
+    { label: "Preventivi accettati", value: reportsSummary.currentMonthAcceptedQuotes || 0, tone: (reportsSummary.currentMonthAcceptedQuotes || 0) > 0 ? "success" : "default" },
+    { label: "Task scaduti mese", value: reportsSummary.currentMonthOverdueTasks || 0, tone: (reportsSummary.currentMonthOverdueTasks || 0) > 0 ? "danger" : "default" },
+    ...(summary.user.canViewFinance
+      ? [{ label: "Revenue mese", value: formatCurrency(reportsSummary.currentMonthRevenue || 0) } satisfies Metric]
+      : []),
+    { label: "Ultimo snapshot", value: reportsSummary.lastSnapshotAt ? formatDate(reportsSummary.lastSnapshotAt) : "Nessuno" },
+  ];
+
+  const reportsCard = (
+    <SectionCard
+      title="Report/KPI"
+      description="Riepilogo direzionale dai report tenant-scoped: obiettivi, rischi e KPI del mese."
+      icon={BarChart3}
+      metrics={reportMetrics}
+      sources={{
+        reports:
+          reportsAvailableCount > 0 ||
+          (reportsSummary.kpiTargetsConfigured || 0) > 0 ||
+          (reportsSummary.currentMonthNewLeads || 0) > 0 ||
+          (summary.user.canViewFinance && (reportsSummary.currentMonthRevenue || 0) > 0),
+      }}
+      emptyText="Nessun KPI direzionale configurato per il periodo corrente."
+    >
+      <div className="flex flex-wrap gap-2">
+        <Button asChild variant="outline" size="sm">
+          <Link href="/reports">Apri report</Link>
+        </Button>
+        <Button asChild variant="outline" size="sm">
+          <Link href="/reports/executive">Report direzione</Link>
+        </Button>
+        <Button asChild variant="outline" size="sm">
+          <Link href="/reports/targets">Obiettivi KPI</Link>
+        </Button>
+      </div>
+    </SectionCard>
+  );
+
   const notificationsCard = (
     <SectionCard
       title="Attenzione richiesta"
@@ -907,6 +989,7 @@ export default function DashboardClient() {
             </SectionCard>
             {notificationsCard}
             {documentsCard}
+            {reportsCard}
           </div>
           <SectionCard
             title="Clienti"
@@ -952,6 +1035,7 @@ export default function DashboardClient() {
             />
             {notificationsCard}
             {documentsCard}
+            {reportsCard}
           </div>
           <FinanceLockedNotice />
           <div className="grid gap-4 lg:grid-cols-3">
@@ -989,6 +1073,7 @@ export default function DashboardClient() {
             />
             {notificationsCard}
             {documentsCard}
+            {reportsCard}
           </div>
           <FinanceLockedNotice />
           <div className="grid gap-4 lg:grid-cols-3">

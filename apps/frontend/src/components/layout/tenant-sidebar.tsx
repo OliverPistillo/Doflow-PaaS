@@ -109,6 +109,18 @@ const EXISTING_TENANT_ROUTES = new Set([
   "/quotes/rejected",
   "/quotes/sent",
   "/quotes/service-templates",
+  "/reports",
+  "/reports/customers",
+  "/reports/documents",
+  "/reports/executive",
+  "/reports/finance",
+  "/reports/operations",
+  "/reports/projects",
+  "/reports/sales",
+  "/reports/saved-views",
+  "/reports/snapshots",
+  "/reports/targets",
+  "/reports/team",
   "/settings",
   "/settings/automations",
   "/settings/company",
@@ -249,6 +261,21 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
       ],
     },
     {
+      label: "Report",
+      modules: [
+        item("Panoramica", "/reports", BarChart3, { minPlan: "PRO" }),
+        item("Direzione", "/reports/executive", BarChart3, { minPlan: "PRO" }),
+        item("Vendite", "/reports/sales", Handshake, { minPlan: "PRO" }),
+        item("Progetti", "/reports/projects", FolderKanban, { minPlan: "PRO" }),
+        item("Finance", "/reports/finance", Wallet, { minPlan: "PRO" }),
+        item("Team", "/reports/team", UsersRound, { minPlan: "PRO" }),
+        item("Documenti", "/reports/documents", FileText, { minPlan: "PRO" }),
+        item("Operatività", "/reports/operations", Workflow, { minPlan: "PRO" }),
+        item("Clienti", "/reports/customers", Building2, { minPlan: "PRO" }),
+        item("Obiettivi", "/reports/targets", BadgeCheck, { minPlan: "PRO" }),
+      ],
+    },
+    {
       label: "Automazioni",
       modules: [
         item("Commerciali", "/settings/automations", Zap, { minPlan: "PRO" }),
@@ -351,6 +378,20 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
       ],
     },
     {
+      label: "Report",
+      modules: [
+        item("Panoramica", "/reports", BarChart3, { minPlan: "PRO" }),
+        item("Direzione", "/reports/executive", BarChart3, { minPlan: "PRO" }),
+        item("Vendite", "/reports/sales", Handshake, { minPlan: "PRO" }),
+        item("Progetti", "/reports/projects", FolderKanban, { minPlan: "PRO" }),
+        item("Team", "/reports/team", UsersRound, { minPlan: "PRO" }),
+        item("Documenti", "/reports/documents", FileText, { minPlan: "PRO" }),
+        item("Operatività", "/reports/operations", Workflow, { minPlan: "PRO" }),
+        item("Clienti", "/reports/customers", Building2, { minPlan: "PRO" }),
+        item("Obiettivi", "/reports/targets", BadgeCheck, { minPlan: "PRO" }),
+      ],
+    },
+    {
       label: "Notifiche",
       modules: [
         item("Tutte", "/notifications", Bell),
@@ -402,6 +443,16 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
       ],
     },
     {
+      label: "Report",
+      modules: [
+        item("Panoramica", "/reports", BarChart3, { minPlan: "PRO" }),
+        item("Progetti", "/reports/projects", FolderKanban, { minPlan: "PRO" }),
+        item("Team", "/reports/team", UsersRound, { minPlan: "PRO" }),
+        item("Documenti", "/reports/documents", FileText, { minPlan: "PRO" }),
+        item("Operatività", "/reports/operations", Workflow, { minPlan: "PRO" }),
+      ],
+    },
+    {
       label: "Notifiche",
       modules: [
         item("Tutte", "/notifications", Bell),
@@ -431,6 +482,14 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
       label: "Preventivi",
       modules: [
         item("Tutti", "/quotes", Send),
+      ],
+    },
+    {
+      label: "Report",
+      modules: [
+        item("Panoramica", "/reports", BarChart3, { minPlan: "PRO" }),
+        item("Vendite", "/reports/sales", Handshake, { minPlan: "PRO" }),
+        item("Clienti", "/reports/customers", Building2, { minPlan: "PRO" }),
       ],
     },
     {
