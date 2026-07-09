@@ -1117,6 +1117,60 @@ export class TenantDashboardService {
     }
   }
 
+  private async buildReportsSummary(schema: string, user: TenantDashboardAuthUser): Promise<DashboardReportsSummary> {
+    const safe = safeSchema(schema, 'TenantDashboardService.buildReportsSummary');
+    const showFinance = this.canViewFinance(user.role);
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
+    const today = now.toISOString().slice(0, 10);
+    const reportsAvailable = ['executive', 'sales', 'projects', 'team', 'documents', 'operations', 'customers'];
+    if (showFinance) reportsAvailable.splice(3, 0, 'finance');
+
+    const lastSnapshotRows = await this.tableExists(safe, 'report_snapshots')
+      ? await this.dataSource.query(
+          `SELECT created_at FROM "${safe}".report_snapshots WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 1`,
+        )
+      : [];
+    const blockedProjects = await this.countRows(safe, 'projects', `LOWER(COALESCE(status, '')) = 'blocked'`);
+    const overdueTasks = await this.countRows(
+      safe,
+      'tasks',
+      `due_at IS NOT NULL AND due_at < now() AND LOWER(COALESCE(status, '')) <> 'done'`,
+    );
+    const staleQuotes = await this.countRows(
+      safe,
+      'quotes',
+      `LOWER(COALESCE(status, '')) = 'sent' AND updated_at < now() - interval '7 days'`,
+    );
+
+    return {
+      kpiTargetsConfigured: await this.countRows(safe, 'kpi_targets'),
+      reportsAvailable,
+      executiveRisksCount: blockedProjects + overdueTasks + staleQuotes,
+      lastSnapshotAt: lastSnapshotRows[0]?.created_at || null,
+      currentMonthRevenue: showFinance
+        ? await this.sumRows(safe, 'payments', 'amount', `payment_date::date BETWEEN $1::date AND $2::date`, [monthStart, today])
+        : 0,
+      currentMonthNewLeads: await this.countRows(safe, 'leads', `created_at::date BETWEEN $1::date AND $2::date`, [monthStart, today]),
+      currentMonthAcceptedQuotes: await this.countRows(
+        safe,
+        'quotes',
+        `created_at::date BETWEEN $1::date AND $2::date AND LOWER(COALESCE(status, '')) = 'accepted'`,
+        [monthStart, today],
+      ),
+      currentMonthOverdueTasks: overdueTasks,
+      sources: {
+        report_snapshots: await this.tableExists(safe, 'report_snapshots'),
+        kpi_targets: await this.tableExists(safe, 'kpi_targets'),
+        projects: await this.tableExists(safe, 'projects'),
+        tasks: await this.tableExists(safe, 'tasks'),
+        quotes: await this.tableExists(safe, 'quotes'),
+        leads: await this.tableExists(safe, 'leads'),
+        payments: showFinance && await this.tableExists(safe, 'payments'),
+      },
+    };
+  }
+
   async getSummary(): Promise<TenantDashboardSummary> {
     const schema = this.getTenantSchema();
     const user = this.getAuthUser();
@@ -1137,6 +1191,7 @@ export class TenantDashboardService {
       notificationSummary,
       documentsSummary,
       briefingOperations,
+      reportsSummary,
     ] = await Promise.all([
       this.buildSalesSummary(schema, showFinance),
       this.buildProjectsSummary(schema, user, audience),
@@ -1150,6 +1205,7 @@ export class TenantDashboardService {
       this.buildNotificationsSummary(schema, user),
       this.buildDocumentsSummary(schema, user),
       this.buildBriefingOperationsSummary(schema),
+      this.buildReportsSummary(schema, user),
     ]);
 
     const finance = showFinance
@@ -1191,10 +1247,12 @@ export class TenantDashboardService {
         recentFiles,
         notifications: tenantNotifications.length > 0 ? tenantNotifications : platformNotifications,
         documentsSummary,
+        reportsSummary,
         sources: {
           ...briefingOperations.sources,
           ...notificationSummary.sources,
           ...documentsSummary.sources,
+          ...reportsSummary.sources,
         },
       },
     };
@@ -1416,6 +1474,18 @@ interface DashboardDocumentsSummary {
   sources: DashboardSourceFlags;
 }
 
+interface DashboardReportsSummary {
+  kpiTargetsConfigured: number;
+  reportsAvailable: string[];
+  executiveRisksCount: number;
+  lastSnapshotAt: string | null;
+  currentMonthRevenue: number;
+  currentMonthNewLeads: number;
+  currentMonthAcceptedQuotes: number;
+  currentMonthOverdueTasks: number;
+  sources: DashboardSourceFlags;
+}
+
 interface TenantDashboardSummary {
   tenant: {
     id?: string;
@@ -1451,6 +1521,7 @@ interface TenantDashboardSummary {
     recentFiles: DashboardActivityItem[];
     notifications: DashboardActivityItem[];
     documentsSummary: DashboardDocumentsSummary;
+    reportsSummary: DashboardReportsSummary;
     sources: DashboardSourceFlags;
   };
 }

@@ -26,6 +26,10 @@ import {
   seedTenantTeamSkills,
   syncTenantUsersToTeamMembers,
 } from '../tenant/tenant-team-schema';
+import {
+  ensureTenantReportsTables,
+  seedTenantKpiTargets,
+} from '../tenant/tenant-reports-schema';
 
 const TENANT_SLUG = 'doflow';
 const TENANT_SCHEMA = 'doflow';
@@ -294,6 +298,8 @@ async function ensureTenantTables(ds: DataSource, schema: string) {
   await ensureTenantDocumentsTables(ds, s);
   await ensureTenantTeamTables(ds, s);
   await seedTenantTeamSkills(ds, s);
+  await ensureTenantReportsTables(ds, s);
+  await seedTenantKpiTargets(ds, s);
 }
 
 async function ensureTenantRecord(ds: DataSource): Promise<{ id: string }> {
@@ -475,6 +481,9 @@ async function main() {
     console.log('[seed:doflow] Ensuring team members and skills...');
     await seedTenantTeamSkills(ds, TENANT_SCHEMA);
     await syncTenantUsersToTeamMembers(ds, TENANT_SCHEMA);
+
+    console.log('[seed:doflow] Ensuring report KPI targets...');
+    await seedTenantKpiTargets(ds, TENANT_SCHEMA);
 
     await ensureEnterpriseModules(ds, tenant.id);
     await markOnboardingComplete(ds, tenant.id);

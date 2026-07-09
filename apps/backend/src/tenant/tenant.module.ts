@@ -20,6 +20,8 @@ import { TenantDocumentsController } from './tenant-documents.controller';
 import { TenantDocumentsService } from './tenant-documents.service';
 import { TenantTeamController } from './tenant-team.controller';
 import { TenantTeamService } from './tenant-team.service';
+import { TenantReportsController } from './tenant-reports.controller';
+import { TenantReportsService } from './tenant-reports.service';
 import { FileStorageService } from '../file-storage.service';
 
 import { Tenant } from '../superadmin/entities/tenant.entity';
@@ -52,6 +54,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantNotificationsController,
     TenantDocumentsController,
     TenantTeamController,
+    TenantReportsController,
   ],
   providers: [
     TenantDashboardService,
@@ -63,6 +66,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantNotificationsService,
     TenantDocumentsService,
     TenantTeamService,
+    TenantReportsService,
     FileStorageService,
   ],
 })
