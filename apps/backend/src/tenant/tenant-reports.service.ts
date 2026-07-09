@@ -643,12 +643,86 @@ export class TenantReportsService {
           automationParams,
         )
       : [];
+    const hasCalendarEvents = await this.tableExists(schema, 'calendar_events');
+    const hasCalendarReminders = await this.tableExists(schema, 'calendar_event_reminders');
+    const calendarFinanceWhere = canFinance
+      ? 'TRUE'
+      : `event_type <> ALL($1::text[])`;
+    const calendarParams = canFinance ? [] : [['invoice_due', 'financial_deadline', 'renewal_due', 'recurring_service_due']];
+    const calendar = hasCalendarEvents
+      ? {
+          eventsThisWeek: await this.countRows(schema, 'calendar_events', `start_at >= date_trunc('week', now()) AND start_at < date_trunc('week', now()) + interval '7 days' AND status <> 'cancelled' AND ${calendarFinanceWhere}`, calendarParams),
+          overdueEvents: await this.countRows(schema, 'calendar_events', `COALESCE(end_at, start_at) < now() AND status IN ('scheduled', 'tentative') AND ${calendarFinanceWhere}`, calendarParams),
+          remindersDue: hasCalendarReminders
+            ? Number((await this.dataSource.query(
+                `SELECT COUNT(*)::int AS count
+                 FROM "${schema}".calendar_event_reminders r
+                 JOIN "${schema}".calendar_events e ON e.id = r.event_id
+                 WHERE r.status = 'pending'
+                   AND r.remind_at <= now()
+                   AND e.deleted_at IS NULL
+                   AND ${canFinance ? 'TRUE' : `e.event_type <> ALL($1::text[])`}`,
+                calendarParams,
+              ))[0]?.count || 0)
+            : 0,
+          teamUnavailableToday: await this.countRows(schema, 'calendar_events', `event_type = 'unavailable' AND start_at::date <= CURRENT_DATE AND COALESCE(end_at, start_at)::date >= CURRENT_DATE AND status <> 'cancelled'`),
+          topEventTypes: await this.groupCount(schema, 'calendar_events', 'event_type', calendarFinanceWhere, calendarParams),
+          workloadByMember: hasCalendarEvents
+            ? await this.dataSource.query(
+                `SELECT COALESCE(assigned_to_user_id, owner_user_id, created_by) AS user_id,
+                        COUNT(*)::int AS events,
+                        COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(end_at, start_at + interval '1 hour') - start_at)) / 60), 0)::int AS busy_minutes
+                 FROM "${schema}".calendar_events
+                 WHERE deleted_at IS NULL
+                   AND status IN ('scheduled', 'tentative')
+                   AND start_at >= date_trunc('week', now())
+                   AND start_at < date_trunc('week', now()) + interval '7 days'
+                   AND transparency = 'busy'
+                   AND ${calendarFinanceWhere}
+                 GROUP BY COALESCE(assigned_to_user_id, owner_user_id, created_by)
+                 ORDER BY busy_minutes DESC
+                 LIMIT 10`,
+                calendarParams,
+              )
+            : [],
+          conflictsCount: Number((await this.dataSource.query(
+            `SELECT COUNT(*)::int AS count
+             FROM "${schema}".calendar_events a
+             JOIN "${schema}".calendar_events b
+               ON a.id < b.id
+              AND COALESCE(a.assigned_to_user_id, a.owner_user_id, a.created_by) IS NOT DISTINCT FROM COALESCE(b.assigned_to_user_id, b.owner_user_id, b.created_by)
+              AND a.transparency = 'busy'
+              AND b.transparency = 'busy'
+              AND a.status IN ('scheduled', 'tentative')
+              AND b.status IN ('scheduled', 'tentative')
+              AND a.deleted_at IS NULL
+              AND b.deleted_at IS NULL
+              AND a.start_at < COALESCE(b.end_at, b.start_at + interval '1 hour')
+              AND b.start_at < COALESCE(a.end_at, a.start_at + interval '1 hour')
+             WHERE a.start_at >= CURRENT_DATE
+               AND a.start_at < CURRENT_DATE + interval '7 days'
+               AND ${canFinance ? 'TRUE' : `a.event_type <> ALL($1::text[])`}`,
+            calendarParams,
+          ))[0]?.count || 0),
+        }
+      : {
+          eventsThisWeek: 0,
+          overdueEvents: 0,
+          remindersDue: 0,
+          teamUnavailableToday: 0,
+          topEventTypes: {},
+          workloadByMember: [],
+          conflictsCount: 0,
+        };
     const dailyDigestAvailable = await this.countRows(schema, 'notification_digests', `digest_date = CURRENT_DATE`) > 0;
     const openRisks = [
       ...(await this.recentRows(schema, 'projects', ['id', 'name', 'status', 'due_date'], `LOWER(COALESCE(status, '')) = 'blocked'`, [], 5)).map((row) => ({ type: 'project_blocked', ...row })),
       ...(await this.recentRows(schema, 'tasks', ['id', 'title', 'status', 'due_at'], `due_at IS NOT NULL AND due_at < now() AND LOWER(COALESCE(status, '')) <> 'done'`, [], 5)).map((row) => ({ type: 'task_overdue', ...row })),
       ...(await this.recentRows(schema, 'contracts', ['id', 'title', 'status', 'signature_status', 'due_date'], `due_date < current_date AND status NOT IN ('signed', 'active', 'cancelled', 'archived')`, [], 5)).map((row) => ({ type: 'contract_overdue', ...row })),
       ...(await this.recentRows(schema, 'paperwork_dossiers', ['id', 'title', 'status', 'due_date'], `status = 'blocked' OR (due_date < current_date AND status NOT IN ('completed', 'archived'))`, [], 5)).map((row) => ({ type: 'paperwork_risk', ...row })),
+      ...(hasCalendarEvents
+        ? (await this.recentRows(schema, 'calendar_events', ['id', 'title', 'event_type', 'priority', 'start_at'], `COALESCE(end_at, start_at) < now() AND status IN ('scheduled', 'tentative') AND priority IN ('high', 'urgent') AND ${calendarFinanceWhere}`, calendarParams, 5)).map((row) => ({ type: 'calendar_overdue', ...row }))
+        : []),
     ].slice(0, 10);
     return {
       unreadNotifications,
@@ -672,6 +746,7 @@ export class TenantReportsService {
         dueRules: dueAutomationRules,
         topFailedRules: topFailedAutomationRules,
       },
+      calendar,
       openRisks,
       dailyDigestAvailable,
       sources: {
@@ -688,6 +763,8 @@ export class TenantReportsService {
         automation_rules: hasAutomationRules,
         automation_runs: hasAutomationRuns,
         automation_action_logs: hasAutomationActions,
+        calendar_events: hasCalendarEvents,
+        calendar_event_reminders: hasCalendarReminders,
       },
     };
   }

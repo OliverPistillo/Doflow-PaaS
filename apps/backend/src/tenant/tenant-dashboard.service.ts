@@ -1326,6 +1326,103 @@ export class TenantDashboardService {
     };
   }
 
+  private async buildCalendarSummary(schema: string, user: TenantDashboardAuthUser): Promise<DashboardCalendarSummary> {
+    const safe = safeSchema(schema, 'TenantDashboardService.buildCalendarSummary');
+    const hasEvents = await this.tableExists(safe, 'calendar_events');
+    const hasReminders = await this.tableExists(safe, 'calendar_event_reminders');
+    if (!hasEvents) {
+      return {
+        eventsToday: 0,
+        eventsThisWeek: 0,
+        overdueEvents: 0,
+        conflictsCount: 0,
+        deadlinesThisWeek: 0,
+        teamUnavailableToday: 0,
+        nextEventAt: null,
+        remindersDue: 0,
+        derivedEventsCount: 0,
+        sources: { calendar_events: false, calendar_event_reminders: hasReminders },
+      };
+    }
+
+    const financeWhere = this.canViewFinance(user.role)
+      ? 'TRUE'
+      : `event_type <> ALL($1::text[])`;
+    const params = this.canViewFinance(user.role)
+      ? []
+      : [['invoice_due', 'financial_deadline', 'renewal_due', 'recurring_service_due']];
+    const deadlineTypes = [
+      'task_due',
+      'milestone_due',
+      'project_deadline',
+      'invoice_due',
+      'financial_deadline',
+      'renewal_due',
+      'contract_due',
+      'contract_expiration',
+      'paperwork_due',
+      'paperwork_item_due',
+    ];
+    const deadlineParam = params.length + 1;
+    const rows = await this.dataSource.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE start_at::date = CURRENT_DATE AND status NOT IN ('cancelled', 'completed'))::int AS "eventsToday",
+         COUNT(*) FILTER (WHERE start_at >= date_trunc('week', now()) AND start_at < date_trunc('week', now()) + interval '7 days' AND status <> 'cancelled')::int AS "eventsThisWeek",
+         COUNT(*) FILTER (WHERE COALESCE(end_at, start_at) < now() AND status IN ('scheduled', 'tentative'))::int AS "overdueEvents",
+         COUNT(*) FILTER (WHERE start_at < now() + interval '7 days' AND event_type = ANY($${deadlineParam}::text[]) AND status <> 'cancelled')::int AS "deadlinesThisWeek",
+         COUNT(*) FILTER (WHERE event_type = 'unavailable' AND start_at::date <= CURRENT_DATE AND COALESCE(end_at, start_at)::date >= CURRENT_DATE AND status <> 'cancelled')::int AS "teamUnavailableToday",
+         MIN(start_at) FILTER (WHERE start_at >= now() AND status NOT IN ('cancelled', 'completed')) AS "nextEventAt",
+         COUNT(*) FILTER (WHERE source_type = 'derived')::int AS "derivedEventsCount"
+       FROM "${safe}".calendar_events
+       WHERE deleted_at IS NULL AND ${financeWhere}`,
+      [...params, deadlineTypes],
+    );
+    const remindersDue = hasReminders
+      ? Number((await this.dataSource.query(
+          `SELECT COUNT(*)::int AS count
+           FROM "${safe}".calendar_event_reminders r
+           JOIN "${safe}".calendar_events e ON e.id = r.event_id
+           WHERE r.status = 'pending'
+             AND r.remind_at <= now()
+             AND e.deleted_at IS NULL
+             AND ${this.canViewFinance(user.role) ? 'TRUE' : `e.event_type <> ALL($1::text[])`}`,
+          params,
+        ))[0]?.count || 0)
+      : 0;
+    const conflictsCount = Number((await this.dataSource.query(
+      `SELECT COUNT(*)::int AS count
+       FROM "${safe}".calendar_events a
+       JOIN "${safe}".calendar_events b
+         ON a.id < b.id
+        AND COALESCE(a.assigned_to_user_id, a.owner_user_id, a.created_by) IS NOT DISTINCT FROM COALESCE(b.assigned_to_user_id, b.owner_user_id, b.created_by)
+        AND a.transparency = 'busy'
+        AND b.transparency = 'busy'
+        AND a.status IN ('scheduled', 'tentative')
+        AND b.status IN ('scheduled', 'tentative')
+        AND a.deleted_at IS NULL
+        AND b.deleted_at IS NULL
+        AND a.start_at < COALESCE(b.end_at, b.start_at + interval '1 hour')
+        AND b.start_at < COALESCE(a.end_at, a.start_at + interval '1 hour')
+       WHERE a.start_at >= CURRENT_DATE
+         AND a.start_at < CURRENT_DATE + interval '7 days'
+         AND ${this.canViewFinance(user.role) ? 'TRUE' : `a.event_type <> ALL($1::text[])`}`,
+      params,
+    ))[0]?.count || 0);
+
+    return {
+      eventsToday: Number(rows[0]?.eventsToday || 0),
+      eventsThisWeek: Number(rows[0]?.eventsThisWeek || 0),
+      overdueEvents: Number(rows[0]?.overdueEvents || 0),
+      conflictsCount,
+      deadlinesThisWeek: Number(rows[0]?.deadlinesThisWeek || 0),
+      teamUnavailableToday: Number(rows[0]?.teamUnavailableToday || 0),
+      nextEventAt: rows[0]?.nextEventAt || null,
+      remindersDue,
+      derivedEventsCount: Number(rows[0]?.derivedEventsCount || 0),
+      sources: { calendar_events: true, calendar_event_reminders: hasReminders },
+    };
+  }
+
   async getSummary(): Promise<TenantDashboardSummary> {
     const schema = this.getTenantSchema();
     const user = this.getAuthUser();
@@ -1350,6 +1447,7 @@ export class TenantDashboardService {
       contractsSummary,
       paperworkSummary,
       automationsSummary,
+      calendarSummary,
     ] = await Promise.all([
       this.buildSalesSummary(schema, showFinance),
       this.buildProjectsSummary(schema, user, audience),
@@ -1367,6 +1465,7 @@ export class TenantDashboardService {
       this.buildContractsSummary(schema),
       this.buildPaperworkSummary(schema),
       this.buildAutomationsSummary(schema, user),
+      this.buildCalendarSummary(schema, user),
     ]);
 
     const finance = showFinance
@@ -1412,6 +1511,7 @@ export class TenantDashboardService {
         contractsSummary,
         paperworkSummary,
         automationsSummary,
+        calendarSummary,
         sources: {
           ...briefingOperations.sources,
           ...notificationSummary.sources,
@@ -1420,6 +1520,7 @@ export class TenantDashboardService {
           ...contractsSummary.sources,
           ...paperworkSummary.sources,
           ...automationsSummary.sources,
+          ...calendarSummary.sources,
         },
       },
     };
@@ -1687,6 +1788,19 @@ interface DashboardAutomationsSummary {
   sources: DashboardSourceFlags;
 }
 
+interface DashboardCalendarSummary {
+  eventsToday: number;
+  eventsThisWeek: number;
+  overdueEvents: number;
+  conflictsCount: number;
+  deadlinesThisWeek: number;
+  teamUnavailableToday: number;
+  nextEventAt: string | null;
+  remindersDue: number;
+  derivedEventsCount: number;
+  sources: DashboardSourceFlags;
+}
+
 interface TenantDashboardSummary {
   tenant: {
     id?: string;
@@ -1726,6 +1840,7 @@ interface TenantDashboardSummary {
     contractsSummary: DashboardContractsSummary;
     paperworkSummary: DashboardPaperworkSummary;
     automationsSummary: DashboardAutomationsSummary;
+    calendarSummary: DashboardCalendarSummary;
     sources: DashboardSourceFlags;
   };
 }

@@ -27,6 +27,8 @@ import { TenantPaperworkController } from './tenant-paperwork.controller';
 import { TenantContractsService } from './tenant-contracts.service';
 import { TenantAutomationsController } from './tenant-automations.controller';
 import { TenantAutomationsService } from './tenant-automations.service';
+import { TenantCalendarController } from './tenant-calendar.controller';
+import { TenantCalendarService } from './tenant-calendar.service';
 import { FileStorageService } from '../file-storage.service';
 
 import { Tenant } from '../superadmin/entities/tenant.entity';
@@ -63,6 +65,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantContractsController,
     TenantPaperworkController,
     TenantAutomationsController,
+    TenantCalendarController,
   ],
   providers: [
     TenantDashboardService,
@@ -77,6 +80,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantReportsService,
     TenantContractsService,
     TenantAutomationsService,
+    TenantCalendarService,
     FileStorageService,
   ],
 })
