@@ -119,6 +119,11 @@ const EXISTING_TENANT_ROUTES = new Set([
   "/tasks",
   "/tasks/board",
   "/team",
+  "/team/availability",
+  "/team/members",
+  "/team/skills",
+  "/team/time-entries",
+  "/team/workload",
   "/team/roles",
   "/timesheet",
   "/activities",
@@ -220,10 +225,12 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
     {
       label: "Team",
       modules: [
-        item("Dipendenti", "/team", UsersRound, { minPlan: "PRO" }),
-        item("Ruoli", "/team/roles", UserCog, { minPlan: "PRO" }),
-        item("Carichi lavoro", undefined, BarChart3, { minPlan: "PRO", comingSoon: true }),
-        item("Ore lavorate", "/timesheet", Timer, { minPlan: "PRO" }),
+        item("Panoramica", "/team", UsersRound, { minPlan: "PRO" }),
+        item("Membri", "/team/members", UserCog, { minPlan: "PRO" }),
+        item("Carichi", "/team/workload", BarChart3, { minPlan: "PRO" }),
+        item("Ore lavorate", "/team/time-entries", Timer, { minPlan: "PRO" }),
+        item("Disponibilità", "/team/availability", CalendarDays, { minPlan: "PRO" }),
+        item("Competenze", "/team/skills", BadgeCheck, { minPlan: "PRO" }),
         item("Calendario team", "/calendar", CalendarDays),
       ],
     },
@@ -334,7 +341,12 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
     {
       label: "Team",
       modules: [
-        item("Carichi lavoro", undefined, BarChart3, { minPlan: "PRO", comingSoon: true }),
+        item("Panoramica", "/team", UsersRound, { minPlan: "PRO" }),
+        item("Membri", "/team/members", UserCog, { minPlan: "PRO" }),
+        item("Carichi", "/team/workload", BarChart3, { minPlan: "PRO" }),
+        item("Ore lavorate", "/team/time-entries", Timer, { minPlan: "PRO" }),
+        item("Disponibilità", "/team/availability", CalendarDays, { minPlan: "PRO" }),
+        item("Competenze", "/team/skills", BadgeCheck, { minPlan: "PRO" }),
         item("Calendario team", "/calendar", CalendarDays),
       ],
     },
@@ -383,6 +395,9 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
     {
       label: "Team",
       modules: [
+        item("Panoramica", "/team", UsersRound, { minPlan: "PRO" }),
+        item("Ore lavorate", "/team/time-entries", Timer, { minPlan: "PRO" }),
+        item("Disponibilità", "/team/availability", CalendarDays, { minPlan: "PRO" }),
         item("Calendario team", "/calendar", CalendarDays),
       ],
     },

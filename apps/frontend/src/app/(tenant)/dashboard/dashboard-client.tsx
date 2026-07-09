@@ -111,10 +111,21 @@ type DashboardSummary = {
     overdueTasks: number;
     openTasks: number;
     blockedTasks: number;
-    workload: Array<{ assignee: string; openTasks: number }>;
+    workload: Array<{ assignee: string; openTasks: number; utilizationPercent?: number; isOverloaded?: boolean; overdueTasks?: number }>;
     blockedCollaborators: number;
     pendingInvites: number;
     activeUsers: number;
+    teamMembers?: number;
+    activeTeamMembers?: number;
+    availableTeamMembers?: number;
+    unavailableTeamMembers?: number;
+    overloadedMembers?: number;
+    totalCapacityHours?: number;
+    loggedHoursThisWeek?: number;
+    loggedHoursThisMonth?: number;
+    pendingTimeEntries?: number;
+    overdueTasksByTeam?: number;
+    costEstimateThisMonth?: number;
     sources: SourceFlags;
   };
   customers: {
@@ -242,6 +253,16 @@ function getFallbackSummary(): DashboardSummary {
       blockedCollaborators: 0,
       pendingInvites: 0,
       activeUsers: 0,
+      teamMembers: 0,
+      activeTeamMembers: 0,
+      availableTeamMembers: 0,
+      unavailableTeamMembers: 0,
+      overloadedMembers: 0,
+      totalCapacityHours: 0,
+      loggedHoursThisWeek: 0,
+      loggedHoursThisMonth: 0,
+      pendingTimeEntries: 0,
+      overdueTasksByTeam: 0,
       sources: {},
     },
     customers: {
@@ -583,6 +604,16 @@ export default function DashboardClient() {
   ];
 
   const teamMetrics: Metric[] = [
+    { label: "Membri team", value: summary.team.teamMembers ?? summary.team.activeUsers },
+    { label: "Attivi", value: summary.team.activeTeamMembers ?? summary.team.activeUsers },
+    { label: "Disponibili", value: summary.team.availableTeamMembers || 0 },
+    { label: "Non disponibili", value: summary.team.unavailableTeamMembers || 0, tone: (summary.team.unavailableTeamMembers || 0) > 0 ? "warning" : "default" },
+    { label: "Sovraccarichi", value: summary.team.overloadedMembers || 0, tone: (summary.team.overloadedMembers || 0) > 0 ? "danger" : "default" },
+    { label: "Capacity totale", value: `${summary.team.totalCapacityHours || 0}h` },
+    { label: "Ore settimana", value: `${summary.team.loggedHoursThisWeek || 0}h` },
+    { label: "Ore mese", value: `${summary.team.loggedHoursThisMonth || 0}h` },
+    { label: "Time entry pending", value: summary.team.pendingTimeEntries || 0, tone: (summary.team.pendingTimeEntries || 0) > 0 ? "warning" : "default" },
+    { label: "Task scaduti team", value: summary.team.overdueTasksByTeam ?? summary.team.overdueTasks, tone: (summary.team.overdueTasksByTeam ?? summary.team.overdueTasks) > 0 ? "danger" : "default" },
     { label: "Task scaduti", value: summary.team.overdueTasks, tone: summary.team.overdueTasks > 0 ? "danger" : "default" },
     { label: "Task aperti", value: summary.team.openTasks },
     { label: "Task bloccati", value: summary.team.blockedTasks, tone: summary.team.blockedTasks > 0 ? "warning" : "default" },
@@ -863,11 +894,16 @@ export default function DashboardClient() {
                   {summary.team.workload.map((item) => (
                     <div key={item.assignee} className="flex items-center justify-between rounded-nav bg-muted/40 px-3 py-2 text-sm">
                       <span className="truncate font-medium">{item.assignee}</span>
-                      <span className="tabular-nums text-muted-foreground">{item.openTasks} task aperti</span>
+                      <span className="tabular-nums text-muted-foreground">{item.openTasks} task · {item.utilizationPercent || 0}%</span>
                     </div>
                   ))}
                 </div>
               ) : null}
+              <div className="flex flex-wrap gap-2">
+                <Button asChild variant="outline" size="sm"><Link href="/team">Apri Team</Link></Button>
+                <Button asChild variant="outline" size="sm"><Link href="/team/workload">Carichi lavoro</Link></Button>
+                <Button asChild variant="outline" size="sm"><Link href="/team/time-entries">Ore lavorate</Link></Button>
+              </div>
             </SectionCard>
             {notificationsCard}
             {documentsCard}
