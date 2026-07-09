@@ -13,3 +13,7 @@
 ## 2026-06-28 - [Page Modernization & Search Accessibility]
 **Learning:** Modernizing secondary pages like Campaigns to use centralized components (PageShell, PageHeader) ensures a premium, cohesive UI across the platform. Integrating keyboard shortcuts (e.g., '/') for search focus is a high-impact UX win that must be paired with clear accessibility markers like <kbd> indicators and screen-reader-only labels. Icon-only actions must always be wrapped in Tooltips and made visible on focus for full keyboard navigability.
 **Action:** Prioritize wrapping icon-only detail triggers in Tooltips and use 'group-focus-within' to ensure visibility during keyboard navigation.
+
+## 2026-06-29 - [Centralized CRM Accessibility & Shortcut Standards]
+**Learning:** Centralizing UX improvements in core components like `CrmResourcePage` ensures consistent behavior across multiple resources (Leads, Deals, Contacts). When using the '/' shortcut, always verify the user isn't already focused on an input or if a modal is open. To maintain mobile usability while reducing desktop noise, apply hover-based reveals only to medium screens and above using `md:opacity-0`.
+**Action:** Use responsive Tailwind classes for hover-based UI reveals and ensure keyboard shortcuts are context-aware to prevent interference with forms and dialogs.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Building2, CheckCircle2, Edit3, Loader2, Plus, Search, Trash2,
 } from "lucide-react";
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
 import { cn } from "@/lib/utils";
@@ -157,7 +158,26 @@ export function CrmResourcePage({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<Record<string, any>>(() => emptyForm(fields));
   const [relations, setRelations] = useState<Record<string, CrmRow[]>>({});
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const showEconomic = canSeeEconomicValues();
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey) {
+        const activeElement = document.activeElement;
+        const isInput = activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement;
+        const isDialog = document.querySelector('[role="dialog"]');
+
+        if (!isInput && !isDialog) {
+          e.preventDefault();
+          searchInputRef.current?.focus();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const relationResources = useMemo(
     () => Array.from(new Set(fields.map((f) => f.relation).filter(Boolean))) as Array<NonNullable<CrmField["relation"]>>,
@@ -280,8 +300,21 @@ export function CrmResourcePage({
         <CardContent className="space-y-4">
           <div className="flex flex-col gap-3 md:flex-row">
             <div className="relative flex-1">
+              <Label htmlFor="crm-search" className="sr-only">Cerca</Label>
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cerca..." className="pl-9" />
+              <Input
+                id="crm-search"
+                ref={searchInputRef}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Cerca..."
+                className="pl-9 pr-12"
+              />
+              <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 select-none">
+                <kbd className="hidden h-5 items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
+                  <span className="text-xs">/</span>
+                </kbd>
+              </div>
             </div>
             {filterKey && filterOptions ? (
               <Select value={filter} onValueChange={setFilter}>
@@ -321,25 +354,40 @@ export function CrmResourcePage({
                 </thead>
                 <tbody>
                   {items.map((row) => (
-                    <tr key={row.id} className="border-t">
+                    <tr key={row.id} className="group border-t transition-colors hover:bg-muted/30">
                       {columns.filter((c) => !c.sensitive || showEconomic).map((column) => (
                         <td key={column.key} className="px-4 py-3 align-top">
                           {column.format ? column.format(row[column.key], row) : String(row[column.key] ?? "-")}
                         </td>
                       ))}
                       <td className="px-4 py-3">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-2 transition-opacity md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                           {resource === "activities" && !row.completed_at ? (
-                            <Button size="sm" variant="outline" onClick={() => completeActivity(row)}>
-                              <CheckCircle2 className="h-4 w-4" />
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button size="sm" variant="outline" onClick={() => completeActivity(row)} aria-label="Completa attività">
+                                  <CheckCircle2 className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Completa attività</TooltipContent>
+                            </Tooltip>
                           ) : null}
-                          <Button size="sm" variant="outline" onClick={() => openEdit(row)}>
-                            <Edit3 className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={() => remove(row)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="sm" variant="outline" onClick={() => openEdit(row)} aria-label="Modifica record">
+                                <Edit3 className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Modifica record</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="sm" variant="outline" onClick={() => remove(row)} aria-label="Elimina record">
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Elimina record</TooltipContent>
+                          </Tooltip>
                         </div>
                       </td>
                     </tr>
