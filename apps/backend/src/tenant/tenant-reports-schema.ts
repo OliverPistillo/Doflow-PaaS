@@ -6,6 +6,9 @@ export type KpiTargetSeed = {
   label: string;
   targetValue: number;
   period?: 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+  appliesToRole?: string | null;
+  appliesToUserId?: string | null;
+  metadata?: Record<string, unknown>;
 };
 
 export const BASE_KPI_TARGETS: KpiTargetSeed[] = [
@@ -148,43 +151,97 @@ export async function ensureTenantReportsTables(ds: DataSource, schema: string) 
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_report_activity_created" ON "${s}".report_activity(created_at DESC)`);
 }
 
-export async function seedTenantKpiTargets(ds: DataSource, schema: string) {
+export async function seedTenantKpiTargets(ds: DataSource, schema: string, createdBy?: string | null) {
   const s = safeSchema(schema, 'seedTenantKpiTargets');
   await ensureTenantReportsTables(ds, s);
 
+  let created = 0;
+  let updated = 0;
+
   for (const target of BASE_KPI_TARGETS) {
-    await ds.query(
+    const period = target.period || 'monthly';
+    const appliesToRole = target.appliesToRole ?? null;
+    const appliesToUserId = target.appliesToUserId ?? null;
+    const metadata = {
+      seeded: true,
+      source: 'base_reports_targets',
+      ...(target.metadata || {}),
+    };
+
+    const existing = await ds.query(
       `
-      UPDATE "${s}".kpi_targets
-      SET label = $2,
-          target_value = $3,
-          updated_at = now()
+      SELECT id
+      FROM "${s}".kpi_targets
       WHERE kpi_key = $1
-        AND period = $4
-        AND applies_to_role IS NULL
-        AND applies_to_user_id IS NULL
+        AND period = $2
+        AND applies_to_role IS NOT DISTINCT FROM $3
+        AND applies_to_user_id IS NOT DISTINCT FROM $4
         AND deleted_at IS NULL
+      LIMIT 1
       `,
-      [target.kpiKey, target.label, target.targetValue, target.period || 'monthly'],
+      [target.kpiKey, period, appliesToRole, appliesToUserId],
     );
+
+    if (existing[0]?.id) {
+      await ds.query(
+        `
+        UPDATE "${s}".kpi_targets
+        SET label = $2,
+            target_value = $3,
+            metadata = $4::jsonb,
+            updated_at = now()
+        WHERE id = $1
+        `,
+        [existing[0].id, target.label, target.targetValue, JSON.stringify(metadata)],
+      );
+      updated += 1;
+      continue;
+    }
 
     await ds.query(
       `
       INSERT INTO "${s}".kpi_targets (
-        kpi_key, label, target_value, period, created_at, updated_at
+        id,
+        kpi_key,
+        label,
+        target_value,
+        period,
+        applies_to_role,
+        applies_to_user_id,
+        metadata,
+        created_by,
+        created_at,
+        updated_at,
+        deleted_at
       )
-      VALUES ($1, $2, $3, $4, now(), now())
-      WHERE NOT EXISTS (
-        SELECT 1
-        FROM "${s}".kpi_targets
-        WHERE kpi_key = $1
-          AND period = $4
-          AND applies_to_role IS NULL
-          AND applies_to_user_id IS NULL
-          AND deleted_at IS NULL
+      VALUES (
+        uuid_generate_v4(),
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7::jsonb,
+        $8,
+        now(),
+        now(),
+        NULL
       )
       `,
-      [target.kpiKey, target.label, target.targetValue, target.period || 'monthly'],
+      [
+        target.kpiKey,
+        target.label,
+        target.targetValue,
+        period,
+        appliesToRole,
+        appliesToUserId,
+        JSON.stringify(metadata),
+        createdBy || null,
+      ],
     );
+    created += 1;
   }
+
+  return { created, updated, total: BASE_KPI_TARGETS.length };
 }

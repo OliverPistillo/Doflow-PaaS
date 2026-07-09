@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { DataSource } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
@@ -20,6 +20,8 @@ type ListResult<T = Record<string, any>> = { items: T[]; total: number; limit: n
 
 @Injectable()
 export class TenantReportsService {
+  private readonly logger = new Logger(TenantReportsService.name);
+
   constructor(
     private readonly dataSource: DataSource,
     @Inject(REQUEST) private readonly request: any,
@@ -1159,8 +1161,16 @@ export class TenantReportsService {
     const user = this.getUser();
     if (!this.canManageReports(user.role)) throw new ForbiddenException('Solo CEO/Admin possono seedare i target KPI.');
     const schema = this.getSchema();
-    await seedTenantKpiTargets(this.dataSource, schema);
-    return { success: true };
+    try {
+      const result = await seedTenantKpiTargets(this.dataSource, schema, this.userIdOrNull(user.id));
+      return { success: true, ...result };
+    } catch (error) {
+      this.logger.error(
+        `Seed target KPI fallito per tenant ${schema}: ${error instanceof Error ? error.message : String(error)}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw new InternalServerErrorException('Seed target KPI non completato.');
+    }
   }
 
   private textOrNull(value: unknown): string | null {
