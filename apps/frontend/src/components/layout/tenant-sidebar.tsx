@@ -34,6 +34,7 @@ import { SIDEBAR_GROUPS, PLAN_META, type PlanTier, planIncludes } from "@/lib/pl
 import { getTenantRoleLabel } from "@/lib/roles";
 import { PlanBadge } from "@/components/ui/locked-feature";
 import { cn } from "@/lib/utils";
+import { getTenantNotificationSummary } from "@/lib/tenant-notifications-api";
 
 type AgencyAudience = "executive" | "manager" | "employee" | "sales";
 
@@ -45,6 +46,7 @@ type AgencyNavItem = {
   moduleKey?: string;
   lockMsg?: string;
   comingSoon?: boolean;
+  badgeCount?: number;
 };
 
 type AgencyNavGroup = {
@@ -86,6 +88,9 @@ const EXISTING_TENANT_ROUTES = new Set([
   "/leads",
   "/my-plan",
   "/notifications",
+  "/notifications/digest",
+  "/notifications/preferences",
+  "/notifications/rules",
   "/payments",
   "/pipeline",
   "/projects",
@@ -245,13 +250,21 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
       ],
     },
     {
+      label: "Notifiche",
+      modules: [
+        item("Tutte", "/notifications", Bell),
+        item("Regole", "/notifications/rules", Workflow, { minPlan: "PRO" }),
+        item("Digest", "/notifications/digest", FileText),
+        item("Preferenze", "/notifications/preferences", Settings),
+      ],
+    },
+    {
       label: "Impostazioni",
       modules: [
         item("Utenti", "/team", UsersRound, { minPlan: "PRO" }),
         item("Permessi", "/team/roles", LockKeyhole, { minPlan: "PRO" }),
         item("Template", "/email-templates", BookTemplate),
         item("Integrazioni", "/settings/integrations", Plug, { minPlan: "PRO" }),
-        item("Notifiche", "/settings/notifications", Bell),
       ],
     },
   ],
@@ -323,6 +336,15 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
         item("Calendario team", "/calendar", CalendarDays),
       ],
     },
+    {
+      label: "Notifiche",
+      modules: [
+        item("Tutte", "/notifications", Bell),
+        item("Regole", "/notifications/rules", Workflow, { minPlan: "PRO" }),
+        item("Digest", "/notifications/digest", FileText),
+        item("Preferenze", "/notifications/preferences", Settings),
+      ],
+    },
   ],
   employee: [
     { label: "Dashboard", modules: [item("Dashboard", "/dashboard", BarChart3)] },
@@ -360,6 +382,14 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
         item("Calendario team", "/calendar", CalendarDays),
       ],
     },
+    {
+      label: "Notifiche",
+      modules: [
+        item("Tutte", "/notifications", Bell),
+        item("Digest", "/notifications/digest", FileText),
+        item("Preferenze", "/notifications/preferences", Settings),
+      ],
+    },
   ],
   sales: [
     { label: "Dashboard", modules: [item("Dashboard", "/dashboard", BarChart3)] },
@@ -382,6 +412,15 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
       label: "Preventivi",
       modules: [
         item("Tutti", "/quotes", Send),
+      ],
+    },
+    {
+      label: "Notifiche",
+      modules: [
+        item("Tutte", "/notifications", Bell),
+        item("Regole", "/notifications/rules", Workflow, { minPlan: "PRO" }),
+        item("Digest", "/notifications/digest", FileText),
+        item("Preferenze", "/notifications/preferences", Settings),
       ],
     },
   ],
@@ -526,7 +565,12 @@ function AgencyNavItem({
       >
         <Link href={item.href!}>
           <Icon className="h-4 w-4 shrink-0" />
-          <span>{item.label}</span>
+          <span className="min-w-0 flex-1 truncate">{item.label}</span>
+          {item.badgeCount && item.badgeCount > 0 ? (
+            <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">
+              {item.badgeCount > 99 ? "99+" : item.badgeCount}
+            </span>
+          ) : null}
         </Link>
       </SidebarMenuSubButton>
     </SidebarMenuSubItem>
@@ -536,9 +580,11 @@ function AgencyNavItem({
 function AgencyMenuGroup({
   group,
   activePlan,
+  notificationUnreadCount = 0,
 }: {
   group: AgencyNavGroup;
   activePlan: PlanTier;
+  notificationUnreadCount?: number;
 }) {
   const pathname = usePathname();
   const first = group.modules[0];
@@ -586,7 +632,10 @@ function AgencyMenuGroup({
             {group.modules.map((mod) => (
               <AgencyNavItem
                 key={`${group.label}-${mod.label}`}
-                item={mod}
+                item={{
+                  ...mod,
+                  badgeCount: mod.href === "/notifications" ? notificationUnreadCount : mod.badgeCount,
+                }}
                 activePlan={activePlan}
               />
             ))}
@@ -616,6 +665,7 @@ export function TenantSidebar({
   const [user, setUser] = React.useState<{
     email: string; role: string; initials: string; tenantSlug?: string; tenantId?: string;
   } | null>(null);
+  const [notificationUnreadCount, setNotificationUnreadCount] = React.useState(0);
 
   React.useEffect(() => {
     const payload = getDoFlowUser();
@@ -640,6 +690,26 @@ export function TenantSidebar({
   const agencyAudience = dashboardAudienceFromRole(user?.role);
   const agencyGroups = AGENCY_MENUS[agencyAudience];
   const roleLabel = getTenantRoleLabel(user?.role);
+
+  React.useEffect(() => {
+    if (!isDoflowTenant) {
+      setNotificationUnreadCount(0);
+      return;
+    }
+
+    let active = true;
+    getTenantNotificationSummary()
+      .then((summary) => {
+        if (active) setNotificationUnreadCount(Number(summary.unreadNotifications || 0));
+      })
+      .catch(() => {
+        if (active) setNotificationUnreadCount(0);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isDoflowTenant]);
 
   return (
     <Sidebar
@@ -684,7 +754,12 @@ export function TenantSidebar({
       <SidebarContent className="pt-1">
         {isDoflowTenant ? (
           agencyGroups.map((group) => (
-            <AgencyMenuGroup key={group.label} group={group} activePlan={plan} />
+            <AgencyMenuGroup
+              key={group.label}
+              group={group}
+              activePlan={plan}
+              notificationUnreadCount={notificationUnreadCount}
+            />
           ))
         ) : (
           SIDEBAR_GROUPS.map((group) => (

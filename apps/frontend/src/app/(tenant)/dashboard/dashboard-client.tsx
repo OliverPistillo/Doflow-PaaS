@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowRight,
   BarChart3,
+  Bell,
   BriefcaseBusiness,
   CalendarDays,
   CheckCircle2,
@@ -127,6 +128,12 @@ type DashboardSummary = {
     incompleteBriefings?: number;
     completedBriefings?: number;
     upcomingDeliveries: number;
+    unreadNotifications?: number;
+    urgentNotifications?: number;
+    taskOverdueNotifications?: number;
+    financeNotifications?: number;
+    assignedTaskNotifications?: number;
+    todayDigestAvailable?: boolean;
     recentComments: ActivityItem[];
     recentFiles: ActivityItem[];
     notifications: ActivityItem[];
@@ -247,6 +254,12 @@ function getFallbackSummary(): DashboardSummary {
       incompleteBriefings: 0,
       completedBriefings: 0,
       upcomingDeliveries: 0,
+      unreadNotifications: 0,
+      urgentNotifications: 0,
+      taskOverdueNotifications: 0,
+      financeNotifications: 0,
+      assignedTaskNotifications: 0,
+      todayDigestAvailable: false,
       recentComments: [],
       recentFiles: [],
       notifications: [],
@@ -585,8 +598,82 @@ export default function DashboardClient() {
     { label: "Task bloccati", value: summary.personal.blockedTasks, tone: summary.personal.blockedTasks > 0 ? "danger" : "default" },
     { label: "Progetti assegnati", value: summary.personal.assignedProjects },
     { label: "Prossime deadline", value: summary.personal.upcomingDeadlines },
-    { label: "Notifiche operative", value: summary.operations.notifications.length },
+    { label: "Notifiche operative", value: summary.operations.unreadNotifications || summary.operations.notifications.length },
   ];
+
+  const notificationMetrics: Metric[] = [
+    {
+      label: "Non lette",
+      value: summary.operations.unreadNotifications || 0,
+      tone: (summary.operations.unreadNotifications || 0) > 0 ? "warning" : "default",
+    },
+    {
+      label: "Urgenti",
+      value: summary.operations.urgentNotifications || 0,
+      tone: (summary.operations.urgentNotifications || 0) > 0 ? "danger" : "default",
+    },
+    {
+      label: "Task scaduti",
+      value: summary.operations.taskOverdueNotifications || 0,
+      tone: (summary.operations.taskOverdueNotifications || 0) > 0 ? "danger" : "default",
+    },
+    ...(summary.user.canViewFinance && (summary.operations.financeNotifications || 0) > 0
+      ? [{
+          label: "Finance",
+          value: summary.operations.financeNotifications || 0,
+          tone: "warning" as const,
+        }]
+      : []),
+    {
+      label: "Digest oggi",
+      value: summary.operations.todayDigestAvailable ? "Sì" : "No",
+      tone: summary.operations.todayDigestAvailable ? "success" : "default",
+    },
+  ];
+
+  const notificationsCard = (
+    <SectionCard
+      title="Attenzione richiesta"
+      description="Notifiche interne generate da regole reali su progetti, task, preventivi, briefing e finance dove autorizzato."
+      icon={Bell}
+      metrics={notificationMetrics}
+      sources={{
+        notifications:
+          (summary.operations.unreadNotifications || 0) > 0 ||
+          (summary.operations.notifications?.length || 0) > 0 ||
+          Boolean(summary.operations.todayDigestAvailable),
+      }}
+      emptyText="Non ci sono notifiche urgenti."
+    >
+      <div className="space-y-3">
+        {summary.operations.notifications.length > 0 ? (
+          <div className="space-y-2">
+            {summary.operations.notifications.slice(0, 3).map((item, index) => (
+              <div key={`${item.title}-${index}`} className="flex items-start justify-between gap-3 rounded-nav bg-muted/40 px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-foreground">{item.title}</p>
+                  <p className="line-clamp-1 text-xs text-muted-foreground">{item.meta}</p>
+                </div>
+                <span className="shrink-0 text-xs text-muted-foreground">{formatDate(item.createdAt)}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-nav border border-dashed border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+            Non ci sono notifiche urgenti.
+          </div>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href="/notifications">Apri notifiche</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/notifications/digest">Vedi digest</Link>
+          </Button>
+        </div>
+      </div>
+    </SectionCard>
+  );
 
   return (
     <div className="flex-1 space-y-5 p-4 pt-4 md:p-6">
@@ -686,6 +773,7 @@ export default function DashboardClient() {
                 </div>
               ) : null}
             </SectionCard>
+            {notificationsCard}
           </div>
           <SectionCard
             title="Clienti"
@@ -729,6 +817,7 @@ export default function DashboardClient() {
               sources={summary.projects.sources}
               emptyText="Calendario e milestone saranno popolati da tabelle progetto/task reali."
             />
+            {notificationsCard}
           </div>
           <FinanceLockedNotice />
           <div className="grid gap-4 lg:grid-cols-3">
@@ -764,6 +853,7 @@ export default function DashboardClient() {
               sources={{ files: summary.operations.recentFiles.length > 0, comments: summary.operations.recentComments.length > 0 }}
               emptyText="File, commenti e notifiche compaiono solo se esistono dati reali per il tenant."
             />
+            {notificationsCard}
           </div>
           <FinanceLockedNotice />
           <div className="grid gap-4 lg:grid-cols-3">
