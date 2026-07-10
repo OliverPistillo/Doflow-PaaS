@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageShell, PageHeader, TableLoadingState, EmptyState as PageEmptyState } from "@/components/ui/page-shell";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -334,6 +336,24 @@ export function ProjectsListPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, status, priority, pm]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey) {
+        if (
+          document.activeElement?.tagName === "INPUT" ||
+          document.activeElement?.tagName === "TEXTAREA" ||
+          document.querySelector('[role="dialog"]')
+        ) {
+          return;
+        }
+        e.preventDefault();
+        document.getElementById("project-search")?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const openEdit = (row: Row) => {
     setEditing(row);
     setForm({
@@ -377,14 +397,18 @@ export function ProjectsListPage() {
   if (!canReadProjects()) return <AccessDenied />;
 
   return (
-    <div className="flex-1 space-y-5 p-4 md:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Progetti</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Progetti reali tenant-scoped per la delivery doflow. Nessun dato dimostrativo.</p>
-        </div>
-        {canManageProjects() ? <Button onClick={() => router.push("/projects/new")}><Plus className="mr-2 h-4 w-4" /> Nuovo progetto</Button> : null}
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Progetti"
+        description="Gestione dei progetti reali tenant-scoped per la delivery doflow."
+        actions={
+          canManageProjects() ? (
+            <Button onClick={() => router.push("/projects/new")}>
+              <Plus className="mr-2 h-4 w-4" /> Nuovo progetto
+            </Button>
+          ) : null
+        }
+      />
 
       <Card>
         <CardHeader>
@@ -393,16 +417,34 @@ export function ProjectsListPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 lg:grid-cols-[1fr_180px_160px_260px]">
-            <div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cerca progetti..." className="pl-9" /></div>
+            <div className="relative">
+              <Label htmlFor="project-search" className="sr-only">Cerca progetti</Label>
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="project-search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Cerca progetti..."
+                className="pl-9"
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 hidden md:block">
+                <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
+                  <span className="text-xs">/</span>
+                </kbd>
+              </div>
+            </div>
             <Select value={status} onValueChange={setStatus}><SelectTrigger><SelectValue placeholder="Stato" /></SelectTrigger><SelectContent><SelectItem value="__all__">Tutti gli stati</SelectItem>{PROJECT_STATUSES.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>
             <Select value={priority} onValueChange={setPriority}><SelectTrigger><SelectValue placeholder="Priorità" /></SelectTrigger><SelectContent><SelectItem value="__all__">Tutte</SelectItem>{PRIORITIES.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>
             <Input value={pm} onChange={(e) => setPm(e.target.value)} placeholder="Filtro project_manager_id opzionale" />
           </div>
           <ErrorBox error={error} />
           {loading ? (
-            <div className="flex justify-center py-16 text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Caricamento...</div>
+            <TableLoadingState cols={7} rows={5} />
           ) : items.length === 0 ? (
-            <EmptyState>Nessun progetto reale trovato. Crea un progetto da un preventivo accettato o dal pulsante Nuovo progetto.</EmptyState>
+            <PageEmptyState
+              title="Nessun progetto trovato"
+              message="Non ci sono ancora progetti in questa sezione. Crea un progetto da un preventivo accettato o dal pulsante Nuovo progetto."
+            />
           ) : (
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full min-w-[980px] text-sm">
@@ -419,7 +461,7 @@ export function ProjectsListPage() {
                 </thead>
                 <tbody>
                   {items.map((row) => (
-                    <tr key={row.id} className="border-t">
+                    <tr key={row.id} className="group border-t">
                       <td className="px-4 py-3">
                         <Link href={`/projects/${row.id}`} className="font-semibold text-primary hover:underline">{row.name}</Link>
                         <p className="text-xs text-muted-foreground">{labelFor(row.type, PROJECT_TYPES)} · {row.project_manager_email || "PM non assegnato"}</p>
@@ -430,16 +472,57 @@ export function ProjectsListPage() {
                       <td className="px-4 py-3">{shortDate(row.due_date)}</td>
                       <td className="px-4 py-3"><Progress value={Number(row.progress || 0)} className="h-2 w-28" /></td>
                       <td className="px-4 py-3">
-                        <div className="flex justify-end gap-2">
-                          <Button size="sm" variant="outline" onClick={() => router.push(`/projects/${row.id}`)}><Eye className="h-4 w-4" /></Button>
-                          {canManageProjects() ? <Button size="sm" variant="outline" onClick={() => openEdit(row)}><Edit3 className="h-4 w-4" /></Button> : null}
+                        <div className="flex justify-end gap-2 md:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                aria-label="Visualizza progetto"
+                                onClick={() => router.push(`/projects/${row.id}`)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Visualizza progetto</TooltipContent>
+                          </Tooltip>
+
                           {canManageProjects() ? (
-                            <Select value={row.status || "to_start"} onValueChange={(next) => updateStatus(row, next)}>
-                              <SelectTrigger className="h-8 w-[160px]"><SelectValue /></SelectTrigger>
-                              <SelectContent>{PROJECT_STATUSES.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
-                            </Select>
+                            <>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    aria-label="Modifica progetto"
+                                    onClick={() => openEdit(row)}
+                                  >
+                                    <Edit3 className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Modifica progetto</TooltipContent>
+                              </Tooltip>
+
+                              <Select value={row.status || "to_start"} onValueChange={(next) => updateStatus(row, next)}>
+                                <SelectTrigger className="h-8 w-[160px]"><SelectValue /></SelectTrigger>
+                                <SelectContent>{PROJECT_STATUSES.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+                              </Select>
+
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    aria-label="Elimina progetto"
+                                    onClick={() => remove(row)}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Elimina progetto</TooltipContent>
+                              </Tooltip>
+                            </>
                           ) : null}
-                          {canManageProjects() ? <Button size="sm" variant="outline" onClick={() => remove(row)}><Trash2 className="h-4 w-4 text-destructive" /></Button> : null}
                         </div>
                       </td>
                     </tr>
@@ -458,7 +541,7 @@ export function ProjectsListPage() {
           <DialogFooter><Button onClick={saveEdit} disabled={!form.name}>Salva</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PageShell>
   );
 }
 

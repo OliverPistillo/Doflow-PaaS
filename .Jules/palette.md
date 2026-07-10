@@ -17,3 +17,7 @@
 ## 2026-06-29 - [Centralized CRM Modernization]
 **Learning:** Modernizing a shared component like `CrmResourcePage` allows for sweeping UX and accessibility improvements across multiple routes (Companies, Contacts, Deals, Leads) with minimal code changes. Ensuring that search inputs have a globally consistent '/' shortcut and visual kbd indicator reinforces platform-wide muscle memory. Wrapping shared table actions in Tooltips with descriptive ARIA labels immediately elevates the accessibility of all CRM-based pages.
 **Action:** When a design pattern is repeated across multiple pages, prefer modernizing the shared core component (e.g., `CrmResourcePage`) to ensure consistency and maintainability.
+
+## 2026-06-30 - [Projects List Modernization & Action Accessibility]
+**Learning:** Extending the v2 design system to specialized pages like Projects reinforces platform-wide consistency. Using `group-focus-within` in combination with `md:opacity-0` for row-level actions provides a clean, modern aesthetic for desktop users without sacrificing keyboard accessibility.
+**Action:** Standardize the use of `group-focus-within:opacity-100` for all hidden-on-hover action buttons to ensure they remain discoverable for power users.
