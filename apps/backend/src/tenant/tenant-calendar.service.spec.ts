@@ -124,6 +124,7 @@ describe('tenant calendar schema', () => {
 
   it('seeda viste base in modo idempotente', async () => {
     const views = new Map<string, string>();
+    const systemViews = new Map<string, { id: string; name: string; view_type: string; filters: string }>();
     let insertCount = 0;
     let updateCount = 0;
     const query = jest.fn(async (sql: string, params: unknown[] = []) => {
@@ -135,11 +136,22 @@ describe('tenant calendar schema', () => {
       }
       if (compact.includes('INSERT INTO "doflow".planning_views')) {
         insertCount += 1;
-        views.set(`${params[0]}:${params[1]}`, `view-${insertCount}`);
+        const key = `${params[0]}:${params[1]}`;
+        const id = `view-${insertCount}`;
+        views.set(key, id);
+        systemViews.set(id, { id, name: String(params[0]), view_type: String(params[1]), filters: String(params[2]) });
         return [];
       }
       if (compact.includes('UPDATE "doflow".planning_views')) {
+        expect(compact).toContain('SET name = $1, view_type = $2, filters = $3::jsonb');
+        expect(params).toHaveLength(4);
         updateCount += 1;
+        const existing = systemViews.get(String(params[3]));
+        if (existing) {
+          existing.name = String(params[0]);
+          existing.view_type = String(params[1]);
+          existing.filters = String(params[2]);
+        }
         return [];
       }
       return [];
@@ -149,7 +161,9 @@ describe('tenant calendar schema', () => {
     await seedTenantPlanningViews({ query } as any, 'doflow');
 
     expect(views.size).toBe(5);
+    expect(systemViews.size).toBe(5);
     expect(insertCount).toBe(5);
     expect(updateCount).toBe(5);
+    expect(new Set(Array.from(systemViews.values()).map((view) => `${view.name}:${view.view_type}`)).size).toBe(5);
   });
 });

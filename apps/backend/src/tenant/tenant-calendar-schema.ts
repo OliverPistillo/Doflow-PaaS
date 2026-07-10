@@ -209,7 +209,9 @@ export async function seedTenantPlanningViews(ds: DataSource, schema: string, cr
     if (rows[0]) {
       await ds.query(
         `UPDATE "${s}".planning_views
-         SET filters = $3::jsonb,
+         SET name = $1,
+             view_type = $2,
+             filters = $3::jsonb,
              is_system = true,
              is_shared = true,
              updated_at = now()
