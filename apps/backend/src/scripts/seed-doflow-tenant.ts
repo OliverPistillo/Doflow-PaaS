@@ -36,6 +36,7 @@ import {
 } from '../tenant/tenant-contracts-schema';
 import { seedTenantAutomationTemplatesAndRules } from '../tenant/tenant-automations-schema';
 import { seedTenantPlanningViews } from '../tenant/tenant-calendar-schema';
+import { seedTenantKnowledgeBase } from '../tenant/tenant-knowledge-schema';
 
 const TENANT_SLUG = 'doflow';
 const TENANT_SCHEMA = 'doflow';
@@ -310,6 +311,7 @@ async function ensureTenantTables(ds: DataSource, schema: string) {
   await seedDoflowContractTemplates(ds, s);
   await seedTenantAutomationTemplatesAndRules(ds, s);
   await seedTenantPlanningViews(ds, s);
+  await seedTenantKnowledgeBase(ds, s);
 }
 
 async function ensureTenantRecord(ds: DataSource): Promise<{ id: string }> {
@@ -494,6 +496,7 @@ async function main() {
 
     console.log('[seed:doflow] Ensuring report KPI targets...');
     await seedTenantKpiTargets(ds, TENANT_SCHEMA);
+    await seedTenantKnowledgeBase(ds, TENANT_SCHEMA);
     await seedDoflowContractTemplates(ds, TENANT_SCHEMA);
 
     await ensureEnterpriseModules(ds, tenant.id);

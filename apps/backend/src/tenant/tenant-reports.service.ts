@@ -714,6 +714,66 @@ export class TenantReportsService {
           workloadByMember: [],
           conflictsCount: 0,
         };
+    const hasKnowledgeArticles = await this.tableExists(schema, 'knowledge_articles');
+    const hasKnowledgeAssets = await this.tableExists(schema, 'asset_items');
+    const hasKnowledgeTemplates = await this.tableExists(schema, 'operational_templates');
+    const knowledgeArticleFinanceWhere = canFinance
+      ? 'TRUE'
+      : `NOT EXISTS (
+          SELECT 1 FROM "${schema}".knowledge_categories kc
+          WHERE kc.id = a.category_id AND lower(kc.name) LIKE '%finance%' AND kc.deleted_at IS NULL
+        )`;
+    const knowledge = {
+      publishedArticles: hasKnowledgeArticles
+        ? await this.countRows(schema, 'knowledge_articles', `status = 'published' AND deleted_at IS NULL AND visibility <> 'private' AND ${canFinance ? 'TRUE' : `visibility <> 'admin'`}`)
+        : 0,
+      draftArticles: hasKnowledgeArticles
+        ? await this.countRows(schema, 'knowledge_articles', `status = 'draft' AND deleted_at IS NULL AND visibility <> 'private' AND ${canFinance ? 'TRUE' : `visibility <> 'admin'`}`)
+        : 0,
+      articlesDueForReview: hasKnowledgeArticles
+        ? Number((await this.dataSource.query(
+            `SELECT COUNT(*)::int AS count
+             FROM "${schema}".knowledge_articles a
+             WHERE a.deleted_at IS NULL
+               AND a.visibility <> 'private'
+               AND ${canFinance ? 'TRUE' : `a.visibility <> 'admin'`}
+               AND ${knowledgeArticleFinanceWhere}
+               AND a.review_due_at IS NOT NULL
+               AND a.review_due_at <= now()
+               AND a.status <> 'archived'`,
+          ))[0]?.count || 0)
+        : 0,
+      totalAssets: hasKnowledgeAssets
+        ? await this.countRows(schema, 'asset_items', `deleted_at IS NULL AND visibility <> 'private' AND ${canFinance ? 'TRUE' : `visibility <> 'admin' AND COALESCE(asset_type, '') <> 'legal_document'`}`)
+        : 0,
+      activeTemplates: hasKnowledgeTemplates
+        ? await this.countRows(schema, 'operational_templates', `deleted_at IS NULL AND status = 'active' AND visibility <> 'private' AND ${canFinance ? 'TRUE' : `visibility <> 'admin' AND category <> 'finance'`}`)
+        : 0,
+      topTemplateUsage: hasKnowledgeTemplates
+        ? await this.dataSource.query(
+            `SELECT id, name, template_type, category, usage_count
+             FROM "${schema}".operational_templates
+             WHERE deleted_at IS NULL
+               AND usage_count > 0
+               AND visibility <> 'private'
+               AND ${canFinance ? 'TRUE' : `visibility <> 'admin' AND category <> 'finance'`}
+             ORDER BY usage_count DESC, updated_at DESC
+             LIMIT 5`,
+          )
+        : [],
+      recentlyUpdated: hasKnowledgeArticles
+        ? await this.dataSource.query(
+            `SELECT a.id, a.title, a.article_type, a.status, a.updated_at
+             FROM "${schema}".knowledge_articles a
+             WHERE a.deleted_at IS NULL
+               AND a.visibility <> 'private'
+               AND ${canFinance ? 'TRUE' : `a.visibility <> 'admin'`}
+               AND ${knowledgeArticleFinanceWhere}
+             ORDER BY a.updated_at DESC
+             LIMIT 5`,
+          )
+        : [],
+    };
     const dailyDigestAvailable = await this.countRows(schema, 'notification_digests', `digest_date = CURRENT_DATE`) > 0;
     const openRisks = [
       ...(await this.recentRows(schema, 'projects', ['id', 'name', 'status', 'due_date'], `LOWER(COALESCE(status, '')) = 'blocked'`, [], 5)).map((row) => ({ type: 'project_blocked', ...row })),
@@ -722,6 +782,21 @@ export class TenantReportsService {
       ...(await this.recentRows(schema, 'paperwork_dossiers', ['id', 'title', 'status', 'due_date'], `status = 'blocked' OR (due_date < current_date AND status NOT IN ('completed', 'archived'))`, [], 5)).map((row) => ({ type: 'paperwork_risk', ...row })),
       ...(hasCalendarEvents
         ? (await this.recentRows(schema, 'calendar_events', ['id', 'title', 'event_type', 'priority', 'start_at'], `COALESCE(end_at, start_at) < now() AND status IN ('scheduled', 'tentative') AND priority IN ('high', 'urgent') AND ${calendarFinanceWhere}`, calendarParams, 5)).map((row) => ({ type: 'calendar_overdue', ...row }))
+        : []),
+      ...(hasKnowledgeArticles
+        ? (await this.dataSource.query(
+            `SELECT a.id, a.title, a.article_type, a.review_due_at
+             FROM "${schema}".knowledge_articles a
+             WHERE a.deleted_at IS NULL
+               AND a.review_due_at IS NOT NULL
+               AND a.review_due_at <= now()
+               AND a.status <> 'archived'
+               AND a.visibility <> 'private'
+               AND ${canFinance ? 'TRUE' : `a.visibility <> 'admin'`}
+               AND ${knowledgeArticleFinanceWhere}
+             ORDER BY a.review_due_at ASC
+             LIMIT 5`,
+          )).map((row: any) => ({ type: 'knowledge_review_due', ...row }))
         : []),
     ].slice(0, 10);
     return {
@@ -747,6 +822,7 @@ export class TenantReportsService {
         topFailedRules: topFailedAutomationRules,
       },
       calendar,
+      knowledge,
       openRisks,
       dailyDigestAvailable,
       sources: {
@@ -765,6 +841,9 @@ export class TenantReportsService {
         automation_action_logs: hasAutomationActions,
         calendar_events: hasCalendarEvents,
         calendar_event_reminders: hasCalendarReminders,
+        knowledge_articles: hasKnowledgeArticles,
+        asset_items: hasKnowledgeAssets,
+        operational_templates: hasKnowledgeTemplates,
       },
     };
   }

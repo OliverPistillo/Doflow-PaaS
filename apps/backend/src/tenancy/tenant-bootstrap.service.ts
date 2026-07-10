@@ -25,6 +25,7 @@ import {
 } from '../tenant/tenant-contracts-schema';
 import { seedTenantAutomationTemplatesAndRules } from '../tenant/tenant-automations-schema';
 import { seedTenantPlanningViews } from '../tenant/tenant-calendar-schema';
+import { seedTenantKnowledgeBase } from '../tenant/tenant-knowledge-schema';
 
 @Injectable()
 export class TenantBootstrapService implements OnApplicationBootstrap {
@@ -200,6 +201,7 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
     await seedDoflowContractTemplates(ds, s);
     await seedTenantAutomationTemplatesAndRules(ds, s);
     await seedTenantPlanningViews(ds, s);
+    await seedTenantKnowledgeBase(ds, s);
 
     this.logger.log(`Schema "${s}" provisioned successfully.`);
   }

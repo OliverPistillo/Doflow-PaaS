@@ -1423,6 +1423,98 @@ export class TenantDashboardService {
     };
   }
 
+  private async buildKnowledgeSummary(schema: string, user: TenantDashboardAuthUser): Promise<DashboardKnowledgeSummary> {
+    const safe = safeSchema(schema, 'TenantDashboardService.buildKnowledgeSummary');
+    const hasArticles = await this.tableExists(safe, 'knowledge_articles');
+    const hasAssets = await this.tableExists(safe, 'asset_items');
+    const hasTemplates = await this.tableExists(safe, 'operational_templates');
+    const hasFavorites = await this.tableExists(safe, 'knowledge_favorites');
+    if (!hasArticles && !hasAssets && !hasTemplates) {
+      return {
+        publishedArticles: 0,
+        draftArticles: 0,
+        articlesDueForReview: 0,
+        totalAssets: 0,
+        activeTemplates: 0,
+        favoritesCount: 0,
+        recentlyUpdatedCount: 0,
+        systemTemplatesCount: 0,
+        knowledgeRisksCount: 0,
+        sources: {
+          knowledge_articles: hasArticles,
+          asset_items: hasAssets,
+          operational_templates: hasTemplates,
+          knowledge_favorites: hasFavorites,
+        },
+      };
+    }
+
+    const canFinance = this.canViewFinance(user.role);
+    const articleFinanceWhere = canFinance
+      ? 'TRUE'
+      : `NOT EXISTS (
+          SELECT 1 FROM "${safe}".knowledge_categories kc
+          WHERE kc.id = a.category_id AND lower(kc.name) LIKE '%finance%' AND kc.deleted_at IS NULL
+        )`;
+    const templateFinanceWhere = canFinance ? 'TRUE' : `ot.category <> 'finance'`;
+    const articles = hasArticles
+      ? await this.dataSource.query(
+          `SELECT
+             COUNT(*) FILTER (WHERE a.status = 'published')::int AS "publishedArticles",
+             COUNT(*) FILTER (WHERE a.status = 'draft')::int AS "draftArticles",
+             COUNT(*) FILTER (WHERE a.review_due_at IS NOT NULL AND a.review_due_at <= now() AND a.status <> 'archived')::int AS "articlesDueForReview",
+             COUNT(*) FILTER (WHERE a.updated_at >= now() - interval '14 days')::int AS "recentlyUpdatedCount"
+           FROM "${safe}".knowledge_articles a
+           WHERE a.deleted_at IS NULL
+             AND a.visibility <> 'private'
+             AND ${canFinance ? 'TRUE' : `a.visibility <> 'admin'`}
+             AND ${articleFinanceWhere}`,
+        )
+      : [{ publishedArticles: 0, draftArticles: 0, articlesDueForReview: 0, recentlyUpdatedCount: 0 }];
+    const assets = hasAssets
+      ? await this.dataSource.query(
+          `SELECT COUNT(*)::int AS "totalAssets"
+           FROM "${safe}".asset_items ai
+           WHERE ai.deleted_at IS NULL
+             AND ai.visibility <> 'private'
+             AND ${canFinance ? 'TRUE' : `ai.visibility <> 'admin' AND COALESCE(ai.asset_type, '') <> 'legal_document'`}`,
+        )
+      : [{ totalAssets: 0 }];
+    const templates = hasTemplates
+      ? await this.dataSource.query(
+          `SELECT
+             COUNT(*) FILTER (WHERE ot.status = 'active')::int AS "activeTemplates",
+             COUNT(*) FILTER (WHERE ot.is_system = true)::int AS "systemTemplatesCount"
+           FROM "${safe}".operational_templates ot
+           WHERE ot.deleted_at IS NULL
+             AND ot.visibility <> 'private'
+             AND ${canFinance ? 'TRUE' : `ot.visibility <> 'admin' AND ${templateFinanceWhere}`}`,
+        )
+      : [{ activeTemplates: 0, systemTemplatesCount: 0 }];
+    const userId = UUID_RE.test(user.id) ? user.id : null;
+    const favoritesCount = hasFavorites && userId
+      ? Number((await this.dataSource.query(`SELECT COUNT(*)::int AS count FROM "${safe}".knowledge_favorites WHERE user_id = $1`, [userId]))[0]?.count || 0)
+      : 0;
+    const articlesDueForReview = Number(articles[0]?.articlesDueForReview || 0);
+    return {
+      publishedArticles: Number(articles[0]?.publishedArticles || 0),
+      draftArticles: Number(articles[0]?.draftArticles || 0),
+      articlesDueForReview,
+      totalAssets: Number(assets[0]?.totalAssets || 0),
+      activeTemplates: Number(templates[0]?.activeTemplates || 0),
+      favoritesCount,
+      recentlyUpdatedCount: Number(articles[0]?.recentlyUpdatedCount || 0),
+      systemTemplatesCount: Number(templates[0]?.systemTemplatesCount || 0),
+      knowledgeRisksCount: articlesDueForReview,
+      sources: {
+        knowledge_articles: hasArticles,
+        asset_items: hasAssets,
+        operational_templates: hasTemplates,
+        knowledge_favorites: hasFavorites,
+      },
+    };
+  }
+
   async getSummary(): Promise<TenantDashboardSummary> {
     const schema = this.getTenantSchema();
     const user = this.getAuthUser();
@@ -1448,6 +1540,7 @@ export class TenantDashboardService {
       paperworkSummary,
       automationsSummary,
       calendarSummary,
+      knowledgeSummary,
     ] = await Promise.all([
       this.buildSalesSummary(schema, showFinance),
       this.buildProjectsSummary(schema, user, audience),
@@ -1466,6 +1559,7 @@ export class TenantDashboardService {
       this.buildPaperworkSummary(schema),
       this.buildAutomationsSummary(schema, user),
       this.buildCalendarSummary(schema, user),
+      this.buildKnowledgeSummary(schema, user),
     ]);
 
     const finance = showFinance
@@ -1512,6 +1606,7 @@ export class TenantDashboardService {
         paperworkSummary,
         automationsSummary,
         calendarSummary,
+        knowledgeSummary,
         sources: {
           ...briefingOperations.sources,
           ...notificationSummary.sources,
@@ -1521,6 +1616,7 @@ export class TenantDashboardService {
           ...paperworkSummary.sources,
           ...automationsSummary.sources,
           ...calendarSummary.sources,
+          ...knowledgeSummary.sources,
         },
       },
     };
@@ -1801,6 +1897,19 @@ interface DashboardCalendarSummary {
   sources: DashboardSourceFlags;
 }
 
+interface DashboardKnowledgeSummary {
+  publishedArticles: number;
+  draftArticles: number;
+  articlesDueForReview: number;
+  totalAssets: number;
+  activeTemplates: number;
+  favoritesCount: number;
+  recentlyUpdatedCount: number;
+  systemTemplatesCount: number;
+  knowledgeRisksCount: number;
+  sources: DashboardSourceFlags;
+}
+
 interface TenantDashboardSummary {
   tenant: {
     id?: string;
@@ -1841,6 +1950,7 @@ interface TenantDashboardSummary {
     paperworkSummary: DashboardPaperworkSummary;
     automationsSummary: DashboardAutomationsSummary;
     calendarSummary: DashboardCalendarSummary;
+    knowledgeSummary: DashboardKnowledgeSummary;
     sources: DashboardSourceFlags;
   };
 }
