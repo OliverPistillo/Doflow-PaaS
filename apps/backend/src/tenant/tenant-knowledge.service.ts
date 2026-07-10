@@ -100,6 +100,12 @@ export class TenantKnowledgeService {
     return text;
   }
 
+  private requireEntityUuid(value: unknown, label = 'ID'): string {
+    const id = this.requireUuid(value, label);
+    if (id === '00000000-0000-0000-0000-000000000000') throw new BadRequestException(`${label} non valido`);
+    return id;
+  }
+
   private uuidOrNull(value: unknown): string | null {
     const text = String(value || '');
     return UUID_RE.test(text) ? text : null;
@@ -621,14 +627,14 @@ export class TenantKnowledgeService {
     this.assertFinanceAllowed(user, input);
     const versionKeys = ['title', 'excerpt', 'content', 'content_format'] as const;
     const shouldVersion = versionKeys.some((key) => String(input[key] ?? '') !== String(current[key] ?? ''));
-    const rows = await this.dataSource.query(
+    await this.dataSource.query(
       `UPDATE "${schema}".knowledge_articles
        SET category_id=$2,title=$3,slug=$4,excerpt=$5,content=$6,content_format=$7,article_type=$8,status=$9,
            visibility=$10,priority=$11,owner_user_id=$12,updated_by=$13,review_due_at=$14,metadata=$15::jsonb,
            published_at=CASE WHEN $9='published' AND published_at IS NULL THEN now() ELSE published_at END,
            archived_at=CASE WHEN $9='archived' THEN now() ELSE archived_at END,
            updated_at=now()
-       WHERE id=$1 AND deleted_at IS NULL RETURNING *`,
+       WHERE id=$1 AND deleted_at IS NULL`,
       [
         current.id,
         input.category_id,
@@ -647,23 +653,35 @@ export class TenantKnowledgeService {
         JSON.stringify(input.metadata || {}),
       ],
     );
-    if (shouldVersion) await this.createArticleVersionInternal(schema, rows[0], null, body.change_summary || 'Aggiornamento articolo', this.uuidOrNull(user.id));
+    const updatedRows = await this.dataSource.query(
+      `SELECT * FROM "${schema}".knowledge_articles WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [current.id],
+    );
+    if (!updatedRows[0]) throw new NotFoundException('Articolo non trovato dopo aggiornamento');
+    if (shouldVersion) await this.createArticleVersionInternal(schema, updatedRows[0], null, body.change_summary || null, this.uuidOrNull(user.id));
     await this.logActivity(schema, 'article_updated', { targetType: 'article', targetId: current.id, actorUserId: this.uuidOrNull(user.id) });
-    return rows[0];
+    return updatedRows[0];
   }
 
   private async createArticleVersionInternal(schema: string, article: any, versionNumber: number | null, changeSummary: string | null, createdBy: string | null) {
-    const version = versionNumber || Number((await this.dataSource.query(
-      `SELECT COALESCE(MAX(version_number), 0)::int AS max FROM "${schema}".knowledge_article_versions WHERE article_id = $1`,
-      [article.id],
-    ))[0]?.max || 0) + 1;
+    if (!article?.id) throw new BadRequestException('Articolo non valido per versioning');
     await this.dataSource.query(
       `INSERT INTO "${schema}".knowledge_article_versions (
          article_id, version_number, title, excerpt, content, content_format, change_summary, created_by, created_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now())
+       )
+       VALUES (
+         $1,
+         COALESCE($2::integer, (SELECT COALESCE(MAX(version_number), 0)::int + 1 FROM "${schema}".knowledge_article_versions WHERE article_id = $1)),
+         $3,$4,$5,$6,$7,$8,now()
+       )
        ON CONFLICT (article_id, version_number) DO NOTHING`,
-      [article.id, version, article.title, article.excerpt || null, article.content || '', article.content_format || 'markdown', changeSummary, createdBy],
+      [article.id, versionNumber, article.title, article.excerpt || null, article.content || '', article.content_format || 'markdown', changeSummary || null, createdBy],
     );
+    const versionRows = await this.dataSource.query(
+      `SELECT COALESCE(MAX(version_number), 0)::int AS version FROM "${schema}".knowledge_article_versions WHERE article_id = $1`,
+      [article.id],
+    );
+    const version = Number(versionRows[0]?.version || versionNumber || 0);
     await this.logActivity(schema, 'article_version_created', { targetType: 'article', targetId: article.id, actorUserId: createdBy, metadata: { version_number: version } });
   }
 
@@ -773,7 +791,7 @@ export class TenantKnowledgeService {
     const schema = this.getSchema();
     const entityType = this.normalizeEnum(body.entity_type, KNOWLEDGE_ENTITY_TYPES, '', 'entity_type');
     const relationType = this.normalizeEnum(body.relation_type, KNOWLEDGE_RELATION_TYPES, 'related', 'relation_type');
-    const entityId = this.requireUuid(body.entity_id, 'entity_id');
+    const entityId = this.requireEntityUuid(body.entity_id, 'entity_id');
     this.assertFinanceAllowed(user, { entity_type: entityType });
     const rows = await this.dataSource.query(
       `INSERT INTO "${schema}".knowledge_article_links (article_id, entity_type, entity_id, relation_type, metadata, created_at)
@@ -1223,12 +1241,12 @@ export class TenantKnowledgeService {
       JSON.stringify(input.content || {}) !== JSON.stringify(current.content || {}) ||
       JSON.stringify(input.variables || null) !== JSON.stringify(current.variables || null) ||
       String(input.instructions || '') !== String(current.instructions || '');
-    const rows = await this.dataSource.query(
+    await this.dataSource.query(
       `UPDATE "${schema}".operational_templates
        SET name=$2, slug=$3, description=$4, template_type=$5, category=$6, status=$7, visibility=$8,
            content=$9::jsonb, variables=$10::jsonb, instructions=$11, owner_user_id=$12, updated_by=$13,
            metadata=$14::jsonb, archived_at=CASE WHEN $7='archived' THEN now() ELSE archived_at END, updated_at=now()
-       WHERE id=$1 RETURNING *`,
+       WHERE id=$1 AND deleted_at IS NULL`,
       [
         current.id,
         input.name,
@@ -1246,31 +1264,43 @@ export class TenantKnowledgeService {
         JSON.stringify(input.metadata || {}),
       ],
     );
-    if (shouldVersion) await this.createTemplateVersionInternal(schema, rows[0], null, body.change_summary || 'Aggiornamento template', this.uuidOrNull(user.id));
+    const updatedRows = await this.dataSource.query(
+      `SELECT * FROM "${schema}".operational_templates WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [current.id],
+    );
+    if (!updatedRows[0]) throw new NotFoundException('Template non trovato dopo aggiornamento');
+    if (shouldVersion) await this.createTemplateVersionInternal(schema, updatedRows[0], null, body.change_summary || null, this.uuidOrNull(user.id));
     await this.logActivity(schema, 'template_updated', { targetType: 'operational_template', targetId: current.id, actorUserId: this.uuidOrNull(user.id) });
-    return rows[0];
+    return updatedRows[0];
   }
 
   private async createTemplateVersionInternal(schema: string, template: any, versionNumber: number | null, changeSummary: string | null, createdBy: string | null) {
-    const version = versionNumber || Number((await this.dataSource.query(
-      `SELECT COALESCE(MAX(version_number), 0)::int AS max FROM "${schema}".operational_template_versions WHERE template_id = $1`,
-      [template.id],
-    ))[0]?.max || 0) + 1;
+    if (!template?.id) throw new BadRequestException('Template non valido per versioning');
     await this.dataSource.query(
       `INSERT INTO "${schema}".operational_template_versions (
          template_id, version_number, content, variables, instructions, change_summary, created_by, created_at
-       ) VALUES ($1,$2,$3::jsonb,$4::jsonb,$5,$6,$7,now())
+       )
+       VALUES (
+         $1,
+         COALESCE($2::integer, (SELECT COALESCE(MAX(version_number), 0)::int + 1 FROM "${schema}".operational_template_versions WHERE template_id = $1)),
+         $3::jsonb,$4::jsonb,$5,$6,$7,now()
+       )
        ON CONFLICT (template_id, version_number) DO NOTHING`,
       [
         template.id,
-        version,
+        versionNumber,
         JSON.stringify(template.content || {}),
         template.variables === null ? null : JSON.stringify(template.variables || null),
         template.instructions || null,
-        changeSummary,
+        changeSummary || null,
         createdBy,
       ],
     );
+    const versionRows = await this.dataSource.query(
+      `SELECT COALESCE(MAX(version_number), 0)::int AS version FROM "${schema}".operational_template_versions WHERE template_id = $1`,
+      [template.id],
+    );
+    const version = Number(versionRows[0]?.version || versionNumber || 0);
     await this.logActivity(schema, 'template_version_created', { targetType: 'operational_template', targetId: template.id, actorUserId: createdBy, metadata: { version_number: version } });
   }
 
@@ -1390,7 +1420,7 @@ export class TenantKnowledgeService {
     const schema = this.getSchema();
     const targetEntityType = this.textOrNull(body.target_entity_type);
     if (targetEntityType && !KNOWLEDGE_ENTITY_TYPES.includes(targetEntityType as any)) throw new BadRequestException('target_entity_type non valido');
-    const targetEntityId = body.target_entity_id ? this.requireUuid(body.target_entity_id, 'target_entity_id') : null;
+    const targetEntityId = body.target_entity_id ? this.requireEntityUuid(body.target_entity_id, 'target_entity_id') : null;
     this.assertFinanceAllowed(user, { category: template.category, target_entity_type: targetEntityType });
     await this.dataSource.query(`UPDATE "${schema}".operational_templates SET usage_count = usage_count + 1, last_used_at = now(), updated_at = now() WHERE id = $1`, [template.id]);
     const rows = await this.dataSource.query(
