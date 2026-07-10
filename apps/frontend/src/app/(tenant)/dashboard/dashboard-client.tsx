@@ -107,6 +107,19 @@ type AutomationsSummary = {
   sources?: SourceFlags;
 };
 
+type CalendarSummary = {
+  eventsToday: number;
+  eventsThisWeek: number;
+  overdueEvents: number;
+  conflictsCount: number;
+  deadlinesThisWeek: number;
+  teamUnavailableToday: number;
+  nextEventAt?: string | null;
+  remindersDue: number;
+  derivedEventsCount: number;
+  sources?: SourceFlags;
+};
+
 type DashboardSummary = {
   tenant: { id?: string; slug?: string; schema: string };
   user: {
@@ -211,6 +224,7 @@ type DashboardSummary = {
     contractsSummary?: ContractsSummary;
     paperworkSummary?: PaperworkSummary;
     automationsSummary?: AutomationsSummary;
+    calendarSummary?: CalendarSummary;
     sources?: SourceFlags;
   };
 };
@@ -395,6 +409,18 @@ function getFallbackSummary(): DashboardSummary {
         lastRunAt: null,
         dueRules: 0,
         automationRisksCount: 0,
+        sources: {},
+      },
+      calendarSummary: {
+        eventsToday: 0,
+        eventsThisWeek: 0,
+        overdueEvents: 0,
+        conflictsCount: 0,
+        deadlinesThisWeek: 0,
+        teamUnavailableToday: 0,
+        nextEventAt: null,
+        remindersDue: 0,
+        derivedEventsCount: 0,
         sources: {},
       },
       sources: {},
@@ -948,6 +974,46 @@ export default function DashboardClient() {
     </SectionCard>
   );
 
+  const calendarSummary = summary.operations.calendarSummary || {
+    eventsToday: 0,
+    eventsThisWeek: 0,
+    overdueEvents: 0,
+    conflictsCount: 0,
+    deadlinesThisWeek: 0,
+    teamUnavailableToday: 0,
+    nextEventAt: null,
+    remindersDue: 0,
+    derivedEventsCount: 0,
+    sources: {},
+  };
+
+  const calendarCard = (
+    <SectionCard
+      title="Calendario"
+      description="Agenda interna, scadenze aggregate, conflitti e reminder del team."
+      icon={CalendarDays}
+      metrics={[
+        { label: "Eventi oggi", value: calendarSummary.eventsToday || 0 },
+        { label: "Eventi settimana", value: calendarSummary.eventsThisWeek || 0 },
+        { label: "Scaduti", value: calendarSummary.overdueEvents || 0, tone: (calendarSummary.overdueEvents || 0) > 0 ? "danger" : "default" },
+        { label: "Conflitti", value: calendarSummary.conflictsCount || 0, tone: (calendarSummary.conflictsCount || 0) > 0 ? "warning" : "default" },
+        { label: "Scadenze settimana", value: calendarSummary.deadlinesThisWeek || 0 },
+        { label: "Team assente oggi", value: calendarSummary.teamUnavailableToday || 0 },
+        { label: "Reminder dovuti", value: calendarSummary.remindersDue || 0, tone: (calendarSummary.remindersDue || 0) > 0 ? "warning" : "default" },
+        { label: "Derivati", value: calendarSummary.derivedEventsCount || 0 },
+        { label: "Prossimo evento", value: calendarSummary.nextEventAt ? formatDate(calendarSummary.nextEventAt) : "Nessuno" },
+      ]}
+      sources={calendarSummary.sources || { calendar_events: (calendarSummary.eventsThisWeek || 0) > 0 }}
+      emptyText="Nessun evento calendario presente."
+    >
+      <div className="flex flex-wrap gap-2">
+        <Button asChild variant="outline" size="sm"><Link href="/calendar">Apri calendario</Link></Button>
+        <Button asChild variant="outline" size="sm"><Link href="/calendar/agenda">Agenda</Link></Button>
+        <Button asChild variant="outline" size="sm"><Link href="/calendar/deadlines">Scadenze</Link></Button>
+      </div>
+    </SectionCard>
+  );
+
   const contractsSummary = summary.operations.contractsSummary || {
     totalContracts: 0,
     draftContracts: 0,
@@ -1197,6 +1263,7 @@ export default function DashboardClient() {
             {documentsCard}
             {reportsCard}
             {automationsCard}
+            {calendarCard}
             {contractsCard}
             {paperworkCard}
           </div>
@@ -1246,6 +1313,7 @@ export default function DashboardClient() {
             {documentsCard}
             {reportsCard}
             {automationsCard}
+            {calendarCard}
             {contractsCard}
             {paperworkCard}
           </div>
@@ -1287,6 +1355,7 @@ export default function DashboardClient() {
             {documentsCard}
             {reportsCard}
             {automationsCard}
+            {calendarCard}
             {contractsCard}
             {paperworkCard}
           </div>
