@@ -8,6 +8,9 @@ import {
   CreditCard, Sparkles, LogOut, Camera, Save, Loader2,
   ChevronRight, Monitor, Palette, Languages,
 } from "lucide-react";
+import {
+  PageShell, PageHeader,
+} from "@/components/ui/page-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,6 +34,7 @@ import { useTheme } from "next-themes";
 import { getDoFlowUser, getInitials } from "@/lib/jwt";
 import { usePlan } from "@/contexts/PlanContext";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -137,20 +141,22 @@ export default function SettingsPage() {
     description,
     children,
     last,
+    id,
   }: {
     icon: typeof User;
     label: string;
     description?: string;
     children: React.ReactNode;
     last?: boolean;
+    id?: string;
   }) => (
     <div className={`flex items-center justify-between py-4 ${last ? "" : "border-b"}`}>
       <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-900/20">
-          <Icon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+          <Icon className="h-4 w-4 text-primary" />
         </div>
         <div>
-          <div className="text-sm font-medium">{label}</div>
+          <Label htmlFor={id} className={cn("text-sm font-medium", id && "cursor-pointer")}>{label}</Label>
           {description && <div className="text-xs text-muted-foreground mt-0.5">{description}</div>}
         </div>
       </div>
@@ -161,15 +167,11 @@ export default function SettingsPage() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex-1 space-y-5 p-4 md:p-6 pt-4 animate-in fade-in duration-500">
-
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Impostazioni</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Gestisci il tuo profilo, le preferenze e la sicurezza
-        </p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Impostazioni"
+        description="Gestisci il tuo profilo, le preferenze e la sicurezza"
+      />
 
       <Tabs defaultValue="profile" className="space-y-5">
         <TabsList>
@@ -191,7 +193,7 @@ export default function SettingsPage() {
               {/* Avatar */}
               <div className="flex items-center gap-4">
                 <Avatar className="h-16 w-16">
-                  <AvatarFallback className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 text-xl font-bold">
+                  <AvatarFallback className="bg-primary/10 text-primary text-xl font-bold">
                     {user?.initials ?? "DF"}
                   </AvatarFallback>
                 </Avatar>
@@ -247,7 +249,6 @@ export default function SettingsPage() {
                 <Button
                   onClick={handleSaveProfile}
                   disabled={saving}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
                   {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}
                   {saving ? "Salvataggio…" : "Salva modifiche"}
@@ -265,9 +266,9 @@ export default function SettingsPage() {
               <CardDescription>Personalizza l'aspetto dell'interfaccia.</CardDescription>
             </CardHeader>
             <CardContent>
-              <SettingRow icon={theme === "dark" ? Moon : Sun} label="Tema" description="Seleziona il tema dell'interfaccia">
+              <SettingRow icon={theme === "dark" ? Moon : Sun} label="Tema" description="Seleziona il tema dell'interfaccia" id="theme-select">
                 <Select value={theme ?? "system"} onValueChange={setTheme}>
-                  <SelectTrigger className="w-[160px]">
+                  <SelectTrigger id="theme-select" className="w-[160px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -284,9 +285,9 @@ export default function SettingsPage() {
                 </Select>
               </SettingRow>
 
-              <SettingRow icon={Languages} label="Lingua" description="Lingua dell'interfaccia" last>
+              <SettingRow icon={Languages} label="Lingua" description="Lingua dell'interfaccia" last id="lang-select">
                 <Select value={profile.language} onValueChange={(v) => setProfile({ ...profile, language: v })}>
-                  <SelectTrigger className="w-[160px]">
+                  <SelectTrigger id="lang-select" className="w-[160px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -309,14 +310,16 @@ export default function SettingsPage() {
               <CardDescription>Scegli quali notifiche ricevere e come.</CardDescription>
             </CardHeader>
             <CardContent>
-              <SettingRow icon={Bell} label="Notifiche push" description="Ricevi notifiche in tempo reale nel browser">
+              <SettingRow icon={Bell} label="Notifiche push" description="Ricevi notifiche in tempo reale nel browser" id="push-notifications">
                 <Switch
+                  id="push-notifications"
                   checked={notifications.pushEnabled}
                   onCheckedChange={(v) => setNotifications({ ...notifications, pushEnabled: v })}
                 />
               </SettingRow>
-              <SettingRow icon={Mail} label="Digest email" description="Ricevi un riepilogo giornaliero via email">
+              <SettingRow icon={Mail} label="Digest email" description="Ricevi un riepilogo giornaliero via email" id="email-digest">
                 <Switch
+                  id="email-digest"
                   checked={notifications.emailDigest}
                   onCheckedChange={(v) => setNotifications({ ...notifications, emailDigest: v })}
                 />
@@ -325,26 +328,30 @@ export default function SettingsPage() {
               <Separator className="my-2" />
               <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider py-2">Eventi</p>
 
-              <SettingRow icon={User} label="Task assegnato" description="Quando un task viene assegnato a te">
+              <SettingRow icon={User} label="Task assegnato" description="Quando un task viene assegnato a te" id="task-assigned">
                 <Switch
+                  id="task-assigned"
                   checked={notifications.taskAssigned}
                   onCheckedChange={(v) => setNotifications({ ...notifications, taskAssigned: v })}
                 />
               </SettingRow>
-              <SettingRow icon={User} label="Task completato" description="Quando un task assegnato a te viene completato">
+              <SettingRow icon={User} label="Task completato" description="Quando un task assegnato a te viene completato" id="task-completed">
                 <Switch
+                  id="task-completed"
                   checked={notifications.taskCompleted}
                   onCheckedChange={(v) => setNotifications({ ...notifications, taskCompleted: v })}
                 />
               </SettingRow>
-              <SettingRow icon={User} label="Nuovo lead" description="Quando un nuovo lead viene aggiunto al CRM">
+              <SettingRow icon={User} label="Nuovo lead" description="Quando un nuovo lead viene aggiunto al CRM" id="new-lead">
                 <Switch
+                  id="new-lead"
                   checked={notifications.newLead}
                   onCheckedChange={(v) => setNotifications({ ...notifications, newLead: v })}
                 />
               </SettingRow>
-              <SettingRow icon={Mail} label="Report settimanale" description="Ricevi un report settimanale via email" last>
+              <SettingRow icon={Mail} label="Report settimanale" description="Ricevi un report settimanale via email" last id="weekly-report">
                 <Switch
+                  id="weekly-report"
                   checked={notifications.weeklyReport}
                   onCheckedChange={(v) => setNotifications({ ...notifications, weeklyReport: v })}
                 />
@@ -364,15 +371,16 @@ export default function SettingsPage() {
               <SettingRow icon={Key} label="Cambia password" description="Aggiorna la tua password di accesso">
                 <Button variant="outline" size="sm">Modifica</Button>
               </SettingRow>
-              <SettingRow icon={Shield} label="Autenticazione a due fattori" description="Aggiungi un ulteriore livello di sicurezza">
+              <SettingRow icon={Shield} label="Autenticazione a due fattori" description="Aggiungi un ulteriore livello di sicurezza" id="mfa-switch">
                 <Switch
+                  id="mfa-switch"
                   checked={security.twoFactor}
                   onCheckedChange={(v) => setSecurity({ ...security, twoFactor: v })}
                 />
               </SettingRow>
-              <SettingRow icon={Lock} label="Timeout sessione" description="Disconnetti automaticamente dopo inattività" last>
+              <SettingRow icon={Lock} label="Timeout sessione" description="Disconnetti automaticamente dopo inattività" last id="timeout-select">
                 <Select value={security.sessionTimeout} onValueChange={(v) => setSecurity({ ...security, sessionTimeout: v })}>
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger id="timeout-select" className="w-[140px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -421,10 +429,10 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-5">
               {/* Current plan */}
-              <div className="flex items-center justify-between p-4 rounded-xl border-2 border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-900/10">
+              <div className="flex items-center justify-between p-4 rounded-xl border-2 border-primary/20 bg-primary/5 dark:bg-primary/10">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-900/30">
-                    <Sparkles className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10">
+                    <Sparkles className="h-5 w-5 text-primary" />
                   </div>
                   <div>
                     <div className="font-semibold text-lg">Piano {meta.label}</div>
@@ -436,7 +444,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 {meta.nextPlan && (
-                  <Button className="bg-indigo-600 hover:bg-indigo-700 text-white" size="sm" onClick={() => handleCheckout(meta.nextPlan || "PRO")} disabled={!!checkoutLoading}>
+                  <Button size="sm" onClick={() => handleCheckout(meta.nextPlan || "PRO")} disabled={!!checkoutLoading}>
                     <Sparkles className="mr-1.5 h-4 w-4" /> {meta.upgradeLabel}
                   </Button>
                 )}
@@ -453,7 +461,7 @@ export default function SettingsPage() {
                   </div>
                   <Progress
                     value={(tenantInfo.storageUsedMb / (tenantInfo.storageLimitGb * 1024)) * 100}
-                    className="h-2 [&>div]:bg-indigo-500"
+                    className="h-2 [&>div]:bg-primary"
                   />
                 </div>
               )}
@@ -483,12 +491,15 @@ export default function SettingsPage() {
                   return (
                     <div
                       key={tier}
-                      className={`rounded-xl border-2 p-4 transition-colors ${isActive ? "border-indigo-400 dark:border-indigo-600 bg-indigo-50/30 dark:bg-indigo-900/10" : "border-border"}`}
+                      className={cn(
+                        "rounded-xl border-2 p-4 transition-colors",
+                        isActive ? "border-primary bg-primary/5 dark:bg-primary/10" : "border-border"
+                      )}
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div className="font-semibold">{tierMeta.label}</div>
                         {isActive && (
-                          <Badge variant="secondary" className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border-0 text-[10px]">
+                          <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-[10px]">
                             ATTIVO
                           </Badge>
                         )}
@@ -497,7 +508,7 @@ export default function SettingsPage() {
                       <ul className="space-y-1.5">
                         {tierMeta.features.map((f) => (
                           <li key={f} className="text-sm text-muted-foreground flex items-center gap-2">
-                            <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 shrink-0" />
+                            <div className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
                             {f}
                           </li>
                         ))}
@@ -529,13 +540,13 @@ export default function SettingsPage() {
             <AlertDialogCancel>Annulla</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleLogout}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
             >
               Disconnetti
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageShell>
   );
 }

@@ -17,3 +17,7 @@
 ## 2026-06-29 - [Centralized CRM Modernization]
 **Learning:** Modernizing a shared component like `CrmResourcePage` allows for sweeping UX and accessibility improvements across multiple routes (Companies, Contacts, Deals, Leads) with minimal code changes. Ensuring that search inputs have a globally consistent '/' shortcut and visual kbd indicator reinforces platform-wide muscle memory. Wrapping shared table actions in Tooltips with descriptive ARIA labels immediately elevates the accessibility of all CRM-based pages.
 **Action:** When a design pattern is repeated across multiple pages, prefer modernizing the shared core component (e.g., `CrmResourcePage`) to ensure consistency and maintainability.
+
+## 2026-06-30 - [Settings Page Modernization & Form Accessibility]
+**Learning:** Modernizing legacy settings pages requires replacing hardcoded color tokens with semantic ones (e.g., `text-primary`, `bg-primary/10`) and adopting centralized layout components like `PageShell` and `PageHeader`. A critical accessibility improvement is ensuring every setting row (Switch, Select, Input) is correctly linked to its label using `htmlFor` and a unique `id`, which also improves the clickable area for users.
+**Action:** Use `PageShell` and `PageHeader` for settings views and always link `Label` to form controls in setting rows to maximize accessibility and usability.
