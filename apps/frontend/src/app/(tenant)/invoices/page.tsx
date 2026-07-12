@@ -28,6 +28,7 @@ import {
 import { cn } from "@/lib/utils";
 
 import { PageShell, PageHeader, TableLoadingState, ErrorState } from "@/components/ui/page-shell";
+import { useSearchShortcut } from "@/hooks/use-search-shortcut";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type InvoiceStatus = "bozza" | "inviata" | "pagata" | "parz_pagata" | "scaduta" | "annullata";
@@ -241,17 +242,7 @@ export default function Page() {
   const [selected, setSel]    = useState<Invoice | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Keyboard shortcut for search
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  useSearchShortcut(searchInputRef);
 
   const totalInvoiced = INVOICES.reduce((s, i) => s + i.total, 0);
   const totalPaid     = INVOICES.filter(i => i.status === "pagata").reduce((s, i) => s + i.total, 0);

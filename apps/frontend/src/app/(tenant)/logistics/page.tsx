@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   Truck, Package, MapPin, Hash, Calendar, Plus, Search, Eye,
   ExternalLink, Printer, AlertTriangle, CheckCircle2, Clock,
@@ -10,9 +10,17 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { PageShell, PageHeader } from "@/components/ui/page-shell";
+import { useSearchShortcut } from "@/hooks/use-search-shortcut";
 import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -52,7 +60,7 @@ const STATUS_CFG: Record<ShipmentStatus, {
   icon: React.ComponentType<{className?: string}>;
   step: number; // 0-4 for timeline
 }> = {
-  in_preparazione: { label: "In preparazione", color: "text-indigo-600",  bg: "bg-indigo-100 dark:bg-indigo-950/40",   border: "border-indigo-200",  icon: Package,       step: 0 },
+  in_preparazione: { label: "In preparazione", color: "text-primary",  bg: "bg-primary/10 dark:bg-primary/5",   border: "border-primary/20",  icon: Package,       step: 0 },
   spedito:         { label: "Spedito",          color: "text-sky-600",     bg: "bg-sky-100 dark:bg-sky-950/40",         border: "border-sky-200",     icon: Truck,         step: 1 },
   in_transito:     { label: "In transito",      color: "text-amber-600",   bg: "bg-amber-100 dark:bg-amber-950/40",     border: "border-amber-200",   icon: Navigation,    step: 2 },
   consegnato:      { label: "Consegnato",       color: "text-emerald-600", bg: "bg-emerald-100 dark:bg-emerald-950/40", border: "border-emerald-200", icon: PackageCheck,  step: 3 },
@@ -94,7 +102,7 @@ function ShipmentTimeline({ status }: { status: ShipmentStatus }) {
                 "h-6 w-6 rounded-full flex items-center justify-center border-2 transition-all",
                 isActive
                   ? isCurrent
-                    ? cn("border-indigo-500 bg-indigo-500 shadow-sm shadow-indigo-200")
+                    ? cn("border-primary bg-primary shadow-sm shadow-primary/20")
                     : "border-emerald-500 bg-emerald-500"
                   : "border-border bg-background",
               )}>
@@ -126,6 +134,9 @@ export default function Page() {
   const [statusFilter, setStatus]   = useState<"Tutti" | ShipmentStatus>("Tutti");
   const [carrierFilter, setCarrier] = useState("Tutti");
   const [selected, setSelected]     = useState<Shipment | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useSearchShortcut(searchInputRef);
 
   const filtered = useMemo(() => SHIPMENTS.filter(s => {
     if (statusFilter  !== "Tutti" && s.status  !== statusFilter)  return false;
@@ -146,25 +157,23 @@ export default function Page() {
   };
 
   return (
-    <div className="flex-1 p-4 md:p-6 animate-in fade-in duration-500 space-y-5">
+    <PageShell>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Logistica & Spedizioni</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {SHIPMENTS.length} spedizioni · {inTransit} in transito · {problems > 0 ? `${problems} con problemi` : "nessun problema"}
-          </p>
-        </div>
-        <Button className="bg-indigo-600 hover:bg-indigo-700 text-white shrink-0" size="sm">
-          <Plus className="mr-1.5 h-4 w-4" /> Nuova Spedizione
-        </Button>
-      </div>
+      <PageHeader
+        title="Logistica & Spedizioni"
+        description={`${SHIPMENTS.length} spedizioni · ${inTransit} in transito · ${problems > 0 ? `${problems} con problemi` : "nessun problema"}`}
+        actions={
+          <Button className="bg-primary hover:bg-primary/90 text-white shrink-0" size="sm">
+            <Plus className="mr-1.5 h-4 w-4" /> Nuova Spedizione
+          </Button>
+        }
+      />
 
       {/* KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: "In preparazione", value: String(preparing),  icon: Package,      color: "text-indigo-600",  bg: "bg-indigo-50 dark:bg-indigo-950/30" },
+          { label: "In preparazione", value: String(preparing),  icon: Package,      color: "text-primary",  bg: "bg-primary/5 dark:bg-primary/5" },
           { label: "In transito",     value: String(inTransit),  icon: Navigation,   color: "text-amber-600",   bg: "bg-amber-50 dark:bg-amber-950/30" },
           { label: "Consegnate",      value: String(delivered),  icon: PackageCheck, color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/30" },
           { label: "Problemi",        value: String(problems),   icon: AlertTriangle,color: "text-rose-600",    bg: "bg-rose-50 dark:bg-rose-950/30" },
@@ -184,8 +193,21 @@ export default function Page() {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
+          <Label htmlFor="logistics-search" className="sr-only">Cerca spedizione, tracking, destinazione...</Label>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Cerca spedizione, tracking, destinazione..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          <Input
+            id="logistics-search"
+            ref={searchInputRef}
+            placeholder="Cerca spedizione, tracking, destinazione..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9 pr-10"
+          />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:block">
+            <kbd className="h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100 flex">
+              <span className="text-xs">/</span>
+            </kbd>
+          </div>
         </div>
         <Select value={statusFilter} onValueChange={v => setStatus(v as any)}>
           <SelectTrigger className="w-full sm:w-48">
@@ -234,7 +256,7 @@ export default function Page() {
                   key={s.id}
                   className={cn(
                     "cursor-pointer hover:shadow-md transition-all border-border/60",
-                    isSelected && "border-indigo-400 shadow-md ring-1 ring-indigo-400/30",
+                    isSelected && "border-primary shadow-md ring-1 ring-primary/30",
                     isProblem  && "border-rose-300 dark:border-rose-800",
                   )}
                   onClick={() => setSelected(isSelected ? null : s)}
@@ -247,7 +269,7 @@ export default function Page() {
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-black font-mono text-indigo-600">{s.id}</span>
+                            <span className="text-sm font-black font-mono text-primary">{s.id}</span>
                             <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0", sc.color, "border-current/30", sc.bg)}>
                               {sc.label}
                             </Badge>
@@ -266,7 +288,7 @@ export default function Page() {
                     <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap mt-1">
                       <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{s.destination.split(",").pop()?.trim()}</span>
                       <span className="flex items-center gap-1"><Package className="h-3 w-3" />{s.items} colli · {s.weight}</span>
-                      {s.orderId && <span className="flex items-center gap-1 text-indigo-600"><Hash className="h-3 w-3" />{s.orderId}</span>}
+                      {s.orderId && <span className="flex items-center gap-1 text-primary"><Hash className="h-3 w-3" />{s.orderId}</span>}
                       {s.status !== "consegnato" && s.status !== "problema" && (
                         <span className={cn("flex items-center gap-1 font-semibold",
                           days < 0 ? "text-rose-600" : days <= 1 ? "text-amber-600" : "text-muted-foreground"
@@ -294,14 +316,21 @@ export default function Page() {
             <Card className="sticky top-4 border-border/60">
               <CardHeader className="pb-3 flex flex-row items-start justify-between">
                 <div>
-                  <p className="font-black font-mono text-indigo-600 text-sm">{selected.id}</p>
+                  <p className="font-black font-mono text-primary text-sm">{selected.id}</p>
                   <Badge variant="outline" className={cn("text-[10px] mt-1", STATUS_CFG[selected.status].color, "border-current/30", STATUS_CFG[selected.status].bg)}>
                     {STATUS_CFG[selected.status].label}
                   </Badge>
                 </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelected(null)}>
-                  <X className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelected(null)} aria-label="Chiudi dettagli">
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    Chiudi dettagli
+                  </TooltipContent>
+                </Tooltip>
               </CardHeader>
               <CardContent className="space-y-3 pt-0">
                 {[
@@ -349,6 +378,6 @@ export default function Page() {
           </div>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }

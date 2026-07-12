@@ -18,6 +18,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { PageShell, PageHeader } from "@/components/ui/page-shell";
+import { useSearchShortcut } from "@/hooks/use-search-shortcut";
 import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
 import { cn } from "@/lib/utils";
@@ -166,18 +167,7 @@ export function CrmResourcePage({
   const showEconomic = canSeeEconomicValues();
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const isInput = ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName || "");
-      const isModal = document.querySelector('[role="dialog"]');
-      if (e.key === "/" && !isInput && !isModal && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  useSearchShortcut(searchInputRef);
 
   const relationResources = useMemo(
     () => Array.from(new Set(fields.map((f) => f.relation).filter(Boolean))) as Array<NonNullable<CrmField["relation"]>>,

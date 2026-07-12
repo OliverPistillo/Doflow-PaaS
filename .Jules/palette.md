@@ -17,3 +17,7 @@
 ## 2026-06-29 - [Centralized CRM Modernization]
 **Learning:** Modernizing a shared component like `CrmResourcePage` allows for sweeping UX and accessibility improvements across multiple routes (Companies, Contacts, Deals, Leads) with minimal code changes. Ensuring that search inputs have a globally consistent '/' shortcut and visual kbd indicator reinforces platform-wide muscle memory. Wrapping shared table actions in Tooltips with descriptive ARIA labels immediately elevates the accessibility of all CRM-based pages.
 **Action:** When a design pattern is repeated across multiple pages, prefer modernizing the shared core component (e.g., `CrmResourcePage`) to ensure consistency and maintainability.
+
+## 2026-07-12 - [Custom Hook for Search Shortcut]
+**Learning:** Extracting repeated logic like the '/' search shortcut into a reusable hook (`useSearchShortcut`) simplifies component code and ensures consistent behavior across the platform. Modernizing a page like Logistics using `PageShell` and semantic color tokens (`primary` vs hardcoded `indigo`) reinforces the v2 design system. Accessibility is improved by ensuring inputs have explicit `id`s, `sr-only` labels, and visual `<kbd>` indicators.
+**Action:** Use the `useSearchShortcut` hook for all search-focusing logic and continue migrating hardcoded colors to semantic tokens.
