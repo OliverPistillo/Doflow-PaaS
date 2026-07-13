@@ -17,3 +17,7 @@
 ## 2026-06-29 - [Centralized CRM Modernization]
 **Learning:** Modernizing a shared component like `CrmResourcePage` allows for sweeping UX and accessibility improvements across multiple routes (Companies, Contacts, Deals, Leads) with minimal code changes. Ensuring that search inputs have a globally consistent '/' shortcut and visual kbd indicator reinforces platform-wide muscle memory. Wrapping shared table actions in Tooltips with descriptive ARIA labels immediately elevates the accessibility of all CRM-based pages.
 **Action:** When a design pattern is repeated across multiple pages, prefer modernizing the shared core component (e.g., `CrmResourcePage`) to ensure consistency and maintainability.
+
+## 2026-06-30 - [Modern Confirmation Dialogs in Shared Components]
+**Learning:** Replacing native `window.confirm()` with a custom `AlertDialog` (via `useConfirm` hook) significantly improves the visual polish and accessibility of destructive actions. It allows for clearer messaging, such as explaining the "soft delete" behavior, and provides a themed, consistent UI that feels integrated into the application.
+**Action:** Prefer `useConfirm` over `window.confirm()` for all destructive actions to maintain visual consistency and provide better context to the user.
