@@ -95,6 +95,19 @@ type PaperworkSummary = {
   sources?: SourceFlags;
 };
 
+type KnowledgeSummary = {
+  publishedArticles?: number;
+  draftArticles?: number;
+  articlesDueForReview?: number;
+  totalAssets?: number;
+  activeTemplates?: number;
+  favoritesCount?: number;
+  recentlyUpdatedCount?: number;
+  systemTemplatesCount?: number;
+  knowledgeRisksCount?: number;
+  sources?: SourceFlags;
+};
+
 type AutomationsSummary = {
   totalRules: number;
   enabledRules: number;
@@ -225,6 +238,7 @@ type DashboardSummary = {
     paperworkSummary?: PaperworkSummary;
     automationsSummary?: AutomationsSummary;
     calendarSummary?: CalendarSummary;
+    knowledgeSummary?: KnowledgeSummary;
     sources?: SourceFlags;
   };
 };
@@ -421,6 +435,18 @@ function getFallbackSummary(): DashboardSummary {
         nextEventAt: null,
         remindersDue: 0,
         derivedEventsCount: 0,
+        sources: {},
+      },
+      knowledgeSummary: {
+        publishedArticles: 0,
+        draftArticles: 0,
+        articlesDueForReview: 0,
+        totalAssets: 0,
+        activeTemplates: 0,
+        favoritesCount: 0,
+        recentlyUpdatedCount: 0,
+        systemTemplatesCount: 0,
+        knowledgeRisksCount: 0,
         sources: {},
       },
       sources: {},
@@ -1014,6 +1040,47 @@ export default function DashboardClient() {
     </SectionCard>
   );
 
+  const knowledgeSummary = summary.operations.knowledgeSummary || {
+    publishedArticles: 0,
+    draftArticles: 0,
+    articlesDueForReview: 0,
+    totalAssets: 0,
+    activeTemplates: 0,
+    favoritesCount: 0,
+    recentlyUpdatedCount: 0,
+    systemTemplatesCount: 0,
+    knowledgeRisksCount: 0,
+    sources: {},
+  };
+
+  const knowledgeCard = (
+    <SectionCard
+      title="Knowledge Base"
+      description="Procedure, asset e template operativi interni."
+      icon={FileText}
+      metrics={[
+        { label: "Articoli pubblicati", value: knowledgeSummary.publishedArticles || 0, tone: (knowledgeSummary.publishedArticles || 0) > 0 ? "success" : "default" },
+        { label: "Bozze", value: knowledgeSummary.draftArticles || 0 },
+        { label: "Da revisionare", value: knowledgeSummary.articlesDueForReview || 0, tone: (knowledgeSummary.articlesDueForReview || 0) > 0 ? "warning" : "default" },
+        { label: "Asset", value: knowledgeSummary.totalAssets || 0 },
+        { label: "Template attivi", value: knowledgeSummary.activeTemplates || 0 },
+        { label: "Preferiti", value: knowledgeSummary.favoritesCount || 0 },
+        { label: "Aggiornati di recente", value: knowledgeSummary.recentlyUpdatedCount || 0 },
+        { label: "Template sistema", value: knowledgeSummary.systemTemplatesCount || 0 },
+        { label: "Rischi", value: knowledgeSummary.knowledgeRisksCount || 0, tone: (knowledgeSummary.knowledgeRisksCount || 0) > 0 ? "danger" : "default" },
+      ]}
+      sources={knowledgeSummary.sources || { knowledge: (knowledgeSummary.publishedArticles || 0) > 0 }}
+      emptyText="Nessun contenuto knowledge presente."
+    >
+      <div className="flex flex-wrap gap-2">
+        <Button asChild variant="outline" size="sm"><Link href="/knowledge">Apri knowledge</Link></Button>
+        <Button asChild variant="outline" size="sm"><Link href="/knowledge/articles">Articoli</Link></Button>
+        <Button asChild variant="outline" size="sm"><Link href="/knowledge/templates">Template</Link></Button>
+        <Button asChild variant="outline" size="sm"><Link href="/knowledge/assets">Asset</Link></Button>
+      </div>
+    </SectionCard>
+  );
+
   const contractsSummary = summary.operations.contractsSummary || {
     totalContracts: 0,
     draftContracts: 0,
@@ -1264,6 +1331,7 @@ export default function DashboardClient() {
             {reportsCard}
             {automationsCard}
             {calendarCard}
+            {knowledgeCard}
             {contractsCard}
             {paperworkCard}
           </div>
@@ -1314,6 +1382,7 @@ export default function DashboardClient() {
             {reportsCard}
             {automationsCard}
             {calendarCard}
+            {knowledgeCard}
             {contractsCard}
             {paperworkCard}
           </div>
@@ -1356,6 +1425,7 @@ export default function DashboardClient() {
             {reportsCard}
             {automationsCard}
             {calendarCard}
+            {knowledgeCard}
             {contractsCard}
             {paperworkCard}
           </div>
