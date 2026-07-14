@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   Truck, Package, MapPin, Hash, Calendar, Plus, Search, Eye,
   ExternalLink, Printer, AlertTriangle, CheckCircle2, Clock,
@@ -11,8 +11,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { useSearchShortcut } from "@/hooks/use-search-shortcut";
 import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -126,6 +128,9 @@ export default function Page() {
   const [statusFilter, setStatus]   = useState<"Tutti" | ShipmentStatus>("Tutti");
   const [carrierFilter, setCarrier] = useState("Tutti");
   const [selected, setSelected]     = useState<Shipment | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useSearchShortcut(searchInputRef);
 
   const filtered = useMemo(() => SHIPMENTS.filter(s => {
     if (statusFilter  !== "Tutti" && s.status  !== statusFilter)  return false;
@@ -184,8 +189,21 @@ export default function Page() {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
+          <Label htmlFor="logistics-search" className="sr-only">Cerca spedizioni</Label>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Cerca spedizione, tracking, destinazione..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          <Input
+            id="logistics-search"
+            ref={searchInputRef}
+            placeholder="Cerca spedizione, tracking, destinazione..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9 pr-10"
+          />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:block">
+            <kbd className="h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100 flex">
+              <span className="text-xs">/</span>
+            </kbd>
+          </div>
         </div>
         <Select value={statusFilter} onValueChange={v => setStatus(v as any)}>
           <SelectTrigger className="w-full sm:w-48">

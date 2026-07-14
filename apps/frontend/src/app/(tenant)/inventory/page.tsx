@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   Package, PackageX, Plus, Search, AlertTriangle, ArrowUpDown,
   TrendingUp, TrendingDown, Edit2, BarChart2, Warehouse, ArrowUp,
@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -19,6 +20,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
+import { useSearchShortcut } from "@/hooks/use-search-shortcut";
 import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -163,6 +165,9 @@ export default function Page() {
   const [catFilter, setCat]       = useState("Tutti");
   const [statusFilter, setStatus] = useState("Tutti");
   const [selected, setSelected]   = useState<InventoryItem | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useSearchShortcut(searchInputRef);
 
   const filtered = useMemo(() => INVENTORY.filter(i => {
     if (catFilter    !== "Tutti" && i.category !== catFilter) return false;
@@ -268,8 +273,21 @@ export default function Page() {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
+          <Label htmlFor="inventory-search" className="sr-only">Cerca articoli</Label>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Cerca articoli, SKU..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          <Input
+            id="inventory-search"
+            ref={searchInputRef}
+            placeholder="Cerca articoli, SKU..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9 pr-10"
+          />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:block">
+            <kbd className="h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100 flex">
+              <span className="text-xs">/</span>
+            </kbd>
+          </div>
         </div>
         <Select value={catFilter} onValueChange={setCat}>
           <SelectTrigger className="w-full sm:w-44"><SelectValue placeholder="Categoria" /></SelectTrigger>

@@ -17,3 +17,7 @@
 ## 2026-06-29 - [Centralized CRM Modernization]
 **Learning:** Modernizing a shared component like `CrmResourcePage` allows for sweeping UX and accessibility improvements across multiple routes (Companies, Contacts, Deals, Leads) with minimal code changes. Ensuring that search inputs have a globally consistent '/' shortcut and visual kbd indicator reinforces platform-wide muscle memory. Wrapping shared table actions in Tooltips with descriptive ARIA labels immediately elevates the accessibility of all CRM-based pages.
 **Action:** When a design pattern is repeated across multiple pages, prefer modernizing the shared core component (e.g., `CrmResourcePage`) to ensure consistency and maintainability.
+
+## 2026-06-30 - [Centralized Search Shortcut Hook]
+**Learning:** Moving repetitive shortcut logic into a centralized hook like `useSearchShortcut` ensures consistent behavior across the app while reducing duplication. The hook must intelligently ignore events when a user is already in an input/textarea or when a modal is open (`[role="dialog"]`) to prevent disruptive focus stealing.
+**Action:** Use the `useSearchShortcut` hook for all search-related focus logic to ensure a unified, modal-aware experience across different modules.
