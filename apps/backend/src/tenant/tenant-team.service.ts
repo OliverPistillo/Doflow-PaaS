@@ -26,7 +26,25 @@ const AVAILABILITY_TYPES = ['available', 'unavailable', 'vacation', 'sick', 'rem
 const AVAILABILITY_ENTRY_STATUSES = ['planned', 'confirmed', 'cancelled'];
 const TIME_ACTIVITY_TYPES = ['design', 'development', 'seo', 'copywriting', 'meeting', 'project_management', 'support', 'admin', 'research', 'qa', 'work'];
 const TIME_STATUSES = ['draft', 'submitted', 'approved', 'rejected'];
-const MODULE_KEYS = ['crm', 'briefing', 'quotes', 'projects', 'documents', 'notifications', 'finance', 'team', 'reports', 'settings'];
+const MODULE_KEYS = [
+  'crm',
+  'briefing',
+  'quotes',
+  'projects',
+  'documents',
+  'notifications',
+  'finance',
+  'team',
+  'reports',
+  'settings',
+  'credentials',
+  'credentials.read',
+  'credentials.create',
+  'credentials.edit',
+  'credentials.reveal',
+  'credentials.manage_permissions',
+  'credentials.audit',
+];
 
 type AuthUser = { id: string; email?: string; role: string };
 type ListResult<T = Record<string, any>> = { items: T[]; total?: number; limit?: number; offset?: number };

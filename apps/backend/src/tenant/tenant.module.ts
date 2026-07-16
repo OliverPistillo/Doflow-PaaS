@@ -31,6 +31,11 @@ import { TenantCalendarController } from './tenant-calendar.controller';
 import { TenantCalendarService } from './tenant-calendar.service';
 import { TenantKnowledgeController } from './tenant-knowledge.controller';
 import { TenantKnowledgeService } from './tenant-knowledge.service';
+import { TenantCredentialsController } from './tenant-credentials.controller';
+import { TenantCredentialsService } from './tenant-credentials.service';
+import { TenantCredentialsCryptoService } from './tenant-credentials-crypto.service';
+import { TenantCredentialsPermissionsService } from './tenant-credentials-permissions.service';
+import { TenantCredentialsSchedulerService } from './tenant-credentials-scheduler.service';
 import { FileStorageService } from '../file-storage.service';
 
 import { Tenant } from '../superadmin/entities/tenant.entity';
@@ -69,6 +74,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantAutomationsController,
     TenantCalendarController,
     TenantKnowledgeController,
+    TenantCredentialsController,
   ],
   providers: [
     TenantDashboardService,
@@ -85,6 +91,10 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantAutomationsService,
     TenantCalendarService,
     TenantKnowledgeService,
+    TenantCredentialsService,
+    TenantCredentialsCryptoService,
+    TenantCredentialsPermissionsService,
+    TenantCredentialsSchedulerService,
     FileStorageService,
   ],
 })

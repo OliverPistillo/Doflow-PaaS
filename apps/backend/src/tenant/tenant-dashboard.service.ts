@@ -1515,6 +1515,59 @@ export class TenantDashboardService {
     };
   }
 
+  private async buildCredentialsSummary(schema: string, user: TenantDashboardAuthUser): Promise<DashboardCredentialsSummary> {
+    const safe = safeSchema(schema, 'TenantDashboardService.buildCredentialsSummary');
+    const hasCredentials = await this.tableExists(safe, 'credential_items');
+    if (!hasCredentials) {
+      return {
+        totalCredentials: 0,
+        activeCredentials: 0,
+        expiringCredentials: 0,
+        renewalsDue: 0,
+        rotationDue: 0,
+        expiredCredentials: 0,
+        recentCredentials: [],
+        sources: { credential_items: false },
+      };
+    }
+    const userId = UUID_RE.test(user.id) ? user.id : null;
+    const canAdmin = this.canViewFinance(user.role);
+    const visibilitySql = canAdmin
+      ? 'TRUE'
+      : userId
+        ? `EXISTS (
+             SELECT 1 FROM "${safe}".credential_permissions cp
+             WHERE cp.credential_item_id = ci.id
+               AND cp.user_id = $1
+               AND cp.can_view_metadata = true
+               AND cp.deleted_at IS NULL
+           )`
+        : 'FALSE';
+    const params = canAdmin || !userId ? [] : [userId];
+    const counts = await this.dataSource.query(
+      `SELECT
+         COUNT(*)::int AS "totalCredentials",
+         COUNT(*) FILTER (WHERE ci.status = 'active')::int AS "activeCredentials",
+         COUNT(*) FILTER (WHERE ci.expires_at IS NOT NULL AND ci.expires_at <= now() + interval '30 days' AND ci.expires_at >= now())::int AS "expiringCredentials",
+         COUNT(*) FILTER (WHERE ci.renewal_at IS NOT NULL AND ci.renewal_at <= now() + interval '30 days')::int AS "renewalsDue",
+         COUNT(*) FILTER (WHERE ci.rotation_due_at IS NOT NULL AND ci.rotation_due_at <= now() + interval '30 days')::int AS "rotationDue",
+         COUNT(*) FILTER (WHERE ci.expires_at IS NOT NULL AND ci.expires_at < now())::int AS "expiredCredentials"
+       FROM "${safe}".credential_items ci
+       WHERE ci.deleted_at IS NULL AND ${visibilitySql}`,
+      params,
+    );
+    return {
+      totalCredentials: Number(counts[0]?.totalCredentials || 0),
+      activeCredentials: Number(counts[0]?.activeCredentials || 0),
+      expiringCredentials: Number(counts[0]?.expiringCredentials || 0),
+      renewalsDue: Number(counts[0]?.renewalsDue || 0),
+      rotationDue: Number(counts[0]?.rotationDue || 0),
+      expiredCredentials: Number(counts[0]?.expiredCredentials || 0),
+      recentCredentials: [],
+      sources: { credential_items: true },
+    };
+  }
+
   async getSummary(): Promise<TenantDashboardSummary> {
     const schema = this.getTenantSchema();
     const user = this.getAuthUser();
@@ -1541,6 +1594,7 @@ export class TenantDashboardService {
       automationsSummary,
       calendarSummary,
       knowledgeSummary,
+      credentialsSummary,
     ] = await Promise.all([
       this.buildSalesSummary(schema, showFinance),
       this.buildProjectsSummary(schema, user, audience),
@@ -1560,6 +1614,7 @@ export class TenantDashboardService {
       this.buildAutomationsSummary(schema, user),
       this.buildCalendarSummary(schema, user),
       this.buildKnowledgeSummary(schema, user),
+      this.buildCredentialsSummary(schema, user),
     ]);
 
     const finance = showFinance
@@ -1607,6 +1662,7 @@ export class TenantDashboardService {
         automationsSummary,
         calendarSummary,
         knowledgeSummary,
+        credentialsSummary,
         sources: {
           ...briefingOperations.sources,
           ...notificationSummary.sources,
@@ -1617,6 +1673,7 @@ export class TenantDashboardService {
           ...automationsSummary.sources,
           ...calendarSummary.sources,
           ...knowledgeSummary.sources,
+          ...credentialsSummary.sources,
         },
       },
     };
@@ -1910,6 +1967,17 @@ interface DashboardKnowledgeSummary {
   sources: DashboardSourceFlags;
 }
 
+interface DashboardCredentialsSummary {
+  totalCredentials: number;
+  activeCredentials: number;
+  expiringCredentials: number;
+  renewalsDue: number;
+  rotationDue: number;
+  expiredCredentials: number;
+  recentCredentials: Record<string, any>[];
+  sources: DashboardSourceFlags;
+}
+
 interface TenantDashboardSummary {
   tenant: {
     id?: string;
@@ -1951,6 +2019,7 @@ interface TenantDashboardSummary {
     automationsSummary: DashboardAutomationsSummary;
     calendarSummary: DashboardCalendarSummary;
     knowledgeSummary: DashboardKnowledgeSummary;
+    credentialsSummary: DashboardCredentialsSummary;
     sources: DashboardSourceFlags;
   };
 }

@@ -37,6 +37,7 @@ import {
 import { seedTenantAutomationTemplatesAndRules } from '../tenant/tenant-automations-schema';
 import { seedTenantPlanningViews } from '../tenant/tenant-calendar-schema';
 import { seedTenantKnowledgeBase } from '../tenant/tenant-knowledge-schema';
+import { ensureTenantCredentialsTables } from '../tenant/tenant-credentials-schema';
 
 const TENANT_SLUG = 'doflow';
 const TENANT_SCHEMA = 'doflow';
@@ -312,6 +313,7 @@ async function ensureTenantTables(ds: DataSource, schema: string) {
   await seedTenantAutomationTemplatesAndRules(ds, s);
   await seedTenantPlanningViews(ds, s);
   await seedTenantKnowledgeBase(ds, s);
+  await ensureTenantCredentialsTables(ds, s);
 }
 
 async function ensureTenantRecord(ds: DataSource): Promise<{ id: string }> {
