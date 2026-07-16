@@ -34,7 +34,6 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-  GrayCard,
 } from "@/components/ui/card";
 import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
@@ -530,16 +529,16 @@ function SectionCard({
   const isFallback = !hasSource(sources || {}) && metricsAreZero(metrics);
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-4">
+    <Card className="overflow-hidden border-border/60 shadow-sm">
+      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className="rounded-nav bg-primary/10 p-2 text-primary">
+            <span className="rounded-lg bg-primary/10 p-2 text-primary">
               <Icon className="h-4 w-4" />
             </span>
-            <CardTitle className="text-[18px]">{title}</CardTitle>
+            <CardTitle className="text-base">{title}</CardTitle>
           </div>
-          <CardDescription>{description}</CardDescription>
+          <CardDescription className="text-xs leading-relaxed">{description}</CardDescription>
         </div>
         {isFallback ? (
           <Badge variant="outline" className="shrink-0 border-border text-muted-foreground">
@@ -547,14 +546,14 @@ function SectionCard({
           </Badge>
         ) : null}
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
           {metrics.map((metric) => (
-            <GrayCard key={metric.label} className="p-4">
+            <div key={metric.label} className="rounded-xl border border-border/50 bg-muted/25 px-3 py-2.5">
               <p className="text-xs font-semibold text-muted-foreground">{metric.label}</p>
               <p
                 className={cn(
-                  "mt-1 text-2xl font-bold tabular-nums text-foreground",
+                  "mt-1 text-xl font-bold tabular-nums text-foreground",
                   metric.tone === "danger" && "text-destructive",
                   metric.tone === "warning" && "text-chart-5",
                   metric.tone === "success" && "text-chart-2",
@@ -565,7 +564,7 @@ function SectionCard({
               {metric.hint ? (
                 <p className="mt-1 text-xs text-muted-foreground">{metric.hint}</p>
               ) : null}
-            </GrayCard>
+            </div>
           ))}
         </div>
         {children}
@@ -665,6 +664,50 @@ function QuickActions({ actions }: { actions: QuickAction[] }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function PriorityStrip({
+  items,
+}: {
+  items: Array<{
+    label: string;
+    value: number | string;
+    href: string;
+    icon: ComponentType<{ className?: string }>;
+    tone?: "danger" | "warning" | "success";
+  }>;
+}) {
+  return (
+    <div className="grid gap-3 md:grid-cols-3">
+      {items.map((item) => {
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.label}
+            href={item.href}
+            className={cn(
+              "group rounded-2xl border border-border/60 bg-card px-4 py-3 shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              item.tone === "danger" && "border-destructive/30 bg-destructive/5 hover:border-destructive/50",
+              item.tone === "warning" && "border-chart-5/30 bg-chart-5/5 hover:border-chart-5/50",
+              item.tone === "success" && "border-chart-2/30 bg-chart-2/5 hover:border-chart-2/50",
+            )}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {item.label}
+                </p>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{item.value}</p>
+              </div>
+              <span className="rounded-xl bg-background/80 p-2 text-primary shadow-sm transition-transform group-hover:translate-x-0.5">
+                <Icon className="h-5 w-5" />
+              </span>
+            </div>
+          </Link>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1281,8 +1324,9 @@ export default function DashboardClient() {
   );
 
   return (
-    <div className="flex-1 space-y-5 p-4 pt-4 md:p-6">
-      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+    <div className="flex-1 space-y-4 p-4 pt-4 md:p-6">
+      <div className="rounded-3xl border border-border/60 bg-card px-4 py-4 shadow-sm md:px-5">
+        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
         <div>
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <h1 className="text-[24px] font-bold tracking-tight text-foreground">
@@ -1310,6 +1354,7 @@ export default function DashboardClient() {
             Aggiorna
           </Button>
         </div>
+        </div>
       </div>
 
       {error ? (
@@ -1321,6 +1366,32 @@ export default function DashboardClient() {
           </div>
         </div>
       ) : null}
+
+      <PriorityStrip
+        items={[
+          {
+            label: "Attenzione",
+            value: (summary.operations.urgentNotifications || 0) + (summary.operations.unreadNotifications || 0),
+            href: "/notifications",
+            icon: Bell,
+            tone: (summary.operations.urgentNotifications || 0) > 0 ? "danger" : "warning",
+          },
+          {
+            label: "Progetti critici",
+            value: (summary.projects.lateProjects || 0) + (summary.projects.blockedProjects || 0),
+            href: "/projects",
+            icon: FolderKanban,
+            tone: (summary.projects.lateProjects || 0) + (summary.projects.blockedProjects || 0) > 0 ? "danger" : "success",
+          },
+          {
+            label: "Scadenze",
+            value: (summary.projects.dueTasks || 0) + (summary.projects.upcomingMilestones || 0),
+            href: "/calendar/deadlines",
+            icon: CalendarDays,
+            tone: (summary.projects.dueTasks || 0) > 0 ? "warning" : "success",
+          },
+        ]}
+      />
 
       {isExecutive ? (
         <>

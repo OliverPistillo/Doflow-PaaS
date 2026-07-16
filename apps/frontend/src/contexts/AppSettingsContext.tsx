@@ -3,14 +3,14 @@
 /**
  * AppSettingsContext — persiste in localStorage le preferenze UI:
  *   - sidebarVariant : inset | sidebar | floating
- *   - sidebarCollapsible : icon | offcanvas | none
+ *   - sidebarCollapsible : icon
  * Il tema (light/dark/system) è gestito da next-themes direttamente.
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 
 export type SidebarVariant    = "inset" | "sidebar" | "floating";
-export type SidebarCollapsible = "icon" | "offcanvas" | "none";
+export type SidebarCollapsible = "icon";
 
 interface AppSettingsContextValue {
   sidebarVariant:     SidebarVariant;
@@ -37,6 +37,23 @@ function readLS<T>(key: string, fallback: T): T {
   }
 }
 
+function readSidebarCollapsible(): SidebarCollapsible {
+  if (typeof window === "undefined") return DEFAULT_COLLAPSIBLE;
+  try {
+    const raw = localStorage.getItem("df_sidebar_collapsible");
+    if (!raw) return DEFAULT_COLLAPSIBLE;
+    const parsed = JSON.parse(raw);
+    if (parsed === "icon") return "icon";
+
+    // Migrazione automatica di preferenze obsolete: "none" disattivava il trigger.
+    localStorage.setItem("df_sidebar_collapsible", JSON.stringify(DEFAULT_COLLAPSIBLE));
+    return DEFAULT_COLLAPSIBLE;
+  } catch {
+    writeLS("df_sidebar_collapsible", DEFAULT_COLLAPSIBLE);
+    return DEFAULT_COLLAPSIBLE;
+  }
+}
+
 function writeLS(key: string, value: unknown) {
   if (typeof window === "undefined") return;
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
@@ -49,7 +66,7 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
   // Idratazione client-side (evita mismatch SSR)
   useEffect(() => {
     _setVariant(readLS("df_sidebar_variant", DEFAULT_VARIANT));
-    _setCollapsible(readLS("df_sidebar_collapsible", DEFAULT_COLLAPSIBLE));
+    _setCollapsible(readSidebarCollapsible());
   }, []);
 
   const setSidebarVariant = useCallback((v: SidebarVariant) => {
@@ -57,9 +74,9 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
     writeLS("df_sidebar_variant", v);
   }, []);
 
-  const setSidebarCollapsible = useCallback((c: SidebarCollapsible) => {
-    _setCollapsible(c);
-    writeLS("df_sidebar_collapsible", c);
+  const setSidebarCollapsible = useCallback((_c: SidebarCollapsible) => {
+    _setCollapsible("icon");
+    writeLS("df_sidebar_collapsible", "icon");
   }, []);
 
   const resetSettings = useCallback(() => {

@@ -35,10 +35,10 @@ import {
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-// Figma sidebar width: 200px, icon-only: 72px
-const SIDEBAR_WIDTH = "200px"
-const SIDEBAR_WIDTH_MOBILE = "260px"
-const SIDEBAR_WIDTH_ICON = "80px"
+// Tenant shell width: workspace navigation, icon-only compact rail.
+const SIDEBAR_WIDTH = "280px"
+const SIDEBAR_WIDTH_MOBILE = "280px"
+const SIDEBAR_WIDTH_ICON = "72px"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
 type SidebarContextProps = {

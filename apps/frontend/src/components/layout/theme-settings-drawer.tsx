@@ -23,7 +23,6 @@ import { useSidebar } from "@/components/ui/sidebar";
 import {
   useAppSettings,
   type SidebarVariant,
-  type SidebarCollapsible,
 } from "@/contexts/AppSettingsContext";
 import { cn } from "@/lib/utils";
 
@@ -239,10 +238,6 @@ export function ThemeSettingsDrawer() {
     resetSettings();
   };
 
-  // Layout radio value: 'default' = sidebar aperta, altrimenti il collapsible
-  // (stesso pattern di shadcn-admin)
-  const layoutValue = sidebarCollapsible === "none" ? "default" : sidebarCollapsible;
-
   return (
     <Sheet>
       <Tooltip>
@@ -317,23 +312,28 @@ export function ThemeSettingsDrawer() {
                 setSidebarCollapsible("icon");
               }}
             />
-            <RadioGroup
-              value={layoutValue}
-              onValueChange={(v) => {
-                if (v === "default") {
-                  setSidebarOpen(true);
-                  setSidebarCollapsible("none");
-                } else {
+            <div className="rounded-xl border border-border bg-muted/30 p-3">
+              <button
+                type="button"
+                onClick={() => {
                   setSidebarOpen(false);
-                  setSidebarCollapsible(v as SidebarCollapsible);
-                }
-              }}
-              className="grid grid-cols-3 gap-3"
-            >
-              <ConfigOption value="none"      label="Default"  icon={IconLayoutDefault} />
-              <ConfigOption value="icon"      label="Compatto" icon={IconLayoutCompact} />
-              <ConfigOption value="offcanvas" label="Pieno"    icon={IconLayoutFull}    />
-            </RadioGroup>
+                  setSidebarCollapsible("icon");
+                }}
+                className="group w-full outline-none"
+                aria-label="Usa sidebar collassabile"
+              >
+                <div className="relative rounded-[6px] ring-1 ring-primary shadow-sm transition-all group-focus-visible:ring-2">
+                  <CircleCheck className="absolute right-0 top-0 z-10 size-5 -translate-y-1/2 translate-x-1/2 fill-primary stroke-white" />
+                  <IconLayoutCompact className="h-auto w-full fill-primary stroke-primary" />
+                </div>
+                <div className="mt-2 text-center text-xs font-medium text-foreground">
+                  Sidebar collassabile
+                </div>
+              </button>
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                Il trigger dell&apos;header alterna sempre la vista estesa e compatta. Le vecchie preferenze non collassabili vengono migrate automaticamente.
+              </p>
+            </div>
           </div>
 
         </div>

@@ -27,21 +27,19 @@ import { SearchTriggerButton } from "@/components/ui/global-search";
 // ─── Inner layout — consuma AppSettingsContext ─────────────────────────────────
 
 function TenantLayoutInner({ children }: { children: React.ReactNode }) {
-  const { sidebarVariant, sidebarCollapsible } = useAppSettings();
-  const collapsible = sidebarCollapsible === "none" ? "none" : sidebarCollapsible;
+  const { sidebarVariant } = useAppSettings();
 
   return (
     <SidebarProvider>
-      <TenantSidebar variant={sidebarVariant} collapsible={collapsible} />
+      <TenantSidebar variant={sidebarVariant} collapsible="icon" />
       <SidebarInset className="doflow-app-frame">
 
         {/* ── HEADER ── */}
-        <header className="doflow-app-header flex h-14 shrink-0 items-center gap-2 px-4 sticky top-0 z-10">
-          <SidebarTrigger className="-ml-1" />
+        <header className="doflow-app-header sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-border/50 px-3 sm:px-4">
+          <SidebarTrigger className="-ml-1 shrink-0" />
           <div className="h-5 w-px bg-border" aria-hidden="true" />
 
-          {/* ✅ Cmd+K Search — visibile da sm in su */}
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <SearchTriggerButton context="tenant" />
           </div>
 
