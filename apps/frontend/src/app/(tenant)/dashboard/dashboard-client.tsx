@@ -108,6 +108,17 @@ type KnowledgeSummary = {
   sources?: SourceFlags;
 };
 
+type CredentialsSummary = {
+  totalCredentials?: number;
+  activeCredentials?: number;
+  archivedCredentials?: number;
+  expiringCredentials?: number;
+  renewalsDue?: number;
+  rotationDue?: number;
+  expiredCredentials?: number;
+  sources?: SourceFlags;
+};
+
 type AutomationsSummary = {
   totalRules: number;
   enabledRules: number;
@@ -239,6 +250,7 @@ type DashboardSummary = {
     automationsSummary?: AutomationsSummary;
     calendarSummary?: CalendarSummary;
     knowledgeSummary?: KnowledgeSummary;
+    credentialsSummary?: CredentialsSummary;
     sources?: SourceFlags;
   };
 };
@@ -447,6 +459,16 @@ function getFallbackSummary(): DashboardSummary {
         recentlyUpdatedCount: 0,
         systemTemplatesCount: 0,
         knowledgeRisksCount: 0,
+        sources: {},
+      },
+      credentialsSummary: {
+        totalCredentials: 0,
+        activeCredentials: 0,
+        archivedCredentials: 0,
+        expiringCredentials: 0,
+        renewalsDue: 0,
+        rotationDue: 0,
+        expiredCredentials: 0,
         sources: {},
       },
       sources: {},
@@ -1081,6 +1103,41 @@ export default function DashboardClient() {
     </SectionCard>
   );
 
+  const credentialsSummary = summary.operations.credentialsSummary || {
+    totalCredentials: 0,
+    activeCredentials: 0,
+    archivedCredentials: 0,
+    expiringCredentials: 0,
+    renewalsDue: 0,
+    rotationDue: 0,
+    expiredCredentials: 0,
+    sources: {},
+  };
+
+  const credentialsCard = (
+    <SectionCard
+      title="Accessi e credenziali"
+      description="Vault interno metadata-only: dashboard solo aggregata, senza titoli o segreti."
+      icon={Lock}
+      metrics={[
+        { label: "Totali", value: credentialsSummary.totalCredentials || 0 },
+        { label: "Attive", value: credentialsSummary.activeCredentials || 0, tone: (credentialsSummary.activeCredentials || 0) > 0 ? "success" : "default" },
+        { label: "In scadenza", value: credentialsSummary.expiringCredentials || 0, tone: (credentialsSummary.expiringCredentials || 0) > 0 ? "warning" : "default" },
+        { label: "Scadute", value: credentialsSummary.expiredCredentials || 0, tone: (credentialsSummary.expiredCredentials || 0) > 0 ? "danger" : "default" },
+        { label: "Rinnovi dovuti", value: credentialsSummary.renewalsDue || 0, tone: (credentialsSummary.renewalsDue || 0) > 0 ? "warning" : "default" },
+        { label: "Rotazioni dovute", value: credentialsSummary.rotationDue || 0, tone: (credentialsSummary.rotationDue || 0) > 0 ? "warning" : "default" },
+      ]}
+      sources={credentialsSummary.sources || { credential_items: (credentialsSummary.totalCredentials || 0) > 0 }}
+      emptyText="Nessuna credenziale censita nel vault."
+    >
+      <div className="flex flex-wrap gap-2">
+        <Button asChild variant="outline" size="sm"><Link href="/credentials">Apri vault credenziali</Link></Button>
+        <Button asChild variant="outline" size="sm"><Link href="/credentials/expiring">In scadenza</Link></Button>
+        <Button asChild variant="outline" size="sm"><Link href="/credentials/rotation-due">Rotazioni</Link></Button>
+      </div>
+    </SectionCard>
+  );
+
   const contractsSummary = summary.operations.contractsSummary || {
     totalContracts: 0,
     draftContracts: 0,
@@ -1332,6 +1389,7 @@ export default function DashboardClient() {
             {automationsCard}
             {calendarCard}
             {knowledgeCard}
+            {credentialsCard}
             {contractsCard}
             {paperworkCard}
           </div>
@@ -1383,6 +1441,7 @@ export default function DashboardClient() {
             {automationsCard}
             {calendarCard}
             {knowledgeCard}
+            {credentialsCard}
             {contractsCard}
             {paperworkCard}
           </div>
@@ -1426,6 +1485,7 @@ export default function DashboardClient() {
             {automationsCard}
             {calendarCard}
             {knowledgeCard}
+            {credentialsCard}
             {contractsCard}
             {paperworkCard}
           </div>

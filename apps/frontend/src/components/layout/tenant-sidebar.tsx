@@ -89,6 +89,12 @@ const EXISTING_TENANT_ROUTES = new Set([
   "/contracts/new",
   "/contracts/templates",
   "/contracts/templates/new",
+  "/credentials",
+  "/credentials/activity",
+  "/credentials/expiring",
+  "/credentials/new",
+  "/credentials/renewals-due",
+  "/credentials/rotation-due",
   "/customers",
   "/dashboard",
   "/deals",
@@ -305,6 +311,18 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
       ],
     },
     {
+      label: "Accessi e credenziali",
+      modules: [
+        item("Panoramica", "/credentials", LockKeyhole, { minPlan: "PRO" }),
+        item("Tutte le credenziali", "/credentials", LockKeyhole, { minPlan: "PRO" }),
+        item("Nuova credenziale", "/credentials/new", FileCheck2, { minPlan: "PRO" }),
+        item("In scadenza", "/credentials/expiring", FileClock, { minPlan: "PRO" }),
+        item("Rinnovi", "/credentials/renewals-due", RefreshCw, { minPlan: "PRO" }),
+        item("Rotazioni", "/credentials/rotation-due", Timer, { minPlan: "PRO" }),
+        item("Attività", "/credentials/activity", ClipboardCheck, { minPlan: "PRO" }),
+      ],
+    },
+    {
       label: "Supporto",
       modules: [
         item("Ticket", "/support", LifeBuoy),
@@ -479,6 +497,17 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
       ],
     },
     {
+      label: "Accessi e credenziali",
+      modules: [
+        item("Panoramica", "/credentials", LockKeyhole, { minPlan: "PRO" }),
+        item("Tutte le credenziali", "/credentials", LockKeyhole, { minPlan: "PRO" }),
+        item("In scadenza", "/credentials/expiring", FileClock, { minPlan: "PRO" }),
+        item("Rinnovi", "/credentials/renewals-due", RefreshCw, { minPlan: "PRO" }),
+        item("Rotazioni", "/credentials/rotation-due", Timer, { minPlan: "PRO" }),
+        item("Attività", "/credentials/activity", ClipboardCheck, { minPlan: "PRO" }),
+      ],
+    },
+    {
       label: "Supporto",
       modules: [
         item("Ticket", "/support", LifeBuoy),
@@ -585,6 +614,13 @@ const AGENCY_MENUS: Record<AgencyAudience, AgencyNavGroup[]> = {
         item("Contratti", "/contracts", FileCheck2, { minPlan: "PRO" }),
         item("Scartoffie", "/paperwork", ClipboardCheck, { minPlan: "PRO" }),
         item("Dossier", "/paperwork/dossiers", FolderOpen, { minPlan: "PRO" }),
+      ],
+    },
+    {
+      label: "Accessi e credenziali",
+      modules: [
+        item("Panoramica", "/credentials", LockKeyhole, { minPlan: "PRO" }),
+        item("In scadenza", "/credentials/expiring", FileClock, { minPlan: "PRO" }),
       ],
     },
     {
