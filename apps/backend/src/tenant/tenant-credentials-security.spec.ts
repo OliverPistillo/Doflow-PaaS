@@ -102,6 +102,111 @@ describe('TenantCredentialsService validation/plaintext/rate-limit', () => {
     expect(query).toHaveBeenCalledTimes(1);
   });
 
+  it('create metadata-only rilegge e restituisce un id UUID valido senza get(undefined)', async () => {
+    const createdId = '13be3fc9-0186-4ae5-975e-8b85b4c56d05';
+    const runner = {
+      connect: jest.fn(),
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn(),
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('INSERT INTO "tenant_a".credential_items')) return [{ id: createdId }];
+        return [];
+      }),
+    };
+    const query = jest.fn(async (sql: string, params: unknown[] = []) => {
+      expect(params).not.toContain(undefined);
+      if (sql.includes('WHERE ci.id = $1')) {
+        expect(params[0]).toBe(createdId);
+        return [{ id: createdId, title: 'Vault', kind: 'hosting', environment: 'production', status: 'active', access_scope: 'restricted' }];
+      }
+      return [];
+    });
+    const service = new TenantCredentialsService(
+      { createQueryRunner: () => runner, query } as any,
+      new TenantCredentialsCryptoService(),
+      { assertCanCreate: jest.fn(), assertCanReadItem: jest.fn(), isAdmin: jest.fn(() => true) } as any,
+      { user: { ...OWNER, tenantId: 'tenant_a' }, headers: {} },
+    ) as any;
+    jest.spyOn(service, 'ensureSchema').mockResolvedValue(undefined);
+
+    const result = await service.create({ title: 'Vault', kind: 'hosting' });
+
+    expect(result.id).toBe(createdId);
+    expect(JSON.stringify(result)).not.toContain('password');
+    expect(runner.commitTransaction).toHaveBeenCalled();
+    expect(runner.rollbackTransaction).not.toHaveBeenCalled();
+  });
+
+  it('create con secret restituisce id valido e non contiene il secret', async () => {
+    const createdId = 'd71b7039-30ea-498c-bd2a-06644a9c3ce2';
+    const runner = {
+      connect: jest.fn(),
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn(),
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('INSERT INTO "tenant_a".credential_items')) return [{ id: createdId }];
+        return [];
+      }),
+    };
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('WHERE ci.id = $1')) {
+        return [{ id: createdId, title: 'Vault', kind: 'hosting', environment: 'production', status: 'active', access_scope: 'restricted', has_secret: true, secret_version: 1 }];
+      }
+      return [];
+    });
+    const service = new TenantCredentialsService(
+      { createQueryRunner: () => runner, query } as any,
+      new TenantCredentialsCryptoService(),
+      { assertCanCreate: jest.fn(), assertCanReadItem: jest.fn(), isAdmin: jest.fn(() => true) } as any,
+      { user: { ...OWNER, tenantId: 'tenant_a' }, headers: {} },
+    ) as any;
+    jest.spyOn(service, 'ensureSchema').mockResolvedValue(undefined);
+
+    const result = await service.create({ title: 'Vault', kind: 'hosting', secret: { username: 'valid-user', password: 'valid-password' } });
+
+    expect(result.id).toBe(createdId);
+    expect(result.has_secret).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('valid-password');
+    expect(JSON.stringify(runner.query.mock.calls)).not.toContain('valid-password');
+  });
+
+  it('detail/delete/restore/reveal/rotate accettano UUID v4 reali nei parametri', async () => {
+    const validId = '13be3fc9-0186-4ae5-975e-8b85b4c56d05';
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('WHERE ci.id = $1')) {
+        return [{ id: validId, title: 'Vault', kind: 'hosting', environment: 'production', status: 'active', access_scope: 'restricted' }];
+      }
+      if (sql.includes('SELECT * FROM "tenant_a".credential_secrets')) return [{ secret_version: 1 }];
+      if (sql.includes('UPDATE "tenant_a".credential_items') && sql.includes('RETURNING last_rotated_at')) return [{ last_rotated_at: '2026-07-16T08:00:00.000Z', rotation_due_at: null }];
+      return [];
+    });
+    const runner = {
+      connect: jest.fn(),
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn(),
+      query,
+    };
+    const service = new TenantCredentialsService(
+      { query, createQueryRunner: () => runner } as any,
+      new TenantCredentialsCryptoService(),
+      { assertCanReadItem: jest.fn(), assertCanEditItem: jest.fn(), assertCanRevealItem: jest.fn(), isAdmin: jest.fn(() => true) } as any,
+      { user: { ...OWNER, tenantId: 'tenant_a' }, headers: {} },
+    ) as any;
+    jest.spyOn(service, 'ensureSchema').mockResolvedValue(undefined);
+
+    await expect(service.get(validId)).resolves.toMatchObject({ id: validId });
+    await expect(service.archive(validId)).resolves.toEqual({ ok: true });
+    await expect(service.restore(validId)).resolves.toMatchObject({ id: validId });
+    await expect(service.reveal(validId, { reason: 'Accesso operativo autorizzato' })).rejects.not.toMatchObject({ response: { message: 'credential_id non valido' } });
+    await expect(service.rotate(validId, { reason: 'Rotazione operativa autorizzata', secret: { password: 'new-password' } })).resolves.toMatchObject({ ok: true, secret_version: 2 });
+  });
+
   it('operations.credentialsSummary contiene soltanto conteggi aggregati', async () => {
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('COUNT(*)::int AS "totalCredentials"')) {

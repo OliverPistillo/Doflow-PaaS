@@ -1,8 +1,8 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { AuthUser } from './tenant-credentials.types';
+import { credentialUuidOrNull } from './tenant-credentials-uuid';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
 const ADMIN_ROLES = new Set(['owner', 'admin', 'superadmin', 'super_admin']);
 
 type PermissionAction = 'read' | 'create' | 'edit' | 'reveal' | 'manage_permissions' | 'audit';
@@ -119,7 +119,6 @@ export class TenantCredentialsPermissionsService {
   }
 
   private uuidOrNull(value: unknown): string | null {
-    const text = String(value || '').trim();
-    return UUID_RE.test(text) ? text : null;
+    return credentialUuidOrNull(value);
   }
 }

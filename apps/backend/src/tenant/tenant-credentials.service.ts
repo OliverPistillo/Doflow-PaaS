@@ -5,6 +5,7 @@ import { safeSchema } from '../common/schema.utils';
 import { ensureTenantCredentialsTables } from './tenant-credentials-schema';
 import { TenantCredentialsCryptoService } from './tenant-credentials-crypto.service';
 import { TenantCredentialsPermissionsService } from './tenant-credentials-permissions.service';
+import { credentialUuidOrNull, requireCredentialUuid } from './tenant-credentials-uuid';
 import {
   AuthUser,
   CREDENTIAL_ACCESS_SCOPES,
@@ -21,7 +22,6 @@ import {
   redactCredentialSensitive,
 } from './tenant-credentials.types';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
 const SORT_COLUMNS = ['title', 'kind', 'provider', 'environment', 'status', 'expires_at', 'renewal_at', 'rotation_due_at', 'updated_at', 'created_at'];
 
 @Injectable()
@@ -831,14 +831,11 @@ export class TenantCredentialsService {
   }
 
   private requireUuid(value: unknown, label: string): string {
-    const text = String(value || '').trim();
-    if (!UUID_RE.test(text)) throw new BadRequestException(`${label} non valido`);
-    return text;
+    return requireCredentialUuid(value, label);
   }
 
   private userIdOrNull(value: unknown): string | null {
-    const text = String(value || '').trim();
-    return UUID_RE.test(text) ? text : null;
+    return credentialUuidOrNull(value);
   }
 
   private requireEnum<T extends readonly string[]>(value: unknown, allowed: T, label: string): T[number] {
