@@ -71,16 +71,15 @@ export class TenantCredentialsService {
        WHERE ci.deleted_at IS NULL AND ${visibility.sql}`,
       visibility.params,
     );
-    const recent = await this.dataSource.query(
-      `SELECT ${this.itemColumns('ci')}, (cs.id IS NOT NULL) AS has_secret
-       FROM "${schema}".credential_items ci
-       LEFT JOIN "${schema}".credential_secrets cs ON cs.credential_item_id = ci.id
-       WHERE ci.deleted_at IS NULL AND ${visibility.sql}
-       ORDER BY ci.updated_at DESC
-       LIMIT 5`,
-      visibility.params,
-    );
-    return { ...(rows[0] || {}), recentCredentials: recent.map((row: any) => this.sanitizeItem(row)) };
+    return {
+      totalCredentials: Number(rows[0]?.totalCredentials || 0),
+      activeCredentials: Number(rows[0]?.activeCredentials || 0),
+      archivedCredentials: Number(rows[0]?.archivedCredentials || 0),
+      expiringCredentials: Number(rows[0]?.expiringCredentials || 0),
+      renewalsDue: Number(rows[0]?.renewalsDue || 0),
+      rotationDue: Number(rows[0]?.rotationDue || 0),
+      expiredCredentials: Number(rows[0]?.expiredCredentials || 0),
+    };
   }
 
   async list(query: Record<string, any>) {
@@ -269,9 +268,10 @@ export class TenantCredentialsService {
         [itemId],
       );
       const existing = existingRows[0] || null;
+      const reason = existing ? this.validateAuditReason(body.reason, true) : this.validateAuditReason(body.reason, false);
       const newVersion = existing ? Number(existing.secret_version || 1) + 1 : 1;
       await this.upsertSecret(runner, schema, itemId, secret, newVersion, user, Boolean(existing));
-      await this.audit(runner, schema, itemId, user, existing ? 'secret_rotated' : 'secret_created', 'success', body.reason, { secret_version: newVersion });
+      await this.audit(runner, schema, itemId, user, existing ? 'secret_replaced' : 'secret_created', 'success', reason, { secret_version: newVersion });
       await runner.commitTransaction();
       return { ok: true, secret_version: newVersion };
     } catch (err) {
@@ -287,8 +287,13 @@ export class TenantCredentialsService {
     const user = this.getUser();
     const itemId = this.requireUuid(id, 'credential_id');
     await this.ensureSchema(schema);
-    const reason = this.reason(body.reason);
-    if (!reason) throw new BadRequestException('Motivo richiesto per rivelare il segreto');
+    let reason: string;
+    try {
+      reason = this.validateAuditReason(body.reason, true);
+    } catch (err) {
+      await this.audit(null, schema, itemId, user, 'secret_reveal_denied', 'denied', 'Motivo rifiutato dalla validazione', { validation_error: 'reason' }).catch(() => undefined);
+      throw err;
+    }
     this.checkRevealRate(user);
     try {
       await this.permissions.assertCanRevealItem(schema, itemId, user);
@@ -310,7 +315,58 @@ export class TenantCredentialsService {
   }
 
   async rotate(id: string, body: Record<string, any>) {
-    return this.replaceSecret(id, { ...body, reason: body.reason || 'Rotazione credenziale' });
+    const schema = this.getSchema();
+    const user = this.getUser();
+    const itemId = this.requireUuid(id, 'credential_id');
+    await this.ensureSchema(schema);
+    await this.permissions.assertCanEditItem(schema, itemId, user);
+    const reason = this.validateAuditReason(body.reason, true);
+    const nextRotationDueAt = body.next_rotation_due_at ? this.isoDate(body.next_rotation_due_at, 'next_rotation_due_at') : null;
+    const secret = this.validateSecretPayload(body.secret);
+    const runner = this.dataSource.createQueryRunner();
+    await runner.connect();
+    await runner.startTransaction();
+    try {
+      const existingRows = await runner.query(
+        `SELECT * FROM "${schema}".credential_secrets WHERE credential_item_id = $1 FOR UPDATE`,
+        [itemId],
+      );
+      const existing = existingRows[0];
+      if (!existing) throw new BadRequestException('Segreto non configurato');
+      const previousVersion = Number(existing.secret_version || 0);
+      const newVersion = previousVersion + 1;
+      await this.upsertSecret(runner, schema, itemId, secret, newVersion, user, true);
+      const itemRows = await runner.query(
+        `UPDATE "${schema}".credential_items
+         SET last_rotated_at = now(),
+             rotation_due_at = COALESCE($2::timestamptz, rotation_due_at),
+             updated_at = now(),
+             updated_by = $3
+         WHERE id = $1 AND deleted_at IS NULL
+         RETURNING last_rotated_at, rotation_due_at`,
+        [itemId, nextRotationDueAt, this.userIdOrNull(user.id)],
+      );
+      if (!itemRows[0]) throw new NotFoundException('Credenziale non trovata');
+      await runner.query(
+        `INSERT INTO "${schema}".credential_rotation_history (
+           credential_item_id, previous_secret_version, new_secret_version, rotated_by, reason, rotated_at, next_rotation_due_at
+         ) VALUES ($1,$2,$3,$4,$5,now(),$6)`,
+        [itemId, previousVersion, newVersion, this.userIdOrNull(user.id), reason, nextRotationDueAt],
+      );
+      await this.audit(runner, schema, itemId, user, 'credential_rotated', 'success', reason, { secret_version: newVersion, next_rotation_due_at: nextRotationDueAt });
+      await runner.commitTransaction();
+      return {
+        ok: true,
+        secret_version: newVersion,
+        last_rotated_at: itemRows[0].last_rotated_at,
+        rotation_due_at: itemRows[0].rotation_due_at,
+      };
+    } catch (err) {
+      await runner.rollbackTransaction();
+      throw err;
+    } finally {
+      await runner.release();
+    }
   }
 
   async listPermissions(id: string) {
@@ -537,7 +593,6 @@ export class TenantCredentialsService {
   private async upsertSecret(runner: QueryRunner, schema: string, itemId: string, secret: CredentialSecretPayload, secretVersion: number, user: AuthUser, hadExisting: boolean) {
     const encrypted = this.crypto.encryptPayload(schema, itemId, secretVersion, secret);
     if (hadExisting) {
-      const previous = await runner.query(`SELECT secret_version FROM "${schema}".credential_secrets WHERE credential_item_id = $1`, [itemId]);
       await runner.query(
         `UPDATE "${schema}".credential_secrets
          SET encrypted_payload = $2, payload_iv = $3, payload_auth_tag = $4, encrypted_dek = $5, dek_iv = $6,
@@ -556,12 +611,6 @@ export class TenantCredentialsService {
           encrypted.secret_version,
           this.userIdOrNull(user.id),
         ],
-      );
-      await runner.query(
-        `INSERT INTO "${schema}".credential_rotation_history (
-           credential_item_id, previous_secret_version, new_secret_version, rotated_by, reason, rotated_at
-         ) VALUES ($1,$2,$3,$4,$5,now())`,
-        [itemId, Number(previous[0]?.secret_version || 0), secretVersion, this.userIdOrNull(user.id), 'Rotazione/aggiornamento segreto'],
       );
     } else {
       await runner.query(
@@ -584,7 +633,7 @@ export class TenantCredentialsService {
         ],
       );
     }
-    await runner.query(`UPDATE "${schema}".credential_items SET last_rotated_at = now(), updated_at = now(), updated_by = $2 WHERE id = $1`, [itemId, this.userIdOrNull(user.id)]);
+    await runner.query(`UPDATE "${schema}".credential_items SET updated_at = now(), updated_by = $2 WHERE id = $1`, [itemId, this.userIdOrNull(user.id)]);
   }
 
   private async getSecretRow(schema: string, itemId: string) {
@@ -611,6 +660,7 @@ export class TenantCredentialsService {
   }
 
   private async audit(runner: QueryRunner | null, schema: string, itemId: string | null, user: AuthUser, action: string, outcome: string, reason?: string | null, metadata: Record<string, any> = {}) {
+    const safeReason = this.validateAuditReason(reason, false);
     const query = `INSERT INTO "${schema}".credential_audit_log (
       credential_item_id, actor_user_id, action, outcome, reason, request_id, metadata, created_at
     ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,now())`;
@@ -619,9 +669,9 @@ export class TenantCredentialsService {
       this.userIdOrNull(user.id),
       this.requireEnum(action, CREDENTIAL_AUDIT_ACTIONS, 'action'),
       this.requireEnum(outcome, CREDENTIAL_AUDIT_OUTCOMES, 'outcome'),
-      this.text(reason),
+      safeReason,
       this.text(this.request.headers?.['x-request-id']),
-      JSON.stringify(redactCredentialSensitive(metadata || {})),
+      JSON.stringify(this.sanitizeAuditMetadata(metadata || {})),
     ];
     if (runner) await runner.query(query, params);
     else await this.dataSource.query(query, params);
@@ -818,10 +868,49 @@ export class TenantCredentialsService {
     return value as Record<string, unknown>;
   }
 
-  private reason(value: unknown): string {
-    const text = this.text(value, 500);
-    if (!text || text.length < 3) throw new BadRequestException('Motivo richiesto per rivelare il segreto');
+  private validateAuditReason(value: unknown, required: true): string;
+  private validateAuditReason(value: unknown, required: false): string | null;
+  private validateAuditReason(value: unknown, required: boolean): string | null {
+    if (value === undefined || value === null || value === '') {
+      if (required) throw new BadRequestException('Motivo richiesto');
+      return null;
+    }
+    if (typeof value !== 'string') throw new BadRequestException('Motivo non valido');
+    const text = value.trim();
+    if (text.length < 5 || text.length > 500) throw new BadRequestException('Motivo non valido');
+    if (/^\s*[{[]/.test(text)) throw new BadRequestException('Motivo non valido');
+    if (this.reasonLooksSensitive(text)) {
+      throw new BadRequestException('Il motivo non deve contenere password, token o altri segreti.');
+    }
     return text;
+  }
+
+  private sanitizeAuditMetadata(metadata: Record<string, any>): Record<string, unknown> {
+    return this.redactSensitiveValues(redactCredentialSensitive(metadata || {})) as Record<string, unknown>;
+  }
+
+  private redactSensitiveValues(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map((entry) => this.redactSensitiveValues(entry));
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, this.redactSensitiveValues(entry)]));
+    }
+    if (typeof value === 'string' && this.reasonLooksSensitive(value)) return '[redacted]';
+    return value;
+  }
+
+  private reasonLooksSensitive(text: string): boolean {
+    const patterns = [
+      /-----BEGIN [A-Z ]*PRIVATE KEY-----/i,
+      /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/i,
+      /\bpassword\s*[:=]/i,
+      /\btoken\s*[:=]/i,
+      /\bapiKey\s*=/i,
+      /\bapi_key\s*=/i,
+      /\bsecretKey\s*=/i,
+      /\bauthorization\s*:/i,
+      /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/,
+    ];
+    return patterns.some((pattern) => pattern.test(text));
   }
 
   private validateUrl(value: string, label: string) {

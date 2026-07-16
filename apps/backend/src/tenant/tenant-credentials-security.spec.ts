@@ -4,6 +4,7 @@ import { TenantCredentialsPermissionsService } from './tenant-credentials-permis
 import { TenantCredentialsSchedulerService } from './tenant-credentials-scheduler.service';
 import { TenantCredentialsService } from './tenant-credentials.service';
 import { CREDENTIAL_MODULE_PERMISSION_KEYS, redactCredentialSensitive } from './tenant-credentials.types';
+import { TenantDashboardService } from './tenant-dashboard.service';
 
 const OWNER = { sub: '11111111-1111-4111-8111-111111111111', role: 'owner', tenantId: 'tenant_a' };
 const USER = { sub: '22222222-2222-4222-8222-222222222222', role: 'user', tenantId: 'tenant_a' };
@@ -73,7 +74,59 @@ describe('TenantCredentialsService validation/plaintext/rate-limit', () => {
     expect(() => service.checkRevealRate(authUser)).not.toThrow();
   });
 
-  it('non passa plaintext nelle query credential_secrets e rotation_history', async () => {
+  it('dashboard contiene soltanto conteggi aggregati', async () => {
+    const { service, query } = makeService();
+    jest.spyOn(service, 'ensureSchema').mockResolvedValue(undefined);
+    query.mockResolvedValueOnce([{
+      totalCredentials: 1,
+      activeCredentials: 1,
+      archivedCredentials: 0,
+      expiringCredentials: 0,
+      renewalsDue: 0,
+      rotationDue: 0,
+      expiredCredentials: 0,
+    }]);
+
+    const result = await service.dashboard();
+
+    expect(result).toEqual({
+      totalCredentials: 1,
+      activeCredentials: 1,
+      archivedCredentials: 0,
+      expiringCredentials: 0,
+      renewalsDue: 0,
+      rotationDue: 0,
+      expiredCredentials: 0,
+    });
+    expect(JSON.stringify(result)).not.toMatch(/title|provider|domain_name|metadata|recentCredentials|credential_item_id/i);
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('operations.credentialsSummary contiene soltanto conteggi aggregati', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('COUNT(*)::int AS "totalCredentials"')) {
+        return [{ totalCredentials: 1, activeCredentials: 1, expiringCredentials: 0, renewalsDue: 0, rotationDue: 0, expiredCredentials: 0 }];
+      }
+      return [];
+    });
+    const service = new TenantDashboardService({ query } as any, { user: { ...OWNER, tenantId: 'tenant_a' } }) as any;
+    jest.spyOn(service, 'tableExists').mockResolvedValue(true);
+
+    const result = await service.buildCredentialsSummary('tenant_a', { id: OWNER.sub, role: 'owner' });
+
+    expect(result).toEqual({
+      totalCredentials: 1,
+      activeCredentials: 1,
+      expiringCredentials: 0,
+      renewalsDue: 0,
+      rotationDue: 0,
+      expiredCredentials: 0,
+      sources: { credential_items: true },
+    });
+    expect(JSON.stringify(result)).not.toMatch(/title|provider|domain_name|metadata|recentCredentials|credential_item_id/i);
+  });
+
+  it('non passa plaintext nelle query credential_secrets', async () => {
     const { service } = makeService();
     const calls: any[][] = [];
     const runner = {
@@ -96,7 +149,7 @@ describe('TenantCredentialsService validation/plaintext/rate-limit', () => {
     for (const value of ['plain-user', 'plain-password', 'plain-api', 'plain-token', 'plain-notes', 'plain-recovery']) {
       expect(serialized).not.toContain(value);
     }
-    expect(serialized).toContain('credential_rotation_history');
+    expect(serialized).not.toContain('credential_rotation_history');
   });
 
   it('rollback se la creazione item+secret fallisce durante insert secret', async () => {
@@ -125,7 +178,126 @@ describe('TenantCredentialsService validation/plaintext/rate-limit', () => {
     expect(runner.commitTransaction).not.toHaveBeenCalled();
   });
 
-  it('rollback se rotation history fallisce durante rotazione', async () => {
+  it('replace di segreto esistente senza reason restituisce 400', async () => {
+    const runner = {
+      connect: jest.fn(),
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn(),
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('SELECT * FROM "tenant_a".credential_secrets')) return [{ secret_version: 1 }];
+        return [];
+      }),
+    };
+    const service = new TenantCredentialsService(
+      { createQueryRunner: () => runner, query: jest.fn() } as any,
+      new TenantCredentialsCryptoService(),
+      { assertCanEditItem: jest.fn(), isAdmin: jest.fn(() => true) } as any,
+      { user: { ...OWNER, tenantId: 'tenant_a' }, headers: {} },
+    ) as any;
+    jest.spyOn(service, 'ensureSchema').mockResolvedValue(undefined);
+    jest.spyOn(service, 'requireUuid').mockImplementation((value: unknown) => String(value));
+
+    await expect(service.replaceSecret('11111111-1111-4111-8111-111111111111', { secret: { password: 'new-secret' } })).rejects.toBeInstanceOf(BadRequestException);
+    expect(runner.rollbackTransaction).toHaveBeenCalled();
+  });
+
+  it('creazione primo segreto senza reason puo funzionare', async () => {
+    const runner = {
+      connect: jest.fn(),
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn(),
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('SELECT * FROM "tenant_a".credential_secrets')) return [];
+        return [];
+      }),
+    };
+    const service = new TenantCredentialsService(
+      { createQueryRunner: () => runner, query: jest.fn() } as any,
+      new TenantCredentialsCryptoService(),
+      { assertCanEditItem: jest.fn(), isAdmin: jest.fn(() => true) } as any,
+      { user: { ...OWNER, tenantId: 'tenant_a' }, headers: {} },
+    ) as any;
+    jest.spyOn(service, 'ensureSchema').mockResolvedValue(undefined);
+    jest.spyOn(service, 'requireUuid').mockImplementation((value: unknown) => String(value));
+
+    await expect(service.replaceSecret('11111111-1111-4111-8111-111111111111', { secret: { password: 'first-secret' } })).resolves.toMatchObject({ ok: true, secret_version: 1 });
+    expect(runner.commitTransaction).toHaveBeenCalled();
+  });
+
+  it('rotate valida reason obbligatoria e vieta pattern sensibili', async () => {
+    const { service } = makeService();
+    jest.spyOn(service, 'ensureSchema').mockResolvedValue(undefined);
+    jest.spyOn(service, 'requireUuid').mockImplementation((value: unknown) => String(value));
+    await expect(service.rotate('id', { secret: { password: 'x' } })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.rotate('id', { reason: 'abcd', secret: { password: 'x' } })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.rotate('id', { reason: 'password=supersecret', secret: { password: 'x' } })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.rotate('id', { reason: 'Bearer abcdefghijklmnopqrstuvwxyz', secret: { password: 'x' } })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('reveal con reason JWT viene rifiutato e audita valore neutro', async () => {
+    const query = jest.fn().mockResolvedValue([]);
+    const service = new TenantCredentialsService(
+      { query } as any,
+      new TenantCredentialsCryptoService(),
+      { assertCanRevealItem: jest.fn(), isAdmin: jest.fn(() => true) } as any,
+      { user: { ...OWNER, tenantId: 'tenant_a' }, headers: {} },
+    ) as any;
+    jest.spyOn(service, 'ensureSchema').mockResolvedValue(undefined);
+    jest.spyOn(service, 'requireUuid').mockImplementation((value: unknown) => String(value));
+    const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnop';
+
+    await expect(service.reveal('id', { reason: jwt })).rejects.toBeInstanceOf(BadRequestException);
+
+    const serialized = JSON.stringify(query.mock.calls);
+    expect(serialized).toContain('Motivo rifiutato dalla validazione');
+    expect(serialized).not.toContain(jwt);
+  });
+
+  it('rotate aggiorna versioni, date, history e non restituisce segreto', async () => {
+    const calls: any[][] = [];
+    const runner = {
+      connect: jest.fn(),
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn(),
+      query: jest.fn(async (sql: string, params: any[] = []) => {
+        calls.push([sql, params]);
+        if (sql.includes('SELECT * FROM "tenant_a".credential_secrets')) return [{ secret_version: 1 }];
+        if (sql.includes('UPDATE "tenant_a".credential_items')) return [{ last_rotated_at: '2026-07-16T08:00:00.000Z', rotation_due_at: '2026-12-01T00:00:00.000Z' }];
+        return [];
+      }),
+    };
+    const service = new TenantCredentialsService(
+      { createQueryRunner: () => runner, query: jest.fn() } as any,
+      new TenantCredentialsCryptoService(),
+      { assertCanEditItem: jest.fn(), isAdmin: jest.fn(() => true) } as any,
+      { user: { ...OWNER, tenantId: 'tenant_a' }, headers: {} },
+    ) as any;
+    jest.spyOn(service, 'ensureSchema').mockResolvedValue(undefined);
+    jest.spyOn(service, 'requireUuid').mockImplementation((value: unknown) => String(value));
+
+    const result = await service.rotate('id', {
+      secret: { password: 'rotated-secret', token: 'rotated-token' },
+      reason: 'Rotazione trimestrale operativa',
+      next_rotation_due_at: '2026-12-01T00:00:00.000Z',
+    });
+
+    expect(result).toEqual({ ok: true, secret_version: 2, last_rotated_at: '2026-07-16T08:00:00.000Z', rotation_due_at: '2026-12-01T00:00:00.000Z' });
+    const serialized = JSON.stringify(calls);
+    expect(serialized).toContain('credential_rotation_history');
+    expect(serialized).toContain('Rotazione trimestrale operativa');
+    expect(serialized).toContain('2026-12-01T00:00:00.000Z');
+    expect(serialized).not.toContain('rotated-secret');
+    expect(serialized).not.toContain('rotated-token');
+    expect(JSON.stringify(result)).not.toContain('rotated-secret');
+  });
+
+  it('rollback se rotation history fallisce durante rotate', async () => {
     const runner = {
       connect: jest.fn(),
       startTransaction: jest.fn(),
@@ -136,6 +308,7 @@ describe('TenantCredentialsService validation/plaintext/rate-limit', () => {
         if (sql.includes('SELECT * FROM "tenant_a".credential_secrets')) return [{ secret_version: 1 }];
         if (sql.includes('SELECT secret_version')) return [{ secret_version: 1 }];
         if (sql.includes('UPDATE "tenant_a".credential_secrets')) return [];
+        if (sql.includes('UPDATE "tenant_a".credential_items')) return [{ last_rotated_at: '2026-07-16T08:00:00.000Z', rotation_due_at: null }];
         if (sql.includes('INSERT INTO "tenant_a".credential_rotation_history')) throw new Error('rotation history failed');
         return [];
       }),
@@ -149,7 +322,35 @@ describe('TenantCredentialsService validation/plaintext/rate-limit', () => {
     jest.spyOn(service, 'ensureSchema').mockResolvedValue(undefined);
     jest.spyOn(service, 'requireUuid').mockImplementation((value: unknown) => String(value));
 
-    await expect(service.replaceSecret('11111111-1111-4111-8111-111111111111', { secret: { password: 'rotated-secret' } })).rejects.toThrow('rotation history failed');
+    await expect(service.rotate('11111111-1111-4111-8111-111111111111', { secret: { password: 'rotated-secret' }, reason: 'Rotazione operativa richiesta' })).rejects.toThrow('rotation history failed');
+    expect(runner.rollbackTransaction).toHaveBeenCalled();
+    expect(runner.commitTransaction).not.toHaveBeenCalled();
+  });
+
+  it('rollback se audit rotate fallisce', async () => {
+    const runner = {
+      connect: jest.fn(),
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(),
+      release: jest.fn(),
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('SELECT * FROM "tenant_a".credential_secrets')) return [{ secret_version: 1 }];
+        if (sql.includes('UPDATE "tenant_a".credential_items')) return [{ last_rotated_at: '2026-07-16T08:00:00.000Z', rotation_due_at: null }];
+        if (sql.includes('INSERT INTO "tenant_a".credential_audit_log')) throw new Error('audit failed');
+        return [];
+      }),
+    };
+    const service = new TenantCredentialsService(
+      { createQueryRunner: () => runner, query: jest.fn() } as any,
+      new TenantCredentialsCryptoService(),
+      { assertCanEditItem: jest.fn(), isAdmin: jest.fn(() => true) } as any,
+      { user: { ...OWNER, tenantId: 'tenant_a' }, headers: {} },
+    ) as any;
+    jest.spyOn(service, 'ensureSchema').mockResolvedValue(undefined);
+    jest.spyOn(service, 'requireUuid').mockImplementation((value: unknown) => String(value));
+
+    await expect(service.rotate('11111111-1111-4111-8111-111111111111', { secret: { password: 'rotated-secret' }, reason: 'Rotazione operativa richiesta' })).rejects.toThrow('audit failed');
     expect(runner.rollbackTransaction).toHaveBeenCalled();
     expect(runner.commitTransaction).not.toHaveBeenCalled();
   });

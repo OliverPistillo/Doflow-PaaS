@@ -1526,7 +1526,6 @@ export class TenantDashboardService {
         renewalsDue: 0,
         rotationDue: 0,
         expiredCredentials: 0,
-        recentCredentials: [],
         sources: { credential_items: false },
       };
     }
@@ -1563,7 +1562,6 @@ export class TenantDashboardService {
       renewalsDue: Number(counts[0]?.renewalsDue || 0),
       rotationDue: Number(counts[0]?.rotationDue || 0),
       expiredCredentials: Number(counts[0]?.expiredCredentials || 0),
-      recentCredentials: [],
       sources: { credential_items: true },
     };
   }
@@ -1974,7 +1972,6 @@ interface DashboardCredentialsSummary {
   renewalsDue: number;
   rotationDue: number;
   expiredCredentials: number;
-  recentCredentials: Record<string, any>[];
   sources: DashboardSourceFlags;
 }
 
