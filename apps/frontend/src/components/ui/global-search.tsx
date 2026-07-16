@@ -24,6 +24,8 @@ import {
   Package, Wallet, Shield, Activity, Search,
 } from "lucide-react";
 import { usePlatform } from "@/hooks/use-platform";
+import { useOptionalTenantAccess } from "@/contexts/TenantAccessContext";
+import type { TenantModuleKey } from "@/lib/tenant-access-api";
 
 // ─── Tipi ─────────────────────────────────────────────────────────────────────
 
@@ -33,27 +35,25 @@ type SearchItem = {
   href:     string;
   group:    string;
   icon:     React.ComponentType<{ className?: string }>;
+  moduleKey?: TenantModuleKey;
   keywords?: string[];
 };
 
 // ─── Catalogo voci — tenant CRM ───────────────────────────────────────────────
 
 const TENANT_ITEMS: SearchItem[] = [
-  { id: "dashboard",   label: "Dashboard",       href: "/dashboard",        group: "Panoramica", icon: LayoutDashboard, keywords: ["home", "overview"] },
-  { id: "contacts",    label: "Contatti",         href: "/contacts",         group: "CRM",        icon: Users           },
-  { id: "companies",   label: "Aziende",          href: "/companies",        group: "CRM",        icon: Building2       },
-  { id: "deals",       label: "Offerte",          href: "/deals",            group: "CRM",        icon: ListTodo,        keywords: ["pipeline", "trattative"] },
-  { id: "invoices",    label: "Fatture",          href: "/invoices",         group: "Finanza",    icon: Receipt         },
-  { id: "orders",      label: "Ordini",           href: "/orders",           group: "Finanza",    icon: ShoppingCart    },
-  { id: "quotes",      label: "Preventivi",       href: "/quotes",           group: "Finanza",    icon: FileText        },
-  { id: "payments",    label: "Pagamenti",        href: "/payments",         group: "Finanza",    icon: Wallet          },
-  { id: "products",    label: "Prodotti",         href: "/products",         group: "Catalogo",   icon: Package         },
-  { id: "inventory",   label: "Inventario",       href: "/inventory",        group: "Catalogo",   icon: Package,         keywords: ["magazzino", "stock"] },
-  { id: "calendar",    label: "Calendario",       href: "/calendar",         group: "Strumenti",  icon: CalendarDays    },
-  { id: "tasks",       label: "Attività",         href: "/tasks",            group: "Strumenti",  icon: Activity        },
-  { id: "analytics",   label: "Analisi",          href: "/analytics",        group: "Report",     icon: BarChart3,       keywords: ["statistiche", "report"] },
-  { id: "settings",    label: "Impostazioni",     href: "/settings",         group: "Account",    icon: Settings        },
-  { id: "team",        label: "Team",             href: "/team",             group: "Account",    icon: Users,           keywords: ["utenti", "ruoli"] },
+  { id: "dashboard",   label: "Dashboard",       href: "/dashboard",        group: "Panoramica", icon: LayoutDashboard, moduleKey: "dashboard", keywords: ["home", "overview"] },
+  { id: "contacts",    label: "Contatti",         href: "/contacts",         group: "CRM",        icon: Users, moduleKey: "crm" },
+  { id: "companies",   label: "Aziende",          href: "/companies",        group: "CRM",        icon: Building2, moduleKey: "crm" },
+  { id: "deals",       label: "Offerte",          href: "/deals",            group: "CRM",        icon: ListTodo, moduleKey: "crm", keywords: ["pipeline", "trattative"] },
+  { id: "invoices",    label: "Fatture",          href: "/finance/invoices", group: "Finanza",    icon: Receipt, moduleKey: "finance" },
+  { id: "quotes",      label: "Preventivi",       href: "/quotes",           group: "Finanza",    icon: FileText, moduleKey: "quotes" },
+  { id: "payments",    label: "Pagamenti",        href: "/finance/payments", group: "Finanza",    icon: Wallet, moduleKey: "finance" },
+  { id: "calendar",    label: "Calendario",       href: "/calendar",         group: "Strumenti",  icon: CalendarDays, moduleKey: "calendar" },
+  { id: "tasks",       label: "Task",             href: "/projects/tasks",   group: "Strumenti",  icon: Activity, moduleKey: "projects" },
+  { id: "analytics",   label: "Report",           href: "/reports",          group: "Report",     icon: BarChart3, moduleKey: "reports", keywords: ["statistiche", "report"] },
+  { id: "settings",    label: "Impostazioni",     href: "/settings",         group: "Account",    icon: Settings, moduleKey: "settings" },
+  { id: "team",        label: "Team",             href: "/team",             group: "Account",    icon: Users, moduleKey: "team", keywords: ["utenti", "ruoli"] },
 ];
 
 // ─── Catalogo voci — superadmin ───────────────────────────────────────────────
@@ -97,7 +97,8 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
 function useSearch(context: "tenant" | "superadmin") {
   const [open, setOpen] = React.useState(false);
   const router = useRouter();
-  const items  = context === "superadmin" ? SUPERADMIN_ITEMS : TENANT_ITEMS;
+  const tenantAccess = useOptionalTenantAccess();
+  const items  = context === "superadmin" ? SUPERADMIN_ITEMS : TENANT_ITEMS.filter((item) => tenantAccess?.canView(item.moduleKey));
 
   const groups = React.useMemo(() => {
     const map = new Map<string, SearchItem[]>();

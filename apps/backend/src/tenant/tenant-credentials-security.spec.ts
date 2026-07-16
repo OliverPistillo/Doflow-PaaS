@@ -214,7 +214,11 @@ describe('TenantCredentialsService validation/plaintext/rate-limit', () => {
       }
       return [];
     });
-    const service = new TenantDashboardService({ query } as any, { user: { ...OWNER, tenantId: 'tenant_a' } }) as any;
+    const service = new TenantDashboardService(
+      { query } as any,
+      { getCurrentAccess: jest.fn() } as any,
+      { user: { ...OWNER, tenantId: 'tenant_a' } },
+    ) as any;
     jest.spyOn(service, 'tableExists').mockResolvedValue(true);
 
     const result = await service.buildCredentialsSummary('tenant_a', { id: OWNER.sub, role: 'owner' });

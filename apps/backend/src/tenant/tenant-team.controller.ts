@@ -1,11 +1,15 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantTeamService } from './tenant-team.service';
+import { TenantEffectivePermissionsService } from './tenant-effective-permissions.service';
 
 @Controller('tenant/team')
 @UseGuards(JwtAuthGuard)
 export class TenantTeamController {
-  constructor(private readonly service: TenantTeamService) {}
+  constructor(
+    private readonly service: TenantTeamService,
+    private readonly access: TenantEffectivePermissionsService,
+  ) {}
 
   @Get('summary')
   summary() {
@@ -25,6 +29,11 @@ export class TenantTeamController {
   @Get('members')
   listMembers(@Query() query: Record<string, any>) {
     return this.service.listMembers(query || {});
+  }
+
+  @Get('me/module-permissions')
+  currentModulePermissions() {
+    return this.access.getCurrentAccess();
   }
 
   @Post('members')

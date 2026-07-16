@@ -36,6 +36,7 @@ import { TenantCredentialsService } from './tenant-credentials.service';
 import { TenantCredentialsCryptoService } from './tenant-credentials-crypto.service';
 import { TenantCredentialsPermissionsService } from './tenant-credentials-permissions.service';
 import { TenantCredentialsSchedulerService } from './tenant-credentials-scheduler.service';
+import { TenantEffectivePermissionsService } from './tenant-effective-permissions.service';
 import { FileStorageService } from '../file-storage.service';
 
 import { Tenant } from '../superadmin/entities/tenant.entity';
@@ -95,6 +96,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantCredentialsCryptoService,
     TenantCredentialsPermissionsService,
     TenantCredentialsSchedulerService,
+    TenantEffectivePermissionsService,
     FileStorageService,
   ],
 })

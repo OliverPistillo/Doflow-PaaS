@@ -22,9 +22,30 @@ import { Button } from "@/components/ui/button";
 import { getDoFlowUser } from "@/lib/jwt";
 import { PlanProvider } from "@/contexts/PlanContext";
 import { AppSettingsProvider, useAppSettings } from "@/contexts/AppSettingsContext";
+import { TenantAccessProvider, useTenantAccess } from "@/contexts/TenantAccessContext";
 import { SearchTriggerButton } from "@/components/ui/global-search";
+import { moduleKeyForTenantPath } from "@/config/tenant-navigation";
 
 // ─── Inner layout — consuma AppSettingsContext ─────────────────────────────────
+
+function TenantRouteGate({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { loading, canView } = useTenantAccess();
+  const moduleKey = React.useMemo(() => moduleKeyForTenantPath(pathname), [pathname]);
+
+  React.useEffect(() => {
+    if (!loading && moduleKey && !canView(moduleKey)) router.replace("/dashboard");
+  }, [loading, moduleKey, canView, router]);
+
+  if (loading) {
+    return <div className="p-6 text-sm text-muted-foreground">Caricamento permessi...</div>;
+  }
+  if (moduleKey && !canView(moduleKey)) {
+    return <div className="p-6 text-sm text-muted-foreground">Reindirizzamento...</div>;
+  }
+  return <>{children}</>;
+}
 
 function TenantLayoutInner({ children }: { children: React.ReactNode }) {
   const { sidebarVariant } = useAppSettings();
@@ -81,7 +102,7 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
 
         {/* ── CONTENUTO ── */}
         <main className="doflow-app-main flex-1 overflow-y-auto">
-          {children}
+          <TenantRouteGate>{children}</TenantRouteGate>
         </main>
       </SidebarInset>
     </SidebarProvider>
@@ -133,7 +154,9 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
   return (
     <AppSettingsProvider>
       <PlanProvider>
-        <TenantLayoutInner>{children}</TenantLayoutInner>
+        <TenantAccessProvider>
+          <TenantLayoutInner>{children}</TenantLayoutInner>
+        </TenantAccessProvider>
       </PlanProvider>
     </AppSettingsProvider>
   );

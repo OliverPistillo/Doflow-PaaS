@@ -53,6 +53,7 @@ import {
 } from "@/config/tenant-navigation";
 import { getDoFlowUser, getInitials } from "@/lib/jwt";
 import { usePlan } from "@/contexts/PlanContext";
+import { useTenantAccess } from "@/contexts/TenantAccessContext";
 import { SIDEBAR_GROUPS, PLAN_META, type PlanTier, planIncludes } from "@/lib/plans";
 import { getTenantRoleLabel } from "@/lib/roles";
 import { cn } from "@/lib/utils";
@@ -366,17 +367,18 @@ export function TenantSidebar({
   const router = useRouter();
   const user = useTenantUser();
   const { plan, tenantInfo } = usePlan();
+  const { canView, loading: accessLoading } = useTenantAccess();
   const role = normalizeNavigationRole(user?.role) as TenantNavigationRole;
   const tenantSlug = String(tenantInfo?.slug || user?.tenantSlug || user?.tenantId || "").toLowerCase();
   const isInternalTenant = tenantSlug === "doflow";
   const roleLabel = getTenantRoleLabel(user?.role);
   const sections = React.useMemo(
-    () => filterTenantNavigation(DOFLOW_TENANT_NAVIGATION, role),
-    [role],
+    () => filterTenantNavigation(DOFLOW_TENANT_NAVIGATION, role, canView, plan, isInternalTenant),
+    [role, canView, plan, isInternalTenant],
   );
   const activeSectionId = React.useMemo(
-    () => findActiveTenantSectionId(sections, pathname, role),
-    [pathname, role, sections],
+    () => findActiveTenantSectionId(sections, pathname, role, canView),
+    [pathname, role, sections, canView],
   );
   const [openSectionId, setOpenSectionId] = React.useState<string | null>(activeSectionId);
 
@@ -398,7 +400,7 @@ export function TenantSidebar({
       <PlanSummary isInternalTenant={isInternalTenant} />
 
       <SidebarContent className="gap-1 py-2">
-        {isInternalTenant ? (
+        {isInternalTenant && !accessLoading ? (
           <TenantSidebarSections
             sections={sections}
             activePlan={plan}
@@ -408,7 +410,7 @@ export function TenantSidebar({
             role={role}
             isDoflowTenant={isInternalTenant}
           />
-        ) : (
+        ) : isInternalTenant ? null : (
           <LegacyTenantNavigation activePlan={plan} isInternalTenant={isInternalTenant} />
         )}
       </SidebarContent>

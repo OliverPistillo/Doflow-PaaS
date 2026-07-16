@@ -93,7 +93,7 @@ export function normalizeError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || "Errore sconosciuto");
   const lower = message.toLowerCase();
   if (lower.includes("429") || lower.includes("traffic control") || lower.includes("troppe richieste")) return "Troppi tentativi. Attendi un minuto e riprova.";
-  if (lower.includes("403") || lower.includes("forbidden") || lower.includes("permess")) return "Non hai i permessi necessari per questa operazione.";
+  if (lower.includes("403") || lower.includes("forbidden") || lower.includes("permess")) return "Operazione non consentita.";
   if (lower.includes("404")) return "La credenziale non è disponibile o non hai accesso.";
   if (lower.includes("decifr") || lower.includes("decrypt")) return "Non è stato possibile decifrare la credenziale. Contatta un amministratore.";
   return message;
@@ -184,4 +184,3 @@ export function downloadJson(filename: string, payload: unknown) {
   link.click();
   URL.revokeObjectURL(url);
 }
-

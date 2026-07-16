@@ -9,6 +9,7 @@ import {
   planIncludes,
   PlanTier,
 } from '../feature-access/dashboard-widget-access';
+import { TenantEffectivePermissionsService, type TenantModuleKey } from './tenant-effective-permissions.service';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -16,6 +17,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 export class TenantDashboardService {
   constructor(
     private readonly dataSource: DataSource,
+    private readonly accessService: TenantEffectivePermissionsService,
     @Inject(REQUEST) private readonly request: any,
   ) {}
 
@@ -1569,9 +1571,11 @@ export class TenantDashboardService {
   async getSummary(): Promise<TenantDashboardSummary> {
     const schema = this.getTenantSchema();
     const user = this.getAuthUser();
-    const audience = this.getDashboardAudience(user.role);
+    const access = await this.accessService.getCurrentAccess();
+    const audience = access.audience;
+    const can = (moduleKey: TenantModuleKey) => Boolean(access.modules[moduleKey]?.can_view);
     const tenant = await this.getTenantIdentity(schema);
-    const showFinance = this.canViewFinance(user.role);
+    const showFinance = this.canViewFinance(user.role) && can('finance');
 
     const [
       sales,
@@ -1594,25 +1598,25 @@ export class TenantDashboardService {
       knowledgeSummary,
       credentialsSummary,
     ] = await Promise.all([
-      this.buildSalesSummary(schema, showFinance),
-      this.buildProjectsSummary(schema, user, audience),
-      this.buildTeamSummary(schema, user),
-      this.buildCustomersSummary(schema, tenant),
+      can('crm') ? this.buildSalesSummary(schema, showFinance) : Promise.resolve(null),
+      can('projects') ? this.buildProjectsSummary(schema, user, audience) : Promise.resolve(null),
+      can('team') ? this.buildTeamSummary(schema, user) : Promise.resolve(null),
+      can('crm') ? this.buildCustomersSummary(schema, tenant) : Promise.resolve(null),
       this.buildPersonalSummary(schema, user),
-      this.getRecentFiles(schema, user),
-      this.getRecentComments(schema),
-      this.getRecentNotifications(tenant, user.email),
-      this.getRecentTenantNotifications(schema, user),
-      this.buildNotificationsSummary(schema, user),
-      this.buildDocumentsSummary(schema, user),
-      this.buildBriefingOperationsSummary(schema),
-      this.buildReportsSummary(schema, user),
-      this.buildContractsSummary(schema),
-      this.buildPaperworkSummary(schema),
-      this.buildAutomationsSummary(schema, user),
-      this.buildCalendarSummary(schema, user),
-      this.buildKnowledgeSummary(schema, user),
-      this.buildCredentialsSummary(schema, user),
+      can('documents') ? this.getRecentFiles(schema, user) : Promise.resolve([]),
+      can('projects') ? this.getRecentComments(schema) : Promise.resolve([]),
+      can('notifications') ? this.getRecentNotifications(tenant, user.email) : Promise.resolve([]),
+      can('notifications') ? this.getRecentTenantNotifications(schema, user) : Promise.resolve([]),
+      can('notifications') ? this.buildNotificationsSummary(schema, user) : Promise.resolve(null),
+      can('documents') ? this.buildDocumentsSummary(schema, user) : Promise.resolve(null),
+      can('briefing') ? this.buildBriefingOperationsSummary(schema) : Promise.resolve(null),
+      can('reports') ? this.buildReportsSummary(schema, user) : Promise.resolve(null),
+      can('contracts') ? this.buildContractsSummary(schema) : Promise.resolve(null),
+      can('paperwork') ? this.buildPaperworkSummary(schema) : Promise.resolve(null),
+      can('automations') ? this.buildAutomationsSummary(schema, user) : Promise.resolve(null),
+      can('calendar') ? this.buildCalendarSummary(schema, user) : Promise.resolve(null),
+      can('knowledge') ? this.buildKnowledgeSummary(schema, user) : Promise.resolve(null),
+      can('credentials') ? this.buildCredentialsSummary(schema, user) : Promise.resolve(null),
     ]);
 
     const finance = showFinance
@@ -1640,16 +1644,16 @@ export class TenantDashboardService {
       customers,
       personal,
       operations: {
-        missingMaterials: briefingOperations.missingMaterials,
-        incompleteBriefings: briefingOperations.incompleteBriefings,
-        completedBriefings: briefingOperations.completedBriefings,
-        upcomingDeliveries: projects.upcomingDeliveries,
-        unreadNotifications: notificationSummary.unreadNotifications,
-        urgentNotifications: notificationSummary.urgentNotifications,
-        taskOverdueNotifications: notificationSummary.taskOverdueNotifications,
-        financeNotifications: notificationSummary.financeNotifications,
-        assignedTaskNotifications: notificationSummary.assignedTaskNotifications,
-        todayDigestAvailable: notificationSummary.todayDigestAvailable,
+        missingMaterials: briefingOperations?.missingMaterials || 0,
+        incompleteBriefings: briefingOperations?.incompleteBriefings || 0,
+        completedBriefings: briefingOperations?.completedBriefings || 0,
+        upcomingDeliveries: projects?.upcomingDeliveries || 0,
+        unreadNotifications: notificationSummary?.unreadNotifications || 0,
+        urgentNotifications: notificationSummary?.urgentNotifications || 0,
+        taskOverdueNotifications: notificationSummary?.taskOverdueNotifications || 0,
+        financeNotifications: notificationSummary?.financeNotifications || 0,
+        assignedTaskNotifications: notificationSummary?.assignedTaskNotifications || 0,
+        todayDigestAvailable: notificationSummary?.todayDigestAvailable || false,
         recentComments,
         recentFiles,
         notifications: tenantNotifications.length > 0 ? tenantNotifications : platformNotifications,
@@ -1662,16 +1666,16 @@ export class TenantDashboardService {
         knowledgeSummary,
         credentialsSummary,
         sources: {
-          ...briefingOperations.sources,
-          ...notificationSummary.sources,
-          ...documentsSummary.sources,
-          ...reportsSummary.sources,
-          ...contractsSummary.sources,
-          ...paperworkSummary.sources,
-          ...automationsSummary.sources,
-          ...calendarSummary.sources,
-          ...knowledgeSummary.sources,
-          ...credentialsSummary.sources,
+          ...(briefingOperations?.sources || {}),
+          ...(notificationSummary?.sources || {}),
+          ...(documentsSummary?.sources || {}),
+          ...(reportsSummary?.sources || {}),
+          ...(contractsSummary?.sources || {}),
+          ...(paperworkSummary?.sources || {}),
+          ...(automationsSummary?.sources || {}),
+          ...(calendarSummary?.sources || {}),
+          ...(knowledgeSummary?.sources || {}),
+          ...(credentialsSummary?.sources || {}),
         },
       },
     };
@@ -1989,11 +1993,11 @@ interface TenantDashboardSummary {
     canViewFinance: boolean;
   };
   generatedAt: string;
-  sales: DashboardSalesSummary;
-  projects: DashboardProjectsSummary;
+  sales: DashboardSalesSummary | null;
+  projects: DashboardProjectsSummary | null;
   finance: DashboardFinanceSummary | null;
-  team: DashboardTeamSummary;
-  customers: DashboardCustomersSummary;
+  team: DashboardTeamSummary | null;
+  customers: DashboardCustomersSummary | null;
   personal: DashboardPersonalSummary;
   operations: {
     missingMaterials: number;
@@ -2009,14 +2013,14 @@ interface TenantDashboardSummary {
     recentComments: DashboardActivityItem[];
     recentFiles: DashboardActivityItem[];
     notifications: DashboardActivityItem[];
-    documentsSummary: DashboardDocumentsSummary;
-    reportsSummary: DashboardReportsSummary;
-    contractsSummary: DashboardContractsSummary;
-    paperworkSummary: DashboardPaperworkSummary;
-    automationsSummary: DashboardAutomationsSummary;
-    calendarSummary: DashboardCalendarSummary;
-    knowledgeSummary: DashboardKnowledgeSummary;
-    credentialsSummary: DashboardCredentialsSummary;
+    documentsSummary: DashboardDocumentsSummary | null;
+    reportsSummary: DashboardReportsSummary | null;
+    contractsSummary: DashboardContractsSummary | null;
+    paperworkSummary: DashboardPaperworkSummary | null;
+    automationsSummary: DashboardAutomationsSummary | null;
+    calendarSummary: DashboardCalendarSummary | null;
+    knowledgeSummary: DashboardKnowledgeSummary | null;
+    credentialsSummary: DashboardCredentialsSummary | null;
     sources: DashboardSourceFlags;
   };
 }

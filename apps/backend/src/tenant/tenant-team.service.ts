@@ -31,15 +31,21 @@ const AVAILABILITY_ENTRY_STATUSES = ['planned', 'confirmed', 'cancelled'];
 const TIME_ACTIVITY_TYPES = ['design', 'development', 'seo', 'copywriting', 'meeting', 'project_management', 'support', 'admin', 'research', 'qa', 'work'];
 const TIME_STATUSES = ['draft', 'submitted', 'approved', 'rejected'];
 const MODULE_KEYS = [
+  'dashboard',
   'crm',
   'briefing',
   'quotes',
   'projects',
+  'calendar',
   'documents',
   'notifications',
   'finance',
   'team',
+  'knowledge',
+  'contracts',
+  'paperwork',
   'reports',
+  'automations',
   'settings',
   'credentials',
   'credentials.read',

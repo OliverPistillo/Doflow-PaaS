@@ -40,22 +40,27 @@ function itemIsAvailable(item: TenantNavigationItem | TenantNavigationSection, r
   return roleCanSee(item.roles, role);
 }
 
+function accessCanSee(item: TenantNavigationItem | TenantNavigationSection, canView?: (moduleKey?: string | null) => boolean): boolean {
+  return canView ? canView(item.moduleKey) : true;
+}
+
 export function findActiveTenantSectionId(
   sections: TenantNavigationSection[],
   pathname: string,
   role: TenantNavigationRole,
+  canView?: (moduleKey?: string | null) => boolean,
 ): string | null {
   let match: { id: string; hrefLength: number } | null = null;
 
   for (const section of sections) {
-    if (!itemIsAvailable(section, role)) continue;
+    if (!itemIsAvailable(section, role) || !accessCanSee(section, canView)) continue;
 
     if (section.href && isHrefActive(pathname, section.href)) {
       match = { id: section.id, hrefLength: section.href.length };
     }
 
     for (const child of section.children || []) {
-      if (!itemIsAvailable(child, role)) continue;
+      if (!itemIsAvailable(child, role) || !accessCanSee(child, canView)) continue;
       if (isHrefActive(pathname, child.href) && child.href.length >= (match?.hrefLength || 0)) {
         match = { id: section.id, hrefLength: child.href.length };
       }
@@ -68,14 +73,26 @@ export function findActiveTenantSectionId(
 export function filterTenantNavigation(
   sections: TenantNavigationSection[],
   role: TenantNavigationRole,
+  canView?: (moduleKey?: string | null) => boolean,
+  activePlan?: PlanTier,
+  isDoflowTenant = false,
 ): TenantNavigationSection[] {
   return sections
-    .filter((section) => itemIsAvailable(section, role))
+    .filter((section) => itemIsAvailable(section, role) && accessCanSee(section, canView))
     .map((section) => ({
       ...section,
-      children: section.children?.filter((child) => itemIsAvailable(child, role)),
+      children: section.children?.filter((child) => {
+        if (!itemIsAvailable(child, role) || !accessCanSee(child, canView)) return false;
+        if (isDoflowTenant && activePlan && !planIncludes(activePlan, child.minPlan || 'STARTER')) return false;
+        return true;
+      }),
     }))
-    .filter((section) => section.href || (section.children && section.children.length > 0));
+    .filter((section) => {
+      if (section.children && section.children.length > 0) return true;
+      if (!section.href) return false;
+      if (isDoflowTenant && activePlan && !planIncludes(activePlan, section.minPlan || 'STARTER')) return false;
+      return true;
+    });
 }
 
 function LockedHint({
@@ -246,6 +263,7 @@ export function TenantSidebarSection({
   }
 
   if (isLocked) {
+    if (isDoflowTenant) return null;
     return (
       <SidebarMenuItem>
         <SidebarMenuButton

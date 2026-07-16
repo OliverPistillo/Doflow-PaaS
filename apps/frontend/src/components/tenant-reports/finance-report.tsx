@@ -9,7 +9,7 @@ export function FinanceReportPage() {
     <ReportPage
       reportKey="finance"
       title="Report finance"
-      description="Fatture, incassi, scadenze, rinnovi, saldi e margine stimato. Solo CEO/Admin."
+      description="Fatture, incassi, scadenze, rinnovi, saldi e margine stimato."
       load={reportsApi.finance}
       financeOnly
       render={(data) => {
@@ -51,4 +51,3 @@ export function FinanceReportPage() {
     />
   );
 }
-

@@ -38,8 +38,10 @@ import {
 import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
 import { getTenantRoleLabel } from "@/lib/roles";
+import type { TenantModuleKey } from "@/lib/tenant-access-api";
 import { cn } from "@/lib/utils";
 import { formatBytes as formatDocumentBytes } from "@/components/tenant-documents/document-utils";
+import { useTenantAccess } from "@/contexts/TenantAccessContext";
 
 type DashboardAudience = "executive" | "manager" | "employee";
 
@@ -265,8 +267,36 @@ type QuickAction = {
   label: string;
   href?: string;
   icon: ComponentType<{ className?: string }>;
+  moduleKey?: TenantModuleKey;
   disabled?: boolean;
   note?: string;
+};
+
+type DashboardSummaryResponse = Omit<DashboardSummary, "sales" | "projects" | "team" | "customers" | "operations"> & {
+  sales: DashboardSummary["sales"] | null;
+  projects: DashboardSummary["projects"] | null;
+  team: DashboardSummary["team"] | null;
+  customers: DashboardSummary["customers"] | null;
+  operations: Omit<
+    DashboardSummary["operations"],
+    | "documentsSummary"
+    | "reportsSummary"
+    | "contractsSummary"
+    | "paperworkSummary"
+    | "automationsSummary"
+    | "calendarSummary"
+    | "knowledgeSummary"
+    | "credentialsSummary"
+  > & {
+    documentsSummary?: DocumentsSummary | null;
+    reportsSummary?: ReportsSummary | null;
+    contractsSummary?: ContractsSummary | null;
+    paperworkSummary?: PaperworkSummary | null;
+    automationsSummary?: AutomationsSummary | null;
+    calendarSummary?: CalendarSummary | null;
+    knowledgeSummary?: KnowledgeSummary | null;
+    credentialsSummary?: CredentialsSummary | null;
+  };
 };
 
 function getGreeting(): string {
@@ -471,6 +501,39 @@ function getFallbackSummary(): DashboardSummary {
         sources: {},
       },
       sources: {},
+    },
+  };
+}
+
+function normalizeDashboardSummary(input: DashboardSummaryResponse): DashboardSummary {
+  const fallback = getFallbackSummary();
+  const operations = input.operations || fallback.operations;
+
+  return {
+    ...fallback,
+    ...input,
+    tenant: { ...fallback.tenant, ...input.tenant },
+    user: { ...fallback.user, ...input.user },
+    sales: input.sales || fallback.sales,
+    projects: input.projects || fallback.projects,
+    finance: input.finance || null,
+    team: input.team || fallback.team,
+    customers: input.customers || fallback.customers,
+    personal: { ...fallback.personal, ...input.personal },
+    operations: {
+      ...fallback.operations,
+      ...operations,
+      recentComments: operations.recentComments || [],
+      recentFiles: operations.recentFiles || [],
+      notifications: operations.notifications || [],
+      documentsSummary: operations.documentsSummary || fallback.operations.documentsSummary,
+      reportsSummary: operations.reportsSummary || fallback.operations.reportsSummary,
+      contractsSummary: operations.contractsSummary || fallback.operations.contractsSummary,
+      paperworkSummary: operations.paperworkSummary || fallback.operations.paperworkSummary,
+      automationsSummary: operations.automationsSummary || fallback.operations.automationsSummary,
+      calendarSummary: operations.calendarSummary || fallback.operations.calendarSummary,
+      knowledgeSummary: operations.knowledgeSummary || fallback.operations.knowledgeSummary,
+      credentialsSummary: operations.credentialsSummary || fallback.operations.credentialsSummary,
     },
   };
 }
@@ -711,37 +774,20 @@ function PriorityStrip({
   );
 }
 
-function FinanceLockedNotice() {
-  return (
-    <Card className="border-dashed">
-      <CardContent className="flex items-start gap-3 p-5">
-        <span className="rounded-nav bg-muted p-2 text-muted-foreground">
-          <Lock className="h-4 w-4" />
-        </span>
-        <div>
-          <p className="font-semibold text-foreground">Finance non disponibile per questo ruolo</p>
-          <p className="text-sm text-muted-foreground">
-            Fatture, margini, pipeline economica e costi interni restano visibili solo a CEO/owner e admin.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function DashboardClient() {
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [rawSummary, setSummary] = useState<DashboardSummaryResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { canView } = useTenantAccess();
 
   const loadSummary = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await apiFetch<DashboardSummary>("/tenant/dashboard/summary");
+      const data = await apiFetch<DashboardSummaryResponse>("/tenant/dashboard/summary");
       setSummary(data);
     } catch (err) {
-      setSummary(getFallbackSummary());
+      setSummary(getFallbackSummary() as DashboardSummaryResponse);
       setError(err instanceof Error ? err.message : "Dashboard non disponibile");
     } finally {
       setIsLoading(false);
@@ -752,33 +798,28 @@ export default function DashboardClient() {
     void loadSummary();
   }, []);
 
-  const audience = summary?.user.dashboardAudience || "employee";
-  const roleLabel = getTenantRoleLabel(summary?.user.role);
-  const isExecutive = audience === "executive";
-  const isManager = audience === "manager";
+  const executiveActions = useMemo<QuickAction[]>(() => ([
+    { label: "Nuovo lead", href: "/leads", icon: Handshake, moduleKey: "crm" },
+    { label: "Nuovo briefing", href: "/briefings/new", icon: FileText, moduleKey: "briefing" },
+    { label: "Nuovo preventivo", href: "/quotes/new", icon: Send, moduleKey: "quotes" },
+    { label: "Nuovo progetto", href: "/projects/new", icon: FolderKanban, moduleKey: "projects" },
+    { label: "Invita dipendente", href: "/team", icon: UserPlus, moduleKey: "team" },
+    { label: "Apri finance", href: "/finance", icon: Wallet, moduleKey: "finance" },
+  ] satisfies QuickAction[]).filter((action) => !action.moduleKey || canView(action.moduleKey)), [canView]);
 
-  const executiveActions = useMemo<QuickAction[]>(() => [
-    { label: "Nuovo lead", href: "/leads", icon: Handshake },
-    { label: "Nuovo briefing", href: "/briefings/new", icon: FileText },
-    { label: "Nuovo preventivo", href: "/quotes/new", icon: Send },
-    { label: "Nuovo progetto", href: "/projects/new", icon: FolderKanban },
-    { label: "Invita dipendente", href: "/team", icon: UserPlus },
-    { label: "Apri finance", href: "/finance", icon: Wallet },
-  ], []);
+  const managerActions = useMemo<QuickAction[]>(() => ([
+    { label: "Apri task", href: "/projects/tasks", icon: CheckCircle2, moduleKey: "projects" },
+    { label: "Agenda", href: "/calendar/agenda", icon: CalendarDays, moduleKey: "calendar" },
+    { label: "File e materiali", href: "/documents", icon: FileText, moduleKey: "documents" },
+  ] satisfies QuickAction[]).filter((action) => !action.moduleKey || canView(action.moduleKey)), [canView]);
 
-  const managerActions = useMemo<QuickAction[]>(() => [
-    { label: "Apri task", href: "/projects/tasks", icon: CheckCircle2 },
-    { label: "Calendario consegne", href: "/projects/timeline", icon: CalendarDays },
-    { label: "File e materiali", href: "/projects/files", icon: FileText },
-  ], []);
+  const employeeActions = useMemo<QuickAction[]>(() => ([
+    { label: "I miei task", href: "/projects/tasks", icon: CheckCircle2, moduleKey: "projects" },
+    { label: "File necessari", href: "/documents", icon: FileText, moduleKey: "documents" },
+    { label: "Notifiche", href: "/notifications", icon: MessageSquare, moduleKey: "notifications" },
+  ] satisfies QuickAction[]).filter((action) => !action.moduleKey || canView(action.moduleKey)), [canView]);
 
-  const employeeActions = useMemo<QuickAction[]>(() => [
-    { label: "I miei task", href: "/projects/tasks", icon: CheckCircle2 },
-    { label: "File necessari", href: "/projects/files", icon: FileText },
-    { label: "Notifiche", href: "/notifications", icon: MessageSquare },
-  ], []);
-
-  if (isLoading || !summary) {
+  if (isLoading || !rawSummary) {
     return (
       <div className="flex h-full items-center justify-center" role="status" aria-label="Caricamento dashboard">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -786,10 +827,17 @@ export default function DashboardClient() {
     );
   }
 
+  const summary = normalizeDashboardSummary(rawSummary);
+  const audience = summary.user.dashboardAudience || "employee";
+  const roleLabel = getTenantRoleLabel(summary.user.role);
+  const isExecutive = audience === "executive";
+  const isManager = audience === "manager";
+  const canSeeFinance = summary.user.canViewFinance && canView("finance");
+
   const salesMetrics: Metric[] = [
     { label: "Lead aperti", value: summary.sales.openLeads },
     { label: "Opportunità attive", value: summary.sales.activeOpportunities },
-    { label: "Valore pipeline", value: formatCurrency(summary.sales.pipelineValue), hint: "Visibile solo a CEO/Admin" },
+    { label: "Valore pipeline", value: formatCurrency(summary.sales.pipelineValue) },
     { label: "Preventivi inviati", value: summary.sales.sentQuotes },
     { label: "Preventivi accettati", value: summary.sales.acceptedQuotes || 0, tone: (summary.sales.acceptedQuotes || 0) > 0 ? "success" : "default" },
     { label: "Preventivi rifiutati", value: summary.sales.rejectedQuotes || 0, tone: (summary.sales.rejectedQuotes || 0) > 0 ? "warning" : "default" },
@@ -841,7 +889,7 @@ export default function DashboardClient() {
     { label: "Upsell possibili", value: summary.customers.upsellOpportunities },
   ];
 
-  const financeMetrics: Metric[] = summary.finance ? [
+  const financeMetrics: Metric[] = canSeeFinance && summary.finance ? [
     { label: "Fatture emesse", value: summary.finance.issuedInvoices },
     { label: "Da incassare", value: summary.finance.receivables },
     { label: "Fatture scadute", value: summary.finance.overdueInvoices, tone: summary.finance.overdueInvoices > 0 ? "danger" : "default" },
@@ -878,7 +926,7 @@ export default function DashboardClient() {
       value: summary.operations.taskOverdueNotifications || 0,
       tone: (summary.operations.taskOverdueNotifications || 0) > 0 ? "danger" : "default",
     },
-    ...(summary.user.canViewFinance && (summary.operations.financeNotifications || 0) > 0
+    ...(canSeeFinance && (summary.operations.financeNotifications || 0) > 0
       ? [{
           label: "Finance",
           value: summary.operations.financeNotifications || 0,
@@ -904,7 +952,7 @@ export default function DashboardClient() {
   const documentMetrics: Metric[] = [
     { label: "Documenti totali", value: documentsSummary.totalDocuments || 0 },
     { label: "Documenti progetto", value: documentsSummary.projectDocuments || 0 },
-    ...(summary.user.canViewFinance
+    ...(canSeeFinance
       ? [{ label: "Documenti finance", value: documentsSummary.financeDocuments || 0 } satisfies Metric]
       : []),
     { label: "Spazio usato", value: formatDocumentBytes(documentsSummary.storageUsedBytes || 0) },
@@ -924,7 +972,7 @@ export default function DashboardClient() {
         documents:
           (documentsSummary.totalDocuments || 0) > 0 ||
           (documentsSummary.projectDocuments || 0) > 0 ||
-          (summary.user.canViewFinance && (documentsSummary.financeDocuments || 0) > 0),
+          (canSeeFinance && (documentsSummary.financeDocuments || 0) > 0),
       }}
       emptyText="Nessun documento caricato."
     >
@@ -992,7 +1040,7 @@ export default function DashboardClient() {
     { label: "Nuovi lead mese", value: reportsSummary.currentMonthNewLeads || 0 },
     { label: "Preventivi accettati", value: reportsSummary.currentMonthAcceptedQuotes || 0, tone: (reportsSummary.currentMonthAcceptedQuotes || 0) > 0 ? "success" : "default" },
     { label: "Task scaduti mese", value: reportsSummary.currentMonthOverdueTasks || 0, tone: (reportsSummary.currentMonthOverdueTasks || 0) > 0 ? "danger" : "default" },
-    ...(summary.user.canViewFinance
+    ...(canSeeFinance
       ? [{ label: "Revenue mese", value: formatCurrency(reportsSummary.currentMonthRevenue || 0) } satisfies Metric]
       : []),
     { label: "Ultimo snapshot", value: reportsSummary.lastSnapshotAt ? formatDate(reportsSummary.lastSnapshotAt) : "Nessuno" },
@@ -1009,7 +1057,7 @@ export default function DashboardClient() {
           reportsAvailableCount > 0 ||
           (reportsSummary.kpiTargetsConfigured || 0) > 0 ||
           (reportsSummary.currentMonthNewLeads || 0) > 0 ||
-          (summary.user.canViewFinance && (reportsSummary.currentMonthRevenue || 0) > 0),
+          (canSeeFinance && (reportsSummary.currentMonthRevenue || 0) > 0),
       }}
       emptyText="Nessun KPI direzionale configurato per il periodo corrente."
     >
@@ -1369,109 +1417,125 @@ export default function DashboardClient() {
 
       <PriorityStrip
         items={[
-          {
-            label: "Attenzione",
-            value: (summary.operations.urgentNotifications || 0) + (summary.operations.unreadNotifications || 0),
-            href: "/notifications",
-            icon: Bell,
-            tone: (summary.operations.urgentNotifications || 0) > 0 ? "danger" : "warning",
-          },
-          {
-            label: "Progetti critici",
-            value: (summary.projects.lateProjects || 0) + (summary.projects.blockedProjects || 0),
-            href: "/projects",
-            icon: FolderKanban,
-            tone: (summary.projects.lateProjects || 0) + (summary.projects.blockedProjects || 0) > 0 ? "danger" : "success",
-          },
-          {
-            label: "Scadenze",
-            value: (summary.projects.dueTasks || 0) + (summary.projects.upcomingMilestones || 0),
-            href: "/calendar/deadlines",
-            icon: CalendarDays,
-            tone: (summary.projects.dueTasks || 0) > 0 ? "warning" : "success",
-          },
+          ...(canView("notifications")
+            ? [{
+                label: "Attenzione",
+                value: (summary.operations.urgentNotifications || 0) + (summary.operations.unreadNotifications || 0),
+                href: "/notifications",
+                icon: Bell,
+                tone: (summary.operations.urgentNotifications || 0) > 0 ? "danger" as const : "warning" as const,
+              }]
+            : []),
+          ...(canView("projects")
+            ? [{
+                label: "Progetti critici",
+                value: (summary.projects.lateProjects || 0) + (summary.projects.blockedProjects || 0),
+                href: "/projects",
+                icon: FolderKanban,
+                tone: (summary.projects.lateProjects || 0) + (summary.projects.blockedProjects || 0) > 0 ? "danger" as const : "success" as const,
+              }]
+            : []),
+          ...(canView("calendar")
+            ? [{
+                label: "Scadenze",
+                value: (summary.projects.dueTasks || 0) + (summary.projects.upcomingMilestones || 0),
+                href: "/calendar/deadlines",
+                icon: CalendarDays,
+                tone: (summary.projects.dueTasks || 0) > 0 ? "warning" as const : "success" as const,
+              }]
+            : []),
         ]}
       />
 
       {isExecutive ? (
         <>
           <div className="grid gap-4 xl:grid-cols-2">
-            <SectionCard
-              title="Vendite"
-              description="Lead, opportunità, preventivi e follow-up della web agency."
-              icon={BarChart3}
-              metrics={salesMetrics}
-              sources={summary.sales.sources}
-              emptyText="Le tabelle CRM V2 commerciali non hanno ancora dati: zeri reali, nessun mock."
-            />
-            <SectionCard
-              title="Briefing e materiali"
-              description="Briefing cliente, review interna e materiali ancora da raccogliere."
-              icon={FileCheck2}
-              metrics={briefingMetrics}
-              sources={summary.operations.sources}
-              emptyText="Briefing e materiali sono collegati a tabelle reali; compariranno appena creati."
-            />
-            <SectionCard
-              title="Progetti"
-              description="Avanzamento delivery, blocchi e consegne in arrivo."
-              icon={FolderKanban}
-              metrics={projectMetrics}
-              sources={summary.projects.sources}
-              emptyText="Progetti, task e milestone sono collegati a Projects V2: compariranno appena creati."
-            />
-            {summary.finance ? (
+            {canView("crm") ? (
+              <SectionCard
+                title="Vendite"
+                description="Lead, opportunità, preventivi e follow-up della web agency."
+                icon={BarChart3}
+                metrics={salesMetrics}
+                sources={summary.sales.sources}
+                emptyText="Le tabelle CRM V2 commerciali non hanno ancora dati: zeri reali, nessun mock."
+              />
+            ) : null}
+            {canView("briefing") ? (
+              <SectionCard
+                title="Briefing e materiali"
+                description="Briefing cliente, review interna e materiali ancora da raccogliere."
+                icon={FileCheck2}
+                metrics={briefingMetrics}
+                sources={summary.operations.sources}
+                emptyText="Briefing e materiali sono collegati a tabelle reali; compariranno appena creati."
+              />
+            ) : null}
+            {canView("projects") ? (
+              <SectionCard
+                title="Progetti"
+                description="Avanzamento delivery, blocchi e consegne in arrivo."
+                icon={FolderKanban}
+                metrics={projectMetrics}
+                sources={summary.projects.sources}
+                emptyText="Progetti, task e milestone sono collegati a Projects V2: compariranno appena creati."
+              />
+            ) : null}
+            {canSeeFinance && summary.finance ? (
               <SectionCard
                 title="Finance"
-                description="Fatture, incassi, rinnovi e margine. Sezione riservata a CEO/Admin."
+                description="Fatture, incassi, rinnovi e margine per i ruoli autorizzati."
                 icon={Wallet}
                 metrics={financeMetrics}
                 sources={summary.finance.sources}
                 emptyText="Le tabelle finance tenant non sono ancora disponibili: nessun dato economico viene simulato."
               />
             ) : null}
-            <SectionCard
-              title="Team"
-              description="Carico operativo, inviti e task del team."
-              icon={Users}
-              metrics={teamMetrics}
-              sources={summary.team.sources}
-              emptyText="Utenti e inviti sono reali; task e workload arrivano da Projects V2 quando presenti."
-            >
-              {summary.team.workload.length > 0 ? (
-                <div className="space-y-2">
-                  {summary.team.workload.map((item) => (
-                    <div key={item.assignee} className="flex items-center justify-between rounded-nav bg-muted/40 px-3 py-2 text-sm">
-                      <span className="truncate font-medium">{item.assignee}</span>
-                      <span className="tabular-nums text-muted-foreground">{item.openTasks} task · {item.utilizationPercent || 0}%</span>
-                    </div>
-                  ))}
+            {canView("team") ? (
+              <SectionCard
+                title="Team"
+                description="Carico operativo, inviti e task del team."
+                icon={Users}
+                metrics={teamMetrics}
+                sources={summary.team.sources}
+                emptyText="Utenti e inviti sono reali; task e workload arrivano da Projects V2 quando presenti."
+              >
+                {summary.team.workload.length > 0 ? (
+                  <div className="space-y-2">
+                    {summary.team.workload.map((item) => (
+                      <div key={item.assignee} className="flex items-center justify-between rounded-nav bg-muted/40 px-3 py-2 text-sm">
+                        <span className="truncate font-medium">{item.assignee}</span>
+                        <span className="tabular-nums text-muted-foreground">{item.openTasks} task · {item.utilizationPercent || 0}%</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild variant="outline" size="sm"><Link href="/team">Apri Team</Link></Button>
+                  <Button asChild variant="outline" size="sm"><Link href="/team/workload">Carichi lavoro</Link></Button>
+                  <Button asChild variant="outline" size="sm"><Link href="/team/time-entries">Ore lavorate</Link></Button>
                 </div>
-              ) : null}
-              <div className="flex flex-wrap gap-2">
-                <Button asChild variant="outline" size="sm"><Link href="/team">Apri Team</Link></Button>
-                <Button asChild variant="outline" size="sm"><Link href="/team/workload">Carichi lavoro</Link></Button>
-                <Button asChild variant="outline" size="sm"><Link href="/team/time-entries">Ore lavorate</Link></Button>
-              </div>
-            </SectionCard>
-            {notificationsCard}
-            {documentsCard}
-            {reportsCard}
-            {automationsCard}
-            {calendarCard}
-            {knowledgeCard}
-            {credentialsCard}
-            {contractsCard}
-            {paperworkCard}
+              </SectionCard>
+            ) : null}
+            {canView("notifications") ? notificationsCard : null}
+            {canView("documents") ? documentsCard : null}
+            {canView("reports") ? reportsCard : null}
+            {canView("automations") ? automationsCard : null}
+            {canView("calendar") ? calendarCard : null}
+            {canView("knowledge") ? knowledgeCard : null}
+            {canView("credentials") ? credentialsCard : null}
+            {canView("contracts") ? contractsCard : null}
+            {canView("paperwork") ? paperworkCard : null}
           </div>
-          <SectionCard
-            title="Clienti"
-            description="Clienti, ticket, manutenzioni e segnali upsell."
-            icon={Handshake}
-            metrics={customerMetrics}
-            sources={summary.customers.sources}
-            emptyText="Ticket support è letto se disponibile; clienti, manutenzioni e upsell attendono tabelle CRM V2 reali."
-          />
+          {canView("crm") ? (
+            <SectionCard
+              title="Clienti"
+              description="Clienti, ticket, manutenzioni e segnali upsell."
+              icon={Handshake}
+              metrics={customerMetrics}
+              sources={summary.customers.sources}
+              emptyText="Ticket support è letto se disponibile; clienti, manutenzioni e upsell attendono tabelle CRM V2 reali."
+            />
+          ) : null}
           <QuickActions actions={executiveActions} />
         </>
       ) : null}
@@ -1479,48 +1543,53 @@ export default function DashboardClient() {
       {isManager ? (
         <>
           <div className="grid gap-4 xl:grid-cols-2">
-            <SectionCard
-              title="Progetti assegnati"
-              description="Delivery, milestone, task bloccati e prossime consegne."
-              icon={BriefcaseBusiness}
-              metrics={[
-                { label: "Progetti assegnati", value: summary.projects.assignedProjects },
-                { label: "Milestone in scadenza", value: summary.projects.upcomingMilestones },
-                { label: "Task bloccati", value: summary.projects.blockedTasks, tone: summary.projects.blockedTasks > 0 ? "warning" : "default" },
-                { label: "Task del team", value: summary.team.openTasks },
-                { label: "Materiali mancanti", value: summary.operations.missingMaterials },
-                { label: "Briefing incompleti", value: summary.operations.incompleteBriefings || 0 },
-              ]}
-              sources={{ ...summary.projects.sources, ...summary.team.sources, ...summary.operations.sources }}
-              emptyText="La vista PM non usa mock: progetti, task, materiali e review restano a zero finché non sono persistenti."
-            />
-            <SectionCard
-              title="Calendario consegne"
-              description="Scadenze operative senza valore economico o margini."
-              icon={CalendarDays}
-              metrics={[
-                { label: "Consegne prossime", value: summary.projects.upcomingDeliveries },
-                { label: "Task in scadenza", value: summary.projects.dueTasks },
-                { label: "Progetti in ritardo", value: summary.projects.lateProjects, tone: summary.projects.lateProjects > 0 ? "danger" : "default" },
-              ]}
-              sources={summary.projects.sources}
-              emptyText="Calendario e milestone saranno popolati da tabelle progetto/task reali."
-            />
-            {notificationsCard}
-            {documentsCard}
-            {reportsCard}
-            {automationsCard}
-            {calendarCard}
-            {knowledgeCard}
-            {credentialsCard}
-            {contractsCard}
-            {paperworkCard}
+            {canView("projects") ? (
+              <SectionCard
+                title="Progetti assegnati"
+                description="Delivery, milestone, task bloccati e prossime consegne."
+                icon={BriefcaseBusiness}
+                metrics={[
+                  { label: "Progetti assegnati", value: summary.projects.assignedProjects },
+                  { label: "Milestone in scadenza", value: summary.projects.upcomingMilestones },
+                  { label: "Task bloccati", value: summary.projects.blockedTasks, tone: summary.projects.blockedTasks > 0 ? "warning" : "default" },
+                  ...(canView("team") ? [{ label: "Task del team", value: summary.team.openTasks } satisfies Metric] : []),
+                  ...(canView("briefing") ? [
+                    { label: "Materiali mancanti", value: summary.operations.missingMaterials } satisfies Metric,
+                    { label: "Briefing incompleti", value: summary.operations.incompleteBriefings || 0 } satisfies Metric,
+                  ] : []),
+                ]}
+                sources={{ ...summary.projects.sources, ...(canView("team") ? summary.team.sources : {}), ...summary.operations.sources }}
+                emptyText="La vista PM non usa mock: progetti, task, materiali e review restano a zero finché non sono persistenti."
+              />
+            ) : null}
+            {canView("calendar") ? (
+              <SectionCard
+                title="Calendario consegne"
+                description="Scadenze operative senza valore economico o margini."
+                icon={CalendarDays}
+                metrics={[
+                  { label: "Consegne prossime", value: summary.projects.upcomingDeliveries },
+                  { label: "Task in scadenza", value: summary.projects.dueTasks },
+                  { label: "Progetti in ritardo", value: summary.projects.lateProjects, tone: summary.projects.lateProjects > 0 ? "danger" : "default" },
+                ]}
+                sources={summary.projects.sources}
+                emptyText="Calendario e milestone saranno popolati da tabelle progetto/task reali."
+              />
+            ) : null}
+            {canView("notifications") ? notificationsCard : null}
+            {canView("documents") ? documentsCard : null}
+            {canView("reports") ? reportsCard : null}
+            {canView("automations") ? automationsCard : null}
+            {canView("calendar") ? calendarCard : null}
+            {canView("knowledge") ? knowledgeCard : null}
+            {canView("credentials") ? credentialsCard : null}
+            {canView("contracts") ? contractsCard : null}
+            {canView("paperwork") ? paperworkCard : null}
           </div>
-          <FinanceLockedNotice />
           <div className="grid gap-4 lg:grid-cols-3">
-            <ActivityList title="Commenti recenti" items={summary.operations.recentComments} empty="Nessun commento recente collegato a tabelle persistenti." icon={MessageSquare} />
-            <ActivityList title="File recenti" items={summary.operations.recentFiles} empty="Nessun file recente nel tenant." icon={FileText} />
-            <ActivityList title="Notifiche operative" items={summary.operations.notifications} empty="Nessuna notifica operativa recente." icon={Clock} />
+            {canView("projects") ? <ActivityList title="Commenti recenti" items={summary.operations.recentComments} empty="Nessun commento recente collegato a tabelle persistenti." icon={MessageSquare} /> : null}
+            {canView("documents") ? <ActivityList title="File recenti" items={summary.operations.recentFiles} empty="Nessun file recente nel tenant." icon={FileText} /> : null}
+            {canView("notifications") ? <ActivityList title="Notifiche operative" items={summary.operations.notifications} empty="Nessuna notifica operativa recente." icon={Clock} /> : null}
           </div>
           <QuickActions actions={managerActions} />
         </>
@@ -1529,42 +1598,43 @@ export default function DashboardClient() {
       {!isExecutive && !isManager ? (
         <>
           <div className="grid gap-4 xl:grid-cols-2">
-            <SectionCard
-              title="Il mio lavoro"
-              description="Task, blocchi, progetti assegnati e prossime deadline."
-              icon={CheckCircle2}
-              metrics={personalMetrics}
-              sources={summary.personal.sources}
-              emptyText="Nessun task personale persistente disponibile: zeri reali, nessuna pipeline o finance esposta."
-            />
+            {canView("projects") ? (
+              <SectionCard
+                title="Il mio lavoro"
+                description="Task, blocchi, progetti assegnati e prossime deadline."
+                icon={CheckCircle2}
+                metrics={personalMetrics}
+                sources={summary.personal.sources}
+                emptyText="Nessun task personale persistente disponibile: zeri reali, nessuna pipeline o finance esposta."
+              />
+            ) : null}
             <SectionCard
               title="Operatività"
               description="Materiali, commenti e notifiche utili per lavorare senza rumore direzionale."
               icon={FolderKanban}
               metrics={[
-                { label: "File/materiali necessari", value: summary.operations.recentFiles.length },
-                { label: "Commenti recenti", value: summary.operations.recentComments.length },
-                { label: "Notifiche operative", value: summary.operations.notifications.length },
-                { label: "Prossime consegne", value: summary.operations.upcomingDeliveries },
+                ...(canView("documents") ? [{ label: "File/materiali necessari", value: summary.operations.recentFiles.length } satisfies Metric] : []),
+                ...(canView("projects") ? [{ label: "Commenti recenti", value: summary.operations.recentComments.length } satisfies Metric] : []),
+                ...(canView("notifications") ? [{ label: "Notifiche operative", value: summary.operations.notifications.length } satisfies Metric] : []),
+                ...(canView("calendar") ? [{ label: "Prossime consegne", value: summary.operations.upcomingDeliveries } satisfies Metric] : []),
               ]}
-              sources={{ files: summary.operations.recentFiles.length > 0, comments: summary.operations.recentComments.length > 0 }}
+              sources={{ files: canView("documents") && summary.operations.recentFiles.length > 0, comments: canView("projects") && summary.operations.recentComments.length > 0 }}
               emptyText="File, commenti e notifiche compaiono solo se esistono dati reali per il tenant."
             />
-            {notificationsCard}
-            {documentsCard}
-            {reportsCard}
-            {automationsCard}
-            {calendarCard}
-            {knowledgeCard}
-            {credentialsCard}
-            {contractsCard}
-            {paperworkCard}
+            {canView("notifications") ? notificationsCard : null}
+            {canView("documents") ? documentsCard : null}
+            {canView("reports") ? reportsCard : null}
+            {canView("automations") ? automationsCard : null}
+            {canView("calendar") ? calendarCard : null}
+            {canView("knowledge") ? knowledgeCard : null}
+            {canView("credentials") ? credentialsCard : null}
+            {canView("contracts") ? contractsCard : null}
+            {canView("paperwork") ? paperworkCard : null}
           </div>
-          <FinanceLockedNotice />
           <div className="grid gap-4 lg:grid-cols-3">
-            <ActivityList title="Commenti recenti" items={summary.operations.recentComments} empty="Nessun commento recente." icon={MessageSquare} />
-            <ActivityList title="File e materiali" items={summary.operations.recentFiles} empty="Nessun file o materiale richiesto." icon={FileText} />
-            <ActivityList title="Notifiche" items={summary.operations.notifications} empty="Nessuna notifica operativa." icon={Clock} />
+            {canView("projects") ? <ActivityList title="Commenti recenti" items={summary.operations.recentComments} empty="Nessun commento recente." icon={MessageSquare} /> : null}
+            {canView("documents") ? <ActivityList title="File e materiali" items={summary.operations.recentFiles} empty="Nessun file o materiale richiesto." icon={FileText} /> : null}
+            {canView("notifications") ? <ActivityList title="Notifiche" items={summary.operations.notifications} empty="Nessuna notifica operativa." icon={Clock} /> : null}
           </div>
           <QuickActions actions={employeeActions} />
         </>
