@@ -32,6 +32,11 @@ export class TenantTeamController {
     return this.service.createMember(body || {});
   }
 
+  @Post('members/:id/invite')
+  inviteMember(@Param('id') id: string) {
+    return this.service.inviteMember(id);
+  }
+
   @Get('members/:id')
   getMember(@Param('id') id: string) {
     return this.service.getMember(id);

@@ -1,8 +1,10 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { DataSource } from 'typeorm';
+import * as crypto from 'crypto';
 import { safeSchema } from '../common/schema.utils';
 import { hasRoleAtLeast } from '../roles';
+import { MailService } from '../mail/mail.service';
 import {
   ensureTenantTeamTables,
   seedTenantTeamSkills,
@@ -14,6 +16,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 
 const ADMIN_ROLES = new Set(['owner', 'admin', 'superadmin', 'super_admin']);
 const TEAM_ROLES = ['owner', 'admin', 'manager', 'editor', 'viewer', 'user', 'superadmin', 'super_admin'];
+const INVITABLE_TENANT_ROLES = ['admin', 'manager', 'editor', 'user', 'viewer'];
 const OPERATIONAL_ROLES = [
   'ceo_label', 'project_manager', 'sales', 'designer', 'developer', 'seo_specialist',
   'copywriter', 'administration', 'external_collaborator', 'generic',
@@ -48,12 +51,15 @@ const MODULE_KEYS = [
 
 type AuthUser = { id: string; email?: string; role: string };
 type ListResult<T = Record<string, any>> = { items: T[]; total?: number; limit?: number; offset?: number };
+export type TeamInviteResult = { email_sent: boolean; invite_link: string; expires_at: string };
+export type CreateTeamMemberResult = { member: Record<string, any>; invite: TeamInviteResult | null };
 
 @Injectable()
 export class TenantTeamService {
   constructor(
     private readonly dataSource: DataSource,
     private readonly notifications: TenantNotificationsService,
+    private readonly mailService: MailService,
     @Inject(REQUEST) private readonly request: any,
   ) {}
 
@@ -105,7 +111,7 @@ export class TenantTeamService {
   }
 
   private assertCanManage(user = this.getUser()) {
-    if (!this.canManageTeam(user.role)) throw new ForbiddenException('Solo CEO/Admin possono gestire i membri del team.');
+    if (!this.canManageTeam(user.role)) throw new ForbiddenException('Solo owner/admin possono gestire i membri del team.');
     return user;
   }
 
@@ -144,6 +150,25 @@ export class TenantTeamService {
   private pick(value: unknown, allowed: string[], fallback: string): string {
     const text = String(value || '').trim();
     return allowed.includes(text) ? text : fallback;
+  }
+
+  private validateEmail(value: unknown): string {
+    const email = String(value || '').trim().toLowerCase();
+    if (!email) throw new BadRequestException('email obbligatoria');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new BadRequestException('email non valida');
+    return email;
+  }
+
+  private normalizeTenantRole(value: unknown, actor: AuthUser): string {
+    const role = String(value || 'user').trim().toLowerCase();
+    if (['owner', 'superadmin', 'super_admin', 'ceo'].includes(role)) {
+      throw new BadRequestException('Ruolo tenant non consentito per invito team');
+    }
+    if (!INVITABLE_TENANT_ROLES.includes(role)) throw new BadRequestException('tenant_role non valido');
+    if (role === 'admin' && !['owner', 'superadmin', 'super_admin'].includes(actor.role)) {
+      throw new ForbiddenException('Solo owner/superadmin possono invitare admin.');
+    }
+    return role;
   }
 
   private parseStringArray(value: unknown): string[] | null {
@@ -208,8 +233,8 @@ export class TenantTeamService {
     return rows[0] || null;
   }
 
-  private async activity(schema: string, action: string, user: AuthUser, teamMemberId?: string | null, entityType?: string | null, entityId?: string | null, metadata?: Record<string, unknown>) {
-    await this.dataSource.query(
+  private async activityWith(executor: { query: (sql: string, params?: unknown[]) => Promise<any> }, schema: string, action: string, user: AuthUser, teamMemberId?: string | null, entityType?: string | null, entityId?: string | null, metadata?: Record<string, unknown>) {
+    await executor.query(
       `INSERT INTO "${schema}".team_activity (team_member_id, actor_user_id, action, entity_type, entity_id, metadata, created_at)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, now())`,
       [
@@ -221,6 +246,59 @@ export class TenantTeamService {
         JSON.stringify(metadata || {}),
       ],
     );
+  }
+
+  private async activity(schema: string, action: string, user: AuthUser, teamMemberId?: string | null, entityType?: string | null, entityId?: string | null, metadata?: Record<string, unknown>) {
+    await this.activityWith(this.dataSource, schema, action, user, teamMemberId, entityType, entityId, metadata);
+  }
+
+  private generateInviteToken(): string {
+    return crypto.randomBytes(32).toString('hex');
+  }
+
+  private async tenantSlugFor(schema: string): Promise<string> {
+    const fromRequest = this.request.user?.tenantSlug || this.request.user?.tenant_slug || this.request.tenantSlug;
+    if (fromRequest) return String(fromRequest);
+    const rows = await this.dataSource.query(
+      `SELECT slug FROM public.tenants WHERE schema_name = $1 OR slug = $1 LIMIT 1`,
+      [schema],
+    ).catch(() => []);
+    return String(rows[0]?.slug || schema);
+  }
+
+  private buildInviteLink(tenantSlug: string, token: string): string {
+    const baseUrl = String(process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
+    return `${baseUrl}/accept-invite?token=${encodeURIComponent(token)}&tenant=${encodeURIComponent(tenantSlug)}`;
+  }
+
+  private async sendInviteEmail(email: string, tenantSlug: string, inviteLink: string): Promise<boolean> {
+    try {
+      return Boolean(await this.mailService.sendInviteEmail({
+        to: email,
+        tenantName: tenantSlug,
+        inviteLink,
+      }));
+    } catch {
+      return false;
+    }
+  }
+
+  private async createInviteRecord(executor: { query: (sql: string, params?: unknown[]) => Promise<any> }, schema: string, email: string, role: string, token: string) {
+    await executor.query(
+      `UPDATE "${schema}".invites
+       SET accepted_at = now()
+       WHERE lower(email) = lower($1)
+         AND accepted_at IS NULL`,
+      [email],
+    );
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const rows = await executor.query(
+      `INSERT INTO "${schema}".invites (email, role, token, expires_at, created_at)
+       VALUES ($1, $2, $3, $4::timestamptz, now())
+       RETURNING expires_at`,
+      [email, role, token, expiresAt],
+    );
+    return rows[0]?.expires_at ? new Date(rows[0].expires_at).toISOString() : expiresAt;
   }
 
   private async notify(schema: string, input: { title: string; body?: string; type?: string; priority?: string; entityType?: string; entityId?: string; role?: string; userId?: string | null; fingerprint: string }) {
@@ -310,52 +388,161 @@ export class TenantTeamService {
     return { items: rows.map((row: any) => this.sanitizeMember(row, user)), total, limit, offset };
   }
 
-  async createMember(body: Record<string, any>) {
+  async createMember(body: Record<string, any>): Promise<CreateTeamMemberResult> {
     const user = this.assertCanManage();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
-    const email = String(body.email || '').trim().toLowerCase();
+    const email = this.validateEmail(body.email);
     const displayName = String(body.display_name || body.displayName || email).trim();
-    if (!email) throw new BadRequestException('email obbligatoria');
     if (!displayName) throw new BadRequestException('display_name obbligatorio');
+    const sendInvite = body.send_invite !== false;
+    const tenantRole = this.normalizeTenantRole(body.tenant_role, user);
+    const status = sendInvite ? 'invited' : this.pick(body.status, MEMBER_STATUSES, 'active');
+    const queryRunner = this.dataSource.createQueryRunner();
+    let member: Record<string, any> | null = null;
+    let invite: Omit<TeamInviteResult, 'email_sent'> | null = null;
+    let inviteEmail: string | null = null;
+    let inviteTenantSlug: string | null = null;
+    let inviteLink: string | null = null;
+
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      const existingMember = await queryRunner.manager.query(
+        `SELECT id FROM "${schema}".team_members WHERE lower(email) = lower($1) AND deleted_at IS NULL LIMIT 1`,
+        [email],
+      );
+      if (existingMember[0]) throw new BadRequestException('Esiste gia un membro team con questa email.');
+
+      if (sendInvite) {
+        const existingUser = await queryRunner.manager.query(
+          `SELECT id FROM "${schema}".users WHERE lower(email) = lower($1) LIMIT 1`,
+          [email],
+        );
+        if (existingUser[0]) throw new BadRequestException('Esiste gia un utente tenant con questa email.');
+      }
+
+      const rows = await queryRunner.manager.query(
+        `INSERT INTO "${schema}".team_members (
+          user_id, email, display_name, first_name, last_name, phone, tenant_role, job_title, department,
+          operational_role, employment_type, status, skills, capacity_hours_per_week, availability_status,
+          hourly_rate_cents, daily_rate_cents, currency, start_date, end_date, notes, private_notes,
+          metadata, created_by, created_at, updated_at
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::text[],$14,$15,$16,$17,$18,$19,$20,$21,$22,$23::jsonb,$24,now(),now())
+        RETURNING *`,
+        [
+          sendInvite ? null : (body.user_id ? this.requireUuid(String(body.user_id), 'user_id') : null),
+          email,
+          displayName,
+          this.textOrNull(body.first_name),
+          this.textOrNull(body.last_name),
+          this.textOrNull(body.phone),
+          tenantRole,
+          this.textOrNull(body.job_title),
+          this.textOrNull(body.department),
+          this.pick(body.operational_role, OPERATIONAL_ROLES, 'generic'),
+          this.pick(body.employment_type, EMPLOYMENT_TYPES, 'employee'),
+          status,
+          this.parseStringArray(body.skills),
+          body.capacity_hours_per_week === undefined || body.capacity_hours_per_week === '' ? null : Number(body.capacity_hours_per_week),
+          this.pick(body.availability_status, AVAILABILITY_STATUSES, 'available'),
+          body.hourly_rate_cents === undefined || body.hourly_rate_cents === '' ? null : Number(body.hourly_rate_cents),
+          body.daily_rate_cents === undefined || body.daily_rate_cents === '' ? null : Number(body.daily_rate_cents),
+          this.textOrNull(body.currency) || 'EUR',
+          this.textOrNull(body.start_date),
+          this.textOrNull(body.end_date),
+          this.textOrNull(body.notes),
+          this.textOrNull(body.private_notes),
+          JSON.stringify(this.parseMetadata(body.metadata) || {}),
+          this.userIdOrNull(user.id),
+        ],
+      );
+      member = rows[0];
+
+      if (sendInvite) {
+        const token = this.generateInviteToken();
+        const expiresAt = await this.createInviteRecord(queryRunner.manager, schema, email, tenantRole, token);
+        inviteTenantSlug = await this.tenantSlugFor(schema);
+        inviteLink = this.buildInviteLink(inviteTenantSlug, token);
+        inviteEmail = email;
+        invite = { invite_link: inviteLink, expires_at: expiresAt };
+      }
+
+      await this.activityWith(queryRunner.manager, schema, 'profile_created', user, member!.id, 'team_member', member!.id, { invite_created: sendInvite });
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+
+    let emailSent = false;
+    if (invite && inviteEmail && inviteTenantSlug && inviteLink) {
+      emailSent = await this.sendInviteEmail(inviteEmail, inviteTenantSlug, inviteLink);
+    }
+
+    return {
+      member: this.sanitizeMember(member!, user),
+      invite: invite ? { ...invite, email_sent: emailSent } : null,
+    };
+  }
+
+  async inviteMember(id: string): Promise<TeamInviteResult> {
+    const user = this.assertCanManage();
+    const schema = this.getSchema();
+    await this.ensureSchema(schema);
+    const memberId = this.requireUuid(id, 'team_member_id');
     const rows = await this.dataSource.query(
-      `INSERT INTO "${schema}".team_members (
-        user_id, email, display_name, first_name, last_name, phone, tenant_role, job_title, department,
-        operational_role, employment_type, status, skills, capacity_hours_per_week, availability_status,
-        hourly_rate_cents, daily_rate_cents, currency, start_date, end_date, notes, private_notes,
-        metadata, created_by, created_at, updated_at
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::text[],$14,$15,$16,$17,$18,$19,$20,$21,$22,$23::jsonb,$24,now(),now())
-      RETURNING *`,
-      [
-        body.user_id ? this.requireUuid(String(body.user_id), 'user_id') : null,
-        email,
-        displayName,
-        this.textOrNull(body.first_name),
-        this.textOrNull(body.last_name),
-        this.textOrNull(body.phone),
-        this.textOrNull(body.tenant_role),
-        this.textOrNull(body.job_title),
-        this.textOrNull(body.department),
-        this.pick(body.operational_role, OPERATIONAL_ROLES, 'generic'),
-        this.pick(body.employment_type, EMPLOYMENT_TYPES, 'employee'),
-        this.pick(body.status, MEMBER_STATUSES, 'active'),
-        this.parseStringArray(body.skills),
-        body.capacity_hours_per_week === undefined || body.capacity_hours_per_week === '' ? null : Number(body.capacity_hours_per_week),
-        this.pick(body.availability_status, AVAILABILITY_STATUSES, 'available'),
-        body.hourly_rate_cents === undefined || body.hourly_rate_cents === '' ? null : Number(body.hourly_rate_cents),
-        body.daily_rate_cents === undefined || body.daily_rate_cents === '' ? null : Number(body.daily_rate_cents),
-        this.textOrNull(body.currency) || 'EUR',
-        this.textOrNull(body.start_date),
-        this.textOrNull(body.end_date),
-        this.textOrNull(body.notes),
-        this.textOrNull(body.private_notes),
-        JSON.stringify(this.parseMetadata(body.metadata) || {}),
-        this.userIdOrNull(user.id),
-      ],
+      `SELECT id, email, tenant_role, user_id, status FROM "${schema}".team_members
+       WHERE id = $1 AND deleted_at IS NULL
+       LIMIT 1`,
+      [memberId],
     );
-    await this.activity(schema, 'profile_created', user, rows[0].id, 'team_member', rows[0].id);
-    return this.sanitizeMember(rows[0], user);
+    const member = rows[0];
+    if (!member) throw new NotFoundException('Membro team non trovato');
+    if (member.user_id) throw new BadRequestException('Il membro ha gia un account attivo.');
+    const email = this.validateEmail(member.email);
+    const tenantRole = this.normalizeTenantRole(member.tenant_role || 'user', user);
+    const existingUser = await this.dataSource.query(
+      `SELECT id FROM "${schema}".users WHERE lower(email) = lower($1) LIMIT 1`,
+      [email],
+    );
+    if (existingUser[0]) throw new BadRequestException('Esiste gia un utente tenant con questa email.');
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    let inviteLink = '';
+    let expiresAt = '';
+    const tenantSlug = await this.tenantSlugFor(schema);
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      const token = this.generateInviteToken();
+      expiresAt = await this.createInviteRecord(queryRunner.manager, schema, email, tenantRole, token);
+      await queryRunner.manager.query(
+        `UPDATE "${schema}".team_members
+         SET status = 'invited',
+             tenant_role = $2,
+             updated_at = now()
+         WHERE id = $1 AND deleted_at IS NULL`,
+        [memberId, tenantRole],
+      );
+      inviteLink = this.buildInviteLink(tenantSlug, token);
+      await this.activityWith(queryRunner.manager, schema, 'member_invited', user, memberId, 'team_member', memberId, { email_sent: false });
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+
+    const emailSent = await this.sendInviteEmail(email, tenantSlug, inviteLink);
+    if (emailSent) {
+      await this.activity(schema, 'member_invite_email_sent', user, memberId, 'team_member', memberId);
+    }
+    return { email_sent: emailSent, invite_link: inviteLink, expires_at: expiresAt };
   }
 
   async getMember(id: string) {

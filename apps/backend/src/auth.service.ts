@@ -396,6 +396,16 @@ export class AuthService {
       [invite.email, passwordHash, invite.role],
     );
     const user = users[0];
+    await conn.query(
+      `UPDATE "${tenantId}"."team_members"
+       SET user_id = $1,
+           tenant_role = $2,
+           status = 'active',
+           updated_at = now()
+       WHERE lower(email) = lower($3)
+         AND deleted_at IS NULL`,
+      [user.id, invite.role, invite.email],
+    );
     await conn.query(`update "${tenantId}"."invites" set accepted_at = now() where id = $1`, [invite.id]);
 
     await this.dataSource.query(

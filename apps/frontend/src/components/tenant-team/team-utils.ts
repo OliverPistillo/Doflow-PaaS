@@ -50,7 +50,7 @@ export const AVAILABILITY_LABELS: Record<string, string> = {
 export const STATUS_LABELS: Record<string, string> = {
   active: "Attivo",
   inactive: "Inattivo",
-  invited: "Invitato",
+  invited: "Invito in attesa",
   suspended: "Sospeso",
   archived: "Archiviato",
   draft: "Bozza",

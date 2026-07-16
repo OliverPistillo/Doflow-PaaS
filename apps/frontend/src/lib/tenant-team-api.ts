@@ -41,6 +41,21 @@ export type TeamMember = {
   skill_items?: TeamMemberSkill[];
 };
 
+export type TeamInviteResult = {
+  email_sent: boolean;
+  invite_link: string;
+  expires_at: string;
+};
+
+export type CreateTeamMemberInput = Partial<TeamMember> & {
+  send_invite?: boolean;
+};
+
+export type CreateTeamMemberResult = {
+  member: TeamMember;
+  invite: TeamInviteResult | null;
+};
+
 export type TeamSkill = {
   id: string;
   name: string;
@@ -182,10 +197,11 @@ export const teamApi = {
   summary: () => apiFetch<TeamSummary>("/tenant/team/summary"),
   workload: (params?: Params) => apiFetch<ListResponse<TeamWorkloadItem>>(`/tenant/team/workload${qs(params)}`),
   members: (params?: Params) => apiFetch<ListResponse<TeamMember>>(`/tenant/team/members${qs(params)}`),
-  createMember: (body: Partial<TeamMember>) => apiFetch<TeamMember>("/tenant/team/members", { method: "POST", body: JSON.stringify(body) }),
+  createMember: (body: CreateTeamMemberInput) => apiFetch<CreateTeamMemberResult>("/tenant/team/members", { method: "POST", body: JSON.stringify(body) }),
   member: (id: string) => apiFetch<TeamMember>(`/tenant/team/members/${id}`),
   updateMember: (id: string, body: Partial<TeamMember>) => apiFetch<TeamMember>(`/tenant/team/members/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteMember: (id: string) => apiFetch<{ success: boolean }>(`/tenant/team/members/${id}`, { method: "DELETE" }),
+  inviteMember: (id: string) => apiFetch<TeamInviteResult>(`/tenant/team/members/${id}/invite`, { method: "POST" }),
   syncUsers: () => apiFetch<{ ok: boolean; total: number }>("/tenant/team/members/sync-users", { method: "POST" }),
   memberWorkload: (id: string) => apiFetch<TeamWorkloadItem>(`/tenant/team/members/${id}/workload`),
   memberActivity: (id: string) => apiFetch<ListResponse<TeamActivity>>(`/tenant/team/members/${id}/activity`),

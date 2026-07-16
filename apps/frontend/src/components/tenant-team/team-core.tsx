@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, RefreshCw, Search } from "lucide-react";
+import { Copy, Plus, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { teamApi, type TeamMember, type TeamOptions, type TeamSummary, type TeamWorkloadItem } from "@/lib/tenant-team-api";
+import { teamApi, type CreateTeamMemberInput, type CreateTeamMemberResult, type TeamMember, type TeamOptions, type TeamSummary, type TeamWorkloadItem } from "@/lib/tenant-team-api";
 import { TeamSummaryCards } from "./team-summary-cards";
 import { TeamMemberForm } from "./team-member-form";
 import { TeamMembersList } from "./team-members-list";
@@ -92,6 +92,7 @@ export function TeamMembersPage() {
   const [status, setStatus] = useState("__all__");
   const [operationalRole, setOperationalRole] = useState("__all__");
   const [availability, setAvailability] = useState("__all__");
+  const [createdResult, setCreatedResult] = useState<CreateTeamMemberResult | null>(null);
 
   const params = useMemo(() => ({ search, status, operational_role: operationalRole, availability_status: availability, limit: 100 }), [search, status, operationalRole, availability]);
   const load = async () => {
@@ -114,14 +115,19 @@ export function TeamMembersPage() {
   };
   useEffect(() => { const t = window.setTimeout(() => void load(), 250); return () => window.clearTimeout(t); }, [params]);
 
-  const create = async (body: Partial<TeamMember>) => {
+  const create = async (body: CreateTeamMemberInput | Partial<TeamMember>) => {
     try {
-      await teamApi.createMember(body);
-      setOpen(false);
+      const result = await teamApi.createMember(body as CreateTeamMemberInput);
+      setCreatedResult(result);
+      if (!result.invite) setOpen(false);
       await load();
     } catch (err) {
       toast({ title: "Membro non creato", description: err instanceof Error ? err.message : "Errore", variant: "destructive" });
     }
+  };
+  const closeCreateDialog = (value: boolean) => {
+    setOpen(value);
+    if (!value) setCreatedResult(null);
   };
   const sync = async () => {
     try {
@@ -155,12 +161,45 @@ export function TeamMembersPage() {
       </div>
       <ErrorBox error={error} />
       {loading ? <Loading /> : <TeamMembersList members={members} workload={workload} onDelete={remove} />}
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={closeCreateDialog}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader><DialogTitle>Nuovo membro team</DialogTitle></DialogHeader>
-          <TeamMemberForm options={options} onSubmit={create} />
+          {createdResult?.invite ? (
+            <InviteCreatedPanel result={createdResult} onClose={() => closeCreateDialog(false)} />
+          ) : (
+            <TeamMemberForm options={options} onSubmit={create} />
+          )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function InviteCreatedPanel({ result, onClose }: { result: CreateTeamMemberResult; onClose: () => void }) {
+  const { toast } = useToast();
+  const invite = result.invite;
+  if (!invite) return null;
+  const copy = async () => {
+    await navigator.clipboard.writeText(invite.invite_link);
+    toast({ title: "Link copiato" });
+  };
+  return (
+    <div className="space-y-4">
+      <div className="rounded-nav border bg-muted/30 p-4">
+        <p className="text-sm font-semibold">Membro creato: {result.member.display_name}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{result.member.email}</p>
+      </div>
+      <div className="rounded-nav border p-4">
+        <p className="font-medium">{invite.email_sent ? "Invito inviato correttamente. Puoi anche copiare il link manualmente." : "Il profilo e l'invito sono stati creati, ma l'email non e stata inviata. Copia e invia manualmente il link."}</p>
+        <p className="mt-1 text-sm text-muted-foreground">Scadenza: {new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(invite.expires_at))}</p>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <Input readOnly value={invite.invite_link} />
+          <Button type="button" onClick={copy}><Copy className="mr-2 h-4 w-4" /> Copia link</Button>
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <Button onClick={onClose}>Chiudi</Button>
+      </div>
     </div>
   );
 }

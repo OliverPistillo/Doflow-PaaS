@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { TeamMember, TeamOptions } from "@/lib/tenant-team-api";
+import type { CreateTeamMemberInput, TeamMember, TeamOptions } from "@/lib/tenant-team-api";
 import {
   AVAILABILITY_LABELS,
   EMPLOYMENT_TYPE_LABELS,
@@ -17,7 +18,7 @@ import {
   label,
 } from "./team-utils";
 
-type FormState = Partial<TeamMember> & { skills_text?: string };
+type FormState = CreateTeamMemberInput & { skills_text?: string };
 
 export function TeamMemberForm({
   member,
@@ -27,7 +28,7 @@ export function TeamMemberForm({
 }: {
   member?: TeamMember | null;
   options?: TeamOptions | null;
-  onSubmit: (body: Partial<TeamMember>) => Promise<void> | void;
+  onSubmit: (body: CreateTeamMemberInput | Partial<TeamMember>) => Promise<void> | void;
   submitting?: boolean;
 }) {
   const canCosts = canViewTeamCosts();
@@ -56,24 +57,27 @@ export function TeamMemberForm({
       end_date: member?.end_date ? String(member.end_date).slice(0, 10) : "",
       notes: member?.notes || "",
       private_notes: canCosts ? member?.private_notes || "" : undefined,
+      send_invite: member ? undefined : true,
     });
   }, [member, canCosts]);
 
   const set = (key: keyof FormState, value: unknown) => setForm((prev) => ({ ...prev, [key]: value }));
-  const tenantRoles = options?.tenantRoles || ["owner", "admin", "manager", "editor", "user", "viewer"];
+  const tenantRoles = (options?.tenantRoles || ["admin", "manager", "editor", "user", "viewer"])
+    .filter((role) => member || !["owner", "superadmin", "super_admin"].includes(role));
   const operationalRoles = options?.operationalRoles || Object.keys(OPERATIONAL_ROLE_LABELS);
   const employmentTypes = options?.employmentTypes || Object.keys(EMPLOYMENT_TYPE_LABELS);
   const statuses = options?.memberStatuses || ["active", "inactive", "invited", "suspended", "archived"];
   const availabilityStatuses = options?.availabilityStatuses || ["available", "busy", "unavailable", "vacation", "sick", "external_limited"];
 
   const submit = async () => {
-    const body: Partial<TeamMember> = {
+    const body: CreateTeamMemberInput = {
       ...form,
       skills: String(form.skills_text || "").split(",").map((item) => item.trim()).filter(Boolean),
       capacity_hours_per_week: form.capacity_hours_per_week === "" ? null : form.capacity_hours_per_week,
       hourly_rate_cents: canCosts && String(form.hourly_rate_cents ?? "") !== "" ? Number(form.hourly_rate_cents) : undefined,
       daily_rate_cents: canCosts && String(form.daily_rate_cents ?? "") !== "" ? Number(form.daily_rate_cents) : undefined,
       private_notes: canCosts ? form.private_notes : undefined,
+      send_invite: member ? undefined : form.send_invite !== false,
     };
     delete (body as FormState).skills_text;
     await onSubmit(body);
@@ -100,6 +104,30 @@ export function TeamMemberForm({
       <SelectField labelText="Disponibilità" value={form.availability_status || "available"} values={availabilityStatuses} labels={AVAILABILITY_LABELS} onChange={(v) => set("availability_status", v)} />
       <div className="grid gap-2"><Label>Capacity ore/settimana</Label><Input type="number" value={String(form.capacity_hours_per_week || "")} onChange={(e) => set("capacity_hours_per_week", e.target.value)} /></div>
       <div className="grid gap-2 md:col-span-2"><Label>Competenze libere</Label><Input value={form.skills_text || ""} onChange={(e) => set("skills_text", e.target.value)} placeholder="SEO, WordPress, UX..." /></div>
+      {!member ? (
+        <div className="grid gap-3 rounded-nav border p-3 md:col-span-2">
+          <div>
+            <Label>Accesso alla webapp</Label>
+            <p className="mt-1 text-xs text-muted-foreground">Scegli se creare subito anche un invito di attivazione account.</p>
+          </div>
+          <RadioGroup value={form.send_invite === false ? "profile" : "invite"} onValueChange={(value) => set("send_invite", value === "invite")}>
+            <label className="flex cursor-pointer items-start gap-3 rounded-nav border p-3">
+              <RadioGroupItem value="invite" className="mt-0.5" />
+              <span>
+                <span className="block text-sm font-medium">Crea e invia invito</span>
+                <span className="text-xs text-muted-foreground">Crea il profilo e genera il link per accedere alla webapp.</span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-3 rounded-nav border p-3">
+              <RadioGroupItem value="profile" className="mt-0.5" />
+              <span>
+                <span className="block text-sm font-medium">Crea soltanto il profilo operativo</span>
+                <span className="text-xs text-muted-foreground">Per collaboratori o profili che non devono fare login.</span>
+              </span>
+            </label>
+          </RadioGroup>
+        </div>
+      ) : null}
       {canCosts ? (
         <>
           <div className="grid gap-2"><Label>Tariffa oraria centesimi</Label><Input type="number" value={form.hourly_rate_cents ?? ""} onChange={(e) => set("hourly_rate_cents", e.target.value)} /></div>
@@ -110,7 +138,7 @@ export function TeamMemberForm({
       <div className="grid gap-2 md:col-span-2"><Label>Note</Label><Textarea value={form.notes || ""} onChange={(e) => set("notes", e.target.value)} /></div>
       <div className="md:col-span-2">
         <Button onClick={submit} disabled={submitting || !form.email || !form.display_name}>
-          {member ? "Salva profilo" : "Crea membro"}
+          {member ? "Salva profilo" : form.send_invite === false ? "Crea profilo" : "Crea e invita"}
         </Button>
       </div>
     </div>

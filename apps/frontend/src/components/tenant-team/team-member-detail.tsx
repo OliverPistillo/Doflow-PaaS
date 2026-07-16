@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { FileText, Loader2, Plus, Save, Trash2 } from "lucide-react";
+import { Copy, Loader2, Plus, Save, Send, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { listDocumentsForEntity, type TenantDocument } from "@/lib/tenant-documents-api";
-import { teamApi, type TeamActivity, type TeamMember, type TeamModulePermission, type TeamOptions, type TeamSkill, type TeamWorkloadItem } from "@/lib/tenant-team-api";
+import { teamApi, type TeamActivity, type TeamInviteResult, type TeamMember, type TeamModulePermission, type TeamOptions, type TeamSkill, type TeamWorkloadItem } from "@/lib/tenant-team-api";
 import { DocumentUploadLink, DocumentsMiniList } from "./team-member-documents";
 import { TeamAvailabilityPage } from "./team-availability";
 import { TeamMemberForm } from "./team-member-form";
@@ -46,6 +46,7 @@ export function TeamMemberDetailPage({ memberId }: { memberId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [skillId, setSkillId] = useState("");
+  const [inviteResult, setInviteResult] = useState<TeamInviteResult | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -99,6 +100,16 @@ export function TeamMemberDetailPage({ memberId }: { memberId: string }) {
       toast({ title: "Permessi non salvati", description: err instanceof Error ? err.message : "Errore", variant: "destructive" });
     }
   };
+  const sendInvite = async () => {
+    try {
+      const result = await teamApi.inviteMember(memberId);
+      setInviteResult(result);
+      toast({ title: result.email_sent ? "Invito inviato" : "Invito creato", description: result.email_sent ? "Email inviata correttamente." : "Email non inviata: copia il link manualmente." });
+      await load();
+    } catch (err) {
+      toast({ title: "Invito non creato", description: err instanceof Error ? err.message : "Errore", variant: "destructive" });
+    }
+  };
 
   if (loading) return <div className="flex flex-1 justify-center py-24 text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Caricamento membro...</div>;
   if (error || !member) return <div className="flex-1 p-4 md:p-6"><ErrorBox error={error || "Membro non trovato"} /></div>;
@@ -118,9 +129,16 @@ export function TeamMemberDetailPage({ memberId }: { memberId: string }) {
         </div>
         <div className="flex flex-wrap gap-2">
           <DocumentUploadLink memberId={memberId} />
+          {canManageTeam() && !member.user_id ? (
+            <Button variant="outline" onClick={sendInvite}>
+              <Send className="mr-2 h-4 w-4" /> {member.status === "invited" ? "Reinvia invito" : "Invita alla webapp"}
+            </Button>
+          ) : null}
           <Button onClick={() => setEditOpen(true)}>Modifica profilo</Button>
         </div>
       </div>
+
+      {inviteResult ? <InviteResultCard invite={inviteResult} onClear={() => setInviteResult(null)} /> : null}
 
       <Tabs defaultValue="profile" className="space-y-4">
         <TabsList className="flex h-auto flex-wrap justify-start">
@@ -139,6 +157,7 @@ export function TeamMemberDetailPage({ memberId }: { memberId: string }) {
             <Info label="Ruolo tenant" value={label(TENANT_ROLE_LABELS, member.tenant_role)} />
             <Info label="Ruolo operativo" value={label(OPERATIONAL_ROLE_LABELS, member.operational_role)} />
             <Info label="Rapporto" value={label(EMPLOYMENT_TYPE_LABELS, member.employment_type)} />
+            <Info label="Accesso webapp" value={member.user_id ? "Account attivo" : member.status === "invited" ? "Invito in attesa" : "Solo profilo"} />
             <Info label="Capacity" value={member.capacity_hours_per_week ? `${member.capacity_hours_per_week}h/settimana` : "-"} />
             <Info label="Inizio" value={formatDate(member.start_date)} />
             <Info label="Telefono" value={member.phone || "-"} />
@@ -186,6 +205,30 @@ export function TeamMemberDetailPage({ memberId }: { memberId: string }) {
 
 function Info({ label, value }: { label: string; value: string }) {
   return <Card><CardContent className="p-4"><p className="text-xs font-semibold text-muted-foreground">{label}</p><p className="mt-1 font-semibold">{value}</p></CardContent></Card>;
+}
+
+function InviteResultCard({ invite, onClear }: { invite: TeamInviteResult; onClear: () => void }) {
+  const { toast } = useToast();
+  const copy = async () => {
+    await navigator.clipboard.writeText(invite.invite_link);
+    toast({ title: "Link copiato" });
+  };
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Invito webapp</CardTitle>
+        <CardDescription>{invite.email_sent ? "Invito inviato correttamente. Puoi anche copiare il link manualmente." : "Il profilo e l'invito sono validi, ma l'email non e stata inviata. Copia e invia manualmente il link."}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted-foreground">Scadenza: {formatDateTime(invite.expires_at)}</p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <input readOnly className="flex h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm" value={invite.invite_link} />
+          <Button type="button" onClick={copy}><Copy className="mr-2 h-4 w-4" /> Copia link</Button>
+          <Button type="button" variant="outline" onClick={onClear}>Nascondi</Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 function PermissionsPanel({ permissions, setPermissions, onSave }: { permissions: TeamModulePermission[]; setPermissions: (items: TeamModulePermission[]) => void; onSave: () => void }) {

@@ -52,6 +52,13 @@ export function TeamMembersList({
                   </Link>
                   <Badge variant="outline" className={roleBadgeClass(member.tenant_role)}>{label(TENANT_ROLE_LABELS, member.tenant_role)}</Badge>
                   <Badge variant="outline" className={availabilityBadgeClass(member.availability_status)}>{label(AVAILABILITY_LABELS, member.availability_status)}</Badge>
+                  {member.user_id ? (
+                    <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">Account attivo</Badge>
+                  ) : member.status === "invited" ? (
+                    <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">Invito in attesa</Badge>
+                  ) : (
+                    <Badge variant="outline">Solo profilo</Badge>
+                  )}
                 </div>
                 <p className="text-sm text-muted-foreground">{member.email}</p>
                 <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
