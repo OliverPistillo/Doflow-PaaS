@@ -3,6 +3,7 @@ import { REQUEST } from '@nestjs/core';
 import { DataSource } from 'typeorm';
 import * as crypto from 'crypto';
 import { safeSchema } from '../common/schema.utils';
+import { buildFrontendPath } from '../common/public-url.utils';
 import { hasRoleAtLeast } from '../roles';
 import { MailService } from '../mail/mail.service';
 import {
@@ -267,20 +268,30 @@ export class TenantTeamService {
   }
 
   private buildInviteLink(tenantSlug: string, token: string): string {
-    const baseUrl = String(process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
-    return `${baseUrl}/accept-invite?token=${encodeURIComponent(token)}&tenant=${encodeURIComponent(tenantSlug)}`;
+    return buildFrontendPath('/accept-invite', { token, tenant: tenantSlug });
   }
 
   private async sendInviteEmail(email: string, tenantSlug: string, inviteLink: string): Promise<boolean> {
-    try {
-      return Boolean(await this.mailService.sendInviteEmail({
+    const timeoutMs = this.inviteEmailTimeoutMs();
+    let timeout: NodeJS.Timeout | undefined;
+    const sendPromise = this.mailService.sendInviteEmail({
         to: email,
         tenantName: tenantSlug,
         inviteLink,
-      }));
-    } catch {
-      return false;
-    }
+      }).then(Boolean).catch(() => false);
+    const timeoutPromise = new Promise<boolean>((resolve) => {
+      timeout = setTimeout(() => resolve(false), timeoutMs);
+    });
+    const result = await Promise.race([sendPromise, timeoutPromise]);
+    if (timeout) clearTimeout(timeout);
+    void sendPromise.catch(() => false);
+    return result;
+  }
+
+  private inviteEmailTimeoutMs(): number {
+    const raw = Number(process.env.TEAM_INVITE_EMAIL_TIMEOUT_MS || process.env.MAIL_SOCKET_TIMEOUT_MS || 15000);
+    if (!Number.isFinite(raw)) return 15000;
+    return Math.max(1000, Math.min(60000, Math.trunc(raw)));
   }
 
   private async createInviteRecord(executor: { query: (sql: string, params?: unknown[]) => Promise<any> }, schema: string, email: string, role: string, token: string) {

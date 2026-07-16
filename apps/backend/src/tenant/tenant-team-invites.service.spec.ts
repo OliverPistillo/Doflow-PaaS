@@ -11,12 +11,14 @@ jest.mock('./tenant-team-schema', () => ({
 const actorId = '11111111-1111-4111-8111-111111111111';
 const memberId = '22222222-2222-4222-8222-222222222222';
 
-function makeQueryRunner(options: { mailFails?: boolean; inviteInsertFails?: boolean } = {}) {
+function makeQueryRunner(options: { mailFails?: boolean; mailHangs?: boolean; inviteInsertFails?: boolean; existingMember?: boolean } = {}) {
   const calls: Array<{ sql: string; params?: unknown[] }> = [];
   const manager = {
     query: jest.fn(async (sql: string, params?: unknown[]) => {
       calls.push({ sql, params });
-      if (sql.includes('FROM "doflow".team_members') && sql.includes('lower(email)')) return [];
+      if (sql.includes('FROM "doflow".team_members') && sql.includes('lower(email)')) {
+        return options.existingMember ? [{ id: memberId }] : [];
+      }
       if (sql.includes('FROM "doflow".users')) return [];
       if (sql.includes('INSERT INTO "doflow".team_members')) {
         return [{
@@ -46,7 +48,7 @@ function makeQueryRunner(options: { mailFails?: boolean; inviteInsertFails?: boo
   return { runner, calls };
 }
 
-function makeTeamService(role = 'owner', runnerOptions: { mailFails?: boolean; inviteInsertFails?: boolean } = {}, dataSourceOverrides: Record<string, unknown> = {}) {
+function makeTeamService(role = 'owner', runnerOptions: { mailFails?: boolean; mailHangs?: boolean; inviteInsertFails?: boolean; existingMember?: boolean } = {}, dataSourceOverrides: Record<string, unknown> = {}) {
   const { runner, calls } = makeQueryRunner(runnerOptions);
   const dataSource = {
     createQueryRunner: jest.fn(() => runner),
@@ -62,7 +64,10 @@ function makeTeamService(role = 'owner', runnerOptions: { mailFails?: boolean; i
     ...dataSourceOverrides,
   } as any;
   const mailService = {
-    sendInviteEmail: jest.fn().mockResolvedValue(!runnerOptions.mailFails),
+    sendInviteEmail: jest.fn(() => {
+      if (runnerOptions.mailHangs) return new Promise<boolean>(() => undefined);
+      return Promise.resolve(!runnerOptions.mailFails);
+    }),
   };
   const request = { user: { sub: actorId, id: actorId, role, tenantId: 'doflow', tenantSlug: 'doflow', email: 'owner@example.com' } };
   const service = new TenantTeamService(dataSource, {} as any, mailService as any, request);
@@ -70,8 +75,17 @@ function makeTeamService(role = 'owner', runnerOptions: { mailFails?: boolean; i
 }
 
 describe('TenantTeamService invite flow', () => {
+  const originalEnv = { ...process.env };
+
   beforeEach(() => {
-    process.env.APP_URL = 'https://app.doflow.test';
+    process.env = { ...originalEnv };
+    process.env.NODE_ENV = 'test';
+    process.env.FRONTEND_URL = 'https://app.doflow.test';
+    delete process.env.APP_URL;
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
   });
 
   it('create con send_invite=true crea membro invited, invito e link senza token separato', async () => {
@@ -98,6 +112,22 @@ describe('TenantTeamService invite flow', () => {
     expect(activityPayloads.join(' ')).not.toContain(token);
   });
 
+  it('in produzione genera link con FRONTEND_URL pubblico e non localhost', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.FRONTEND_URL = 'https://app.doflow.it';
+    const { service } = makeTeamService();
+    const result = await service.createMember({
+      email: 'nuovo@example.com',
+      display_name: 'Nuovo membro',
+      tenant_role: 'user',
+      send_invite: true,
+    });
+
+    expect(result.invite?.invite_link).toMatch(/^https:\/\/app\.doflow\.it\/accept-invite\?token=/);
+    expect(result.invite?.invite_link).toContain('&tenant=doflow');
+    expect(result.invite?.invite_link).not.toContain('localhost');
+  });
+
   it('mail failure non annulla membro e invito', async () => {
     const { service, runner } = makeTeamService('owner', { mailFails: true });
     const result = await service.createMember({
@@ -106,6 +136,24 @@ describe('TenantTeamService invite flow', () => {
       tenant_role: 'user',
       send_invite: true,
     });
+    expect(result.invite?.email_sent).toBe(false);
+    expect(result.invite?.invite_link).toBeTruthy();
+    expect(runner.commitTransaction).toHaveBeenCalledTimes(1);
+    expect(runner.rollbackTransaction).not.toHaveBeenCalled();
+  });
+
+  it('SMTP appeso torna rapidamente con email_sent=false senza rollback', async () => {
+    process.env.TEAM_INVITE_EMAIL_TIMEOUT_MS = '20';
+    const { service, runner } = makeTeamService('owner', { mailHangs: true });
+    const started = Date.now();
+    const result = await service.createMember({
+      email: 'nuovo@example.com',
+      display_name: 'Nuovo membro',
+      tenant_role: 'user',
+      send_invite: true,
+    });
+
+    expect(Date.now() - started).toBeLessThan(2000);
     expect(result.invite?.email_sent).toBe(false);
     expect(result.invite?.invite_link).toBeTruthy();
     expect(runner.commitTransaction).toHaveBeenCalledTimes(1);
@@ -135,6 +183,18 @@ describe('TenantTeamService invite flow', () => {
     expect(result.invite).toBeNull();
     expect(result.member.status).toBe('active');
     expect(mailService.sendInviteEmail).not.toHaveBeenCalled();
+  });
+
+  it('membro duplicato restituisce 400 e non crea nuovo invito', async () => {
+    const { service, mailService, runner } = makeTeamService('owner', { existingMember: true });
+    await expect(service.createMember({
+      email: 'nuovo@example.com',
+      display_name: 'Nuovo membro',
+      tenant_role: 'user',
+      send_invite: true,
+    })).rejects.toBeInstanceOf(BadRequestException);
+    expect(mailService.sendInviteEmail).not.toHaveBeenCalled();
+    expect(runner.rollbackTransaction).toHaveBeenCalledTimes(1);
   });
 
   it('reinvio invalida precedente invito e genera nuovo token', async () => {
