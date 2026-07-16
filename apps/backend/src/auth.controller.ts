@@ -145,7 +145,7 @@ export class AuthController {
     } catch (e) {
       await this.auditService.log(req, {
         action: 'auth_accept_invite_failed',
-        metadata: { token: body.token },
+        metadata: { token_present: Boolean(body.token), tenant: body.tenant || body.tenantSlug || null },
       });
 
       if (e instanceof Error) return { error: e.message };
