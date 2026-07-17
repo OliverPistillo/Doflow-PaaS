@@ -18,6 +18,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { PageShell, PageHeader } from "@/components/ui/page-shell";
+import { useConfirm } from "@/hooks/useConfirm";
 import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
 import { cn } from "@/lib/utils";
@@ -165,6 +166,7 @@ export function CrmResourcePage({
   const [relations, setRelations] = useState<Record<string, CrmRow[]>>({});
   const showEconomic = canSeeEconomicValues();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const { ConfirmDialog, confirm } = useConfirm();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -266,7 +268,13 @@ export function CrmResourcePage({
   };
 
   const remove = async (row: CrmRow) => {
-    if (!window.confirm("Spostare questo record nel cestino?")) return;
+    const ok = await confirm({
+      title: "Spostare questo record nel cestino?",
+      confirmLabel: "Elimina",
+      cancelLabel: "Annulla",
+      variant: "destructive",
+    });
+    if (!ok) return;
     await apiFetch(`/tenant/crm/${resource}/${row.id}`, { method: "DELETE" });
     await load();
   };
@@ -278,6 +286,7 @@ export function CrmResourcePage({
 
   return (
     <PageShell>
+      <ConfirmDialog />
       <PageHeader
         title={title}
         description={description}
