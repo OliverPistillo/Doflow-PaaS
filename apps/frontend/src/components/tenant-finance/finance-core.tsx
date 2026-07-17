@@ -20,6 +20,7 @@ import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
 import { money, shortDate } from "@/components/tenant-crm/crm-core";
 import { useToast } from "@/hooks/use-toast";
+import { useTenantAccess } from "@/contexts/TenantAccessContext";
 
 type Row = Record<string, any>;
 type ListResponse<T = Row> = { items: T[]; total?: number; limit?: number; offset?: number };
@@ -217,6 +218,7 @@ function RelationSelect({
 }
 
 function useFinanceRelations() {
+  const { canView } = useTenantAccess();
   const [relations, setRelations] = useState<Record<string, Row[]>>({
     companies: [],
     contacts: [],
@@ -227,9 +229,10 @@ function useFinanceRelations() {
   });
 
   const load = async () => {
+    const canLoadCrm = canView("crm");
     const [companies, contacts, quotes, projects, invoices, recurringServices] = await Promise.all([
-      loadList("/tenant/crm/companies?limit=100").catch(() => ({ items: [] })),
-      loadList("/tenant/crm/contacts?limit=100").catch(() => ({ items: [] })),
+      canLoadCrm ? loadList("/tenant/crm/companies?limit=100").catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
+      canLoadCrm ? loadList("/tenant/crm/contacts?limit=100").catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
       loadList("/tenant/quotes?limit=100").catch(() => ({ items: [] })),
       loadList("/tenant/projects?limit=100").catch(() => ({ items: [] })),
       loadList("/tenant/finance/invoices?limit=100").catch(() => ({ items: [] })),

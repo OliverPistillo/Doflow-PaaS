@@ -110,6 +110,65 @@ describe('TenantCalendarService', () => {
     expect(result.total).toBe(1);
     expect(query.mock.calls.some(([sql]) => String(sql).includes('overlap_busy_events'))).toBe(true);
   });
+
+  it('visibilityWhere usa placeholder contigui per user senza finance', () => {
+    const { service } = makeService(managerUser);
+
+    const visibility = (service as any).visibilityWhere({ id: managerUser.sub, role: 'user' }, 'e', 3);
+
+    expect(visibility.sql).toContain('e.event_type <> ALL($3::text[])');
+    expect(visibility.sql).toContain('e.owner_user_id = $4');
+    expect(visibility.sql).toContain('e.assigned_to_user_id = $4');
+    expect(visibility.params).toHaveLength(2);
+    expect(visibility.params[0]).toEqual(expect.any(Array));
+    expect(visibility.params[1]).toBe(managerUser.sub);
+  });
+
+  it('endpoint calendario user non usano UUID come LIMIT o array text come UUID', async () => {
+    const { service, query } = makeService(managerUser);
+    jest.spyOn(service as any, 'tableExists').mockResolvedValue(false);
+    query.mockImplementation(async (sql: string) => {
+      if (sql.includes('COUNT(*) FILTER')) {
+        return [{
+          eventsToday: 0,
+          eventsThisWeek: 0,
+          overdueEvents: 0,
+          deadlinesThisWeek: 0,
+          teamUnavailableToday: 0,
+          nextEventAt: null,
+          derivedEventsCount: 0,
+        }];
+      }
+      if (sql.includes('calendar_event_reminders') && sql.includes('COUNT(*)')) return [{ count: 0 }];
+      return [];
+    });
+
+    await service.summary();
+    await service.listEvents({ start: '2026-07-10T00:00:00.000Z', end: '2026-07-17T00:00:00.000Z', limit: 25, offset: 5 });
+    await service.agenda({ date: '2026-07-10' });
+    await service.deadlines({ start: '2026-07-10T00:00:00.000Z', end: '2026-07-17T00:00:00.000Z' });
+    await service.workload({ start: '2026-07-10T00:00:00.000Z', end: '2026-07-17T00:00:00.000Z' });
+    await service.conflicts({ start: '2026-07-10T00:00:00.000Z', end: '2026-07-17T00:00:00.000Z', limit: 10 });
+    await service.availability({ start: '2026-07-10T00:00:00.000Z', end: '2026-07-17T00:00:00.000Z' });
+    await service.dueReminders();
+
+    for (const [sqlRaw, paramsRaw] of query.mock.calls) {
+      const sql = String(sqlRaw);
+      const params = (paramsRaw || []) as unknown[];
+      const placeholders = Array.from(sql.matchAll(/\$(\d+)/g)).map((match) => Number(match[1]));
+      for (const index of placeholders) {
+        expect(params[index - 1]).not.toBeUndefined();
+      }
+      const limitMatch = sql.match(/LIMIT \$(\d+)/);
+      if (limitMatch) {
+        expect(typeof params[Number(limitMatch[1]) - 1]).toBe('number');
+      }
+      const uuidComparisons = Array.from(sql.matchAll(/(?:owner_user_id|assigned_to_user_id|created_by) = \$(\d+)/g)).map((match) => Number(match[1]));
+      for (const index of uuidComparisons) {
+        expect(typeof params[index - 1]).toBe('string');
+      }
+    }
+  });
 });
 
 describe('tenant calendar schema', () => {

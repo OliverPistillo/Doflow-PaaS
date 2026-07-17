@@ -161,9 +161,14 @@ export class TenantDocumentsService {
     }
   }
 
-  private visibilitySql(user: AuthUser, alias = 'd') {
+  private documentVisibilitySql(user: AuthUser, alias = 'd') {
     if (this.canViewFinance(user.role)) return 'TRUE';
     return `(${alias}.visibility <> 'finance' AND COALESCE(${alias}.category, '') NOT IN ('finance', 'invoice', 'receipt') AND COALESCE(${alias}.entity_type, '') NOT IN ('invoice', 'payment', 'deadline', 'renewal', 'recurring_service'))`;
+  }
+
+  private folderVisibilitySql(user: AuthUser, alias = 'f') {
+    if (this.canViewFinance(user.role)) return 'TRUE';
+    return `(${alias}.visibility <> 'finance' AND COALESCE(${alias}.entity_type, '') NOT IN ('invoice', 'payment', 'deadline', 'renewal', 'recurring_service'))`;
   }
 
   private sanitizeDocument(row: Record<string, any>) {
@@ -194,7 +199,7 @@ export class TenantDocumentsService {
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const params: unknown[] = [];
-    const where = ['deleted_at IS NULL', this.visibilitySql(user, 'document_folders')];
+    const where = ['deleted_at IS NULL', this.folderVisibilitySql(user, 'document_folders')];
 
     if (query.parent_id) {
       params.push(this.requireUuid(String(query.parent_id), 'parent_id'));
@@ -256,7 +261,7 @@ export class TenantDocumentsService {
     await this.ensureSchema(schema);
     const rows = await this.dataSource.query(
       `SELECT * FROM "${schema}".document_folders
-       WHERE id = $1 AND deleted_at IS NULL AND ${this.visibilitySql(user, 'document_folders')}
+       WHERE id = $1 AND deleted_at IS NULL AND ${this.folderVisibilitySql(user, 'document_folders')}
        LIMIT 1`,
       [this.requireUuid(id)],
     );
@@ -313,7 +318,7 @@ export class TenantDocumentsService {
     const sortBy = SORT_COLUMNS.includes(String(query.sort || query.sortBy || '')) ? String(query.sort || query.sortBy) : 'created_at';
     const sortDir = String(query.sortDir || query.sortOrder || 'desc').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
     const params: unknown[] = [];
-    const where = ['d.deleted_at IS NULL', this.visibilitySql(user, 'd')];
+    const where = ['d.deleted_at IS NULL', this.documentVisibilitySql(user, 'd')];
     const status = query.status === undefined ? 'active' : String(query.status);
     if (status !== '__all__' && status !== 'all') {
       params.push(this.normalizeStatus(status));
@@ -425,7 +430,7 @@ export class TenantDocumentsService {
        FROM "${schema}".documents d
        LEFT JOIN "${schema}".document_folders f ON f.id = d.folder_id
        LEFT JOIN "${schema}".users u ON u.id = d.uploaded_by
-       WHERE d.id = $1 AND d.deleted_at IS NULL AND ${this.visibilitySql(user, 'd')}
+       WHERE d.id = $1 AND d.deleted_at IS NULL AND ${this.documentVisibilitySql(user, 'd')}
        LIMIT 1`,
       [this.requireUuid(id)],
     );
@@ -609,7 +614,7 @@ export class TenantDocumentsService {
     const params: unknown[] = [normalizedType, normalizedId];
     const where = [
       'd.deleted_at IS NULL',
-      this.visibilitySql(user, 'd'),
+      this.documentVisibilitySql(user, 'd'),
       `(d.entity_type = $1 AND d.entity_id = $2 OR EXISTS (
         SELECT 1 FROM "${schema}".document_links dl
         WHERE dl.document_id = d.id AND dl.entity_type = $1 AND dl.entity_id = $2 AND dl.deleted_at IS NULL
@@ -640,7 +645,7 @@ export class TenantDocumentsService {
     const user = this.assertCanRead();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
-    const visibility = this.visibilitySql(user, 'd');
+    const visibility = this.documentVisibilitySql(user, 'd');
     const count = async (extra = 'TRUE') => Number((await this.dataSource.query(
       `SELECT COUNT(*)::int AS count FROM "${schema}".documents d WHERE d.deleted_at IS NULL AND ${visibility} AND ${extra}`,
     ))[0]?.count || 0);
@@ -692,7 +697,7 @@ export class TenantDocumentsService {
     await this.ensureSchema(schema);
     const rows = await this.dataSource.query(
       `SELECT * FROM "${schema}".documents
-       WHERE id = $1 AND ${this.visibilitySql(user, 'documents')}
+       WHERE id = $1 AND ${this.documentVisibilitySql(user, 'documents')}
        LIMIT 1`,
       [this.requireUuid(id)],
     );

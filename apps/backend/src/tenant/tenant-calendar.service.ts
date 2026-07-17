@@ -22,8 +22,7 @@ import {
   PLANNING_VIEW_TYPES,
 } from './tenant-calendar.types';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
-const UUID_STRICT_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ADMIN_ROLES = new Set(['owner', 'admin', 'superadmin', 'super_admin']);
 const READ_ROLES = new Set(['owner', 'admin', 'superadmin', 'super_admin', 'manager', 'editor', 'user', 'viewer']);
 const SORT_COLUMNS = ['start_at', 'end_at', 'created_at', 'updated_at', 'priority', 'event_type', 'status'];
@@ -136,13 +135,13 @@ export class TenantCalendarService {
 
   private requireUuid(value: unknown, label = 'ID'): string {
     const text = String(value || '');
-    if (!UUID_STRICT_RE.test(text)) throw new BadRequestException(`${label} non valido`);
+    if (!UUID_RE.test(text)) throw new BadRequestException(`${label} non valido`);
     return text;
   }
 
   private uuidOrNull(value: unknown): string | null {
     const text = String(value || '');
-    return UUID_STRICT_RE.test(text) ? text : null;
+    return UUID_RE.test(text) ? text : null;
   }
 
   private textOrNull(value: unknown): string | null {
@@ -233,11 +232,12 @@ export class TenantCalendarService {
     if (this.isAdmin(user.role)) return { sql: financeSql, params };
 
     const userId = this.uuidOrNull(user.id);
+    const userParam = userId ? startParam + params.length : null;
     const privateParts = [
       `${alias}.visibility <> 'private'`,
-      userId ? `${alias}.owner_user_id = $${startParam + params.length + 1}` : null,
-      userId ? `${alias}.assigned_to_user_id = $${startParam + params.length + 1}` : null,
-      userId ? `${alias}.created_by = $${startParam + params.length + 1}` : null,
+      userParam ? `${alias}.owner_user_id = $${userParam}` : null,
+      userParam ? `${alias}.assigned_to_user_id = $${userParam}` : null,
+      userParam ? `${alias}.created_by = $${userParam}` : null,
     ].filter(Boolean);
     if (userId) params.push(userId);
     return { sql: `(${financeSql}) AND (${privateParts.join(' OR ') || 'FALSE'})`, params };

@@ -70,12 +70,18 @@ export function TeamMemberForm({
   const availabilityStatuses = options?.availabilityStatuses || ["available", "busy", "unavailable", "vacation", "sick", "external_limited"];
 
   const submit = async () => {
+    const emptyToNull = (value: unknown): string | null => {
+      const text = String(value ?? "").trim();
+      return text || null;
+    };
     const body: CreateTeamMemberInput = {
       ...form,
       skills: String(form.skills_text || "").split(",").map((item) => item.trim()).filter(Boolean),
-      capacity_hours_per_week: form.capacity_hours_per_week === "" ? null : form.capacity_hours_per_week,
-      hourly_rate_cents: canCosts && String(form.hourly_rate_cents ?? "") !== "" ? Number(form.hourly_rate_cents) : undefined,
-      daily_rate_cents: canCosts && String(form.daily_rate_cents ?? "") !== "" ? Number(form.daily_rate_cents) : undefined,
+      capacity_hours_per_week: emptyToNull(form.capacity_hours_per_week),
+      hourly_rate_cents: canCosts ? (emptyToNull(form.hourly_rate_cents) === null ? null : Number(form.hourly_rate_cents)) : undefined,
+      daily_rate_cents: canCosts ? (emptyToNull(form.daily_rate_cents) === null ? null : Number(form.daily_rate_cents)) : undefined,
+      start_date: emptyToNull(form.start_date) as string | null,
+      end_date: emptyToNull(form.end_date) as string | null,
       private_notes: canCosts ? form.private_notes : undefined,
       send_invite: member ? undefined : form.send_invite !== false,
     };
@@ -102,7 +108,9 @@ export function TeamMemberForm({
       <SelectField labelText="Rapporto" value={form.employment_type || "employee"} values={employmentTypes} labels={EMPLOYMENT_TYPE_LABELS} onChange={(v) => set("employment_type", v)} />
       <SelectField labelText="Stato" value={form.status || "active"} values={statuses} labels={STATUS_LABELS} onChange={(v) => set("status", v)} />
       <SelectField labelText="Disponibilità" value={form.availability_status || "available"} values={availabilityStatuses} labels={AVAILABILITY_LABELS} onChange={(v) => set("availability_status", v)} />
-      <div className="grid gap-2"><Label>Capacity ore/settimana</Label><Input type="number" value={String(form.capacity_hours_per_week || "")} onChange={(e) => set("capacity_hours_per_week", e.target.value)} /></div>
+      <div className="grid gap-2"><Label>Capacity ore/settimana</Label><Input type="number" value={String(form.capacity_hours_per_week ?? "")} onChange={(e) => set("capacity_hours_per_week", e.target.value)} /></div>
+      <div className="grid gap-2"><Label>Data inizio</Label><Input type="date" value={form.start_date || ""} onChange={(e) => set("start_date", e.target.value)} /></div>
+      <div className="grid gap-2"><Label>Data fine</Label><Input type="date" value={form.end_date || ""} onChange={(e) => set("end_date", e.target.value)} /></div>
       <div className="grid gap-2 md:col-span-2"><Label>Competenze libere</Label><Input value={form.skills_text || ""} onChange={(e) => set("skills_text", e.target.value)} placeholder="SEO, WordPress, UX..." /></div>
       {!member ? (
         <div className="grid gap-3 rounded-nav border p-3 md:col-span-2">

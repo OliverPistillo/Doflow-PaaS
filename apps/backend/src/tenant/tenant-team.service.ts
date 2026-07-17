@@ -154,6 +154,37 @@ export class TenantTeamService {
     return Math.max(0, Math.trunc(n));
   }
 
+  private normalizeNullableDate(value: unknown, fieldName: string): string | null | undefined {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    const text = String(value).trim();
+    if (!text) return null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) throw new BadRequestException(`${fieldName} non valida`);
+    const date = new Date(`${text}T00:00:00.000Z`);
+    if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== text) {
+      throw new BadRequestException(`${fieldName} non valida`);
+    }
+    return text;
+  }
+
+  private normalizeNullableNumber(value: unknown, fieldName: string, integer = false): number | null | undefined {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    const text = String(value).trim();
+    if (!text) return null;
+    const n = Number(text);
+    if (!Number.isFinite(n)) throw new BadRequestException(`${fieldName} non valido`);
+    if (integer && !Number.isInteger(n)) throw new BadRequestException(`${fieldName} non valido`);
+    if (n < 0) throw new BadRequestException(`${fieldName} non valido`);
+    return n;
+  }
+
+  private assertDateRange(start: string | null | undefined, end: string | null | undefined) {
+    if (start && end && new Date(`${end}T00:00:00.000Z`) < new Date(`${start}T00:00:00.000Z`)) {
+      throw new BadRequestException('end_date deve essere successiva o uguale a start_date');
+    }
+  }
+
   private pick(value: unknown, allowed: string[], fallback: string): string {
     const text = String(value || '').trim();
     return allowed.includes(text) ? text : fallback;
@@ -415,6 +446,12 @@ export class TenantTeamService {
     const sendInvite = body.send_invite !== false;
     const tenantRole = this.normalizeTenantRole(body.tenant_role, user);
     const status = sendInvite ? 'invited' : this.pick(body.status, MEMBER_STATUSES, 'active');
+    const startDate = this.normalizeNullableDate(body.start_date, 'start_date') ?? null;
+    const endDate = this.normalizeNullableDate(body.end_date, 'end_date') ?? null;
+    this.assertDateRange(startDate, endDate);
+    const capacityHours = this.normalizeNullableNumber(body.capacity_hours_per_week, 'capacity_hours_per_week') ?? null;
+    const hourlyRate = this.normalizeNullableNumber(body.hourly_rate_cents, 'hourly_rate_cents', true) ?? null;
+    const dailyRate = this.normalizeNullableNumber(body.daily_rate_cents, 'daily_rate_cents', true) ?? null;
     const queryRunner = this.dataSource.createQueryRunner();
     let member: Record<string, any> | null = null;
     let invite: Omit<TeamInviteResult, 'email_sent'> | null = null;
@@ -462,13 +499,13 @@ export class TenantTeamService {
           this.pick(body.employment_type, EMPLOYMENT_TYPES, 'employee'),
           status,
           this.parseStringArray(body.skills),
-          body.capacity_hours_per_week === undefined || body.capacity_hours_per_week === '' ? null : Number(body.capacity_hours_per_week),
+          capacityHours,
           this.pick(body.availability_status, AVAILABILITY_STATUSES, 'available'),
-          body.hourly_rate_cents === undefined || body.hourly_rate_cents === '' ? null : Number(body.hourly_rate_cents),
-          body.daily_rate_cents === undefined || body.daily_rate_cents === '' ? null : Number(body.daily_rate_cents),
+          hourlyRate,
+          dailyRate,
           this.textOrNull(body.currency) || 'EUR',
-          this.textOrNull(body.start_date),
-          this.textOrNull(body.end_date),
+          startDate,
+          endDate,
           this.textOrNull(body.notes),
           this.textOrNull(body.private_notes),
           JSON.stringify(this.parseMetadata(body.metadata) || {}),
@@ -584,6 +621,11 @@ export class TenantTeamService {
     const isSelf = member.user_id && member.user_id === this.userIdOrNull(user.id);
     if (!this.canManageTeam(user.role) && !isSelf) throw new ForbiddenException('Puoi modificare solo il tuo profilo.');
     await this.ensureSchema(schema);
+    const normalizedStartDate = this.normalizeNullableDate(body.start_date, 'start_date');
+    const normalizedEndDate = this.normalizeNullableDate(body.end_date, 'end_date');
+    const effectiveStartDate = normalizedStartDate !== undefined ? normalizedStartDate : (member.start_date ? String(member.start_date).slice(0, 10) : null);
+    const effectiveEndDate = normalizedEndDate !== undefined ? normalizedEndDate : (member.end_date ? String(member.end_date).slice(0, 10) : null);
+    this.assertDateRange(effectiveStartDate, effectiveEndDate);
 
     const allowedForSelf = new Set(['display_name', 'first_name', 'last_name', 'phone', 'notes', 'availability_status', 'skills', 'metadata']);
     const fields: Array<[string, unknown, string]> = [
@@ -599,13 +641,13 @@ export class TenantTeamService {
       ['employment_type', body.employment_type ? this.pick(body.employment_type, EMPLOYMENT_TYPES, 'employee') : undefined, 'employment_type'],
       ['status', body.status ? this.pick(body.status, MEMBER_STATUSES, 'active') : undefined, 'status'],
       ['skills', body.skills !== undefined ? this.parseStringArray(body.skills) : undefined, 'skills'],
-      ['capacity_hours_per_week', body.capacity_hours_per_week === undefined ? undefined : Number(body.capacity_hours_per_week), 'capacity_hours_per_week'],
+      ['capacity_hours_per_week', this.normalizeNullableNumber(body.capacity_hours_per_week, 'capacity_hours_per_week'), 'capacity_hours_per_week'],
       ['availability_status', body.availability_status ? this.pick(body.availability_status, AVAILABILITY_STATUSES, 'available') : undefined, 'availability_status'],
-      ['hourly_rate_cents', body.hourly_rate_cents === undefined ? undefined : Number(body.hourly_rate_cents), 'hourly_rate_cents'],
-      ['daily_rate_cents', body.daily_rate_cents === undefined ? undefined : Number(body.daily_rate_cents), 'daily_rate_cents'],
+      ['hourly_rate_cents', this.normalizeNullableNumber(body.hourly_rate_cents, 'hourly_rate_cents', true), 'hourly_rate_cents'],
+      ['daily_rate_cents', this.normalizeNullableNumber(body.daily_rate_cents, 'daily_rate_cents', true), 'daily_rate_cents'],
       ['currency', body.currency, 'currency'],
-      ['start_date', body.start_date, 'start_date'],
-      ['end_date', body.end_date, 'end_date'],
+      ['start_date', normalizedStartDate, 'start_date'],
+      ['end_date', normalizedEndDate, 'end_date'],
       ['notes', body.notes, 'notes'],
       ['private_notes', body.private_notes, 'private_notes'],
       ['metadata', body.metadata !== undefined ? this.parseMetadata(body.metadata) : undefined, 'metadata'],

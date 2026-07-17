@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { canUseFinanceFrontend } from "@/components/tenant-finance/finance-core";
 import { contractsApi } from "@/lib/tenant-contracts-api";
 import { paperworkApi } from "@/lib/tenant-paperwork-api";
+import { useTenantAccess } from "@/contexts/TenantAccessContext";
 
 type Row = Record<string, any>;
 type ListResponse<T = Row> = { items: T[]; total: number; limit: number; offset: number };
@@ -197,6 +198,7 @@ async function loadList(path: string, params?: URLSearchParams) {
 }
 
 function useRelations(includeBriefings = false) {
+  const { canView } = useTenantAccess();
   const [relations, setRelations] = useState<Record<string, Row[]>>({
     companies: [],
     contacts: [],
@@ -207,10 +209,11 @@ function useRelations(includeBriefings = false) {
   });
 
   const load = async () => {
+    const canLoadCrm = canView("crm");
     const [companies, contacts, opportunities, briefings, briefingTemplates, serviceTemplates] = await Promise.all([
-      loadList("/tenant/crm/companies?limit=100").catch(() => ({ items: [] })),
-      loadList("/tenant/crm/contacts?limit=100").catch(() => ({ items: [] })),
-      loadList("/tenant/crm/opportunities?limit=100").catch(() => ({ items: [] })),
+      canLoadCrm ? loadList("/tenant/crm/companies?limit=100").catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
+      canLoadCrm ? loadList("/tenant/crm/contacts?limit=100").catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
+      canLoadCrm ? loadList("/tenant/crm/opportunities?limit=100").catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
       includeBriefings ? loadList("/tenant/briefing?limit=100").catch(() => ({ items: [] })) : Promise.resolve({ items: [] }),
       loadList("/tenant/briefing/templates?limit=100").catch(() => ({ items: [] })),
       loadList("/tenant/quotes/service-templates?limit=100").catch(() => ({ items: [] })),

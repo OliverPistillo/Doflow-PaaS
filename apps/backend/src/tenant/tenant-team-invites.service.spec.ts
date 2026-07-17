@@ -250,3 +250,79 @@ describe('AuthService accept invite team link', () => {
     process.env.JWT_SECRET = previousSecret;
   });
 });
+
+describe('TenantTeamService member update nullable fields', () => {
+  function makeUpdateService() {
+    const calls: Array<{ sql: string; params?: unknown[] }> = [];
+    const member = {
+      id: memberId,
+      user_id: null,
+      email: 'nuovo@example.com',
+      display_name: 'Nuovo membro',
+      tenant_role: 'user',
+      status: 'active',
+      start_date: '2026-01-01',
+      end_date: null,
+    };
+    const dataSource = {
+      query: jest.fn(async (sql: string, params?: unknown[]) => {
+        calls.push({ sql, params });
+        if (sql.includes('SELECT tm.* FROM "doflow".team_members')) return [member];
+        if (sql.includes('UPDATE "doflow".team_members SET')) return [{ ...member, id: params?.[0], updated: true }];
+        return [];
+      }),
+    };
+    const request = { user: { sub: actorId, id: actorId, role: 'owner', tenantId: 'doflow', tenantSlug: 'doflow', email: 'owner@example.com' } };
+    return { service: new TenantTeamService(dataSource as any, {} as any, {} as any, request), calls };
+  }
+
+  it('date vuote e numerici vuoti diventano NULL', async () => {
+    const { service, calls } = makeUpdateService();
+
+    await service.updateMember(memberId, {
+      start_date: '',
+      end_date: '   ',
+      capacity_hours_per_week: '',
+      hourly_rate_cents: '',
+      daily_rate_cents: '',
+    });
+
+    const update = calls.find((call) => call.sql.includes('UPDATE "doflow".team_members SET'));
+    expect(update?.sql).toContain('start_date');
+    expect(update?.sql).toContain('end_date');
+    expect(update?.params?.slice(1)).toEqual([null, null, null, null, null]);
+  });
+
+  it('undefined non modifica date o numerici', async () => {
+    const { service, calls } = makeUpdateService();
+
+    await service.updateMember(memberId, { display_name: 'Aggiornato' });
+
+    const update = calls.find((call) => call.sql.includes('UPDATE "doflow".team_members SET'));
+    expect(update?.sql).toContain('display_name');
+    expect(update?.sql).not.toContain('start_date');
+    expect(update?.sql).not.toContain('capacity_hours_per_week');
+  });
+
+  it('data valida viene salvata', async () => {
+    const { service, calls } = makeUpdateService();
+
+    await service.updateMember(memberId, { start_date: '2026-02-01', end_date: '2026-02-28' });
+
+    const update = calls.find((call) => call.sql.includes('UPDATE "doflow".team_members SET'));
+    expect(update?.params).toContain('2026-02-01');
+    expect(update?.params).toContain('2026-02-28');
+  });
+
+  it('data invalida restituisce 400 controllato', async () => {
+    const { service } = makeUpdateService();
+
+    await expect(service.updateMember(memberId, { start_date: '2026-99-99' })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('end_date prima di start_date restituisce 400 controllato', async () => {
+    const { service } = makeUpdateService();
+
+    await expect(service.updateMember(memberId, { start_date: '2026-02-10', end_date: '2026-02-01' })).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
