@@ -10,12 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/useConfirm";
 import { teamApi, type TeamSkill } from "@/lib/tenant-team-api";
 import { canManageTeam } from "./team-utils";
 import { Empty, ErrorBox, Header, Loading } from "./team-workload";
 
 export function TeamSkillsPage() {
   const { toast } = useToast();
+  const { ConfirmDialog, confirm } = useConfirm();
   const [items, setItems] = useState<TeamSkill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,13 +55,20 @@ export function TeamSkillsPage() {
     }
   };
   const remove = async (skill: TeamSkill) => {
-    if (!window.confirm(`Eliminare ${skill.name}?`)) return;
+    const ok = await confirm({
+      title: `Eliminare ${skill.name}?`,
+      confirmLabel: "Elimina",
+      cancelLabel: "Annulla",
+      variant: "destructive",
+    });
+    if (!ok) return;
     await teamApi.deleteSkill(skill.id);
     await load();
   };
 
   return (
     <div className="flex-1 space-y-5 p-4 md:p-6">
+      <ConfirmDialog />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <Header title="Competenze" description="Skill reali del team, seedate e modificabili." />
         {canManageTeam() ? <Button onClick={() => startEdit()}><Plus className="mr-2 h-4 w-4" /> Nuova skill</Button> : null}

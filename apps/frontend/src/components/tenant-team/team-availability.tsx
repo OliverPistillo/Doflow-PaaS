@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/useConfirm";
 import { teamApi, type TeamAvailability, type TeamMember } from "@/lib/tenant-team-api";
 import { AVAILABILITY_LABELS, STATUS_LABELS, availabilityBadgeClass, canManageTeamOps, formatDateTime, label } from "./team-utils";
 import { Empty, ErrorBox, Header, Loading } from "./team-workload";
@@ -20,6 +21,7 @@ const STATUSES = ["planned", "confirmed", "cancelled"];
 
 export function TeamAvailabilityPage({ memberId }: { memberId?: string }) {
   const { toast } = useToast();
+  const { ConfirmDialog, confirm } = useConfirm();
   const [items, setItems] = useState<TeamAvailability[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -96,13 +98,20 @@ export function TeamAvailabilityPage({ memberId }: { memberId?: string }) {
     setOpen(true);
   };
   const remove = async (item: TeamAvailability) => {
-    if (!window.confirm("Eliminare questa disponibilità?")) return;
+    const ok = await confirm({
+      title: "Eliminare questa disponibilità?",
+      confirmLabel: "Elimina",
+      cancelLabel: "Annulla",
+      variant: "destructive",
+    });
+    if (!ok) return;
     await teamApi.deleteAvailability(item.id);
     await load();
   };
 
   return (
     <div className={memberId ? "space-y-4" : "flex-1 space-y-5 p-4 md:p-6"}>
+      <ConfirmDialog />
       {!memberId ? <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><Header title="Disponibilità" description="Ferie, assenze, remoto e focus time del team." />{canManageTeamOps() ? <Button onClick={startCreate}><Plus className="mr-2 h-4 w-4" /> Nuova disponibilità</Button> : null}</div> : canManageTeamOps() ? <Button size="sm" onClick={startCreate}><Plus className="mr-2 h-4 w-4" /> Aggiungi disponibilità</Button> : null}
       {!memberId ? (
         <div className="grid gap-3 lg:grid-cols-5">

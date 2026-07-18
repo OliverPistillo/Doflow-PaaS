@@ -21,3 +21,7 @@
 ## 2026-06-30 - [Projects UX Deletions & Custom Confirm Dialogs]
 **Learning:** Native `window.confirm` dialogs are highly inaccessible, lack unified styling, and degrade premium SaaS experiences. Replacing them with an accessible `AlertDialog` wrapper like the existing custom `useConfirm` hook ensures keyboard operability, screen reader support, and design continuity.
 **Action:** Always replace legacy browser native confirm dialogs with the custom, accessible `ConfirmDialog` hook.
+
+## 2026-07-02 - [Cohesive Module-Wide Confirm Dialog Modernization]
+**Learning:** Modernizing legacy confirm actions in a feature module (such as the Team management module) should be done cohesively across all of its sub-pages (skills, members list, time entries, and availability) rather than in isolation. Reusing the custom `useConfirm` / `ConfirmDialog` hook uniformly across an entire module ensures visual and interactive consistency, reinforcing user trust and providing seamless keyboard navigation everywhere.
+**Action:** When modernizing interactive dialogs, audit the whole feature group or folder to apply the improvement holistically to all related files.

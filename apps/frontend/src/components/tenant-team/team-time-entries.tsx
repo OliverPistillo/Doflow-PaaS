@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/useConfirm";
 import { teamApi, type TeamMember, type TimeEntry } from "@/lib/tenant-team-api";
 import { ACTIVITY_TYPE_LABELS, STATUS_LABELS, canManageTeam, canManageTeamOps, formatDate, formatMinutes, label } from "./team-utils";
 import { Empty, ErrorBox, Header, Loading } from "./team-workload";
@@ -20,6 +21,7 @@ const STATUSES = ["draft", "submitted", "approved", "rejected"];
 
 export function TeamTimeEntriesPage({ memberId }: { memberId?: string }) {
   const { toast } = useToast();
+  const { ConfirmDialog, confirm } = useConfirm();
   const [items, setItems] = useState<TimeEntry[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -99,7 +101,13 @@ export function TeamTimeEntriesPage({ memberId }: { memberId?: string }) {
         await teamApi.rejectTimeEntry(entry.id, reason);
       }
       if (kind === "delete") {
-        if (!window.confirm("Eliminare questa time entry?")) return;
+        const ok = await confirm({
+          title: "Eliminare questa time entry?",
+          confirmLabel: "Elimina",
+          cancelLabel: "Annulla",
+          variant: "destructive",
+        });
+        if (!ok) return;
         await teamApi.deleteTimeEntry(entry.id);
       }
       await load();
@@ -110,6 +118,7 @@ export function TeamTimeEntriesPage({ memberId }: { memberId?: string }) {
 
   return (
     <div className={memberId ? "space-y-4" : "flex-1 space-y-5 p-4 md:p-6"}>
+      <ConfirmDialog />
       {!memberId ? <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><Header title="Ore lavorate" description="Timesheet reale per progetto, task e attività." /><Button onClick={startCreate}><Plus className="mr-2 h-4 w-4" /> Nuova time entry</Button></div> : <Button size="sm" onClick={startCreate}><Plus className="mr-2 h-4 w-4" /> Aggiungi time entry</Button>}
       {!memberId ? (
         <div className="grid gap-3 lg:grid-cols-5">

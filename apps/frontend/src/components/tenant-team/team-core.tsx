@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/useConfirm";
 import { teamApi, type CreateTeamMemberInput, type CreateTeamMemberResult, type TeamMember, type TeamOptions, type TeamSummary, type TeamWorkloadItem } from "@/lib/tenant-team-api";
 import { TeamSummaryCards } from "./team-summary-cards";
 import { TeamMemberForm } from "./team-member-form";
@@ -82,6 +83,7 @@ export function TeamOverviewPage() {
 
 export function TeamMembersPage() {
   const { toast } = useToast();
+  const { ConfirmDialog, confirm } = useConfirm();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [workload, setWorkload] = useState<TeamWorkloadItem[]>([]);
   const [options, setOptions] = useState<TeamOptions | null>(null);
@@ -139,13 +141,20 @@ export function TeamMembersPage() {
     }
   };
   const remove = async (member: TeamMember) => {
-    if (!window.confirm(`Archiviare ${member.display_name}?`)) return;
+    const ok = await confirm({
+      title: `Archiviare ${member.display_name}?`,
+      confirmLabel: "Archivia",
+      cancelLabel: "Annulla",
+      variant: "destructive",
+    });
+    if (!ok) return;
     await teamApi.deleteMember(member.id);
     await load();
   };
 
   return (
     <div className="flex-1 space-y-5 p-4 md:p-6">
+      <ConfirmDialog />
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <Header title="Dipendenti e collaboratori" description="Profili operativi collegati agli utenti tenant esistenti." />
         <div className="flex flex-wrap gap-2">
