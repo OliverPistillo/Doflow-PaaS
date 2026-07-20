@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Download, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/useConfirm";
 import { credentialsApi } from "@/lib/tenant-credentials-api";
 import type { CredentialItem, CredentialsDashboard, CredentialsOptions } from "@/lib/tenant-credentials-types";
 import { CredentialRevealDialog } from "./credential-reveal-dialog";
@@ -26,6 +27,7 @@ export function CredentialsOverviewPage({ mode = "all" }: { mode?: "all" | "expi
   const [rotateOpen, setRotateOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { ConfirmDialog, confirm } = useConfirm();
 
   const title = mode === "expiring" ? "Credenziali in scadenza" : mode === "renewals" ? "Rinnovi credenziali" : mode === "rotation" ? "Rotazioni dovute" : "Accessi e credenziali";
 
@@ -63,7 +65,13 @@ export function CredentialsOverviewPage({ mode = "all" }: { mode?: "all" | "expi
   };
 
   const archive = async (item: CredentialItem) => {
-    if (!window.confirm("La credenziale verrà archiviata e non apparirà più nelle liste operative.")) return;
+    const ok = await confirm({
+      title: "Archivia credenziale?",
+      description: "La credenziale verrà archiviata e non apparirà più nelle liste operative.",
+      confirmLabel: "Archivia",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       await credentialsApi.archive(item.id);
       toast({ title: "Credenziale archiviata" });
@@ -98,6 +106,7 @@ export function CredentialsOverviewPage({ mode = "all" }: { mode?: "all" | "expi
       )}
       <CredentialRevealDialog credential={selected} open={revealOpen} onOpenChange={setRevealOpen} />
       <CredentialRotateDialog credential={selected} open={rotateOpen} onOpenChange={setRotateOpen} onDone={load} />
+      <ConfirmDialog />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/useConfirm";
 import { credentialsApi } from "@/lib/tenant-credentials-api";
 import type { CredentialLink } from "@/lib/tenant-credentials-types";
 import { CredentialsEmptyState, CredentialsError, CredentialsLoading } from "./credentials-shared";
@@ -17,6 +18,7 @@ export function CredentialLinks({ credentialId }: { credentialId: string }) {
   const [form, setForm] = useState({ entity_type: "project", entity_id: "", relation: "related_to" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { ConfirmDialog, confirm } = useConfirm();
 
   const load = async () => {
     setLoading(true);
@@ -47,7 +49,13 @@ export function CredentialLinks({ credentialId }: { credentialId: string }) {
   };
 
   const remove = async (row: CredentialLink) => {
-    if (!window.confirm("Rimuovere questo collegamento?")) return;
+    const ok = await confirm({
+      title: "Rimuovere questo collegamento?",
+      description: "Il collegamento con questa entità verrà eliminato permanentemente.",
+      confirmLabel: "Rimuovi",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       await credentialsApi.deleteLink(credentialId, row.id);
       setRows((prev) => prev.filter((item) => item.id !== row.id));
@@ -85,6 +93,7 @@ export function CredentialLinks({ credentialId }: { credentialId: string }) {
           <Button variant="outline" size="sm" onClick={() => remove(row)}><Trash2 className="mr-2 h-4 w-4" /> Rimuovi</Button>
         </div>
       )) : <CredentialsEmptyState>Nessun collegamento configurato.</CredentialsEmptyState>}
+      <ConfirmDialog />
     </div>
   );
 }

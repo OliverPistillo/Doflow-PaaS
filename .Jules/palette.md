@@ -21,3 +21,7 @@
 ## 2026-06-30 - [Projects UX Deletions & Custom Confirm Dialogs]
 **Learning:** Native `window.confirm` dialogs are highly inaccessible, lack unified styling, and degrade premium SaaS experiences. Replacing them with an accessible `AlertDialog` wrapper like the existing custom `useConfirm` hook ensures keyboard operability, screen reader support, and design continuity.
 **Action:** Always replace legacy browser native confirm dialogs with the custom, accessible `ConfirmDialog` hook.
+
+## 2026-07-01 - [Credentials UX Deletions & Modernized Confirmations]
+**Learning:** In premium modules like Credentials/Vault, visual cohesion and accessible flows are vital. Extending the custom `useConfirm` hook to all secondary delete/archive sub-views (e.g. permission removal, entity unlinking, and card archiving) eliminates blocky legacy dialogs, enforces focus containment, and ensures full keyboard & screen-reader compliance.
+**Action:** Use the custom `useConfirm` hook and mount `<ConfirmDialog />` across all workspace sub-components where destructive actions occur.
