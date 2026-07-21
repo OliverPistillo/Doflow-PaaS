@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 
-const FULL_LOGO_SRC = "/logo-doflow.svg";
+const FULL_LOGO_SRC = "/doflow_logo.svg";
 const COMPACT_LOGO_SRC = "/doflow_logo.svg";
 
 export function TenantSidebarBrand({ className }: { className?: string }) {
