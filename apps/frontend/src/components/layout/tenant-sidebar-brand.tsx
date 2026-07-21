@@ -18,13 +18,14 @@ export function TenantSidebarBrand({ className }: { className?: string }) {
       )}
       aria-label="Vai alla dashboard doflow"
     >
-      <span className="relative block h-10 w-full max-w-[150px] group-data-[collapsible=icon]:hidden">
+      <span className="flex h-14 w-full items-center overflow-hidden group-data-[collapsible=icon]:hidden">
         <Image
           src={FULL_LOGO_SRC}
           alt="doflow"
-          fill
-          sizes="150px"
-          className="object-contain object-left dark:invert"
+          width={220}
+          height={110}
+          sizes="220px"
+          className="h-auto w-[220px] max-w-full shrink-0 dark:invert"
           priority
         />
       </span>
