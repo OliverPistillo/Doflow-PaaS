@@ -24,6 +24,7 @@ import { listDocumentsForEntity, type TenantDocument } from "@/lib/tenant-docume
 import { shortDate } from "@/components/tenant-crm/crm-core";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/useConfirm";
 import { canUseFinanceFrontend } from "@/components/tenant-finance/finance-core";
 import { categoryLabel, formatBytes, formatDateTime } from "@/components/tenant-documents/document-utils";
 import { contractsApi } from "@/lib/tenant-contracts-api";
@@ -301,6 +302,7 @@ function ProjectForm({
 
 export function ProjectsListPage() {
   const router = useRouter();
+  const { ConfirmDialog, confirm } = useConfirm();
   const { relations } = useProjectRelations(false, false);
   const [items, setItems] = useState<Row[]>([]);
   const [search, setSearch] = useState("");
@@ -372,7 +374,13 @@ export function ProjectsListPage() {
   };
 
   const remove = async (row: Row) => {
-    if (!window.confirm("Eliminare questo progetto?")) return;
+    const ok = await confirm({
+      title: "Eliminare questo progetto?",
+      description: `Stai per eliminare il progetto "${row.name}". Questa operazione non può essere annullata.`,
+      confirmLabel: "Elimina",
+      variant: "destructive",
+    });
+    if (!ok) return;
     await apiFetch(`/tenant/projects/${row.id}`, { method: "DELETE" });
     await load();
   };
@@ -381,6 +389,7 @@ export function ProjectsListPage() {
 
   return (
     <div className="flex-1 space-y-5 p-4 md:p-6">
+      <ConfirmDialog />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Progetti</h1>
@@ -504,6 +513,7 @@ export function ProjectCreatePage() {
 export function ProjectDetailPage({ projectId }: { projectId: string }) {
   const router = useRouter();
   const { toast } = useToast();
+  const { ConfirmDialog, confirm } = useConfirm();
   const { relations } = useProjectRelations(true, true);
   const [project, setProject] = useState<Row | null>(null);
   const [milestones, setMilestones] = useState<Row[]>([]);
@@ -597,7 +607,13 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
     await load();
   };
   const deleteMilestone = async (row: Row) => {
-    if (!window.confirm("Eliminare questa milestone?")) return;
+    const ok = await confirm({
+      title: "Eliminare questa milestone?",
+      description: `Stai per eliminare la milestone "${row.title}". Questa operazione non può essere annullata.`,
+      confirmLabel: "Elimina",
+      variant: "destructive",
+    });
+    if (!ok) return;
     await apiFetch(`/tenant/projects/${projectId}/milestones/${row.id}`, { method: "DELETE" });
     await load();
   };
@@ -620,7 +636,13 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
     await load();
   };
   const deleteTask = async (row: Row) => {
-    if (!window.confirm("Eliminare questo task?")) return;
+    const ok = await confirm({
+      title: "Eliminare questo task?",
+      description: `Stai per eliminare il task "${row.title}". Questa operazione non può essere annullata.`,
+      confirmLabel: "Elimina",
+      variant: "destructive",
+    });
+    if (!ok) return;
     await apiFetch(`/tenant/projects/${projectId}/tasks/${row.id}`, { method: "DELETE" });
     await load();
   };
@@ -728,6 +750,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex-1 space-y-5 p-4 md:p-6">
+      <ConfirmDialog />
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <Button variant="outline" size="sm" onClick={() => router.push("/projects")} className="mb-3">Torna ai progetti</Button>
