@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, BarChart3, CheckCircle2, Target, TrendingUp, Wallet } from "lucide-react";
-import { KpiGrid, KpiStatCard } from "@/components/ui/workspace-ui";
+import { Card, CardContent } from "@/components/ui/card";
 import type { ReportSummary } from "@/lib/tenant-reports-api";
 import { formatCurrency, formatDate, formatNumber } from "./report-utils";
 
@@ -23,16 +23,23 @@ export function ReportsSummaryCards({ summary, canViewFinance }: Props) {
   ];
 
   return (
-    <KpiGrid>
-      {items.map((item) => (
-        <KpiStatCard
-          key={item.label}
-          label={item.label}
-          value={typeof item.value === "number" ? formatNumber(item.value) : item.value}
-          icon={item.icon}
-          tone={item.label.includes("Rischi") || item.label.includes("scaduti") ? "warning" : "info"}
-        />
-      ))}
-    </KpiGrid>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {items.map((item) => {
+        const Icon = item.icon;
+        return (
+          <Card key={item.label}>
+            <CardContent className="flex items-center justify-between gap-4 p-4">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground">{item.label}</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums">{typeof item.value === "number" ? formatNumber(item.value) : item.value}</p>
+              </div>
+              <span className="rounded-nav bg-primary/10 p-2 text-primary">
+                <Icon className="h-4 w-4" />
+              </span>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
   );
 }

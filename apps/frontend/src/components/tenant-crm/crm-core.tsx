@@ -231,6 +231,13 @@ export function CrmResourcePage({
     setDialogOpen(true);
   };
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("new") === "1") openCreate();
+    // The query flag is consumed only on the first mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const openEdit = (row: CrmRow) => {
     setEditing(row);
     setForm(fields.reduce<Record<string, any>>((acc, field) => {

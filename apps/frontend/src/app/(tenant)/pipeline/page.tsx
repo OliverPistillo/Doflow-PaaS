@@ -1,5 +1,5 @@
-"use client";
+import { CommercialPipelinePage } from "@/components/tenant-commercial/commercial-pipeline";
 
-import { PipelinePage } from "@/components/tenant-crm/crm-core";
-
-export default PipelinePage;
+export default function PipelinePage() {
+  return <CommercialPipelinePage />;
+}

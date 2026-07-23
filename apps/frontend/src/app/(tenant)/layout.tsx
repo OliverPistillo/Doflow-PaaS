@@ -17,7 +17,7 @@ import {
 import { TenantSidebar } from "@/components/layout/tenant-sidebar";
 import { UserNav } from "@/components/layout/user-nav";
 import { ThemeSettingsDrawer } from "@/components/layout/theme-settings-drawer";
-import { Bell } from "lucide-react";
+import { Bell, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getDoFlowUser } from "@/lib/jwt";
 import { PlanProvider } from "@/contexts/PlanContext";
@@ -49,21 +49,25 @@ function TenantRouteGate({ children }: { children: React.ReactNode }) {
 
 function TenantLayoutInner({ children }: { children: React.ReactNode }) {
   const { sidebarVariant } = useAppSettings();
+  const { canCreate } = useTenantAccess();
   const currentUser = getDoFlowUser();
   const tenantSlug = String(currentUser?.tenantSlug || currentUser?.tenantId || "").toLowerCase();
   const isDoflowTenant = tenantSlug === "doflow";
 
   return (
-    <SidebarProvider>
-      <TenantSidebar variant={sidebarVariant} collapsible="icon" />
-      <SidebarInset className={isDoflowTenant ? "doflow-app-frame" : undefined}>
+    <SidebarProvider
+      style={isDoflowTenant
+        ? ({ "--sidebar-width": "252px", "--sidebar-width-icon": "72px" } as React.CSSProperties)
+        : undefined}
+    >
+      <TenantSidebar variant={isDoflowTenant ? "sidebar" : sidebarVariant} collapsible="icon" />
+      <SidebarInset className={isDoflowTenant ? "doflow-shell" : undefined}>
 
         {/* ── HEADER ── */}
-        <header className="doflow-app-header sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 border-b border-border/60 px-3 sm:px-5">
+        <header className="doflow-topbar sticky top-0 z-20 flex h-[72px] shrink-0 items-center gap-2 border-b border-border/60 px-3 sm:px-6">
           <SidebarTrigger className="-ml-1 shrink-0" />
-          <div className="hidden h-5 w-px bg-border sm:block" aria-hidden="true" />
 
-          <div className="ml-auto flex min-w-0 max-w-[260px] flex-1 justify-end">
+          <div className="ml-auto flex min-w-0 max-w-[240px] flex-1 justify-end">
             <SearchTriggerButton context="tenant" />
           </div>
 
@@ -87,24 +91,32 @@ function TenantLayoutInner({ children }: { children: React.ReactNode }) {
             </TooltipContent>
           </Tooltip>
 
-          {/* Theme Settings drawer */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div>
-                <ThemeSettingsDrawer />
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              Impostazioni aspetto
-            </TooltipContent>
-          </Tooltip>
-
           {/* User menu */}
           <UserNav />
+
+          {isDoflowTenant && canCreate("crm") ? (
+            <Button asChild className="hidden h-11 rounded-lg bg-indigo-600 px-5 text-white shadow-none hover:bg-indigo-700 sm:inline-flex">
+              <Link href="/activities">
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Nuova attività
+              </Link>
+            </Button>
+          ) : null}
+
+          {!isDoflowTenant ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <ThemeSettingsDrawer />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>Impostazioni aspetto</TooltipContent>
+            </Tooltip>
+          ) : null}
         </header>
 
         {/* ── CONTENUTO ── */}
-        <main className="doflow-app-main flex-1 overflow-y-auto">
+        <main className={isDoflowTenant ? "doflow-main flex-1 overflow-y-auto" : "flex-1 overflow-y-auto"}>
           <TenantRouteGate>{children}</TenantRouteGate>
         </main>
       </SidebarInset>

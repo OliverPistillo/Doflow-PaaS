@@ -351,7 +351,7 @@ export function TenantSidebarSections({
   }, [isMobile, setOpenMobile]);
 
   return (
-    <SidebarMenu className="gap-1 px-2.5">
+    <SidebarMenu className="gap-2 px-3">
       {sections.map((section) => (
         <TenantSidebarSection
           key={section.id}

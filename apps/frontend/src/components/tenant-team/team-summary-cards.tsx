@@ -1,8 +1,24 @@
 "use client";
 
 import { Clock, Gauge, Timer, UserCheck, Users } from "lucide-react";
-import { KpiGrid, KpiStatCard } from "@/components/ui/workspace-ui";
+import { Card, CardContent } from "@/components/ui/card";
 import type { TeamSummary } from "@/lib/tenant-team-api";
+
+function StatCard({ label, value, icon: Icon }: { label: string; value: string | number; icon: React.ComponentType<{ className?: string }> }) {
+  return (
+    <Card>
+      <CardContent className="flex items-center justify-between gap-4 p-4">
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums">{value}</p>
+        </div>
+        <span className="rounded-nav bg-primary/10 p-2 text-primary">
+          <Icon className="h-4 w-4" />
+        </span>
+      </CardContent>
+    </Card>
+  );
+}
 
 export function TeamSummaryCards({ summary }: { summary: TeamSummary | null }) {
   const data = summary || {
@@ -20,17 +36,12 @@ export function TeamSummaryCards({ summary }: { summary: TeamSummary | null }) {
   };
 
   return (
-    <KpiGrid className="xl:grid-cols-5">
-      <KpiStatCard label="Membri team" value={data.teamMembers || 0} icon={Users} />
-      <KpiStatCard label="Attivi" value={data.activeTeamMembers || 0} icon={UserCheck} tone="success" />
-      <KpiStatCard label="Disponibili" value={data.availableTeamMembers || 0} icon={Gauge} tone="success" />
-      <KpiStatCard label="Ore settimana" value={`${data.loggedHoursThisWeek || 0}h`} icon={Timer} tone="info" />
-      <KpiStatCard
-        label="Time entry pending"
-        value={data.pendingTimeEntries || 0}
-        icon={Clock}
-        tone={(data.pendingTimeEntries || 0) > 0 ? "warning" : "default"}
-      />
-    </KpiGrid>
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <StatCard label="Membri team" value={data.teamMembers || 0} icon={Users} />
+      <StatCard label="Attivi" value={data.activeTeamMembers || 0} icon={UserCheck} />
+      <StatCard label="Disponibili" value={data.availableTeamMembers || 0} icon={Gauge} />
+      <StatCard label="Ore settimana" value={`${data.loggedHoursThisWeek || 0}h`} icon={Timer} />
+      <StatCard label="Time entry pending" value={data.pendingTimeEntries || 0} icon={Clock} />
+    </div>
   );
 }

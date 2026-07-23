@@ -23,7 +23,6 @@ import {
   canAdminTemplates, canManageAdminWorkflow, canViewFinanceValues, downloadJson, formatDate,
   formatDateTime, labelFor, money, toBody,
 } from "./contract-utils";
-import { ContractsSummaryCards } from "./contracts-summary-cards";
 
 type Row = Record<string, any>;
 type Option = { value: string; label: string };
@@ -65,6 +64,26 @@ function Header({ title, description, children }: { title: string; description: 
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
       {children ? <div className="flex flex-wrap gap-2">{children}</div> : null}
+    </div>
+  );
+}
+
+export function ContractsSummaryCards({ summary }: { summary?: any }) {
+  const data = summary?.contracts || summary || {};
+  const cards = [
+    ["Totali", data.totalContracts || 0],
+    ["Bozze", data.draftContracts || 0],
+    ["Inviati", data.sentContracts || 0],
+    ["In attesa firma", data.waitingSignatureContracts || 0],
+    ["Firmati/attivi", data.signedContracts || 0],
+    ["In scadenza", data.expiringContracts || 0],
+    ["Scaduti", data.overdueContracts || 0],
+  ];
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {cards.map(([label, value]) => (
+        <Card key={String(label)}><CardContent className="p-4"><p className="text-xs font-semibold text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-bold">{String(value)}</p></CardContent></Card>
+      ))}
     </div>
   );
 }

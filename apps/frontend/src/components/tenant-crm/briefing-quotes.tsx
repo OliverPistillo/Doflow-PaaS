@@ -22,6 +22,11 @@ import { canUseFinanceFrontend } from "@/components/tenant-finance/finance-core"
 import { contractsApi } from "@/lib/tenant-contracts-api";
 import { paperworkApi } from "@/lib/tenant-paperwork-api";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
+import type { CommercialQuote } from "@/lib/tenant-commercial-api";
+import { CommercialPageHeader } from "@/components/tenant-commercial/commercial-ui";
+import { QuotesKpis } from "@/components/tenant-commercial/quotes-kpis";
+import { QuotesFollowUpPanel } from "@/components/tenant-commercial/quotes-follow-up-panel";
+import { QuotesTable } from "@/components/tenant-commercial/quotes-table";
 
 type Row = Record<string, any>;
 type ListResponse<T = Row> = { items: T[]; total: number; limit: number; offset: number };
@@ -660,7 +665,7 @@ export function QuotesListPage({
   const [editing, setEditing] = useState<Row | null>(null);
   const [editForm, setEditForm] = useState<Record<string, any>>({});
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState(initialStatus || "__all__");
+  const [status, setStatus] = useState(initialStatus || "all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [acceptedQuoteCta, setAcceptedQuoteCta] = useState<Row | null>(null);
@@ -678,8 +683,6 @@ export function QuotesListPage({
     setError(null);
     try {
       const params = new URLSearchParams({ limit: "100" });
-      if (search.trim()) params.set("search", search.trim());
-      if (status !== "__all__") params.set("status", status);
       const data = await loadList("/tenant/quotes", params);
       setItems(data.items || []);
     } catch (err) {
@@ -696,10 +699,9 @@ export function QuotesListPage({
   };
 
   useEffect(() => {
-    const t = window.setTimeout(() => void load(), 250);
-    return () => window.clearTimeout(t);
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, status]);
+  }, []);
 
   const updateStatus = async (row: Row, next: string) => {
     await apiFetch(`/tenant/quotes/${row.id}/status`, { method: "PATCH", body: JSON.stringify({ status: next }) });
@@ -877,130 +879,64 @@ export function QuotesListPage({
 
   if (!canManageBriefingQuotes()) return <AccessDenied title="Preventivi" />;
 
+  const commercialItems = items as CommercialQuote[];
+
   return (
-    <div className="flex-1 space-y-5 p-4 md:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-        </div>
-        <Button onClick={() => { window.location.href = "/quotes/new"; }}><Plus className="mr-2 h-4 w-4" /> Nuovo preventivo</Button>
-      </div>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Archivio preventivi</CardTitle>
-          <CardDescription>{items.length} preventivi reali. I totali arrivano dal backend.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-[1fr_220px]">
-            <div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cerca preventivi..." className="pl-9" /></div>
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger><SelectValue placeholder="Stato" /></SelectTrigger>
-              <SelectContent>
-                {!initialStatus ? <SelectItem value="__all__">Tutti gli stati</SelectItem> : null}
-                {QUOTE_STATUSES.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
+    <div className="space-y-5 px-4 py-6 sm:px-6 lg:px-8">
+      <CommercialPageHeader
+        title={title}
+        description={description === "Preventivi reali tenant-scoped, con righe e totali calcolati dal backend."
+          ? "Crea, invia e controlla le proposte commerciali."
+          : description}
+        ctaLabel="Nuovo preventivo"
+        ctaHref="/quotes/new"
+      />
+
+      <QuotesKpis items={commercialItems} showMoney={showMoney} />
+      <ErrorBox error={error} />
+
+      {acceptedQuoteCta ? (
+        <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="font-semibold text-emerald-700">Preventivo accettato.</p>
+            <p className="text-slate-600">Puoi creare il progetto o il contratto collegato a “{acceptedQuoteCta.title}”.</p>
           </div>
-          <ErrorBox error={error} />
-          {acceptedQuoteCta ? (
-            <div className="flex flex-col gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="font-semibold text-emerald-700 dark:text-emerald-300">Preventivo accettato.</p>
-                <p className="text-muted-foreground">Vuoi creare subito il progetto operativo collegato a “{acceptedQuoteCta.title}”?</p>
-              </div>
-              <Button
-                onClick={() => createProjectFromQuote(acceptedQuoteCta)}
-                disabled={creatingProjectId === acceptedQuoteCta.id}
-              >
-                {creatingProjectId === acceptedQuoteCta.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FolderKanban className="mr-2 h-4 w-4" />}
-                Crea progetto
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => createContractFromQuote(acceptedQuoteCta)}
-                disabled={creatingContractId === acceptedQuoteCta.id}
-              >
-                {creatingContractId === acceptedQuoteCta.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
-                Crea contratto
-              </Button>
-            </div>
-          ) : null}
-          {loading ? (
-            <div className="flex justify-center py-16 text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Caricamento...</div>
-          ) : items.length === 0 ? (
-            <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-12 text-center text-sm text-muted-foreground">Nessun preventivo reale trovato.</div>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[980px] text-sm">
-                <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3">Numero</th>
-                    <th className="px-4 py-3">Titolo</th>
-                    <th className="px-4 py-3">Azienda</th>
-                    <th className="px-4 py-3">Opportunità</th>
-                    <th className="px-4 py-3">Briefing</th>
-                    <th className="px-4 py-3">Stato</th>
-                    <th className="px-4 py-3">Scadenza</th>
-                    {showMoney ? <th className="px-4 py-3">Totale</th> : null}
-                    <th className="px-4 py-3 text-right">Azioni</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((row) => (
-                    <tr key={row.id} className="border-t">
-                      <td className="px-4 py-3 font-mono">{row.quote_number || "-"}</td>
-                      <td className="px-4 py-3 font-semibold">{row.title}</td>
-                      <td className="px-4 py-3">{row.company_name || "-"}</td>
-                      <td className="px-4 py-3">{row.opportunity_title || "-"}</td>
-                      <td className="px-4 py-3">{row.briefing_title || "-"}</td>
-                      <td className="px-4 py-3"><StateBadge value={row.status} options={QUOTE_STATUSES} /></td>
-                      <td className="px-4 py-3">{shortDate(row.valid_until)}</td>
-                      {showMoney ? <td className="px-4 py-3 font-semibold">{money(row.total)}</td> : null}
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-2">
-                          <Button size="sm" variant="outline" onClick={() => loadQuote(row)}><Eye className="h-4 w-4" /></Button>
-                          <Button size="sm" variant="outline" onClick={() => openEdit(row)}><Edit3 className="h-4 w-4" /></Button>
-                          <Button size="sm" variant="outline" onClick={() => accept(row)} disabled={row.status === "accepted"}><CheckCircle2 className="h-4 w-4" /></Button>
-                          <Button size="sm" variant="outline" onClick={() => reject(row)} disabled={row.status === "rejected"}><XCircle className="h-4 w-4" /></Button>
-                          {row.status === "accepted" ? (
-                            <>
-                              <Button size="sm" variant="outline" onClick={() => createProjectFromQuote(row)} disabled={creatingProjectId === row.id}>
-                                {creatingProjectId === row.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FolderKanban className="mr-2 h-4 w-4" />}
-                                Crea progetto
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => createContractFromQuote(row)} disabled={creatingContractId === row.id}>
-                                {creatingContractId === row.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
-                                Crea contratto
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => createDossierFromQuote(row)} disabled={creatingDossierId === row.id}>
-                                {creatingDossierId === row.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardCheck className="mr-2 h-4 w-4" />}
-                                Crea dossier
-                              </Button>
-                              {canCreateFinanceInvoice ? (
-                                <Button size="sm" variant="outline" onClick={() => createInvoiceFromQuote(row)} disabled={creatingInvoiceId === row.id}>
-                                  {creatingInvoiceId === row.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Receipt className="mr-2 h-4 w-4" />}
-                                  Crea fattura da preventivo
-                                </Button>
-                              ) : null}
-                            </>
-                          ) : null}
-                          <Button size="sm" variant="outline" onClick={() => recalculate(row)}><RefreshCw className="h-4 w-4" /></Button>
-                          <Select value={row.status || "draft"} onValueChange={(next) => updateStatus(row, next)}>
-                            <SelectTrigger className="h-8 w-[130px]"><SelectValue /></SelectTrigger>
-                            <SelectContent>{QUOTE_STATUSES.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
-                          </Select>
-                          <Button size="sm" variant="outline" onClick={() => remove(row)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => createProjectFromQuote(acceptedQuoteCta)} disabled={creatingProjectId === acceptedQuoteCta.id}>
+              {creatingProjectId === acceptedQuoteCta.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FolderKanban className="mr-2 h-4 w-4" />}
+              Crea progetto
+            </Button>
+            <Button variant="outline" onClick={() => createContractFromQuote(acceptedQuoteCta)} disabled={creatingContractId === acceptedQuoteCta.id}>
+              {creatingContractId === acceptedQuoteCta.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+              Crea contratto
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <QuotesTable
+          items={commercialItems}
+          loading={loading}
+          search={search}
+          onSearch={setSearch}
+          status={status}
+          onStatus={setStatus}
+          showMoney={showMoney}
+          canCreateInvoice={canCreateFinanceInvoice}
+          actions={{
+            open: loadQuote,
+            edit: openEdit,
+            accept,
+            reject,
+            recalculate,
+            remove,
+            createProject: createProjectFromQuote,
+            createInvoice: createInvoiceFromQuote,
+          }}
+        />
+        <QuotesFollowUpPanel items={commercialItems} onOpen={loadQuote} />
+      </div>
 
       <Dialog open={!!selected} onOpenChange={(open) => { if (!open) setSelected(null); }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
