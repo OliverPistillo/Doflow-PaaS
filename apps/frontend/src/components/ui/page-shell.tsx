@@ -24,8 +24,8 @@ export function PageShell({ children, className, padded = true }: PageShellProps
   return (
     <div
       className={cn(
-        "doflow-page-shell flex flex-col gap-6 animate-fade-in",
-        padded && "p-4 sm:p-6 lg:p-8",
+        "doflow-page-shell flex flex-col gap-5 animate-fade-in",
+        padded && "p-4 sm:p-5 lg:p-6",
         className
       )}
     >
@@ -45,16 +45,15 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    <div className="df-page-hero flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
-      <div className="min-w-0 space-y-4">
-        <div className="df-page-eyebrow">Doflow Workspace</div>
-        <h1 className="df-page-title truncate tracking-tight">{title}</h1>
+    <div className="df-page-hero flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="min-w-0">
+        <h1 className="df-page-title tracking-tight">{title}</h1>
         {description && (
-          <p className="df-page-description text-balance">{description}</p>
+          <p className="df-page-description mt-1 text-balance">{description}</p>
         )}
       </div>
       {actions && (
-        <div className="flex items-center gap-3 shrink-0 flex-wrap lg:justify-end pb-1">{actions}</div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">{actions}</div>
       )}
     </div>
   );

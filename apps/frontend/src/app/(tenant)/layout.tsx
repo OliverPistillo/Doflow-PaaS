@@ -49,18 +49,21 @@ function TenantRouteGate({ children }: { children: React.ReactNode }) {
 
 function TenantLayoutInner({ children }: { children: React.ReactNode }) {
   const { sidebarVariant } = useAppSettings();
+  const currentUser = getDoFlowUser();
+  const tenantSlug = String(currentUser?.tenantSlug || currentUser?.tenantId || "").toLowerCase();
+  const isDoflowTenant = tenantSlug === "doflow";
 
   return (
     <SidebarProvider>
       <TenantSidebar variant={sidebarVariant} collapsible="icon" />
-      <SidebarInset className="doflow-app-frame">
+      <SidebarInset className={isDoflowTenant ? "doflow-app-frame" : undefined}>
 
         {/* ── HEADER ── */}
-        <header className="doflow-app-header sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b border-border/50 px-3 sm:px-4">
+        <header className="doflow-app-header sticky top-0 z-20 flex h-16 shrink-0 items-center gap-2 border-b border-border/60 px-3 sm:px-5">
           <SidebarTrigger className="-ml-1 shrink-0" />
-          <div className="h-5 w-px bg-border" aria-hidden="true" />
+          <div className="hidden h-5 w-px bg-border sm:block" aria-hidden="true" />
 
-          <div className="min-w-0 flex-1">
+          <div className="ml-auto flex min-w-0 max-w-[260px] flex-1 justify-end">
             <SearchTriggerButton context="tenant" />
           </div>
 

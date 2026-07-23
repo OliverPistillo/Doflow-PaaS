@@ -44,6 +44,7 @@ import {
   parseJsonTextarea,
   scrubFinancePayload,
 } from "./automation-utils";
+import { AutomationsSummaryCards } from "./automations-summary-cards";
 
 type Filters = Record<string, string>;
 
@@ -100,31 +101,6 @@ function useAutomationOptions() {
     return () => { active = false; };
   }, []);
   return options;
-}
-
-export function AutomationsSummaryCards({ summary }: { summary?: AutomationSummary | null }) {
-  const cards = [
-    ["Regole totali", summary?.totalRules || 0],
-    ["Abilitate", summary?.enabledRules || 0],
-    ["Run falliti oggi", summary?.failedRunsToday || 0],
-    ["Run OK oggi", summary?.successfulRunsToday || 0],
-    ["Azioni oggi", summary?.actionsToday || 0],
-    ["Regole dovute", summary?.dueRules || 0],
-    ["Rischi automazione", summary?.automationRisksCount || 0],
-    ["Ultimo run", summary?.lastRunAt ? formatDateTime(summary.lastRunAt) : "-"],
-  ];
-  return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      {cards.map(([name, value]) => (
-        <Card key={String(name)}>
-          <CardContent className="p-4">
-            <p className="text-xs font-semibold text-muted-foreground">{name}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums">{String(value)}</p>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
 }
 
 export function AutomationsOverviewPage() {

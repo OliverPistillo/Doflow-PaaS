@@ -206,9 +206,9 @@ export function SearchTriggerButton({
       <button
         onClick={() => setOpen(true)}
         className={[
-          "hidden md:flex items-center gap-2",
-          "h-9 px-3 rounded-nav",
-          "bg-muted/60 border border-border/50",
+          "hidden md:flex w-full items-center justify-start gap-2",
+          "h-9 px-3 rounded-lg",
+          "bg-background border border-border",
           "text-sm text-muted-foreground",
           "hover:bg-muted hover:text-foreground hover:border-border",
           "transition-colors duration-150",

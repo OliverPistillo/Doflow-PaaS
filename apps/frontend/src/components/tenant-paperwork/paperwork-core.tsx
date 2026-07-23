@@ -18,6 +18,7 @@ import { listDocumentsForEntity, type TenantDocument } from "@/lib/tenant-docume
 import { paperworkApi, type PaperworkActivity, type PaperworkDossier, type PaperworkItem } from "@/lib/tenant-paperwork-api";
 import { downloadJson } from "@/components/tenant-contracts/contract-utils";
 import { DOSSIER_STATUSES, DOSSIER_TYPES, ITEM_STATUSES, PAPERWORK_CATEGORIES, PRIORITIES, badgeClass, canManageAdminWorkflow, formatDate, formatDateTime, labelFor, toBody } from "./paperwork-utils";
+import { PaperworkSummaryCards } from "./paperwork-summary-cards";
 
 type Option = { value: string; label: string };
 
@@ -39,17 +40,6 @@ function StateBadge({ value, options }: { value?: string | null; options: Option
 }
 function SelectField({ value, options, placeholder, onChange }: { value?: string; options: Option[]; placeholder: string; onChange: (value: string) => void }) {
   return <Select value={value || "__none__"} onValueChange={(next) => onChange(next === "__none__" ? "" : next)}><SelectTrigger><SelectValue placeholder={placeholder} /></SelectTrigger><SelectContent><SelectItem value="__none__">{placeholder}</SelectItem>{options.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>;
-}
-
-export function PaperworkSummaryCards({ summary }: { summary?: any }) {
-  const cards = [
-    ["Dossier aperti", summary?.openDossiers || 0],
-    ["Bloccati", summary?.blockedDossiers || 0],
-    ["Scaduti", summary?.overdueDossiers || 0],
-    ["Item mancanti", summary?.missingItems || 0],
-    ["Item in scadenza", summary?.dueSoonItems || 0],
-  ];
-  return <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{cards.map(([label, value]) => <Card key={String(label)}><CardContent className="p-4"><p className="text-xs font-semibold text-muted-foreground">{label}</p><p className="mt-1 text-2xl font-bold">{String(value)}</p></CardContent></Card>)}</div>;
 }
 
 export function PaperworkPage() {

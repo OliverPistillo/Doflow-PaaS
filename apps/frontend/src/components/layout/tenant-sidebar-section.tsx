@@ -174,7 +174,7 @@ function TenantSidebarLeaf({
         isActive={active}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "h-8 rounded-lg",
+          "h-8 rounded-md",
           active
             ? "bg-primary/10 font-semibold text-primary"
             : "text-muted-foreground hover:bg-primary/5 hover:text-foreground",
@@ -230,12 +230,12 @@ export function TenantSidebarSection({
           tooltip={section.label}
           aria-current={active ? "page" : undefined}
           className={cn(
-            "h-11 rounded-xl",
+            "h-9 rounded-lg",
             active ? "bg-primary/10 text-primary" : "text-muted-foreground",
           )}
         >
           <Link href={section.href} onClick={onNavigate}>
-            <Icon className="h-5 w-5" />
+            <Icon className="h-4 w-4" />
             <span>{section.label}</span>
           </Link>
         </SidebarMenuButton>
@@ -251,10 +251,10 @@ export function TenantSidebarSection({
           isActive={active}
           tooltip={section.label}
           aria-current={active ? "page" : undefined}
-          className={cn("h-11 rounded-xl", active && "bg-primary/10 text-primary")}
+          className={cn("h-9 rounded-lg", active && "bg-primary/10 text-primary")}
         >
           <Link href={section.href} onClick={onNavigate}>
-            <Icon className="h-5 w-5" />
+            <Icon className="h-4 w-4" />
             <span>{section.label}</span>
           </Link>
         </SidebarMenuButton>
@@ -271,9 +271,9 @@ export function TenantSidebarSection({
           tooltip={{
             children: <DisabledUpgradeHint minPlan={minPlan} isDoflowTenant={isDoflowTenant} />,
           }}
-          className="h-11 cursor-not-allowed rounded-xl opacity-50"
+          className="h-9 cursor-not-allowed rounded-lg opacity-50"
         >
-          <Icon className="h-5 w-5" />
+        <Icon className="h-4 w-4" />
           <span>{section.label}</span>
           <LockedHint minPlan={minPlan} isDoflowTenant={isDoflowTenant} />
         </SidebarMenuButton>
@@ -292,13 +292,13 @@ export function TenantSidebarSection({
             aria-expanded={open}
             aria-controls={contentId}
             className={cn(
-              "h-11 rounded-xl",
+              "h-9 rounded-lg",
               active
                 ? "bg-primary/10 text-primary"
                 : "text-muted-foreground hover:bg-primary/5 hover:text-foreground",
             )}
           >
-            <Icon className="h-5 w-5" />
+            <Icon className="h-4 w-4" />
             <span>{section.label}</span>
             <ChevronRight
               className={cn(
@@ -309,7 +309,7 @@ export function TenantSidebarSection({
           </SidebarMenuButton>
         </CollapsibleTrigger>
         <CollapsibleContent id={contentId}>
-          <SidebarMenuSub className="mx-4 mt-1 gap-0.5 border-l-border/70 px-2">
+          <SidebarMenuSub className="mx-3 mt-1 gap-0.5 border-l-border/70 px-2">
             {children.map((child) => (
               <TenantSidebarLeaf
                 key={child.id}
@@ -351,7 +351,7 @@ export function TenantSidebarSections({
   }, [isMobile, setOpenMobile]);
 
   return (
-    <SidebarMenu className="gap-1 px-2">
+    <SidebarMenu className="gap-1 px-2.5">
       {sections.map((section) => (
         <TenantSidebarSection
           key={section.id}

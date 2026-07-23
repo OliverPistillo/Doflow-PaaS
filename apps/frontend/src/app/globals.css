@@ -1096,6 +1096,256 @@ body {
   color: hsl(var(--foreground));
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   TENANT DOFLOW — reference UI from "Gestionale doflow"
+   Flat white workspace, restrained borders, compact SaaS density.
+   This final layer intentionally neutralizes the older glass treatment.
+═══════════════════════════════════════════════════════════════════ */
+.doflow-app-frame {
+  --radius: .5rem;
+  --radius-card: .625rem;
+  --radius-nav: .5rem;
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, .035);
+  --shadow-button: none;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #fbfbfc;
+}
+.dark .doflow-app-frame {
+  background: hsl(var(--background));
+}
+.doflow-app-frame::before {
+  display: none;
+}
+
+.doflow-app-header {
+  background: hsl(var(--background)) !important;
+  border-color: hsl(var(--border)) !important;
+  box-shadow: none !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.doflow-app-main {
+  background: #fbfbfc;
+}
+.dark .doflow-app-main {
+  background: hsl(var(--background));
+}
+.doflow-page-shell {
+  width: 100%;
+  max-width: 1540px;
+  margin-inline: auto;
+}
+
+.df-page-hero,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child:has(h1):not([role="dialog"]):not([data-radix-popper-content-wrapper]),
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child:has(h2):not([role="dialog"]):not([data-radix-popper-content-wrapper]) {
+  position: relative;
+  overflow: visible;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.df-page-hero::after {
+  display: none;
+}
+.df-page-title,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child:has(h1) h1,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child:has(h2) h2 {
+  font-size: clamp(1.55rem, 2.2vw, 2rem);
+  line-height: 1.12;
+  letter-spacing: 0;
+  font-weight: 750;
+}
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child:has(h1) h1::before,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child:has(h2) h2::before {
+  display: none;
+  content: none;
+}
+.df-page-description,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child:has(h1) p,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child:has(h2) p {
+  max-width: 54rem;
+  color: hsl(var(--muted-foreground));
+  font-size: .875rem;
+  line-height: 1.45;
+}
+
+.doflow-app-frame .df-glass-panel,
+.doflow-app-frame .glass-card,
+.doflow-app-frame .df-card,
+.doflow-app-frame .df-kpi-card,
+.doflow-app-frame [data-slot="card"] {
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: var(--radius-card);
+  background: hsl(var(--card)) !important;
+  box-shadow: var(--shadow-card) !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.doflow-app-frame .df-glass-panel-hover {
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.doflow-app-frame .df-glass-panel-hover:hover {
+  transform: none;
+  border-color: hsl(var(--input)) !important;
+  box-shadow: var(--shadow-card) !important;
+}
+.doflow-app-frame .df-kpi-card::after {
+  display: none;
+}
+.doflow-app-frame [data-slot="card-header"] {
+  padding: 1rem;
+}
+.doflow-app-frame [data-slot="card-content"] {
+  padding: 1rem;
+  padding-top: 0;
+}
+.doflow-app-frame [data-slot="card-footer"] {
+  padding: 0 1rem 1rem;
+}
+.doflow-app-frame [data-slot="card-title"] {
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+.doflow-app-frame [data-slot="card-description"] {
+  font-size: .8125rem;
+  line-height: 1.45;
+}
+.doflow-app-frame .df-soft-panel,
+.doflow-app-frame .df-card-gray,
+.doflow-app-frame [data-slot="gray-card"] {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-card);
+  background: hsl(var(--muted) / .55);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.doflow-app-frame .df-icon-bubble {
+  border: 0;
+  border-radius: .5rem;
+  background: hsl(var(--primary) / .09);
+  color: hsl(var(--primary));
+  box-shadow: none;
+}
+
+.doflow-app-frame [data-slot="button"][data-variant="default"] {
+  border-radius: .45rem;
+  background-color: hsl(var(--primary));
+  background-image: none !important;
+  box-shadow: none;
+}
+.doflow-app-frame [data-slot="button"][data-variant="default"]:hover {
+  opacity: .92;
+  transform: none;
+}
+.doflow-app-frame [data-slot="button"][data-variant="outline"],
+.doflow-app-frame [data-slot="button"][data-variant="secondary"] {
+  border-radius: .45rem;
+  background: hsl(var(--background));
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.doflow-app-frame input,
+.doflow-app-frame textarea,
+.doflow-app-frame [role="combobox"] {
+  border-radius: .45rem;
+  box-shadow: none;
+}
+.doflow-app-frame input:not([type="checkbox"]):not([type="radio"]),
+.doflow-app-frame [role="combobox"] {
+  min-height: 2.25rem;
+}
+.doflow-app-frame textarea {
+  line-height: 1.5;
+}
+
+.doflow-page-shell table,
+.doflow-app-main table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.doflow-page-shell thead tr,
+.doflow-app-main thead tr {
+  background: hsl(var(--muted) / .42);
+}
+.doflow-page-shell th,
+.doflow-app-main th {
+  height: 2.5rem;
+  padding-inline: .875rem;
+  font-family: var(--font-sans);
+  font-size: .6875rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: hsl(var(--muted-foreground));
+}
+.doflow-page-shell td,
+.doflow-app-main td {
+  min-height: 3rem;
+  padding: .75rem .875rem;
+  border-bottom: 1px solid hsl(var(--border) / .7);
+  font-size: .8125rem;
+}
+.doflow-page-shell tbody tr:last-child td,
+.doflow-app-main tbody tr:last-child td {
+  border-bottom: 0;
+}
+.doflow-page-shell tbody tr:hover,
+.doflow-app-main tbody tr:hover {
+  background: hsl(var(--primary) / .025);
+}
+
+.tenant-doflow-sidebar [data-sidebar="sidebar"] {
+  background: hsl(var(--sidebar-background)) !important;
+  border-color: hsl(var(--sidebar-border)) !important;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.tenant-doflow-sidebar [data-sidebar="menu-button"] {
+  border-radius: .5rem !important;
+  font-size: .8125rem;
+  font-weight: 500;
+}
+.tenant-doflow-sidebar [data-sidebar="menu-button"][data-active="true"],
+.tenant-doflow-sidebar [data-sidebar="menu-button"][data-state="active"] {
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  box-shadow: none !important;
+}
+.tenant-doflow-sidebar [data-sidebar="menu-sub-button"][data-active="true"] {
+  background: hsl(var(--primary) / .09) !important;
+  color: hsl(var(--primary)) !important;
+  font-weight: 600;
+}
+.tenant-doflow-sidebar [data-sidebar="menu-sub"] {
+  border-color: hsl(var(--border));
+}
+
+@media (max-width: 767px) {
+  .doflow-app-header {
+    height: 3.5rem;
+  }
+  .doflow-page-shell {
+    gap: 1rem;
+  }
+  .df-page-title,
+  .doflow-app-main > .flex-1[class*="space-y-"] > div:first-child:has(h1) h1,
+  .doflow-app-main > .flex-1[class*="space-y-"] > div:first-child:has(h2) h2 {
+    font-size: 1.5rem;
+  }
+  .doflow-app-frame [data-slot="card-header"],
+  .doflow-app-frame [data-slot="card-content"] {
+    padding-inline: .875rem;
+  }
+}
+
 /* Login/signup/onboarding stay dramatic but inherit the new font system. */
 [data-testid="signup-page"],
 [data-testid="onboarding-page"] {

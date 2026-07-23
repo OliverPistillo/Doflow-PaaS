@@ -392,14 +392,18 @@ export function TenantSidebar({
   }, [router]);
 
   return (
-    <Sidebar variant={variant} collapsible={collapsible} className="border-r border-border/40">
-      <SidebarHeader className="h-16 border-b border-border/40 px-3 py-2">
+    <Sidebar
+      variant={variant}
+      collapsible={collapsible}
+      className={cn("border-r border-border/60", isInternalTenant && "tenant-doflow-sidebar")}
+    >
+      <SidebarHeader className="h-16 border-b border-border/50 px-4 py-2">
         <TenantSidebarBrand />
       </SidebarHeader>
 
       <PlanSummary isInternalTenant={isInternalTenant} />
 
-      <SidebarContent className="gap-1 py-2">
+      <SidebarContent className="gap-1 py-3">
         {isInternalTenant && !accessLoading ? (
           <TenantSidebarSections
             sections={sections}
@@ -415,7 +419,7 @@ export function TenantSidebar({
         )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-border/40 p-2">
+      <SidebarFooter className="border-t border-border/50 p-2.5">
         <TenantStorageSummary isInternalTenant={isInternalTenant} />
         <TenantUserMenu user={user} roleLabel={roleLabel} onLogout={logout} />
       </SidebarFooter>

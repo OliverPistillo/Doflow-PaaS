@@ -61,6 +61,7 @@ import {
   toDateInput,
   toDateTimeInput,
 } from "./calendar-utils";
+import { CalendarSummaryCards } from "./calendar-summary-cards";
 
 type Filters = Record<string, string>;
 
@@ -121,31 +122,6 @@ function useCalendarOptions() {
 
 function visibleEvents(events: CalendarEvent[], canFinance = canViewCalendarFinance()) {
   return events.filter((event) => canFinance || !isFinanceEvent(event));
-}
-
-export function CalendarSummaryCards({ summary }: { summary?: CalendarSummary | null }) {
-  const cards = [
-    ["Eventi oggi", summary?.eventsToday || 0],
-    ["Eventi settimana", summary?.eventsThisWeek || 0],
-    ["Scaduti", summary?.overdueEvents || 0],
-    ["Conflitti", summary?.conflictsCount || 0],
-    ["Scadenze settimana", summary?.deadlinesThisWeek || 0],
-    ["Team assente oggi", summary?.teamUnavailableToday || 0],
-    ["Reminder dovuti", summary?.remindersDue || 0],
-    ["Derivati", summary?.derivedEventsCount || 0],
-  ];
-  return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      {cards.map(([name, value]) => (
-        <Card key={String(name)}>
-          <CardContent className="p-4">
-            <p className="text-xs font-semibold text-muted-foreground">{name}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums">{String(value)}</p>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  );
 }
 
 function EventCard({ event, actions }: { event: CalendarEvent; actions?: ReactNode }) {

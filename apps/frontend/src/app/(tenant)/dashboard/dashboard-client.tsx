@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
-  ArrowRight,
   BarChart3,
   Bell,
   BriefcaseBusiness,
@@ -28,30 +27,24 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { KpiGrid, KpiStatCard, WorkspaceSectionHeader } from "@/components/ui/workspace-ui";
 import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
 import { getTenantRoleLabel } from "@/lib/roles";
-import type { TenantModuleKey } from "@/lib/tenant-access-api";
-import { cn } from "@/lib/utils";
 import { formatBytes as formatDocumentBytes } from "@/components/tenant-documents/document-utils";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
+import {
+  DashboardActivityList as ActivityList,
+  DashboardPriorityStrip as PriorityStrip,
+  DashboardQuickActions as QuickActions,
+  DashboardSectionCard as SectionCard,
+  type ActivityItem,
+  type DashboardMetric as Metric,
+  type DashboardQuickAction as QuickAction,
+  type SourceFlags,
+} from "./dashboard-ui";
 
 type DashboardAudience = "executive" | "manager" | "employee";
-
-type SourceFlags = Record<string, boolean>;
-
-type ActivityItem = {
-  title: string;
-  meta: string;
-  createdAt: string | null;
-};
 
 type DocumentsSummary = {
   totalDocuments: number;
@@ -254,22 +247,6 @@ type DashboardSummary = {
     credentialsSummary?: CredentialsSummary;
     sources?: SourceFlags;
   };
-};
-
-type Metric = {
-  label: string;
-  value: string | number;
-  hint?: string;
-  tone?: "default" | "warning" | "danger" | "success";
-};
-
-type QuickAction = {
-  label: string;
-  href?: string;
-  icon: ComponentType<{ className?: string }>;
-  moduleKey?: TenantModuleKey;
-  disabled?: boolean;
-  note?: string;
 };
 
 type DashboardSummaryResponse = Omit<DashboardSummary, "sales" | "projects" | "team" | "customers" | "operations"> & {
@@ -559,219 +536,6 @@ function formatDate(value: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
-}
-
-function hasSource(sources: SourceFlags): boolean {
-  return Object.values(sources || {}).some(Boolean);
-}
-
-function metricsAreZero(metrics: Metric[]): boolean {
-  return metrics.every((metric) => {
-    if (typeof metric.value === "number") return metric.value === 0;
-    return metric.value === "0" || metric.value === formatCurrency(0);
-  });
-}
-
-function SectionCard({
-  title,
-  description,
-  icon: Icon,
-  metrics,
-  sources,
-  emptyText,
-  children,
-}: {
-  title: string;
-  description: string;
-  icon: ComponentType<{ className?: string }>;
-  metrics: Metric[];
-  sources?: SourceFlags;
-  emptyText: string;
-  children?: ReactNode;
-}) {
-  const isFallback = !hasSource(sources || {}) && metricsAreZero(metrics);
-
-  return (
-    <Card className="overflow-hidden border-border/60 shadow-sm">
-      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="rounded-lg bg-primary/10 p-2 text-primary">
-              <Icon className="h-4 w-4" />
-            </span>
-            <CardTitle className="text-base">{title}</CardTitle>
-          </div>
-          <CardDescription className="text-xs leading-relaxed">{description}</CardDescription>
-        </div>
-        {isFallback ? (
-          <Badge variant="outline" className="shrink-0 border-border text-muted-foreground">
-            In attesa dati
-          </Badge>
-        ) : null}
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
-          {metrics.map((metric) => (
-            <div key={metric.label} className="rounded-xl border border-border/50 bg-muted/25 px-3 py-2.5">
-              <p className="text-xs font-semibold text-muted-foreground">{metric.label}</p>
-              <p
-                className={cn(
-                  "mt-1 text-xl font-bold tabular-nums text-foreground",
-                  metric.tone === "danger" && "text-destructive",
-                  metric.tone === "warning" && "text-chart-5",
-                  metric.tone === "success" && "text-chart-2",
-                )}
-              >
-                {metric.value}
-              </p>
-              {metric.hint ? (
-                <p className="mt-1 text-xs text-muted-foreground">{metric.hint}</p>
-              ) : null}
-            </div>
-          ))}
-        </div>
-        {children}
-        {isFallback ? (
-          <div className="rounded-nav border border-dashed border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-            {emptyText}
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ActivityList({
-  title,
-  items,
-  empty,
-  icon: Icon,
-}: {
-  title: string;
-  items: ActivityItem[];
-  empty: string;
-  icon: ComponentType<{ className?: string }>;
-}) {
-  return (
-    <Card>
-      <CardHeader className="pb-4">
-        <div className="flex items-center gap-2">
-          <span className="rounded-nav bg-primary/10 p-2 text-primary">
-            <Icon className="h-4 w-4" />
-          </span>
-          <CardTitle className="text-[18px]">{title}</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {items.length === 0 ? (
-          <div className="rounded-nav border border-dashed border-border bg-muted/30 px-4 py-6 text-sm text-muted-foreground">
-            {empty}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {items.map((item, index) => (
-              <div key={`${item.title}-${index}`} className="flex items-start justify-between gap-3 border-b border-border/60 pb-3 last:border-0 last:pb-0">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-foreground">{item.title}</p>
-                  <p className="line-clamp-2 text-xs text-muted-foreground">{item.meta}</p>
-                </div>
-                <span className="shrink-0 text-xs text-muted-foreground">{formatDate(item.createdAt)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function QuickActions({ actions }: { actions: QuickAction[] }) {
-  return (
-    <Card>
-      <CardHeader className="pb-4">
-        <CardTitle className="text-[18px]">Azioni rapide</CardTitle>
-        <CardDescription>Comandi operativi per il lavoro interno doflow.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {actions.map((action) => {
-            const Icon = action.icon;
-            const content = (
-              <Button
-                variant={action.disabled ? "outline" : "default"}
-                className="h-auto w-full justify-between gap-3 px-4 py-3"
-                disabled={action.disabled}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{action.label}</span>
-                </span>
-                {action.disabled ? (
-                  <Badge variant="outline" className="shrink-0">In arrivo</Badge>
-                ) : (
-                  <ArrowRight className="h-4 w-4 shrink-0" />
-                )}
-              </Button>
-            );
-
-            return action.href && !action.disabled ? (
-              <Link key={action.label} href={action.href}>
-                {content}
-              </Link>
-            ) : (
-              <div key={action.label} title={action.note}>
-                {content}
-              </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function PriorityStrip({
-  items,
-}: {
-  items: Array<{
-    label: string;
-    value: number | string;
-    href: string;
-    icon: ComponentType<{ className?: string }>;
-    tone?: "danger" | "warning" | "success";
-  }>;
-}) {
-  return (
-    <div className="grid gap-3 md:grid-cols-3">
-      {items.map((item) => {
-        const Icon = item.icon;
-        return (
-          <Link
-            key={item.label}
-            href={item.href}
-            className={cn(
-              "group rounded-2xl border border-border/60 bg-card px-4 py-3 shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-              item.tone === "danger" && "border-destructive/30 bg-destructive/5 hover:border-destructive/50",
-              item.tone === "warning" && "border-chart-5/30 bg-chart-5/5 hover:border-chart-5/50",
-              item.tone === "success" && "border-chart-2/30 bg-chart-2/5 hover:border-chart-2/50",
-            )}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {item.label}
-                </p>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-foreground">{item.value}</p>
-              </div>
-              <span className="rounded-xl bg-background/80 p-2 text-primary shadow-sm transition-transform group-hover:translate-x-0.5">
-                <Icon className="h-5 w-5" />
-              </span>
-            </div>
-          </Link>
-        );
-      })}
-    </div>
-  );
 }
 
 export default function DashboardClient() {
@@ -1371,37 +1135,54 @@ export default function DashboardClient() {
     </SectionCard>
   );
 
+  const headlineKpis = isExecutive
+    ? [
+        ...(canView("crm") ? [{ label: "Pipeline commerciale", value: formatCurrency(summary.sales.pipelineValue), icon: BarChart3, tone: "info" as const }] : []),
+        ...(canSeeFinance && summary.finance ? [{ label: "Da incassare", value: formatCurrency(summary.finance.receivables), icon: Wallet, tone: "success" as const }] : []),
+        ...(canView("projects") ? [{ label: "Progetti attivi", value: summary.projects.activeProjects, icon: FolderKanban, tone: "info" as const }] : []),
+        ...(canView("team") ? [{ label: "Task aperti team", value: summary.team.openTasks, icon: Users, tone: "default" as const }] : []),
+      ]
+    : isManager
+      ? [
+          ...(canView("projects") ? [
+            { label: "Progetti assegnati", value: summary.projects.assignedProjects, icon: BriefcaseBusiness, tone: "info" as const },
+            { label: "Task in scadenza", value: summary.projects.dueTasks, icon: Clock, tone: summary.projects.dueTasks > 0 ? "warning" as const : "default" as const },
+            { label: "Prossime consegne", value: summary.projects.upcomingDeliveries, icon: CalendarDays, tone: "success" as const },
+          ] : []),
+          ...(canView("notifications") ? [{ label: "Notifiche urgenti", value: summary.operations.urgentNotifications || 0, icon: Bell, tone: "danger" as const }] : []),
+        ]
+      : [
+          ...(canView("projects") ? [
+            { label: "I miei task", value: summary.personal.myTasks, icon: CheckCircle2, tone: "info" as const },
+            { label: "In scadenza", value: summary.personal.dueSoon, icon: Clock, tone: summary.personal.dueSoon > 0 ? "warning" as const : "default" as const },
+            { label: "Progetti assegnati", value: summary.personal.assignedProjects, icon: FolderKanban, tone: "success" as const },
+          ] : []),
+          ...(canView("notifications") ? [{ label: "Notifiche", value: summary.operations.unreadNotifications || 0, icon: Bell, tone: "default" as const }] : []),
+        ];
+
   return (
-    <div className="flex-1 space-y-4 p-4 pt-4 md:p-6">
-      <div className="rounded-3xl border border-border/60 bg-card px-4 py-4 shadow-sm md:px-5">
-        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
+    <div className="doflow-page-shell flex-1 space-y-5 p-4 sm:p-5 lg:p-6">
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
         <div>
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h1 className="text-[24px] font-bold tracking-tight text-foreground">
+            <h1 className="text-[28px] font-bold tracking-normal text-foreground">
               {getGreeting()}, {displayName(summary.user.email)}
             </h1>
-            <Badge className="bg-primary/10 text-primary hover:bg-primary/10">{roleLabel}</Badge>
-            <Badge variant="outline">{summary.tenant.slug || summary.tenant.schema}</Badge>
+            <Badge className="border-0 bg-primary/10 text-primary shadow-none hover:bg-primary/10">{roleLabel}</Badge>
           </div>
           <p className="max-w-3xl text-sm text-muted-foreground">
             {isExecutive
-              ? "Vista direzionale doflow: vendite, progetti, finance, team e clienti senza dati dimostrativi."
+              ? "Una vista aggiornata su vendite, progetti, amministrazione e team."
               : isManager
-                ? "Vista project manager: priorità operative, consegne e materiali senza informazioni finanziarie."
-                : "Vista operativa: task personali, scadenze, materiali e notifiche senza dati economici."}
+                ? "Priorità operative, consegne e carico di lavoro del team."
+                : "Task personali, prossime scadenze, materiali e notifiche."}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {error ? (
-            <Badge variant="outline" className="border-chart-5/40 text-chart-5">
-              Fallback locale
-            </Badge>
-          ) : null}
           <Button variant="outline" size="sm" onClick={loadSummary}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Aggiorna
           </Button>
-        </div>
         </div>
       </div>
 
@@ -1415,37 +1196,49 @@ export default function DashboardClient() {
         </div>
       ) : null}
 
-      <PriorityStrip
-        items={[
-          ...(canView("notifications")
-            ? [{
-                label: "Attenzione",
-                value: (summary.operations.urgentNotifications || 0) + (summary.operations.unreadNotifications || 0),
-                href: "/notifications",
-                icon: Bell,
-                tone: (summary.operations.urgentNotifications || 0) > 0 ? "danger" as const : "warning" as const,
-              }]
-            : []),
-          ...(canView("projects")
-            ? [{
-                label: "Progetti critici",
-                value: (summary.projects.lateProjects || 0) + (summary.projects.blockedProjects || 0),
-                href: "/projects",
-                icon: FolderKanban,
-                tone: (summary.projects.lateProjects || 0) + (summary.projects.blockedProjects || 0) > 0 ? "danger" as const : "success" as const,
-              }]
-            : []),
-          ...(canView("calendar")
-            ? [{
-                label: "Scadenze",
-                value: (summary.projects.dueTasks || 0) + (summary.projects.upcomingMilestones || 0),
-                href: "/calendar/deadlines",
-                icon: CalendarDays,
-                tone: (summary.projects.dueTasks || 0) > 0 ? "warning" as const : "success" as const,
-              }]
-            : []),
-        ]}
-      />
+      {headlineKpis.length > 0 ? (
+        <KpiGrid>
+          {headlineKpis.slice(0, 4).map((kpi) => <KpiStatCard key={kpi.label} {...kpi} />)}
+        </KpiGrid>
+      ) : null}
+
+      <section className="space-y-3">
+        <WorkspaceSectionHeader
+          title="Priorità di oggi"
+          description="Le attività che richiedono attenzione immediata."
+        />
+        <PriorityStrip
+          items={[
+            ...(canView("notifications")
+              ? [{
+                  label: "Attenzione",
+                  value: (summary.operations.urgentNotifications || 0) + (summary.operations.unreadNotifications || 0),
+                  href: "/notifications",
+                  icon: Bell,
+                  tone: (summary.operations.urgentNotifications || 0) > 0 ? "danger" as const : "warning" as const,
+                }]
+              : []),
+            ...(canView("projects")
+              ? [{
+                  label: "Progetti critici",
+                  value: (summary.projects.lateProjects || 0) + (summary.projects.blockedProjects || 0),
+                  href: "/projects",
+                  icon: FolderKanban,
+                  tone: (summary.projects.lateProjects || 0) + (summary.projects.blockedProjects || 0) > 0 ? "danger" as const : "success" as const,
+                }]
+              : []),
+            ...(canView("calendar")
+              ? [{
+                  label: "Scadenze",
+                  value: (summary.projects.dueTasks || 0) + (summary.projects.upcomingMilestones || 0),
+                  href: "/calendar/deadlines",
+                  icon: CalendarDays,
+                  tone: (summary.projects.dueTasks || 0) > 0 ? "warning" as const : "success" as const,
+                }]
+              : []),
+          ]}
+        />
+      </section>
 
       {isExecutive ? (
         <>
@@ -1457,7 +1250,7 @@ export default function DashboardClient() {
                 icon={BarChart3}
                 metrics={salesMetrics}
                 sources={summary.sales.sources}
-                emptyText="Le tabelle CRM V2 commerciali non hanno ancora dati: zeri reali, nessun mock."
+                emptyText="Non ci sono ancora attività commerciali da mostrare."
               />
             ) : null}
             {canView("briefing") ? (
@@ -1467,7 +1260,7 @@ export default function DashboardClient() {
                 icon={FileCheck2}
                 metrics={briefingMetrics}
                 sources={summary.operations.sources}
-                emptyText="Briefing e materiali sono collegati a tabelle reali; compariranno appena creati."
+                emptyText="Nessun briefing o materiale richiede attenzione."
               />
             ) : null}
             {canView("projects") ? (
@@ -1477,7 +1270,7 @@ export default function DashboardClient() {
                 icon={FolderKanban}
                 metrics={projectMetrics}
                 sources={summary.projects.sources}
-                emptyText="Progetti, task e milestone sono collegati a Projects V2: compariranno appena creati."
+                emptyText="Non ci sono progetti o consegne da mostrare."
               />
             ) : null}
             {canSeeFinance && summary.finance ? (
@@ -1487,7 +1280,7 @@ export default function DashboardClient() {
                 icon={Wallet}
                 metrics={financeMetrics}
                 sources={summary.finance.sources}
-                emptyText="Le tabelle finance tenant non sono ancora disponibili: nessun dato economico viene simulato."
+                emptyText="Non ci sono movimenti amministrativi da mostrare."
               />
             ) : null}
             {canView("team") ? (
@@ -1497,7 +1290,7 @@ export default function DashboardClient() {
                 icon={Users}
                 metrics={teamMetrics}
                 sources={summary.team.sources}
-                emptyText="Utenti e inviti sono reali; task e workload arrivano da Projects V2 quando presenti."
+                emptyText="Nessun carico o invito del team richiede attenzione."
               >
                 {summary.team.workload.length > 0 ? (
                   <div className="space-y-2">
@@ -1533,7 +1326,7 @@ export default function DashboardClient() {
               icon={Handshake}
               metrics={customerMetrics}
               sources={summary.customers.sources}
-              emptyText="Ticket support è letto se disponibile; clienti, manutenzioni e upsell attendono tabelle CRM V2 reali."
+              emptyText="Non ci sono aggiornamenti recenti sui clienti."
             />
           ) : null}
           <QuickActions actions={executiveActions} />
@@ -1559,7 +1352,7 @@ export default function DashboardClient() {
                   ] : []),
                 ]}
                 sources={{ ...summary.projects.sources, ...(canView("team") ? summary.team.sources : {}), ...summary.operations.sources }}
-                emptyText="La vista PM non usa mock: progetti, task, materiali e review restano a zero finché non sono persistenti."
+                emptyText="Non ci sono progetti o attività assegnate da mostrare."
               />
             ) : null}
             {canView("calendar") ? (
@@ -1573,7 +1366,7 @@ export default function DashboardClient() {
                   { label: "Progetti in ritardo", value: summary.projects.lateProjects, tone: summary.projects.lateProjects > 0 ? "danger" : "default" },
                 ]}
                 sources={summary.projects.sources}
-                emptyText="Calendario e milestone saranno popolati da tabelle progetto/task reali."
+                emptyText="Nessuna consegna o milestone in calendario."
               />
             ) : null}
             {canView("notifications") ? notificationsCard : null}
@@ -1587,7 +1380,7 @@ export default function DashboardClient() {
             {canView("paperwork") ? paperworkCard : null}
           </div>
           <div className="grid gap-4 lg:grid-cols-3">
-            {canView("projects") ? <ActivityList title="Commenti recenti" items={summary.operations.recentComments} empty="Nessun commento recente collegato a tabelle persistenti." icon={MessageSquare} /> : null}
+            {canView("projects") ? <ActivityList title="Commenti recenti" items={summary.operations.recentComments} empty="Nessun commento recente." icon={MessageSquare} /> : null}
             {canView("documents") ? <ActivityList title="File recenti" items={summary.operations.recentFiles} empty="Nessun file recente nel tenant." icon={FileText} /> : null}
             {canView("notifications") ? <ActivityList title="Notifiche operative" items={summary.operations.notifications} empty="Nessuna notifica operativa recente." icon={Clock} /> : null}
           </div>
@@ -1605,7 +1398,7 @@ export default function DashboardClient() {
                 icon={CheckCircle2}
                 metrics={personalMetrics}
                 sources={summary.personal.sources}
-                emptyText="Nessun task personale persistente disponibile: zeri reali, nessuna pipeline o finance esposta."
+                emptyText="Non hai task o scadenze personali da mostrare."
               />
             ) : null}
             <SectionCard
@@ -1619,7 +1412,7 @@ export default function DashboardClient() {
                 ...(canView("calendar") ? [{ label: "Prossime consegne", value: summary.operations.upcomingDeliveries } satisfies Metric] : []),
               ]}
               sources={{ files: canView("documents") && summary.operations.recentFiles.length > 0, comments: canView("projects") && summary.operations.recentComments.length > 0 }}
-              emptyText="File, commenti e notifiche compaiono solo se esistono dati reali per il tenant."
+              emptyText="Nessun aggiornamento operativo recente."
             />
             {canView("notifications") ? notificationsCard : null}
             {canView("documents") ? documentsCard : null}
