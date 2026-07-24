@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/useConfirm";
 import { credentialsApi } from "@/lib/tenant-credentials-api";
 import type { CredentialItem, CredentialsOptions } from "@/lib/tenant-credentials-types";
 import { CredentialAudit } from "./credential-audit";
@@ -67,6 +68,7 @@ export function CredentialDetailPage({ credentialId }: { credentialId: string })
   const [revealOpen, setRevealOpen] = useState(false);
   const [replaceOpen, setReplaceOpen] = useState(false);
   const [rotateOpen, setRotateOpen] = useState(false);
+  const { ConfirmDialog, confirm } = useConfirm();
   const canManage = canManageCredentials();
 
   const load = async () => {
@@ -102,7 +104,13 @@ export function CredentialDetailPage({ credentialId }: { credentialId: string })
   };
 
   const archive = async () => {
-    if (!window.confirm("La credenziale verrà archiviata e non apparirà più nelle liste operative.")) return;
+    const ok = await confirm({
+      title: "Archivia credenziale?",
+      description: "La credenziale verrà archiviata e non apparirà più nelle liste operative.",
+      confirmLabel: "Archivia",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       await credentialsApi.archive(credentialId);
       toast({ title: "Credenziale archiviata" });
@@ -182,6 +190,7 @@ export function CredentialDetailPage({ credentialId }: { credentialId: string })
       <CredentialRevealDialog credential={credential} open={revealOpen} onOpenChange={setRevealOpen} />
       <CredentialReplaceSecretDialog credential={credential} open={replaceOpen} onOpenChange={setReplaceOpen} onDone={load} />
       <CredentialRotateDialog credential={credential} open={rotateOpen} onOpenChange={setRotateOpen} onDone={load} />
+      <ConfirmDialog />
     </div>
   );
 }
