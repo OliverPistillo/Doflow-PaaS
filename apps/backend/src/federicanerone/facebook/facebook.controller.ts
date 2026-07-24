@@ -1,15 +1,18 @@
 import { Controller, Get, Post, Query, Body, Res, Req } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { Response, Request } from 'express';
 import { DataSource } from 'typeorm';
 import { getTenantConn } from '../../tenant-helpers';
 import axios from 'axios';
 
-// CONFIGURAZIONE (Da mettere in .env in produzione)
-const FB_VERIFY_TOKEN = 'doflow_verify_token'; // Scegli una password a caso
-const FB_PAGE_ACCESS_TOKEN = 'EAAWZA2QtQvFUBQqpWorD5ZBg055G0gOWasgWCkdZBLVvGyZA35ZA6vWEyfu1kflD1slUV6HDVahCYvCNxjYPR6vEP0BZChCCLZAni42NYdWcnNm8U8UsIBGlpqkPKJpBuZAkTvizL0RvfNTAfZBYXyWZBSEVufUkwgFmix7tnHw0jzKW2iQ4tKdgAWpTEFpdWthDoH2KCbZAGyZBjfgzZBZCfr7Eb815KOkcZBs3JuSK5pPtzAbEsApKu3d6LtZBTR0ZD'; 
+// Configurazione webhook Facebook: usare sempre variabili ambiente in produzione.
+const FB_VERIFY_TOKEN = process.env.FB_VERIFY_TOKEN || 'doflow_verify_token';
+const FB_PAGE_ACCESS_TOKEN = process.env.FB_PAGE_ACCESS_TOKEN || ''; 
 
 @Controller('facebook')
 export class FacebookController {
+  private readonly logger = new Logger('FacebookController');
+
   
   // 1. VERIFICA WEBHOOK (Facebook chiama questo quando configuri l'app)
   @Get('webhook')
@@ -20,7 +23,7 @@ export class FacebookController {
 
     if (mode && token) {
       if (mode === 'subscribe' && token === FB_VERIFY_TOKEN) {
-        console.log('WEBHOOK_VERIFIED');
+        this.logger.log('WEBHOOK_VERIFIED');
         return res.status(200).send(challenge);
       } else {
         return res.sendStatus(403);
@@ -32,7 +35,7 @@ export class FacebookController {
   // 2. RICEZIONE LEAD (Facebook invia i dati qui)
   @Post('webhook')
   async receiveLead(@Body() body: any, @Req() req: Request, @Res() res: Response) {
-    console.log('Facebook Event Received');
+    this.logger.log('Facebook Event Received');
 
     try {
       const ds = getTenantConn(req); // Nota: Qui serve gestire il tenant. Per i webhook esterni, spesso si usa una connessione admin o si deduce il tenant.
@@ -52,7 +55,7 @@ export class FacebookController {
         return res.sendStatus(404);
       }
     } catch (error) {
-      console.error('Errore webhook:', error);
+      this.logger.error('Errore webhook:', error);
       return res.sendStatus(500);
     }
   }
@@ -84,10 +87,10 @@ export class FacebookController {
         [fullName, email, phone, leadId]
       );
 
-      console.log(`Lead salvato: ${fullName}`);
+      this.logger.log(`Lead salvato: ${fullName}`);
 
     } catch (e) {
-      console.error('Errore processing lead:', e);
+      this.logger.error('Errore processing lead:', e);
     }
   }
 }

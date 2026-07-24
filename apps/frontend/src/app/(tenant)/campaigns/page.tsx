@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Megaphone, Plus, Search, Send, Eye, MousePointerClick, Users,
   BarChart2, Mail, Play, Pause, Edit2, Trash2, Copy, ChevronRight,
   TrendingUp, CheckCircle2, Clock, XCircle, Calendar } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
@@ -14,8 +15,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+
+import { PageShell, PageHeader } from "@/components/ui/page-shell";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -150,9 +158,25 @@ function CampaignCard({ c, onSelect }: { c: Campaign; onSelect: (c: Campaign) =>
             <h3 className="font-semibold text-sm leading-tight">{c.name}</h3>
             <p className="text-xs text-muted-foreground mt-0.5 truncate">{c.subject}</p>
           </div>
-          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => { e.stopPropagation(); }}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                onClick={e => {
+                  e.stopPropagation();
+                  onSelect(c);
+                }}
+                aria-label="Dettagli campagna"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              Dettagli campagna
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         {/* Audience + date */}
@@ -306,6 +330,19 @@ export default function Page() {
   const [typeFilter, setType]     = useState("Tutti");
   const [statusFilter, setStatus] = useState("Tutti");
   const [selected, setSelected]   = useState<Campaign | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcut for search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const filtered = useMemo(() => CAMPAIGNS.filter(c => {
     if (typeFilter   !== "Tutti" && c.type   !== typeFilter)   return false;
@@ -315,20 +352,18 @@ export default function Page() {
   }), [search, typeFilter, statusFilter]);
 
   return (
-    <div className="flex-1 p-4 md:p-6 animate-in fade-in duration-500 space-y-5">
+    <PageShell>
 
       {selected && <CampaignDetail c={selected} onClose={() => setSelected(null)} />}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Campagne Email</h2>
-          <p className="text-sm text-muted-foreground mt-0.5">Gestisci e monitora le tue campagne di email marketing</p>
-        </div>
-        <Button className="bg-primary hover:bg-primary/90 text-white shrink-0" size="sm">
+      <PageHeader
+        title="Campagne Email"
+        description="Gestisci e monitora le tue campagne di email marketing"
+        actions={<Button className="bg-primary hover:bg-primary/90 text-white shrink-0" size="sm">
           <Plus className="mr-1.5 h-4 w-4" /> Nuova Campagna
-        </Button>
-      </div>
+        </Button>}
+      />
 
       {/* KPI */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -348,8 +383,21 @@ export default function Page() {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
+          <Label htmlFor="campaign-search" className="sr-only">Cerca campagne</Label>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Cerca campagne..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          <Input
+            id="campaign-search"
+            ref={searchInputRef}
+            placeholder="Cerca campagne..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-9 pr-10"
+          />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:block">
+            <kbd className="h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100 flex">
+              <span className="text-xs">/</span>
+            </kbd>
+          </div>
         </div>
         <Select value={typeFilter} onValueChange={setType}>
           <SelectTrigger className="w-full sm:w-44">
@@ -384,6 +432,6 @@ export default function Page() {
           ))}
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

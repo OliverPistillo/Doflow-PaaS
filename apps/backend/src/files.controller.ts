@@ -10,13 +10,18 @@ import {
   StreamableFile,
   NotFoundException,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FileStorageService } from './file-storage.service';
 import { AuditService } from './audit.service'; // <--- Import AuditService
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { TenantModuleGuard, RequireTenantModule } from './common/guards/tenant-module.guard';
 
 @Controller('files')
+@UseGuards(JwtAuthGuard, TenantModuleGuard)
+@RequireTenantModule('docs.files')
 export class FilesController {
   // Iniettiamo AuditService
   constructor(

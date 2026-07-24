@@ -5,6 +5,7 @@ import * as crypto from 'crypto';
 import { AuditService } from './audit.service';
 import { hasRoleAtLeast, Role } from './roles';
 import { MailService } from './mail/mail.service';
+import { safeSchema } from './common/schema.utils';
 
 type InviteBody = {
   email: string;
@@ -36,12 +37,7 @@ export class TenantAdminController {
     const tenantId = (req as any).tenantId as string | undefined;
     const tid = tenantId ?? 'public';
 
-    // Protezione SQL Injection estrema
-    if (!/^[a-z0-9_]+$/.test(tid)) {
-       throw new Error('Invalid tenant ID detected (potential SQL injection attempt)');
-    }
-    
-    return tid;
+    return safeSchema(tid, 'TenantAdminController.getTenantId');
   }
 
   // ✅ HELPER: Blocca chiamate su contesto 'public' (Control Plane)
@@ -70,6 +66,22 @@ export class TenantAdminController {
     return authUser;
   }
 
+  private async getTenantSlug(conn: DataSource, schema: string): Promise<string> {
+    const rows = await conn.query(
+      `select slug from public.tenants where schema_name = $1 or slug = $1 limit 1`,
+      [schema],
+    );
+    return rows[0]?.slug || schema;
+  }
+
+  private async getTenantPublicId(conn: DataSource, schema: string): Promise<string | null> {
+    const rows = await conn.query(
+      `select id::text as id from public.tenants where schema_name = $1 or slug = $1 limit 1`,
+      [schema],
+    );
+    return rows[0]?.id || null;
+  }
+
   @Get('users')
   async listAll(@Req() req: Request, @Res() res: Response) {
     // 🛡️ Guard: Tenant Context
@@ -92,7 +104,7 @@ export class TenantAdminController {
         role,
         created_at,
         'active' as status
-      from ${tenantId}.users
+      from "${tenantId}".users
 
       union all
 
@@ -102,7 +114,7 @@ export class TenantAdminController {
         role,
         created_at,
         'invited' as status
-      from ${tenantId}.invites
+      from "${tenantId}".invites
       where accepted_at is null
         and (expires_at is null or expires_at > now())
 
@@ -142,7 +154,7 @@ export class TenantAdminController {
 
     // Controllo se l'utente esiste già
     const existingUser = await conn.query(
-      `select id from ${tenantId}.users where email = $1 limit 1`,
+      `select id from "${tenantId}".users where email = $1 limit 1`,
       [email],
     );
 
@@ -152,7 +164,7 @@ export class TenantAdminController {
 
     // Check esistenza invito duplicato (pending)
     const existingInvite = await conn.query(
-      `select id from ${tenantId}.invites
+      `select id from "${tenantId}".invites
        where email = $1 and accepted_at is null
        and (expires_at is null or expires_at > now())
        limit 1`,
@@ -167,7 +179,7 @@ export class TenantAdminController {
     const token = crypto.randomBytes(32).toString('hex');
     const rows = await conn.query(
       `
-      insert into ${tenantId}.invites (email, role, token)
+      insert into "${tenantId}".invites (email, role, token)
       values ($1, $2, $3)
       returning id, email, role, token, created_at, expires_at
       `,
@@ -183,7 +195,8 @@ export class TenantAdminController {
     });
 
     const baseUrl = process.env.APP_BASE_URL ?? 'https://app.doflow.it';
-    const acceptUrl = `${baseUrl}/auth/accept-invite?token=${invite.token}`;
+    const tenantSlug = await this.getTenantSlug(conn, tenantId);
+    const acceptUrl = `${baseUrl}/auth/accept-invite?tenant=${encodeURIComponent(tenantSlug)}&token=${invite.token}`;
 
     try {
       this.logger.log(`Tentativo invio email a ${invite.email}...`);
@@ -230,7 +243,7 @@ export class TenantAdminController {
     const rows = await conn.query(
       `
       select id, email, role, token
-      from ${tenantId}.invites
+      from "${tenantId}".invites
       where email = $1
         and accepted_at is null
         and (expires_at is null or expires_at > now())
@@ -245,7 +258,8 @@ export class TenantAdminController {
     }
 
     const baseUrl = process.env.APP_BASE_URL ?? 'https://app.doflow.it';
-    const acceptUrl = `${baseUrl}/auth/accept-invite?token=${invite.token}`;
+    const tenantSlug = await this.getTenantSlug(conn, tenantId);
+    const acceptUrl = `${baseUrl}/auth/accept-invite?tenant=${encodeURIComponent(tenantSlug)}&token=${invite.token}`;
 
     try {
       await this.mailService.sendInviteEmail({
@@ -293,8 +307,8 @@ export class TenantAdminController {
       return res.status(400).json({ error: 'Cannot change role for an invite. Accept invite first.' });
     }
 
-    const userId = Number(raw);
-    if (Number.isNaN(userId)) {
+    const userId = raw.trim();
+    if (!userId) {
       return res.status(400).json({ error: 'Invalid user id' });
     }
 
@@ -306,7 +320,7 @@ export class TenantAdminController {
     const conn = this.getConn(req);
 
     const existingRows = await conn.query(
-      `select id, email, role from ${tenantId}.users where id = $1 limit 1`,
+      `select id, email, role from "${tenantId}".users where id = $1 limit 1`,
       [userId],
     );
 
@@ -315,7 +329,7 @@ export class TenantAdminController {
     const oldRole = existingRows[0].role;
 
     const updatedRows = await conn.query(
-      `update ${tenantId}.users set role = $1 where id = $2 returning id, email, role, created_at`,
+      `update "${tenantId}".users set role = $1 where id = $2 returning id, email, role, created_at`,
       [body.role, userId],
     );
 
@@ -326,6 +340,15 @@ export class TenantAdminController {
       targetEmail: updated.email,
       metadata: { oldRole, newRole: updated.role },
     });
+
+    const tenantPublicId = await this.getTenantPublicId(conn, tenantId);
+    await conn.query(
+      `update public.users
+       set role = $1, updated_at = now()
+       where lower(email) = lower($2)
+         and (tenant_id = $3 or tenant_id = $4)`,
+      [body.role, updated.email, tenantPublicId, tenantId],
+    );
 
     return res.json({ status: 'ok', user: updated });
   }
@@ -353,16 +376,15 @@ export class TenantAdminController {
     if (isInvite) {
       // rawId è UUID -> NON convertire a Number
       result = await conn.query(
-        `delete from ${tenantId}.invites where id = $1 returning id, email`,
+        `delete from "${tenantId}".invites where id = $1 returning id, email`,
         [rawId],
       );
     } else {
-      // rawId è numerico
-      const userId = Number(rawId);
-      if (Number.isNaN(userId)) return res.status(400).json({ error: 'Invalid user id' });
+      const userId = rawId.trim();
+      if (!userId) return res.status(400).json({ error: 'Invalid user id' });
 
       result = await conn.query(
-        `delete from ${tenantId}.users where id = $1 returning id, email`,
+        `delete from "${tenantId}".users where id = $1 returning id, email`,
         [userId],
       );
     }
@@ -378,6 +400,16 @@ export class TenantAdminController {
       targetEmail: deletedEmail,
       metadata: { deletedId: id, type: isInvite ? 'invite' : 'user' },
     });
+
+    if (isUser) {
+      const tenantPublicId = await this.getTenantPublicId(conn, tenantId);
+      await conn.query(
+        `delete from public.users
+         where lower(email) = lower($1)
+           and (tenant_id = $2 or tenant_id = $3)`,
+        [deletedEmail, tenantPublicId, tenantId],
+      );
+    }
 
     return res.json({ status: 'ok', deletedId: id });
   }
@@ -399,7 +431,7 @@ export class TenantAdminController {
 
     const rows = await conn.query(
       `select id, action, actor_email, actor_role, target_email, metadata, ip, created_at
-       from ${tenantId}.audit_log
+       from "${tenantId}".audit_log
        order by id desc
        limit 100`,
     );

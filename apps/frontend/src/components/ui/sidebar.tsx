@@ -1,8 +1,8 @@
 // Percorso: apps/frontend/src/components/ui/sidebar.tsx
 // Refactored 1:1 dal Figma: elm/sidebar/activesection, elm/sidebar/indicator
-//   Active bg:      #052136 at 10% opacity, radius 10px
-//   Active indicator: 4px solid #052136 (left)
-//   Active text:    #052136 Bold
+//   Active bg:      #0E0E0C / #5B5BD6 at 10% opacity, radius 10px
+//   Active indicator: 4px solid #0E0E0C / #5B5BD6 (left)
+//   Active text:    #0E0E0C / #5B5BD6 Bold
 //   Inactive text:  #7d8592 SemiBold
 //   Hover bg:       slight blue tint
 //   Sidebar bg:     white card (shadow-card, radius 24px)
@@ -14,6 +14,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { PanelLeft } from "lucide-react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
+import { usePlatform } from "@/hooks/use-platform"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,16 +30,15 @@ import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-// Figma sidebar width: 200px, icon-only: 72px
-const SIDEBAR_WIDTH = "200px"
-const SIDEBAR_WIDTH_MOBILE = "260px"
-const SIDEBAR_WIDTH_ICON = "80px"
+// Tenant shell width: workspace navigation, icon-only compact rail.
+const SIDEBAR_WIDTH = "280px"
+const SIDEBAR_WIDTH_MOBILE = "280px"
+const SIDEBAR_WIDTH_ICON = "72px"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
 type SidebarContextProps = {
@@ -136,25 +136,23 @@ const SidebarProvider = React.forwardRef<
 
     return (
       <SidebarContext.Provider value={contextValue}>
-        <TooltipProvider delayDuration={0}>
-          <div
-            style={
-              {
-                "--sidebar-width": SIDEBAR_WIDTH,
-                "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
-                ...style,
-              } as React.CSSProperties
-            }
-            className={cn(
-              "group/sidebar-wrapper flex min-h-svh w-full has-[[data-variant=inset]]:bg-sidebar",
-              className
-            )}
-            ref={ref}
-            {...props}
-          >
-            {children}
-          </div>
-        </TooltipProvider>
+        <div
+          style={
+            {
+              "--sidebar-width": SIDEBAR_WIDTH,
+              "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
+              ...style,
+            } as React.CSSProperties
+          }
+          className={cn(
+            "group/sidebar-wrapper flex min-h-svh w-full has-[[data-variant=inset]]:bg-sidebar",
+            className
+          )}
+          ref={ref}
+          {...props}
+        >
+          {children}
+        </div>
       </SidebarContext.Provider>
     )
   }
@@ -277,24 +275,40 @@ const SidebarTrigger = React.forwardRef<
   React.ElementRef<typeof Button>,
   React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
-  const { toggleSidebar } = useSidebar()
+  const { state, toggleSidebar } = useSidebar()
+  const { modifierKey, modifierLabel } = usePlatform()
+  const isCollapsed = state === "collapsed"
+  const label = isCollapsed ? "Espandi sidebar" : "Comprimi sidebar"
 
   return (
-    <Button
-      ref={ref}
-      data-sidebar="trigger"
-      variant="ghost"
-      size="icon"
-      className={cn("h-9 w-9 text-muted-foreground hover:text-foreground", className)}
-      onClick={(event) => {
-        onClick?.(event)
-        toggleSidebar()
-      }}
-      {...props}
-    >
-      <PanelLeft />
-      <span className="sr-only">Toggle Sidebar</span>
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          ref={ref}
+          data-sidebar="trigger"
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "h-9 w-9 text-muted-foreground hover:text-foreground",
+            className,
+          )}
+          onClick={(event) => {
+            onClick?.(event)
+            toggleSidebar()
+          }}
+          {...props}
+        >
+          <PanelLeft />
+          <span className="sr-only">{`${label} (${modifierLabel} + B)`}</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right" align="center" className="hidden md:block">
+        {label}
+        <kbd className="ml-2 font-mono text-[10px] bg-primary-foreground/20 rounded px-1 py-0.5">
+          {modifierKey}B
+        </kbd>
+      </TooltipContent>
+    </Tooltip>
   )
 })
 SidebarTrigger.displayName = "SidebarTrigger"
@@ -792,6 +806,8 @@ const SidebarMenuSubButton = React.forwardRef<
 })
 SidebarMenuSubButton.displayName = "SidebarMenuSubButton"
 
+const SidebarMenuSeparator = SidebarSeparator
+
 export {
   Sidebar,
   SidebarContent,
@@ -819,6 +835,3 @@ export {
   SidebarTrigger,
   useSidebar,
 }
-
-// Re-export alias for separators inside menu
-const SidebarMenuSeparator = SidebarSeparator

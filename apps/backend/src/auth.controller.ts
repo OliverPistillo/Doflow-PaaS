@@ -22,6 +22,8 @@ type AuthBody = {
 type AcceptInviteBody = {
   token: string;
   password: string;
+  tenant?: string;
+  tenantSlug?: string;
 };
 
 type MfaConfirmBody = {
@@ -131,6 +133,7 @@ export class AuthController {
         req,
         body.token,
         body.password,
+        body.tenant || body.tenantSlug,
       );
 
       await this.auditService.log(req, {
@@ -142,7 +145,7 @@ export class AuthController {
     } catch (e) {
       await this.auditService.log(req, {
         action: 'auth_accept_invite_failed',
-        metadata: { token: body.token },
+        metadata: { token_present: Boolean(body.token), tenant: body.tenant || body.tenantSlug || null },
       });
 
       if (e instanceof Error) return { error: e.message };

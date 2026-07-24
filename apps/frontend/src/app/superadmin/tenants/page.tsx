@@ -2,7 +2,7 @@
 
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   Eye,
   KeyRound,
@@ -20,10 +20,17 @@ import {
   Loader2,
   Globe,
   Mail,
-  Trash2
+  Trash2,
+  Copy,
+  Check
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,6 +51,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -69,6 +83,8 @@ type ResetModalState = {
   tenantId: string;
   email: string;
   result?: string;
+  title?: string;
+  description?: string;
 };
 
 type FetchState =
@@ -123,10 +139,23 @@ const StatusPill = ({ isActive }: { isActive: boolean }) => {
 export default function TenantsPage() {
   const { toast } = useToast();
   const { ConfirmDialog, confirm } = useConfirm();
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // --- FIX HYDRATION ---
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+
+  // Keyboard shortcut for search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const [tenants, setTenants] = useState<TenantRow[]>([]);
   const [fetchState, setFetchState] = useState<FetchState>({ status: "idle" });
@@ -139,6 +168,7 @@ export default function TenantsPage() {
   // Modali
   const [resetModal, setResetModal] = useState<ResetModalState | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // --- STATI CREAZIONE ---
   const [newTenant, setNewTenant] = useState({ name: "", slug: "", email: "", plan: "STARTER" });
@@ -207,6 +237,16 @@ export default function TenantsPage() {
   // --- AZIONI ---
 
   // NUOVA AZIONE: Sospensione/Riattivazione Reale
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    toast({
+      title: "Copiato!",
+      description: "Password copiata negli appunti.",
+    });
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const handleToggleStatus = async (tenantId: string, currentStatus: boolean) => {
     const actionLabel = currentStatus ? "sospendere" : "riattivare";
     const ok = await confirm({
@@ -257,13 +297,14 @@ export default function TenantsPage() {
 
       // --- FIX: Mostra la password se restituita dal backend ---
       if (res?.tempPassword) {
-        alert(
-          `✅ TENANT CREATO CON SUCCESSO!\n\n` +
-          `Ecco le credenziali Admin per ${res.name || newTenant.name}:\n\n` +
-          `Email: ${newTenant.email}\n` +
-          `Password: ${res.tempPassword}\n\n` +
-          `⚠️ COPIA QUESTA PASSWORD ORA. Non sarà più visibile.\n(È stata inviata anche via email)`
-        );
+        setResetModal({
+          open: true,
+          tenantId: "new",
+          email: newTenant.email,
+          result: res.tempPassword,
+          title: "Tenant Creato con Successo!",
+          description: `Ecco le credenziali Admin per ${res.name || newTenant.name}. Copia la password ora: non sarà più visibile.`
+        });
       }
 
       setIsCreateOpen(false);
@@ -324,7 +365,12 @@ export default function TenantsPage() {
         },
       );
 
-      setResetModal({ ...resetModal, result: data.tempPassword });
+      setResetModal({
+        ...resetModal,
+        result: data.tempPassword,
+        title: "Reset Password Amministratore",
+        description: `Generazione nuove credenziali per ${resetModal.email}.`
+      });
       toast({
         title: "Successo",
         description: "Password rigenerata con successo.",
@@ -433,26 +479,38 @@ export default function TenantsPage() {
             {/* TOOLBAR */}
             <div className="flex flex-col md:flex-row gap-4 bg-card p-4 rounded-2xl border border-border shadow-sm">
                 <div className="relative flex-1">
+                <Label htmlFor="tenant-search" className="sr-only">Cerca tenant</Label>
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
+                    id="tenant-search"
+                    ref={searchInputRef}
                     placeholder="Cerca azienda, slug o schema DB..."
-                    className="pl-9 border-border"
+                    className="pl-9 pr-12 border-border"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                 />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:block">
+                  <kbd className="h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100 flex">
+                    <span className="text-xs">/</span>
+                  </kbd>
+                </div>
                 </div>
 
                 <div className="flex items-center gap-2">
                 <Filter className="h-4 w-4 text-muted-foreground" />
-                <select
-                    className="h-10 rounded-md border border-border bg-card px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                <Select
                     value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "suspended")}
+                    onValueChange={(value) => setStatusFilter(value as "all" | "active" | "suspended")}
                 >
-                    <option value="all">Tutti gli stati</option>
-                    <option value="active">Solo attivi</option>
-                    <option value="suspended">Sospesi</option>
-                </select>
+                    <SelectTrigger className="w-[160px] border-border bg-card">
+                        <SelectValue placeholder="Tutti gli stati" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Tutti gli stati</SelectItem>
+                        <SelectItem value="active">Solo attivi</SelectItem>
+                        <SelectItem value="suspended">Sospesi</SelectItem>
+                    </SelectContent>
+                </Select>
                 </div>
             </div>
 
@@ -558,22 +616,32 @@ export default function TenantsPage() {
 
                         <td className="px-6 py-4 text-right">
                             <div className="flex justify-end items-center gap-2">
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleImpersonate(t.id)}
-                                className="hidden group-hover:flex h-8 text-primary hover:text-primary hover:bg-primary/10"
-                            >
-                                <Eye className="h-4 w-4 mr-2" />
-                                Entra
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleImpersonate(t.id)}
+                                    className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity h-8 text-primary hover:text-primary hover:bg-primary/10"
+                                >
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    Entra
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Impersona amministratore</TooltipContent>
+                            </Tooltip>
 
                             <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                                </DropdownMenuTrigger>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label="Azioni tenant">
+                                          <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Altre azioni</TooltipContent>
+                                </Tooltip>
 
                                 <DropdownMenuContent align="end">
                                 <DropdownMenuLabel>Azioni Tenant</DropdownMenuLabel>
@@ -681,16 +749,19 @@ export default function TenantsPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="plan">Piano</Label>
-                <select
-                  id="plan"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                <Select
                   value={newTenant.plan}
-                  onChange={(e) => setNewTenant({ ...newTenant, plan: e.target.value })}
+                  onValueChange={(value) => setNewTenant({ ...newTenant, plan: value })}
                 >
-                  <option value="STARTER">Starter</option>
-                  <option value="PRO">Pro</option>
-                  <option value="ENTERPRISE">Enterprise</option>
-                </select>
+                  <SelectTrigger id="plan" className="w-full">
+                    <SelectValue placeholder="Seleziona piano" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="STARTER">Starter</SelectItem>
+                    <SelectItem value="PRO">Pro</SelectItem>
+                    <SelectItem value="ENTERPRISE">Enterprise</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="grid gap-2">
@@ -734,9 +805,11 @@ export default function TenantsPage() {
         <Dialog open={resetModal.open} onOpenChange={(v) => !v && setResetModal(null)}>
           <DialogContent className="sm:max-w-md rounded-2xl">
             <DialogHeader>
-              <DialogTitle>Reset Password Amministratore</DialogTitle>
+            <DialogTitle>{resetModal.title || "Reset Password Amministratore"}</DialogTitle>
               <DialogDescription>
-                Generazione nuove credenziali per <b>{resetModal.email}</b>.
+              {resetModal.description || (
+                <>Generazione nuove credenziali per <b>{resetModal.email}</b>.</>
+              )}
               </DialogDescription>
             </DialogHeader>
 
@@ -754,8 +827,24 @@ export default function TenantsPage() {
                 <div className="text-xs text-muted-foreground mb-2 uppercase tracking-widest font-bold">
                   Credenziali
                 </div>
-                <div className="text-3xl font-mono font-black tracking-wider select-all cursor-text text-emerald-400">
-                  {resetModal.result}
+                <div className="flex items-center justify-center gap-4">
+                  <div className="text-3xl font-mono font-black tracking-wider select-all cursor-text text-emerald-400">
+                    {resetModal.result}
+                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-400/10"
+                        onClick={() => copyToClipboard(resetModal.result!)}
+                        aria-label="Copia password"
+                      >
+                        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Copia password</TooltipContent>
+                  </Tooltip>
                 </div>
                 <div className="text-xs text-muted-foreground mt-4">
                   Copia la password ora. Dopo chiudo la porta e butto via la chiave.

@@ -11,7 +11,7 @@ import {
 import { SystemBackup, BackupStatus, BackupType } from './entities/system-backup.entity';
 import { BackupSchedule, ScheduleFrequency, ScheduleBackupType } from './entities/backup-schedule.entity';
 import { Tenant } from './entities/tenant.entity';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -289,9 +289,60 @@ export class BackupService implements OnModuleInit {
 
       // 2. Ripristina con psql (decomprimi inline)
       this.logger.log(`🔄 Esecuzione psql restore...`);
-      const restoreCmd = `gunzip -c "${localPath}" | psql "${this.dbUrl}"`;
-      const { stderr } = await execAsync(restoreCmd, { timeout: 600000 });
-      if (stderr) this.logger.warn(`psql stderr: ${stderr}`);
+      await new Promise<void>((resolve, reject) => {
+        let stderrData = '';
+        const gunzip = spawn('gunzip', ['-c', localPath]);
+        const psql = spawn('psql', [this.dbUrl]);
+
+        gunzip.stderr.on('data', (data) => stderrData += data.toString());
+        psql.stderr.on('data', (data) => stderrData += data.toString());
+
+        gunzip.stdout.pipe(psql.stdin);
+
+        const timeout = setTimeout(() => {
+          gunzip.kill('SIGKILL');
+          psql.kill('SIGKILL');
+          reject(new Error('psql restore timeout'));
+        }, 600000);
+
+        gunzip.on('error', (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+
+        psql.on('error', (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+
+        let psqlCode: number | null = null;
+        let gunzipCode: number | null = null;
+
+        const checkCompletion = () => {
+          if (psqlCode !== null && gunzipCode !== null) {
+            clearTimeout(timeout);
+            if (stderrData) this.logger.warn(`psql/gunzip stderr: ${stderrData}`);
+
+            if (psqlCode !== 0) {
+              reject(new Error(`psql process exited with code ${psqlCode}. Stderr: ${stderrData}`));
+            } else if (gunzipCode !== 0) {
+              reject(new Error(`gunzip process exited with code ${gunzipCode}. Stderr: ${stderrData}`));
+            } else {
+              resolve();
+            }
+          }
+        };
+
+        psql.on('close', (code) => {
+          psqlCode = code ?? -1;
+          checkCompletion();
+        });
+
+        gunzip.on('close', (code) => {
+          gunzipCode = code ?? -1;
+          checkCompletion();
+        });
+      });
 
       // 3. Cleanup
       fs.unlinkSync(localPath);
@@ -340,13 +391,80 @@ export class BackupService implements OnModuleInit {
     const storagePath = `backups/${fileName}`;
 
     try {
-      const dumpCmd = schemaName
-        ? `pg_dump "${this.dbUrl}" --schema="${schemaName}" --no-owner --no-privileges | gzip > "${localPath}"`
-        : `pg_dump "${this.dbUrl}" --no-owner --no-privileges | gzip > "${localPath}"`;
-
       this.logger.log(`📦 Avvio pg_dump: ${schemaName || 'full database'}`);
-      const { stderr } = await execAsync(dumpCmd, { timeout: 300000 });
-      if (stderr) this.logger.warn(`pg_dump stderr: ${stderr}`);
+      await new Promise<void>((resolve, reject) => {
+        const pgDumpArgs = ['--no-owner', '--no-privileges'];
+        if (schemaName) {
+          pgDumpArgs.push('--schema', schemaName);
+        }
+        pgDumpArgs.push(this.dbUrl);
+
+        const pgDump = spawn('pg_dump', pgDumpArgs);
+        const gzip = spawn('gzip');
+        const outStream = fs.createWriteStream(localPath);
+
+        let stderrData = '';
+        pgDump.stderr.on('data', (data) => stderrData += data.toString());
+        gzip.stderr.on('data', (data) => stderrData += data.toString());
+
+        pgDump.stdout.pipe(gzip.stdin);
+        gzip.stdout.pipe(outStream);
+
+        const timeout = setTimeout(() => {
+          pgDump.kill('SIGKILL');
+          gzip.kill('SIGKILL');
+          reject(new Error('pg_dump timeout'));
+        }, 300000);
+
+        pgDump.on('error', (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+
+        gzip.on('error', (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+
+        outStream.on('error', (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+
+        let pgDumpCode: number | null = null;
+        let gzipCode: number | null = null;
+        let streamFinished = false;
+
+        const checkCompletion = () => {
+          if (pgDumpCode !== null && gzipCode !== null && streamFinished) {
+            clearTimeout(timeout);
+            if (stderrData) this.logger.warn(`pg_dump/gzip stderr: ${stderrData}`);
+
+            if (pgDumpCode !== 0) {
+              reject(new Error(`pg_dump exited with code ${pgDumpCode}. Stderr: ${stderrData}`));
+            } else if (gzipCode !== 0) {
+              reject(new Error(`gzip exited with code ${gzipCode}. Stderr: ${stderrData}`));
+            } else {
+              resolve();
+            }
+          }
+        };
+
+        pgDump.on('close', (code) => {
+          pgDumpCode = code ?? -1;
+          checkCompletion();
+        });
+
+        gzip.on('close', (code) => {
+          gzipCode = code ?? -1;
+          checkCompletion();
+        });
+
+        outStream.on('finish', () => {
+          streamFinished = true;
+          checkCompletion();
+        });
+      });
 
       const stats = fs.statSync(localPath);
       if (stats.size === 0) throw new Error('Dump file vuoto.');

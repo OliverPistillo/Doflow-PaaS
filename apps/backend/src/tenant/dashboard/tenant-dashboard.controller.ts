@@ -12,9 +12,8 @@ export class TenantDashboardController {
     const user = (req as any).user; // Popolato dalla JwtStrategy
     if (!user) throw new UnauthorizedException();
 
-    // Priorità: 1. Header (se c'è middleware) 2. Token JWT 3. Fallback a public (per superadmin)
-    // Nota: user.tenantId viene dal payload del token che abbiamo generato in AuthService
-    let tenantId = (req as any).tenantId || user.tenantId || user.tenant_id;
+    // Il JWT è la fonte autorevole; l'header tenant può essere public su app.doflow.it/localhost.
+    let tenantId = user.tenantId || user.tenant_id || (req as any).tenantId;
 
     // Se l'utente è un Superadmin o Owner che sta operando globalmente, potrebbe non avere un tenantId nel token.
     // In quel caso, salviamo le preferenze su 'public'.

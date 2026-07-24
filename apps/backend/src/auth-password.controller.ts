@@ -5,15 +5,17 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { DataSource } from 'typeorm';
 import { randomBytes, createHash } from 'crypto';
 import * as bcrypt from 'bcryptjs'; // namespace import — sicuro con qualsiasi bundler/tsconfig
 import { MailService } from './mail/mail.service';
+import { safeSchema } from './common/schema.utils';
 
 function getTenantId(req: Request): string {
   const tenantId = (req as any).tenantId as string | undefined;
-  return tenantId ?? 'public';
+  return safeSchema(tenantId ?? 'public', 'AuthPasswordController');
 }
 
 function getTenantConn(req: Request): DataSource {
@@ -30,6 +32,8 @@ function hashToken(rawToken: string): string {
 
 @Controller('auth')
 export class AuthPasswordController {
+  private readonly logger = new Logger(AuthPasswordController.name);
+
   constructor(
     private readonly mail: MailService,
   ) {}
@@ -91,7 +95,7 @@ export class AuthPasswordController {
       rawToken,
     )}`;
 
-    console.log(
+    this.logger.log(
       `[DOFLOW][RESET-PASSWORD] email=${email} tenant=${tenantId} link=${resetLink}`,
     );
 
@@ -163,7 +167,6 @@ export class AuthPasswordController {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // 🔧 QUI il fix: niente updated_at (la colonna non esiste)
     await conn.query(
       `
       update "${tenantId}".users

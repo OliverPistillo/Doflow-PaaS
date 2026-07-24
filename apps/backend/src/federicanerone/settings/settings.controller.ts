@@ -1,7 +1,9 @@
 import { Controller, Get, Body, Put, UseGuards, Request } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { RequireFeature } from '../../feature-access/feature-access.decorator';
 // import { AuthGuard } from ... (importa il tuo AuthGuard se ne usi uno)
 
+@RequireFeature('vert.beauty')
 @Controller('federicanerone/settings')
 export class SettingsController {
   constructor(private ds: DataSource) {}

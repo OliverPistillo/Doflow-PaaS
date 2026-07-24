@@ -1,9 +1,32 @@
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { Role } from '../roles';
 import { RedisService } from '../redis/redis.service';
 import { safeSchema } from '../common/schema.utils';
+import { ensureTenantCrmCoreTables } from '../tenant/tenant-crm-schema';
+import { ensureTenantBriefingQuoteTables } from '../tenant/tenant-briefing-quotes-schema';
+import { ensureTenantProjectsTables } from '../tenant/tenant-projects-schema';
+import { ensureTenantFinanceTables } from '../tenant/tenant-finance-schema';
+import { seedTenantNotificationRules } from '../tenant/tenant-notifications-schema';
+import { ensureTenantDocumentsTables } from '../tenant/tenant-documents-schema';
+import {
+  ensureTenantTeamTables,
+  seedTenantTeamSkills,
+  syncTenantUsersToTeamMembers,
+} from '../tenant/tenant-team-schema';
+import {
+  ensureTenantReportsTables,
+  seedTenantKpiTargets,
+} from '../tenant/tenant-reports-schema';
+import {
+  ensureTenantContractsTables,
+  seedDoflowContractTemplates,
+} from '../tenant/tenant-contracts-schema';
+import { seedTenantAutomationTemplatesAndRules } from '../tenant/tenant-automations-schema';
+import { seedTenantPlanningViews } from '../tenant/tenant-calendar-schema';
+import { seedTenantKnowledgeBase } from '../tenant/tenant-knowledge-schema';
+import { ensureTenantCredentialsTables } from '../tenant/tenant-credentials-schema';
 
 @Injectable()
 export class TenantBootstrapService implements OnApplicationBootstrap {
@@ -61,17 +84,75 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
   // ── Provisioning schema ──────────────────────────────────────────────────
 
   async ensureTenantTables(ds: DataSource, schema: string) {
-    // FIX: safeSchema unificato — lancia eccezione su slug non valido
-    const s = safeSchema(schema, 'TenantBootstrapService.ensureTenantTables');
+    let s: string;
+    try {
+      // FIX: safeSchema unificato — lancia eccezione su slug non valido
+      s = safeSchema(schema, 'TenantBootstrapService.ensureTenantTables');
+    } catch (e: any) {
+      throw new BadRequestException(e.message);
+    }
 
     this.logger.log(`Provisioning schema: "${s}"`);
 
     await ds.query(`CREATE SCHEMA IF NOT EXISTS "${s}"`);
 
-    // Tabelle clonate da public (eredita struttura + indici)
-    await ds.query(`CREATE TABLE IF NOT EXISTS "${s}".users    (LIKE public.users    INCLUDING ALL)`);
-    await ds.query(`CREATE TABLE IF NOT EXISTS "${s}".invites  (LIKE public.invites  INCLUDING ALL)`);
-    await ds.query(`CREATE TABLE IF NOT EXISTS "${s}".audit_log(LIKE public.audit_log INCLUDING ALL)`);
+    // ── Tabelle per-schema con DDL esplicita ──────────────────────────────────
+    // Manteniamo la definizione qui (e non con LIKE public.X INCLUDING ALL) così
+    // che future migrazioni del public schema non debbano essere ripropgate a mano.
+    // Quando si aggiorna una tabella, aggiornare sia la migration InitialPublicSchema
+    // che questo metodo.
+    await ds.query(`
+      CREATE TABLE IF NOT EXISTS "${s}".users (
+        id            UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
+        email         TEXT         NOT NULL UNIQUE,
+        password_hash TEXT,
+        role          TEXT         NOT NULL DEFAULT 'user',
+        full_name     TEXT,
+        auth_provider TEXT         NOT NULL DEFAULT 'password',
+        google_id     TEXT,
+        avatar_url    TEXT,
+        email_verified_at TIMESTAMP,
+        mfa_enabled   BOOLEAN      DEFAULT false,
+        mfa_secret    TEXT,
+        is_active     BOOLEAN      DEFAULT true,
+        created_at    TIMESTAMP    DEFAULT NOW(),
+        updated_at    TIMESTAMP    DEFAULT NOW()
+      )
+    `);
+    await ds.query(`ALTER TABLE "${s}".users ADD COLUMN IF NOT EXISTS full_name TEXT`);
+    await ds.query(`ALTER TABLE "${s}".users ADD COLUMN IF NOT EXISTS auth_provider TEXT NOT NULL DEFAULT 'password'`);
+    await ds.query(`ALTER TABLE "${s}".users ADD COLUMN IF NOT EXISTS google_id TEXT`);
+    await ds.query(`ALTER TABLE "${s}".users ADD COLUMN IF NOT EXISTS avatar_url TEXT`);
+    await ds.query(`ALTER TABLE "${s}".users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP`);
+    await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_users_email" ON "${s}".users(lower(email))`);
+    await ds.query(`CREATE UNIQUE INDEX IF NOT EXISTS "idx_${s}_users_google_id" ON "${s}".users(google_id) WHERE google_id IS NOT NULL`);
+
+    await ds.query(`
+      CREATE TABLE IF NOT EXISTS "${s}".invites (
+        id          UUID      PRIMARY KEY DEFAULT uuid_generate_v4(),
+        email       TEXT      NOT NULL,
+        token       TEXT      NOT NULL UNIQUE,
+        role        TEXT      NOT NULL DEFAULT 'user',
+        accepted_at TIMESTAMP,
+        expires_at  TIMESTAMP,
+        created_at  TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await ds.query(`
+      CREATE TABLE IF NOT EXISTS "${s}".audit_log (
+        id          BIGSERIAL    PRIMARY KEY,
+        actor_email TEXT,
+        actor_role  TEXT,
+        action      TEXT         NOT NULL,
+        target      TEXT,
+        ip_address  TEXT,
+        user_agent  TEXT,
+        metadata    JSONB        DEFAULT '{}'::jsonb,
+        created_at  TIMESTAMP    DEFAULT NOW()
+      )
+    `);
+    await ds.query(`ALTER TABLE "${s}".audit_log ADD COLUMN IF NOT EXISTS actor_role TEXT`);
 
     // Tabella file metadata (S3)
     await ds.query(`
@@ -105,6 +186,24 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
       `CREATE INDEX IF NOT EXISTS idx_widgets_user
        ON "${s}".dashboard_widgets(user_id)`,
     );
+
+    await ensureTenantCrmCoreTables(ds, s);
+    await ensureTenantBriefingQuoteTables(ds, s);
+    await ensureTenantProjectsTables(ds, s);
+    await ensureTenantFinanceTables(ds, s);
+    await seedTenantNotificationRules(ds, s);
+    await ensureTenantDocumentsTables(ds, s);
+    await ensureTenantTeamTables(ds, s);
+    await seedTenantTeamSkills(ds, s);
+    await syncTenantUsersToTeamMembers(ds, s);
+    await ensureTenantReportsTables(ds, s);
+    await seedTenantKpiTargets(ds, s);
+    await ensureTenantContractsTables(ds, s);
+    await seedDoflowContractTemplates(ds, s);
+    await seedTenantAutomationTemplatesAndRules(ds, s);
+    await seedTenantPlanningViews(ds, s);
+    await seedTenantKnowledgeBase(ds, s);
+    await ensureTenantCredentialsTables(ds, s);
 
     this.logger.log(`Schema "${s}" provisioned successfully.`);
   }

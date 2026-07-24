@@ -200,7 +200,7 @@ export class AdminQuoteRequestController {
 
     stream.pipe(res);
 
-    stream.on('error', (err) => {
+    stream.on('error', (err: Error) => {
       this.logger.error(`Errore streaming zip: ${err.message}`);
       if (!res.headersSent) {
         res.status(500).json({ error: 'Errore durante la generazione dello zip' });

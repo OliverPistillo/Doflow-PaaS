@@ -106,8 +106,8 @@ export class TenancyMiddleware implements NestMiddleware, OnModuleDestroy {
     const hdr = (req.headers['x-doflow-tenant-id'] as string | undefined)?.trim();
 
     // Modalità Header (priorità massima)
-    // Nota: /^[a-z0-9_.]+$/i — il punto è ammesso per slug legacy tipo 'op1.servizi'
-    if (hdr && /^[a-z0-9_.]+$/i.test(hdr)) {
+    // Nota: trattino per slug self-service, underscore per schema, punto per slug legacy tipo 'op1.servizi'
+    if (hdr && /^[a-z0-9_.-]+$/i.test(hdr)) {
       const slug = hdr.toLowerCase();
 
       if (slug === 'public') return this.attachTenant(req, next, 'public');

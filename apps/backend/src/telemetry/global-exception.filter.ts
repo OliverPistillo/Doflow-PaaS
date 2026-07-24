@@ -36,13 +36,16 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const message = exception.message || 'Internal server error';
     const path = request.url;
 
-    // --- FILTRO RUMORE (v3.5 Fix) ---
-    // Se l'errore è un 404 su percorsi "inutili", non lo mandiamo alla Control Tower
-    const isIgnored = 
-      status === 404 && 
-      this.IGNORED_PATHS.some(p => path.includes(p));
+    // --- FILTRO RUMORE (v3.5 Fix / v3.6 Update) ---
+    // Se l'errore è un 404, non lo logghiamo come SYSTEM_ERROR.
+    // Ignoriamo tutti i 404 per evitare che i crawler inquinino i log della Control Tower
+    // Tuttavia, percorsi specifici nel IGNORED_PATHS vengono silenziati del tutto (nessun log su console).
+    const isIgnored = status === 404 && this.IGNORED_PATHS.some(p => path.includes(p));
 
-    if (!isIgnored) {
+    // Tutti i 404 NON sono veri SYSTEM_ERROR, quindi skippiamo telemetryService.logRequest per loro
+    const isSystemError = status !== 404;
+
+    if (isSystemError) {
       // 1. SHADOW LOGGING: Mandiamo l'errore alla Control Tower
       this.telemetryService.logRequest({
         type: 'SYSTEM_ERROR',
@@ -55,7 +58,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           stack: process.env.NODE_ENV === 'development' ? exception.stack : undefined,
         },
       });
+    }
 
+    if (!isIgnored) {
       this.logger.error(`[${status}] ${request.method} ${path} - ${message}`);
     }
 

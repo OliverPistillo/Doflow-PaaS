@@ -2,6 +2,7 @@
   "name": "doflow",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@10.24.0",
   "scripts": {
     "build:frontend": "pnpm -C apps/frontend build",
     "build:backend": "pnpm -C apps/backend build",
@@ -23,6 +24,7 @@
     },
     "onlyBuiltDependencies": [
       "@nestjs/core",
+      "msgpackr-extract",
       "sharp"
     ]
   },

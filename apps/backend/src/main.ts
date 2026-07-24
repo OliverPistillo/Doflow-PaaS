@@ -1,7 +1,8 @@
 // apps/backend/src/main.ts
-// AGGIORNAMENTO: 
+// AGGIORNAMENTO:
 // - CORS: aggiunto supporto per dominio sito web pubblico (CORS_PUBLIC_ORIGINS)
 // - Header esposti: aggiunto Content-Disposition per download zip
+// - Static assets pubblici generici per file caricati e risorse applicative
 
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
@@ -14,6 +15,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as express from 'express';
 import * as dotenv from 'dotenv';
+import { Logger } from '@nestjs/common';
 import * as path from 'path';
 
 // --- AGGIUNTE v3.5 (Monitoring) ---
@@ -57,18 +59,25 @@ function pickTenantFromJwt(decoded: any): { tenantId: string; tenantSlug?: strin
 
 async function bootstrap() {
   if (!process.env.JWT_SECRET) {
-    console.error('❌ FATAL: JWT_SECRET is not defined in .env. Exiting.');
+    new Logger('Bootstrap').error('❌ FATAL: JWT_SECRET is not defined in .env. Exiting.');
     process.exit(1);
   }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    bodyParser: false, 
+    bodyParser: false,
   });
 
-  app.use(express.json({ limit: '50mb' }));
+  app.use(express.json({ limit: '50mb', verify: (req, res, buf) => { (req as any).rawBody = buf; } }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   app.setGlobalPrefix('api');
+
+  // ── Static assets pubblici generici ──────────────────────────────────────
+  app.useStaticAssets(
+    path.resolve(process.cwd(), 'public'),
+    { prefix: '/public', index: false },
+  );
+  new Logger('Bootstrap').log(`📦 Static assets served from: ${path.resolve(process.cwd(), 'public')} → /public`);
 
   // ── CORS — Whitelist unificata CRM + Sito Web Pubblico ───────────────────
   // CORS_ORIGINS: origini per l'app CRM (es. https://app.doflow.it)
@@ -87,11 +96,9 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`CORS: origin '${origin}' non autorizzata`));
-      }
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error(`CORS: origin '${origin}' non autorizzata`));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -101,9 +108,9 @@ async function bootstrap() {
       'X-DOFLOW-TENANT-ID',
       'x-doflow-tenant-id',
       'x-doflow-pathname',
-      'Accept'
+      'Accept',
     ],
-    // AGGIUNTO: Content-Disposition per il download zip dal CRM
+    // Content-Disposition per download file dal CRM
     exposedHeaders: ['Content-Length', 'X-RateLimit-Remaining', 'Retry-After', 'Content-Disposition'],
     maxAge: 86400,
   });
@@ -118,7 +125,7 @@ async function bootstrap() {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('DoFlow PaaS API')
     .setDescription('API completa della piattaforma DoFlow — superadmin, tenant, self-service, automazioni')
-    .setVersion('3.6')
+    .setVersion('3.7')
     .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'JWT')
     .addServer(`http://localhost:${Number(process.env.PORT ?? 4000)}`, 'Local Dev')
     .addServer('https://api.doflow.it', 'Production')
@@ -137,7 +144,7 @@ async function bootstrap() {
       operationsSorter: 'alpha',
     },
   });
-  console.log(`📖 Swagger docs available at /api/docs`);
+  new Logger('Bootstrap').log('📖 Swagger docs available at /api/docs');
 
   const telemetryService = app.get(TelemetryService);
   app.useGlobalInterceptors(new TelemetryInterceptor(telemetryService));
@@ -165,7 +172,7 @@ async function bootstrap() {
         wss.emit('connection', ws, req);
       });
     } catch (e) {
-      console.error('[UPGRADE] error parsing URL', e);
+      new Logger('WS').error('[UPGRADE] error parsing URL', (e as Error).message);
       socket.destroy();
     }
   });
@@ -217,12 +224,12 @@ async function bootstrap() {
 
       socket.on('close', () => clients.delete(socket));
       socket.on('error', (err) => {
-          console.error('[WS] Socket error', err);
-          clients.delete(socket);
+        new Logger('WS').error('[WS] Socket error', (err as Error).message);
+        clients.delete(socket);
       });
 
     } catch (e) {
-      console.error('[WS] Auth connection error:', (e as Error).message);
+      new Logger('WS').error('[WS] Auth connection error:', (e as Error).message);
       socket.close(4002, 'Invalid or expired token');
     }
   });
@@ -248,9 +255,9 @@ async function bootstrap() {
     }
   });
 
-  console.log(`🚀 Backend running on port ${port} (Prefix: /api, WS: ${wsPath})`);
-  console.log(`   CORS CRM origins: ${crmOrigins.join(', ')}`);
-  console.log(`   CORS Public origins: ${publicOrigins.join(', ') || '(nessuna)'}`);
+  new Logger('Bootstrap').log(`🚀 Backend running on port ${port} (Prefix: /api, WS: ${wsPath})`);
+  new Logger('Bootstrap').log(`   CORS CRM origins: ${crmOrigins.join(', ')}`);
+  new Logger('Bootstrap').log(`   CORS Public origins: ${publicOrigins.join(', ') || '(nessuna)'}`);
 }
 
 bootstrap();

@@ -134,8 +134,6 @@ export default function ProjectBoardPage() {
     (ev: RealtimeEvent) => {
       if (ev.type !== 'tenant_notification') return;
 
-      console.log('[Board WS] raw event', ev);
-
       const payload = ev.payload as TaskEventPayload;
       if (!payload || typeof payload.kind !== 'string') {
         return;
@@ -145,12 +143,6 @@ export default function ProjectBoardPage() {
         typeof payload.projectId === 'string' ? payload.projectId : undefined;
 
       if (projectId && eventProjectId && eventProjectId !== projectId) {
-        console.log(
-          '[Board WS] evento di altro progetto, ignorato',
-          eventProjectId,
-          '!=',
-          projectId,
-        );
         return;
       }
 
@@ -159,7 +151,6 @@ export default function ProjectBoardPage() {
         payload.kind === 'task_created' ||
         payload.kind === 'task_deleted'
       ) {
-        console.log('[Board WS] evento task, ricarico tasks da API');
         setRealtimeInfo(
           payload.kind === 'task_created'
             ? 'Nuovo task creato'
@@ -171,8 +162,6 @@ export default function ProjectBoardPage() {
         void loadTasks();
 
         setTimeout(() => setRealtimeInfo(null), 3000);
-      } else {
-        console.log('[Board WS] evento non gestito kind=', payload.kind);
       }
     },
     [projectId, loadTasks],

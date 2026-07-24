@@ -17,6 +17,7 @@ import {
   KeyRound,
   History,
   Lock,
+  Trash2,
 } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
@@ -206,6 +207,7 @@ export default function SuperadminUsersPage() {
 
   const [resetUser, setResetUser] = useState<GlobalUser | null>(null);
   const [resetResult, setResetResult] = useState<string | null>(null);
+  const [deleteUser, setDeleteUser] = useState<GlobalUser | null>(null);
 
   /* =========================
        CREATE USER STATE
@@ -354,6 +356,33 @@ export default function SuperadminUsersPage() {
        ACTIONS
    ======================================================= */
 
+  const doDeleteUser = async (u: GlobalUser) => {
+    try {
+      if (activeTab === "tenant") {
+        await apiFetch(`/superadmin/tenants/${targetTenantId}/users/${u.id}`, {
+          method: "DELETE",
+        });
+      } else {
+        await apiFetch(`/superadmin/users/${u.id}`, {
+          method: "DELETE",
+        });
+      }
+      toast({
+        title: "Utente eliminato",
+        description: `L'utente ${u.email} è stato eliminato.`,
+      });
+      setDeleteUser(null);
+      await loadUsers();
+      await loadKpi();
+    } catch (e: unknown) {
+      toast({
+        title: "Errore",
+        description: e instanceof Error ? e.message : "Operazione fallita",
+        variant: "destructive",
+      });
+    }
+  };
+
   const patchUser = async (id: string, patch: Record<string, unknown>) => {
     try {
       // ✅ FIX: Patch dinamico. Se siamo in tenant mode, usiamo l'endpoint tenant
@@ -383,7 +412,7 @@ export default function SuperadminUsersPage() {
   const toggleMfa = async (u: GlobalUser) => {
     try {
       // ✅ Normalizzazione: public usa 'mfa_enabled', tenant usa 'mfa_enabled'.
-      
+
       const currentVal = u.mfa_enabled ?? false;
       const patchData = {
         mfa_enabled: !currentVal   // for both tenant and global
@@ -907,6 +936,14 @@ export default function SuperadminUsersPage() {
                       >
                         <KeyRound className="h-4 w-4" />
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setDeleteUser(u)}
+                        title="Delete user"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
                     </td>
                   </tr>
                 ))
@@ -943,8 +980,34 @@ export default function SuperadminUsersPage() {
       </Tabs>
 
       {/* ======================================================
-            MODALS (Audit / Create / Reset)
+            MODALS (Audit / Create / Reset / Delete)
       ======================================================= */}
+
+      {/* DELETE MODAL */}
+      <Dialog open={!!deleteUser} onOpenChange={(o) => !o && setDeleteUser(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Elimina Utente</DialogTitle>
+            <DialogDescription>
+              Sei sicuro di voler eliminare l'utente{" "}
+              <span className="font-semibold">{deleteUser?.email}</span>?
+              Questa azione non può essere annullata.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setDeleteUser(null)}>
+              Annulla
+            </Button>
+            <Button
+              variant="destructive"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteUser && doDeleteUser(deleteUser)}
+            >
+              Elimina
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Audit modal */}
       {selectedUser && (

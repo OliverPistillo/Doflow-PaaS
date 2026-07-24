@@ -7,6 +7,7 @@ import {
   Query, Param, Patch, Delete, Res,
   NotFoundException, InternalServerErrorException,
 } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { FinanceService }          from './finance.service';
 import { InvoicePdfService }       from './invoice-pdf.service';
 import { PreventivoPdfService }    from './preventivo-pdf.service';
@@ -18,6 +19,8 @@ import { Response }                 from 'express';
 @Controller('superadmin/finance')
 @UseGuards(JwtAuthGuard)
 export class FinanceController {
+  private readonly logger = new Logger(FinanceController.name);
+
   constructor(
     private readonly service:             FinanceService,
     private readonly pdfService:          InvoicePdfService,
@@ -35,7 +38,7 @@ export class FinanceController {
     try {
       return await this.service.findAll(search, status, docType);
     } catch (error) {
-      console.error('[FinanceController] Error fetching invoices:', error);
+      this.logger.error('[FinanceController] Error fetching invoices:', error);
       throw new InternalServerErrorException('Impossibile recuperare le fatture');
     }
   }
@@ -46,7 +49,7 @@ export class FinanceController {
     try {
       return await this.service.getDashboardStats();
     } catch (error) {
-      console.error('[FinanceController] Error fetching dashboard stats:', error);
+      this.logger.error('[FinanceController] Error fetching dashboard stats:', error);
       throw new InternalServerErrorException('Impossibile recuperare le statistiche');
     }
   }
@@ -57,7 +60,7 @@ export class FinanceController {
     try {
       return await this.service.create(body);
     } catch (error) {
-      console.error('[FinanceController] Error creating invoice:', error);
+      this.logger.error('[FinanceController] Error creating invoice:', error);
       throw new InternalServerErrorException(
         'Impossibile creare il documento. Verifica i dati o lo schema DB.',
       );
@@ -73,7 +76,7 @@ export class FinanceController {
     try {
       return await this.service.update(id, body);
     } catch (error) {
-      console.error(`[FinanceController] Error updating invoice ${id}:`, error);
+      this.logger.error(`[FinanceController] Error updating invoice ${id}:`, error);
       throw new InternalServerErrorException('Impossibile aggiornare il documento');
     }
   }
@@ -84,7 +87,7 @@ export class FinanceController {
     try {
       return await this.service.delete(id);
     } catch (error) {
-      console.error(`[FinanceController] Error deleting invoice ${id}:`, error);
+      this.logger.error(`[FinanceController] Error deleting invoice ${id}:`, error);
       throw new InternalServerErrorException('Impossibile eliminare il documento');
     }
   }
@@ -147,7 +150,7 @@ export class FinanceController {
     try {
       return await this.service.findAllClients();
     } catch (error) {
-      console.error('[FinanceController] Error fetching clients:', error);
+      this.logger.error('[FinanceController] Error fetching clients:', error);
       throw new InternalServerErrorException('Impossibile recuperare i clienti');
     }
   }
@@ -166,7 +169,7 @@ export class FinanceController {
       if (!body.clientName?.trim()) throw new Error('clientName è obbligatorio');
       return await this.service.upsertClient(body);
     } catch (error) {
-      console.error('[FinanceController] Error upserting client:', error);
+      this.logger.error('[FinanceController] Error upserting client:', error);
       throw new InternalServerErrorException('Impossibile salvare il cliente');
     }
   }
@@ -180,7 +183,7 @@ export class FinanceController {
     try {
       return await this.service.findAllServices();
     } catch (error) {
-      console.error('[FinanceController] Error fetching services:', error);
+      this.logger.error('[FinanceController] Error fetching services:', error);
       throw new InternalServerErrorException('Impossibile recuperare i servizi');
     }
   }
@@ -203,7 +206,7 @@ export class FinanceController {
         quantity:    Number(body.quantity)   || 1,
       });
     } catch (error) {
-      console.error('[FinanceController] Error saving service:', error);
+      this.logger.error('[FinanceController] Error saving service:', error);
       throw new InternalServerErrorException('Impossibile salvare il servizio');
     }
   }

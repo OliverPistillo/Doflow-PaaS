@@ -2,7 +2,9 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res } fr
 import { Request, Response } from 'express';
 import { assertAuthenticated, assertFedericaTenant, getTenantConn, respondError } from '../../tenant-helpers';
 import { ClientiService, CreateClienteDto, UpdateClienteDto } from './clienti.service';
+import { RequireFeature } from '../../feature-access/feature-access.decorator';
 
+@RequireFeature('vert.beauty')
 @Controller('clienti')
 export class ClientiController {
   constructor(private readonly service: ClientiService) {}

@@ -21,7 +21,10 @@ export class TenantController {
    */
   @Get('me')
   async getMe(@Req() req: Request) {
-    const schema = (req as any).tenantId as string | undefined;
+    const user = (req as any).user as any;
+    const jwtTenant = user?.tenantId || user?.tenant_id;
+    const routedTenant = (req as any).tenantId as string | undefined;
+    const schema = jwtTenant && jwtTenant !== 'public' ? jwtTenant : routedTenant;
 
     // Superadmin su public schema non hanno un tenant record
     if (!schema || schema === 'public') {

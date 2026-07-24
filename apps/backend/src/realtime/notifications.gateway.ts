@@ -5,6 +5,7 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server } from 'ws';
+import { Logger } from '@nestjs/common';
 import { IncomingMessage } from 'http';
 import { NotificationsService } from './notifications.service';
 
@@ -40,6 +41,8 @@ function decodeJwt(token: string): any {
 export class NotificationsGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
+  private readonly logger = new Logger(NotificationsGateway.name);
+
   @WebSocketServer()
   public server!: Server;
 
@@ -85,7 +88,7 @@ export class NotificationsGateway
       this.clients.set(client, meta);
 
       // eslint-disable-next-line no-console
-      console.log('[WS] client connected (NO VERIFY JWT)', meta);
+      this.logger.log('[WS] client connected (NO VERIFY JWT)', meta);
 
       const hello = {
         type: 'hello' as const,
@@ -97,7 +100,7 @@ export class NotificationsGateway
       client.send(JSON.stringify(hello));
     } catch (e) {
       // eslint-disable-next-line no-console
-      console.error('[WS] connection error (decode)', e);
+      this.logger.error('[WS] connection error (decode)', e);
       client.close(4002, 'Invalid token');
     }
   }

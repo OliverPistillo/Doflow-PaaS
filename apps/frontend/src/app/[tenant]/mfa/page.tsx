@@ -3,11 +3,21 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
-import { ShieldCheck, RefreshCw, QrCode, Lock, CheckCircle2 } from "lucide-react";
+import { ShieldCheck, RefreshCw, QrCode, Lock, CheckCircle2, ArrowLeft, Copy, Check } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSeparator,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
 
@@ -43,6 +53,7 @@ export default function TenantMfaPage() {
   // Input Utente
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // ==========================================
   // 1. INIT: Controlla Token e Stage
@@ -102,8 +113,26 @@ export default function TenantMfaPage() {
   };
 
   // ==========================================
-  // 3. SUBMIT: Confirm o Verify
+  // 3. ACTIONS
   // ==========================================
+  const handleCopySecret = async () => {
+    if (!secret) return;
+    try {
+      await navigator.clipboard.writeText(secret);
+      setCopied(true);
+      toast({
+        description: "Codice segreto copiato negli appunti.",
+      });
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      toast({
+        title: "Errore",
+        description: "Impossibile copiare il codice.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!code || code.length < 6) return;
@@ -165,9 +194,9 @@ export default function TenantMfaPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center text-slate-500 animate-pulse">
-          <RefreshCw className="h-8 w-8 mx-auto mb-2 animate-spin" />
+      <div className="min-h-screen doflow-app-frame flex items-center justify-center p-6">
+        <div className="text-center text-muted-foreground animate-pulse">
+          <RefreshCw className="h-8 w-8 mx-auto mb-2 animate-spin text-primary" />
           <p>Caricamento sicurezza...</p>
         </div>
       </div>
@@ -175,86 +204,116 @@ export default function TenantMfaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md p-8 shadow-xl border-slate-200 bg-white">
-        
-        {/* Header Icon */}
-        <div className="flex flex-col items-center text-center space-y-4 mb-6">
-          <div className="p-3 bg-indigo-100 rounded-full text-indigo-600">
-            {mode === "SETUP" ? <QrCode className="h-8 w-8" /> : <ShieldCheck className="h-8 w-8" />}
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900">
-            {mode === "SETUP" ? "Configura MFA" : "Verifica Accesso"}
-          </h1>
-          <p className="text-sm text-slate-500 px-4">
-            {mode === "SETUP" 
-              ? "Per proteggere il tuo account, scansiona il QR code con la tua app Authenticator (Google/Microsoft)."
-              : "Inserisci il codice a 6 cifre generato dalla tua app di autenticazione."}
-          </p>
-        </div>
-
-        {/* QR Code Section (Solo SETUP) */}
-        {mode === "SETUP" && qrCode && (
-          <div className="flex flex-col items-center mb-6 animate-in fade-in zoom-in duration-300">
-            <div className="border-4 border-white shadow-lg rounded-xl overflow-hidden">
-              <Image src={qrCode} alt="QR Code" width={180} height={180} priority />
+    <div className="min-h-screen doflow-app-frame flex items-center justify-center p-4 lg:p-6">
+      <Card className="w-full max-w-md df-glass-panel rounded-[32px] p-8 lg:p-10 overflow-hidden relative">
+        <div className="animate-fadeInUp space-y-6">
+          {/* Header Icon */}
+          <div className="flex flex-col items-center text-center space-y-4 mb-2">
+            <div className="df-icon-bubble h-16 w-16">
+              {mode === "SETUP" ? <QrCode className="h-8 w-8" /> : <ShieldCheck className="h-8 w-8" />}
             </div>
-            
-            {/* Fallback Text */}
-            <details className="mt-4 text-xs text-slate-400 cursor-pointer text-center w-full">
-              <summary className="hover:text-indigo-600 transition-colors">Non riesci a scansionare?</summary>
-              <div className="mt-2 p-3 bg-slate-100 rounded border border-slate-200 font-mono break-all select-all text-slate-600">
-                {secret}
-              </div>
-            </details>
+            <h1 className="text-3xl font-extrabold tracking-tight">
+              {mode === "SETUP" ? "Configura MFA" : "Verifica Accesso"}
+            </h1>
+            <p className="text-sm text-muted-foreground px-2 leading-relaxed">
+              {mode === "SETUP"
+                ? "Per proteggere il tuo account, scansiona il QR code con la tua app Authenticator (Google/Microsoft)."
+                : "Inserisci il codice a 6 cifre generato dalla tua app di autenticazione."}
+            </p>
           </div>
-        )}
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
-                <Lock className="h-5 w-5" />
+          {/* QR Code Section (Solo SETUP) */}
+          {mode === "SETUP" && qrCode && (
+            <div className="flex flex-col items-center mb-2 animate-in fade-in zoom-in duration-300">
+              <div className="border-4 border-white shadow-lg rounded-xl overflow-hidden bg-white">
+                <Image src={qrCode} alt="QR Code" width={180} height={180} priority />
               </div>
-              <Input
-                className="pl-10 text-center text-2xl tracking-[0.5em] font-mono h-14 border-slate-300 focus:border-indigo-500 focus:ring-indigo-500"
+
+              {/* Fallback Text */}
+              <div className="mt-6 w-full">
+                <p className="text-[11px] text-muted-foreground text-center mb-2 font-medium uppercase tracking-wider">Non riesci a scansionare? Usa il codice segreto:</p>
+                <div className="flex items-center gap-2 p-2 bg-secondary/50 border border-border rounded-xl group transition-colors hover:bg-secondary">
+                  <code className="flex-1 text-[12px] font-mono text-foreground px-2 truncate font-semibold">
+                    {secret}
+                  </code>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg"
+                        onClick={handleCopySecret}
+                        aria-label="Copia codice segreto"
+                      >
+                        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {copied ? "Copiato!" : "Copia segreto"}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2 flex flex-col items-center">
+              <InputOTP
                 maxLength={6}
-                placeholder="000000"
                 value={code}
-                onChange={(e) => setCode(normalizeCode(e.target.value))}
-                autoFocus
+                onChange={(v) => setCode(normalizeCode(v))}
                 disabled={submitting}
-              />
+                aria-label="Codice di verifica a 6 cifre"
+                autoFocus
+              >
+                <InputOTPGroup>
+                  <InputOTPSlot index={0} />
+                  <InputOTPSlot index={1} />
+                  <InputOTPSlot index={2} />
+                </InputOTPGroup>
+                <InputOTPSeparator />
+                <InputOTPGroup>
+                  <InputOTPSlot index={3} />
+                  <InputOTPSlot index={4} />
+                  <InputOTPSlot index={5} />
+                </InputOTPGroup>
+              </InputOTP>
             </div>
+
+            <Button
+              type="submit"
+              className="w-full h-12 text-base font-bold shadow-button"
+              disabled={submitting || code.length !== 6}
+            >
+              {submitting ? (
+                <>
+                  <RefreshCw className="mr-2 h-5 w-5 animate-spin" />
+                  Verifica in corso...
+                </>
+              ) : mode === "SETUP" ? (
+                <>
+                  <CheckCircle2 className="mr-2 h-5 w-5" /> Attiva e Accedi
+                </>
+              ) : (
+                "Verifica Codice"
+              )}
+            </Button>
+          </form>
+
+          {/* Footer Actions */}
+          <div className="mt-8 pt-6 border-t border-border text-center">
+            <Button
+              variant="link"
+              className="text-xs font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center justify-center gap-1.5"
+              onClick={() => router.replace(tenantSlug ? `/${tenantSlug}/login` : "/login")}
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Torna al login
+            </Button>
           </div>
-
-          <Button 
-            type="submit" 
-            className="w-full h-12 text-lg font-semibold bg-indigo-600 hover:bg-indigo-700 transition-all shadow-md hover:shadow-lg"
-            disabled={submitting || code.length !== 6}
-          >
-            {submitting ? (
-              <RefreshCw className="mr-2 h-5 w-5 animate-spin" />
-            ) : mode === "SETUP" ? (
-              <>
-                <CheckCircle2 className="mr-2 h-5 w-5" /> Attiva e Accedi
-              </>
-            ) : (
-              "Verifica Codice"
-            )}
-          </Button>
-        </form>
-
-        {/* Footer Actions */}
-        <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-          <Button 
-            variant="link" 
-            className="text-xs text-slate-400 hover:text-slate-600" 
-            onClick={() => router.replace(tenantSlug ? `/${tenantSlug}/login` : "/login")}
-          >
-            Torna al login
-          </Button>
         </div>
       </Card>
     </div>

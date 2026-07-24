@@ -53,19 +53,15 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
 
     const url = `${finalUrl}?token=${encodeURIComponent(token)}`;
     
-    console.log(`[WS Hook] Connecting to ${finalUrl}...`);
-
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log('[WS Hook] Connected 🟢');
       setConnected(true);
       setError(null);
     };
 
     ws.onclose = (ev) => {
-      console.log('[WS Hook] Disconnected 🔴', ev.code, ev.reason);
       setConnected(false);
       // Codici 4xxx sono errori applicativi (es. Token scaduto)
       if (ev.code >= 4000) {
@@ -81,12 +77,6 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
     ws.onmessage = (msg) => {
       try {
         const data = JSON.parse(msg.data as string) as RealtimeEvent;
-        
-        // In Dev logghiamo tutto, in Prod solo errori
-        if (process.env.NODE_ENV === 'development') {
-            console.log('[WS] <', data.type);
-        }
-
         setEvents((prev) => {
             // Manteniamo solo gli ultimi 50 eventi per non saturare la memoria del browser
             const newEvents = [...prev, data];

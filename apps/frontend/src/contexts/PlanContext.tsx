@@ -27,11 +27,12 @@ export interface TenantInfo {
 }
 
 interface PlanContextValue {
-  plan:       PlanTier;
-  tenantInfo: TenantInfo | null;
-  loading:    boolean;
-  can:        (minPlan: PlanTier) => boolean;
-  meta:       typeof PLAN_META[PlanTier];
+  plan:          PlanTier;
+  tenantInfo:    TenantInfo | null;
+  loading:       boolean;
+  can:           (minPlan: PlanTier) => boolean;
+  meta:          typeof PLAN_META[PlanTier];
+  activeModules: Set<string>;
 }
 
 const PlanContext = React.createContext<PlanContextValue | null>(null);
@@ -43,16 +44,22 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [tenantInfo, setTenantInfo] = React.useState<TenantInfo | null>(null);
+  const [activeModules, setActiveModules] = React.useState<Set<string>>(new Set());
   const [loading, setLoading]       = React.useState(true);
 
   React.useEffect(() => {
-    apiFetch<TenantInfo>("/tenant/me")
-      .then((data) => {
-        setTenantInfo(data);
-        if (data.planTier && data.planTier !== plan) setPlan(data.planTier);
-      })
-      .catch(() => { /* fallback silenzioso: piano da JWT */ })
-      .finally(() => setLoading(false));
+    Promise.all([
+      apiFetch<TenantInfo>("/tenant/me").catch(() => null),
+      apiFetch<{ active: { key: string }[] }>("/tenant/self-service/modules").catch(() => null),
+    ]).then(([tenantData, modulesData]) => {
+      if (tenantData) {
+        setTenantInfo(tenantData);
+        if (tenantData.planTier && tenantData.planTier !== plan) setPlan(tenantData.planTier);
+      }
+      if (modulesData?.active) {
+        setActiveModules(new Set(modulesData.active.map((m) => m.key)));
+      }
+    }).finally(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -62,7 +69,7 @@ export function PlanProvider({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <PlanContext.Provider value={{ plan, tenantInfo, loading, can, meta: PLAN_META[plan] }}>
+    <PlanContext.Provider value={{ plan, tenantInfo, loading, can, meta: PLAN_META[plan], activeModules }}>
       {children}
     </PlanContext.Provider>
   );
