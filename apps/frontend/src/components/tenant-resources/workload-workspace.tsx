@@ -20,7 +20,7 @@ export function WorkloadWorkspace() {
   const [members, setMembers] = useState<TeamMember[]>([]); const [workload, setWorkload] = useState<TeamWorkloadItem[]>([]); const [entries, setEntries] = useState<TimeEntry[]>([]); const [availability, setAvailability] = useState<TeamAvailability[]>([]);
   const [memberFilter, setMemberFilter] = useState("all"); const [projectFilter, setProjectFilter] = useState("all");
   const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null);
-  const days = useMemo(() => weekDays(anchor), [anchor]); const from = localIso(days[0]); const to = localIso(days[6]);
+  const days = useMemo(() => weekDays(anchor), [anchor]); const from = localIso(days[0]); const to = localIso(days[days.length - 1]);
 
   const load = useCallback(async () => {
     if (!canView("team")) { setLoading(false); return; } setLoading(true); setError(null);

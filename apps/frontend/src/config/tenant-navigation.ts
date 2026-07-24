@@ -3,7 +3,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
-  Bell,
   BookOpen,
   BriefcaseBusiness,
   Building2,
@@ -147,14 +146,11 @@ export const DOFLOW_TENANT_NAVIGATION: TenantNavigationSection[] = [
     label: "Impostazioni",
     icon: Settings,
     href: "/settings",
-    moduleKey: "settings",
     children: [
-      { id: "settings", label: "Panoramica", href: "/settings", icon: Settings, moduleKey: "settings" },
-      { id: "users", label: "Utenti e ruoli", href: "/team/roles", icon: UserCog, minPlan: "PRO", moduleKey: "settings" },
+      { id: "settings", label: "Generali", href: "/settings", icon: Settings, moduleKey: "settings" },
       { id: "integrations", label: "Integrazioni", href: "/settings/integrations", icon: Plug, minPlan: "PRO", moduleKey: "settings" },
-      { id: "notification-preferences", label: "Preferenze notifiche", href: "/notifications/preferences", icon: Bell, moduleKey: "notifications" },
-      { id: "appearance", label: "Aspetto", href: "/settings", icon: Settings, moduleKey: "settings" },
-      { id: "security", label: "Sicurezza", href: "/settings/security", icon: ShieldCheck, minPlan: "ENTERPRISE", roles: ["owner", "admin", "superadmin"], moduleKey: "settings" },
+      { id: "security", label: "Sicurezza e accessi", href: "/settings/security", icon: ShieldCheck, roles: ["owner", "admin", "superadmin"], moduleKey: "settings" },
+      { id: "users", label: "Utenti e permessi", href: "/settings/users", icon: UserCog, minPlan: "PRO", moduleKey: "settings" },
     ],
   },
 ];

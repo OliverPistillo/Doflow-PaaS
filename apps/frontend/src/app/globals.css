@@ -1098,6 +1098,8 @@ body {
 
 /* Dashboard reference shell. Scoped to the internal doflow tenant only. */
 .doflow-shell {
+  width: auto;
+  min-width: 0;
   min-height: 100vh;
   background: #fcfcfd;
 }
@@ -1115,6 +1117,7 @@ body {
 }
 
 .doflow-main {
+  min-width: 0;
   background: #fcfcfd;
 }
 

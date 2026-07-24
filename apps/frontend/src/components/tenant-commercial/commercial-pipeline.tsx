@@ -72,7 +72,7 @@ export function CommercialPipelinePage() {
   };
 
   return (
-    <main className="space-y-5 px-4 py-6 sm:px-6 lg:px-8">
+    <main className="min-w-0 max-w-full space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <CommercialPageHeader
           title="Pipeline"
