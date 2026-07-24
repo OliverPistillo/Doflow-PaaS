@@ -135,16 +135,11 @@ export const DOFLOW_TENANT_NAVIGATION: TenantNavigationSection[] = [
     icon: Workflow,
     href: "/automations",
     minPlan: "PRO",
-    moduleKey: "automations",
     children: [
-      { id: "automations", label: "Automazioni", href: "/automations", icon: Workflow, minPlan: "PRO", moduleKey: "automations" },
-      { id: "rules", label: "Regole", href: "/automations/rules", icon: Zap, minPlan: "PRO", moduleKey: "automations" },
-      { id: "runs", label: "Esecuzioni", href: "/automations/runs", icon: Timer, minPlan: "PRO", moduleKey: "automations" },
-      { id: "notifications", label: "Notifiche", href: "/notifications", icon: Bell, moduleKey: "notifications" },
-      { id: "notification-rules", label: "Regole notifiche", href: "/notifications/rules", icon: Workflow, minPlan: "PRO", moduleKey: "notifications" },
-      { id: "reports", label: "Report", href: "/reports", icon: BarChart3, minPlan: "PRO", moduleKey: "reports" },
-      { id: "executive-report", label: "Direzione", href: "/reports/executive", icon: BarChart3, minPlan: "PRO", roles: ["owner", "admin", "superadmin", "manager"], moduleKey: "reports" },
-      { id: "targets", label: "Obiettivi KPI", href: "/reports/targets", icon: ShieldCheck, minPlan: "PRO", roles: ["owner", "admin", "superadmin", "manager"], moduleKey: "reports" },
+      { id: "automation-overview", label: "Riepilogo", href: "/automations", icon: BarChart3, minPlan: "PRO", moduleKey: "automations" },
+      { id: "rules", label: "Automazioni", href: "/automations/rules", icon: Zap, minPlan: "PRO", moduleKey: "automations" },
+      { id: "runs", label: "Monitoraggio", href: "/automations/runs", icon: Timer, minPlan: "PRO", moduleKey: "automations" },
+      { id: "reports", label: "Report e KPI", href: "/reports", icon: BarChart3, minPlan: "PRO", moduleKey: "reports" },
     ],
   },
   {
@@ -185,6 +180,7 @@ export function moduleKeyForTenantPath(pathname: string): TenantModuleKey | null
     ["/contracts", "contracts"],
     ["/paperwork", "paperwork"],
     ["/credentials", "credentials"],
+    ["/notifications", "notifications"],
   ];
   let match: { moduleKey: TenantModuleKey; length: number } | null = null;
   for (const section of DOFLOW_TENANT_NAVIGATION) {

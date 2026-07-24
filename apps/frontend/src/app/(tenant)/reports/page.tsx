@@ -1,5 +1,5 @@
-import { ReportsOverviewPage } from "@/components/tenant-reports/reports-core";
+import { AutomationReportsWorkspace } from "@/components/tenant-automation-center/automation-reports-workspace";
 
 export default function ReportsPage() {
-  return <ReportsOverviewPage />;
+  return <AutomationReportsWorkspace />;
 }

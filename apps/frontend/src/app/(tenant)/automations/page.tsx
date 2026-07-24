@@ -1,5 +1,5 @@
-import { AutomationsOverviewPage } from "@/components/tenant-automations/automations-core";
+import { AutomationOverview } from "@/components/tenant-automation-center/automation-overview";
 
 export default function AutomationsPage() {
-  return <AutomationsOverviewPage />;
+  return <AutomationOverview />;
 }
