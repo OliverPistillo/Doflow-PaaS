@@ -13,6 +13,7 @@ import { PageHeader, PageShell } from "@/components/ui/page-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/useConfirm";
 import { getDoFlowUser } from "@/lib/jwt";
 import {
   createDocumentFolder,
@@ -39,6 +40,7 @@ function errorMessage(error: unknown) {
 
 export function DocumentFoldersPage() {
   const { toast } = useToast();
+  const { ConfirmDialog, confirm } = useConfirm();
   const canViewFinance = canViewFinanceDocuments(getDoFlowUser()?.role);
   const [folders, setFolders] = useState<DocumentFolder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,7 +102,13 @@ export function DocumentFoldersPage() {
   };
 
   const remove = async (folder: DocumentFolder) => {
-    if (!window.confirm(`Eliminare la cartella "${folder.name}"?`)) return;
+    const ok = await confirm({
+      title: "Eliminare la cartella?",
+      description: `Stai per eliminare la cartella "${folder.name}". Questa operazione non può essere annullata.`,
+      confirmLabel: "Elimina",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       await deleteDocumentFolder(folder.id);
       toast({ title: "Cartella eliminata" });
@@ -188,6 +196,7 @@ export function DocumentFoldersPage() {
           <DialogFooter><Button onClick={save} disabled={!form.name.trim()}>Salva</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+        <ConfirmDialog />
     </PageShell>
   );
 }

@@ -21,3 +21,7 @@
 ## 2026-06-30 - [Projects UX Deletions & Custom Confirm Dialogs]
 **Learning:** Native `window.confirm` dialogs are highly inaccessible, lack unified styling, and degrade premium SaaS experiences. Replacing them with an accessible `AlertDialog` wrapper like the existing custom `useConfirm` hook ensures keyboard operability, screen reader support, and design continuity.
 **Action:** Always replace legacy browser native confirm dialogs with the custom, accessible `ConfirmDialog` hook.
+
+## 2026-07-22 - [Documents Deletions Modernization & Custom Dialog Hook Integration]
+**Learning:** Fully integrating the custom, accessible `useConfirm` / `ConfirmDialog` hook across all deletion pathways in the Documents module (document list, detail page, and folders page) ensures a unified visual aesthetic and complete keyboard navigability.
+**Action:** Ensure all confirmation dialogs within module sub-pages consistently render and trigger the custom `useConfirm` hooks for standard deletions.
