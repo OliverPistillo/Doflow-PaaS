@@ -1,5 +1,5 @@
-import { KnowledgeOverviewPage } from "@/components/tenant-knowledge/knowledge-core";
+import { KnowledgeWorkspace } from "@/components/tenant-resources/knowledge-workspace";
 
 export default function KnowledgePage() {
-  return <KnowledgeOverviewPage />;
+  return <KnowledgeWorkspace />;
 }

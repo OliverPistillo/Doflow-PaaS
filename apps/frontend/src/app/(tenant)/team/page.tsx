@@ -1,5 +1,5 @@
-import { TeamOverviewPage } from "@/components/tenant-team/team-core";
+import { TeamWorkspace } from "@/components/tenant-resources/team-workspace";
 
 export default function TeamRoute() {
-  return <TeamOverviewPage />;
+  return <TeamWorkspace />;
 }

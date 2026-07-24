@@ -1,5 +1,5 @@
-import { TeamWorkloadPage } from "@/components/tenant-team/team-workload";
+import { WorkloadWorkspace } from "@/components/tenant-resources/workload-workspace";
 
 export default function TeamWorkloadRoute() {
-  return <TeamWorkloadPage />;
+  return <WorkloadWorkspace />;
 }
