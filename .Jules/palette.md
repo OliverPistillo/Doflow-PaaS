@@ -21,3 +21,7 @@
 ## 2026-06-30 - [Projects UX Deletions & Custom Confirm Dialogs]
 **Learning:** Native `window.confirm` dialogs are highly inaccessible, lack unified styling, and degrade premium SaaS experiences. Replacing them with an accessible `AlertDialog` wrapper like the existing custom `useConfirm` hook ensures keyboard operability, screen reader support, and design continuity.
 **Action:** Always replace legacy browser native confirm dialogs with the custom, accessible `ConfirmDialog` hook.
+
+## 2026-07-19 - [Documents UX Custom Confirm Dialogs & Accessibility]
+**Learning:** Browser-native `window.confirm()` calls are visually jarring and fail basic accessibility and screen-reader requirements. Replacing them with the custom `useConfirm` hook aligns user confirmations with the glassmorphism design language while ensuring keyboard focus trap and ARIA-compliant dialog state management.
+**Action:** When adding destructive operations in other modules, proactively replace native confirmation boxes with the accessible and customizable `useConfirm` hook.
