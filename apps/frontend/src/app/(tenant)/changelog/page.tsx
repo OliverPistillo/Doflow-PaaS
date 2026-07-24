@@ -2,12 +2,15 @@
 
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
-  Loader2, Rocket, ArrowUpCircle, ArrowRightCircle, Wrench, Zap, Tag, Calendar,
+  Rocket, ArrowUpCircle, ArrowRightCircle, Wrench, Zap, Tag, Calendar, RefreshCw,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { PageShell, PageHeader, LoadingState, EmptyState } from "@/components/ui/page-shell";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { apiFetch } from "@/lib/api";
 
 type Entry = {
@@ -25,37 +28,72 @@ const TYPE_CONFIG: Record<string, { label: string; icon: React.ComponentType<{ c
 export default function TenantChangelogPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadEntries = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
+    try {
+      const res = await apiFetch<Entry[]>("/tenant/self-service/changelog");
+      setEntries(Array.isArray(res) ? res : []);
+    } catch {
+      // Silently fail — changelog is informational
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await apiFetch<Entry[]>("/tenant/self-service/changelog");
-        setEntries(Array.isArray(res) ? res : []);
-      } catch {
-        // Silently fail — changelog is informational
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+    loadEntries();
+  }, [loadEntries]);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadEntries(true);
+  };
+
+  const headerActions = (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={handleRefresh}
+            disabled={loading || refreshing}
+            aria-label="Rinfresca novità"
+            className="h-9 w-9 focus-visible:ring-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${(loading || refreshing) ? "animate-spin" : ""}`} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Aggiorna elenco novità</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 
   if (loading) {
     return (
-      <div className="flex-1 p-4 md:p-6 flex flex-col justify-center items-center py-32 gap-4">
-        <Loader2 className="animate-spin text-primary h-12 w-12" />
-        <p className="text-muted-foreground text-sm animate-pulse">Caricamento novità...</p>
-      </div>
+      <PageShell>
+        <PageHeader
+          title="Novità della Piattaforma"
+          description="Tutte le ultime release e miglioramenti"
+          actions={headerActions}
+        />
+        <LoadingState centered label="Caricamento novità..." />
+      </PageShell>
     );
   }
 
   return (
-    <div className="flex-1 p-4 md:p-6 animate-in fade-in duration-500">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2"><Rocket className="h-6 w-6 text-primary" />Novità della Piattaforma</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">Tutte le ultime release e miglioramenti</p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Novità della Piattaforma"
+        description="Tutte le ultime release e miglioramenti"
+        actions={headerActions}
+      />
 
-      <div className="space-y-4 max-w-3xl">
+      <div className="space-y-4 max-w-3xl animate-in fade-in duration-500">
         {entries.map(entry => {
           const tc = TYPE_CONFIG[entry.type] || TYPE_CONFIG.MINOR;
           const IconComp = tc.icon;
@@ -84,9 +122,13 @@ export default function TenantChangelogPage() {
           );
         })}
         {entries.length === 0 && (
-          <div className="text-center py-16 text-muted-foreground"><Rocket className="h-10 w-10 mx-auto mb-3 opacity-40" /><p className="font-medium">Nessuna novità al momento</p></div>
+          <EmptyState
+            title="Nessuna novità al momento"
+            message="Non ci sono novità da visualizzare per questa sezione."
+            icon={Rocket}
+          />
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }

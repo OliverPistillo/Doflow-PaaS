@@ -21,3 +21,7 @@
 ## 2026-06-30 - [Projects UX Deletions & Custom Confirm Dialogs]
 **Learning:** Native `window.confirm` dialogs are highly inaccessible, lack unified styling, and degrade premium SaaS experiences. Replacing them with an accessible `AlertDialog` wrapper like the existing custom `useConfirm` hook ensures keyboard operability, screen reader support, and design continuity.
 **Action:** Always replace legacy browser native confirm dialogs with the custom, accessible `ConfirmDialog` hook.
+
+## 2026-07-02 - [Changelog Modernization & Manual Refresh UX]
+**Learning:** Secondary informational pages (like Changelog) shouldn't be neglected; modernizing them with standard PageShell/PageHeader structure maintains a premium cohesive feel. Sighted and keyboard users appreciate manual "Refresh" triggers with clear loading feedback (spinning icons) and tooltips, while keeping the application screen-reader accessible with explicit ARIA labels.
+**Action:** Always provide a styled refresh button with tooltips, spin animations, and explicit `aria-label`s on core list/feed displays.
