@@ -1,5 +1,5 @@
 /* Percorso: apps/frontend/src/app/globals.css */
-@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,300;0,6..12,400;0,6..12,600;0,6..12,700;0,6..12,800;1,6..12,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -11,128 +11,159 @@
      LIGHT THEME — DoFlow CRM (Figma: CRM-Workroom-Community)
      Valori estratti 1:1 dal file Figma node-id="0:1"
      ─────────────────────────────────────────────────────────────────
-     Figma Palette:
-       Background body:  #f4f9fd  → hsl(208 68% 97%)
-       Card white:       #ffffff
-       Card gray:        #f4f9fd
-       Primary blue:     #052136  → hsl(214 100% 62%)
-       Text dark:        #0a1629  → hsl(220 82% 10%)
-       Text muted:       #7d8592  → hsl(218 8% 54%)
-       Sidebar card bg:  #ffffff  (rounded-[24px])
-       Active section:   #052136  at 10% opacity
+     UI Review Palette:
+       Background body:  #FAFAF7
+       Card white:       #FFFFFF
+       Card warm gray:   #F4F3EE
+       Accent indigo:    #5B5BD6
+       Accent violet:    #8A6CF1
+       Text dark:        #0E0E0C
+       Text muted:       #6B6A63
   ═══════════════════════════════════════════════════════════════════ */
   :root {
-    /* ── Figma raw primitives ──────────────────────────────────────── */
-    --figma-blue:          #052136;
-    --figma-bg:            #f4f9fd;
-    --figma-card-white:    #ffffff;
-    --figma-card-gray:     #f4f9fd;
-    --figma-text-dark:     #052136;
-    --figma-text-muted:    #7d8592;
-    --figma-support-card:  #052136;   /* lightblue card at 10% */
+    /* ═══════════════════════════════════════════════════════════════
+       DOFLOW UI V2 — tokens da Doflow UI Review
+       Neutral warm base + indigo/violet accent, tenant-ready.
+    ═══════════════════════════════════════════════════════════════ */
+    --df-bg:        #FAFAF7;
+    --df-surface:   #FFFFFF;
+    --df-surface-2: #F4F3EE;
+    --df-ink:       #0E0E0C;
+    --df-ink-2:     #1F1E1A;
+    --df-muted:     #6B6A63;
+    --df-muted-2:   #9C9A91;
+    --df-line:      #E7E5DD;
+    --df-line-2:    #DBD8CD;
 
-    /* ── shadcn/ui semantic tokens (mapped from Figma) ────────────── */
-    --background:           208 68% 97%;   /* #f4f9fd */
-    --foreground:           220 82% 10%;   /* #0a1629 */
+    --df-accent:      #5B5BD6;
+    --df-accent-2:    #8A6CF1;
+    --df-accent-soft: #ECECFB;
+    --df-accent-ink:  #2E2E8A;
 
-    --card:                 0 0% 100%;     /* #ffffff */
-    --card-foreground:      220 82% 10%;
+    --df-success: #16A34A;
+    --df-warn:    #D97706;
+    --df-danger:  #DC2626;
+    --df-info:    #2563EB;
+
+    --df-fed-accent:      #B69559;
+    --df-fed-accent-2:    #C9AD78;
+    --df-fed-accent-soft: #F5EEDD;
+
+    --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-serif: 'Instrument Serif', Georgia, serif;
+
+    /* shadcn/ui semantic tokens */
+    --background:           60 23% 97%;   /* #FAFAF7 */
+    --foreground:           60 8% 5%;     /* #0E0E0C */
+
+    --card:                 0 0% 100%;
+    --card-foreground:      60 8% 5%;
 
     --popover:              0 0% 100%;
-    --popover-foreground:   220 82% 10%;
+    --popover-foreground:   60 8% 5%;
 
-    --primary:              214 100% 62%;  /* #052136 */
+    --primary:              240 61% 60%;  /* #5B5BD6 */
     --primary-foreground:   0 0% 100%;
 
-    --secondary:            208 68% 97%;   /* #f4f9fd (card gray) */
-    --secondary-foreground: 220 82% 10%;
+    --secondary:            50 21% 94%;   /* #F4F3EE */
+    --secondary-foreground: 48 9% 11%;
 
-    --muted:                208 40% 95%;
-    --muted-foreground:     218 8% 54%;    /* #7d8592 */
+    --muted:                50 21% 94%;
+    --muted-foreground:     51 4% 40%;    /* #6B6A63 */
 
-    --accent:               214 100% 62%;
-    --accent-foreground:    0 0% 100%;
-
-    --destructive:          0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border:               214 20% 90%;
-    --input:                0 0% 100%;
-    --ring:                 214 100% 62%;
-
-    /* ── Radius scale — Figma uses 24px cards / 14px buttons / 10px nav ── */
-    --radius:               0.875rem;      /* 14px — button base */
-    --radius-card:          1.5rem;        /* 24px — card/panel */
-    --radius-nav:           0.625rem;      /* 10px — sidebar active section */
-    --radius-badge:         0.25rem;       /* 4px  — level badge */
-
-    /* ── Sidebar ─────────────────────────────────────────────────── */
-    --sidebar-background:            208 68% 99%;
-    --sidebar-foreground:            220 82% 10%;
-    --sidebar-primary:               214 100% 62%;
-    --sidebar-primary-foreground:    0 0% 100%;
-    --sidebar-accent:                214 100% 62%;   /* used at /10 opacity */
-    --sidebar-accent-foreground:     214 100% 62%;   /* text stays blue */
-    --sidebar-border:                214 20% 92%;
-    --sidebar-ring:                  214 100% 62%;
-
-    /* ── Card shadow (Figma: 0px 6px 58px 0px rgba(196,203,214,0.10)) ── */
-    --shadow-card:     0px 6px 58px 0px rgba(196, 203, 214, 0.10);
-    --shadow-button:   0px 6px 12px 0px rgba(63, 140, 255, 0.26);
-    --shadow-sm:       0 1px 4px rgba(0, 0, 0, 0.06);
-    --shadow-md:       0 2px 10px rgba(0, 0, 0, 0.10);
-
-    /* ── Chart colors ─────────────────────────────────────────────── */
-    --chart-1:              214 100% 62%;
-    --chart-2:              152 60% 42%;
-    --chart-3:              28  90% 58%;
-    --chart-4:              339 80% 55%;
-    --chart-5:              54  90% 52%;
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════
-     DARK THEME — Warm Olive-Black (DoFlow product dark)
-  ═══════════════════════════════════════════════════════════════════ */
-  .dark {
-    --background:           220 25% 10%;
-    --foreground:           210 30% 94%;
-
-    --card:                 220 20% 14%;
-    --card-foreground:      210 30% 94%;
-
-    --popover:              220 20% 14%;
-    --popover-foreground:   210 30% 94%;
-
-    --primary:              214 100% 65%;
-    --primary-foreground:   0 0% 100%;
-
-    --secondary:            220 18% 20%;
-    --secondary-foreground: 210 20% 75%;
-
-    --muted:                220 18% 18%;
-    --muted-foreground:     218 8% 52%;
-
-    --accent:               214 100% 65%;
-    --accent-foreground:    0 0% 100%;
+    --accent:               240 63% 95%;  /* #ECECFB */
+    --accent-foreground:    240 50% 36%;  /* #2E2E8A */
 
     --destructive:          0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border:               220 14% 22%;
-    --input:                220 20% 18%;
-    --ring:                 214 100% 65%;
+    --border:               48 17% 89%;   /* #E7E5DD */
+    --input:                47 17% 83%;   /* #DBD8CD */
+    --ring:                 240 61% 60%;
 
-    --sidebar-background:   220 25% 10%;
-    --sidebar-foreground:   210 30% 90%;
-    --sidebar-primary:      214 100% 65%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent:       214 100% 65%;
-    --sidebar-accent-foreground: 214 100% 65%;
-    --sidebar-border:       220 14% 22%;
-    --sidebar-ring:         214 100% 65%;
+    --radius:               0.875rem;     /* 14px */
+    --radius-card:          1.25rem;      /* 20px */
+    --radius-nav:           0.625rem;     /* 10px */
+    --radius-badge:         999px;
 
-    --shadow-card:     0px 6px 24px 0px rgba(0, 0, 0, 0.35);
-    --shadow-button:   0px 6px 12px 0px rgba(63, 140, 255, 0.30);
+    --sidebar-background:            0 0% 100%;
+    --sidebar-foreground:            48 9% 11%;
+    --sidebar-primary:               60 8% 5%;
+    --sidebar-primary-foreground:    60 23% 97%;
+    --sidebar-accent:                50 21% 94%;
+    --sidebar-accent-foreground:     60 8% 5%;
+    --sidebar-border:                48 17% 89%;
+    --sidebar-ring:                  240 61% 60%;
+
+    --shadow-card:     0 4px 16px -4px rgba(15,15,12,.08), 0 2px 6px rgba(15,15,12,.04);
+    --shadow-button:   0 10px 24px -14px rgba(91, 91, 214, .55);
+    --shadow-sm:       0 1px 2px rgba(15,15,12,.04), 0 1px 1px rgba(15,15,12,.03);
+    --shadow-md:       0 12px 34px -20px rgba(15,15,12,.24), 0 4px 14px -8px rgba(15,15,12,.10);
+    --shadow-lg:       0 24px 60px -20px rgba(15,15,12,.18), 0 8px 24px -8px rgba(15,15,12,.08);
+
+    --chart-1:              240 61% 60%;
+    --chart-2:              152 72% 36%;
+    --chart-3:              32 95% 44%;
+    --chart-4:              255 82% 68%;
+    --chart-5:              217 91% 60%;
+  }
+
+  .dark {
+    --df-bg:        #0B0B0E;
+    --df-surface:   #131318;
+    --df-surface-2: #1B1B22;
+    --df-ink:       #F5F4EE;
+    --df-ink-2:     #E5E4DC;
+    --df-muted:     #9A9A93;
+    --df-muted-2:   #6E6E68;
+    --df-line:      #25252D;
+    --df-line-2:    #2F2F38;
+    --df-accent-soft: #1F1F3A;
+    --df-accent-ink:  #BDBDF6;
+
+    --background:           240 12% 5%;
+    --foreground:           48 26% 95%;
+
+    --card:                 240 11% 8%;
+    --card-foreground:      48 26% 95%;
+
+    --popover:              240 11% 8%;
+    --popover-foreground:   48 26% 95%;
+
+    --primary:              240 61% 66%;
+    --primary-foreground:   0 0% 100%;
+
+    --secondary:            240 11% 12%;
+    --secondary-foreground: 48 18% 88%;
+
+    --muted:                240 11% 12%;
+    --muted-foreground:     60 3% 59%;
+
+    --accent:               240 31% 17%;
+    --accent-foreground:    240 74% 85%;
+
+    --destructive:          0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border:               240 10% 16%;
+    --input:                240 9% 20%;
+    --ring:                 240 61% 66%;
+
+    --sidebar-background:   240 11% 8%;
+    --sidebar-foreground:   48 18% 88%;
+    --sidebar-primary:      48 26% 95%;
+    --sidebar-primary-foreground: 240 12% 5%;
+    --sidebar-accent:       240 11% 12%;
+    --sidebar-accent-foreground: 48 26% 95%;
+    --sidebar-border:       240 10% 16%;
+    --sidebar-ring:         240 61% 66%;
+
+    --shadow-card:     0 8px 24px rgba(0,0,0,.45);
+    --shadow-button:   0 10px 24px -14px rgba(138, 108, 241, .65);
+    --shadow-sm:       0 1px 2px rgba(0,0,0,.40);
+    --shadow-md:       0 18px 52px rgba(0,0,0,.32);
+    --shadow-lg:       0 24px 60px rgba(0,0,0,.55);
   }
 
   /* ── Tailwind base resets ─────────────────────────────────────── */
@@ -140,8 +171,7 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    /* Figma uses Nunito Sans — added via Google Fonts above */
-    font-family: 'Nunito Sans', var(--font-sans, system-ui), sans-serif;
+    font-family: var(--font-sans);
     background-color: hsl(var(--background));
     min-height: 100vh;
     overflow-x: hidden;
@@ -454,3 +484,1171 @@
 }
 .animate-fadeIn    { animation: fadeIn    0.4s ease both; }
 .animate-fadeInUp  { animation: fadeInUp  0.45s cubic-bezier(0.22,1,0.36,1) both; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   DOFLOW MODERN UI — unified glass/gradient product shell
+   Portato dal nuovo signup/onboarding a tenant app + superadmin.
+═══════════════════════════════════════════════════════════════════ */
+:root {
+  --df-modern-bg-1: 214 100% 98%;
+  --df-modern-bg-2: 258 100% 98%;
+  --df-modern-blob-blue: 217 91% 60%;
+  --df-modern-blob-violet: 263 91% 66%;
+  --df-modern-panel: 0 0% 100%;
+  --df-modern-panel-border: 220 70% 91%;
+  --df-modern-panel-shadow: 0 22px 70px rgba(23, 37, 84, 0.10);
+  --df-modern-panel-shadow-hover: 0 28px 90px rgba(23, 37, 84, 0.16);
+}
+.dark {
+  --df-modern-bg-1: 222 47% 8%;
+  --df-modern-bg-2: 231 40% 11%;
+  --df-modern-blob-blue: 217 91% 60%;
+  --df-modern-blob-violet: 263 91% 66%;
+  --df-modern-panel: 222 35% 14%;
+  --df-modern-panel-border: 217 30% 23%;
+  --df-modern-panel-shadow: 0 24px 90px rgba(0, 0, 0, 0.34);
+  --df-modern-panel-shadow-hover: 0 30px 105px rgba(0, 0, 0, 0.48);
+}
+
+.doflow-app-frame {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 12% -12%, hsl(var(--df-modern-blob-blue) / 0.14), transparent 34rem),
+    radial-gradient(circle at 92% 6%, hsl(var(--df-modern-blob-violet) / 0.13), transparent 32rem),
+    linear-gradient(135deg, hsl(var(--df-modern-bg-1)), hsl(var(--df-modern-bg-2)) 58%, hsl(var(--background)));
+}
+.dark .doflow-app-frame {
+  background:
+    radial-gradient(circle at 8% -10%, hsl(var(--df-modern-blob-blue) / 0.17), transparent 34rem),
+    radial-gradient(circle at 92% 3%, hsl(var(--df-modern-blob-violet) / 0.15), transparent 34rem),
+    linear-gradient(135deg, hsl(222 47% 7%), hsl(230 40% 10%) 52%, hsl(222 32% 11%));
+}
+.doflow-app-frame::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.42;
+  background-image:
+    linear-gradient(hsl(var(--foreground) / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--foreground) / 0.045) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, black, transparent 80%);
+}
+.dark .doflow-app-frame::before { opacity: 0.22; }
+.doflow-app-frame > * { position: relative; z-index: 1; }
+
+.doflow-app-header {
+  border-bottom: 1px solid hsl(var(--border) / 0.55) !important;
+  background: hsl(var(--background) / 0.72) !important;
+  backdrop-filter: blur(20px) saturate(1.22);
+  -webkit-backdrop-filter: blur(20px) saturate(1.22);
+}
+.dark .doflow-app-header {
+  background: hsl(222 36% 10% / 0.74) !important;
+}
+.doflow-app-main {
+  position: relative;
+  z-index: 1;
+}
+
+.doflow-page-shell {
+  max-width: 1600px;
+  width: 100%;
+  margin-inline: auto;
+}
+.df-page-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  padding: 22px;
+  border: 1px solid hsl(var(--border) / 0.58);
+  background:
+    linear-gradient(135deg, hsl(var(--card) / 0.86), hsl(var(--card) / 0.58)),
+    radial-gradient(circle at 88% 12%, hsl(var(--primary) / 0.18), transparent 18rem),
+    radial-gradient(circle at 14% 0%, hsl(var(--chart-4) / 0.13), transparent 16rem);
+  box-shadow: var(--df-modern-panel-shadow);
+  backdrop-filter: blur(18px) saturate(1.18);
+  -webkit-backdrop-filter: blur(18px) saturate(1.18);
+}
+.df-page-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.55;
+  background-image:
+    linear-gradient(hsl(var(--foreground) / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--foreground) / 0.035) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(120deg, black 0%, transparent 70%);
+}
+.df-page-hero > * { position: relative; z-index: 1; }
+.dark .df-page-hero {
+  border-color: hsl(var(--border) / 0.72);
+  background:
+    linear-gradient(135deg, hsl(var(--card) / 0.72), hsl(var(--card) / 0.38)),
+    radial-gradient(circle at 88% 12%, hsl(var(--primary) / 0.18), transparent 18rem),
+    radial-gradient(circle at 14% 0%, hsl(var(--chart-4) / 0.13), transparent 16rem);
+}
+.df-page-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.10);
+  border: 1px solid hsl(var(--primary) / 0.18);
+}
+.df-page-eyebrow::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--chart-4)));
+  box-shadow: 0 0 18px hsl(var(--primary) / 0.55);
+}
+.df-page-title {
+  font-size: clamp(2rem, 3.6vw, 3.7rem);
+  line-height: .96;
+  letter-spacing: -0.055em;
+  font-weight: 900;
+  color: hsl(var(--foreground));
+}
+.df-page-description {
+  max-width: 58rem;
+  font-size: 0.98rem;
+  line-height: 1.65;
+  color: hsl(var(--muted-foreground));
+}
+
+.df-glass-panel,
+.glass-card,
+.df-card {
+  border: 1px solid hsl(var(--df-modern-panel-border) / 0.78) !important;
+  background:
+    linear-gradient(145deg, hsl(var(--df-modern-panel) / 0.88), hsl(var(--df-modern-panel) / 0.64)) !important;
+  box-shadow: var(--df-modern-panel-shadow) !important;
+  backdrop-filter: blur(18px) saturate(1.16);
+  -webkit-backdrop-filter: blur(18px) saturate(1.16);
+}
+.dark .df-glass-panel,
+.dark .glass-card,
+.dark .df-card {
+  background:
+    linear-gradient(145deg, hsl(var(--df-modern-panel) / 0.70), hsl(var(--df-modern-panel) / 0.40)) !important;
+}
+.df-glass-panel-hover {
+  transition: transform .18s ease, box-shadow .22s ease, border-color .22s ease, background .22s ease;
+}
+.df-glass-panel-hover:hover {
+  transform: translateY(-2px);
+  border-color: hsl(var(--primary) / 0.30) !important;
+  box-shadow: var(--df-modern-panel-shadow-hover) !important;
+}
+.df-card-gray,
+.df-soft-panel {
+  border: 1px solid hsl(var(--border) / 0.56);
+  background: hsl(var(--card) / 0.52);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.dark .df-card-gray,
+.dark .df-soft-panel {
+  background: hsl(var(--card) / 0.34);
+}
+
+.df-gradient-text {
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--chart-4)) 62%, hsl(var(--chart-3)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.df-kpi-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  border: 1px solid hsl(var(--border) / 0.56);
+  background:
+    linear-gradient(145deg, hsl(var(--card) / 0.78), hsl(var(--card) / 0.46)),
+    radial-gradient(circle at top right, hsl(var(--primary) / 0.12), transparent 13rem);
+  box-shadow: var(--df-modern-panel-shadow);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.df-kpi-card::after {
+  content: "";
+  position: absolute;
+  inset-inline: 18px;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, hsl(var(--primary) / .58), hsl(var(--chart-4) / .55), transparent);
+  opacity: .9;
+}
+.df-icon-bubble {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.16), hsl(var(--chart-4) / 0.14));
+  color: hsl(var(--primary));
+  border: 1px solid hsl(var(--primary) / 0.14);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.48);
+}
+.dark .df-icon-bubble { box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.08); }
+
+/* shadcn/radix primitives: modernizza menu, dialog, popover, sheet senza toccare ogni pagina */
+[data-radix-popper-content-wrapper] .bg-popover,
+[role="dialog"].bg-background,
+[role="dialog"] .bg-background {
+  backdrop-filter: blur(20px) saturate(1.16);
+  -webkit-backdrop-filter: blur(20px) saturate(1.16);
+}
+
+/* Tabelle e tab principali: più premium e leggibili */
+.doflow-page-shell table,
+.dashboard-content table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.doflow-page-shell thead tr,
+.dashboard-content thead tr {
+  background: hsl(var(--primary) / 0.055);
+}
+.doflow-page-shell tbody tr,
+.dashboard-content tbody tr {
+  transition: background-color .16s ease, transform .16s ease;
+}
+.doflow-page-shell tbody tr:hover,
+.dashboard-content tbody tr:hover {
+  background: hsl(var(--primary) / 0.045);
+}
+
+/* Sidebar feel più vicino a signup/onboarding: compatto, vetro, active pill */
+[data-sidebar="sidebar"] {
+  background: hsl(var(--card) / 0.70) !important;
+  backdrop-filter: blur(20px) saturate(1.18);
+  -webkit-backdrop-filter: blur(20px) saturate(1.18);
+}
+.dark [data-sidebar="sidebar"] {
+  background: hsl(222 36% 10% / 0.76) !important;
+}
+[data-sidebar="menu-button"][data-active="true"],
+[data-sidebar="menu-button"][data-state="active"] {
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.16), hsl(var(--chart-4) / 0.12)) !important;
+  color: hsl(var(--primary)) !important;
+  box-shadow: inset 0 0 0 1px hsl(var(--primary) / .16);
+}
+
+/* Route speciali già dark: usa lo stesso font/feel senza duplicare local style ovunque */
+[data-testid="signup-page"],
+[data-testid="onboarding-page"] {
+  font-family: var(--font-sans);
+}
+
+/* Uniforma anche le pagine tenant che non usano ancora PageShell */
+.doflow-app-main > .flex-1[class*="space-y-"] {
+  max-width: 1600px;
+  width: 100%;
+  margin-inline: auto;
+}
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child:not([role="dialog"]):not([data-radix-popper-content-wrapper]) {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  padding: 20px;
+  border: 1px solid hsl(var(--border) / 0.58);
+  background:
+    linear-gradient(135deg, hsl(var(--card) / 0.82), hsl(var(--card) / 0.52)),
+    radial-gradient(circle at 88% 14%, hsl(var(--primary) / 0.16), transparent 16rem),
+    radial-gradient(circle at 12% 0%, hsl(var(--chart-4) / 0.12), transparent 14rem);
+  box-shadow: var(--df-modern-panel-shadow);
+  backdrop-filter: blur(18px) saturate(1.18);
+  -webkit-backdrop-filter: blur(18px) saturate(1.18);
+}
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child h1,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child h2 {
+  font-size: clamp(1.7rem, 2.6vw, 2.9rem);
+  line-height: 1;
+  letter-spacing: -0.045em;
+  font-weight: 900;
+}
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child h1::before,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child h2::before {
+  content: "Workspace";
+  display: block;
+  width: max-content;
+  margin-bottom: 10px;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.10);
+  border: 1px solid hsl(var(--primary) / 0.18);
+}
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child p {
+  max-width: 52rem;
+  line-height: 1.6;
+}
+
+/* Kanban/list card non basate sul componente Card */
+.doflow-app-main .bg-card.border.rounded-xl,
+.doflow-app-main .border.rounded-xl,
+.doflow-app-main .rounded-2xl.border {
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 12px 38px rgba(23, 37, 84, 0.08);
+}
+.dark .doflow-app-main .bg-card.border.rounded-xl,
+.dark .doflow-app-main .border.rounded-xl,
+.dark .doflow-app-main .rounded-2xl.border {
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.22);
+}
+
+/* Superadmin legacy pages */
+.dashboard-content > div:first-child:not(.kpi-grid):not(.charts-grid),
+.dashboard-content > section:first-child {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  padding: 20px;
+  border: 1px solid hsl(var(--border) / 0.58);
+  background:
+    linear-gradient(135deg, hsl(var(--card) / 0.82), hsl(var(--card) / 0.52)),
+    radial-gradient(circle at 90% 10%, hsl(var(--primary) / 0.16), transparent 16rem),
+    radial-gradient(circle at 12% 0%, hsl(var(--chart-4) / 0.12), transparent 14rem);
+  box-shadow: var(--df-modern-panel-shadow);
+  backdrop-filter: blur(18px) saturate(1.18);
+  -webkit-backdrop-filter: blur(18px) saturate(1.18);
+}
+.dashboard-content > div:first-child h1,
+.dashboard-content > div:first-child h2,
+.dashboard-content > section:first-child h1,
+.dashboard-content > section:first-child h2 {
+  font-size: clamp(1.7rem, 2.6vw, 2.9rem);
+  line-height: 1;
+  letter-spacing: -0.045em;
+  font-weight: 900;
+}
+.dashboard-content > div:first-child h1::before,
+.dashboard-content > div:first-child h2::before,
+.dashboard-content > section:first-child h1::before,
+.dashboard-content > section:first-child h2::before {
+  content: "Control Plane";
+  display: block;
+  width: max-content;
+  margin-bottom: 10px;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.10);
+  border: 1px solid hsl(var(--primary) / 0.18);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   DOFLOW UI REVIEW RESTYLING — applicazione finale sopra il pass moderno
+   Mantiene la struttura CRM/SaaS, ma porta la UI al linguaggio v2:
+   warm neutral, Inter, indigo accent, active nav solida, tenant variants.
+═══════════════════════════════════════════════════════════════════ */
+:root {
+  color-scheme: light;
+  --df-modern-bg-1: 60 23% 97%;
+  --df-modern-bg-2: 50 21% 94%;
+  --df-modern-blob-blue: 240 61% 60%;
+  --df-modern-blob-violet: 255 82% 68%;
+  --df-modern-panel: 0 0% 100%;
+  --df-modern-panel-border: 48 17% 89%;
+  --df-modern-panel-shadow: var(--shadow-card);
+  --df-modern-panel-shadow-hover: var(--shadow-md);
+}
+.dark {
+  color-scheme: dark;
+  --df-modern-bg-1: 240 12% 5%;
+  --df-modern-bg-2: 240 11% 8%;
+  --df-modern-panel: 240 11% 8%;
+  --df-modern-panel-border: 240 10% 16%;
+}
+
+html,
+body {
+  font-family: var(--font-sans);
+  background: hsl(var(--background));
+}
+
+/* Tenant brand switches from the review deck */
+.tenant-fed,
+.federica-theme,
+[data-tenant="federicanerone"] {
+  --primary: 38 35% 53%;       /* #B69559 */
+  --ring: 38 35% 53%;
+  --accent: 42 61% 91%;        /* #F5EEDD */
+  --accent-foreground: 38 58% 28%;
+  --chart-4: 39 45% 63%;       /* #C9AD78 */
+  --sidebar-primary: 38 35% 53%;
+  --sidebar-primary-foreground: 0 0% 100%;
+}
+
+.doflow-app-frame {
+  background:
+    radial-gradient(circle at 12% -8%, hsl(var(--primary) / 0.08), transparent 31rem),
+    radial-gradient(circle at 94% 2%, hsl(var(--chart-4) / 0.075), transparent 31rem),
+    linear-gradient(135deg, hsl(var(--background)), hsl(var(--secondary)) 60%, hsl(var(--background)));
+}
+.dark .doflow-app-frame {
+  background:
+    radial-gradient(circle at 10% -8%, hsl(var(--primary) / 0.12), transparent 32rem),
+    radial-gradient(circle at 92% 3%, hsl(var(--chart-4) / 0.11), transparent 32rem),
+    linear-gradient(135deg, hsl(var(--background)), hsl(var(--card)) 55%, hsl(var(--background)));
+}
+.doflow-app-frame::before {
+  opacity: .28;
+  background-image:
+    linear-gradient(hsl(var(--foreground) / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--foreground) / 0.035) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+.dark .doflow-app-frame::before { opacity: .18; }
+
+.doflow-app-header,
+.glass {
+  background: hsl(var(--background) / .82) !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+  backdrop-filter: blur(12px) saturate(1.04);
+  -webkit-backdrop-filter: blur(12px) saturate(1.04);
+  box-shadow: none;
+}
+.dark .doflow-app-header,
+.dark .glass {
+  background: hsl(var(--background) / .78) !important;
+}
+
+.df-page-hero,
+.dashboard-content > div:first-child:not(.kpi-grid):not(.charts-grid),
+.dashboard-content > section:first-child,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child:not([role="dialog"]):not([data-radix-popper-content-wrapper]) {
+  border-radius: var(--radius-card);
+  border: 1px solid hsl(var(--border));
+  background:
+    linear-gradient(135deg, hsl(var(--card) / 0.8), hsl(var(--secondary) / .60)),
+    radial-gradient(circle at 92% 10%, hsl(var(--primary) / .10), transparent 15rem);
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+}
+.df-page-hero::after { opacity: .18; }
+
+.df-page-title,
+.dashboard-content > div:first-child h1,
+.dashboard-content > div:first-child h2,
+.dashboard-content > section:first-child h1,
+.dashboard-content > section:first-child h2,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child h1,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child h2 {
+  letter-spacing: -0.045em;
+  font-weight: 800;
+}
+.df-page-eyebrow,
+.dashboard-content > div:first-child h1::before,
+.dashboard-content > div:first-child h2::before,
+.dashboard-content > section:first-child h1::before,
+.dashboard-content > section:first-child h2::before,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child h1::before,
+.doflow-app-main > .flex-1[class*="space-y-"] > div:first-child h2::before {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: hsl(var(--primary));
+  background: hsl(var(--accent));
+  border: 1px solid hsl(var(--border));
+  box-shadow: none;
+}
+
+.df-glass-panel,
+.glass-card,
+.df-card,
+.df-kpi-card {
+  border: 1px solid hsl(var(--border)) !important;
+  background: hsl(var(--card) / 0.8) !important;
+  box-shadow: var(--shadow-card) !important;
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+}
+.dark .df-glass-panel,
+.dark .glass-card,
+.dark .df-card,
+.dark .df-kpi-card {
+  background: hsl(var(--card) / 0.8) !important;
+}
+.df-glass-panel-hover:hover {
+  transform: translateY(-1px);
+  border-color: hsl(var(--input)) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+.df-kpi-card::after {
+  inset-inline: 20px;
+  background: linear-gradient(90deg, transparent, hsl(var(--primary) / .45), transparent);
+}
+
+.df-soft-panel,
+.df-card-gray {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--secondary) / 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.df-gradient-text {
+  background: linear-gradient(135deg, hsl(var(--foreground)), hsl(var(--primary)) 58%, hsl(var(--chart-4)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Sidebar: look da review deck — surface pulita, active pill solida */
+[data-sidebar="sidebar"] {
+  background: hsl(var(--sidebar-background) / 0.8) !important;
+  border-color: hsl(var(--sidebar-border)) !important;
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+}
+.dark [data-sidebar="sidebar"] {
+  background: hsl(var(--sidebar-background) / 0.8) !important;
+}
+[data-sidebar="group-label"] {
+  font-family: var(--font-mono);
+  letter-spacing: .14em;
+  font-size: 10.5px;
+  color: hsl(var(--muted-foreground) / .72) !important;
+}
+[data-sidebar="menu-button"] {
+  border-radius: var(--radius-nav) !important;
+  font-weight: 500;
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease, transform .15s ease;
+}
+[data-sidebar="menu-button"][data-active="true"],
+[data-sidebar="menu-button"][data-state="active"] {
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--chart-4))) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+[data-sidebar="menu-button"][data-active="true"] svg,
+[data-sidebar="menu-button"][data-state="active"] svg {
+  color: currentColor !important;
+}
+[data-sidebar="menu-button"]:not([data-active="true"]):hover {
+  background: hsl(var(--secondary)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+.tenant-fed [data-sidebar="menu-button"][data-active="true"],
+[data-tenant="federicanerone"] [data-sidebar="menu-button"][data-active="true"] {
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+/* Tables from review: mono uppercase headers, soft hover */
+.doflow-page-shell thead tr,
+.dashboard-content thead tr {
+  background: hsl(var(--secondary));
+}
+.doflow-page-shell th,
+.dashboard-content th {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+}
+.doflow-page-shell tbody tr:hover,
+.dashboard-content tbody tr:hover {
+  background: hsl(var(--secondary) / .72);
+}
+
+/* Badges/pills */
+.rounded-badge,
+.df-level-badge {
+  border-radius: 999px;
+}
+
+/* Brand wordmark helper for places where no image logo is available */
+.doflow-wordmark {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: hsl(var(--foreground));
+}
+
+/* Dashboard reference shell. Scoped to the internal doflow tenant only. */
+.doflow-shell {
+  min-height: 100vh;
+  background: #fcfcfd;
+}
+
+.doflow-topbar {
+  background: rgba(255, 255, 255, .98);
+  border-color: #ececf1;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.doflow-topbar a.bg-indigo-600 {
+  background-color: #5f50e7;
+  background-image: none;
+}
+
+.doflow-main {
+  background: #fcfcfd;
+}
+
+.doflow-dashboard-page {
+  display: flex;
+  width: 100%;
+  max-width: 1600px;
+  flex-direction: column;
+  gap: 24px;
+  margin-inline: auto;
+  padding: 24px 24px 36px;
+}
+
+.dashboard-card {
+  overflow: hidden;
+  border: 1px solid #e8e8ed;
+  border-radius: 15px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .025);
+}
+
+.tenant-doflow-sidebar [data-sidebar="sidebar"] {
+  border-color: #ececf1;
+  background: #fff;
+  box-shadow: none;
+}
+
+.tenant-doflow-sidebar [data-sidebar="menu-button"] {
+  min-height: 42px;
+  border-radius: 11px;
+  color: #45454f;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.tenant-doflow-sidebar [data-sidebar="menu-button"][data-active="true"] {
+  background: #f0edff;
+  color: #5f50e7;
+  font-weight: 600;
+}
+
+.tenant-doflow-sidebar [data-sidebar="menu-sub"] {
+  margin-top: 4px;
+  border-color: #e8e8ed;
+}
+
+.tenant-doflow-sidebar [data-sidebar="menu-sub-button"] {
+  min-height: 34px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.tenant-doflow-sidebar [data-sidebar="menu-sub-button"][data-active="true"] {
+  background: #f5f3ff;
+  color: #5f50e7;
+  font-weight: 600;
+}
+
+.dark .doflow-shell,
+.dark .doflow-main {
+  background: hsl(var(--background));
+}
+
+.dark .doflow-topbar,
+.dark .tenant-doflow-sidebar [data-sidebar="sidebar"],
+.dark .dashboard-card {
+  border-color: hsl(var(--border));
+  background: hsl(var(--card));
+}
+
+@media (max-width: 767px) {
+  .doflow-topbar {
+    height: 60px;
+    padding-inline: 12px;
+  }
+
+  .doflow-dashboard-page {
+    gap: 16px;
+    padding: 18px 14px 28px;
+  }
+}
+
+/* Login/signup/onboarding stay dramatic but inherit the new font system. */
+[data-testid="signup-page"],
+[data-testid="onboarding-page"] {
+  font-family: var(--font-sans);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   AUTH EXPERIENCE — login/register/signup inspired by nuovo login
+   Uses Doflow palette tokens from :root, keeps glass + mascot pattern.
+═══════════════════════════════════════════════════════════════════ */
+.df-auth-page {
+  --df-auth-text: #eaf0ff;
+  --df-auth-muted: color-mix(in srgb, var(--df-auth-text) 54%, transparent);
+  --df-auth-muted-2: color-mix(in srgb, var(--df-auth-text) 36%, transparent);
+  --df-auth-panel: hsl(226 47% 12% / 0.56);
+  --df-auth-panel-strong: hsl(226 47% 10% / 0.72);
+  --df-auth-field: hsl(224 58% 8% / 0.62);
+  --df-auth-border: hsl(var(--primary) / 0.18);
+  --df-auth-border-strong: hsl(var(--primary) / 0.36);
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  color: var(--df-auth-text);
+  background:
+    radial-gradient(120% 90% at 18% 12%, hsl(var(--primary) / 0.20), transparent 55%),
+    radial-gradient(120% 100% at 85% 90%, hsl(var(--chart-4) / 0.19), transparent 55%),
+    hsl(240 12% 5%);
+  font-family: var(--font-sans);
+}
+.df-auth-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.df-auth-grid {
+  position: absolute;
+  inset: 0;
+  opacity: .34;
+  background-image:
+    linear-gradient(hsl(var(--primary) / .07) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--primary) / .07) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(120% 80% at 50% 40%, #000, transparent 75%);
+}
+.df-auth-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: .48;
+  mix-blend-mode: screen;
+  animation: dfAuthDrift 22s ease-in-out infinite;
+}
+.df-auth-blob-1 { width: 520px; height: 520px; left: -120px; top: -140px; background: radial-gradient(circle, hsl(var(--primary)), transparent 70%); }
+.df-auth-blob-2 { width: 480px; height: 480px; right: -100px; bottom: -120px; background: radial-gradient(circle, hsl(var(--chart-4)), transparent 70%); animation-delay: -8s; }
+.df-auth-blob-3 { width: 360px; height: 360px; left: 50%; top: 55%; background: radial-gradient(circle, hsl(var(--chart-5)), transparent 70%); animation-delay: -14s; }
+@keyframes dfAuthDrift {
+  0%,100% { transform: translate(0,0) scale(1); }
+  33% { transform: translate(40px,-30px) scale(1.08); }
+  66% { transform: translate(-30px,25px) scale(.95); }
+}
+.df-auth-spark {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  box-shadow: 0 0 8px 2px hsl(var(--primary) / .72);
+  opacity: 0;
+  animation: dfAuthRise linear infinite;
+}
+@keyframes dfAuthRise {
+  0% { transform: translateY(20px); opacity: 0; }
+  12%,88% { opacity: .86; }
+  100% { transform: translateY(-260px); opacity: 0; }
+}
+.df-auth-spark-1 { left: 7%; bottom: 12%; animation-duration: 7s; animation-delay: -1s; }
+.df-auth-spark-2 { left: 13%; bottom: 52%; animation-duration: 10s; animation-delay: -6s; }
+.df-auth-spark-3 { left: 21%; bottom: 24%; animation-duration: 12s; animation-delay: -3s; }
+.df-auth-spark-4 { left: 32%; bottom: 44%; animation-duration: 8s; animation-delay: -8s; }
+.df-auth-spark-5 { left: 39%; bottom: 16%; animation-duration: 11s; animation-delay: -5s; }
+.df-auth-spark-6 { left: 47%; bottom: 60%; animation-duration: 9s; animation-delay: -2s; }
+.df-auth-spark-7 { left: 58%; bottom: 20%; animation-duration: 13s; animation-delay: -7s; }
+.df-auth-spark-8 { left: 66%; bottom: 48%; animation-duration: 7s; animation-delay: -4s; }
+.df-auth-spark-9 { left: 74%; bottom: 12%; animation-duration: 10s; animation-delay: -9s; }
+.df-auth-spark-10 { left: 82%; bottom: 54%; animation-duration: 12s; animation-delay: -6s; }
+.df-auth-spark-11 { left: 90%; bottom: 28%; animation-duration: 8s; animation-delay: -3s; }
+.df-auth-spark-12 { left: 96%; bottom: 62%; animation-duration: 11s; animation-delay: -7s; }
+.df-auth-spark-13 { left: 18%; bottom: 72%; animation-duration: 9s; animation-delay: -5s; }
+.df-auth-spark-14 { left: 52%; bottom: 76%; animation-duration: 13s; animation-delay: -10s; }
+.df-auth-spark-15 { left: 70%; bottom: 70%; animation-duration: 8s; animation-delay: -1s; }
+.df-auth-spark-16 { left: 86%; bottom: 80%; animation-duration: 10s; animation-delay: -4s; }
+
+.df-auth-layout {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(380px, .95fr);
+}
+.df-auth-brand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 48px 56px;
+  overflow: hidden;
+}
+.df-auth-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  color: var(--df-auth-text);
+  text-decoration: none;
+  font-weight: 800;
+  font-size: 26px;
+  letter-spacing: -.03em;
+}
+.df-auth-logo-img {
+  display: block;
+  width: clamp(132px, 12vw, 178px);
+  height: auto;
+  filter: brightness(0) invert(1) drop-shadow(0 0 12px hsl(var(--primary) / .42));
+}
+.df-auth-logo-mark {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  filter: drop-shadow(0 0 10px hsl(var(--chart-4) / .58));
+}
+.df-auth-logo-do { color: #fff; }
+.df-auth-logo-flow { color: hsl(var(--primary)); }
+.df-auth-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+  padding: 24px 0;
+}
+.df-auth-mascot-wrap { position: relative; width: min(340px, 70vw); }
+.df-auth-mascot-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: 6%;
+  width: 55%;
+  height: 26px;
+  transform: translateX(-50%);
+  background: radial-gradient(ellipse, hsl(var(--primary) / .55), transparent 70%);
+  filter: blur(8px);
+  animation: dfAuthShadowPulse 4s ease-in-out infinite;
+}
+@keyframes dfAuthShadowPulse {
+  0%,100% { transform: translateX(-50%) scaleX(1); opacity: .55; }
+  50% { transform: translateX(-50%) scaleX(.82); opacity: .35; }
+}
+.df-auth-tagline { max-width: 430px; text-align: center; }
+.df-auth-tagline h1 {
+  font-size: clamp(28px, 3.4vw, 42px);
+  font-weight: 850;
+  letter-spacing: -.045em;
+  line-height: 1.04;
+}
+.df-auth-tagline h1 em { font-style: normal; color: hsl(var(--primary)); }
+.df-auth-tagline p { margin-top: 12px; color: var(--df-auth-muted); font-size: 15px; line-height: 1.58; }
+.df-auth-props { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
+.df-auth-prop {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--df-auth-muted);
+  padding: 7px 13px;
+  border: 1px solid var(--df-auth-border);
+  border-radius: 999px;
+  background: hsl(224 48% 16% / .35);
+  backdrop-filter: blur(6px);
+}
+.df-auth-prop-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  box-shadow: 0 0 8px hsl(var(--primary));
+}
+.df-auth-prop b { color: var(--df-auth-text); font-weight: 700; }
+.df-auth-form-side { display: flex; align-items: center; justify-content: center; padding: 40px 32px 56px; }
+.df-auth-card.df-glass-panel {
+  width: 100%;
+  max-width: 420px;
+  padding: 34px 34px 30px;
+  border-radius: 24px;
+  color: var(--df-auth-text);
+  border: 1px solid var(--df-auth-border) !important;
+  background: linear-gradient(145deg, var(--df-auth-panel), var(--df-auth-panel-strong)) !important;
+  box-shadow: 0 30px 80px -30px rgba(0,8,40,.9), inset 0 1px 0 rgba(255,255,255,.04) !important;
+  backdrop-filter: blur(20px) saturate(1.08);
+  -webkit-backdrop-filter: blur(20px) saturate(1.08);
+  animation: dfAuthCardIn .7s cubic-bezier(.2,.7,.2,1) both;
+}
+.df-auth-card-wide.df-glass-panel { max-width: min(760px, calc(100vw - 48px)); }
+@keyframes dfAuthCardIn { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+.df-auth-tabs {
+  position: relative;
+  display: flex;
+  background: var(--df-auth-field);
+  border: 1px solid var(--df-auth-border);
+  border-radius: 14px;
+  padding: 5px;
+  margin-bottom: 26px;
+}
+.df-auth-tab {
+  flex: 1;
+  z-index: 2;
+  border-radius: 10px;
+  padding: 10px;
+  text-align: center;
+  color: var(--df-auth-muted);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  transition: color .25s;
+}
+.df-auth-tab.active { color: #fff; }
+.df-auth-tab-pill {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 5px;
+  width: calc(50% - 5px);
+  border-radius: 10px;
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--chart-5)) 58%, hsl(var(--chart-4)));
+  box-shadow: 0 6px 18px -6px hsl(var(--primary));
+  transition: transform .35s cubic-bezier(.65,.05,.2,1);
+}
+.df-auth-tabs[data-mode="register"] .df-auth-tab-pill { transform: translateX(100%); }
+.df-auth-head { margin-bottom: 22px; }
+.df-auth-head h2 { font-size: 23px; font-weight: 800; letter-spacing: -.025em; }
+.df-auth-head p { color: var(--df-auth-muted); font-size: 13.5px; margin-top: 5px; line-height: 1.5; }
+.df-auth-form { display: flex; flex-direction: column; gap: 15px; }
+.df-auth-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.df-auth-field { display: grid; gap: 7px; }
+.df-auth-label { font-size: 13px; font-weight: 650; color: color-mix(in srgb, var(--df-auth-text) 82%, transparent); }
+.df-auth-input-wrap { position: relative; }
+.df-auth-input {
+  width: 100%;
+  min-height: 50px;
+  border-radius: 13px;
+  border: 1px solid var(--df-auth-border);
+  background: var(--df-auth-field);
+  color: var(--df-auth-text);
+  font-size: 14.5px;
+  padding: 0 46px;
+  outline: none;
+  transition: border-color .2s, box-shadow .2s, background .2s;
+}
+.df-auth-input.no-right { padding-right: 16px; }
+.df-auth-input.no-left { padding-left: 16px; }
+.df-auth-input::placeholder { color: var(--df-auth-muted-2); }
+.df-auth-input:focus {
+  border-color: var(--df-auth-border-strong);
+  background: hsl(224 58% 10% / .86);
+  box-shadow: 0 0 0 4px hsl(var(--primary) / .13);
+}
+.df-auth-input[aria-invalid="true"] { border-color: hsl(var(--destructive) / .72); }
+.df-auth-field-icon {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: var(--df-auth-muted);
+  pointer-events: none;
+  transition: color .2s;
+}
+.df-auth-input:focus ~ .df-auth-field-icon { color: hsl(var(--primary)); }
+.df-auth-password-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: var(--df-auth-muted);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  display: inline-flex;
+  transition: color .2s, background .2s;
+}
+.df-auth-password-toggle:hover { color: hsl(var(--primary)); background: hsl(var(--primary) / .10); }
+.df-auth-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; font-size: 13px; }
+.df-auth-check-row { display: flex; align-items: flex-start; gap: 10px; color: var(--df-auth-muted); }
+.df-auth-check-row label { cursor: pointer; user-select: none; line-height: 1.55; }
+.df-auth-link { color: hsl(var(--primary)); text-decoration: none; font-weight: 700; }
+.df-auth-link:hover { text-decoration: underline; }
+.df-auth-submit {
+  width: 100%;
+  min-height: 50px;
+  border: 0;
+  border-radius: 13px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--chart-5)) 55%, hsl(var(--chart-4)));
+  background-size: 200% 100%;
+  background-position: 0 0;
+  box-shadow: 0 12px 30px -10px hsl(var(--primary));
+  transition: background-position .5s, transform .12s, box-shadow .2s, opacity .2s;
+}
+.df-auth-submit:hover:not(:disabled) { background-position: 100% 0; box-shadow: 0 16px 38px -10px hsl(var(--primary)); transform: translateY(-1px); }
+.df-auth-submit:active:not(:disabled) { transform: translateY(0); }
+.df-auth-submit:disabled { opacity: .56; cursor: not-allowed; }
+.df-auth-submit::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.34), transparent);
+  transform: skewX(-18deg);
+  animation: dfAuthSheen 4.5s ease-in-out infinite;
+}
+@keyframes dfAuthSheen { 0%,72% { left: -60%; } 82%,100% { left: 120%; } }
+.df-auth-button-content { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.df-auth-divider { display: flex; align-items: center; gap: 12px; color: var(--df-auth-muted-2); font-size: 12px; margin: 4px 0; }
+.df-auth-divider::before,
+.df-auth-divider::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--df-auth-border), transparent); }
+.df-auth-social {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  border-radius: 13px;
+  cursor: pointer;
+  background: var(--df-auth-field);
+  border: 1px solid var(--df-auth-border);
+  color: var(--df-auth-text);
+  font-size: 14px;
+  font-weight: 700;
+  transition: border-color .2s, background .2s, transform .2s;
+}
+.df-auth-social:hover { border-color: var(--df-auth-border-strong); background: hsl(224 46% 14% / .86); transform: translateY(-1px); }
+.df-auth-foot { text-align: center; font-size: 13px; color: var(--df-auth-muted); margin-top: 18px; line-height: 1.7; }
+.df-auth-foot a { color: hsl(var(--primary)); text-decoration: none; font-weight: 800; }
+.df-auth-foot a:hover { text-decoration: underline; }
+.df-auth-inline-action {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--primary));
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  padding: 0;
+}
+.df-auth-inline-action:hover { text-decoration: underline; }
+.df-auth-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border-radius: 13px;
+  border: 1px solid hsl(var(--destructive) / .32);
+  background: hsl(var(--destructive) / .12);
+  color: hsl(350 100% 78%);
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.df-auth-success {
+  border-radius: 16px;
+  padding: 20px;
+  text-align: center;
+  color: hsl(144 78% 82%);
+  background: hsl(144 76% 32% / .13);
+  border: 1px solid hsl(144 75% 52% / .28);
+}
+.df-auth-help { color: hsl(var(--destructive) / .92); font-size: 12px; font-weight: 650; }
+.df-auth-strength { height: 4px; border-radius: 4px; background: var(--df-auth-field); overflow: hidden; }
+.df-auth-strength-bar { display: block; height: 100%; width: 0; border-radius: 4px; transition: width .35s, background .35s; }
+.df-auth-stepper { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 22px; flex-wrap: wrap; }
+.df-auth-step-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  background: hsl(224 58% 8% / .45);
+  border: 1px solid var(--df-auth-border);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--df-auth-muted);
+}
+.df-auth-step-pill.active { color: #fff; border-color: var(--df-auth-border-strong); background: hsl(var(--primary) / .16); }
+.df-auth-step-pill.done { color: hsl(144 78% 72%); border-color: hsl(144 75% 52% / .28); background: hsl(144 76% 32% / .13); }
+.df-auth-step-line { width: 26px; height: 1px; background: var(--df-auth-border); }
+.df-auth-secondary-button {
+  min-height: 48px;
+  border-radius: 13px;
+  border: 1px solid var(--df-auth-border);
+  background: var(--df-auth-field);
+  color: var(--df-auth-text);
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 800;
+  transition: background .2s, border-color .2s, transform .2s;
+}
+.df-auth-secondary-button:hover:not(:disabled) { background: hsl(224 46% 14% / .86); border-color: var(--df-auth-border-strong); transform: translateY(-1px); }
+.df-auth-secondary-button:disabled { opacity: .54; cursor: not-allowed; }
+.df-auth-plan-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.df-auth-plan-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid var(--df-auth-border);
+  background: hsl(224 58% 8% / .42);
+  padding: 18px;
+  color: var(--df-auth-text);
+  text-align: left;
+  cursor: pointer;
+  transition: transform .18s, border-color .18s, background .18s, box-shadow .18s;
+}
+.df-auth-plan-card:hover { transform: translateY(-2px); border-color: var(--df-auth-border-strong); background: hsl(224 46% 14% / .72); }
+.df-auth-plan-card.selected { border-color: hsl(var(--primary) / .72); box-shadow: 0 0 0 1px hsl(var(--primary) / .72), 0 12px 40px hsl(var(--primary) / .18); background: hsl(var(--primary) / .11); }
+.df-auth-plan-badge { position: absolute; top: 12px; right: 12px; border-radius: 999px; padding: 3px 8px; font-size: 10px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; color: #fff; background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--chart-4))); }
+.df-auth-summary-card { border-radius: 16px; border: 1px solid var(--df-auth-border); background: hsl(224 58% 8% / .38); padding: 15px; }
+.df-auth-summary-label { font-size: 10px; font-weight: 900; letter-spacing: .10em; text-transform: uppercase; color: var(--df-auth-muted-2); margin-bottom: 6px; }
+@media (max-width: 1024px) {
+  .df-auth-layout { grid-template-columns: 1fr; }
+  .df-auth-brand { padding: 32px 28px 8px; align-items: center; text-align: center; }
+  .df-auth-stage { gap: 18px; padding: 8px 0 0; }
+  .df-auth-mascot-wrap { width: 170px; }
+  .df-auth-props { display: none; }
+  .df-auth-form-side { padding: 8px 22px 48px; }
+}
+@media (max-width: 640px) {
+  .df-auth-card.df-glass-panel { padding: 26px 22px 24px; }
+  .df-auth-form-grid { grid-template-columns: 1fr; }
+  .df-auth-plan-grid { grid-template-columns: 1fr; }
+  .df-auth-row { align-items: flex-start; flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .df-auth-page *, .df-auth-page *::before, .df-auth-page *::after { animation: none !important; transition: none !important; }
+}

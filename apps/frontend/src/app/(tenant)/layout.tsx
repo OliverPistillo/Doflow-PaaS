@@ -9,60 +9,115 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   SidebarProvider, SidebarTrigger, SidebarInset,
 } from "@/components/ui/sidebar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { TenantSidebar } from "@/components/layout/tenant-sidebar";
 import { UserNav } from "@/components/layout/user-nav";
 import { ThemeSettingsDrawer } from "@/components/layout/theme-settings-drawer";
-import { Bell } from "lucide-react";
+import { Bell, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getDoFlowUser } from "@/lib/jwt";
 import { PlanProvider } from "@/contexts/PlanContext";
 import { AppSettingsProvider, useAppSettings } from "@/contexts/AppSettingsContext";
+import { TenantAccessProvider, useTenantAccess } from "@/contexts/TenantAccessContext";
 import { SearchTriggerButton } from "@/components/ui/global-search";
+import { moduleKeyForTenantPath } from "@/config/tenant-navigation";
 
 // ─── Inner layout — consuma AppSettingsContext ─────────────────────────────────
 
+function TenantRouteGate({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { loading, canView } = useTenantAccess();
+  const moduleKey = React.useMemo(() => moduleKeyForTenantPath(pathname), [pathname]);
+
+  React.useEffect(() => {
+    if (!loading && moduleKey && !canView(moduleKey)) router.replace("/dashboard");
+  }, [loading, moduleKey, canView, router]);
+
+  if (loading) {
+    return <div className="p-6 text-sm text-muted-foreground">Caricamento permessi...</div>;
+  }
+  if (moduleKey && !canView(moduleKey)) {
+    return <div className="p-6 text-sm text-muted-foreground">Reindirizzamento...</div>;
+  }
+  return <>{children}</>;
+}
+
 function TenantLayoutInner({ children }: { children: React.ReactNode }) {
-  const { sidebarVariant, sidebarCollapsible } = useAppSettings();
-  const collapsible = sidebarCollapsible === "none" ? "none" : sidebarCollapsible;
+  const { sidebarVariant } = useAppSettings();
+  const { canCreate } = useTenantAccess();
+  const currentUser = getDoFlowUser();
+  const tenantSlug = String(currentUser?.tenantSlug || currentUser?.tenantId || "").toLowerCase();
+  const isDoflowTenant = tenantSlug === "doflow";
 
   return (
-    <SidebarProvider>
-      <TenantSidebar variant={sidebarVariant} collapsible={collapsible} />
-      <SidebarInset>
+    <SidebarProvider
+      style={isDoflowTenant
+        ? ({ "--sidebar-width": "252px", "--sidebar-width-icon": "72px" } as React.CSSProperties)
+        : undefined}
+    >
+      <TenantSidebar variant={isDoflowTenant ? "sidebar" : sidebarVariant} collapsible="icon" />
+      <SidebarInset className={isDoflowTenant ? "doflow-shell" : undefined}>
 
         {/* ── HEADER ── */}
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/95 backdrop-blur-sm px-4 sticky top-0 z-10">
-          <SidebarTrigger className="-ml-1" aria-label="Toggle menu" />
-          <div className="h-5 w-px bg-border" aria-hidden="true" />
+        <header className="doflow-topbar sticky top-0 z-20 flex h-[72px] shrink-0 items-center gap-2 border-b border-border/60 px-3 sm:px-6">
+          <SidebarTrigger className="-ml-1 shrink-0" />
 
-          {/* ✅ Cmd+K Search — visibile da sm in su */}
-          <div className="flex-1">
+          <div className="ml-auto flex min-w-0 max-w-[240px] flex-1 justify-end">
             <SearchTriggerButton context="tenant" />
           </div>
 
           {/* Notifiche */}
-          <Link href="/notifications">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative text-muted-foreground hover:text-foreground"
-              aria-label="Notifiche"
-            >
-              <Bell className="h-4 w-4" aria-hidden="true" />
-              <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-rose-500 rounded-full" aria-hidden="true" />
-            </Button>
-          </Link>
-
-          {/* Theme Settings drawer */}
-          <ThemeSettingsDrawer />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link href="/notifications">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative text-muted-foreground hover:text-foreground"
+                  aria-label="Notifiche"
+                >
+                  <Bell className="h-4 w-4" aria-hidden="true" />
+                  <span className="absolute top-2 right-2 h-1.5 w-1.5 bg-rose-500 rounded-full" aria-hidden="true" />
+                </Button>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="center">
+              Notifiche
+            </TooltipContent>
+          </Tooltip>
 
           {/* User menu */}
           <UserNav />
+
+          {isDoflowTenant && canCreate("crm") ? (
+            <Button asChild className="hidden h-11 rounded-lg bg-indigo-600 px-5 text-white shadow-none hover:bg-indigo-700 sm:inline-flex">
+              <Link href="/activities">
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Nuova attività
+              </Link>
+            </Button>
+          ) : null}
+
+          {!isDoflowTenant ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <ThemeSettingsDrawer />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>Impostazioni aspetto</TooltipContent>
+            </Tooltip>
+          ) : null}
         </header>
 
         {/* ── CONTENUTO ── */}
-        <main className="flex-1 overflow-y-auto">
-          {children}
+        <main className={isDoflowTenant ? "doflow-main flex-1 overflow-y-auto" : "flex-1 overflow-y-auto"}>
+          <TenantRouteGate>{children}</TenantRouteGate>
         </main>
       </SidebarInset>
     </SidebarProvider>
@@ -88,7 +143,11 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
     const role     = String(user.role     ?? "").toLowerCase().trim();
     const tenantId = String(user.tenantId ?? "").toLowerCase().trim();
 
-    if (["superadmin", "super_admin", "owner"].includes(role) || tenantId === "public") {
+    // The user is a superadmin if their role is superadmin OR if their tenant is public (e.g. system owner)
+    // Regular tenant owners should be able to access the tenant dashboard.
+    const isSuperAdmin = ["superadmin", "super_admin"].includes(role) || tenantId === "public";
+
+    if (isSuperAdmin) {
       if (!pathname.startsWith("/superadmin")) router.replace("/superadmin");
       else setReady(true);
       return;
@@ -110,7 +169,9 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
   return (
     <AppSettingsProvider>
       <PlanProvider>
-        <TenantLayoutInner>{children}</TenantLayoutInner>
+        <TenantAccessProvider>
+          <TenantLayoutInner>{children}</TenantLayoutInner>
+        </TenantAccessProvider>
       </PlanProvider>
     </AppSettingsProvider>
   );
