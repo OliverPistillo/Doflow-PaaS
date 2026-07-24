@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/useConfirm";
 import { getDoFlowUser } from "@/lib/jwt";
 import {
   automationsApi,
@@ -129,6 +130,7 @@ export function AutomationsSummaryCards({ summary }: { summary?: AutomationSumma
 
 export function AutomationsOverviewPage() {
   const { toast } = useToast();
+  const { ConfirmDialog, confirm } = useConfirm();
   const options = useAutomationOptions();
   const [summary, setSummary] = useState<AutomationSummary | null>(null);
   const [runs, setRuns] = useState<AutomationRun[]>([]);
@@ -161,7 +163,12 @@ export function AutomationsOverviewPage() {
   useEffect(() => { void load(); }, []);
 
   const runDue = async () => {
-    if (!window.confirm("Eseguire ora le automazioni dovute?")) return;
+    const ok = await confirm({
+      title: "Eseguire ora le automazioni dovute?",
+      description: "Questa operazione avvierà l'esecuzione immediata di tutte le regole pianificate.",
+      confirmLabel: "Esegui",
+    });
+    if (!ok) return;
     setRunning(true);
     try {
       const result = await automationsApi.runDue();
@@ -221,6 +228,7 @@ export function AutomationsOverviewPage() {
           <CardContent>{runs.length ? <RunsTable rows={runs} compact /> : <Empty>Nessuna esecuzione registrata.</Empty>}</CardContent>
         </Card>
       </div>
+      <ConfirmDialog />
     </div>
   );
 }
@@ -372,6 +380,7 @@ function RulesTable({ rows, compact = false, onReload }: { rows: AutomationRule[
 export function AutomationRuleActions({ rule, onReload, canManage = canManageAutomations() }: { rule: AutomationRule; onReload?: () => void; canManage?: boolean }) {
   const { toast } = useToast();
   const router = useRouter();
+  const { ConfirmDialog, confirm } = useConfirm();
   const [busy, setBusy] = useState(false);
   const act = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true);
@@ -393,11 +402,45 @@ export function AutomationRuleActions({ rule, onReload, canManage = canManageAut
       {canManage ? (
         <>
           {rule.is_enabled ? <Button size="sm" variant="outline" disabled={busy} onClick={() => act(() => automationsApi.disableRule(rule.id), "Regola disabilitata")}>Disable</Button> : <Button size="sm" variant="outline" disabled={busy} onClick={() => act(() => automationsApi.enableRule(rule.id), "Regola abilitata")}>Enable</Button>}
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => window.confirm("Eseguire ora questa automazione?") && act(() => automationsApi.runRule(rule.id), "Regola eseguita")}>Run</Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={async () => {
+              const ok = await confirm({
+                title: "Eseguire ora questa automazione?",
+                description: "Verrà avviata immediatamente.",
+                confirmLabel: "Esegui",
+              });
+              if (ok) {
+                void act(() => automationsApi.runRule(rule.id), "Regola eseguita");
+              }
+            }}
+          >
+            Run
+          </Button>
           <Button size="sm" variant="outline" disabled={busy} onClick={() => act(async () => downloadJson(`automation-rule-${rule.id}.json`, await automationsApi.exportRule(rule.id)), "Export creato")}><Download className="h-4 w-4" /></Button>
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => window.confirm("Eliminare questa regola?") && act(() => automationsApi.deleteRule(rule.id), "Regola eliminata")}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={async () => {
+              const ok = await confirm({
+                title: "Eliminare questa regola?",
+                description: "L'operazione è irreversibile.",
+                confirmLabel: "Elimina",
+                variant: "destructive",
+              });
+              if (ok) {
+                void act(() => automationsApi.deleteRule(rule.id), "Regola eliminata");
+              }
+            }}
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
         </>
       ) : null}
+      <ConfirmDialog />
     </div>
   );
 }
