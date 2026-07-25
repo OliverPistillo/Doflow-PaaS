@@ -21,3 +21,7 @@
 ## 2026-06-30 - [Projects UX Deletions & Custom Confirm Dialogs]
 **Learning:** Native `window.confirm` dialogs are highly inaccessible, lack unified styling, and degrade premium SaaS experiences. Replacing them with an accessible `AlertDialog` wrapper like the existing custom `useConfirm` hook ensures keyboard operability, screen reader support, and design continuity.
 **Action:** Always replace legacy browser native confirm dialogs with the custom, accessible `ConfirmDialog` hook.
+
+## 2026-07-25 - [Team Skills Custom Confirmation & Icon-only Button Usability]
+**Learning:** Standardizing key operations inside the Team workspace (like skill deletion) by replacing legacy browser native `window.confirm()` with our custom `useConfirm` hook provides unified visual aesthetics, better keyboard access, and screen-reader transparency. Icon-only delete buttons within cards must always be wrapped in a `<Tooltip>` to assist sighted mouse users and must have descriptive, dynamic `aria-label`s for screen readers.
+**Action:** Replace `window.confirm()` in all card or list deletions with the unified `ConfirmDialog` and enrich associated buttons with Tooltips and explicit accessibility attributes.
