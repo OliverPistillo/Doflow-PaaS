@@ -21,3 +21,7 @@
 ## 2026-06-30 - [Projects UX Deletions & Custom Confirm Dialogs]
 **Learning:** Native `window.confirm` dialogs are highly inaccessible, lack unified styling, and degrade premium SaaS experiences. Replacing them with an accessible `AlertDialog` wrapper like the existing custom `useConfirm` hook ensures keyboard operability, screen reader support, and design continuity.
 **Action:** Always replace legacy browser native confirm dialogs with the custom, accessible `ConfirmDialog` hook.
+
+## 2026-07-01 - [Standardizing Deletions & Tooltip Enhancements in Team Modules]
+**Learning:** Legacy window.confirm() dialogs in secondary modules (such as Team Members and Team Skills) break keyboard focus trapping and screen reader flow. By standardizing them to use the custom, accessible `useConfirm` wrapper, we maintain visual consistency with shadcn/ui and ensure keyboard operability. Furthermore, wrapping icon-only trash actions in tooltips and adding explicit `aria-label` tags ensures visual and non-visual discoverability without altering functional flow.
+**Action:** Always replace standard browser prompts with the `useConfirm` hook and ensure any icon-only action button contains an explicit `aria-label` alongside its tooltip wrapper.
