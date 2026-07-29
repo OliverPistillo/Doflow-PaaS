@@ -21,6 +21,7 @@ import { PageShell, PageHeader } from "@/components/ui/page-shell";
 import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/hooks/useConfirm";
 
 type FieldType = "text" | "email" | "number" | "date" | "datetime-local" | "textarea" | "select" | "relation";
 
@@ -165,6 +166,7 @@ export function CrmResourcePage({
   const [relations, setRelations] = useState<Record<string, CrmRow[]>>({});
   const showEconomic = canSeeEconomicValues();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const { ConfirmDialog, confirm } = useConfirm();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -273,7 +275,13 @@ export function CrmResourcePage({
   };
 
   const remove = async (row: CrmRow) => {
-    if (!window.confirm("Spostare questo record nel cestino?")) return;
+    const ok = await confirm({
+      title: "Spostare nel cestino?",
+      description: `Sei sicuro di voler spostare questo record nel cestino?`,
+      confirmLabel: "Sposta nel cestino",
+      variant: "destructive",
+    });
+    if (!ok) return;
     await apiFetch(`/tenant/crm/${resource}/${row.id}`, { method: "DELETE" });
     await load();
   };
@@ -285,6 +293,7 @@ export function CrmResourcePage({
 
   return (
     <PageShell>
+      <ConfirmDialog />
       <PageHeader
         title={title}
         description={description}

@@ -21,3 +21,7 @@
 ## 2026-06-30 - [Projects UX Deletions & Custom Confirm Dialogs]
 **Learning:** Native `window.confirm` dialogs are highly inaccessible, lack unified styling, and degrade premium SaaS experiences. Replacing them with an accessible `AlertDialog` wrapper like the existing custom `useConfirm` hook ensures keyboard operability, screen reader support, and design continuity.
 **Action:** Always replace legacy browser native confirm dialogs with the custom, accessible `ConfirmDialog` hook.
+
+## 2026-07-01 - [CRM & Commercial Custom Confirm Dialogs Migration]
+**Learning:** Moving from legacy `window.confirm` to the custom, accessible `useConfirm` / `ConfirmDialog` hook across CRM, briefings, and quotes components completely eliminates native browser confirm popups. This ensures keyboard focus trapping, full screen-reader alignment, and visual cohesion with the shadcn/ui AlertDialog. It also enables presenting user-friendly item titles in the description for high confidence before destructive actions.
+**Action:** Ensure that `<ConfirmDialog />` is rendered inside the components where `confirm` is called, and customize the prompt parameters (title, description, button labels, and variant) appropriately.
