@@ -31,6 +31,7 @@ import { FedericaNeroneModule } from './federicanerone/federicanerone.module';
 
 import { SalesIntelligenceModule } from './sales-intelligence/sales-intelligence.module';
 import { BillingModule } from './billing/billing.module';
+import { PublicLeadIntakeModule } from './public-lead-intake/public-lead-intake.module';
 
 // ── Root-level controllers (non appartengono a nessun sotto-modulo) ───────────
 import { AppController } from './app.controller';
@@ -116,6 +117,7 @@ import { OutreachCampaign } from './sales-intelligence/entities/outreach-campaig
 
     SalesIntelligenceModule,
     BillingModule,
+    PublicLeadIntakeModule,
   ],
 
   controllers: [

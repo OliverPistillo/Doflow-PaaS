@@ -218,21 +218,20 @@ export default function DashboardClient() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-12">
-        <div className="xl:col-span-5">
+        <div className="xl:col-span-4">
           <DashboardPriorities
             tasks={tasks}
             notifications={summary?.operations?.notifications || []}
           />
         </div>
-        <div className="xl:col-span-5">
+        <div className="xl:col-span-4">
           <DashboardProjects projects={projects} />
         </div>
         {canView("crm") ? (
-          <div className="xl:col-span-2">
+          <div className="xl:col-span-4">
             <DashboardPipeline
-              leads={summary?.sales?.openLeads || 0}
-              quotes={summary?.sales?.sentQuotes || 0}
-              won={summary?.sales?.wonDeals || summary?.sales?.acceptedQuotes || 0}
+              pipelineStages={summary?.sales?.pipelineStages}
+              showEconomic={Boolean(summary?.user?.canViewFinance)}
             />
           </div>
         ) : null}

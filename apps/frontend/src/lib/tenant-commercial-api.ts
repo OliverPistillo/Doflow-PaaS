@@ -65,6 +65,9 @@ export type CommercialOpportunity = {
   contact_name?: string | null;
   title: string;
   service_type?: string | null;
+  lead_source?: string | null;
+  lead_interest?: string | null;
+  lead_urgency?: string | null;
   value_estimate?: number | string | null;
   probability?: number | null;
   stage: string;

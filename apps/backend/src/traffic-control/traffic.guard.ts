@@ -17,6 +17,10 @@ export class TrafficGuard implements CanActivate {
       return true;
     }
 
+    if (req.path?.startsWith('/api/public/lead-intake/')) {
+      return true;
+    }
+
     // Qui inizia il controllo vero e proprio per GET/POST/PUT/DELETE
     try {
       const result = await this.trafficService.checkRequest(req);

@@ -16,6 +16,12 @@ export type DashboardSummary = {
     openLeads?: number;
     activeOpportunities?: number;
     pipelineValue?: number;
+    pipelineStages?: {
+      new: { count: number; totalValue: number | null };
+      contacted: { count: number; totalValue: number | null };
+      quote: { count: number; totalValue: number | null };
+      won: { count: number; totalValue: number | null };
+    };
     sentQuotes?: number;
     acceptedQuotes?: number;
     rejectedQuotes?: number;

@@ -13,6 +13,13 @@ import { TenantEffectivePermissionsService, type TenantModuleKey } from './tenan
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+const DASHBOARD_PIPELINE_STAGE_GROUPS = {
+  new: ['new_lead', 'to_contact'],
+  contacted: ['contacted', 'call_scheduled', 'briefing_sent', 'briefing_received'],
+  quote: ['quote_preparation', 'quote_sent', 'follow_up'],
+  won: ['accepted'],
+} as const;
+
 @Injectable()
 export class TenantDashboardService {
   constructor(
@@ -536,6 +543,55 @@ export class TenantDashboardService {
     }));
   }
 
+  private async buildPipelineStagesSummary(schema: string, includeEconomicValue: boolean): Promise<DashboardPipelineStagesSummary> {
+    const safe = safeSchema(schema, 'TenantDashboardService.buildPipelineStagesSummary');
+    const hiddenValue = includeEconomicValue ? 0 : null;
+    const empty = {
+      new: { count: 0, totalValue: hiddenValue },
+      contacted: { count: 0, totalValue: hiddenValue },
+      quote: { count: 0, totalValue: hiddenValue },
+      won: { count: 0, totalValue: hiddenValue },
+    };
+    if (!(await this.tableExists(safe, 'opportunities'))) return empty;
+
+    const hasValue = includeEconomicValue
+      && (await this.columnExists(safe, 'opportunities', 'value_estimate'))
+      && (await this.isNumericColumn(safe, 'opportunities', 'value_estimate'));
+    const stages = Object.values(DASHBOARD_PIPELINE_STAGE_GROUPS).flat();
+    const rows = await this.dataSource.query(
+      `SELECT
+         stage,
+         COUNT(*)::int AS count,
+         ${hasValue ? 'COALESCE(SUM(value_estimate), 0)::numeric' : 'NULL::numeric'} AS "totalValue"
+       FROM "${safe}".opportunities
+       WHERE deleted_at IS NULL AND stage = ANY($1::text[])
+       GROUP BY stage`,
+      [stages],
+    );
+
+    const byStage = new Map<string, DashboardPipelineStageSummary>(rows.map((row: any) => [String(row.stage), {
+      count: Number(row.count || 0),
+      totalValue: hasValue ? Number(row.totalValue || 0) : null,
+    }]));
+
+    return (Object.keys(DASHBOARD_PIPELINE_STAGE_GROUPS) as DashboardPipelineStageKey[]).reduce<DashboardPipelineStagesSummary>(
+      (acc, key) => {
+        acc[key] = DASHBOARD_PIPELINE_STAGE_GROUPS[key].reduce(
+          (sum, stage) => {
+            const item = byStage.get(stage) || { count: 0, totalValue: 0 };
+            return {
+              count: sum.count + item.count,
+              totalValue: hasValue ? Number(sum.totalValue || 0) + Number(item.totalValue || 0) : null,
+            };
+          },
+          { count: 0, totalValue: hasValue ? 0 : null },
+        );
+        return acc;
+      },
+      empty,
+    );
+  }
+
   private async buildSalesSummary(schema: string, includeEconomicValue: boolean): Promise<DashboardSalesSummary> {
     const opportunitiesTable = (await this.tableExists(schema, 'opportunities'))
       ? 'opportunities'
@@ -591,6 +647,7 @@ export class TenantDashboardService {
           ? await this.countByOptionalColumn(schema, opportunitiesTable, 'stage', ['lost'])
           : await this.countByOptionalStatus(schema, opportunitiesTable, ['lost'])
         : 0,
+      pipelineStages: await this.buildPipelineStagesSummary(schema, includeEconomicValue),
       sources: {
         leads: await this.tableExists(schema, 'leads'),
         opportunities: Boolean(opportunitiesTable),
@@ -1784,6 +1841,15 @@ interface DashboardSourceFlags {
   [key: string]: boolean;
 }
 
+type DashboardPipelineStageKey = keyof typeof DASHBOARD_PIPELINE_STAGE_GROUPS;
+
+type DashboardPipelineStageSummary = {
+  count: number;
+  totalValue: number | null;
+};
+
+type DashboardPipelineStagesSummary = Record<DashboardPipelineStageKey, DashboardPipelineStageSummary>;
+
 interface DashboardSalesSummary {
   openLeads: number;
   activeOpportunities: number;
@@ -1796,6 +1862,7 @@ interface DashboardSalesSummary {
   followUpsDue: number;
   wonDeals: number;
   lostDeals: number;
+  pipelineStages: DashboardPipelineStagesSummary;
   sources: DashboardSourceFlags;
 }
 

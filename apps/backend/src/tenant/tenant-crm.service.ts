@@ -72,8 +72,9 @@ const RESOURCES: Record<ResourceKey, ResourceConfig> = {
     required: ['title'],
     writable: [
       'company_id', 'contact_id', 'lead_id', 'title', 'service_type', 'value_estimate',
-      'probability', 'stage', 'expected_close_date', 'assigned_to', 'next_action',
-      'next_action_at', 'lost_reason', 'notes',
+      'lead_source', 'lead_interest', 'lead_urgency', 'probability', 'stage',
+      'expected_close_date', 'assigned_to', 'next_action', 'next_action_at',
+      'lost_reason', 'notes',
     ],
     searchable: ['title', 'service_type', 'next_action', 'notes'],
     filters: ['stage', 'company_id', 'contact_id', 'lead_id', 'assigned_to'],
@@ -84,7 +85,7 @@ const RESOURCES: Record<ResourceKey, ResourceConfig> = {
       LEFT JOIN "{schema}".contacts ct ON ct.id = t.contact_id
       LEFT JOIN "{schema}".leads l ON l.id = t.lead_id
     `,
-    selectExtra: `, c.name AS company_name, concat_ws(' ', ct.first_name, ct.last_name) AS contact_name, l.title AS lead_title`,
+    selectExtra: `, c.name AS company_name, concat_ws(' ', ct.first_name, ct.last_name) AS contact_name, l.title AS lead_title, COALESCE(t.lead_source, l.source) AS lead_source, COALESCE(t.lead_interest, l.interest) AS lead_interest, COALESCE(t.lead_urgency, l.urgency) AS lead_urgency`,
   },
   activities: {
     table: 'commercial_activities',

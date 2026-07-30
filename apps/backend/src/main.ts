@@ -17,6 +17,7 @@ import * as express from 'express';
 import * as dotenv from 'dotenv';
 import { Logger } from '@nestjs/common';
 import * as path from 'path';
+import { parseTrustProxy } from './common/client-ip.utils';
 
 // --- AGGIUNTE v3.5 (Monitoring) ---
 import { TelemetryService } from './telemetry/telemetry.service';
@@ -33,6 +34,15 @@ type ClientMeta = {
 };
 
 type ClientWithMeta = WebSocket & { __meta?: ClientMeta };
+
+function normalizeCorsOrigin(origin: string): string | null {
+  try {
+    const parsed = new URL(origin.trim());
+    return `${parsed.protocol}//${parsed.host}`.toLowerCase();
+  } catch {
+    return null;
+  }
+}
 
 function pickTenantFromJwt(decoded: any): { tenantId: string; tenantSlug?: string } {
   const slug =
@@ -66,6 +76,12 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false,
   });
+  try {
+    app.set('trust proxy', parseTrustProxy(process.env.TRUST_PROXY));
+  } catch (error) {
+    new Logger('Bootstrap').error(error instanceof Error ? error.message : 'TRUST_PROXY non valido.');
+    process.exit(1);
+  }
 
   app.use(express.json({ limit: '50mb', verify: (req, res, buf) => { (req as any).rawBody = buf; } }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -84,20 +100,21 @@ async function bootstrap() {
   // CORS_PUBLIC_ORIGINS: origini per il sito web pubblico (es. https://www.doflow.it)
   const crmOrigins = (process.env.CORS_ORIGINS ?? 'https://app.doflow.it')
     .split(',')
-    .map((o) => o.trim())
-    .filter(Boolean);
+    .map((o) => normalizeCorsOrigin(o))
+    .filter((o): o is string => Boolean(o));
 
   const publicOrigins = (process.env.CORS_PUBLIC_ORIGINS ?? '')
     .split(',')
-    .map((o) => o.trim())
-    .filter(Boolean);
+    .map((o) => normalizeCorsOrigin(o))
+    .filter((o): o is string => Boolean(o));
 
   const allowedOrigins = [...new Set([...crmOrigins, ...publicOrigins])];
 
   app.enableCors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
+      const normalized = normalizeCorsOrigin(origin);
+      if (normalized && allowedOrigins.includes(normalized)) return callback(null, true);
       return callback(new Error(`CORS: origin '${origin}' non autorizzata`));
     },
     credentials: true,

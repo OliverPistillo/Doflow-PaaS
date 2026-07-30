@@ -95,6 +95,9 @@ export async function ensureTenantCrmCoreTables(ds: DataSource, schema: string) 
       lead_id UUID REFERENCES "${s}".leads(id) ON DELETE SET NULL,
       title TEXT NOT NULL,
       service_type TEXT,
+      lead_source TEXT,
+      lead_interest TEXT,
+      lead_urgency TEXT,
       value_estimate NUMERIC,
       probability INTEGER,
       stage TEXT NOT NULL DEFAULT 'new_lead',
@@ -111,6 +114,9 @@ export async function ensureTenantCrmCoreTables(ds: DataSource, schema: string) 
       deleted_at TIMESTAMPTZ
     )
   `);
+  await ds.query(`ALTER TABLE "${s}".opportunities ADD COLUMN IF NOT EXISTS lead_source TEXT`);
+  await ds.query(`ALTER TABLE "${s}".opportunities ADD COLUMN IF NOT EXISTS lead_interest TEXT`);
+  await ds.query(`ALTER TABLE "${s}".opportunities ADD COLUMN IF NOT EXISTS lead_urgency TEXT`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_opportunities_stage" ON "${s}".opportunities(stage) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_opportunities_assigned" ON "${s}".opportunities(assigned_to) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_opportunities_expected_close" ON "${s}".opportunities(expected_close_date) WHERE deleted_at IS NULL`);

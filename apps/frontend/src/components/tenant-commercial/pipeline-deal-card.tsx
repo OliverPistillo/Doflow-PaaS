@@ -1,6 +1,7 @@
 "use client";
 
-import { CalendarClock, UserRound } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { CalendarClock, Globe2, UserRound } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { CommercialOpportunity } from "@/lib/tenant-commercial-api";
 import { cn } from "@/lib/utils";
@@ -25,18 +26,40 @@ export function PipelineDealCard({
   item,
   showEconomic,
   onMove,
+  highlighted = false,
 }: {
   item: CommercialOpportunity;
   showEconomic: boolean;
   onMove: (id: string, stage: string) => void;
+  highlighted?: boolean;
 }) {
   const followUpDue = item.next_action_at && new Date(item.next_action_at).getTime() <= Date.now();
+  const cardRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!highlighted) return;
+    cardRef.current?.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+  }, [highlighted]);
 
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-3.5 transition-colors hover:border-indigo-200">
+    <article
+      ref={cardRef}
+      className={cn(
+        "rounded-xl border border-slate-200 bg-white p-3.5 transition-colors hover:border-indigo-200",
+        highlighted && "border-indigo-400 ring-2 ring-indigo-200",
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-slate-950">{item.company_name || item.title}</h3>
+          <div className="flex min-w-0 items-center gap-2">
+            <h3 className="truncate text-sm font-semibold text-slate-950">{item.company_name || item.title}</h3>
+            {item.lead_source === "website_form" ? (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700">
+                <Globe2 className="h-3 w-3" aria-hidden="true" />
+                Sito web
+              </span>
+            ) : null}
+          </div>
           <p className="mt-1 truncate text-xs text-slate-600">{item.service_type || item.title}</p>
         </div>
         {showEconomic ? <span className="shrink-0 text-sm font-semibold text-slate-950">{commercialMoney(item.value_estimate)}</span> : null}

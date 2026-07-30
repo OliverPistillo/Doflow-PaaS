@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Archive, Filter, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,10 +18,19 @@ function canSeeEconomicValues() {
   return ["owner", "admin", "manager", "superadmin", "super_admin"].includes(role);
 }
 
+function normalizePipelineStage(value: string | null) {
+  return ["new", "contacted", "quote", "won"].includes(String(value || ""))
+    ? String(value)
+    : "all";
+}
+
 export function CommercialPipelinePage() {
+  const searchParams = useSearchParams();
+  const stageParam = searchParams.get("stage");
+  const highlightedOpportunityId = searchParams.get("opportunity");
   const [pipeline, setPipeline] = useState<CommercialPipeline | null>(null);
   const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState("all");
+  const [stageFilter, setStageFilter] = useState(() => normalizePipelineStage(stageParam));
   const [showFilters, setShowFilters] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -43,6 +53,10 @@ export function CommercialPipelinePage() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    setStageFilter(normalizePipelineStage(stageParam));
+  }, [stageParam]);
 
   const groups = useMemo(() => groupPipeline(pipeline), [pipeline]);
   const allItems = (pipeline?.stages || []).flatMap((stage) => stage.items || []);
@@ -121,6 +135,7 @@ export function CommercialPipelinePage() {
                 totalValue={group.items.reduce((sum, item) => sum + Number(item.value_estimate || 0), 0)}
                 showEconomic={showEconomic}
                 onMove={move}
+                highlightedOpportunityId={highlightedOpportunityId}
               />
             ))}
           </div>

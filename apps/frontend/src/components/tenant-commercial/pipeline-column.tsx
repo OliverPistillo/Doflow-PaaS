@@ -9,6 +9,7 @@ export function PipelineColumn({
   totalValue,
   showEconomic,
   onMove,
+  highlightedOpportunityId,
 }: {
   label: string;
   color: string;
@@ -16,6 +17,7 @@ export function PipelineColumn({
   totalValue: number;
   showEconomic: boolean;
   onMove: (id: string, stage: string) => void;
+  highlightedOpportunityId?: string | null;
 }) {
   return (
     <section className="flex min-h-[480px] min-w-[280px] flex-1 flex-col rounded-2xl border border-slate-200/80 bg-slate-50/50 p-3">
@@ -33,7 +35,13 @@ export function PipelineColumn({
         {items.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-xs text-slate-500">Nessuna trattativa</div>
         ) : items.map((item) => (
-          <PipelineDealCard key={item.id} item={item} showEconomic={showEconomic} onMove={onMove} />
+          <PipelineDealCard
+            key={item.id}
+            item={item}
+            showEconomic={showEconomic}
+            onMove={onMove}
+            highlighted={item.id === highlightedOpportunityId}
+          />
         ))}
       </div>
     </section>
