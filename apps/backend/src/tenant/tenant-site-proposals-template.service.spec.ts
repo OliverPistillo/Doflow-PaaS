@@ -18,6 +18,19 @@ function splitTemplate(html: string) {
   return { matches, config: JSON.parse(match[1]), prefix: html.slice(0, payloadStart), suffix: html.slice(payloadEnd) };
 }
 
+function simulateJsonbRoundTrip(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((item) => simulateJsonbRoundTrip(item));
+  if (value && typeof value === 'object') {
+    return Object.keys(value as Record<string, unknown>)
+      .sort()
+      .reduce<Record<string, unknown>>((result, key) => {
+        result[key] = simulateJsonbRoundTrip((value as Record<string, unknown>)[key]);
+        return result;
+      }, {});
+  }
+  return value;
+}
+
 describe('TenantSiteProposalsTemplateService', () => {
   let service: TenantSiteProposalsTemplateService;
 
@@ -91,6 +104,56 @@ describe('TenantSiteProposalsTemplateService', () => {
     expect(rendered.html).toContain('\\u2028');
     expect(rendered.html).toContain('\\u2029');
     expect(rendered.html).toContain('\\u0026');
+  });
+
+  it('renders a JSONB round trip with reordered object keys and preserves document bytes outside the payload', async () => {
+    const original = fs.readFileSync(TEMPLATE_PATH, 'utf8');
+    const originalParts = splitTemplate(original);
+    const config = await service.getDefaultConfig();
+    (config.content as any).hero.description = 'Descrizione aggiornata dopo JSONB';
+    const jsonbConfig = simulateJsonbRoundTrip(config) as any;
+    const rendered = await service.renderHtml(jsonbConfig);
+    const renderedParts = splitTemplate(rendered.html);
+
+    expect(renderedParts.prefix).toBe(originalParts.prefix);
+    expect(renderedParts.suffix).toBe(originalParts.suffix);
+    expect(renderedParts.config.content.hero.description).toBe('Descrizione aggiornata dopo JSONB');
+    expect(renderedParts.config.editingContract).toEqual(config.editingContract);
+  });
+
+  it('allows reordered protected object keys while retaining permitted proposal edits', async () => {
+    const config = await service.getDefaultConfig();
+    (config.content as any).hero.description = 'Testo consentito';
+    (config.palette as any[])[0].value = '#123456';
+    (config.images as any).hero = {
+      ...(config.images as any).hero,
+      src: 'https://example.com/hero.jpg',
+      alt: 'Hero aggiornato',
+      objectPosition: 'center',
+      prompt: 'Immagine dimostrativa',
+    };
+    (config.routing as any).paths.bookingPage = './prenota-{citySlug}/';
+
+    await expect(service.renderHtml(simulateJsonbRoundTrip(config) as any)).resolves.toMatchObject({ html: expect.any(String) });
+  });
+
+  it.each([
+    ['editingContract fixed count', (config: any) => { config.editingContract.fixedCounts.reviews = 5; }],
+    ['editingContract allowed edit', (config: any) => { config.editingContract.allowedEdits.pop(); }],
+    ['text limit', (config: any) => { config.textLimits.heroTitle = 1; }],
+    ['routing label', (config: any) => { config.routing.labels.bookingPage = 'Diverso'; }],
+    ['added route key', (config: any) => { config.routing.paths.extra = './extra/'; }],
+    ['removed route key', (config: any) => { delete config.routing.paths.bookingPage; }],
+    ['added image slot', (config: any) => { config.images.extra = {}; }],
+    ['removed image slot', (config: any) => { delete config.images.hero; }],
+    ['image recommended size', (config: any) => { config.images.hero.recommendedSize = '1x1'; }],
+    ['palette variable', (config: any) => { config.palette[0].variable = '--different'; }],
+    ['palette role', (config: any) => { config.palette[0].role = 'Diverso'; }],
+    ['palette order', (config: any) => { config.palette.reverse(); }],
+  ])('rejects a real protected mutation: %s', async (_name, mutate) => {
+    const config = await service.getDefaultConfig();
+    mutate(config);
+    await expect(service.renderHtml(config)).rejects.toThrow(BadRequestException);
   });
 
   it('rejects missing/duplicated nodes, invalid counts, palette and dangerous routes', async () => {

@@ -80,6 +80,33 @@ describe('TenantSiteProposalsService', () => {
     expect(result.status).toBe('completed');
   });
 
+  it('records a failed generation and returns its sanitized failure result', async () => {
+    const { service, queryMock, templates } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    jest.spyOn(service, 'get').mockResolvedValue({ proposal: { id: uuid, current_version: 1, template_slug: 'colsova', template_version: '1.0.0', site_config: {} } } as any);
+    queryMock.mockResolvedValueOnce([{ id: '650e8400-e29b-41d4-a716-446655440000' }]).mockResolvedValue([]);
+    templates.renderHtml.mockRejectedValue(new Error('Render non riuscito'));
+
+    const result = await service.generateProposal(uuid);
+
+    expect(result).toMatchObject({ status: 'failed', error_message: 'Render non riuscito' });
+    expect(queryMock).toHaveBeenCalledWith(expect.stringContaining("site_proposal_generations SET status = 'failed'"), expect.any(Array));
+    expect(queryMock).toHaveBeenCalledWith(expect.stringContaining("site_proposals SET status = 'error'"), [uuid]);
+  });
+
+  it('keeps batch generation summaries when individual generations fail', async () => {
+    const importId = '650e8400-e29b-41d4-a716-446655440000';
+    const proposalId = '750e8400-e29b-41d4-a716-446655440000';
+    const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    jest.spyOn(service, 'getImport').mockResolvedValue({ id: importId, status: 'confirmed' } as any);
+    jest.spyOn(service, 'generateProposal')
+      .mockResolvedValueOnce({ id: uuid, status: 'completed' } as any)
+      .mockResolvedValueOnce({ id: proposalId, status: 'failed', error_message: 'Render non riuscito' } as any);
+    queryMock.mockResolvedValueOnce([{ id: uuid }, { id: proposalId }]).mockResolvedValue([]);
+
+    await expect(service.generateImport(importId)).resolves.toMatchObject({ total: 2, success: 1, failed: 1 });
+    expect(queryMock).toHaveBeenCalledWith(expect.stringContaining('site_proposal_import_batches SET status = $2'), [importId, 'partial']);
+  });
+
   it('download verifies generation belongs to proposal and archive is soft', async () => {
     const { service, queryMock, storage } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
     queryMock.mockResolvedValueOnce([{ id: '650e8400-e29b-41d4-a716-446655440000', html_key: `doflow/site-proposals/${uuid}/650e8400-e29b-41d4-a716-446655440000/index.html`, status: 'completed' }]);

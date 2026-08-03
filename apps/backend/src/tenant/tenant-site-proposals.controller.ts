@@ -7,6 +7,7 @@ import {
   Post,
   Query,
   Res,
+  UnprocessableEntityException,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -89,8 +90,12 @@ export class TenantSiteProposalsController {
   }
 
   @Post(':id/generate')
-  generate(@Param('id') id: string) {
-    return this.service.generateProposal(id);
+  async generate(@Param('id') id: string) {
+    const result = await this.service.generateProposal(id);
+    if (result.status === 'failed') {
+      throw new UnprocessableEntityException(this.generationFailureMessage(result.error_message));
+    }
+    return result;
   }
 
   @Get(':id/generations')
@@ -139,5 +144,11 @@ export class TenantSiteProposalsController {
   @Patch(':id/archive')
   archive(@Param('id') id: string) {
     return this.service.archive(id);
+  }
+
+  private generationFailureMessage(value: unknown): string {
+    if (typeof value !== 'string' || !value.trim()) return 'Generazione non riuscita.';
+    const message = value.replace(/[\r\n]+/g, ' ').slice(0, 500);
+    return /stack|sql|postgres|s3|stack trace/i.test(message) ? 'Generazione non riuscita.' : message;
   }
 }

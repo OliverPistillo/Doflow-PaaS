@@ -95,7 +95,12 @@ export function updateSiteProposal(id: string, payload: SiteProposalUpdate) { re
 export function archiveSiteProposal(id: string) { return apiFetch<SiteProposal>(endpoint(`/${encodeURIComponent(id)}/archive`), { method: "PATCH" }); }
 export function listSiteProposalVersions(id: string) { return apiFetch<SiteProposalVersion[]>(endpoint(`/${encodeURIComponent(id)}/versions`)); }
 export function restoreSiteProposalVersion(id: string, version: number) { return apiFetch<SiteProposal>(endpoint(`/${encodeURIComponent(id)}/versions/${encodeURIComponent(version)}/restore`), { method: "POST" }); }
-export function generateSiteProposal(id: string) { return apiFetch<SiteProposalGeneration>(endpoint(`/${encodeURIComponent(id)}/generate`), { method: "POST" }); }
+export async function generateSiteProposal(id: string) {
+  const result = await apiFetch<SiteProposalGeneration>(endpoint(`/${encodeURIComponent(id)}/generate`), { method: "POST" });
+  if (result.status === "completed") return result;
+  if (result.status === "failed") throw new Error(result.error_message || "Generazione non riuscita.");
+  throw new Error("La generazione non è stata completata.");
+}
 export function listSiteProposalGenerations(id: string) { return apiFetch<SiteProposalGeneration[]>(endpoint(`/${encodeURIComponent(id)}/generations`)); }
 export function listSiteProposalActivity(id: string, query: { limit?: number; offset?: number } = {}) { return apiFetch<PaginatedResponse<SiteProposalActivity>>(endpoint(`/${encodeURIComponent(id)}/activity${queryString(query, ACTIVITY_KEYS)}`)); }
 export async function fetchSiteProposalPreviewHtml(id: string, generationId?: string) { const result = await binaryRequest(endpoint(`/${encodeURIComponent(id)}/preview${generationId ? `?generationId=${encodeURIComponent(generationId)}` : ""}`), "index.html"); return result.blob.text(); }

@@ -17,6 +17,29 @@ import {
 } from './tenant-site-proposals-validation';
 
 const SCRIPT_RE = /<script\s+id=["']template-config["']\s+type=["']application\/json["']\s*>([\s\S]*?)<\/script>/gi;
+const UNSAFE_JSON_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function deepEqualJson(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right) && left.length === right.length
+      && left.every((item, index) => deepEqualJson(item, right[index]));
+  }
+  if (!isJsonObject(left) || !isJsonObject(right)) return false;
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.some((key) => UNSAFE_JSON_KEYS.has(key)) || rightKeys.some((key) => UNSAFE_JSON_KEYS.has(key))) return false;
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every((key) => Object.prototype.hasOwnProperty.call(right, key) && deepEqualJson(left[key], right[key]));
+}
+
+function sameJsonKeys(left: JsonObject, right: JsonObject): boolean {
+  return deepEqualJson(Object.keys(left).sort(), Object.keys(right).sort());
+}
 
 @Injectable()
 export class TenantSiteProposalsTemplateService {
@@ -137,7 +160,7 @@ export class TenantSiteProposalsTemplateService {
 
   private assertProtectedConfig(config: JsonObject, base: JsonObject) {
     for (const key of ['_README', 'editingContract', 'textLimits']) {
-      if (JSON.stringify(config[key]) !== JSON.stringify(base[key])) throw new BadRequestException(`Chiave protetta modificata: ${key}`);
+      if (!deepEqualJson(config[key], base[key])) throw new BadRequestException(`Chiave protetta modificata: ${key}`);
     }
     const template = (config.template || {}) as JsonObject;
     if (template.schemaVersion !== COLSOVA_TEMPLATE.schemaVersion || template.templateVersion !== COLSOVA_TEMPLATE.version || template.layoutLocked !== true) {
@@ -145,12 +168,14 @@ export class TenantSiteProposalsTemplateService {
     }
     const routing = (config.routing || {}) as JsonObject;
     const baseRouting = (base.routing || {}) as JsonObject;
-    if (routing.localPreviewMode !== true || JSON.stringify(routing.labels) !== JSON.stringify(baseRouting.labels)) {
+    if (routing.localPreviewMode !== true || !deepEqualJson(routing.labels, baseRouting.labels)) {
       throw new BadRequestException('Routing protetto modificato');
     }
-    const routeKeys = Object.keys((routing.paths || {}) as JsonObject);
-    const baseRouteKeys = Object.keys((baseRouting.paths || {}) as JsonObject);
-    if (JSON.stringify(routeKeys) !== JSON.stringify(baseRouteKeys)) throw new BadRequestException('Chiavi route protette modificate');
+    const paths = routing.paths;
+    const basePaths = baseRouting.paths;
+    if (!isJsonObject(paths) || !isJsonObject(basePaths) || !sameJsonKeys(paths, basePaths)) {
+      throw new BadRequestException('Chiavi route protette modificate');
+    }
 
     const palette = config.palette as JsonObject[];
     const basePalette = base.palette as JsonObject[];
@@ -158,14 +183,16 @@ export class TenantSiteProposalsTemplateService {
       throw new BadRequestException('Struttura palette protetta modificata');
     }
 
-    const images = (config.images || {}) as JsonObject;
-    const baseImages = (base.images || {}) as JsonObject;
-    if (JSON.stringify(Object.keys(images)) !== JSON.stringify(Object.keys(baseImages))) throw new BadRequestException('Slot immagini protetti modificati');
+    const images = config.images;
+    const baseImages = base.images;
+    if (!isJsonObject(images) || !isJsonObject(baseImages) || !sameJsonKeys(images, baseImages)) {
+      throw new BadRequestException('Slot immagini protetti modificati');
+    }
     for (const slot of Object.keys(baseImages)) {
       const image = images[slot] as JsonObject;
       const baseImage = baseImages[slot] as JsonObject;
       for (const key of ['placeholderLabel', 'recommendedSize', 'aspectRatio']) {
-        if (image?.[key] !== baseImage?.[key]) throw new BadRequestException(`Metadato immagine protetto modificato: ${slot}.${key}`);
+        if (!deepEqualJson(image?.[key], baseImage?.[key])) throw new BadRequestException(`Metadato immagine protetto modificato: ${slot}.${key}`);
       }
     }
   }
