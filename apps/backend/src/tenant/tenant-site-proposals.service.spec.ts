@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { TenantSiteProposalsService } from './tenant-site-proposals.service';
 
 const uuid = '550e8400-e29b-41d4-a716-446655440000';
@@ -36,6 +36,14 @@ describe('TenantSiteProposalsService', () => {
     const result = await service.confirmImport(uuid);
     expect(result.idempotent).toBe(true);
     expect(result.proposals).toHaveLength(1);
+  });
+
+  it('rejects a preview import with no valid rows before creating any proposal data', async () => {
+    const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    queryMock.mockResolvedValueOnce([{ id: uuid, status: 'preview', valid_count: 0, rows: [] }]);
+
+    await expect(service.confirmImport(uuid)).rejects.toMatchObject({ status: 400 });
+    expect(queryMock.mock.calls.some(([query]) => /INSERT INTO .*site_proposals|site_proposal_versions|site_proposal_activity|UPDATE .*site_proposal_import_batches/s.test(String(query)))).toBe(false);
   });
 
   it('matches CRM uniquely, detects ambiguous matches and not found', async () => {

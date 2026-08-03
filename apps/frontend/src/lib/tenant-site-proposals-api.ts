@@ -20,9 +20,13 @@ export type SiteConfig = JsonObject & {
   template: JsonObject; editingContract: JsonObject; sourceWebsite: JsonObject; brand: JsonObject; business: JsonObject; seo: JsonObject;
   palette: Array<{ variable: string; value: string; role: string }>; routing: JsonObject; images: Record<string, JsonObject>; content: JsonObject; textLimits: Record<string, number>;
 };
+export type SiteProposalImportCanonicalInput = JsonObject & {
+  businessName?: string; category?: string; city?: string; publicContactName?: string; professionalTitle?: string;
+  phone?: string; email?: string; websiteUrl?: string; services?: string[]; extra?: Record<string, string>;
+};
 export type SiteProposalImportRow = {
   rowIndex: number; valid: boolean; errors: SiteProposalImportError[]; warnings: SiteProposalImportWarning[];
-  canonical?: JsonObject; sourceRowHash?: string; fingerprint?: string; siteConfig?: SiteConfig; displayName?: string;
+  canonical?: SiteProposalImportCanonicalInput; sourceRow?: Record<string, string>; sourceRowHash?: string; fingerprint?: string; siteConfig?: SiteConfig; displayName?: string;
 };
 export type SiteProposalImportBatch = {
   id: string; template_slug: string; template_version: string; original_filename: string; content_type?: string | null; source_sha256: string; status: ImportStatus;

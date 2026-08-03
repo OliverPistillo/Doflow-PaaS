@@ -109,6 +109,12 @@ export class TenantSiteProposalsService {
       const existing = await this.ds().query(`SELECT id, display_name, status FROM "${schema}".site_proposals WHERE import_batch_id = $1 ORDER BY source_row_index`, [id]);
       return { batch, proposals: existing, idempotent: true };
     }
+    if (Number(batch.valid_count || 0) === 0) {
+      throw new BadRequestException(
+        'Nessuna riga valida da importare. Correggi le intestazioni o i dati e crea un nuovo import.',
+      );
+    }
+
     const rows = (batch.rows || []) as PreviewRow[];
     const proposals: JsonObject[] = [];
     for (const row of rows.filter((r) => r.valid && r.canonical && r.siteConfig)) {

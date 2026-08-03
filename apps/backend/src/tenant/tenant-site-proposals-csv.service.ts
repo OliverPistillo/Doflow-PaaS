@@ -41,15 +41,34 @@ const ALIASES: Record<string, keyof CanonicalProposalInput> = {
   nome_studio: 'businessName',
   studio_name: 'businessName',
   name: 'businessName',
+  nome_azienda: 'businessName',
+  nome_azienda_struttura: 'businessName',
+  azienda_struttura: 'businessName',
+  nome_struttura: 'businessName',
+  nome_centro: 'businessName',
+  centro: 'businessName',
+  denominazione: 'businessName',
+  ragione_sociale: 'businessName',
+  attivita: 'businessName',
+  attività: 'businessName',
   professional_title: 'professionalTitle',
   qualifica: 'professionalTitle',
   titolo_professionale: 'professionalTitle',
+  ruolo: 'professionalTitle',
+  ruolo_pubblico: 'professionalTitle',
+  qualifica_pubblica: 'professionalTitle',
   descriptor: 'descriptor',
   descrittore: 'descriptor',
   specializzazione: 'descriptor',
   category: 'category',
   categoria: 'category',
   settore: 'category',
+  ambito: 'category',
+  tipologia: 'category',
+  categoria_attivita: 'category',
+  categoria_attività: 'category',
+  settore_attivita: 'category',
+  settore_attività: 'category',
   city: 'city',
   citta: 'city',
   città: 'city',
@@ -102,7 +121,54 @@ const ALIASES: Record<string, keyof CanonicalProposalInput> = {
   hero_image_url: 'heroImageUrl',
   consultation_image_url: 'consultationImageUrl',
   products_image_url: 'productsImageUrl',
+  nome_e_cognome_pubblico: 'publicContactName',
+  referente_pubblico: 'publicContactName',
+  nome_referente: 'publicContactName',
+  referente: 'publicContactName',
+  fonte_contatti: 'contactSource',
+  source_contacts: 'contactSource',
+  fonte_persona_ruolo: 'personRoleSource',
+  fonte_referente: 'personRoleSource',
+  completezza: 'dataCompleteness',
+  data_completeness: 'dataCompleteness',
+  data_verifica: 'verifiedAt',
+  verified_at: 'verifiedAt',
+  verification_date: 'verifiedAt',
 };
+
+const MISSING_VALUE_FIELDS = new Set<keyof CanonicalProposalInput>([
+  'publicContactName',
+  'professionalTitle',
+  'phone',
+  'email',
+  'websiteUrl',
+  'address',
+  'socialFacebook',
+  'socialInstagram',
+  'socialTikTok',
+  'socialYouTube',
+  'logoUrl',
+  'heroImageUrl',
+  'consultationImageUrl',
+  'productsImageUrl',
+]);
+
+const MISSING_VALUES = new Set([
+  'non pubblicato',
+  'non pubblicata',
+  'non disponibile',
+  'non presente',
+  'non trovato',
+  'non trovata',
+  'n/d',
+  'nd',
+  'n.a.',
+  'null',
+  'undefined',
+  '-',
+]);
+
+const BUSINESS_NAME_REQUIRED_MESSAGE = 'Nome dell’attività mancante. Colonna attesa: business_name, nome attività, nome azienda o nome struttura.';
 
 const PALETTE_MAP: Record<string, string> = {
   primary_color: '--gold',
@@ -170,6 +236,7 @@ export class TenantSiteProposalsCsvService {
     return rows.map((row, index) => {
       const errors: RowIssue[] = [];
       const warnings: RowIssue[] = [];
+      const sourceRow = this.copySourceRow(row);
       try {
         const canonical = this.normalizeRow(row, warnings);
         const sourceRowHash = sha256(JSON.stringify(canonical));
@@ -190,10 +257,22 @@ export class TenantSiteProposalsCsvService {
           fingerprint,
           siteConfig,
           displayName: canonical.businessName,
+          sourceRow,
         };
       } catch (error) {
-        errors.push({ code: 'ROW_INVALID', message: error instanceof Error ? error.message : 'Riga non valida' });
-        return { rowIndex: index + 1, valid: false, errors, warnings };
+        const message = error instanceof Error ? error.message : 'Riga non valida';
+        errors.push({
+          code: message === BUSINESS_NAME_REQUIRED_MESSAGE ? 'BUSINESS_NAME_REQUIRED' : 'ROW_INVALID',
+          message,
+        });
+        return {
+          rowIndex: index + 1,
+          valid: false,
+          errors,
+          warnings,
+          sourceRow,
+          displayName: this.displayNameFromRow(sourceRow),
+        };
       }
     });
   }
@@ -223,7 +302,7 @@ export class TenantSiteProposalsCsvService {
       const alias = ALIASES[key];
       if (alias) {
         if (alias === 'services' || alias === 'brands') (canonical[alias] as string[]) = this.parseArray(value);
-        else (canonical as any)[alias] = value;
+        else (canonical as Record<string, unknown>)[alias] = MISSING_VALUE_FIELDS.has(alias) && this.isMissingValue(value) ? '' : value;
       } else if (key === 'palette_json') {
         Object.assign(paletteOverrides, this.parseJson(value, key));
       } else if (['images_json', 'reviews_json', 'faqs_json', 'treatment_cards_json', 'product_points_json', 'routes_json'].includes(key)) {
@@ -234,7 +313,9 @@ export class TenantSiteProposalsCsvService {
     }
 
     canonical.businessName = cleanString(canonical.businessName, 200) || '';
-    if (!canonical.businessName) throw new BadRequestException('businessName obbligatorio');
+    if (!canonical.businessName) {
+      throw new BadRequestException(BUSINESS_NAME_REQUIRED_MESSAGE);
+    }
     canonical.websiteUrl = validateWebsiteUrl(canonical.websiteUrl);
     canonical.email = normalizeEmail(canonical.email);
     canonical.logoUrl = validateImageUrl(canonical.logoUrl);
@@ -405,7 +486,40 @@ export class TenantSiteProposalsCsvService {
   }
 
   private canonicalHeader(header: string): string {
-    return String(header || '').trim().replace(/^\uFEFF/, '').toLowerCase().replace(/\s+/g, '_');
+    const normalized = String(header || '')
+      .replace(/^\uFEFF/, '')
+      .normalize('NFKC')
+      .trim()
+      .toLowerCase();
+    if (['__proto__', 'prototype', 'constructor'].includes(normalized)) return normalized;
+    return normalized
+      .replace(/[\\/|:;,\-–—()[\]{}!?"']/g, '_')
+      .replace(/\s+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+
+  private isMissingValue(value: string): boolean {
+    return MISSING_VALUES.has(value.trim().toLowerCase());
+  }
+
+  private copySourceRow(row: Record<string, string>): Record<string, string> {
+    const copy = Object.create(null) as Record<string, string>;
+    for (const [rawKey, rawValue] of Object.entries(row)) {
+      const key = this.canonicalHeader(rawKey);
+      if (!key || ['__proto__', 'prototype', 'constructor'].includes(key)) throw new BadRequestException('Header non consentito');
+      copy[key] = String(rawValue ?? '');
+    }
+    return Object.freeze(copy);
+  }
+
+  private displayNameFromRow(row: Record<string, string>): string | undefined {
+    for (const [key, value] of Object.entries(row)) {
+      if (ALIASES[this.canonicalHeader(key)] === 'businessName') {
+        return cleanString(value, 200) || undefined;
+      }
+    }
+    return undefined;
   }
 
   private checkCell(cell: string) {

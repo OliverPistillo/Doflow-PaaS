@@ -3,6 +3,11 @@ export type JsonObject = Record<string, unknown>;
 export type CanonicalProposalInput = {
   businessName: string;
   professionalTitle?: string;
+  publicContactName?: string;
+  contactSource?: string;
+  personRoleSource?: string;
+  dataCompleteness?: string;
+  verifiedAt?: string;
   descriptor?: string;
   category?: string;
   city?: string;
@@ -50,6 +55,7 @@ export type PreviewRow = {
   fingerprint?: string;
   siteConfig?: JsonObject;
   displayName?: string;
+  sourceRow: Record<string, string>;
 };
 
 export type TemplateManifest = {

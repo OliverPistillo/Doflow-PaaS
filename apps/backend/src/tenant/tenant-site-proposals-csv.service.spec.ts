@@ -66,6 +66,66 @@ describe('TenantSiteProposalsCsvService', () => {
     expect(row.extra.sconosciuta).toBe('valore');
   });
 
+  it('accepts real-world Italian headers with a BOM and preserves public contact metadata', () => {
+    const csv = '\uFEFFCittà;Ambito;Nome azienda / struttura;Nome e cognome pubblico;Ruolo pubblico;Telefono;Email;Indirizzo;Sito web;Fonte contatti;Fonte persona / ruolo;Completezza;Note;Data verifica\nReggio Emilia;Centro estetico;Studio Esempio;Mario Rossi;Titolare;+39 0522 000000;info@studio-esempio.it;Via Esempio 1;https://www.studio-esempio.it/;https://www.studio-esempio.it/;https://www.studio-esempio.it/;Completo;Contatti professionali pubblici;03/08/2026';
+    const parsed = service.parseCsvText(csv);
+    const preview = service.buildPreviewRows(parsed.rows, defaultConfig);
+    const canonical = preview[0].canonical!;
+
+    expect(parsed.headers).toEqual([
+      'città', 'ambito', 'nome_azienda_struttura', 'nome_e_cognome_pubblico', 'ruolo_pubblico', 'telefono', 'email', 'indirizzo', 'sito_web', 'fonte_contatti', 'fonte_persona_ruolo', 'completezza', 'note', 'data_verifica',
+    ]);
+    expect(preview[0].valid).toBe(true);
+    expect(canonical).toMatchObject({
+      businessName: 'Studio Esempio', category: 'Centro estetico', city: 'Reggio Emilia', publicContactName: 'Mario Rossi', professionalTitle: 'Titolare', phone: '+39 0522 000000', email: 'info@studio-esempio.it', address: 'Via Esempio 1', websiteUrl: 'https://www.studio-esempio.it', contactSource: 'https://www.studio-esempio.it/', personRoleSource: 'https://www.studio-esempio.it/', dataCompleteness: 'Completo', notes: 'Contatti professionali pubblici', verifiedAt: '03/08/2026',
+    });
+    expect(preview[0].sourceRow.nome_azienda_struttura).toBe('Studio Esempio');
+    expect(preview[0].siteConfig).toBeDefined();
+  });
+
+  it('accepts all 49 non-empty rows from the real-world header shape', () => {
+    const header = 'Città;Ambito;Nome azienda / struttura;Nome e cognome pubblico;Ruolo pubblico;Telefono;Email;Indirizzo;Sito web;Fonte contatti;Fonte persona / ruolo;Completezza;Note;Data verifica';
+    const rows = Array.from({ length: 49 }, (_, index) => `Reggio Emilia;Centro estetico;Studio Esempio ${index + 1};Referente ${index + 1};Titolare;+39 0522 000${index};info${index}@studio-esempio.it;Via Esempio ${index + 1};https://www.studio-esempio.it/;Fonte;Fonte;Completo;Nota;03/08/2026`);
+    const preview = service.buildPreviewRows(service.parseCsvText(`\uFEFF${header}\n${rows.join('\n')}`).rows, defaultConfig);
+
+    expect(preview).toHaveLength(49);
+    expect(preview.every((row) => row.valid)).toBe(true);
+  });
+
+  it('treats missing public values as empty while keeping their original source row values', () => {
+    const parsed = service.parseCsvText('Nome azienda / struttura;Nome e cognome pubblico;Ruolo pubblico;Telefono;Email\nStudio Esempio;Non pubblicato;Non pubblicata;Non pubblicato;Non pubblicata');
+    const preview = service.buildPreviewRows(parsed.rows, defaultConfig);
+    const canonical = preview[0].canonical!;
+
+    expect(preview[0].valid).toBe(true);
+    expect(canonical.publicContactName).toBeFalsy();
+    expect(canonical.professionalTitle).toBeFalsy();
+    expect(canonical.phone).toBeFalsy();
+    expect(canonical.email).toBeFalsy();
+    expect(preview[0].sourceRow.nome_e_cognome_pubblico).toBe('Non pubblicato');
+    expect(preview[0].sourceRow.email).toBe('Non pubblicata');
+  });
+
+  it('normalizes punctuation without breaking config paths', () => {
+    const parsed = service.parseCsvText('Nome azienda / struttura;Fonte persona / ruolo;Ruolo pubblico (titolare);Sito   web;config.content.hero.titleLine\nStudio Esempio;Fonte;Titolare;https://studio-esempio.it;Titolo');
+    expect(parsed.headers).toEqual([
+      'nome_azienda_struttura', 'fonte_persona_ruolo', 'ruolo_pubblico_titolare', 'sito_web', 'config.content.hero.titleline',
+    ]);
+    const canonical = service.normalizeRow(parsed.rows[0]);
+    expect(canonical.businessName).toBe('Studio Esempio');
+    expect(canonical.configOverrides).toEqual({ content: { hero: { titleline: 'Titolo' } } });
+  });
+
+  it('keeps source rows and a clear code when business name is missing', () => {
+    const parsed = service.parseCsvText('Città;Ambito;Fonte contatti\nReggio Emilia;Centro estetico;https://example.it');
+    const preview = service.buildPreviewRows(parsed.rows, defaultConfig);
+
+    expect(preview[0]).toMatchObject({ rowIndex: 1, valid: false, displayName: undefined });
+    expect(preview[0].errors[0]).toMatchObject({ code: 'BUSINESS_NAME_REQUIRED' });
+    expect(preview[0].errors[0].message).toContain('Nome dell’attività mancante');
+    expect(preview[0].sourceRow).toEqual({ città: 'Reggio Emilia', ambito: 'Centro estetico', fonte_contatti: 'https://example.it' });
+  });
+
   it('parses services with semicolon, pipe, newline and JSON array without splitting commas', () => {
     expect(service.normalizeRow({ business_name: 'A', services: 'Uno;Due|Tre\nQuattro' }).services).toEqual(['Uno', 'Due', 'Tre', 'Quattro']);
     expect(service.normalizeRow({ business_name: 'A', services: '["Uno, descrizione","Due"]' }).services).toEqual(['Uno, descrizione', 'Due']);
