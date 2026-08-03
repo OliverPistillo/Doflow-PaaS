@@ -18,6 +18,7 @@ import {
   KeyRound,
   Layers,
   LockKeyhole,
+  MonitorSmartphone,
   Plug,
   Receipt,
   RefreshCw,
@@ -80,6 +81,7 @@ export const DOFLOW_TENANT_NAVIGATION: TenantNavigationSection[] = [
       { id: "pipeline", label: "Pipeline", href: "/pipeline", icon: Layers, moduleKey: "crm" },
       { id: "companies", label: "Clienti", href: "/companies", icon: Building2, moduleKey: "crm" },
       { id: "quotes", label: "Preventivi", href: "/quotes", icon: Send, moduleKey: "quotes" },
+      { id: "site-proposals", label: "Proposte web", href: "/commercial/site-proposals", icon: MonitorSmartphone, moduleKey: "crm", visibility: "doflow", roles: ["owner", "admin", "superadmin", "manager"] },
     ],
   },
   {

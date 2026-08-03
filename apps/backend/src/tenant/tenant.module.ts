@@ -37,6 +37,12 @@ import { TenantCredentialsCryptoService } from './tenant-credentials-crypto.serv
 import { TenantCredentialsPermissionsService } from './tenant-credentials-permissions.service';
 import { TenantCredentialsSchedulerService } from './tenant-credentials-scheduler.service';
 import { TenantEffectivePermissionsService } from './tenant-effective-permissions.service';
+import { TenantSiteProposalsController } from './tenant-site-proposals.controller';
+import { TenantSiteProposalsService } from './tenant-site-proposals.service';
+import { TenantSiteProposalsCsvService } from './tenant-site-proposals-csv.service';
+import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
+import { TenantSiteProposalsArtifactService } from './tenant-site-proposals-artifact.service';
+import { TenantSiteProposalsDoflowGuard } from './tenant-site-proposals-doflow.guard';
 import { FileStorageService } from '../file-storage.service';
 
 import { Tenant } from '../superadmin/entities/tenant.entity';
@@ -76,6 +82,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantCalendarController,
     TenantKnowledgeController,
     TenantCredentialsController,
+    TenantSiteProposalsController,
   ],
   providers: [
     TenantDashboardService,
@@ -97,6 +104,11 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantCredentialsPermissionsService,
     TenantCredentialsSchedulerService,
     TenantEffectivePermissionsService,
+    TenantSiteProposalsService,
+    TenantSiteProposalsCsvService,
+    TenantSiteProposalsTemplateService,
+    TenantSiteProposalsArtifactService,
+    TenantSiteProposalsDoflowGuard,
     FileStorageService,
   ],
 })

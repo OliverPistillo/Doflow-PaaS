@@ -27,6 +27,7 @@ import { seedTenantAutomationTemplatesAndRules } from '../tenant/tenant-automati
 import { seedTenantPlanningViews } from '../tenant/tenant-calendar-schema';
 import { seedTenantKnowledgeBase } from '../tenant/tenant-knowledge-schema';
 import { ensureTenantCredentialsTables } from '../tenant/tenant-credentials-schema';
+import { ensureDoflowSiteProposalTables } from '../tenant/tenant-site-proposals-schema';
 
 @Injectable()
 export class TenantBootstrapService implements OnApplicationBootstrap {
@@ -204,6 +205,9 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
     await seedTenantPlanningViews(ds, s);
     await seedTenantKnowledgeBase(ds, s);
     await ensureTenantCredentialsTables(ds, s);
+    if (s === 'doflow') {
+      await ensureDoflowSiteProposalTables(ds, s);
+    }
 
     this.logger.log(`Schema "${s}" provisioned successfully.`);
   }

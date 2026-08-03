@@ -1,0 +1,384 @@
+import { BadRequestException } from '@nestjs/common';
+import * as crypto from 'crypto';
+import {
+  COLSOVA_TEMPLATE,
+  ROUTE_REDIRECT_ANCHORS,
+  SITE_PROPOSAL_CATEGORY_TAGS,
+} from './tenant-site-proposals.constants';
+import { CanonicalProposalInput, JsonObject, RowIssue } from './tenant-site-proposals.types';
+
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const COLOR_RE = /^(#[0-9a-f]{3,4}([0-9a-f]{3,4})?|rgba?\(\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(25[0-5]|2[0-4]\d|1?\d?\d)\s*,\s*(25[0-5]|2[0-4]\d|1?\d?\d)(\s*,\s*(0|1|0?\.\d+))?\s*\))$/i;
+const CSS_LENGTH_RE = '(?:0|-?\\d+(?:\\.\\d+)?px)';
+const SHADOW_RE = new RegExp(`^${CSS_LENGTH_RE}\\s+${CSS_LENGTH_RE}\\s+${CSS_LENGTH_RE}(?:\\s+${CSS_LENGTH_RE})?\\s+rgba?\\(\\s*(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\s*,\\s*(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\s*,\\s*(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)(?:\\s*,\\s*(?:0|1|0?\\.\\d+))?\\s*\\)$`, 'i');
+const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const ABSENT_VALUES = new Set(['non trovato', 'n/d', 'nd', 'n.a.', 'null', 'undefined', '-']);
+
+export function sha256(data: string | Buffer): string {
+  return crypto.createHash('sha256').update(data).digest('hex');
+}
+
+export function deepClone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value));
+}
+
+export function assertNoPrototypePollution(value: unknown, path = 'body') {
+  if (!value || typeof value !== 'object') return;
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertNoPrototypePollution(item, `${path}.${index}`));
+    return;
+  }
+  for (const key of Object.keys(value as JsonObject)) {
+    if (FORBIDDEN_KEYS.has(key)) throw new BadRequestException(`Chiave non consentita: ${path}.${key}`);
+    assertNoPrototypePollution((value as JsonObject)[key], `${path}.${key}`);
+  }
+}
+
+export function cleanString(value: unknown, max = 2000): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  const s = String(value).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim();
+  if (!s || ABSENT_VALUES.has(s.toLowerCase())) return undefined;
+  return s.length > max ? s.slice(0, max) : s;
+}
+
+export function normalizeSlug(value: unknown): string {
+  return String(value ?? '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+}
+
+export function normalizeNameKey(value?: string): string {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+export function normalizeWebsite(value?: string): string | undefined {
+  const raw = cleanString(value, 500);
+  if (!raw) return undefined;
+  try {
+    const url = new URL(raw);
+    if (!['http:', 'https:'].includes(url.protocol)) return undefined;
+    url.hash = '';
+    url.search = '';
+    return url.toString().replace(/\/$/, '').toLowerCase();
+  } catch {
+    return undefined;
+  }
+}
+
+export function normalizeEmail(value?: string): string | undefined {
+  const email = cleanString(value, 320)?.toLowerCase();
+  return email && EMAIL_RE.test(email) ? email : undefined;
+}
+
+export function normalizePhoneHref(value?: string): string {
+  const raw = cleanString(value, 80);
+  if (!raw) return '';
+  const first = raw.split(/[\/;,|]/)[0] || raw;
+  let digits = first.replace(/[^\d+]/g, '');
+  if (!digits) return '';
+  if (!digits.startsWith('+') && digits.startsWith('00')) digits = `+${digits.slice(2)}`;
+  if (!digits.startsWith('+') && digits.length >= 6) digits = `+39${digits}`;
+  return /^\+\d{6,15}$/.test(digits) ? `tel:${digits}` : '';
+}
+
+export function validateWebsiteUrl(value?: string): string | undefined {
+  return normalizeWebsite(value);
+}
+
+export function validateImageUrl(value?: string): string | undefined {
+  const raw = cleanString(value, 80_000);
+  if (!raw) return undefined;
+  if (/^data:image\/(png|jpeg|jpg|webp|gif|svg\+xml);base64,[a-z0-9+/=\s]+$/i.test(raw) && raw.length <= 80_000) {
+    return raw.replace(/\s+/g, '');
+  }
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:') return undefined;
+    if (url.username || url.password) return undefined;
+    const host = url.hostname.toLowerCase();
+    if (host === 'localhost' || host.endsWith('.localhost')) return undefined;
+    if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return undefined;
+    if (host === '169.254.169.254') return undefined;
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+export function validateColor(value: unknown): string | undefined {
+  const s = cleanString(value, 80);
+  if (!s) return undefined;
+  if (/url\s*\(|var\s*\(|expression\s*\(|javascript:/i.test(s)) return undefined;
+  return COLOR_RE.test(s) ? s : undefined;
+}
+
+export function validatePaletteValue(value: unknown): string | undefined {
+  const s = cleanString(value, 120);
+  if (!s || /url\s*\(|var\s*\(|expression\s*\(|javascript:|[;{}<>]/i.test(s)) return undefined;
+  return COLOR_RE.test(s) || SHADOW_RE.test(s) ? s : undefined;
+}
+
+export function wordSafeLimit(path: string, value: string, limit: number, warnings: RowIssue[]): string {
+  const s = cleanString(value, limit * 3) || '';
+  if (s.length <= limit) return s;
+  const cut = s.slice(0, limit + 1);
+  const atSpace = cut.lastIndexOf(' ');
+  const used = `${(atSpace > Math.floor(limit * 0.55) ? cut.slice(0, atSpace) : cut.slice(0, limit)).trim()}...`;
+  warnings.push({ code: 'TEXT_ABBREVIATED', message: 'Testo abbreviato per rispettare il layout.', path, original: s, used, limit });
+  return used;
+}
+
+export function initialsFor(name: string): string {
+  const parts = normalizeNameKey(name).split(' ').filter(Boolean);
+  return (parts.length === 1 ? parts[0].slice(0, 2) : `${parts[0][0]}${parts[parts.length - 1][0]}`).toUpperCase();
+}
+
+export function parseJsonObject(value: string | undefined, field: string): JsonObject | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value);
+    assertNoPrototypePollution(parsed, field);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('object required');
+    return parsed as JsonObject;
+  } catch {
+    throw new BadRequestException(`${field} deve contenere JSON valido`);
+  }
+}
+
+export function fixedArray<T>(value: unknown, count: number, field: string): T[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length !== count) {
+    throw new BadRequestException(`${field} deve contenere esattamente ${count} elementi`);
+  }
+  return value as T[];
+}
+
+export function applyAllowedConfigOverrides(config: JsonObject, overrides: JsonObject, warnings: RowIssue[]) {
+  assertNoPrototypePollution(overrides, 'configOverrides');
+  const blockedRoots = new Set(['_README', 'editingContract', 'fixedCounts', 'textLimits', 'palette', 'layoutLocked', 'localPreviewMode', 'prototype', '__proto__', 'constructor']);
+  for (const [path, value] of flattenObject(overrides)) {
+    const parts = path.split('.');
+    const protectedRouting = parts[0] === 'routing' && parts[1] !== 'paths';
+    const protectedImage = parts[0] === 'images' && (parts.length < 3 || !['src', 'alt', 'objectPosition', 'prompt'].includes(parts[2]));
+    if (blockedRoots.has(parts[0]) || path.startsWith('template.') || protectedRouting || protectedImage) {
+      warnings.push({ code: 'CONFIG_OVERRIDE_BLOCKED', message: 'Override non consentito.', path });
+      continue;
+    }
+    if (!hasPath(config, parts)) {
+      warnings.push({ code: 'CONFIG_OVERRIDE_UNKNOWN', message: 'Override ignorato: percorso non esistente.', path });
+      continue;
+    }
+    setPath(config, parts, value);
+  }
+  forceTemplateContract(config);
+}
+
+export function applyPaletteOverrides(config: JsonObject, overrides: JsonObject) {
+  assertNoPrototypePollution(overrides, 'paletteOverrides');
+  if (!Array.isArray(config.palette)) throw new BadRequestException('Palette del Tema Colsova non valida');
+  const palette = config.palette as JsonObject[];
+  const byVariable = new Map(palette.map((entry) => [String(entry.variable), entry]));
+  for (const [variable, rawValue] of Object.entries(overrides)) {
+    const entry = byVariable.get(variable);
+    if (!entry) throw new BadRequestException(`Variabile palette non consentita: ${variable}`);
+    const value = validatePaletteValue(rawValue);
+    if (!value) throw new BadRequestException(`Valore palette non sicuro: ${variable}`);
+    entry.value = value;
+  }
+}
+
+export function forceTemplateContract(config: JsonObject) {
+  config.template = {
+    ...(config.template as JsonObject),
+    name: COLSOVA_TEMPLATE.name,
+    slug: COLSOVA_TEMPLATE.slug,
+    schemaVersion: COLSOVA_TEMPLATE.schemaVersion,
+    templateVersion: COLSOVA_TEMPLATE.version,
+    layoutLocked: true,
+  };
+  const routing = (config.routing && typeof config.routing === 'object' ? config.routing : {}) as JsonObject;
+  routing.localPreviewMode = true;
+  config.routing = routing;
+}
+
+export function validateSiteConfig(config: JsonObject): RowIssue[] {
+  assertNoPrototypePollution(config, 'siteConfig');
+  const warnings: RowIssue[] = [];
+  const template = config.template as JsonObject | undefined;
+  const editingContract = config.editingContract as JsonObject | undefined;
+  const fixed = editingContract?.fixedCounts as JsonObject | undefined;
+  const content = config.content as JsonObject | undefined;
+  if (!template || template.schemaVersion !== COLSOVA_TEMPLATE.schemaVersion || template.templateVersion !== COLSOVA_TEMPLATE.version || template.layoutLocked !== true) {
+    throw new BadRequestException('Contratto template del Tema Colsova non valido');
+  }
+  if (!fixed || Number(fixed.treatmentCards) !== 3 || Number(fixed.productPoints) !== 3 || Number(fixed.reviews) !== 6 || Number(fixed.faqs) !== 6) {
+    throw new BadRequestException('Conteggi fissi del Tema Colsova non validi');
+  }
+  const treatments = (((content?.treatments as JsonObject | undefined)?.cards) || []) as unknown[];
+  const points = (((content?.products as JsonObject | undefined)?.points) || []) as unknown[];
+  const reviews = (((content?.reviews as JsonObject | undefined)?.items) || []) as unknown[];
+  const faqs = (((content?.faq as JsonObject | undefined)?.items) || []) as unknown[];
+  if (treatments.length !== 3 || points.length !== 3 || reviews.length !== 6 || faqs.length !== 6) {
+    throw new BadRequestException('Il SiteConfig deve mantenere 3 trattamenti, 3 punti prodotto, 6 recensioni e 6 FAQ');
+  }
+  if (!Array.isArray(config.palette) || !config.palette.length) throw new BadRequestException('Palette del Tema Colsova non valida');
+  const paletteVariables = new Set<string>();
+  for (const item of config.palette as unknown[]) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new BadRequestException('Palette del Tema Colsova non valida');
+    const entry = item as JsonObject;
+    const variable = typeof entry.variable === 'string' ? entry.variable : '';
+    if (!/^--[a-z][a-z0-9-]*$/i.test(variable) || paletteVariables.has(variable) || typeof entry.role !== 'string' || !validatePaletteValue(entry.value)) {
+      throw new BadRequestException('Palette del Tema Colsova non valida');
+    }
+    paletteVariables.add(variable);
+  }
+  const images = config.images as JsonObject | undefined;
+  for (const slot of ['logo', 'hero', 'consultation', 'products', 'review1', 'review2', 'review3', 'review4', 'review5', 'review6']) {
+    if (!images?.[slot] || typeof images[slot] !== 'object' || Array.isArray(images[slot])) throw new BadRequestException(`Slot immagine non valido: ${slot}`);
+    const src = (images[slot] as JsonObject).src;
+    if (typeof src !== 'string' || !isSafeImageSource(src)) throw new BadRequestException(`Sorgente immagine non valida: ${slot}`);
+  }
+  const routing = config.routing as JsonObject | undefined;
+  const paths = routing?.paths as JsonObject | undefined;
+  const labels = routing?.labels as JsonObject | undefined;
+  if (!routing || routing.localPreviewMode !== true || !paths || !labels) throw new BadRequestException('Routing del Tema Colsova non valido');
+  for (const route of Object.values(paths)) {
+    if (typeof route !== 'string') throw new BadRequestException('Route non sicura');
+    if (route.startsWith('#')) continue;
+    if (/[{}]/.test(route.split('{citySlug}').join(''))) throw new BadRequestException('Route non sicura');
+    safeRelativeRoute(route.split('{citySlug}').join('citta'));
+  }
+  if (!config.textLimits || typeof config.textLimits !== 'object' || Array.isArray(config.textLimits)) throw new BadRequestException('textLimits del Tema Colsova non validi');
+  if (Object.values(config.textLimits as JsonObject).some((limit) => !Number.isFinite(Number(limit)) || Number(limit) <= 0)) {
+    throw new BadRequestException('textLimits del Tema Colsova non validi');
+  }
+  return warnings;
+}
+
+export function buildCommercialAnalysis(input: CanonicalProposalInput): JsonObject {
+  const strengths: JsonObject[] = [];
+  if (input.websiteUrl) strengths.push({ label: 'Sito web presente', source: 'csv_website', verified: true });
+  if (input.email || input.phone) strengths.push({ label: 'Contatti disponibili', source: 'csv_contacts', verified: true });
+  if (input.address) strengths.push({ label: 'Indirizzo dichiarato', source: 'csv_address', verified: true });
+  if (input.services.length) strengths.push({ label: 'Servizi dichiarati nel CSV', source: 'csv_services', verified: true });
+  if (input.city) strengths.push({ label: 'Citta indicata', source: 'csv_city', verified: true });
+  if (input.socialFacebook || input.socialInstagram || input.socialTikTok || input.socialYouTube) strengths.push({ label: 'Canali social indicati', source: 'csv_social', verified: true });
+  if (input.descriptor || input.category || input.professionalTitle) strengths.push({ label: 'Identita o specializzazione dichiarata', source: 'csv_identity', verified: true });
+
+  const improvementAreas: JsonObject[] = [];
+  if (input.notes) {
+    improvementAreas.push({ label: 'Indicazione da verificare prima dell invio', note: input.notes, source: 'csv_notes', verified: false });
+  }
+
+  return {
+    mode: 'csv_only',
+    status: 'draft',
+    strengths,
+    improvementAreas,
+    benefits: [
+      'gerarchia visiva chiara',
+      'CTA piu visibili',
+      'contatti accessibili',
+      'navigazione semplificata',
+      'struttura responsive',
+      'esperienza fluida',
+      'predisposizione mobile-first',
+      'contenuti facilmente aggiornabili tramite SiteConfig',
+    ],
+    desktopExperience: ['qualita visiva', 'gerarchia', 'leggibilita', 'uso dello spazio', 'coerenza delle sezioni'],
+    mobileFirstExperience: ['leggibilita da smartphone', 'CTA facilmente raggiungibili', 'navigazione semplice', 'scroll fluido', 'riduzione dell attrito', 'percorso che non intimorisce il potenziale cliente', 'facilita nel contattare l attivita'],
+    rationale: ['La proposta usa un tema strutturato e invariabile, aggiornato solo tramite SiteConfig validato.', 'Le scelte sono orientate a chiarezza, contatto e valutazione mobile-first senza screditare il sito precedente.'],
+    evidence: strengths,
+    requiresManualReview: true,
+  };
+}
+
+export function buildEmail(input: CanonicalProposalInput) {
+  const name = input.businessName;
+  return {
+    subject: `Una proposta mobile-first per ${name}`,
+    body: `Buongiorno,\n\nho preparato una proposta dimostrativa non pubblica per ${name}.\n\nL'obiettivo non e stravolgere l'identita dell'attivita, ma mostrare come contenuti, servizi e contatti possano essere presentati in modo piu chiaro, fluido e orientato al contatto.\n\nLa demo e stata progettata per offrire una buona esperienza da desktop, ma soprattutto da smartphone: navigazione semplice, testi leggibili, call to action visibili e un percorso che invita a scorrere senza creare confusione o attrito.\n\nLink alla demo:\n[LINK_DEMO]\n\nLe consiglio di valutarla sia da computer sia dal telefono, perche e soprattutto sul mobile che il potenziale cliente forma la sua prima impressione e decide se continuare la visita o abbandonarla.\n\nSe questa direzione le sembra interessante, puo rispondere a questa email e possiamo confrontarci in modo piu mirato su obiettivi, contenuti e possibili sviluppi.\n\nOliver\ndoFlow\nMobile first.`,
+  };
+}
+
+export function buildFingerprint(input: CanonicalProposalInput): string {
+  return normalizeWebsite(input.websiteUrl) || normalizeEmail(input.email) || normalizeNameKey(`${input.businessName} ${input.city || ''}`);
+}
+
+export function templateCategoryWarnings(category?: string): RowIssue[] {
+  const normalized = normalizeNameKey(category);
+  if (!normalized) return [];
+  if (SITE_PROPOSAL_CATEGORY_TAGS.some((tag) => normalized.includes(normalizeNameKey(tag)))) return [];
+  return [{ code: 'TEMPLATE_CATEGORY_MISMATCH', message: 'Categoria non perfettamente allineata al Tema Colsova; import consentito con contenuti prudenti.' }];
+}
+
+export function allowedStatusTransition(current: string, next: string): boolean {
+  if (current === next) return true;
+  if (current === 'archived') return next === 'archived';
+  return ['draft', 'ready', 'generated', 'error', 'archived'].includes(next);
+}
+
+function flattenObject(obj: JsonObject, prefix = ''): [string, unknown][] {
+  const out: [string, unknown][] = [];
+  for (const [key, value] of Object.entries(obj)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (value && typeof value === 'object' && !Array.isArray(value)) out.push(...flattenObject(value as JsonObject, path));
+    else out.push([path, value]);
+  }
+  return out;
+}
+
+function hasPath(obj: JsonObject, parts: string[]): boolean {
+  let cursor: unknown = obj;
+  for (const part of parts) {
+    if (!cursor || typeof cursor !== 'object' || !(part in (cursor as JsonObject))) return false;
+    cursor = (cursor as JsonObject)[part];
+  }
+  return true;
+}
+
+function setPath(obj: JsonObject, parts: string[], value: unknown) {
+  let cursor = obj;
+  for (let index = 0; index < parts.length - 1; index += 1) cursor = cursor[parts[index]] as JsonObject;
+  cursor[parts[parts.length - 1]] = value;
+}
+
+export function safeRelativeRoute(route: string): string {
+  let value = cleanString(route, 160) || '';
+  if (!value || value.startsWith('#')) return '';
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value) || value.includes('\\') || value.includes('\0') || value.includes('?') || value.includes('..') || value.startsWith('/')) {
+    throw new BadRequestException('Route non sicura');
+  }
+  if (value.startsWith('./')) value = value.slice(2);
+  const parts = value.split('/').filter(Boolean);
+  if (!parts.length || parts.some((p) => !/^[a-z0-9][a-z0-9_-]*$/i.test(p) || ['con', 'prn', 'aux', 'nul'].includes(p.toLowerCase()))) {
+    throw new BadRequestException('Route non sicura');
+  }
+  return parts.join('/');
+}
+
+function isSafeImageSource(value: string): boolean {
+  if (!value) return true;
+  if (validateImageUrl(value)) return true;
+  return !/^[a-z][a-z0-9+.-]*:/i.test(value)
+    && !value.startsWith('/')
+    && !value.includes('\\')
+    && !value.includes('\0')
+    && !value.includes('..')
+    && !/[<>"']/.test(value);
+}
+
+export function redirectAnchorFor(key: string): string {
+  return ROUTE_REDIRECT_ANCHORS[key] || '#home';
+}

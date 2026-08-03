@@ -135,6 +135,27 @@ export class FileStorageService {
     };
   }
 
+  async uploadGeneratedBuffer(key: string, buffer: Buffer, contentType: string) {
+    if (!key || key.startsWith('/') || key.includes('..') || key.includes('\\') || key.includes('\0')) {
+      throw new ForbiddenException('Invalid generated object key');
+    }
+    if (!buffer?.length) throw new ForbiddenException('Generated buffer is empty');
+    if (buffer.length > 25 * 1024 * 1024) throw new ForbiddenException('Generated buffer is too large');
+    if (!contentType || /[\r\n]/.test(contentType)) throw new ForbiddenException('Invalid content type');
+
+    await this.s3.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+      }),
+    );
+
+    this.logger.log(`Generated object uploaded: ${key} (${buffer.length} bytes)`);
+    return { bucket: this.bucket, key, contentType, size: buffer.length };
+  }
+
   async listFiles(req: Request) {
     const tenantId = this.getTenantId(req);
     const conn = this.getConn(req);

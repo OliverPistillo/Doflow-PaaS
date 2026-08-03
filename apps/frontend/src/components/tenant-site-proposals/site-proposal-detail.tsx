@@ -1,0 +1,59 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Archive, ChevronLeft, Download, Loader2, Save, Sparkles } from "lucide-react";
+import { toast } from "sonner";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CommercialEmptyState } from "@/components/tenant-commercial/commercial-ui";
+import { useTenantAccess } from "@/contexts/TenantAccessContext";
+import { archiveSiteProposal, downloadSiteProposalHtml, downloadSiteProposalZip, generateSiteProposal, getSiteProposal, listSiteProposalGenerations, listSiteProposalVersions, updateSiteProposal, type CommercialAnalysis, type SiteConfig, type SiteProposalDetail as DetailResponse, type SiteProposalGeneration, type SiteProposalVersion } from "@/lib/tenant-site-proposals-api";
+import { copyJson, downloadBlob, formatDate, generationStatusLabel, getErrorMessage, proposalStatusLabel } from "./site-proposal-utils";
+import { SiteProposalConfigEditor } from "./site-proposal-config-editor";
+import { SiteProposalAnalysisEditor } from "./site-proposal-analysis-editor";
+import { SiteProposalCrmEditor } from "./site-proposal-crm-editor";
+import { SiteProposalEmailEditor } from "./site-proposal-email-editor";
+import { SiteProposalFilesPanel } from "./site-proposal-files-panel";
+import { SiteProposalActivityPanel } from "./site-proposal-activity-panel";
+import { SiteProposalPreview } from "./site-proposal-preview";
+
+type Draft = { displayName: string; siteConfig: SiteConfig; commercialAnalysis: CommercialAnalysis; emailSubject: string; emailBody: string; companyId?: string | null; contactId?: string | null; leadId?: string | null; opportunityId?: string | null };
+const tabs = ["dati", "sito", "responsive", "analisi", "contatti", "email", "file", "attivita"] as const;
+type Tab = typeof tabs[number];
+function detailDraft(detail: DetailResponse): Draft { const proposal = detail.proposal; return { displayName: proposal.display_name, siteConfig: copyJson(proposal.site_config as SiteConfig), commercialAnalysis: copyJson(proposal.commercial_analysis || {}), emailSubject: proposal.email_subject || "", emailBody: proposal.email_body || "", companyId: proposal.company_id, contactId: proposal.contact_id, leadId: proposal.lead_id, opportunityId: proposal.opportunity_id }; }
+
+export function SiteProposalDetail({ id }: { id: string }) {
+  const { canCreate, canDelete, canManage, canUpdate } = useTenantAccess(); const router = useRouter(); const pathname = usePathname(); const searchParams = useSearchParams(); const queryTab = searchParams.get("tab"); const activeTab: Tab = tabs.includes(queryTab as Tab) ? queryTab as Tab : "dati";
+  const [detail, setDetail] = useState<DetailResponse | null>(null); const [draft, setDraft] = useState<Draft | null>(null); const [versions, setVersions] = useState<SiteProposalVersion[]>([]); const [generations, setGenerations] = useState<SiteProposalGeneration[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null); const [dirty, setDirty] = useState(false); const [saving, setSaving] = useState(false); const [generating, setGenerating] = useState(false); const [archiveOpen, setArchiveOpen] = useState(false);
+  const load = useCallback(async () => { setLoading(true); setError(null); try { const [nextDetail, nextVersions, nextGenerations] = await Promise.all([getSiteProposal(id), listSiteProposalVersions(id), listSiteProposalGenerations(id)]); setDetail(nextDetail); setDraft(detailDraft(nextDetail)); setVersions(nextVersions); setGenerations(nextGenerations); setDirty(false); } catch (value) { setError(getErrorMessage(value)); } finally { setLoading(false); } }, [id]);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { const warn = (event: BeforeUnloadEvent) => { if (!dirty) return; event.preventDefault(); event.returnValue = ""; }; window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn); }, [dirty]);
+  const updateDraft = (next: Draft) => { setDraft(next); setDirty(true); };
+  const save = useCallback(async () => { if (!draft) return false; setSaving(true); try { await updateSiteProposal(id, { displayName: draft.displayName, siteConfig: draft.siteConfig, commercialAnalysis: draft.commercialAnalysis, emailSubject: draft.emailSubject, emailBody: draft.emailBody, companyId: draft.companyId || null, contactId: draft.contactId || null, leadId: draft.leadId || null, opportunityId: draft.opportunityId || null }); toast.success("Proposta salvata."); await load(); return true; } catch (value) { toast.error(getErrorMessage(value)); return false; } finally { setSaving(false); } }, [draft, id, load]);
+  const generate = useCallback(async (saveFirst = false) => { if (dirty && !saveFirst) { toast.error("Sono presenti modifiche non salvate. Usa Salva e genera."); return; } if (saveFirst && !(await save())) return; setGenerating(true); try { await generateSiteProposal(id); toast.success("Proposta generata."); await load(); const params = new URLSearchParams(searchParams.toString()); params.set("tab", "sito"); router.replace(`${pathname}?${params.toString()}`, { scroll: false }); } catch (value) { toast.error(getErrorMessage(value)); } finally { setGenerating(false); } }, [dirty, id, load, pathname, router, save, searchParams]);
+  const completed = useMemo(() => generations.find((item) => item.status === "completed"), [generations]);
+  const previewGenerationId = searchParams.get("generationId") || completed?.id;
+  const download = async (kind: "html" | "zip") => { if (!completed) return; try { const result = kind === "html" ? await downloadSiteProposalHtml(id, completed.id) : await downloadSiteProposalZip(id, completed.id); downloadBlob(result.blob, result.filename); toast.success("Download avviato."); } catch (value) { toast.error(getErrorMessage(value)); } };
+  const archive = async () => { try { await archiveSiteProposal(id); toast.success("Proposta archiviata."); router.push("/commercial/site-proposals"); } catch (value) { toast.error(getErrorMessage(value)); } };
+  const changeTab = (tab: string) => { const params = new URLSearchParams(searchParams.toString()); params.set("tab", tab); router.replace(`${pathname}?${params.toString()}`, { scroll: false }); };
+  if (loading) return <main className="space-y-4 px-4 py-6 sm:px-6 lg:px-8"><Skeleton className="h-10 w-72" /><Skeleton className="h-[500px] w-full" /></main>;
+  if (!detail || !draft) return <main className="px-4 py-6 sm:px-6 lg:px-8"><CommercialEmptyState>{error || "Proposta non trovata."}</CommercialEmptyState></main>;
+  const proposal = detail.proposal;
+  return <main className="space-y-5 px-4 py-6 sm:px-6 lg:px-8"><Link href="/commercial/site-proposals" className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600"><ChevronLeft className="h-4 w-4" />Proposte web</Link><header className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h1 className="text-[30px] font-bold leading-tight text-slate-950">{draft.displayName}</h1><Badge>{proposalStatusLabel[proposal.status] || proposal.status}</Badge>{dirty ? <Badge className="bg-amber-100 text-amber-700">Modifiche non salvate</Badge> : null}</div><p className="mt-2 text-sm text-slate-500">Tema Colsova · configurazione v{proposal.current_version} · ultima generazione {formatDate(proposal.last_generated_at)}</p></div><div className="flex flex-wrap gap-2">{canUpdate("crm") ? <Button variant="outline" disabled={saving || !dirty} onClick={() => void save()}><Save className="mr-2 h-4 w-4" />Salva</Button> : null}{canManage("crm") ? <Button disabled={saving || generating || !dirty} onClick={() => void generate(true)}><Sparkles className="mr-2 h-4 w-4" />Salva e genera</Button> : null}{canManage("crm") ? <Button variant="outline" disabled={generating} onClick={() => void generate()}>{generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}Genera</Button> : null}<Button variant="outline" disabled={!completed} onClick={() => void download("html")}><Download className="mr-2 h-4 w-4" />HTML</Button><Button variant="outline" disabled={!completed} onClick={() => void download("zip")}><Download className="mr-2 h-4 w-4" />ZIP</Button>{canDelete("crm") ? <Button variant="outline" disabled={saving || generating} onClick={() => setArchiveOpen(true)}><Archive className="mr-2 h-4 w-4" />Archivia</Button> : null}</div></header>
+    <Tabs value={activeTab} onValueChange={changeTab}><TabsList className="h-auto w-full justify-start overflow-x-auto"><TabsTrigger value="dati">Dati</TabsTrigger><TabsTrigger value="sito">Sito</TabsTrigger><TabsTrigger value="responsive">Mobile / Desktop</TabsTrigger><TabsTrigger value="analisi">Analisi</TabsTrigger><TabsTrigger value="contatti">Contatti</TabsTrigger><TabsTrigger value="email">Email</TabsTrigger><TabsTrigger value="file">File</TabsTrigger><TabsTrigger value="attivita">Attività</TabsTrigger></TabsList></Tabs>
+    {activeTab === "dati" ? <SiteProposalConfigEditor config={draft.siteConfig} onChange={(siteConfig) => updateDraft({ ...draft, siteConfig })} /> : null}
+    {activeTab === "sito" ? <SiteProposalPreview id={id} generationId={previewGenerationId} onGenerate={() => void generate(false)} /> : null}
+    {activeTab === "responsive" ? <SiteProposalPreview id={id} generationId={previewGenerationId} comparison onGenerate={() => void generate(false)} /> : null}
+    {activeTab === "analisi" ? <SiteProposalAnalysisEditor analysis={draft.commercialAnalysis} onChange={(commercialAnalysis) => updateDraft({ ...draft, commercialAnalysis })} /> : null}
+    {activeTab === "contatti" ? <SiteProposalCrmEditor config={draft.siteConfig} links={draft} onConfigChange={(siteConfig) => updateDraft({ ...draft, siteConfig })} onLinksChange={(links) => updateDraft({ ...draft, ...links })} /> : null}
+    {activeTab === "email" ? <SiteProposalEmailEditor subject={draft.emailSubject} body={draft.emailBody} originalSubject={proposal.email_subject || ""} originalBody={proposal.email_body || ""} onChange={({ subject, body }) => updateDraft({ ...draft, emailSubject: subject, emailBody: body })} /> : null}
+    {activeTab === "file" ? <SiteProposalFilesPanel proposalId={id} generations={generations} versions={versions} onPreview={(generationId) => { const params = new URLSearchParams(searchParams.toString()); params.set("tab", "sito"); params.set("generationId", generationId); router.replace(`${pathname}?${params.toString()}`, { scroll: false }); }} onRestore={load} /> : null}
+    {activeTab === "attivita" ? <SiteProposalActivityPanel proposalId={id} /> : null}
+    <AlertDialog open={archiveOpen} onOpenChange={setArchiveOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Archivia proposta</AlertDialogTitle><AlertDialogDescription>“{proposal.display_name}” verrà archiviata con soft archive. Potrà rimanere disponibile nei dati storici, ma non nella lista attiva.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Annulla</AlertDialogCancel><AlertDialogAction onClick={() => void archive()}>Archivia</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+  </main>;
+}
