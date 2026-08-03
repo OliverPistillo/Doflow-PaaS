@@ -146,7 +146,11 @@ export class TenantSiteProposalsCsvService {
     if (rawHeaders.every((h) => !h.trim())) throw new BadRequestException('Intestazione completamente vuota');
     const headers = this.normalizeHeaders(rawHeaders);
     const rows = matrix.slice(1).filter((row) => row.some((cell) => cell.trim()));
-    if (rows.length > CSV_LIMITS.maxRows) throw new BadRequestException('Troppe righe dati');
+    if (rows.length > CSV_LIMITS.maxRows) {
+      throw new BadRequestException(
+        `Il CSV contiene ${rows.length} righe dati; il limite attuale e ${CSV_LIMITS.maxRows}. Dividi il file in piu importazioni.`,
+      );
+    }
     return {
       headers,
       delimiter,

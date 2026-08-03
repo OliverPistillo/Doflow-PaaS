@@ -37,8 +37,6 @@ import {
 
 @Injectable()
 export class TenantSiteProposalsService {
-  private ensurePromise?: Promise<void>;
-
   constructor(
     private readonly dataSource: DataSource,
     private readonly csv: TenantSiteProposalsCsvService,
@@ -362,17 +360,7 @@ export class TenantSiteProposalsService {
 
   private async ensure() {
     const schema = this.schema();
-    if (!this.ensurePromise) {
-      this.ensurePromise = (async () => {
-        await ensureDoflowSiteProposalTables(this.ds(), schema);
-        const manifest = await this.templates.getManifest();
-        await this.ds().query(
-          `UPDATE "${schema}".site_proposal_templates SET manifest = $1::jsonb, category_tags = $2::text[], updated_at = now() WHERE slug = $3 AND version = $4`,
-          [JSON.stringify(manifest), manifest.categoryTags, COLSOVA_TEMPLATE.slug, COLSOVA_TEMPLATE.version],
-        );
-      })();
-    }
-    await this.ensurePromise;
+    await ensureDoflowSiteProposalTables(this.dataSource, schema);
   }
 
   private schema(): string {

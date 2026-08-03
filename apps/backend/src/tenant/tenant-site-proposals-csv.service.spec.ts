@@ -41,6 +41,23 @@ describe('TenantSiteProposalsCsvService', () => {
     expect(() => service.parseCsvText(`business_name\n${rows}`)).toThrow(BadRequestException);
   });
 
+  it('reports the detected and allowed row counts without exposing CSV content', () => {
+    const rows = Array.from({ length: 51 }, (_, index) => `RISERVATO-${index}`).join('\n');
+
+    try {
+      service.parseCsvText(`business_name\n${rows}`);
+      throw new Error('Expected parseCsvText to reject 51 rows');
+    } catch (error) {
+      expect(error).toBeInstanceOf(BadRequestException);
+      const badRequest = error as BadRequestException;
+      expect(badRequest.getStatus()).toBe(400);
+      expect(badRequest.message).toContain('51');
+      expect(badRequest.message).toContain('50');
+      expect(badRequest.message).toContain('Dividi il file in piu importazioni');
+      expect(badRequest.message).not.toContain('RISERVATO');
+    }
+  });
+
   it('normalizes Italian aliases and preserves unknown columns', () => {
     const row = service.normalizeRow({ nome_attivita: 'Studio Demo', città: 'Roma', settore: 'wellness', sconosciuta: 'valore' });
     expect(row.businessName).toBe('Studio Demo');

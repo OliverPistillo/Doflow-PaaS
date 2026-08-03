@@ -88,4 +88,57 @@ describe('TenantSiteProposalsService', () => {
     await expect(service.listActivity(uuid, { limit: '500', offset: '2' })).resolves.toMatchObject({ total: 1, limit: 100, offset: 2 });
     expect(queryMock).toHaveBeenCalledWith(expect.stringContaining('ORDER BY created_at DESC LIMIT $2 OFFSET $3'), [uuid, 100, 2]);
   });
+
+  it('uses the singleton DataSource for shared provisioning and tenant connections for business queries', async () => {
+    const runner: any = { isTransactionActive: false };
+    runner.connect = jest.fn().mockResolvedValue(undefined);
+    runner.startTransaction = jest.fn().mockImplementation(async () => {
+      runner.isTransactionActive = true;
+    });
+    runner.query = jest.fn().mockResolvedValue([]);
+    runner.commitTransaction = jest.fn().mockImplementation(async () => {
+      runner.isTransactionActive = false;
+    });
+    runner.rollbackTransaction = jest.fn().mockImplementation(async () => {
+      runner.isTransactionActive = false;
+    });
+    runner.release = jest.fn().mockResolvedValue(undefined);
+
+    const singletonQuery = jest.fn();
+    const singletonDataSource = {
+      query: singletonQuery,
+      createQueryRunner: jest.fn().mockReturnValue(runner),
+    } as any;
+    const tenantQueryA = jest.fn().mockResolvedValueOnce([{ total: 0 }]).mockResolvedValueOnce([]);
+    const tenantQueryB = jest.fn().mockResolvedValueOnce([{ total: 0 }]).mockResolvedValueOnce([]);
+    const dependencies = [
+      { parseCsvFile: jest.fn(), buildPreviewRows: jest.fn(), normalizeRow: jest.fn(), buildSiteConfig: jest.fn() },
+      { listTemplates: jest.fn(), getDefaultConfig: jest.fn(), renderHtml: jest.fn(), buildRedirectFiles: jest.fn() },
+      { createZip: jest.fn() },
+      { uploadGeneratedBuffer: jest.fn(), downloadObjectStream: jest.fn() },
+    ] as any[];
+    const serviceA = new TenantSiteProposalsService(
+      singletonDataSource,
+      dependencies[0],
+      dependencies[1],
+      dependencies[2],
+      dependencies[3],
+      { user: { id: uuid, role: 'manager', tenantId: 'doflow' }, tenantConnection: { query: tenantQueryA } },
+    );
+    const serviceB = new TenantSiteProposalsService(
+      singletonDataSource,
+      dependencies[0],
+      dependencies[1],
+      dependencies[2],
+      dependencies[3],
+      { user: { id: uuid, role: 'manager', tenantId: 'doflow' }, tenantConnection: { query: tenantQueryB } },
+    );
+
+    await Promise.all([serviceA.list({ limit: 1 }), serviceB.list({ limit: 1 })]);
+
+    expect(singletonDataSource.createQueryRunner).toHaveBeenCalledTimes(1);
+    expect(singletonQuery).not.toHaveBeenCalled();
+    expect(tenantQueryA).toHaveBeenCalledTimes(2);
+    expect(tenantQueryB).toHaveBeenCalledTimes(2);
+  });
 });

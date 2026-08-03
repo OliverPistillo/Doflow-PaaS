@@ -9,15 +9,47 @@ import {
 } from './tenant-site-proposals.constants';
 import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
 
-export async function ensureDoflowSiteProposalTables(ds: DataSource, schema: string) {
+const SITE_PROPOSALS_SCHEMA_LOCK = 'site-proposals-schema-v1';
+const provisioningByDataSource = new WeakMap<DataSource, Map<string, Promise<void>>>();
+
+export function ensureDoflowSiteProposalTables(ds: DataSource, schema: string): Promise<void> {
   const s = safeSchema(schema, 'ensureDoflowSiteProposalTables');
   if (s !== SITE_PROPOSALS_TENANT) {
     throw new Error('Site proposal tables are available only for doflow');
   }
 
-  await ds.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
+  let provisioningBySchema = provisioningByDataSource.get(ds);
+  if (!provisioningBySchema) {
+    provisioningBySchema = new Map<string, Promise<void>>();
+    provisioningByDataSource.set(ds, provisioningBySchema);
+  }
 
-  await ds.query(`
+  const existing = provisioningBySchema.get(s);
+  if (existing) return existing;
+
+  const provisioning = provisionDoflowSiteProposalTables(ds, s).catch((error) => {
+    if (provisioningBySchema?.get(s) === provisioning) provisioningBySchema.delete(s);
+    throw error;
+  });
+  provisioningBySchema.set(s, provisioning);
+  return provisioning;
+}
+
+async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Promise<void> {
+  const runner = ds.createQueryRunner();
+  let provisioningFailed = false;
+
+  try {
+    await runner.connect();
+    await runner.startTransaction();
+    await runner.query(
+      'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))',
+      [SITE_PROPOSALS_TENANT, SITE_PROPOSALS_SCHEMA_LOCK],
+    );
+
+    await runner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
+
+    await runner.query(`
     CREATE TABLE IF NOT EXISTS "${s}".site_proposal_templates (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
       slug TEXT NOT NULL,
@@ -33,7 +65,7 @@ export async function ensureDoflowSiteProposalTables(ds: DataSource, schema: str
     )
   `);
 
-  await ds.query(`
+    await runner.query(`
     CREATE TABLE IF NOT EXISTS "${s}".site_proposal_import_batches (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
       template_slug TEXT NOT NULL,
@@ -54,11 +86,11 @@ export async function ensureDoflowSiteProposalTables(ds: DataSource, schema: str
       CONSTRAINT site_proposal_import_batches_status_chk CHECK (status = ANY ('{${IMPORT_STATUSES.join(',')}}'::text[]))
     )
   `);
-  await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_import_batches_status" ON "${s}".site_proposal_import_batches(status)`);
-  await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_import_batches_created_at" ON "${s}".site_proposal_import_batches(created_at)`);
-  await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_import_batches_source_sha256" ON "${s}".site_proposal_import_batches(source_sha256)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_import_batches_status" ON "${s}".site_proposal_import_batches(status)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_import_batches_created_at" ON "${s}".site_proposal_import_batches(created_at)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_import_batches_source_sha256" ON "${s}".site_proposal_import_batches(source_sha256)`);
 
-  await ds.query(`
+    await runner.query(`
     CREATE TABLE IF NOT EXISTS "${s}".site_proposals (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
       import_batch_id UUID REFERENCES "${s}".site_proposal_import_batches(id) ON DELETE SET NULL,
@@ -89,15 +121,15 @@ export async function ensureDoflowSiteProposalTables(ds: DataSource, schema: str
       CONSTRAINT site_proposals_status_chk CHECK (status = ANY ('{${PROPOSAL_STATUSES.join(',')}}'::text[]))
     )
   `);
-  await ds.query(`CREATE UNIQUE INDEX IF NOT EXISTS "uidx_${s}_site_proposals_import_row" ON "${s}".site_proposals(import_batch_id, source_row_index) WHERE import_batch_id IS NOT NULL AND source_row_index IS NOT NULL`);
-  await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_status" ON "${s}".site_proposals(status)`);
-  await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_import_batch" ON "${s}".site_proposals(import_batch_id)`);
-  await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_company" ON "${s}".site_proposals(company_id)`);
-  await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_fingerprint" ON "${s}".site_proposals(fingerprint)`);
-  await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_updated_at" ON "${s}".site_proposals(updated_at)`);
-  await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_deleted_at" ON "${s}".site_proposals(deleted_at)`);
+    await runner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "uidx_${s}_site_proposals_import_row" ON "${s}".site_proposals(import_batch_id, source_row_index) WHERE import_batch_id IS NOT NULL AND source_row_index IS NOT NULL`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_status" ON "${s}".site_proposals(status)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_import_batch" ON "${s}".site_proposals(import_batch_id)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_company" ON "${s}".site_proposals(company_id)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_fingerprint" ON "${s}".site_proposals(fingerprint)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_updated_at" ON "${s}".site_proposals(updated_at)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_deleted_at" ON "${s}".site_proposals(deleted_at)`);
 
-  await ds.query(`
+    await runner.query(`
     CREATE TABLE IF NOT EXISTS "${s}".site_proposal_versions (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
       proposal_id UUID NOT NULL REFERENCES "${s}".site_proposals(id) ON DELETE CASCADE,
@@ -113,7 +145,7 @@ export async function ensureDoflowSiteProposalTables(ds: DataSource, schema: str
     )
   `);
 
-  await ds.query(`
+    await runner.query(`
     CREATE TABLE IF NOT EXISTS "${s}".site_proposal_generations (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
       proposal_id UUID NOT NULL REFERENCES "${s}".site_proposals(id) ON DELETE CASCADE,
@@ -135,11 +167,11 @@ export async function ensureDoflowSiteProposalTables(ds: DataSource, schema: str
       CONSTRAINT site_proposal_generations_status_chk CHECK (status = ANY ('{running,completed,failed}'::text[]))
     )
   `);
-  await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_generations_proposal" ON "${s}".site_proposal_generations(proposal_id)`);
-  await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_generations_status" ON "${s}".site_proposal_generations(status)`);
-  await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_generations_created_at" ON "${s}".site_proposal_generations(created_at)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_generations_proposal" ON "${s}".site_proposal_generations(proposal_id)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_generations_status" ON "${s}".site_proposal_generations(status)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_generations_created_at" ON "${s}".site_proposal_generations(created_at)`);
 
-  await ds.query(`
+    await runner.query(`
     CREATE TABLE IF NOT EXISTS "${s}".site_proposal_activity (
       id BIGSERIAL PRIMARY KEY,
       proposal_id UUID NOT NULL REFERENCES "${s}".site_proposals(id) ON DELETE CASCADE,
@@ -150,13 +182,13 @@ export async function ensureDoflowSiteProposalTables(ds: DataSource, schema: str
       created_at TIMESTAMPTZ DEFAULT now()
     )
   `);
-  await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_activity_proposal" ON "${s}".site_proposal_activity(proposal_id)`);
-  await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_activity_created_at" ON "${s}".site_proposal_activity(created_at)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_activity_proposal" ON "${s}".site_proposal_activity(proposal_id)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_activity_created_at" ON "${s}".site_proposal_activity(created_at)`);
 
-  const manifest = await new TenantSiteProposalsTemplateService().getManifest();
+    const manifest = await new TenantSiteProposalsTemplateService().getManifest();
 
-  await ds.query(
-    `
+    await runner.query(
+      `
     INSERT INTO "${s}".site_proposal_templates
       (slug, name, version, schema_version, category_tags, manifest, is_active, created_at, updated_at)
     VALUES ($1, $2, $3, $4, $5::text[], $6::jsonb, true, now(), now())
@@ -167,14 +199,33 @@ export async function ensureDoflowSiteProposalTables(ds: DataSource, schema: str
         manifest = "${s}".site_proposal_templates.manifest || EXCLUDED.manifest,
         is_active = true,
         updated_at = now()
-    `,
-    [
-      COLSOVA_TEMPLATE.slug,
-      COLSOVA_TEMPLATE.name,
-      COLSOVA_TEMPLATE.version,
-      COLSOVA_TEMPLATE.schemaVersion,
-      SITE_PROPOSAL_CATEGORY_TAGS,
-      JSON.stringify(manifest),
-    ],
-  );
+      `,
+      [
+        COLSOVA_TEMPLATE.slug,
+        COLSOVA_TEMPLATE.name,
+        COLSOVA_TEMPLATE.version,
+        COLSOVA_TEMPLATE.schemaVersion,
+        SITE_PROPOSAL_CATEGORY_TAGS,
+        JSON.stringify(manifest),
+      ],
+    );
+
+    await runner.commitTransaction();
+  } catch (error) {
+    provisioningFailed = true;
+    if (runner.isTransactionActive) {
+      try {
+        await runner.rollbackTransaction();
+      } catch {
+        // Preserve the provisioning failure; rollback errors are secondary.
+      }
+    }
+    throw error;
+  } finally {
+    try {
+      await runner.release();
+    } catch (error) {
+      if (!provisioningFailed) throw error;
+    }
+  }
 }
