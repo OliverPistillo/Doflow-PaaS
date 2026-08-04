@@ -199,7 +199,90 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_personalizations_snapshot" ON "${s}".site_proposal_personalizations(snapshot_hash)`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_personalizations_created" ON "${s}".site_proposal_personalizations(created_at)`);
 
-    const manifests = await new TenantSiteProposalsTemplateService().getAllManifests();
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS preparation_status TEXT DEFAULT 'idle'`);
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS preparation_error TEXT`);
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS preparation_queued_at TIMESTAMPTZ`);
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS preparation_started_at TIMESTAMPTZ`);
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS preparation_completed_at TIMESTAMPTZ`);
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS latest_preparation_job_id TEXT`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_preparation" ON "${s}".site_proposals(preparation_status)`);
+    await runner.query(`
+      UPDATE "${s}".site_proposals p
+      SET preparation_status = CASE
+        WHEN p.status = 'generated'
+          AND length(trim(coalesce(p.email_subject,''))) >= 8
+          AND length(trim(coalesce(p.email_body,''))) >= 250
+          AND position('[LINK_DEMO]' in coalesce(p.email_body,'')) > 0
+          AND length(trim(coalesce(p.commercial_analysis->>'summary',''))) >= 40
+          AND EXISTS (SELECT 1 FROM "${s}".site_proposal_generations g WHERE g.proposal_id=p.id AND g.status='completed')
+        THEN 'ready'
+        ELSE 'idle'
+      END
+      WHERE p.preparation_status IS NULL
+    `);
+
+    await runner.query(`
+      CREATE TABLE IF NOT EXISTS "${s}".site_proposal_themes (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        slug TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        source_kind TEXT NOT NULL CHECK (source_kind IN ('builtin','uploaded')),
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        default_version TEXT,
+        categories JSONB NOT NULL DEFAULT '[]'::jsonb,
+        created_by UUID,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_themes_slug" ON "${s}".site_proposal_themes(slug)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_themes_source" ON "${s}".site_proposal_themes(source_kind)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_themes_created" ON "${s}".site_proposal_themes(created_at)`);
+    await runner.query(`
+      CREATE TABLE IF NOT EXISTS "${s}".site_proposal_theme_versions (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        theme_id UUID NOT NULL REFERENCES "${s}".site_proposal_themes(id) ON DELETE RESTRICT,
+        version TEXT NOT NULL,
+        schema_version TEXT NOT NULL,
+        contract_version TEXT NOT NULL,
+        content_profile TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('draft','active','disabled')),
+        is_builtin BOOLEAN NOT NULL DEFAULT false,
+        is_immutable BOOLEAN NOT NULL DEFAULT true,
+        template_sha256 TEXT NOT NULL,
+        template_size BIGINT NOT NULL,
+        zip_sha256 TEXT,
+        zip_size BIGINT,
+        manifest JSONB NOT NULL,
+        default_config JSONB NOT NULL,
+        template_storage_key TEXT,
+        zip_storage_key TEXT,
+        validation_report JSONB,
+        created_by UUID,
+        activated_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE(theme_id, version)
+      )
+    `);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_theme_versions_status" ON "${s}".site_proposal_theme_versions(status)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_theme_versions_created" ON "${s}".site_proposal_theme_versions(created_at)`);
+    await runner.query(`
+      CREATE TABLE IF NOT EXISTS "${s}".site_proposal_theme_activity (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        theme_id UUID NOT NULL REFERENCES "${s}".site_proposal_themes(id) ON DELETE CASCADE,
+        version_id UUID REFERENCES "${s}".site_proposal_theme_versions(id) ON DELETE SET NULL,
+        action TEXT NOT NULL,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        actor_user_id UUID,
+        actor_email TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_theme_activity_created" ON "${s}".site_proposal_theme_activity(created_at)`);
+
+    const templateService = new TenantSiteProposalsTemplateService();
+    const manifests = await templateService.getAllManifests();
     for (const { registration, manifest } of manifests) await runner.query(
       `
     INSERT INTO "${s}".site_proposal_templates
@@ -222,6 +305,28 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
         JSON.stringify(manifest),
       ],
     );
+
+    for (const { registration, manifest } of manifests) {
+      const defaultConfig = await templateService.getDefaultConfig(registration.slug, registration.version);
+      const insertedThemes = await runner.query(`
+        INSERT INTO "${s}".site_proposal_themes (slug,name,description,source_kind,is_active,default_version,categories)
+        VALUES ($1,$2,'Tema integrato e versionato','builtin',true,$3,$4::jsonb)
+        ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name, categories=EXCLUDED.categories, updated_at=now()
+        RETURNING id
+      `, [registration.slug, registration.name, registration.slug === 'colsova' ? '2.4.1' : (registration.isLatest ? registration.version : null), JSON.stringify(registration.categoryTags)]);
+      const themeId = insertedThemes[0]?.id || (await runner.query(`SELECT id FROM "${s}".site_proposal_themes WHERE slug=$1`, [registration.slug]))[0]?.id;
+      await runner.query(`
+        INSERT INTO "${s}".site_proposal_theme_versions
+          (theme_id,version,schema_version,contract_version,content_profile,status,is_builtin,is_immutable,template_sha256,template_size,zip_sha256,zip_size,manifest,default_config,validation_report,activated_at)
+        VALUES ($1,$2,$3,$4,$5,'active',true,true,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,now())
+        ON CONFLICT (theme_id,version) DO UPDATE SET
+          status='active', content_profile=EXCLUDED.content_profile, manifest=EXCLUDED.manifest,
+          default_config=EXCLUDED.default_config, validation_report=EXCLUDED.validation_report
+      `, [themeId, registration.version, registration.schemaVersion, registration.contractVersion, registration.contentProfile, registration.sourceSha256, registration.templateSize,
+        registration.version === '2.4.1' ? 'bc9be4d9249e06ee113331b0890b8d3c4efc8140bbadcd237a1cd68040549ad6' : null,
+        registration.version === '2.4.1' ? 1673508 : null,
+        JSON.stringify(manifest), JSON.stringify(defaultConfig), JSON.stringify({ valid: true, builtin: true, contentProfile: registration.contentProfile })]);
+    }
 
     await runner.commitTransaction();
   } catch (error) {

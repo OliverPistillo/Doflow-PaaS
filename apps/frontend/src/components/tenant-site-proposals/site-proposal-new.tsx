@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { CommercialPageHeader, CommercialSectionCard } from "@/components/tenant-commercial/commercial-ui";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
-import { createSiteProposal, listTemplates, previewImport, type SiteProposalTemplate } from "@/lib/tenant-site-proposals-api";
+import { createSiteProposal, fetchProposalThemePreview, listProposalThemes, previewImport, type ProposalTheme } from "@/lib/tenant-site-proposals-api";
 import { downloadCsvTemplate, getErrorMessage } from "./site-proposal-utils";
 
 const MAX_CSV_BYTES = 2 * 1024 * 1024;
@@ -26,8 +26,9 @@ const sourceFields = [
 export function SiteProposalNew() {
   const router = useRouter();
   const { canCreate } = useTenantAccess();
-  const [templates, setTemplates] = useState<SiteProposalTemplate[]>([]);
-  const [templateSlug, setTemplateSlug] = useState("");
+  const [templates, setTemplates] = useState<ProposalTheme[]>([]);
+  const [templateKey, setTemplateKey] = useState("");
+  const [previewHtml, setPreviewHtml] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -36,17 +37,19 @@ export function SiteProposalNew() {
 
   useEffect(() => {
     let active = true;
-    listTemplates()
+    listProposalThemes()
       .then((items) => {
         if (!active) return;
-        setTemplates(items);
-        setTemplateSlug(items.find((item) => item.slug === "colsova")?.slug || items[0]?.slug || "");
+        const activeItems = items.filter((item) => item.status === "active");
+        setTemplates(activeItems);
+        const preferred = activeItems.find((item) => item.default_version === item.version) || activeItems.find((item) => item.slug === "colsova" && item.version === "2.4.1") || activeItems[0];
+        setTemplateKey(preferred ? `${preferred.slug}@${preferred.version}` : "");
       })
       .catch((error) => toast.error(getErrorMessage(error)));
     return () => { active = false; };
   }, []);
 
-  const selected = templates.find((item) => item.slug === templateSlug);
+  const selected = templates.find((item) => `${item.slug}@${item.version}` === templateKey);
   const pickFile = (next: File | null) => {
     setFileError(null);
     if (!next) { setFile(null); return; }
@@ -63,13 +66,13 @@ export function SiteProposalNew() {
     setFile(next);
   };
   const submitCsv = async () => {
-    if (!file || !templateSlug) {
+    if (!file || !selected) {
       setFileError("Seleziona un file CSV e un template.");
       return;
     }
     setBusy(true);
     try {
-      const result = await previewImport(file, templateSlug);
+      const result = await previewImport(file, selected.slug, selected.version);
       toast.success("CSV analizzato.");
       router.push(`/commercial/site-proposals/imports/${result.batch.id}`);
     } catch (error) {
@@ -85,8 +88,9 @@ export function SiteProposalNew() {
     }
     setBusy(true);
     try {
-      const proposal = await createSiteProposal({ templateSlug, displayName: manual.business_name.trim(), sourceData: manual });
-      toast.success("Proposta creata.");
+      if (!selected) throw new Error("Seleziona un tema attivo.");
+      const proposal = await createSiteProposal({ templateSlug: selected.slug, templateVersion: selected.version, displayName: manual.business_name.trim(), sourceData: manual });
+      toast.success("Proposta creata e accodata.");
       router.push(`/commercial/site-proposals/${proposal.id}`);
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -98,19 +102,21 @@ export function SiteProposalNew() {
   return (
     <main className="space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <CommercialPageHeader title="Nuova proposta" description="Importa un elenco CSV oppure crea una proposta da dati essenziali." />
-      <CommercialSectionCard title="Template">
+      <CommercialSectionCard title="Tema">
         <div className="grid gap-3 md:grid-cols-[260px_1fr]">
-          <Select value={templateSlug} onValueChange={setTemplateSlug} disabled={busy}>
-            <SelectTrigger className="h-11"><SelectValue placeholder="Seleziona template" /></SelectTrigger>
-            <SelectContent>{templates.map((item) => <SelectItem key={item.slug} value={item.slug}>{item.name} · {item.version}</SelectItem>)}</SelectContent>
+          <Select value={templateKey} onValueChange={setTemplateKey} disabled={busy}>
+            <SelectTrigger className="h-11"><SelectValue placeholder="Seleziona tema" /></SelectTrigger>
+            <SelectContent>{templates.map((item) => <SelectItem key={`${item.slug}@${item.version}`} value={`${item.slug}@${item.version}`}>{item.name} · {item.version}{item.default_version === item.version ? " · Predefinito" : ""}</SelectItem>)}</SelectContent>
           </Select>
-          {selected ? <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600"><strong className="text-slate-900">{selected.name}</strong> · {selected.manifest.categoryTags.slice(0, 4).join(", ")} · {Object.values(selected.manifest.fixedCounts).reduce((total, count) => total + Number(count || 0), 0)} elementi bloccati · Layout bloccato</div> : <p className="text-sm text-slate-500">Caricamento template…</p>}
+          {selected ? <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600"><strong className="text-slate-900">{selected.name}</strong> · {(selected.categories || []).slice(0, 4).join(", ")} · {selected.content_profile} · Versione immutabile <Button size="sm" variant="outline" className="ml-3" onClick={() => void fetchProposalThemePreview(selected.slug, selected.version).then(setPreviewHtml).catch((error) => toast.error(getErrorMessage(error)))}>Anteprima</Button></div> : <p className="text-sm text-slate-500">Caricamento temi…</p>}
         </div>
+        {previewHtml ? <div className="mt-4 overflow-hidden rounded-xl border bg-white"><div className="flex justify-end border-b p-2"><Button size="sm" variant="ghost" onClick={() => setPreviewHtml("")}>Chiudi</Button></div><iframe title="Anteprima tema selezionato" srcDoc={previewHtml} sandbox="allow-scripts" referrerPolicy="no-referrer" className="h-[620px] w-full" /></div> : null}
       </CommercialSectionCard>
       <Tabs defaultValue="csv">
         <TabsList className="w-full justify-start overflow-x-auto"><TabsTrigger value="csv">Importa CSV</TabsTrigger><TabsTrigger value="manual">Crea manualmente</TabsTrigger></TabsList>
         <TabsContent value="csv" className="mt-5">
           <CommercialSectionCard title="Importa CSV">
+            <p className="mb-4 text-sm text-slate-600"><strong>Tema per questo batch:</strong> {selected ? `${selected.name} ${selected.version}` : "seleziona un tema attivo"}</p>
             <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
               <button type="button" className="flex min-h-52 flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 px-5 text-center transition-colors hover:border-indigo-300 hover:bg-indigo-50/30" onClick={() => inputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); pickFile(event.dataTransfer.files[0] || null); }}>
                 <Upload className="h-7 w-7 text-indigo-600" /><span className="mt-3 font-medium text-slate-900">Trascina qui il CSV</span><span className="mt-1 text-sm text-slate-500">oppure premi per selezionarlo, massimo 2 MiB</span>
@@ -127,7 +133,7 @@ export function SiteProposalNew() {
             </div>
             {file ? <p className="mt-4 text-sm text-slate-700"><FileUp className="mr-2 inline h-4 w-4" />{file.name} · {(file.size / 1024).toFixed(1)} KiB</p> : null}
             {fileError ? <p className="mt-3 text-sm text-rose-600" role="alert">{fileError}</p> : null}
-            <div className="mt-5 flex justify-end"><Button disabled={!canCreate("crm") || busy || !file || !templateSlug} onClick={() => void submitCsv()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Analizza CSV</Button></div>
+            <div className="mt-5 flex justify-end"><Button disabled={!canCreate("crm") || busy || !file || !selected} onClick={() => void submitCsv()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Analizza CSV</Button></div>
           </CommercialSectionCard>
         </TabsContent>
         <TabsContent value="manual" className="mt-5">
@@ -135,7 +141,7 @@ export function SiteProposalNew() {
             <div className="grid gap-4 md:grid-cols-2">
               {sourceFields.map(([key, label, required]) => <div key={key} className={["services", "overview", "target_audience", "primary_goal", "tone_of_voice", "notes"].includes(key) ? "md:col-span-2" : ""}><Label htmlFor={key}>{label}{required ? " *" : ""}</Label>{["services", "overview", "target_audience", "primary_goal", "tone_of_voice", "notes"].includes(key) ? <Textarea id={key} className="mt-1 min-h-24" value={manual[key] || ""} onChange={(event) => setManual((current) => ({ ...current, [key]: event.target.value }))} placeholder={key === "services" ? "Un servizio per riga oppure separati da punto e virgola" : undefined} /> : <Input id={key} className="mt-1 h-11" value={manual[key] || ""} onChange={(event) => setManual((current) => ({ ...current, [key]: event.target.value }))} />}</div>)}
             </div>
-            <div className="mt-5 flex justify-end"><Button disabled={!canCreate("crm") || busy || !templateSlug} onClick={() => void submitManual()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Crea proposta</Button></div>
+            <div className="mt-5 flex justify-end"><Button disabled={!canCreate("crm") || busy || !selected} onClick={() => void submitManual()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Crea e prepara</Button></div>
           </CommercialSectionCard>
         </TabsContent>
       </Tabs>

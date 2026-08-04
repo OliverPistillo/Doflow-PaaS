@@ -1,6 +1,7 @@
 import { selectProposalImages } from './tenant-site-proposals-image-catalog';
 import { CanonicalProposalInput, JsonObject, WebsiteSnapshot } from './tenant-site-proposals.types';
 import { buildFingerprint, deepClone, initialsFor, normalizePhoneHref, normalizeSlug, sha256 } from './tenant-site-proposals-validation';
+import { getTemplateRegistration, SiteProposalTemplateRegistration } from './tenant-site-proposals-template-registry';
 
 const heroVariants = [
   (name: string, category: string) => `${name}: ${category.toLowerCase()}, con un percorso più chiaro.`,
@@ -24,7 +25,7 @@ function firstThree(input: CanonicalProposalInput) {
 
 export type DeterministicPackage = { config: JsonObject; analysis: JsonObject; email: { subject: string; body: string } };
 
-export function buildDeterministicProposal(base: JsonObject, input: CanonicalProposalInput, snapshot?: WebsiteSnapshot, assets: JsonObject = {}): DeterministicPackage {
+function buildBasicDeterministicProposal(base: JsonObject, input: CanonicalProposalInput, snapshot?: WebsiteSnapshot, assets: JsonObject = {}): DeterministicPackage {
   const config = deepClone(base);
   const fingerprint = buildFingerprint(input) || sha256(`${input.businessName}:${input.city || ''}`);
   const category = input.category || input.descriptor || 'Studio professionale';
@@ -115,3 +116,155 @@ export function buildDeterministicProposal(base: JsonObject, input: CanonicalPro
   };
   return { config, analysis, email };
 }
+
+function conversionAnalysis(input: CanonicalProposalInput, snapshot?: WebsiteSnapshot): JsonObject {
+  const observed = Boolean(snapshot?.text);
+  const hasContacts = Boolean(input.email || input.phone || snapshot?.emails.length || snapshot?.phones.length);
+  const strengths: JsonObject[] = [
+    snapshot?.title ? { label: 'Identità online riconoscibile', evidence: `Titolo pubblico rilevato: ${snapshot.title}`, confidence: 'high' } : null,
+    snapshot?.headings.length ? { label: 'Contenuti già presenti', evidence: `${snapshot.headings.length} intestazioni pubbliche rilevate`, confidence: 'medium' } : null,
+    hasContacts ? { label: 'Canali di contatto disponibili', evidence: 'Sono presenti recapiti pubblici o dichiarati.', confidence: 'high' } : null,
+  ].filter(Boolean) as JsonObject[];
+  if (!strengths.length) strengths.push({ label: 'Identità dell’attività disponibile', evidence: `Nome pubblico o dichiarato: ${input.businessName}`, confidence: 'medium' });
+  const improvementAreas: JsonObject[] = [
+    { label: 'Proposta di valore più immediata', evidence: observed ? 'I contenuti pubblici possono essere sintetizzati in una gerarchia più diretta.' : 'Valutazione prudente basata sui dati disponibili.', businessImpact: 'Una promessa chiara aiuta il visitatore a capire prima il valore offerto.' },
+    { label: 'Percorso verso il contatto', evidence: snapshot?.ctas.length ? 'Le CTA esistenti possono essere rese più coerenti nel percorso.' : 'Non è emersa una CTA pubblica inequivocabile.', businessImpact: 'Ridurre i passaggi può aumentare le richieste qualificate.' },
+    { label: 'Esperienza mobile', evidence: 'La demo organizza contenuti e azioni per una lettura rapida da smartphone.', businessImpact: 'Una navigazione più semplice riduce l’abbandono.' },
+  ];
+  return {
+    mode: observed ? 'website_analysis' : 'deterministic_public_data', status: 'draft',
+    summary: observed
+      ? `L’analisi dei contenuti pubblici di ${input.businessName} mostra una base concreta da valorizzare con una gerarchia più chiara, un percorso mobile lineare e inviti al contatto più coerenti.`
+      : `Analisi preliminare di ${input.businessName} costruita sui dati disponibili: la proposta valorizza identità, servizi e contatti con un percorso commerciale chiaro, da verificare prima dell’invio.`,
+    strengths, improvementAreas,
+    opportunities: [{ label: 'Chiarezza commerciale', evidence: 'Messaggio principale, servizi e CTA sono collegati in sequenza.' }],
+    whyDoflow: [{ label: 'Demo concreta', evidence: 'Il prospect può valutare un risultato navigabile prima di decidere.' }],
+    evidence: strengths,
+    requiresManualReview: true,
+  };
+}
+
+function conversionEmail(input: CanonicalProposalInput, analysis: JsonObject) {
+  const positive = String(((analysis.strengths as JsonObject[])?.[0] || {}).label || 'l’identità della vostra attività').toLowerCase();
+  return {
+    subject: `Una demo su misura per ${input.businessName}`.slice(0, 120),
+    body: `Buongiorno,\n\nho osservato ${positive} e ho preparato una proposta dimostrativa riservata per ${input.businessName}.\n\nLa base attuale può essere valorizzata rendendo più immediata la proposta di valore, più coerente il percorso verso il contatto e più semplice la consultazione da smartphone. In termini commerciali significa aiutare chi visita il sito a capire prima cosa offrite, trovare rapidamente le informazioni essenziali e compiere il passo successivo con meno attrito.\n\nLa demo mostra una homepage completa con messaggio iniziale chiaro, tre servizi centrali, elementi di fiducia, un percorso in tre passaggi, FAQ e un contatto ben visibile. Con doflow il progetto resta aggiornabile e può evolvere senza perdere l’identità esistente, partendo da un risultato concreto da valutare insieme.\n\nPuò vedere la demo qui:\n[LINK_DEMO]\n\nSe questa direzione le sembra interessante, risponda pure a questa email: sarò felice di confrontarmi sui contenuti da confermare e sui prossimi passi.\n\nOliver\ndoflow`,
+  };
+}
+
+function buildColsovaConversionProposal(base: JsonObject, input: CanonicalProposalInput, snapshot?: WebsiteSnapshot, assets: JsonObject = {}): DeterministicPackage {
+  const config = deepClone(base);
+  const fingerprint = buildFingerprint(input) || sha256(`${input.businessName}:${input.city || ''}`);
+  const category = input.category || input.descriptor || 'Studio professionale';
+  const city = input.city || '';
+  const services = firstThree(input);
+  const baseContent = config.content as JsonObject;
+  const baseImages = config.images as JsonObject;
+  const resolvedImages = (assets.images || {}) as JsonObject;
+  const image = (slot: 'hero'|'consultation'|'feature', manual?: string) => {
+    const resolved = resolvedImages[slot];
+    if (manual) return { ...((baseImages[slot] || {}) as JsonObject), src: manual, sourceMethod: 'manual' };
+    if (resolved && typeof resolved === 'object' && !Array.isArray(resolved)) return { ...((baseImages[slot] || {}) as JsonObject), ...(resolved as JsonObject) };
+    if (typeof resolved === 'string' && resolved) return { ...((baseImages[slot] || {}) as JsonObject), src: resolved, sourceMethod: 'website' };
+    return deepClone((baseImages[slot] || {}) as JsonObject);
+  };
+  const analysis = conversionAnalysis(input, snapshot);
+  const currentBusiness = (config.business || {}) as JsonObject;
+  const social = snapshot?.social || {};
+  config.sourceWebsite = { url: input.websiteUrl || snapshot?.sourceUrl || '', title: snapshot?.title || '', description: snapshot?.description || '', overview: input.overview || '' };
+  config.brand = { ...((config.brand || {}) as JsonObject), name: input.businessName, descriptor: input.descriptor || category, monogram: initialsFor(input.businessName), logoMethod: assets.logoDefault ? 'website' : 'text-fallback', warnings: (assets.warnings as unknown[]) || [] };
+  config.business = {
+    ...currentBusiness, city, citySlug: normalizeSlug(city), address: input.address || currentBusiness.address || '',
+    phoneDisplay: input.phone || snapshot?.phones[0] || currentBusiness.phoneDisplay || '', phoneHref: normalizePhoneHref(input.phone || snapshot?.phones[0]),
+    email: input.email || snapshot?.emails[0] || currentBusiness.email || '', hours: input.openingHours || currentBusiness.hours || '',
+    socialLinkedIn: input.socialLinkedIn || social.linkedin || currentBusiness.socialLinkedIn || '',
+    socialInstagram: input.socialInstagram || social.instagram || currentBusiness.socialInstagram || '',
+    socialFacebook: input.socialFacebook || social.facebook || currentBusiness.socialFacebook || '',
+    copyrightYear: String(new Date().getFullYear()), developerCredit: 'doflow~', developerUrl: 'https://doflow.it/',
+  };
+  config.seo = {
+    title: `${input.businessName} | ${category}${city ? ` a ${city}` : ''}`.slice(0, 70),
+    description: `Scopri ${input.businessName}: ${category.toLowerCase()}, servizi presentati con chiarezza e un contatto semplice${city ? ` a ${city}` : ''}.`.slice(0, 165),
+  };
+  config.images = {
+    ...baseImages,
+    logoDefault: { ...((baseImages.logoDefault || {}) as JsonObject), src: String(assets.logoDefault || input.logoUrl || ((baseImages.logoDefault as JsonObject)?.src || '')), alt: `Logo ${input.businessName}` },
+    logoLight: { ...((baseImages.logoLight || {}) as JsonObject), src: String(assets.logoLight || ((baseImages.logoLight as JsonObject)?.src || '')), alt: `Logo chiaro ${input.businessName}` },
+    hero: image('hero', input.heroImageUrl), consultation: image('consultation', input.consultationImageUrl), feature: image('feature', input.productsImageUrl),
+  };
+  const serviceDescriptions = [
+    'Un percorso presentato con chiarezza, indicazioni prudenti e un primo contatto semplice.',
+    'Informazioni ordinate per comprendere opzioni, priorità e prossimi passi.',
+    'Un servizio valorizzato con contenuti essenziali e un invito all’azione coerente.',
+  ];
+  config.content = {
+    ...baseContent,
+    hero: { eyebrow: `${category}${city ? ` · ${city}` : ''}`, title: `${input.businessName}, più vicino alle persone`, titleAccent: 'con un percorso chiaro', description: input.overview || `${input.businessName} presenta servizi e competenze con un percorso chiaro, personale e facile da consultare da ogni dispositivo.`, primaryCta: 'Richiedi informazioni', secondaryCta: 'Scopri il metodo', stampText: 'ASCOLTO • CHIAREZZA • VALORE • ', proofs: ['Consulenza personalizzata','Percorso chiaro','Contatto diretto'] },
+    consultation: { eyebrow: 'Approccio e metodo', title: 'Prima le esigenze,', titleAccent: 'poi il percorso', paragraphs: [`Ogni richiesta parte dall’ascolto e da informazioni comprensibili, per aiutare chi visita ${input.businessName} a orientarsi con fiducia.`, 'Obiettivi, alternative e prossimi passi vengono presentati senza promesse eccessive, con un contatto semplice per approfondire i dettagli.'], cta: 'Scopri il metodo', highlights: ['Valutazione individuale','Informazioni chiare','Follow-up dedicato'] },
+    servicesIntro: { eyebrow: 'Servizi', title: 'Soluzioni costruite', titleAccent: 'intorno alle esigenze', description: `Tre aree centrali di ${input.businessName}, presentate in modo semplice per accompagnare dalla scoperta al contatto.` },
+    services: services.map((title, index) => ({ number: `0${index + 1} / Servizio`, title, description: serviceDescriptions[index], cta: `Scopri ${title.toLowerCase()}` })),
+    feature: { eyebrow: 'Esperienza', title: 'Un riferimento chiaro', titleAccent: 'in ogni momento', description: `Contenuti, servizi e contatti di ${input.businessName} restano accessibili in un percorso ordinato, pensato per ridurre dubbi e passaggi inutili.`, cta: 'Richiedi informazioni' },
+    trust: { items: [
+      { title: 'Percorso personalizzato', description: 'Ogni richiesta parte da esigenze e priorità reali.' },
+      { title: 'Informazioni prudenti', description: 'Nessuna promessa o dato non supportato dalle fonti.' },
+      { title: city ? `Presenza a ${city}` : 'Presenza locale', description: city ? 'La sede dichiarata è valorizzata nel percorso.' : 'La sede può essere confermata prima della pubblicazione.' },
+      { title: 'Contatto diretto', description: 'Il passo successivo è sempre visibile e comprensibile.' },
+    ] },
+    process: { eyebrow: 'Come funziona', title: 'Dalla prima richiesta', titleAccent: 'al passo successivo', description: 'Tre passaggi semplici per sapere sempre cosa succede e perché.', steps: [
+      { number: '01', title: 'Condividi la tua esigenza', description: 'Racconta obiettivi e priorità attraverso il canale che preferisci.' },
+      { number: '02', title: 'Valutiamo le opzioni', description: 'Informazioni e alternative vengono organizzate in modo chiaro e prudente.' },
+      { number: '03', title: 'Definiamo il percorso', description: 'Confermiamo insieme tempi, contenuti e passo successivo più adatto.' },
+    ], cta: 'Inizia dal primo contatto' },
+    faqIntro: { eyebrow: 'Domande frequenti', title: 'Le informazioni utili prima di iniziare', description: 'Risposte chiare per orientarsi; i dettagli specifici vengono sempre confermati direttamente.' },
+    faq: [
+      ['Come posso richiedere informazioni?', 'Usa i contatti presenti nella pagina per avviare un primo confronto senza impegno.'],
+      ['Qual è il primo passo?', 'Condividi la tua esigenza: riceverai indicazioni prudenti sui possibili passi successivi.'],
+      ['Il percorso è personalizzato?', 'Le opzioni vengono definite sulla base delle necessità, dei dati disponibili e delle priorità condivise.'],
+      ['Posso consultare il sito da smartphone?', 'Sì, contenuti e azioni sono progettati per restare chiari su schermi di ogni dimensione.'],
+      ['Dove trovo i dettagli dei servizi?', 'La sezione servizi offre una panoramica; i dettagli vengono confermati nel contatto diretto.'],
+      ['Le informazioni della demo sono definitive?', 'No, la demo è una proposta riservata e va verificata prima di qualsiasi pubblicazione.'],
+    ].map(([question, answer]) => ({ question, answer })),
+    contact: { ...((baseContent.contact || {}) as JsonObject), eyebrow: 'Richiedi informazioni', title: 'Parliamo di ciò', titleAccent: 'che stai cercando', description: `Lascia i recapiti essenziali per entrare in contatto con ${input.businessName}. Questa demo non invia dati e mostra soltanto il percorso previsto.`, phoneLabel: 'Telefono', emailLabel: 'Email', addressLabel: 'Sede', hoursLabel: 'Orari', formTitle: 'Richiedi informazioni', formDescription: 'Compila i campi essenziali per simulare la richiesta.', demoNotice: 'Modalità demo: il modulo non invia dati.', submit: 'Invia la richiesta', success: 'Richiesta dimostrativa acquisita. Nel sito definitivo sarà collegata al canale concordato.' },
+    footer: { ...((baseContent.footer || {}) as JsonObject), description: `${input.businessName}${city ? ` · ${city}` : ''}. Informazioni da verificare prima della pubblicazione.`, copyright: `© ${new Date().getFullYear()} ${input.businessName}. Tutti i diritti riservati.` },
+    headerCta: 'Richiedi informazioni',
+  };
+  config.personalization = { ...((config.personalization || {}) as JsonObject), status: snapshot ? 'completed' : 'idle', provider: 'local', model: '', sourceUrl: snapshot?.finalUrl || input.websiteUrl || '', snapshotHash: '', completedAt: '', warnings: [], assetMethod: assets.logoDefault ? 'website+stock-local' : 'stock-local', copyMethod: 'deterministic', pageMode: 'homepage' };
+  return { config, analysis, email: conversionEmail(input, analysis) };
+}
+
+export function buildDeterministicProposalForTemplate(base: JsonObject, registration: SiteProposalTemplateRegistration, input: CanonicalProposalInput, snapshot?: WebsiteSnapshot, assets: JsonObject = {}): DeterministicPackage {
+  return registration.contentProfile === 'colsova-conversion-v1'
+    ? buildColsovaConversionProposal(base, input, snapshot, assets)
+    : buildBasicDeterministicProposal(base, input, snapshot, assets);
+}
+
+export function buildDeterministicProposal(base: JsonObject, input: CanonicalProposalInput, snapshot?: WebsiteSnapshot, assets: JsonObject = {}): DeterministicPackage {
+  const template = (base.template || {}) as JsonObject;
+  const registration = getTemplateRegistration(String(template.slug || 'colsova'), String(template.templateVersion || ''));
+  return buildDeterministicProposalForTemplate(base, registration, input, snapshot, assets);
+}
+
+export function applyAiOutputForProfile(built: DeterministicPackage, output: JsonObject, registration: SiteProposalTemplateRegistration): DeterministicPackage {
+  const next = { ...built, config: deepClone(built.config), analysis: deepClone(output.analysis as JsonObject), email: deepClone(output.email as { subject: string; body: string }) };
+  const generated = output.content as JsonObject;
+  const baseContent = next.config.content as JsonObject;
+  if (registration.contentProfile === 'colsova-conversion-v1') {
+    const allowed = ['hero','consultation','servicesIntro','services','feature','trust','process','faqIntro','faq','contact','footer','headerCta'];
+    next.config.content = { ...baseContent };
+    for (const key of allowed) if (Object.prototype.hasOwnProperty.call(generated, key)) (next.config.content as JsonObject)[key] = deepClone(generated[key]);
+    const footer = (next.config.content as JsonObject).footer as JsonObject;
+    const baseBusiness = built.config.business as JsonObject;
+    (next.config.business as JsonObject).developerCredit = baseBusiness.developerCredit;
+    (next.config.business as JsonObject).developerUrl = baseBusiness.developerUrl;
+    if (footer && isObject(baseContent.footer)) {
+      const originalFooter = baseContent.footer as JsonObject;
+      for (const key of ['developerCredit','developerUrl']) if (originalFooter[key] !== undefined) footer[key] = originalFooter[key];
+    }
+  } else {
+    next.config.content = deepClone(generated);
+  }
+  next.config.seo = deepClone(output.seo as JsonObject);
+  return next;
+}
+
+function isObject(value: unknown): value is JsonObject { return Boolean(value) && typeof value === 'object' && !Array.isArray(value); }

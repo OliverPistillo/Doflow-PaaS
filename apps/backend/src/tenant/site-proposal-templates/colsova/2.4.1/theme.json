@@ -1,0 +1,22 @@
+{
+  "name": "Tema Colsova",
+  "slug": "colsova",
+  "version": "2.4.1",
+  "schemaVersion": "2.0",
+  "contractVersion": "2.0",
+  "entry": "template.html",
+  "standalone": true,
+  "templateSha256": "395a7f9e77d120558e5e45d3485c65f07be0cb339ad6a207a5562ec8b491d263",
+  "size": 2276156,
+  "categories": [
+    "medicina-estetica",
+    "beauty",
+    "wellness",
+    "lead-generation"
+  ],
+  "modes": [
+    "homepage",
+    "landing"
+  ],
+  "notes": "Homepage premium orientata alla conversione, con gerarchia tipografica uniforme, sezione metodo alleggerita, percorso in tre passaggi e CTA header testuale."
+}

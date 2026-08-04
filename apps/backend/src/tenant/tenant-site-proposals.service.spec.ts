@@ -52,7 +52,7 @@ describe('TenantSiteProposalsService', () => {
     const { service, csv, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
     csv.parseCsvFile.mockReturnValue({ rows: [{ business_name: 'A' }] });
     csv.buildPreviewRows.mockReturnValue([{ rowIndex: 1, valid: false, errors: [{ code: 'DUPLICATE_ROW' }] }]);
-    queryMock.mockResolvedValueOnce([{ id: uuid, status: 'preview' }]);
+    queryMock.mockResolvedValueOnce([{ slug: 'colsova', version: '2.4.1' }]).mockResolvedValueOnce([{ id: uuid, status: 'preview' }]);
     const result = await service.previewImport({ originalname: 'x.csv', mimetype: 'text/csv', buffer: Buffer.from('a') } as any);
     expect(result.rows[0].errors[0].code).toBe('DUPLICATE_ROW');
   });

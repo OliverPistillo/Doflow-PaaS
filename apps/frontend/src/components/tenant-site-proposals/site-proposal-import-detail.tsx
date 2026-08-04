@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, ChevronLeft, CircleAlert, Loader2, Sparkles } from "lucide-react";
+import { CheckCircle2, ChevronLeft, CircleAlert, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -26,7 +26,7 @@ import {
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
 import {
   confirmImport,
-  generateImportBatch,
+  prepareImportBatch,
   getImportBatch,
   listSiteProposals,
   type SiteProposal,
@@ -138,6 +138,7 @@ export function SiteProposalImportDetail({ id }: { id: string }) {
   }, [id]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (!proposals.some((proposal) => ["queued", "running"].includes(proposal.preparation_status || ""))) return; const timer = window.setInterval(() => void load(), 3000); return () => window.clearInterval(timer); }, [load, proposals]);
 
   const confirm = async () => {
     if (!batch || batch.valid_count === 0) {
@@ -158,11 +159,11 @@ export function SiteProposalImportDetail({ id }: { id: string }) {
     }
   };
 
-  const generate = async () => {
+  const prepare = async () => {
     setBusy(true);
     try {
-      const result = await generateImportBatch(id);
-      toast.success(`Generazione completata: ${result.success} riuscite, ${result.failed} errori.`);
+      const result = await prepareImportBatch(id, false);
+      toast.success(`${result.queued} proposte accodate per la preparazione.`);
       await load();
     } catch (value) {
       toast.error(getErrorMessage(value));
@@ -176,17 +177,18 @@ export function SiteProposalImportDetail({ id }: { id: string }) {
 
   const warnings = batch.rows.reduce((sum, row) => sum + row.warnings.length, 0);
   const noValidRows = batch.status === "preview" && batch.valid_count === 0;
+  const preparation = { queued: proposals.filter((item) => item.preparation_status === "queued").length, running: proposals.filter((item) => item.preparation_status === "running").length, ready: proposals.filter((item) => item.preparation_status === "ready").length, fallback: proposals.filter((item) => item.preparation_status === "fallback").length, failed: proposals.filter((item) => item.preparation_status === "failed").length };
 
   return (
     <main className="space-y-5 px-4 py-6 sm:px-6 lg:px-8">
       <Link href="/commercial/site-proposals/new" className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600"><ChevronLeft className="h-4 w-4" />Nuovo import</Link>
-      <CommercialPageHeader title={batch.original_filename} description={`Template ${batch.template_slug} · ${formatDate(batch.created_at)} · hash ${shortHash(batch.source_sha256)}`} />
+      <CommercialPageHeader title={batch.original_filename} description={`Tema per questo batch: ${batch.template_slug} ${batch.template_version} · ${formatDate(batch.created_at)} · hash ${shortHash(batch.source_sha256)}`} />
       <div className="flex flex-wrap items-center gap-3">
         <Badge>{importStatusLabel[batch.status] || batch.status}</Badge>
         <span className="text-sm text-slate-500">{batch.row_count} righe · {batch.valid_count} valide · {batch.invalid_count} non valide</span>
         {noValidRows && canCreate("crm") ? <Button asChild variant="outline"><Link href="/commercial/site-proposals/new">Nuovo import</Link></Button> : null}
         {batch.status === "preview" && canCreate("crm") && !noValidRows ? <Button disabled={busy} onClick={() => setConfirmOpen(true)}><CheckCircle2 className="mr-2 h-4 w-4" />Conferma importazione</Button> : null}
-        {batch.status === "confirmed" && canManage("crm") ? <Button disabled={busy} onClick={() => void generate()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}Genera tutte le proposte</Button> : null}
+        {["confirmed", "generated", "partial"].includes(batch.status) && canManage("crm") ? <Button disabled={busy || preparation.running > 0} variant="outline" onClick={() => void prepare()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Accoda proposte incomplete</Button> : null}
       </div>
       {noValidRows ? <div role="alert" className="flex flex-wrap items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><CircleAlert className="h-4 w-4" />{EMPTY_IMPORT_MESSAGE}</div> : null}
       {error ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
@@ -196,6 +198,7 @@ export function SiteProposalImportDetail({ id }: { id: string }) {
         <CommercialKpiCard label="Con errori" value={batch.invalid_count} icon={CircleAlert} tone="orange" />
         <CommercialKpiCard label="Warning" value={warnings} icon={CircleAlert} tone="blue" />
       </div>
+      {proposals.length ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"><CommercialKpiCard label="Accodate" value={preparation.queued} icon={RefreshCw} tone="violet" /><CommercialKpiCard label="In preparazione" value={preparation.running} icon={Loader2} tone="blue" /><CommercialKpiCard label="Pronte AI" value={preparation.ready} icon={CheckCircle2} tone="green" /><CommercialKpiCard label="Pronte localmente" value={preparation.fallback} icon={CheckCircle2} tone="orange" /><CommercialKpiCard label="Fallite" value={preparation.failed} icon={CircleAlert} tone="orange" /></div> : null}
       <CommercialSectionCard title="Anteprima righe">
         {batch.rows.length === 0 ? <CommercialEmptyState>Nessuna riga disponibile.</CommercialEmptyState> : (
           <div className="space-y-2">
@@ -214,7 +217,7 @@ export function SiteProposalImportDetail({ id }: { id: string }) {
       {proposals.length ? <CommercialSectionCard title="Proposte create"><div className="flex flex-wrap gap-2">{proposals.map((proposal) => <Button key={proposal.id} variant="outline" asChild><Link href={`/commercial/site-proposals/${proposal.id}`}>{proposal.display_name}</Link></Button>)}</div></CommercialSectionCard> : null}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Conferma importazione</AlertDialogTitle><AlertDialogDescription>Le righe valide creeranno proposte in bozza. L’operazione è idempotente.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader><AlertDialogTitle>Conferma importazione</AlertDialogTitle><AlertDialogDescription>Le righe valide creeranno proposte e verranno accodate automaticamente per personalizzazione e generazione. L’operazione è idempotente.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter><AlertDialogCancel>Annulla</AlertDialogCancel><AlertDialogAction disabled={busy || batch.valid_count === 0} onClick={() => void confirm()}>Conferma importazione</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

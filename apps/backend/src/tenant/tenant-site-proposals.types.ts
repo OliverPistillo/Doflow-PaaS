@@ -72,6 +72,8 @@ export type TemplateManifest = {
     reviews?: number;
     services?: number;
     trustItems?: number;
+    consultationHighlights?: number;
+    processSteps?: number;
     faqs: number;
   };
   textLimits: JsonObject;
@@ -82,8 +84,25 @@ export type TemplateManifest = {
   sourceSha256: string;
 };
 
+export type ProposalContentProfile = 'colsova-legacy-v1' | 'proposal-basic-v2' | 'colsova-conversion-v1';
+export type PreparationStatus = 'idle' | 'queued' | 'running' | 'ready' | 'fallback' | 'failed';
+export type ProposalPreparationActor = { id?: string | null; email?: string | null; role?: string | null };
+export type ProposalPreparationOptions = {
+  force: boolean;
+  generate: boolean;
+  reason: string;
+  targetTemplateSlug?: string;
+  targetTemplateVersion?: string;
+};
+export type ProposalPreparationJobData = ProposalPreparationOptions & {
+  tenantSchema: string;
+  proposalId: string;
+  actorUserId: string | null;
+  actorEmail: string | null;
+};
+
 export type PersonalizationStatus = 'idle' | 'running' | 'completed' | 'fallback' | 'failed';
-export type ProposalImageSourceMethod = 'website' | 'catalog' | 'catalog_fallback' | 'manual';
+export type ProposalImageSourceMethod = 'website' | 'catalog' | 'catalog_fallback' | 'manual' | 'stock_local';
 export type WebsiteImageCandidate = {
   url: string;
   alt: string;

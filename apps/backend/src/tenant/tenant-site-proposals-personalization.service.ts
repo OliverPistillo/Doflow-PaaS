@@ -7,9 +7,10 @@ import { ACTIVITY, SITE_PROPOSALS_TENANT } from './tenant-site-proposals.constan
 import { TenantSiteProposalsAiService, ProposalAiUnavailableError } from './tenant-site-proposals-ai.service';
 import { TenantSiteProposalsBrandService } from './tenant-site-proposals-brand.service';
 import { TenantSiteProposalsImageService } from './tenant-site-proposals-image.service';
-import { buildDeterministicProposal } from './tenant-site-proposals-deterministic';
+import { applyAiOutputForProfile, buildDeterministicProposal } from './tenant-site-proposals-deterministic';
 import { ensureDoflowSiteProposalTables } from './tenant-site-proposals-schema';
 import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
+import { getTemplateRegistration } from './tenant-site-proposals-template-registry';
 import { TenantSiteProposalsWebsiteExtractorService } from './tenant-site-proposals-website-extractor.service';
 import { TenantSiteProposalsWebsiteFetcherService } from './tenant-site-proposals-website-fetcher.service';
 import { AuthUserRef, CanonicalProposalInput, JsonObject, WebsiteSnapshot } from './tenant-site-proposals.types';
@@ -106,8 +107,10 @@ export class TenantSiteProposalsPersonalizationService {
       if (palette && typeof palette === 'object' && !Array.isArray(palette)) built.config.palette = palette;
       let status: 'completed'|'fallback' = 'fallback'; let provider='local'; let usedModel='';
       try {
-        const generated = await this.ai.generate(this.aiPayload(canonical,snapshot,built.config.palette as JsonObject),built.config.textLimits as JsonObject);
-        const output=generated.output; built.analysis=output.analysis as JsonObject; built.config.content=output.content; built.config.seo=output.seo; built.email={subject:String((output.email as JsonObject).subject||''),body:String((output.email as JsonObject).body||'')};
+        const generated = await this.ai.generate(this.aiPayload(canonical,snapshot,built.config.palette as JsonObject),built.config.textLimits as JsonObject,'proposal-basic-v2');
+        const output=generated.output;
+        const merged=applyAiOutputForProfile(built,output,getTemplateRegistration('colsova','2.0.0'));
+        built.config=merged.config;built.analysis=merged.analysis;built.email=merged.email;
         status='completed';provider='gemini';usedModel=generated.model;
       } catch (error) {
         if (!(error instanceof ProposalAiUnavailableError)) throw error;

@@ -1,10 +1,39 @@
-# Contratto Tema Proposte web V2
+# Contratto temi Proposte web V2
 
-## Scopo e versioning
+## Pacchetto e versioni
 
-Un tema è una sorgente HTML standalone registrata dal backend. La struttura è `apps/backend/src/tenant/site-proposal-templates/{slug}/{version}/template.html`; slug e versione seguono un registry tipizzato e ogni versione è immutabile dopo la pubblicazione. Il manifest dichiara nome, slug, versione, schema, hash SHA-256, directory, stato, categorie e versione del contratto. Una nuova versione non modifica le proposte esistenti: l’upgrade è esplicito e crea una versione della proposta.
+Un tema è un pacchetto ZIP standalone e immutabile. Deve contenere, direttamente o sotto una sola cartella radice:
 
-## Configurazione obbligatoria
+```text
+nome-tema-versione/
+├── template.html
+├── theme.json
+├── README.md               # opzionale
+├── NOTE-REVISIONE.md       # opzionale
+└── ASSET-CREDITS.md        # opzionale
+```
+
+Sono ammessi altri file documentali `.md` o `.txt`, ma non asset separati o eseguibili: immagini, CSS e JavaScript necessari devono essere incorporati nel solo `template.html`. Una coppia `slug + version` non può essere sostituita né sovrascritta; ogni aggiornamento richiede una nuova versione semver.
+
+## Manifest `theme.json`
+
+Campi obbligatori:
+
+- `name`, `slug` sicuro e `version` semver;
+- `schemaVersion` e `contractVersion`;
+- `entry`, sempre `template.html`;
+- `templateSha256` e `size`, calcolati sui byte originali;
+- `categories`, array non vuoto;
+- `standalone`, sempre `true`.
+
+`contentProfile` è consigliato. Se assente, il backend può inferire prudentemente solo:
+
+- `proposal-basic-v2`, dalla presenza di `content.approach`, `content.benefits` e `content.trustItems`;
+- `colsova-conversion-v1`, dalla presenza di `content.consultation`, `content.servicesIntro` e `content.process`.
+
+Strutture arbitrarie o profili sconosciuti sono rifiutati. Il file di esempio è in `docs/site-proposal-theme-package-example/theme.json`.
+
+## Config incorporato e profili
 
 Il documento deve contenere esattamente un nodo:
 
@@ -12,69 +41,53 @@ Il documento deve contenere esattamente un nodo:
 <script id="template-config" type="application/json">{}</script>
 ```
 
-Il config V2 contiene `template`, `editingContract`, `sourceWebsite`, `brand`, `business`, `seo`, `palette`, `routing`, `images`, `content`, `personalization` e `textLimits`.
+Il JSON deve essere valido, privo di chiavi `__proto__`, `prototype` e `constructor`, e coerente con manifest, contratto, conteggi, slot, route e limiti testuali. Il renderer sostituisce esclusivamente il payload di questo nodo, preservando tutti gli altri byte HTML.
 
-`editingContract.contractVersion` vale `2.0` e dichiara:
+`proposal-basic-v2` richiede 3 servizi, 6 punti di fiducia e 6 FAQ. `colsova-conversion-v1` richiede 3 servizi, 6 recensioni demo, 6 FAQ, 4 trust item, 3 highlight di consulenza e 3 passaggi. I due profili non sono distinti dal solo `contractVersion`: Colsova 2.0.0 e 2.4.1 dichiarano entrambi `2.0` ma hanno strutture differenti.
 
-- campi protetti: identità del template, contratto, conteggi e limiti;
-- campi editabili: identità pubblica, contatti, social, testi, palette, immagini e route ammesse;
-- conteggi fissi: 3 servizi, 6 punti di fiducia, 6 FAQ;
-- image slot: `logoDefault`, `logoLight`, `hero`, `consultation`, `feature`;
-- social slot: `socialLinkedIn`, `socialInstagram`, `socialFacebook`.
+Gli slot immagine V2 sono `logoDefault`, `logoLight`, `hero`, `consultation` e `feature`. Gli slot social sono `socialLinkedIn`, `socialInstagram` e `socialFacebook`. Route, `editingContract`, `textLimits`, feature, asset credit, struttura form e label strutturali sono protetti.
 
-`textLimits` assegna un limite positivo ai testi editabili. Il renderer e l’output AI devono rispettarlo. Non sono ammessi HTML nei contenuti testuali, chiavi `__proto__`, `prototype` o `constructor`, placeholder tecnici o testimonianze attribuite a persone non verificate.
+## Palette Colsova conversion
 
-## Palette, immagini e doppio logo
+Colsova 2.4.1 usa `ink`, `inkSoft`, `muted`, `ivory`, `cream`, `sand`, `sandSoft`, `gold`, `goldDeep` e `white`. La mappatura del brand è: dark→ink, dark secondario→inkSoft, muted→muted, light→ivory, light secondario→cream, neutral→sand, neutral soft→sandSoft, primary→gold, primary hover→goldDeep e white→white. Il validatore basic (`primary`, `secondary`, `accent` ecc.) non viene applicato al profilo conversion.
 
-La palette dichiara almeno `primary`, `secondary`, `accent`, `dark`, `light`, `primaryHover`, `muted` e `textOnPrimary`, usando colori CSS semplici validati. Il contrasto di testo e azioni deve rispettare WCAG AA dove applicabile.
+## Recensioni e form demo
 
-Gli slot fotografici `hero`, `consultation` e `feature` sono obbligatori e non vuoti. Sono accettati URL HTTPS o data URI immagine entro i limiti del backend. Non usare endpoint casuali, rettangoli tratteggiati o testo sostitutivo visibile. Ogni oggetto fotografico dichiara `src`, `alt`, `objectPosition` e `sourceMethod`; i metodi ammessi sono `website`, `catalog`, `catalog_fallback` e `manual`.
+Le recensioni dimostrative appartengono al tema: testi, nomi, avatar, disclaimer e indicazione “Recensioni dimostrative” non possono essere generati o modificati dall’AI. `features.reviewsMode = demo` deve restare tale. Il passaggio a `real` richiede dati manuali verificati; in loro assenza la sezione deve restare nascosta o il passaggio deve essere bloccato. Le recensioni demo non sono evidenze da inviare al provider AI.
 
-Le immagini pubbliche del sito vengono validate con Sharp (almeno 720×480, area minima 450.000 pixel, rapporto fra 0,45 e 2,6) e hanno priorità sul catalogo. Il ranking per hero, consultation e feature considera contesto, rapporto, risoluzione e ordine sorgente in modo deterministico. Le scelte manuali esplicite vengono conservate anche durante una nuova analisi. Per il catalogo viene provata una sequenza deterministica con cache temporanea di raggiungibilità; se nessun URL supera il probe, il primo URL deterministico resta valorizzato come `catalog_fallback` con warning.
+Un form demo è ammesso soltanto senza action esterna, con `form-action 'none'`, submit intercettato tramite `preventDefault()` e una dichiarazione visibile che chiarisca che non invia dati.
 
-`logoDefault` è destinato all’header chiaro; `logoLight` allo stato trasparente sopra una hero scura. Se uno dei due non è sicuro o disponibile il tema deve mostrare il nome testuale dell’attività, senza riquadri “LOGO”. L’header sticky cambia stato dopo lo scroll senza layout shift e mantiene navigazione da tastiera e menu mobile.
+## Sicurezza e limiti upload
 
-## Slot semantici
+Il caricamento accetta ZIP fino a 5 MiB, massimo 25 file, massimo 10 MiB non compressi, `template.html` fino a 5 MiB e ogni documento fino a 1 MiB. Il backend rifiuta path assoluti, traversal, file nascosti, symlink, file eseguibili, nomi duplicati case-insensitive, più radici e possibili ZIP bomb.
 
-Gli elementi modificabili dovrebbero esporre `data-doflow-slot`, per esempio:
+Il template richiede `noindex,nofollow,noarchive` e CSP con almeno `default-src 'none'`, `connect-src 'none'`, `object-src 'none'`, `frame-src 'none'` e `form-action 'none'`. Sono vietati script e stylesheet esterni, iframe, object, embed, base href, meta refresh, handler inline, `eval`, `new Function`, `document.write`, `fetch`, XMLHttpRequest, WebSocket, localStorage, sessionStorage e URL `javascript:`. I collegamenti web esterni sono soltanto HTTPS; `_blank` richiede `noopener noreferrer`.
 
-```html
-<img data-doflow-slot="brand.logoDefault" alt="">
-<img data-doflow-slot="brand.logoLight" alt="">
-<h1 data-doflow-slot="content.hero.title"></h1>
-<p data-doflow-slot="content.hero.description"></p>
-<img data-doflow-slot="images.hero" alt="">
-<a data-doflow-slot="business.socialLinkedIn"></a>
-```
+I template verificati possono incorporare data URI `image/webp`, `image/png`, `image/jpeg` e SVG sanitizzati. Il limite è 1 MiB codificato per singola immagine fotografica e 3 MiB codificati complessivi. Questa eccezione vale soltanto nel validatore dei pacchetti tema e non amplia il limite degli URL immagine inseriti via API.
 
-Lo stesso criterio si applica a servizi, CTA, contatto, footer e altri social. Gli slot sono un contratto di editing; non autorizzano l’esecuzione dinamica di codice.
+## Workflow libreria
 
-## Route, sicurezza e distribuzione
+L’upload salva una nuova versione come `draft` e restituisce manifest, hash, dimensioni, profilo, warning, report e URL di preview. Un admin, owner o superadmin può attivarla e impostarla come predefinita; un manager può consultare, scaricare e visualizzare l’anteprima. Disattivazione, default ed eliminazione sono registrati nell’attività.
 
-Le route sono ancore locali o percorsi relativi sicuri. Vietati URL JavaScript, traversal, backslash e route assolute. Il tema deve avere `noindex,nofollow,noarchive`, CSP restrittiva, nessun font remoto obbligatorio, nessun CDN JavaScript, nessun form verso origini esterne e nessuna lettura di cookie o token. Deve funzionare in iframe `sandbox="allow-scripts"` e negli artifact HTML/ZIP attuali.
+Le versioni built-in, attive, predefinite o già usate non sono eliminabili. Lo storage viene rimosso prima del record DB: un errore storage conserva il record. I temi caricati restano in MinIO sotto `doflow/site-proposal-themes/{slug}/{version}/`, mai nel filesystem del container. Il resolver riceve sempre lo schema tenant validato e separa la cache per schema, slug, versione e hash.
 
-Il JavaScript può leggere soltanto il config validato. Sono vietati `eval`, `new Function`, HTML non sanificato proveniente dall’utente e fetch automatici. I social sono mostrati solo per URL HTTPS validi e usano `target="_blank"` con `rel="noopener noreferrer"` e `aria-label`.
+La preview usa il config base tramite API autenticata e un iframe con `sandbox="allow-scripts"`, `referrerPolicy="no-referrer"`, senza same-origin, form, popup o top-navigation.
 
-## Requisiti responsive e accessibilità
+## Checklist upload
 
-Verificare almeno 390, 768 e 1440 px. Il menu mobile deve avere stato `aria-expanded`, controllo da tastiera, focus visibile e chiusura dopo la navigazione. Immagini con alt, gerarchia di heading, FAQ native accessibili e rispetto di `prefers-reduced-motion` sono obbligatori.
+1. Preparare `template.html` e `theme.json` byte-stabili.
+2. Calcolare SHA-256 e dimensione sul template definitivo.
+3. Dichiarare profilo, conteggi, slot, route, feature e limiti.
+4. Verificare standalone, un solo `template-config`, noindex e CSP.
+5. Verificare script, link, form demo, SVG e data URI.
+6. Cercare PII, segreti, recensioni inventate e claim non verificati.
+7. Creare lo ZIP con zero o una cartella radice.
+8. Caricare: il risultato deve essere `draft` con report valido.
+9. Controllare preview mobile, tablet, desktop e confronto.
+10. Attivare e, separatamente, impostare come predefinito.
 
-## Hash, validazione e checklist
+## Preparazione automatica e AI
 
-Prima della registrazione:
+Creazione manuale e conferma CSV accodano la preparazione; il worker recupera il sito pubblico, sceglie asset, costruisce il pacchetto locale, prova Gemini, valida semanticamente l’output e genera HTML e ZIP. Qualsiasi errore provider o output incompleto usa il motore locale e produce stato `fallback`, senza falso badge AI.
 
-1. calcolare SHA-256 sul file byte per byte e inserirlo nel registry;
-2. verificare un solo `template-config` JSON valido;
-3. validare campi protetti, conteggi, palette, route, social e slot;
-4. renderizzare un config di prova senza alterare struttura o CSP;
-5. verificare noindex, responsive, tastiera, contrasto e menu;
-6. cercare placeholder, dati cliente, recensioni inventate, script remoti e segreti;
-7. eseguire test, type check e build.
-
-## Futuro processo di upload
-
-L’upload da browser non è parte di questa versione. Il futuro flusso dovrà ricevere un archivio in quarantena, controllare estensione e dimensione, impedire traversal/symlink, leggere un manifest dichiarativo, validare HTML e config, calcolare l’hash server-side, eseguire una preview isolata e richiedere approvazione prima dell’attivazione. Non dovrà mai sovrascrivere una versione esistente né rendere attivo un tema che non supera l’intera checklist.
-
-## Configurazione AI opzionale
-
-La personalizzazione può usare Gemini esclusivamente dall’azione esplicita “Analizza e personalizza”. `GEMINI_API_KEY` resta server-side; `SITE_PROPOSALS_AI_MODEL` seleziona il modello e usa `gemini-3.5-flash` come default; `SITE_PROPOSALS_AI_ENABLED` accetta `true`, `false` o `auto` (default). In `auto` il provider viene tentato soltanto con chiave presente. Chiave assente, quota, timeout o output non valido attivano il motore locale deterministico senza bloccare la proposta. Nessun valore reale di queste variabili deve essere inserito nel repository.
+Per essere valido, l’output AI deve includere analisi interna completa, SEO, contenuto conforme al profilo e una email con oggetto non vuoto, corpo di almeno 250 caratteri e `[LINK_DEMO]`. L’AI non può produrre recensioni, HTML o URL. La chiave Gemini resta server-side e test/build non effettuano chiamate reali.

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { BullModule } from '@nestjs/bullmq';
 import { TenantController } from './tenant.controller';
 import { TenantDashboardController } from './tenant-dashboard.controller';
 import { TenantDashboardService } from './tenant-dashboard.service';
@@ -50,6 +51,13 @@ import { TenantSiteProposalsBrandService } from './tenant-site-proposals-brand.s
 import { TenantSiteProposalsAiService } from './tenant-site-proposals-ai.service';
 import { TenantSiteProposalsPersonalizationService } from './tenant-site-proposals-personalization.service';
 import { TenantSiteProposalsImageService } from './tenant-site-proposals-image.service';
+import { SITE_PROPOSAL_PREPARATION_QUEUE } from './tenant-site-proposals.constants';
+import { TenantSiteProposalsThemePackageService } from './tenant-site-proposals-theme-package.service';
+import { TenantSiteProposalsThemeService } from './tenant-site-proposals-theme.service';
+import { TenantSiteProposalsGenerationCoreService } from './tenant-site-proposals-generation-core.service';
+import { TenantSiteProposalsPreparationCoreService } from './tenant-site-proposals-preparation-core.service';
+import { TenantSiteProposalsPreparationQueueService } from './tenant-site-proposals-preparation-queue.service';
+import { TenantSiteProposalsPreparationWorker } from './tenant-site-proposals-preparation.worker';
 
 import { Tenant } from '../superadmin/entities/tenant.entity';
 import { TenantSubscription } from '../superadmin/entities/tenant-subscription.entity';
@@ -60,6 +68,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
 
 @Module({
   imports: [
+    BullModule.registerQueue({ name: SITE_PROPOSAL_PREPARATION_QUEUE }),
     TypeOrmModule.forFeature([
       Tenant,
       TenantSubscription,
@@ -122,6 +131,12 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantSiteProposalsImageService,
     TenantSiteProposalsAiService,
     TenantSiteProposalsPersonalizationService,
+    TenantSiteProposalsThemePackageService,
+    TenantSiteProposalsThemeService,
+    TenantSiteProposalsGenerationCoreService,
+    TenantSiteProposalsPreparationCoreService,
+    TenantSiteProposalsPreparationQueueService,
+    TenantSiteProposalsPreparationWorker,
   ],
 })
 export class TenantModule {}

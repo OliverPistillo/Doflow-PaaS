@@ -158,6 +158,64 @@ export class FileStorageService {
     return { bucket: this.bucket, key, contentType, size: buffer.length };
   }
 
+  private proposalThemePrefix(slug: string, version: string): string {
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
+      throw new ForbiddenException('Invalid proposal theme identity');
+    }
+    return `doflow/site-proposal-themes/${slug}/${version}/`;
+  }
+
+  async uploadThemePackage(slug: string, version: string, input: { zip: Buffer; template: Buffer; manifest: Buffer; documentation?: Record<string, Buffer> }) {
+    const prefix = this.proposalThemePrefix(slug, version);
+    const docs = input.documentation || {};
+    for (const name of Object.keys(docs)) if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.(?:md|txt)$/i.test(name) || name.startsWith('.')) throw new ForbiddenException('Invalid theme documentation name');
+    const uploads = [
+      this.uploadGeneratedBuffer(`${prefix}source.zip`, input.zip, 'application/zip'),
+      this.uploadGeneratedBuffer(`${prefix}template.html`, input.template, 'text/html; charset=utf-8'),
+      this.uploadGeneratedBuffer(`${prefix}theme.json`, input.manifest, 'application/json'),
+      ...Object.entries(docs).map(([name, buffer]) => this.uploadGeneratedBuffer(`${prefix}${name}`, buffer, name.toLowerCase().endsWith('.md') ? 'text/markdown; charset=utf-8' : 'text/plain; charset=utf-8')),
+    ];
+    await Promise.all(uploads);
+    return { prefix, zipKey: `${prefix}source.zip`, templateKey: `${prefix}template.html` };
+  }
+
+  async readThemeTemplate(slug: string, version: string): Promise<Buffer> {
+    const key = `${this.proposalThemePrefix(slug, version)}template.html`;
+    const item = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    return this.readBody(item.Body);
+  }
+
+  async downloadThemePackage(slug: string, version: string) {
+    const key = `${this.proposalThemePrefix(slug, version)}source.zip`;
+    return this.downloadObjectStream(key);
+  }
+
+  async deleteThemePrefix(slug: string, version: string): Promise<number> {
+    const prefix = this.proposalThemePrefix(slug, version);
+    let continuationToken: string | undefined;
+    let deleted = 0;
+    do {
+      const page = await this.s3.send(new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix, ContinuationToken: continuationToken }));
+      const keys = (page.Contents || []).map((object) => object.Key).filter((key): key is string => Boolean(key) && key!.startsWith(prefix));
+      if (keys.length) {
+        const result = await this.s3.send(new DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true } }));
+        if (result.Errors?.length) throw new Error('Theme object deletion failed');
+        deleted += keys.length;
+      }
+      continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (continuationToken);
+    return deleted;
+  }
+
+  private async readBody(body: unknown): Promise<Buffer> {
+    if (!body) throw new NotFoundException('File not found in storage');
+    const transformable = body as { transformToByteArray?: () => Promise<Uint8Array> };
+    if (typeof transformable.transformToByteArray === 'function') return Buffer.from(await transformable.transformToByteArray());
+    const chunks: Buffer[] = [];
+    for await (const chunk of body as AsyncIterable<Uint8Array | Buffer | string>) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    return Buffer.concat(chunks);
+  }
+
   async deleteGeneratedPrefix(prefix: string): Promise<number> {
     const match = /^doflow\/site-proposals\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/$/i.exec(
       prefix,

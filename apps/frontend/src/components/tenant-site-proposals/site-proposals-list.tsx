@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Archive, Eye, FilePlus2, RefreshCw, Search, Sparkles, Trash2, TriangleAlert } from "lucide-react";
+import { Archive, Eye, FilePlus2, Palette, RefreshCw, Search, Sparkles, Trash2, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -130,7 +130,7 @@ export function SiteProposalsList() {
 
   return <main className="space-y-5 px-4 py-6 sm:px-6 lg:px-8">
     <CommercialPageHeader title="Proposte web" description="Crea, personalizza e genera proposte dimostrative mobile-first per i prospect." ctaLabel={canCreate("crm") ? "Nuova proposta" : undefined} ctaHref={canCreate("crm") ? "/commercial/site-proposals/new" : undefined} />
-    <div className="flex justify-end"><Button asChild variant="outline"><Link href="/commercial/site-proposals/archive"><Archive className="mr-2 h-4 w-4" />{archiveTotal ? `Archivio (${archiveTotal})` : "Archivio"}</Link></Button></div>
+    <div className="flex justify-end gap-2"><Button asChild variant="outline"><Link href="/commercial/site-proposals/themes"><Palette className="mr-2 h-4 w-4" />Temi</Link></Button><Button asChild variant="outline"><Link href="/commercial/site-proposals/archive"><Archive className="mr-2 h-4 w-4" />{archiveTotal ? `Archivio (${archiveTotal})` : "Archivio"}</Link></Button></div>
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><CommercialKpiCard label="Totale" value={loading ? "…" : counts.total} icon={FilePlus2} tone="violet" /><CommercialKpiCard label="Bozze e pronte" value={loading ? "…" : counts.draftReady} icon={Eye} tone="blue" /><CommercialKpiCard label="Generate" value={loading ? "…" : counts.generated} icon={Sparkles} tone="green" /><CommercialKpiCard label="Errori" value={loading ? "…" : counts.error} icon={TriangleAlert} tone="orange" /></div>
     <CommercialSectionCard title="Elenco proposte">
       <div className="mb-4 grid gap-3 md:grid-cols-[1fr_180px_180px_auto]"><div className="relative"><Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-400" /><Input value={search} onChange={(event) => setSearch(event.target.value)} className="h-11 pl-9" placeholder="Cerca proposta" aria-label="Cerca proposta" /></div><Select value={status} onValueChange={(value) => { setStatus(value); setOffset(0); setSelectedIds(new Set()); }}><SelectTrigger className="h-11"><SelectValue placeholder="Stato" /></SelectTrigger><SelectContent><SelectItem value="all">Tutti gli stati</SelectItem>{Object.entries(proposalStatusLabel).filter(([key]) => key !== "archived").map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select><Select value={template} onValueChange={(value) => { setTemplate(value); setOffset(0); setSelectedIds(new Set()); }}><SelectTrigger className="h-11"><SelectValue placeholder="Template" /></SelectTrigger><SelectContent><SelectItem value="all">Tutti i template</SelectItem>{templates.map((item) => <SelectItem key={item.slug} value={item.slug}>{item.name}</SelectItem>)}</SelectContent></Select><Button variant="outline" className="h-11" onClick={() => void load()} disabled={loading}><RefreshCw className="mr-2 h-4 w-4" />Aggiorna</Button></div>

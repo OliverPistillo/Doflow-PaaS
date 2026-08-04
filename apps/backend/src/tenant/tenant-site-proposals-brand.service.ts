@@ -14,6 +14,22 @@ function sanitizeSvg(buffer: Buffer): Buffer {
   if (!/<svg\b/i.test(value) || /javascript:/i.test(value)) throw new Error('SVG logo non sicuro');
   return Buffer.from(value);
 }
+
+export function mapBrandPaletteForContentProfile(palette: JsonObject, profile: string, base: JsonObject): JsonObject {
+  if (profile !== 'colsova-conversion-v1') return { ...base, ...palette };
+  return {
+    ink: palette.dark || base.ink,
+    inkSoft: palette.secondary || palette.dark || base.inkSoft,
+    muted: palette.muted || base.muted,
+    ivory: palette.light || base.ivory,
+    cream: base.cream,
+    sand: palette.secondary || base.sand,
+    sandSoft: base.sandSoft,
+    gold: palette.primary || base.gold,
+    goldDeep: palette.primaryHover || base.goldDeep,
+    white: palette.textOnPrimary === '#ffffff' ? palette.textOnPrimary : base.white,
+  };
+}
 @Injectable()
 export class TenantSiteProposalsBrandService {
   constructor(private readonly fetcher: TenantSiteProposalsWebsiteFetcherService) {}

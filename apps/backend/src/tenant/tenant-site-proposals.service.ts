@@ -20,6 +20,8 @@ import { TenantSiteProposalsArtifactService } from './tenant-site-proposals-arti
 import { TenantSiteProposalsPersonalizationService } from './tenant-site-proposals-personalization.service';
 import { buildDeterministicProposal } from './tenant-site-proposals-deterministic';
 import { getTemplateRegistration } from './tenant-site-proposals-template-registry';
+import { TenantSiteProposalsPreparationQueueService } from './tenant-site-proposals-preparation-queue.service';
+import { TenantSiteProposalsGenerationCoreService } from './tenant-site-proposals-generation-core.service';
 import { AuthUserRef, JsonObject, PreviewRow, RowIssue } from './tenant-site-proposals.types';
 import {
   allowedStatusTransition,
@@ -49,6 +51,8 @@ export class TenantSiteProposalsService {
     private readonly fileStorage: FileStorageService,
     @Inject(REQUEST) private readonly request: any,
     @Optional() private readonly personalization?: TenantSiteProposalsPersonalizationService,
+    @Optional() private readonly preparationQueue?: TenantSiteProposalsPreparationQueueService,
+    @Optional() private readonly generationCore?: TenantSiteProposalsGenerationCoreService,
   ) {}
 
   async listTemplates() {
@@ -63,12 +67,15 @@ export class TenantSiteProposalsService {
     return this.templates.getTemplate(slug, version);
   }
 
-  async previewImport(file: Express.Multer.File, templateSlug: string = COLSOVA_TEMPLATE.slug) {
+  async previewImport(file: Express.Multer.File, requestedTemplateSlug?: string, requestedTemplateVersion?: string) {
     const user = this.assertAccess(true);
     await this.ensure();
-    if (templateSlug !== COLSOVA_TEMPLATE.slug) throw new NotFoundException('Template non trovato');
+    const configuredDefault = !requestedTemplateSlug && !requestedTemplateVersion ? await this.defaultThemeSelection() : null;
+    const templateSlug = requestedTemplateSlug || configuredDefault?.slug || COLSOVA_LATEST_TEMPLATE.slug;
+    const templateVersion = requestedTemplateVersion || configuredDefault?.version;
     const parsed = this.csv.parseCsvFile(file);
-    const defaultConfig = await this.templates.getDefaultConfig(templateSlug);
+    const registration = this.registrationOrUploaded(templateSlug, templateVersion);
+    const defaultConfig = await this.templates.getDefaultConfig(templateSlug, templateVersion, this.templateContext());
     const previewRows = this.csv.buildPreviewRows(parsed.rows, defaultConfig);
     const errors = previewRows.flatMap((row) => row.errors.map((error) => ({ rowIndex: row.rowIndex, ...error })));
     const rows = await this.ds().query(
@@ -80,7 +87,7 @@ export class TenantSiteProposalsService {
       `,
       [
         templateSlug,
-        COLSOVA_LATEST_TEMPLATE.version,
+        registration?.version || String((defaultConfig.template as JsonObject).templateVersion),
         cleanString(file.originalname, 255) || 'import.csv',
         cleanString(file.mimetype, 100) || null,
         sha256(file.buffer),
@@ -140,7 +147,7 @@ export class TenantSiteProposalsService {
         DO UPDATE SET updated_at = "${schema}".site_proposals.updated_at
         RETURNING *
         `,
-        [id, row.rowIndex, row.sourceRowHash, row.fingerprint, batch.template_slug, batch.template_version, row.displayName, match.companyId, JSON.stringify(row.canonical), JSON.stringify(row.siteConfig), JSON.stringify(warnings), JSON.stringify(analysis), email.subject, email.body, this.userIdOrNull(user.id)],
+        [id, row.rowIndex, row.sourceRowHash, row.fingerprint, batch.template_slug, batch.template_version, row.displayName, match.companyId, JSON.stringify(row.canonical), JSON.stringify(deterministic.config), JSON.stringify(warnings), JSON.stringify(analysis), email.subject, email.body, this.userIdOrNull(user.id)],
       );
       await this.createVersion(inserted, 1, user, 'initial');
       await this.activity(inserted.id, ACTIVITY.proposalCreated, user, {});
@@ -148,7 +155,9 @@ export class TenantSiteProposalsService {
       proposals.push(inserted);
     }
     await this.ds().query(`UPDATE "${schema}".site_proposal_import_batches SET status = 'confirmed', confirmed_at = now() WHERE id = $1`, [id]);
-    return { batch: await this.getImport(id), proposals, idempotent: false };
+    const queued = [];
+    if (this.preparationQueue) for (const proposal of proposals) queued.push(await this.preparationQueue.enqueue(schema, String(proposal.id), user, { force: false, generate: true, reason: 'csv_import', targetTemplateSlug: batch.template_slug, targetTemplateVersion: batch.template_version }));
+    return { batch: await this.getImport(id), proposals, queued: queued.length, idempotent: false };
   }
 
   async generateImport(id: string) {
@@ -197,7 +206,7 @@ export class TenantSiteProposalsService {
     }
     const sqlWhere = where.join(' AND ');
     const count = await this.one(`SELECT count(*)::int total FROM "${schema}".site_proposals WHERE ${sqlWhere}`, params);
-    const items = await this.ds().query(`SELECT id, display_name, status, archived_from_status, template_slug, template_version, company_id, current_version, last_generated_at, updated_at, deleted_at FROM "${schema}".site_proposals WHERE ${sqlWhere} ORDER BY ${sortBy} ${sortOrder} NULLS LAST LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, limit, offset]);
+    const items = await this.ds().query(`SELECT id, display_name, status, archived_from_status, template_slug, template_version, company_id, current_version, last_generated_at, preparation_status, preparation_error, preparation_queued_at, preparation_started_at, preparation_completed_at, latest_preparation_job_id, updated_at, deleted_at FROM "${schema}".site_proposals WHERE ${sqlWhere} ORDER BY ${sortBy} ${sortOrder} NULLS LAST LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, limit, offset]);
     return { items, total: Number(count?.total || 0), limit, offset };
   }
 
@@ -205,24 +214,28 @@ export class TenantSiteProposalsService {
     const user = this.assertAccess(true);
     assertNoPrototypePollution(body);
     await this.ensure();
-    if (body.templateSlug && body.templateSlug !== COLSOVA_TEMPLATE.slug) throw new NotFoundException('Template non trovato');
+    const configuredDefault = !body.templateSlug && !body.templateVersion ? await this.defaultThemeSelection() : null;
+    const templateSlug = String(body.templateSlug || configuredDefault?.slug || COLSOVA_LATEST_TEMPLATE.slug);
+    const templateVersion = body.templateVersion ? String(body.templateVersion) : configuredDefault?.version;
     const sourceData = (body.sourceData && typeof body.sourceData === 'object' ? body.sourceData : {}) as Record<string, string>;
     const canonical = this.csv.normalizeRow({ ...sourceData, business_name: body.displayName || sourceData.business_name || sourceData.businessName || sourceData.name }, []);
     const warnings: RowIssue[] = [];
-    const baseConfig = await this.templates.getDefaultConfig();
+    const baseConfig = await this.templates.getDefaultConfig(templateSlug, templateVersion, this.templateContext());
+    const selectedTemplate = (baseConfig.template || {}) as JsonObject;
     const siteConfig = this.csv.buildSiteConfig(baseConfig, canonical, warnings);
-    const deterministic = buildDeterministicProposal(baseConfig, canonical);
+    const deterministic = buildDeterministicProposal(siteConfig, canonical);
     const analysis = deterministic.analysis;
     const email = deterministic.email;
     const inserted = await this.one(
       `INSERT INTO "${this.schema()}".site_proposals
        (source_row_hash, fingerprint, template_slug, template_version, status, display_name, source_data, site_config, validation_warnings, commercial_analysis, email_subject, email_body, created_by, updated_by)
        VALUES ($1,$2,$3,$4,'draft',$5,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb,$10,$11,$12,$12) RETURNING *`,
-      [sha256(JSON.stringify(canonical)), buildFingerprint(canonical), COLSOVA_LATEST_TEMPLATE.slug, COLSOVA_LATEST_TEMPLATE.version, canonical.businessName, JSON.stringify(canonical), JSON.stringify(siteConfig), JSON.stringify(warnings), JSON.stringify(analysis), email.subject, email.body, this.userIdOrNull(user.id)],
+      [sha256(JSON.stringify(canonical)), buildFingerprint(canonical), String(selectedTemplate.slug), String(selectedTemplate.templateVersion), canonical.businessName, JSON.stringify(canonical), JSON.stringify(deterministic.config), JSON.stringify(warnings), JSON.stringify(analysis), email.subject, email.body, this.userIdOrNull(user.id)],
     );
     await this.createVersion(inserted, 1, user, 'manual_create');
     await this.activity(inserted.id, ACTIVITY.proposalCreated, user, {});
-    return inserted;
+    const queued = this.preparationQueue ? await this.preparationQueue.enqueue(this.schema(), inserted.id, user, { force: false, generate: true, reason: 'manual_create', targetTemplateSlug: String(selectedTemplate.slug), targetTemplateVersion: String(selectedTemplate.templateVersion) }) : null;
+    return { ...inserted, preparation_status: queued?.status || inserted.preparation_status || 'idle', preparation: queued };
   }
 
   async get(id: string) {
@@ -238,8 +251,28 @@ export class TenantSiteProposalsService {
   }
 
   personalizeProposal(id: string, body: unknown) {
-    if (!this.personalization) throw new Error('Personalization service unavailable');
-    return this.personalization.personalize(id, body);
+    return this.prepareProposal(id, body, 'deprecated_personalize');
+  }
+
+  async prepareProposal(id: string, body: unknown = {}, reason = 'manual_prepare') {
+    const user = this.assertAccess(true); this.assertUuid(id); assertNoPrototypePollution(body || {});
+    const payload = body && typeof body === 'object' && !Array.isArray(body) ? body as JsonObject : {};
+    const allowed = new Set(['force','targetTemplateSlug','targetTemplateVersion']);
+    for (const key of Object.keys(payload)) if (!allowed.has(key)) throw new BadRequestException(`Campo non consentito: ${key}`);
+    if (!this.preparationQueue) throw new ConflictException('Coda di preparazione non disponibile');
+    return this.preparationQueue.enqueue(this.schema(), id, user, { force: payload.force === true, generate: true, reason, targetTemplateSlug: payload.targetTemplateSlug ? String(payload.targetTemplateSlug) : undefined, targetTemplateVersion: payload.targetTemplateVersion ? String(payload.targetTemplateVersion) : undefined });
+  }
+
+  async prepareImport(id: string, body: unknown = {}) {
+    const user = this.assertAccess(true); this.assertUuid(id); assertNoPrototypePollution(body || {});
+    const payload = body && typeof body === 'object' && !Array.isArray(body) ? body as JsonObject : {};
+    if (Object.keys(payload).some((key) => key !== 'force')) throw new BadRequestException('Body batch prepare non valido');
+    if (!this.preparationQueue) throw new ConflictException('Coda di preparazione non disponibile');
+    await this.ensure(); const force = payload.force === true;
+    const rows = await this.ds().query(`SELECT id,template_slug,template_version FROM "${this.schema()}".site_proposals WHERE import_batch_id=$1 AND deleted_at IS NULL AND status<>'archived' ${force ? '' : "AND coalesce(preparation_status,'idle') NOT IN ('running','ready','fallback')"} ORDER BY source_row_index LIMIT 50`, [id]);
+    const results = [];
+    for (const row of rows) results.push(await this.preparationQueue.enqueue(this.schema(), row.id, user, { force, generate: true, reason: 'existing_batch', targetTemplateSlug: row.template_slug, targetTemplateVersion: row.template_version }));
+    return { total: rows.length, queued: results.filter((result) => result.queued).length, results };
   }
 
   listPersonalizations(id: string) {
@@ -252,13 +285,14 @@ export class TenantSiteProposalsService {
     this.assertUuid(id);
     assertNoPrototypePollution(body || {});
     const payload = body && typeof body === 'object' && !Array.isArray(body) ? body as JsonObject : {};
-    for (const key of Object.keys(payload)) if (key !== 'targetVersion') throw new BadRequestException(`Campo non consentito: ${key}`);
+    for (const key of Object.keys(payload)) if (!['targetSlug','targetVersion'].includes(key)) throw new BadRequestException(`Campo non consentito: ${key}`);
     await this.ensure();
     const current = (await this.get(id)).proposal;
-    const target = getTemplateRegistration(current.template_slug, payload.targetVersion ? String(payload.targetVersion) : undefined);
-    if (target.slug !== current.template_slug) throw new BadRequestException('Il target deve appartenere alla stessa famiglia di tema.');
-    if (current.template_version === target.version) return { proposal: current, idempotent: true };
-    if (target.version !== '2.0.0') throw new BadRequestException('Versione target non supportata per l’upgrade.');
+    const targetSlug = payload.targetSlug ? String(payload.targetSlug) : current.template_slug;
+    const target = await this.templates.getRegistration(targetSlug, payload.targetVersion ? String(payload.targetVersion) : undefined, this.templateContext());
+    if (current.template_slug === target.slug && current.template_version === target.version) return { proposal: current, idempotent: true };
+    if (!['proposal-basic-v2','colsova-conversion-v1'].includes(target.contentProfile)) throw new BadRequestException('Profilo target non supportato per l’upgrade.');
+    if (this.preparationQueue) return { queued: await this.preparationQueue.enqueue(this.schema(), id, user, { force: true, generate: true, reason: 'template_upgrade', targetTemplateSlug: target.slug, targetTemplateVersion: target.version }), idempotent: false };
     const running = await this.one(`SELECT id FROM "${this.schema()}".site_proposal_generations WHERE proposal_id=$1 AND status='running' LIMIT 1`, [id]);
     if (running) throw new ConflictException('La proposta ha una generazione in corso.');
     const canonical = deepClone(current.source_data || {}) as any;
@@ -266,7 +300,7 @@ export class TenantSiteProposalsService {
     canonical.services = Array.isArray(canonical.services) ? canonical.services : [];
     canonical.brands = Array.isArray(canonical.brands) ? canonical.brands : [];
     canonical.extra = canonical.extra && typeof canonical.extra === 'object' ? canonical.extra : {};
-    const built = buildDeterministicProposal(await this.templates.getDefaultConfig(target.slug,target.version), canonical);
+    const built = buildDeterministicProposal(await this.templates.getDefaultConfig(target.slug,target.version,this.templateContext()), canonical);
     const oldConfig = current.site_config as JsonObject;
     const oldBusiness = (oldConfig.business || {}) as JsonObject;
     const nextBusiness = built.config.business as JsonObject;
@@ -274,7 +308,7 @@ export class TenantSiteProposalsService {
     const oldImages = (oldConfig.images || {}) as JsonObject;
     const oldLogo = (oldImages.logo || {}) as JsonObject;
     if (oldLogo.src) (built.config.images as JsonObject).logoDefault = { src: oldLogo.src, alt: oldLogo.alt || canonical.businessName };
-    validateSiteConfig(built.config);
+    validateSiteConfig(built.config,target);
     const version = Number(current.current_version)+1;
     const runner=this.ds().createQueryRunner();let original:unknown;
     try {
@@ -282,7 +316,7 @@ export class TenantSiteProposalsService {
       const locked=(await runner.query(`SELECT id,template_version FROM "${this.schema()}".site_proposals WHERE id=$1 AND deleted_at IS NULL AND status <> 'archived' FOR UPDATE`,[id]))[0];
       if(!locked)throw new NotFoundException('Proposta non trovata');
       if(locked.template_version===target.version){await runner.rollbackTransaction();return {proposal:await this.get(id).then(x=>x.proposal),idempotent:true};}
-      const updated=(await runner.query(`UPDATE "${this.schema()}".site_proposals SET template_version=$1,site_config=$2::jsonb,commercial_analysis=$3::jsonb,email_subject=$4,email_body=$5,current_version=$6,status='ready',updated_by=$7,updated_at=now() WHERE id=$8 RETURNING *`,[target.version,JSON.stringify(built.config),JSON.stringify(built.analysis),built.email.subject,built.email.body,version,this.userIdOrNull(user.id),id]))[0];
+      const updated=(await runner.query(`UPDATE "${this.schema()}".site_proposals SET template_slug=$1,template_version=$2,site_config=$3::jsonb,commercial_analysis=$4::jsonb,email_subject=$5,email_body=$6,current_version=$7,status='ready',updated_by=$8,updated_at=now() WHERE id=$9 RETURNING *`,[target.slug,target.version,JSON.stringify(built.config),JSON.stringify(built.analysis),built.email.subject,built.email.body,version,this.userIdOrNull(user.id),id]))[0];
       await runner.query(`INSERT INTO "${this.schema()}".site_proposal_versions (proposal_id,version,site_config,commercial_analysis,email_subject,email_body,reason,created_by) VALUES ($1,$2,$3::jsonb,$4::jsonb,$5,$6,'template_upgrade',$7)`,[id,version,JSON.stringify(built.config),JSON.stringify(built.analysis),built.email.subject,built.email.body,this.userIdOrNull(user.id)]);
       await runner.query(`INSERT INTO "${this.schema()}".site_proposal_activity (proposal_id,action,metadata,actor_user_id,actor_email) VALUES ($1,$2,$3::jsonb,$4,$5)`,[id,ACTIVITY.proposalTemplateUpgraded,JSON.stringify({from:current.template_version,to:target.version}),this.userIdOrNull(user.id),user.email||null]);
       await runner.commitTransaction();return {proposal:updated,idempotent:false};
@@ -301,8 +335,10 @@ export class TenantSiteProposalsService {
     let siteConfig = current.site_config as JsonObject;
     if (body.siteConfig) {
       siteConfig = deepClone(body.siteConfig as JsonObject);
-      forceTemplateContract(siteConfig);
-      validateSiteConfig(siteConfig);
+      const template = (siteConfig.template || {}) as JsonObject;
+      const registration = await this.templates.getRegistration(String(template.slug || current.template_slug), String(template.templateVersion || current.template_version), this.templateContext());
+      forceTemplateContract(siteConfig, registration);
+      validateSiteConfig(siteConfig, registration);
     }
     for (const key of ['companyId', 'contactId', 'leadId', 'opportunityId']) if (body[key]) await this.assertCrmRecord(key, body[key]);
     const nextVersion = Number(current.current_version) + 1;
@@ -342,8 +378,10 @@ export class TenantSiteProposalsService {
     const snapshot = await this.one(`SELECT * FROM "${this.schema()}".site_proposal_versions WHERE proposal_id = $1 AND version = $2`, [id, version]);
     if (!snapshot) throw new NotFoundException('Versione non trovata');
     const restoredConfig = deepClone(snapshot.site_config as JsonObject);
-    forceTemplateContract(restoredConfig);
-    validateSiteConfig(restoredConfig);
+    const restoredMetadata = (restoredConfig.template || {}) as JsonObject;
+    const registration = await this.templates.getRegistration(String(restoredMetadata.slug || ''), String(restoredMetadata.templateVersion || ''), this.templateContext(), true);
+    forceTemplateContract(restoredConfig, registration);
+    validateSiteConfig(restoredConfig, registration);
     const nextVersion = Number(current.current_version) + 1;
     const restoredTemplate = restoredConfig.template as JsonObject;
     const restored = await this.one(`UPDATE "${this.schema()}".site_proposals SET site_config = $1::jsonb, commercial_analysis = $2::jsonb, email_subject = $3, email_body = $4, current_version = $5, updated_by = $6, template_slug = $7, template_version = $8, updated_at = now() WHERE id = $9 RETURNING *`, [JSON.stringify(restoredConfig), JSON.stringify(snapshot.commercial_analysis), snapshot.email_subject, snapshot.email_body, nextVersion, this.userIdOrNull(user.id), String(restoredTemplate.slug), String(restoredTemplate.templateVersion), id]);
@@ -356,6 +394,7 @@ export class TenantSiteProposalsService {
     const user = this.assertAccess(true);
     this.assertUuid(id);
     await this.ensure();
+    if (this.generationCore) return this.generationCore.generate(this.schema(), user, id);
     const schema = this.schema();
     const proposal = (await this.get(id)).proposal;
     const generation = await this.one(`INSERT INTO "${schema}".site_proposal_generations (proposal_id, proposal_version, template_slug, template_version, status, created_by, started_at) VALUES ($1,$2,$3,$4,'running',$5,now()) RETURNING *`, [id, proposal.current_version, proposal.template_slug, proposal.template_version, this.userIdOrNull(user.id)]);
@@ -548,6 +587,18 @@ export class TenantSiteProposalsService {
     await ensureDoflowSiteProposalTables(this.dataSource, schema);
   }
 
+  private async defaultThemeSelection(): Promise<{ slug: string; version: string } | null> {
+    const rows = await this.ds().query(
+      `SELECT t.slug, t.default_version AS version
+       FROM "${this.schema()}".site_proposal_themes t
+       JOIN "${this.schema()}".site_proposal_theme_versions v ON v.theme_id=t.id AND v.version=t.default_version
+       WHERE t.is_active=true AND v.status='active' AND t.default_version IS NOT NULL
+       ORDER BY CASE WHEN t.slug='colsova' THEN 0 ELSE 1 END, t.updated_at DESC
+       LIMIT 1`,
+    );
+    return rows[0] ? { slug: String(rows[0].slug), version: String(rows[0].version) } : null;
+  }
+
   private async restoreArchived(id: string, user: AuthUserRef) {
     return this.one(
       `UPDATE "${this.schema()}".site_proposals
@@ -604,10 +655,11 @@ export class TenantSiteProposalsService {
   }
 
   private schema(): string {
-    const user = this.request.user || this.request.authUser;
-    const tenantRef = user?.tenantId || user?.tenant_id || user?.tenantSlug || this.request.tenantId;
-    const schema = safeSchema(tenantRef || 'public', 'TenantSiteProposalsService.schema');
-    if (schema !== SITE_PROPOSALS_TENANT) throw new NotFoundException();
+    const user = this.request?.user || this.request?.authUser;
+    const tenantRef = [user?.tenantId,user?.tenant_id,user?.tenantSlug,this.request?.tenantId,this.request?.tenant?.schemaName,this.request?.tenant?.schema].find((value) => typeof value === 'string' && value.trim());
+    if (!tenantRef) throw new NotFoundException('Tenant non trovato');
+    const schema = safeSchema(tenantRef, 'TenantSiteProposalsService.schema');
+    if (schema !== SITE_PROPOSALS_TENANT) throw new NotFoundException('Tenant non trovato');
     return schema;
   }
 
@@ -694,4 +746,7 @@ export class TenantSiteProposalsService {
   private sanitizeError(error: unknown): string {
     return cleanString(error instanceof Error ? error.message : String(error), 500) || 'Generation failed';
   }
+
+  private templateContext() { return { schema: this.schema(), dataSource: this.ds() }; }
+  private registrationOrUploaded(slug: string, version?: string) { try { return getTemplateRegistration(slug, version); } catch { return undefined; } }
 }

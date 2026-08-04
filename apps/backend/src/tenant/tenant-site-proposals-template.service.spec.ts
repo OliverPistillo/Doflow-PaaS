@@ -159,9 +159,10 @@ describe('TenantSiteProposalsTemplateService', () => {
 
   it('rejects missing/duplicated nodes, invalid counts, palette and dangerous routes', async () => {
     const config = await service.getDefaultConfig('colsova', '1.0.0');
-    (service as any).cache.set('colsova@1.0.0', Promise.resolve({ html: '<html></html>', config, sha256: 'x', manifest: {}, registration: getTemplateRegistration('colsova', '1.0.0') }));
+    const key = [...(service as any).cache.keys()][0];
+    (service as any).cache.set(key, { expiresAt: Date.now() + 60_000, pending: Promise.resolve({ html: '<html></html>', config, sha256: 'x', manifest: {}, registration: getTemplateRegistration('colsova', '1.0.0') }) });
     await expect(service.renderHtml(config)).rejects.toThrow(BadRequestException);
-    (service as any).cache.set('colsova@1.0.0', Promise.resolve({ html: '<script id="template-config" type="application/json">{}</script><script id="template-config" type="application/json">{}</script>', config, sha256: 'x', manifest: {}, registration: getTemplateRegistration('colsova', '1.0.0') }));
+    (service as any).cache.set(key, { expiresAt: Date.now() + 60_000, pending: Promise.resolve({ html: '<script id="template-config" type="application/json">{}</script><script id="template-config" type="application/json">{}</script>', config, sha256: 'x', manifest: {}, registration: getTemplateRegistration('colsova', '1.0.0') }) });
     await expect(service.renderHtml(config)).rejects.toThrow(BadRequestException);
 
     const badCount = await new TenantSiteProposalsTemplateService().getDefaultConfig('colsova', '1.0.0');

@@ -1,0 +1,15 @@
+{
+  "name": "Tema esempio",
+  "slug": "tema-esempio",
+  "version": "1.0.0",
+  "schemaVersion": "2.0",
+  "contractVersion": "2.0",
+  "contentProfile": "proposal-basic-v2",
+  "entry": "template.html",
+  "standalone": true,
+  "templateSha256": "SOSTITUIRE_CON_SHA256_ESATTO_DEL_TEMPLATE",
+  "size": 0,
+  "categories": [
+    "lead-generation"
+  ]
+}

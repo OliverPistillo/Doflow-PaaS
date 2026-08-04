@@ -4,7 +4,7 @@ import { TenantSiteProposalsController } from './tenant-site-proposals.controlle
 describe('TenantSiteProposalsController', () => {
   it('forwards bounded activity query values to the protected service', () => {
     const service = { listActivity: jest.fn() } as any;
-    const controller = new TenantSiteProposalsController(service);
+    const controller = new TenantSiteProposalsController(service, {} as any);
     controller.listActivity('proposal-id', '50', '10');
     expect(service.listActivity).toHaveBeenCalledWith('proposal-id', { limit: '50', offset: '10' });
   });
@@ -12,14 +12,14 @@ describe('TenantSiteProposalsController', () => {
   it('returns a completed single generation normally', async () => {
     const completed = { id: 'generation-id', status: 'completed' };
     const service = { generateProposal: jest.fn().mockResolvedValue(completed) } as any;
-    const controller = new TenantSiteProposalsController(service);
+    const controller = new TenantSiteProposalsController(service, {} as any);
 
     await expect(controller.generate('proposal-id')).resolves.toBe(completed);
   });
 
   it('returns a sanitized 422 when a single generation fails', async () => {
     const service = { generateProposal: jest.fn().mockResolvedValue({ status: 'failed', error_message: 'Render non riuscito' }) } as any;
-    const controller = new TenantSiteProposalsController(service);
+    const controller = new TenantSiteProposalsController(service, {} as any);
 
     await expect(controller.generate('proposal-id')).rejects.toBeInstanceOf(UnprocessableEntityException);
     try {
@@ -33,7 +33,7 @@ describe('TenantSiteProposalsController', () => {
 
   it('uses the generic error for failed generations without an error message', async () => {
     const service = { generateProposal: jest.fn().mockResolvedValue({ status: 'failed' }) } as any;
-    const controller = new TenantSiteProposalsController(service);
+    const controller = new TenantSiteProposalsController(service, {} as any);
 
     await expect(controller.generate('proposal-id')).rejects.toBeInstanceOf(UnprocessableEntityException);
     try {
@@ -47,7 +47,7 @@ describe('TenantSiteProposalsController', () => {
 
   it('does not expose internal failure details from a single generation', async () => {
     const service = { generateProposal: jest.fn().mockResolvedValue({ status: 'failed', error_message: 'postgres stack trace S3 secret' }) } as any;
-    const controller = new TenantSiteProposalsController(service);
+    const controller = new TenantSiteProposalsController(service, {} as any);
 
     await expect(controller.generate('proposal-id')).rejects.toBeInstanceOf(UnprocessableEntityException);
     try {
@@ -62,7 +62,7 @@ describe('TenantSiteProposalsController', () => {
   it('leaves batch generation responses unchanged', async () => {
     const batch = { total: 2, success: 1, failed: 1, status: 'partial', results: [] };
     const service = { generateImport: jest.fn().mockResolvedValue(batch) } as any;
-    const controller = new TenantSiteProposalsController(service);
+    const controller = new TenantSiteProposalsController(service, {} as any);
 
     await expect(controller.generateImport('import-id')).resolves.toBe(batch);
   });
@@ -70,7 +70,7 @@ describe('TenantSiteProposalsController', () => {
   it('delegates static bulk archive, restore and delete routes', () => {
     const body = { ids: ['proposal-id'] };
     const service = { archiveBulk: jest.fn(), restoreBulk: jest.fn(), deleteBulk: jest.fn() } as any;
-    const controller = new TenantSiteProposalsController(service);
+    const controller = new TenantSiteProposalsController(service, {} as any);
     controller.archiveBulk(body);
     controller.restoreBulk(body);
     controller.deleteBulk(body);
@@ -84,7 +84,7 @@ describe('TenantSiteProposalsController', () => {
 
   it('delegates single restore and permanent delete routes', () => {
     const service = { restore: jest.fn(), delete: jest.fn() } as any;
-    const controller = new TenantSiteProposalsController(service);
+    const controller = new TenantSiteProposalsController(service, {} as any);
     controller.restore('proposal-id');
     controller.delete('proposal-id');
     expect(service.restore).toHaveBeenCalledWith('proposal-id');
@@ -93,7 +93,7 @@ describe('TenantSiteProposalsController', () => {
 
   it('delegates template upgrade and personalization routes without treating them as IDs', () => {
     const service = { upgradeTemplate: jest.fn(), personalizeProposal: jest.fn(), listPersonalizations: jest.fn() } as any;
-    const controller = new TenantSiteProposalsController(service);
+    const controller = new TenantSiteProposalsController(service, {} as any);
     controller.upgradeTemplate('proposal-id', { targetVersion: '2.0.0' });
     controller.personalize('proposal-id', { force: false });
     controller.personalizations('proposal-id');

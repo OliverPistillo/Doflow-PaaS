@@ -49,6 +49,15 @@ export class TenantSiteProposalsImageService {
 
     for (const slot of ['hero', 'consultation', 'feature'] as ProposalImageSlot[]) {
       if (result[slot]) continue;
+      const current = currentImages[slot] as JsonObject | undefined;
+      const src = String(current?.src || '');
+      if (/^data:image\/(?:webp|png|jpeg);base64,/i.test(src)) {
+        result[slot] = { src, alt: String(current?.alt || this.altFor(slot)), objectPosition: String(current?.objectPosition || 'center'), sourceMethod: 'stock_local' };
+      }
+    }
+
+    for (const slot of ['hero', 'consultation', 'feature'] as ProposalImageSlot[]) {
+      if (result[slot]) continue;
       const resolved = await this.resolveReachableCatalogImage(category, slot, fingerprint, used);
       result[slot] = resolved.image;
       warnings.push(...resolved.warnings);

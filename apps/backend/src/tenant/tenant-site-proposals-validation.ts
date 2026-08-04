@@ -226,11 +226,11 @@ export function forceTemplateContract(config: JsonObject, selected?: SiteProposa
   config.routing = routing;
 }
 
-export function validateSiteConfig(config: JsonObject): RowIssue[] {
+export function validateSiteConfig(config: JsonObject, selected?: SiteProposalTemplateRegistration): RowIssue[] {
   assertNoPrototypePollution(config, 'siteConfig');
   const warnings: RowIssue[] = [];
   const template = config.template as JsonObject | undefined;
-  const registration = getTemplateRegistration(String(template?.slug || COLSOVA_TEMPLATE.slug), String(template?.templateVersion || ''));
+  const registration = selected || getTemplateRegistration(String(template?.slug || COLSOVA_TEMPLATE.slug), String(template?.templateVersion || ''));
   if (registration.contractVersion === '2.0') return validateSiteConfigV2(config, registration);
   const editingContract = config.editingContract as JsonObject | undefined;
   const fixed = editingContract?.fixedCounts as JsonObject | undefined;
@@ -285,6 +285,7 @@ export function validateSiteConfig(config: JsonObject): RowIssue[] {
 function validateSiteConfigV2(config: JsonObject, registration: SiteProposalTemplateRegistration): RowIssue[] {
   const template = config.template as JsonObject;
   if (template.schemaVersion !== registration.schemaVersion || template.layoutLocked !== true) throw new BadRequestException('Contratto template del Tema Colsova 2.0 non valido');
+  if (registration.contentProfile === 'colsova-conversion-v1') return validateColsovaConversionConfig(config, registration);
   const editing = config.editingContract as JsonObject | undefined;
   const fixed = editing?.fixedCounts as JsonObject | undefined;
   const content = config.content as JsonObject | undefined;
@@ -298,7 +299,7 @@ function validateSiteConfigV2(config: JsonObject, registration: SiteProposalTemp
     if (src && !isSafeImageSource(src)) throw new BadRequestException(`Sorgente immagine non valida: ${slot}`);
     if (['hero', 'consultation', 'feature'].includes(slot)) {
       const method = String((images![slot] as JsonObject).sourceMethod || '');
-      if (method && !['website', 'catalog', 'catalog_fallback', 'manual'].includes(method)) throw new BadRequestException(`Metodo immagine non valido: ${slot}`);
+      if (method && !['website', 'catalog', 'catalog_fallback', 'manual', 'stock_local'].includes(method)) throw new BadRequestException(`Metodo immagine non valido: ${slot}`);
     }
   }
   if (!isJsonObject(config.palette)) throw new BadRequestException('Palette del Tema Colsova 2.0 non valida');
@@ -318,6 +319,101 @@ function validateSiteConfigV2(config: JsonObject, registration: SiteProposalTemp
   const serialized = JSON.stringify(content).toLowerCase();
   if (/sostituire|immagine hero|prodotti \/ studio|\bplaceholder\b|recensione di/.test(serialized)) throw new BadRequestException('Il SiteConfig V2 contiene placeholder tecnici');
   return [];
+}
+
+const COLSOVA_CONVERSION_PALETTE = ['ink','inkSoft','muted','ivory','cream','sand','sandSoft','gold','goldDeep','white'] as const;
+const COLSOVA_CONVERSION_CONTENT = ['hero','consultation','servicesIntro','services','feature','reviewsIntro','reviews','faqIntro','faq','footer','headerCta','trust','process','contact'] as const;
+
+function requireObject(value: unknown, path: string): JsonObject {
+  if (!isJsonObject(value)) throw new BadRequestException(`Campo obbligatorio non valido: ${path}`);
+  return value;
+}
+
+function requireText(parent: JsonObject, key: string, path: string) {
+  if (typeof parent[key] !== 'string' || !String(parent[key]).trim()) throw new BadRequestException(`Testo obbligatorio mancante: ${path}.${key}`);
+}
+
+function requireTextFields(value: unknown, fields: readonly string[], path: string) {
+  const object = requireObject(value, path);
+  fields.forEach((field) => requireText(object, field, path));
+  return object;
+}
+
+function requireArray(value: unknown, count: number, path: string): unknown[] {
+  if (!Array.isArray(value) || value.length !== count) throw new BadRequestException(`${path} deve contenere esattamente ${count} elementi`);
+  return value;
+}
+
+function validateColsovaConversionConfig(config: JsonObject, registration: SiteProposalTemplateRegistration): RowIssue[] {
+  const editing = requireObject(config.editingContract, 'editingContract');
+  const fixed = requireObject(editing.fixedCounts, 'editingContract.fixedCounts');
+  const expected: Record<string, number> = { services: 3, reviews: 6, faqs: 6, trustItems: 4, consultationHighlights: 3, processSteps: 3 };
+  if (editing.contractVersion !== '2.0' || Object.entries(expected).some(([key, count]) => Number(fixed[key]) !== count)) throw new BadRequestException('Conteggi fissi del Tema Colsova 2.4.1 non validi');
+  const imageSlots = editing.imageSlots;
+  if (!Array.isArray(imageSlots) || imageSlots.join('|') !== 'logoDefault|logoLight|hero|consultation|feature') throw new BadRequestException('Slot immagini del Tema Colsova 2.4.1 non validi');
+
+  const content = requireObject(config.content, 'content');
+  if (COLSOVA_CONVERSION_CONTENT.some((key) => !Object.prototype.hasOwnProperty.call(content, key))) throw new BadRequestException('Contenuto obbligatorio del Tema Colsova 2.4.1 incompleto');
+  requireTextFields(content.hero, ['eyebrow','title','titleAccent','description','primaryCta','secondaryCta','stampText'], 'content.hero');
+  requireArray((content.hero as JsonObject).proofs, 3, 'content.hero.proofs').forEach((value) => { if (typeof value !== 'string' || !value.trim()) throw new BadRequestException('Proof hero non valida'); });
+  const consultation = requireTextFields(content.consultation, ['eyebrow','title','titleAccent','cta'], 'content.consultation');
+  requireArray(consultation.paragraphs, 2, 'content.consultation.paragraphs').forEach((value) => { if (typeof value !== 'string' || !value.trim()) throw new BadRequestException('Paragrafo consultation non valido'); });
+  requireArray(consultation.highlights, 3, 'content.consultation.highlights').forEach((value) => { if (typeof value !== 'string' || !value.trim()) throw new BadRequestException('Highlight consultation non valido'); });
+  requireTextFields(content.servicesIntro, ['eyebrow','title','titleAccent','description'], 'content.servicesIntro');
+  requireArray(content.services, 3, 'content.services').forEach((item, index) => requireTextFields(item, ['number','title','description','cta'], `content.services.${index}`));
+  requireTextFields(content.feature, ['eyebrow','title','titleAccent','description','cta'], 'content.feature');
+  const reviewsIntro = requireTextFields(content.reviewsIntro, ['eyebrow','title','titleAccent','description','cta','disclaimer'], 'content.reviewsIntro');
+  const reviews = requireArray(content.reviews, 6, 'content.reviews');
+  reviews.forEach((item, index) => requireTextFields(item, ['name','date','title','text'], `content.reviews.${index}`));
+  requireTextFields(content.faqIntro, ['eyebrow','title','description'], 'content.faqIntro');
+  requireArray(content.faq, 6, 'content.faq').forEach((item, index) => requireTextFields(item, ['question','answer'], `content.faq.${index}`));
+  requireTextFields(content.footer, ['description','studioTitle','servicesTitle','contactTitle','phoneLabel','emailLabel','cta','copyright','privacyLabel','cookieLabel'], 'content.footer');
+  requireText(content, 'headerCta', 'content');
+  const trust = requireObject(content.trust, 'content.trust');
+  requireArray(trust.items, 4, 'content.trust.items').forEach((item, index) => requireTextFields(item, ['title','description'], `content.trust.items.${index}`));
+  const process = requireTextFields(content.process, ['eyebrow','title','titleAccent','description','cta'], 'content.process');
+  requireArray(process.steps, 3, 'content.process.steps').forEach((item, index) => requireTextFields(item, ['number','title','description'], `content.process.steps.${index}`));
+  requireTextFields(content.contact, ['eyebrow','title','titleAccent','description','phoneLabel','emailLabel','addressLabel','hoursLabel','formTitle','formDescription','demoNotice','submit','success'], 'content.contact');
+
+  const features = requireObject(config.features, 'features');
+  for (const key of ['showProducts','showAccount','showCart','showReviews','showFaq','showContactForm','showMobileCta']) if (typeof features[key] !== 'boolean') throw new BadRequestException(`Feature non valida: ${key}`);
+  if (!['demo','real'].includes(String(features.reviewsMode))) throw new BadRequestException('reviewsMode non valido');
+  if (features.reviewsMode === 'demo') {
+    if (!/recensioni dimostrative/i.test(String(reviewsIntro.disclaimer))) throw new BadRequestException('Disclaimer recensioni dimostrative mancante');
+  } else if ((config.personalization as JsonObject | undefined)?.reviewsVerified !== true) {
+    throw new BadRequestException('Le recensioni reali richiedono dati manuali verificati');
+  }
+
+  const personalization = requireObject(config.personalization, 'personalization');
+  if (!['homepage','landing'].includes(String(personalization.pageMode))) throw new BadRequestException('pageMode non valido');
+  const palette = requireObject(config.palette, 'palette');
+  if (Object.keys(palette).sort().join('|') !== [...COLSOVA_CONVERSION_PALETTE].sort().join('|')) throw new BadRequestException('Palette del Tema Colsova 2.4.1 non valida');
+  COLSOVA_CONVERSION_PALETTE.forEach((key) => { if (!validateColor(palette[key])) throw new BadRequestException(`Colore palette non valido: ${key}`); });
+
+  const images = requireObject(config.images, 'images');
+  let encodedDataTotal = 0;
+  for (const slot of ['logoDefault','logoLight','hero','consultation','feature']) {
+    const image = requireObject(images[slot], `images.${slot}`);
+    const src = String(image.src || '');
+    if (['hero','consultation','feature'].includes(slot) && !src) throw new BadRequestException(`Slot fotografico vuoto: ${slot}`);
+    const encoded = validateVersionedThemeImageSource(src);
+    if (!encoded.safe) throw new BadRequestException(`Sorgente immagine non valida: ${slot}`);
+    encodedDataTotal += encoded.encodedLength;
+  }
+  if (encodedDataTotal > 3 * 1024 * 1024) throw new BadRequestException('Data URI totali del tema oltre il limite');
+  const business = requireObject(config.business, 'business');
+  if (business.developerUrl !== 'https://doflow.it/') throw new BadRequestException('Developer URL protetto non valido');
+  const template = requireObject(config.template, 'template');
+  if (template.templateVersion !== registration.version || template.slug !== registration.slug) throw new BadRequestException('Versione template non coerente');
+  if (!isJsonObject(config.textLimits) || Object.values(config.textLimits).some((v) => !Number.isFinite(Number(v)) || Number(v) <= 0)) throw new BadRequestException('textLimits del Tema Colsova 2.4.1 non validi');
+  return [];
+}
+
+function validateVersionedThemeImageSource(value: string): { safe: boolean; encodedLength: number } {
+  if (!value) return { safe: true, encodedLength: 0 };
+  const match = /^data:(image\/(?:webp|png|jpeg|svg\+xml));base64,([a-z0-9+/=]+)$/i.exec(value);
+  if (match) return { safe: match[2].length <= 1024 * 1024, encodedLength: match[2].length };
+  return { safe: isSafeImageSource(value), encodedLength: 0 };
 }
 
 export function buildCommercialAnalysis(input: CanonicalProposalInput): JsonObject {

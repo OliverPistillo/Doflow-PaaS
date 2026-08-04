@@ -8,6 +8,7 @@ export type ProposalStatus = "draft" | "ready" | "generated" | "error" | "archiv
 export type ImportStatus = "preview" | "confirmed" | "generated" | "partial" | "failed";
 export type GenerationStatus = "running" | "completed" | "failed";
 export type PersonalizationStatus = "idle" | "running" | "completed" | "fallback" | "failed";
+export type PreparationStatus = "idle" | "queued" | "running" | "ready" | "fallback" | "failed";
 
 export type SiteProposalTemplateManifest = {
   name: string; slug: string; version: string; versione?: string; schemaVersion: string; layoutLocked: boolean;
@@ -39,6 +40,7 @@ export type SiteProposal = {
   company_id?: string | null; contact_id?: string | null; lead_id?: string | null; opportunity_id?: string | null; current_version: number; last_generated_at?: string | null; updated_at?: string | null; created_at?: string | null;
   archived_from_status?: ProposalStatus | null; deleted_at?: string | null;
   personalization_status?: PersonalizationStatus | null; latest_personalization_id?: string | null; last_personalized_at?: string | null;
+  preparation_status?: PreparationStatus | null; preparation_error?: string | null; preparation_queued_at?: string | null; preparation_started_at?: string | null; preparation_completed_at?: string | null; latest_preparation_job_id?: string | null;
   source_data?: JsonObject; site_config?: SiteConfig; validation_warnings?: SiteProposalImportWarning[]; commercial_analysis?: CommercialAnalysis; email_subject?: string | null; email_body?: string | null;
 };
 export type SiteProposalDetail = { proposal: SiteProposal; latestGeneration?: SiteProposalGeneration | null; versionCount: number; activityCount: number };
@@ -54,6 +56,12 @@ export type SiteProposalBulkDeleteResult = { requested: number; deleted: number;
 export type SiteProposalDeleteResult = { deleted: true; id: string; storageObjectsDeleted: number };
 export type SiteProposalPersonalization = { id: string; status: PersonalizationStatus; provider?: string | null; model?: string | null; source_url?: string | null; final_url?: string | null; snapshot_hash?: string | null; website_analysis?: CommercialAnalysis; brand_assets?: JsonObject; warnings?: string[]; error_message?: string | null; started_at?: string | null; completed_at?: string | null; created_at?: string | null };
 export type SiteProposalPersonalizationResult = { cached: boolean; status: "completed" | "fallback"; provider?: string; personalizationId?: string; proposalVersion?: number; warnings?: string[]; personalization?: SiteProposalPersonalization };
+export type ProposalTheme = {
+  id: string; theme_id?: string; version_id?: string; slug: string; name: string; description?: string | null; source_kind: "builtin" | "uploaded"; is_active: boolean; default_version?: string | null; categories: string[];
+  version: string; schema_version: string; contract_version: string; content_profile: "proposal-basic-v2" | "colsova-conversion-v1" | "colsova-legacy-v1"; status: "draft" | "active" | "disabled"; is_builtin: boolean; is_immutable: boolean;
+  template_sha256: string; template_size: number | string; zip_sha256?: string | null; zip_size?: number | string | null; validation_report?: JsonObject; usages?: number; version_created_at?: string;
+};
+export type ThemeUploadResult = { manifest: JsonObject; hash: { template: string; zip: string }; sizes: { template: number; zip: number }; contentProfile: string; validationReport: JsonObject; warnings: string[]; status: "draft"; previewUrl: string };
 
 const LIST_KEYS = new Set(["scope", "search", "status", "templateSlug", "companyId", "importBatchId", "limit", "offset", "sortBy", "sortOrder"]);
 const ACTIVITY_KEYS = new Set(["limit", "offset"]);
@@ -93,12 +101,12 @@ async function binaryRequest(path: string, fallbackName: string) {
 
 export function listTemplates() { return apiFetch<SiteProposalTemplate[]>(endpoint("/templates")); }
 export function getTemplate(slug: string, version?: string) { return apiFetch<SiteProposalTemplate>(endpoint(`/templates/${encodeURIComponent(slug)}${version ? `?version=${encodeURIComponent(version)}` : ""}`)); }
-export function previewImport(file: File, templateSlug: string) { const form = new FormData(); form.append("file", file); form.append("templateSlug", templateSlug); return apiFetch<{ batch: SiteProposalImportBatch; rows: SiteProposalImportRow[] }>(endpoint("/imports/preview"), { method: "POST", body: form }); }
+export function previewImport(file: File, templateSlug: string, templateVersion?: string) { const form = new FormData(); form.append("file", file); form.append("templateSlug", templateSlug); if (templateVersion) form.append("templateVersion", templateVersion); return apiFetch<{ batch: SiteProposalImportBatch; rows: SiteProposalImportRow[] }>(endpoint("/imports/preview"), { method: "POST", body: form }); }
 export function getImportBatch(id: string) { return apiFetch<SiteProposalImportBatch>(endpoint(`/imports/${encodeURIComponent(id)}`)); }
 export function confirmImport(id: string) { return apiFetch<{ batch: SiteProposalImportBatch; proposals: SiteProposal[]; idempotent: boolean }>(endpoint(`/imports/${encodeURIComponent(id)}/confirm`), { method: "POST" }); }
 export function generateImportBatch(id: string) { return apiFetch<{ total: number; success: number; failed: number; results: SiteProposalGeneration[] }>(endpoint(`/imports/${encodeURIComponent(id)}/generate`), { method: "POST" }); }
 export function listSiteProposals(query: SiteProposalListQuery = {}) { return apiFetch<PaginatedResponse<SiteProposal>>(endpoint(queryString(query, LIST_KEYS))); }
-export function createSiteProposal(payload: { templateSlug?: string; displayName: string; sourceData: Record<string, string> }) { return apiFetch<SiteProposal>(endpoint(""), { method: "POST", body: JSON.stringify(payload) }); }
+export function createSiteProposal(payload: { templateSlug?: string; templateVersion?: string; displayName: string; sourceData: Record<string, string> }) { return apiFetch<SiteProposal>(endpoint(""), { method: "POST", body: JSON.stringify(payload) }); }
 export function getSiteProposal(id: string) { return apiFetch<SiteProposalDetail>(endpoint(`/${encodeURIComponent(id)}`)); }
 export function updateSiteProposal(id: string, payload: SiteProposalUpdate) { return apiFetch<SiteProposal>(endpoint(`/${encodeURIComponent(id)}`), { method: "PATCH", body: JSON.stringify(payload) }); }
 export function archiveSiteProposal(id: string) { return apiFetch<SiteProposal>(endpoint(`/${encodeURIComponent(id)}/archive`), { method: "PATCH" }); }
@@ -108,8 +116,10 @@ export function restoreSiteProposals(ids: string[]) { return apiFetch<SitePropos
 export function deleteSiteProposal(id: string) { return apiFetch<SiteProposalDeleteResult>(endpoint(`/${encodeURIComponent(id)}`), { method: "DELETE" }); }
 export function deleteSiteProposals(ids: string[]) { return apiFetch<SiteProposalBulkDeleteResult>(endpoint("/bulk"), { method: "DELETE", body: JSON.stringify({ ids }) }); }
 export function personalizeSiteProposal(id: string, force = false, upgradeTemplate = false) { return apiFetch<SiteProposalPersonalizationResult>(endpoint(`/${encodeURIComponent(id)}/personalize`), { method: "POST", body: JSON.stringify({ force, upgradeTemplate }) }); }
+export function prepareSiteProposal(id: string, payload: { force?: boolean; targetTemplateSlug?: string; targetTemplateVersion?: string } = {}) { return apiFetch<{ queued: boolean; idempotent: boolean; status: PreparationStatus; jobId?: string }>(endpoint(`/${encodeURIComponent(id)}/prepare`), { method: "POST", body: JSON.stringify(payload) }); }
+export function prepareImportBatch(id: string, force = false) { return apiFetch<{ total: number; queued: number }>(endpoint(`/imports/${encodeURIComponent(id)}/prepare`), { method: "POST", body: JSON.stringify({ force }) }); }
 export function listSiteProposalPersonalizations(id: string) { return apiFetch<SiteProposalPersonalization[]>(endpoint(`/${encodeURIComponent(id)}/personalizations`)); }
-export function upgradeSiteProposalTemplate(id: string, targetVersion?: string) { return apiFetch<{ proposal: SiteProposal; idempotent: boolean }>(endpoint(`/${encodeURIComponent(id)}/template-upgrade`), { method: "POST", body: JSON.stringify(targetVersion ? { targetVersion } : {}) }); }
+export function upgradeSiteProposalTemplate(id: string, targetVersion?: string, targetSlug?: string) { return apiFetch<{ proposal?: SiteProposal; queued?: unknown; idempotent: boolean }>(endpoint(`/${encodeURIComponent(id)}/template-upgrade`), { method: "POST", body: JSON.stringify({ ...(targetVersion ? { targetVersion } : {}), ...(targetSlug ? { targetSlug } : {}) }) }); }
 export function listSiteProposalVersions(id: string) { return apiFetch<SiteProposalVersion[]>(endpoint(`/${encodeURIComponent(id)}/versions`)); }
 export function restoreSiteProposalVersion(id: string, version: number) { return apiFetch<SiteProposal>(endpoint(`/${encodeURIComponent(id)}/versions/${encodeURIComponent(version)}/restore`), { method: "POST" }); }
 export async function generateSiteProposal(id: string) {
@@ -123,3 +133,13 @@ export function listSiteProposalActivity(id: string, query: { limit?: number; of
 export async function fetchSiteProposalPreviewHtml(id: string, generationId?: string) { const result = await binaryRequest(endpoint(`/${encodeURIComponent(id)}/preview${generationId ? `?generationId=${encodeURIComponent(generationId)}` : ""}`), "index.html"); return result.blob.text(); }
 export function downloadSiteProposalHtml(id: string, generationId?: string) { return binaryRequest(endpoint(`/${encodeURIComponent(id)}/download/html${generationId ? `?generationId=${encodeURIComponent(generationId)}` : ""}`), "index.html"); }
 export function downloadSiteProposalZip(id: string, generationId?: string) { return binaryRequest(endpoint(`/${encodeURIComponent(id)}/download/zip${generationId ? `?generationId=${encodeURIComponent(generationId)}` : ""}`), "demo.zip"); }
+
+export function listProposalThemes() { return apiFetch<ProposalTheme[]>(endpoint("/themes")); }
+export function getProposalTheme(slug: string, version: string) { return apiFetch<ProposalTheme>(endpoint(`/themes/${encodeURIComponent(slug)}/${encodeURIComponent(version)}`)); }
+export function uploadProposalTheme(file: File) { const form = new FormData(); form.append("file", file); return apiFetch<ThemeUploadResult>(endpoint("/themes/upload"), { method: "POST", body: form }); }
+export function activateProposalTheme(slug: string, version: string) { return apiFetch<ProposalTheme>(endpoint(`/themes/${encodeURIComponent(slug)}/${encodeURIComponent(version)}/activate`), { method: "POST" }); }
+export function disableProposalTheme(slug: string, version: string) { return apiFetch<ProposalTheme>(endpoint(`/themes/${encodeURIComponent(slug)}/${encodeURIComponent(version)}/disable`), { method: "PATCH" }); }
+export function setDefaultProposalTheme(slug: string, version: string) { return apiFetch<ProposalTheme>(endpoint(`/themes/${encodeURIComponent(slug)}/${encodeURIComponent(version)}/default`), { method: "POST" }); }
+export function deleteProposalTheme(slug: string, version: string) { return apiFetch<{ deleted: true; slug: string; version: string }>(endpoint(`/themes/${encodeURIComponent(slug)}/${encodeURIComponent(version)}`), { method: "DELETE" }); }
+export function downloadProposalTheme(slug: string, version: string) { return binaryRequest(endpoint(`/themes/${encodeURIComponent(slug)}/${encodeURIComponent(version)}/download`), `${slug}-${version}.zip`); }
+export async function fetchProposalThemePreview(slug: string, version: string) { const result = await binaryRequest(endpoint(`/themes/${encodeURIComponent(slug)}/${encodeURIComponent(version)}/preview`), "preview.html"); return result.blob.text(); }

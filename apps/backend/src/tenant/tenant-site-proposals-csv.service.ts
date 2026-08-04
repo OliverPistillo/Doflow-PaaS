@@ -334,7 +334,7 @@ export class TenantSiteProposalsCsvService {
   }
 
   buildSiteConfig(defaultConfig: JsonObject, input: CanonicalProposalInput, warnings: RowIssue[] = []): JsonObject {
-    if (((defaultConfig.template as JsonObject)?.templateVersion) === '2.0.0') {
+    if (((defaultConfig.template as JsonObject)?.schemaVersion) === '2.0') {
       const built = buildDeterministicProposal(defaultConfig, input);
       if (input.paletteOverrides) applyPaletteOverrides(built.config, input.paletteOverrides);
       if (input.configOverrides) applyAllowedConfigOverrides(built.config, input.configOverrides, warnings);

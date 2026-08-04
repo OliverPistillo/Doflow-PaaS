@@ -11,9 +11,14 @@ export const COLSOVA_TEMPLATE = {
 export const COLSOVA_LATEST_TEMPLATE = {
   slug: 'colsova',
   name: 'Tema Colsova',
-  version: '2.0.0',
+  version: '2.4.1',
   schemaVersion: '2.0',
 } as const;
+
+export const SITE_PROPOSAL_PREPARATION_QUEUE = 'site-proposal-preparation';
+export const SITE_PROPOSAL_PREPARATION_JOB = 'prepare-proposal';
+export const THEME_STORAGE_PREFIX = 'doflow/site-proposal-themes';
+export const PREPARATION_STATUSES = ['idle', 'queued', 'running', 'ready', 'fallback', 'failed'] as const;
 
 export const SITE_PROPOSAL_CATEGORY_TAGS = [
   'medicina estetica',
@@ -66,6 +71,11 @@ export const ACTIVITY = {
   proposalTemplateUpgraded: 'PROPOSAL_TEMPLATE_UPGRADED',
   proposalPersonalizationCompleted: 'PROPOSAL_PERSONALIZATION_COMPLETED',
   proposalPersonalizationFallback: 'PROPOSAL_PERSONALIZATION_FALLBACK',
+  proposalPreparationQueued: 'PROPOSAL_PREPARATION_QUEUED',
+  proposalPreparationStarted: 'PROPOSAL_PREPARATION_STARTED',
+  proposalPreparationReady: 'PROPOSAL_PREPARATION_READY',
+  proposalPreparationFallback: 'PROPOSAL_PREPARATION_FALLBACK',
+  proposalPreparationFailed: 'PROPOSAL_PREPARATION_FAILED',
 } as const;
 
 export const ROUTE_REDIRECT_ANCHORS: Record<string, string> = {
