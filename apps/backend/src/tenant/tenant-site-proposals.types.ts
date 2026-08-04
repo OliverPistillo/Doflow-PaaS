@@ -19,6 +19,7 @@ export type CanonicalProposalInput = {
   services: string[];
   brands: string[];
   socialFacebook?: string;
+  socialLinkedIn?: string;
   socialInstagram?: string;
   socialTikTok?: string;
   socialYouTube?: string;
@@ -66,9 +67,11 @@ export type TemplateManifest = {
   schemaVersion: string;
   layoutLocked: boolean;
   fixedCounts: {
-    treatmentCards: number;
-    productPoints: number;
-    reviews: number;
+    treatmentCards?: number;
+    productPoints?: number;
+    reviews?: number;
+    services?: number;
+    trustItems?: number;
     faqs: number;
   };
   textLimits: JsonObject;
@@ -77,6 +80,22 @@ export type TemplateManifest = {
   categoryTags: string[];
   updatedAt: string;
   sourceSha256: string;
+};
+
+export type PersonalizationStatus = 'idle' | 'running' | 'completed' | 'fallback' | 'failed';
+export type ProposalImageSourceMethod = 'website' | 'catalog' | 'catalog_fallback' | 'manual';
+export type WebsiteImageCandidate = {
+  url: string;
+  alt: string;
+  context: string;
+  kind: 'og' | 'hero' | 'main' | 'content';
+  order: number;
+};
+export type WebsiteSnapshot = {
+  sourceUrl: string; finalUrl: string; title: string; description: string;
+  headings: string[]; paragraphs: string[]; navigation: string[]; ctas: string[];
+  emails: string[]; phones: string[]; social: Record<string, string>;
+  logoCandidates: string[]; imageCandidates: string[]; photoCandidates?: WebsiteImageCandidate[]; colors: string[]; text: string;
 };
 
 export type AuthUserRef = {

@@ -90,4 +90,15 @@ describe('TenantSiteProposalsController', () => {
     expect(service.restore).toHaveBeenCalledWith('proposal-id');
     expect(service.delete).toHaveBeenCalledWith('proposal-id');
   });
+
+  it('delegates template upgrade and personalization routes without treating them as IDs', () => {
+    const service = { upgradeTemplate: jest.fn(), personalizeProposal: jest.fn(), listPersonalizations: jest.fn() } as any;
+    const controller = new TenantSiteProposalsController(service);
+    controller.upgradeTemplate('proposal-id', { targetVersion: '2.0.0' });
+    controller.personalize('proposal-id', { force: false });
+    controller.personalizations('proposal-id');
+    expect(service.upgradeTemplate).toHaveBeenCalledWith('proposal-id', { targetVersion: '2.0.0' });
+    expect(service.personalizeProposal).toHaveBeenCalledWith('proposal-id', { force: false });
+    expect(service.listPersonalizations).toHaveBeenCalledWith('proposal-id');
+  });
 });

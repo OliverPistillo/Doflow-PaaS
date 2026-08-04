@@ -6,6 +6,7 @@ import {
   SITE_PROPOSAL_CATEGORY_TAGS,
 } from './tenant-site-proposals.constants';
 import { CanonicalProposalInput, JsonObject, RowIssue } from './tenant-site-proposals.types';
+import { getTemplateRegistration, SiteProposalTemplateRegistration } from './tenant-site-proposals-template-registry';
 
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -14,6 +15,7 @@ const CSS_LENGTH_RE = '(?:0|-?\\d+(?:\\.\\d+)?px)';
 const SHADOW_RE = new RegExp(`^${CSS_LENGTH_RE}\\s+${CSS_LENGTH_RE}\\s+${CSS_LENGTH_RE}(?:\\s+${CSS_LENGTH_RE})?\\s+rgba?\\(\\s*(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\s*,\\s*(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\s*,\\s*(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)(?:\\s*,\\s*(?:0|1|0?\\.\\d+))?\\s*\\)$`, 'i');
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 const ABSENT_VALUES = new Set(['non trovato', 'n/d', 'nd', 'n.a.', 'null', 'undefined', '-']);
+function isJsonObject(value: unknown): value is JsonObject { return !!value && typeof value === 'object' && !Array.isArray(value); }
 
 export function sha256(data: string | Buffer): string {
   return crypto.createHash('sha256').update(data).digest('hex');
@@ -186,7 +188,17 @@ export function applyAllowedConfigOverrides(config: JsonObject, overrides: JsonO
 
 export function applyPaletteOverrides(config: JsonObject, overrides: JsonObject) {
   assertNoPrototypePollution(overrides, 'paletteOverrides');
-  if (!Array.isArray(config.palette)) throw new BadRequestException('Palette del Tema Colsova non valida');
+  if (!Array.isArray(config.palette)) {
+    if (!isJsonObject(config.palette)) throw new BadRequestException('Palette del Tema Colsova non valida');
+    for (const [key, rawValue] of Object.entries(overrides)) {
+      const normalized = key.startsWith('--') ? key.slice(2).replace(/-([a-z])/g, (_, c) => c.toUpperCase()) : key;
+      if (!Object.prototype.hasOwnProperty.call(config.palette, normalized)) throw new BadRequestException(`Variabile palette non consentita: ${key}`);
+      const value = validateColor(rawValue);
+      if (!value) throw new BadRequestException(`Valore palette non sicuro: ${key}`);
+      (config.palette as JsonObject)[normalized] = value;
+    }
+    return;
+  }
   const palette = config.palette as JsonObject[];
   const byVariable = new Map(palette.map((entry) => [String(entry.variable), entry]));
   for (const [variable, rawValue] of Object.entries(overrides)) {
@@ -198,13 +210,15 @@ export function applyPaletteOverrides(config: JsonObject, overrides: JsonObject)
   }
 }
 
-export function forceTemplateContract(config: JsonObject) {
+export function forceTemplateContract(config: JsonObject, selected?: SiteProposalTemplateRegistration) {
+  const current = config.template as JsonObject | undefined;
+  const registration = selected || getTemplateRegistration(String(current?.slug || COLSOVA_TEMPLATE.slug), current?.templateVersion ? String(current.templateVersion) : undefined);
   config.template = {
     ...(config.template as JsonObject),
-    name: COLSOVA_TEMPLATE.name,
-    slug: COLSOVA_TEMPLATE.slug,
-    schemaVersion: COLSOVA_TEMPLATE.schemaVersion,
-    templateVersion: COLSOVA_TEMPLATE.version,
+    name: registration.name,
+    slug: registration.slug,
+    schemaVersion: registration.schemaVersion,
+    templateVersion: registration.version,
     layoutLocked: true,
   };
   const routing = (config.routing && typeof config.routing === 'object' ? config.routing : {}) as JsonObject;
@@ -216,6 +230,8 @@ export function validateSiteConfig(config: JsonObject): RowIssue[] {
   assertNoPrototypePollution(config, 'siteConfig');
   const warnings: RowIssue[] = [];
   const template = config.template as JsonObject | undefined;
+  const registration = getTemplateRegistration(String(template?.slug || COLSOVA_TEMPLATE.slug), String(template?.templateVersion || ''));
+  if (registration.contractVersion === '2.0') return validateSiteConfigV2(config, registration);
   const editingContract = config.editingContract as JsonObject | undefined;
   const fixed = editingContract?.fixedCounts as JsonObject | undefined;
   const content = config.content as JsonObject | undefined;
@@ -264,6 +280,44 @@ export function validateSiteConfig(config: JsonObject): RowIssue[] {
     throw new BadRequestException('textLimits del Tema Colsova non validi');
   }
   return warnings;
+}
+
+function validateSiteConfigV2(config: JsonObject, registration: SiteProposalTemplateRegistration): RowIssue[] {
+  const template = config.template as JsonObject;
+  if (template.schemaVersion !== registration.schemaVersion || template.layoutLocked !== true) throw new BadRequestException('Contratto template del Tema Colsova 2.0 non valido');
+  const editing = config.editingContract as JsonObject | undefined;
+  const fixed = editing?.fixedCounts as JsonObject | undefined;
+  const content = config.content as JsonObject | undefined;
+  if (editing?.contractVersion !== '2.0' || Number(fixed?.services) !== 3 || Number(fixed?.trustItems) !== 6 || Number(fixed?.faqs) !== 6) throw new BadRequestException('Conteggi fissi del Tema Colsova 2.0 non validi');
+  if (!Array.isArray(content?.services) || content.services.length !== 3 || !Array.isArray(content?.trustItems) || content.trustItems.length !== 6 || !Array.isArray(content?.faq) || content.faq.length !== 6) throw new BadRequestException('Il SiteConfig V2 deve mantenere 3 servizi, 6 punti di fiducia e 6 FAQ');
+  const images = config.images as JsonObject | undefined;
+  for (const slot of ['logoDefault', 'logoLight', 'hero', 'consultation', 'feature']) {
+    if (!isJsonObject(images?.[slot])) throw new BadRequestException(`Slot immagine non valido: ${slot}`);
+    const src = String((images![slot] as JsonObject).src || '');
+    if (['hero', 'consultation', 'feature'].includes(slot) && !src) throw new BadRequestException(`Slot fotografico vuoto: ${slot}`);
+    if (src && !isSafeImageSource(src)) throw new BadRequestException(`Sorgente immagine non valida: ${slot}`);
+    if (['hero', 'consultation', 'feature'].includes(slot)) {
+      const method = String((images![slot] as JsonObject).sourceMethod || '');
+      if (method && !['website', 'catalog', 'catalog_fallback', 'manual'].includes(method)) throw new BadRequestException(`Metodo immagine non valido: ${slot}`);
+    }
+  }
+  if (!isJsonObject(config.palette)) throw new BadRequestException('Palette del Tema Colsova 2.0 non valida');
+  for (const key of ['primary','secondary','accent','dark','light','primaryHover','muted','textOnPrimary']) if (!validateColor((config.palette as JsonObject)[key])) throw new BadRequestException(`Colore palette non valido: ${key}`);
+  const business = config.business as JsonObject | undefined;
+  for (const key of ['socialLinkedIn','socialInstagram','socialFacebook']) {
+    const value = business?.[key];
+    if (value && (typeof value !== 'string' || !/^https:\/\//i.test(value) || !validateWebsiteUrl(value))) throw new BadRequestException(`Social non sicuro: ${key}`);
+  }
+  const routing = config.routing as JsonObject | undefined;
+  if (routing?.localPreviewMode !== true || !isJsonObject(routing.paths)) throw new BadRequestException('Routing del Tema Colsova 2.0 non valido');
+  for (const value of Object.values(routing.paths as JsonObject)) {
+    if (typeof value !== 'string') throw new BadRequestException('Route non sicura');
+    if (!value.startsWith('#')) safeRelativeRoute(value);
+  }
+  if (!isJsonObject(config.textLimits) || Object.values(config.textLimits).some((v) => !Number.isFinite(Number(v)) || Number(v) <= 0)) throw new BadRequestException('textLimits del Tema Colsova 2.0 non validi');
+  const serialized = JSON.stringify(content).toLowerCase();
+  if (/sostituire|immagine hero|prodotti \/ studio|\bplaceholder\b|recensione di/.test(serialized)) throw new BadRequestException('Il SiteConfig V2 contiene placeholder tecnici');
+  return [];
 }
 
 export function buildCommercialAnalysis(input: CanonicalProposalInput): JsonObject {

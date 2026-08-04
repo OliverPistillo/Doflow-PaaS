@@ -52,6 +52,13 @@ describe('ensureDoflowSiteProposalTables', () => {
       sql.includes('ALTER TABLE "doflow".site_proposals ADD COLUMN IF NOT EXISTS archived_from_status TEXT'),
     );
     expect(archiveColumn).toBeDefined();
+    const ddl = runner.query.mock.calls.map(([sql]: [string]) => sql).join('\n');
+    expect(ddl).toContain('CREATE TABLE IF NOT EXISTS "doflow".site_proposal_personalizations');
+    expect(ddl).toContain('ADD COLUMN IF NOT EXISTS personalization_status TEXT');
+    expect(ddl).toContain('ADD COLUMN IF NOT EXISTS latest_personalization_id UUID');
+    expect(ddl).toContain('ADD COLUMN IF NOT EXISTS last_personalized_at TIMESTAMPTZ');
+    expect(ddl).toContain('site_proposal_personalizations(proposal_id)');
+    expect(ddl).toContain('site_proposal_personalizations(snapshot_hash)');
 
     const seedCall = runner.query.mock.calls.find(([sql]: [string]) => sql.includes('INSERT INTO "doflow".site_proposal_templates'));
     expect(seedCall).toBeDefined();
@@ -84,7 +91,9 @@ describe('ensureDoflowSiteProposalTables', () => {
 
     expect(createQueryRunner).toHaveBeenCalledTimes(1);
     expect(runner.commitTransaction).toHaveBeenCalledTimes(1);
-    expect(runner.query.mock.calls.filter(([sql]: [string]) => sql.includes('INSERT INTO "doflow".site_proposal_templates'))).toHaveLength(1);
+    const templateInserts = runner.query.mock.calls.filter(([sql]: [string]) => sql.includes('INSERT INTO "doflow".site_proposal_templates'));
+    expect(templateInserts).toHaveLength(2);
+    expect(templateInserts.map((call: any[]) => call[1][2])).toEqual(['1.0.0', '2.0.0']);
   });
 
   it('keeps provisioning isolated between different DataSources', async () => {

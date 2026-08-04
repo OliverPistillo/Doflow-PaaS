@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Inject, NotFoundException, Optional } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { DataSource } from 'typeorm';
 import { Readable } from 'stream';
@@ -8,6 +8,7 @@ import { hasRoleAtLeast } from '../roles';
 import {
   ACTIVITY,
   COLSOVA_TEMPLATE,
+  COLSOVA_LATEST_TEMPLATE,
   GENERATED_STORAGE_PREFIX,
   PROPOSAL_STATUSES,
   SITE_PROPOSALS_TENANT,
@@ -16,6 +17,9 @@ import { ensureDoflowSiteProposalTables } from './tenant-site-proposals-schema';
 import { TenantSiteProposalsCsvService } from './tenant-site-proposals-csv.service';
 import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
 import { TenantSiteProposalsArtifactService } from './tenant-site-proposals-artifact.service';
+import { TenantSiteProposalsPersonalizationService } from './tenant-site-proposals-personalization.service';
+import { buildDeterministicProposal } from './tenant-site-proposals-deterministic';
+import { getTemplateRegistration } from './tenant-site-proposals-template-registry';
 import { AuthUserRef, JsonObject, PreviewRow, RowIssue } from './tenant-site-proposals.types';
 import {
   allowedStatusTransition,
@@ -44,6 +48,7 @@ export class TenantSiteProposalsService {
     private readonly artifacts: TenantSiteProposalsArtifactService,
     private readonly fileStorage: FileStorageService,
     @Inject(REQUEST) private readonly request: any,
+    @Optional() private readonly personalization?: TenantSiteProposalsPersonalizationService,
   ) {}
 
   async listTemplates() {
@@ -55,7 +60,7 @@ export class TenantSiteProposalsService {
   async getTemplate(slug: string, version?: string) {
     this.assertAccess(false);
     await this.ensure();
-    return this.templates.getTemplate(slug, version || COLSOVA_TEMPLATE.version);
+    return this.templates.getTemplate(slug, version);
   }
 
   async previewImport(file: Express.Multer.File, templateSlug: string = COLSOVA_TEMPLATE.slug) {
@@ -75,7 +80,7 @@ export class TenantSiteProposalsService {
       `,
       [
         templateSlug,
-        COLSOVA_TEMPLATE.version,
+        COLSOVA_LATEST_TEMPLATE.version,
         cleanString(file.originalname, 255) || 'import.csv',
         cleanString(file.mimetype, 100) || null,
         sha256(file.buffer),
@@ -122,8 +127,9 @@ export class TenantSiteProposalsService {
       const match = await this.matchCompany(row.canonical!, warnings);
       const existingActive = await this.one(`SELECT id FROM "${schema}".site_proposals WHERE fingerprint = $1 AND deleted_at IS NULL LIMIT 1`, [row.fingerprint]);
       if (existingActive) warnings.push({ code: 'EXISTING_ACTIVE_PROPOSAL', message: 'Esiste gia una proposta attiva con lo stesso fingerprint.' });
-      const analysis = buildCommercialAnalysis(row.canonical!);
-      const email = buildEmail(row.canonical!);
+      const deterministic = buildDeterministicProposal(row.siteConfig!, row.canonical!);
+      const analysis = deterministic.analysis;
+      const email = deterministic.email;
       const inserted = await this.one(
         `
         INSERT INTO "${schema}".site_proposals
@@ -203,14 +209,16 @@ export class TenantSiteProposalsService {
     const sourceData = (body.sourceData && typeof body.sourceData === 'object' ? body.sourceData : {}) as Record<string, string>;
     const canonical = this.csv.normalizeRow({ ...sourceData, business_name: body.displayName || sourceData.business_name || sourceData.businessName || sourceData.name }, []);
     const warnings: RowIssue[] = [];
-    const siteConfig = this.csv.buildSiteConfig(await this.templates.getDefaultConfig(), canonical, warnings);
-    const analysis = analysisFor(canonical);
-    const email = buildEmail(canonical);
+    const baseConfig = await this.templates.getDefaultConfig();
+    const siteConfig = this.csv.buildSiteConfig(baseConfig, canonical, warnings);
+    const deterministic = buildDeterministicProposal(baseConfig, canonical);
+    const analysis = deterministic.analysis;
+    const email = deterministic.email;
     const inserted = await this.one(
       `INSERT INTO "${this.schema()}".site_proposals
        (source_row_hash, fingerprint, template_slug, template_version, status, display_name, source_data, site_config, validation_warnings, commercial_analysis, email_subject, email_body, created_by, updated_by)
        VALUES ($1,$2,$3,$4,'draft',$5,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb,$10,$11,$12,$12) RETURNING *`,
-      [sha256(JSON.stringify(canonical)), buildFingerprint(canonical), COLSOVA_TEMPLATE.slug, COLSOVA_TEMPLATE.version, canonical.businessName, JSON.stringify(canonical), JSON.stringify(siteConfig), JSON.stringify(warnings), JSON.stringify(analysis), email.subject, email.body, this.userIdOrNull(user.id)],
+      [sha256(JSON.stringify(canonical)), buildFingerprint(canonical), COLSOVA_LATEST_TEMPLATE.slug, COLSOVA_LATEST_TEMPLATE.version, canonical.businessName, JSON.stringify(canonical), JSON.stringify(siteConfig), JSON.stringify(warnings), JSON.stringify(analysis), email.subject, email.body, this.userIdOrNull(user.id)],
     );
     await this.createVersion(inserted, 1, user, 'manual_create');
     await this.activity(inserted.id, ACTIVITY.proposalCreated, user, {});
@@ -227,6 +235,58 @@ export class TenantSiteProposalsService {
     const versionCount = await this.one(`SELECT count(*)::int count FROM "${this.schema()}".site_proposal_versions WHERE proposal_id = $1`, [id]);
     const activityCount = await this.one(`SELECT count(*)::int count FROM "${this.schema()}".site_proposal_activity WHERE proposal_id = $1`, [id]);
     return { proposal, latestGeneration, versionCount: Number(versionCount?.count || 0), activityCount: Number(activityCount?.count || 0) };
+  }
+
+  personalizeProposal(id: string, body: unknown) {
+    if (!this.personalization) throw new Error('Personalization service unavailable');
+    return this.personalization.personalize(id, body);
+  }
+
+  listPersonalizations(id: string) {
+    if (!this.personalization) throw new Error('Personalization service unavailable');
+    return this.personalization.list(id);
+  }
+
+  async upgradeTemplate(id: string, body: unknown = {}) {
+    const user = this.assertAccess(true);
+    this.assertUuid(id);
+    assertNoPrototypePollution(body || {});
+    const payload = body && typeof body === 'object' && !Array.isArray(body) ? body as JsonObject : {};
+    for (const key of Object.keys(payload)) if (key !== 'targetVersion') throw new BadRequestException(`Campo non consentito: ${key}`);
+    await this.ensure();
+    const current = (await this.get(id)).proposal;
+    const target = getTemplateRegistration(current.template_slug, payload.targetVersion ? String(payload.targetVersion) : undefined);
+    if (target.slug !== current.template_slug) throw new BadRequestException('Il target deve appartenere alla stessa famiglia di tema.');
+    if (current.template_version === target.version) return { proposal: current, idempotent: true };
+    if (target.version !== '2.0.0') throw new BadRequestException('Versione target non supportata per l’upgrade.');
+    const running = await this.one(`SELECT id FROM "${this.schema()}".site_proposal_generations WHERE proposal_id=$1 AND status='running' LIMIT 1`, [id]);
+    if (running) throw new ConflictException('La proposta ha una generazione in corso.');
+    const canonical = deepClone(current.source_data || {}) as any;
+    canonical.businessName = canonical.businessName || current.display_name;
+    canonical.services = Array.isArray(canonical.services) ? canonical.services : [];
+    canonical.brands = Array.isArray(canonical.brands) ? canonical.brands : [];
+    canonical.extra = canonical.extra && typeof canonical.extra === 'object' ? canonical.extra : {};
+    const built = buildDeterministicProposal(await this.templates.getDefaultConfig(target.slug,target.version), canonical);
+    const oldConfig = current.site_config as JsonObject;
+    const oldBusiness = (oldConfig.business || {}) as JsonObject;
+    const nextBusiness = built.config.business as JsonObject;
+    for (const key of ['email','phoneDisplay','phoneHref','address','socialLinkedIn','socialInstagram','socialFacebook']) if (oldBusiness[key]) nextBusiness[key] = oldBusiness[key];
+    const oldImages = (oldConfig.images || {}) as JsonObject;
+    const oldLogo = (oldImages.logo || {}) as JsonObject;
+    if (oldLogo.src) (built.config.images as JsonObject).logoDefault = { src: oldLogo.src, alt: oldLogo.alt || canonical.businessName };
+    validateSiteConfig(built.config);
+    const version = Number(current.current_version)+1;
+    const runner=this.ds().createQueryRunner();let original:unknown;
+    try {
+      await runner.connect();await runner.startTransaction();
+      const locked=(await runner.query(`SELECT id,template_version FROM "${this.schema()}".site_proposals WHERE id=$1 AND deleted_at IS NULL AND status <> 'archived' FOR UPDATE`,[id]))[0];
+      if(!locked)throw new NotFoundException('Proposta non trovata');
+      if(locked.template_version===target.version){await runner.rollbackTransaction();return {proposal:await this.get(id).then(x=>x.proposal),idempotent:true};}
+      const updated=(await runner.query(`UPDATE "${this.schema()}".site_proposals SET template_version=$1,site_config=$2::jsonb,commercial_analysis=$3::jsonb,email_subject=$4,email_body=$5,current_version=$6,status='ready',updated_by=$7,updated_at=now() WHERE id=$8 RETURNING *`,[target.version,JSON.stringify(built.config),JSON.stringify(built.analysis),built.email.subject,built.email.body,version,this.userIdOrNull(user.id),id]))[0];
+      await runner.query(`INSERT INTO "${this.schema()}".site_proposal_versions (proposal_id,version,site_config,commercial_analysis,email_subject,email_body,reason,created_by) VALUES ($1,$2,$3::jsonb,$4::jsonb,$5,$6,'template_upgrade',$7)`,[id,version,JSON.stringify(built.config),JSON.stringify(built.analysis),built.email.subject,built.email.body,this.userIdOrNull(user.id)]);
+      await runner.query(`INSERT INTO "${this.schema()}".site_proposal_activity (proposal_id,action,metadata,actor_user_id,actor_email) VALUES ($1,$2,$3::jsonb,$4,$5)`,[id,ACTIVITY.proposalTemplateUpgraded,JSON.stringify({from:current.template_version,to:target.version}),this.userIdOrNull(user.id),user.email||null]);
+      await runner.commitTransaction();return {proposal:updated,idempotent:false};
+    }catch(error){original=error;if(runner.isTransactionActive)await runner.rollbackTransaction().catch(()=>undefined);throw error;}finally{await runner.release().catch((error)=>{if(!original)throw error;});}
   }
 
   async update(id: string, body: Record<string, any>) {
@@ -285,7 +345,8 @@ export class TenantSiteProposalsService {
     forceTemplateContract(restoredConfig);
     validateSiteConfig(restoredConfig);
     const nextVersion = Number(current.current_version) + 1;
-    const restored = await this.one(`UPDATE "${this.schema()}".site_proposals SET site_config = $1::jsonb, commercial_analysis = $2::jsonb, email_subject = $3, email_body = $4, current_version = $5, updated_by = $6, updated_at = now() WHERE id = $7 RETURNING *`, [JSON.stringify(restoredConfig), JSON.stringify(snapshot.commercial_analysis), snapshot.email_subject, snapshot.email_body, nextVersion, this.userIdOrNull(user.id), id]);
+    const restoredTemplate = restoredConfig.template as JsonObject;
+    const restored = await this.one(`UPDATE "${this.schema()}".site_proposals SET site_config = $1::jsonb, commercial_analysis = $2::jsonb, email_subject = $3, email_body = $4, current_version = $5, updated_by = $6, template_slug = $7, template_version = $8, updated_at = now() WHERE id = $9 RETURNING *`, [JSON.stringify(restoredConfig), JSON.stringify(snapshot.commercial_analysis), snapshot.email_subject, snapshot.email_body, nextVersion, this.userIdOrNull(user.id), String(restoredTemplate.slug), String(restoredTemplate.templateVersion), id]);
     await this.createVersion(restored, nextVersion, user, `restore:${version}`);
     await this.activity(id, ACTIVITY.versionRestored, user, { restoredFrom: version });
     return restored;

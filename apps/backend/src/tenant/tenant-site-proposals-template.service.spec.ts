@@ -5,6 +5,7 @@ import * as path from 'path';
 import { TenantSiteProposalsArtifactService } from './tenant-site-proposals-artifact.service';
 import { COLSOVA_TEMPLATE } from './tenant-site-proposals.constants';
 import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
+import { getTemplateRegistration } from './tenant-site-proposals-template-registry';
 
 const SCRIPT_RE = /<script\s+id=["']template-config["']\s+type=["']application\/json["']\s*>([\s\S]*?)<\/script>/gi;
 const TEMPLATE_PATH = path.join(__dirname, 'site-proposal-templates', 'colsova', '1.0.0', 'template.html');
@@ -76,8 +77,8 @@ describe('TenantSiteProposalsTemplateService', () => {
 
   it('publishes Tema Colsova without mutating the canonical base config', async () => {
     const canonical = splitTemplate(fs.readFileSync(TEMPLATE_PATH, 'utf8')).config;
-    const config = await service.getDefaultConfig();
-    const manifest = await service.getManifest();
+    const config = await service.getDefaultConfig('colsova', '1.0.0');
+    const manifest = await service.getManifest('colsova', '1.0.0');
     expect(canonical.template.name).toBe('White-label Medicina Estetica');
     expect(config.template).toMatchObject({ name: 'Tema Colsova', templateVersion: '1.0.0', schemaVersion: '1.0', layoutLocked: true });
     expect((config.routing as any).localPreviewMode).toBe(true);
@@ -91,7 +92,7 @@ describe('TenantSiteProposalsTemplateService', () => {
   it('replaces only the JSON payload, escapes XSS, and does not mutate its input', async () => {
     const original = fs.readFileSync(TEMPLATE_PATH, 'utf8');
     const originalParts = splitTemplate(original);
-    const config = await service.getDefaultConfig();
+    const config = await service.getDefaultConfig('colsova', '1.0.0');
     config.template = { ...(config.template as object), name: 'Override vietato' };
     (config.content as any).hero.description = '</script><img src=x>\u2028\u2029&';
     const rendered = await service.renderHtml(config);
@@ -109,7 +110,7 @@ describe('TenantSiteProposalsTemplateService', () => {
   it('renders a JSONB round trip with reordered object keys and preserves document bytes outside the payload', async () => {
     const original = fs.readFileSync(TEMPLATE_PATH, 'utf8');
     const originalParts = splitTemplate(original);
-    const config = await service.getDefaultConfig();
+    const config = await service.getDefaultConfig('colsova', '1.0.0');
     (config.content as any).hero.description = 'Descrizione aggiornata dopo JSONB';
     const jsonbConfig = simulateJsonbRoundTrip(config) as any;
     const rendered = await service.renderHtml(jsonbConfig);
@@ -122,7 +123,7 @@ describe('TenantSiteProposalsTemplateService', () => {
   });
 
   it('allows reordered protected object keys while retaining permitted proposal edits', async () => {
-    const config = await service.getDefaultConfig();
+    const config = await service.getDefaultConfig('colsova', '1.0.0');
     (config.content as any).hero.description = 'Testo consentito';
     (config.palette as any[])[0].value = '#123456';
     (config.images as any).hero = {
@@ -151,31 +152,31 @@ describe('TenantSiteProposalsTemplateService', () => {
     ['palette role', (config: any) => { config.palette[0].role = 'Diverso'; }],
     ['palette order', (config: any) => { config.palette.reverse(); }],
   ])('rejects a real protected mutation: %s', async (_name, mutate) => {
-    const config = await service.getDefaultConfig();
+    const config = await service.getDefaultConfig('colsova', '1.0.0');
     mutate(config);
     await expect(service.renderHtml(config)).rejects.toThrow(BadRequestException);
   });
 
   it('rejects missing/duplicated nodes, invalid counts, palette and dangerous routes', async () => {
-    const config = await service.getDefaultConfig();
-    (service as any).templateCache = Promise.resolve({ html: '<html></html>', config, sha256: 'x', manifest: {} });
+    const config = await service.getDefaultConfig('colsova', '1.0.0');
+    (service as any).cache.set('colsova@1.0.0', Promise.resolve({ html: '<html></html>', config, sha256: 'x', manifest: {}, registration: getTemplateRegistration('colsova', '1.0.0') }));
     await expect(service.renderHtml(config)).rejects.toThrow(BadRequestException);
-    (service as any).templateCache = Promise.resolve({ html: '<script id="template-config" type="application/json">{}</script><script id="template-config" type="application/json">{}</script>', config, sha256: 'x', manifest: {} });
+    (service as any).cache.set('colsova@1.0.0', Promise.resolve({ html: '<script id="template-config" type="application/json">{}</script><script id="template-config" type="application/json">{}</script>', config, sha256: 'x', manifest: {}, registration: getTemplateRegistration('colsova', '1.0.0') }));
     await expect(service.renderHtml(config)).rejects.toThrow(BadRequestException);
 
-    const badCount = await new TenantSiteProposalsTemplateService().getDefaultConfig();
+    const badCount = await new TenantSiteProposalsTemplateService().getDefaultConfig('colsova', '1.0.0');
     (badCount.content as any).reviews.items.pop();
     await expect(new TenantSiteProposalsTemplateService().renderHtml(badCount)).rejects.toThrow(BadRequestException);
-    const badPalette = await new TenantSiteProposalsTemplateService().getDefaultConfig();
+    const badPalette = await new TenantSiteProposalsTemplateService().getDefaultConfig('colsova', '1.0.0');
     (badPalette.palette as any[])[0].value = 'url(javascript:alert(1))';
     await expect(new TenantSiteProposalsTemplateService().renderHtml(badPalette)).rejects.toThrow(BadRequestException);
-    const badRoute = await new TenantSiteProposalsTemplateService().getDefaultConfig();
+    const badRoute = await new TenantSiteProposalsTemplateService().getDefaultConfig('colsova', '1.0.0');
     (badRoute.routing as any).paths.bookingPage = '../secret';
     await expect(new TenantSiteProposalsTemplateService().renderHtml(badRoute)).rejects.toThrow(BadRequestException);
   });
 
   it('builds interpolated safe redirects and rejects path traversal', async () => {
-    const config = await service.getDefaultConfig();
+    const config = await service.getDefaultConfig('colsova', '1.0.0');
     (config.business as any).citySlug = 'roma';
     const redirects = await service.buildRedirectFiles(config);
     expect(redirects.some((r) => r.path === 'medicina-estetica-roma-contatti/index.html')).toBe(true);

@@ -8,7 +8,7 @@ describe('TenantSiteProposalsCsvService', () => {
 
   beforeEach(async () => {
     service = new TenantSiteProposalsCsvService();
-    defaultConfig = await new TenantSiteProposalsTemplateService().getDefaultConfig();
+    defaultConfig = await new TenantSiteProposalsTemplateService().getDefaultConfig('colsova', '1.0.0');
   });
 
   it('parses UTF-8 BOM and comma CSV', () => {

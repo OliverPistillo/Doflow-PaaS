@@ -7,18 +7,19 @@ export type JsonObject = Record<string, unknown>;
 export type ProposalStatus = "draft" | "ready" | "generated" | "error" | "archived";
 export type ImportStatus = "preview" | "confirmed" | "generated" | "partial" | "failed";
 export type GenerationStatus = "running" | "completed" | "failed";
+export type PersonalizationStatus = "idle" | "running" | "completed" | "fallback" | "failed";
 
 export type SiteProposalTemplateManifest = {
   name: string; slug: string; version: string; versione?: string; schemaVersion: string; layoutLocked: boolean;
-  fixedCounts: { treatmentCards: number; productPoints: number; reviews: number; faqs: number };
+  fixedCounts: { treatmentCards?: number; productPoints?: number; reviews?: number; services?: number; trustItems?: number; faqs: number };
   textLimits: JsonObject; imageSlots: string[]; routes: string[]; categoryTags: string[]; updatedAt: string; sourceSha256: string;
 };
-export type SiteProposalTemplate = { slug: string; name: string; version: string; schemaVersion: string; manifest: SiteProposalTemplateManifest; isActive?: boolean };
+export type SiteProposalTemplate = { slug: string; name: string; version: string; latestVersion?: string; versions?: string[]; categoryTags?: string[]; schemaVersion: string; manifest: SiteProposalTemplateManifest; isActive?: boolean };
 export type SiteProposalImportError = { code: string; message: string; path?: string; original?: unknown; used?: unknown; limit?: number };
 export type SiteProposalImportWarning = SiteProposalImportError;
 export type SiteConfig = JsonObject & {
   template: JsonObject; editingContract: JsonObject; sourceWebsite: JsonObject; brand: JsonObject; business: JsonObject; seo: JsonObject;
-  palette: Array<{ variable: string; value: string; role: string }>; routing: JsonObject; images: Record<string, JsonObject>; content: JsonObject; textLimits: Record<string, number>;
+  palette: Array<{ variable: string; value: string; role: string }> | JsonObject; routing: JsonObject; images: Record<string, JsonObject>; content: JsonObject; textLimits: Record<string, number>; personalization?: JsonObject;
 };
 export type SiteProposalImportCanonicalInput = JsonObject & {
   businessName?: string; category?: string; city?: string; publicContactName?: string; professionalTitle?: string;
@@ -37,6 +38,7 @@ export type SiteProposal = {
   id: string; import_batch_id?: string | null; source_row_index?: number | null; template_slug: string; template_version: string; status: ProposalStatus; display_name: string;
   company_id?: string | null; contact_id?: string | null; lead_id?: string | null; opportunity_id?: string | null; current_version: number; last_generated_at?: string | null; updated_at?: string | null; created_at?: string | null;
   archived_from_status?: ProposalStatus | null; deleted_at?: string | null;
+  personalization_status?: PersonalizationStatus | null; latest_personalization_id?: string | null; last_personalized_at?: string | null;
   source_data?: JsonObject; site_config?: SiteConfig; validation_warnings?: SiteProposalImportWarning[]; commercial_analysis?: CommercialAnalysis; email_subject?: string | null; email_body?: string | null;
 };
 export type SiteProposalDetail = { proposal: SiteProposal; latestGeneration?: SiteProposalGeneration | null; versionCount: number; activityCount: number };
@@ -50,6 +52,8 @@ export type SiteProposalUpdate = { displayName?: string; status?: ProposalStatus
 export type SiteProposalBulkResult = { requested: number; affected: number; items: Array<{ id: string; status: ProposalStatus; deleted_at?: string | null }> };
 export type SiteProposalBulkDeleteResult = { requested: number; deleted: number; deletedIds: string[]; failed: Array<{ id: string; message: string }> };
 export type SiteProposalDeleteResult = { deleted: true; id: string; storageObjectsDeleted: number };
+export type SiteProposalPersonalization = { id: string; status: PersonalizationStatus; provider?: string | null; model?: string | null; source_url?: string | null; final_url?: string | null; snapshot_hash?: string | null; website_analysis?: CommercialAnalysis; brand_assets?: JsonObject; warnings?: string[]; error_message?: string | null; started_at?: string | null; completed_at?: string | null; created_at?: string | null };
+export type SiteProposalPersonalizationResult = { cached: boolean; status: "completed" | "fallback"; provider?: string; personalizationId?: string; proposalVersion?: number; warnings?: string[]; personalization?: SiteProposalPersonalization };
 
 const LIST_KEYS = new Set(["scope", "search", "status", "templateSlug", "companyId", "importBatchId", "limit", "offset", "sortBy", "sortOrder"]);
 const ACTIVITY_KEYS = new Set(["limit", "offset"]);
@@ -103,6 +107,9 @@ export function restoreSiteProposal(id: string) { return apiFetch<SiteProposal>(
 export function restoreSiteProposals(ids: string[]) { return apiFetch<SiteProposalBulkResult>(endpoint("/bulk/restore"), { method: "POST", body: JSON.stringify({ ids }) }); }
 export function deleteSiteProposal(id: string) { return apiFetch<SiteProposalDeleteResult>(endpoint(`/${encodeURIComponent(id)}`), { method: "DELETE" }); }
 export function deleteSiteProposals(ids: string[]) { return apiFetch<SiteProposalBulkDeleteResult>(endpoint("/bulk"), { method: "DELETE", body: JSON.stringify({ ids }) }); }
+export function personalizeSiteProposal(id: string, force = false, upgradeTemplate = false) { return apiFetch<SiteProposalPersonalizationResult>(endpoint(`/${encodeURIComponent(id)}/personalize`), { method: "POST", body: JSON.stringify({ force, upgradeTemplate }) }); }
+export function listSiteProposalPersonalizations(id: string) { return apiFetch<SiteProposalPersonalization[]>(endpoint(`/${encodeURIComponent(id)}/personalizations`)); }
+export function upgradeSiteProposalTemplate(id: string, targetVersion?: string) { return apiFetch<{ proposal: SiteProposal; idempotent: boolean }>(endpoint(`/${encodeURIComponent(id)}/template-upgrade`), { method: "POST", body: JSON.stringify(targetVersion ? { targetVersion } : {}) }); }
 export function listSiteProposalVersions(id: string) { return apiFetch<SiteProposalVersion[]>(endpoint(`/${encodeURIComponent(id)}/versions`)); }
 export function restoreSiteProposalVersion(id: string, version: number) { return apiFetch<SiteProposal>(endpoint(`/${encodeURIComponent(id)}/versions/${encodeURIComponent(version)}/restore`), { method: "POST" }); }
 export async function generateSiteProposal(id: string) {

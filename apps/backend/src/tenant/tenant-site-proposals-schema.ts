@@ -1,10 +1,8 @@
 import { DataSource } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
 import {
-  COLSOVA_TEMPLATE,
   IMPORT_STATUSES,
   PROPOSAL_STATUSES,
-  SITE_PROPOSAL_CATEGORY_TAGS,
   SITE_PROPOSALS_TENANT,
 } from './tenant-site-proposals.constants';
 import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
@@ -186,9 +184,23 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_activity_proposal" ON "${s}".site_proposal_activity(proposal_id)`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_activity_created_at" ON "${s}".site_proposal_activity(created_at)`);
 
-    const manifest = await new TenantSiteProposalsTemplateService().getManifest();
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS personalization_status TEXT`);
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS latest_personalization_id UUID`);
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS last_personalized_at TIMESTAMPTZ`);
+    await runner.query(`
+      CREATE TABLE IF NOT EXISTS "${s}".site_proposal_personalizations (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), proposal_id UUID NOT NULL REFERENCES "${s}".site_proposals(id) ON DELETE CASCADE,
+        status TEXT NOT NULL, provider TEXT, model TEXT, source_url TEXT, final_url TEXT, snapshot_hash TEXT,
+        extracted_data JSONB, website_analysis JSONB, generated_content JSONB, brand_assets JSONB, warnings JSONB NOT NULL DEFAULT '[]'::jsonb,
+        error_message TEXT, created_by UUID, started_at TIMESTAMPTZ, completed_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT now()
+      )`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_personalizations_proposal" ON "${s}".site_proposal_personalizations(proposal_id)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_personalizations_status" ON "${s}".site_proposal_personalizations(status)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_personalizations_snapshot" ON "${s}".site_proposal_personalizations(snapshot_hash)`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_personalizations_created" ON "${s}".site_proposal_personalizations(created_at)`);
 
-    await runner.query(
+    const manifests = await new TenantSiteProposalsTemplateService().getAllManifests();
+    for (const { registration, manifest } of manifests) await runner.query(
       `
     INSERT INTO "${s}".site_proposal_templates
       (slug, name, version, schema_version, category_tags, manifest, is_active, created_at, updated_at)
@@ -202,11 +214,11 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
         updated_at = now()
       `,
       [
-        COLSOVA_TEMPLATE.slug,
-        COLSOVA_TEMPLATE.name,
-        COLSOVA_TEMPLATE.version,
-        COLSOVA_TEMPLATE.schemaVersion,
-        SITE_PROPOSAL_CATEGORY_TAGS,
+        registration.slug,
+        registration.name,
+        registration.version,
+        registration.schemaVersion,
+        registration.categoryTags,
         JSON.stringify(manifest),
       ],
     );

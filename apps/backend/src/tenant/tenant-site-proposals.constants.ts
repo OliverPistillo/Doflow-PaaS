@@ -8,6 +8,13 @@ export const COLSOVA_TEMPLATE = {
   sourceSha256: '2dc5395dee61f351a6b64789736c82453ac78a55bc8d6184bcf120fe0b01a217',
 } as const;
 
+export const COLSOVA_LATEST_TEMPLATE = {
+  slug: 'colsova',
+  name: 'Tema Colsova',
+  version: '2.0.0',
+  schemaVersion: '2.0',
+} as const;
+
 export const SITE_PROPOSAL_CATEGORY_TAGS = [
   'medicina estetica',
   'dermatologia',
@@ -42,6 +49,7 @@ export const ALLOWED_CSV_MIME_TYPES = new Set([
 export const IMPORT_STATUSES = ['preview', 'confirmed', 'generated', 'partial', 'failed'] as const;
 export const PROPOSAL_STATUSES = ['draft', 'ready', 'generated', 'error', 'archived'] as const;
 export const GENERATION_STATUSES = ['running', 'completed', 'failed'] as const;
+export const PERSONALIZATION_STATUSES = ['idle', 'running', 'completed', 'fallback', 'failed'] as const;
 
 export const ACTIVITY = {
   proposalCreated: 'PROPOSAL_CREATED',
@@ -55,6 +63,9 @@ export const ACTIVITY = {
   generationFailed: 'GENERATION_FAILED',
   proposalArchived: 'PROPOSAL_ARCHIVED',
   proposalRestored: 'PROPOSAL_RESTORED',
+  proposalTemplateUpgraded: 'PROPOSAL_TEMPLATE_UPGRADED',
+  proposalPersonalizationCompleted: 'PROPOSAL_PERSONALIZATION_COMPLETED',
+  proposalPersonalizationFallback: 'PROPOSAL_PERSONALIZATION_FALLBACK',
 } as const;
 
 export const ROUTE_REDIRECT_ANCHORS: Record<string, string> = {

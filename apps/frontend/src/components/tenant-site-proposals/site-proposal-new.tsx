@@ -104,7 +104,7 @@ export function SiteProposalNew() {
             <SelectTrigger className="h-11"><SelectValue placeholder="Seleziona template" /></SelectTrigger>
             <SelectContent>{templates.map((item) => <SelectItem key={item.slug} value={item.slug}>{item.name} · {item.version}</SelectItem>)}</SelectContent>
           </Select>
-          {selected ? <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600"><strong className="text-slate-900">{selected.name}</strong> · {selected.manifest.categoryTags.slice(0, 4).join(", ")} · {selected.manifest.fixedCounts.treatmentCards + selected.manifest.fixedCounts.productPoints + selected.manifest.fixedCounts.reviews + selected.manifest.fixedCounts.faqs} elementi bloccati · Layout bloccato</div> : <p className="text-sm text-slate-500">Caricamento template…</p>}
+          {selected ? <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600"><strong className="text-slate-900">{selected.name}</strong> · {selected.manifest.categoryTags.slice(0, 4).join(", ")} · {Object.values(selected.manifest.fixedCounts).reduce((total, count) => total + Number(count || 0), 0)} elementi bloccati · Layout bloccato</div> : <p className="text-sm text-slate-500">Caricamento template…</p>}
         </div>
       </CommercialSectionCard>
       <Tabs defaultValue="csv">

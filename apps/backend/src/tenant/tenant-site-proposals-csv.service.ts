@@ -26,6 +26,7 @@ import {
   validateWebsiteUrl,
   wordSafeLimit,
 } from './tenant-site-proposals-validation';
+import { buildDeterministicProposal } from './tenant-site-proposals-deterministic';
 
 type ParsedCsv = {
   headers: string[];
@@ -94,6 +95,8 @@ const ALIASES: Record<string, keyof CanonicalProposalInput> = {
   marchi: 'brands',
   social_facebook: 'socialFacebook',
   facebook: 'socialFacebook',
+  social_linkedin: 'socialLinkedIn',
+  linkedin: 'socialLinkedIn',
   social_instagram: 'socialInstagram',
   instagram: 'socialInstagram',
   social_tiktok: 'socialTikTok',
@@ -144,6 +147,7 @@ const MISSING_VALUE_FIELDS = new Set<keyof CanonicalProposalInput>([
   'websiteUrl',
   'address',
   'socialFacebook',
+  'socialLinkedIn',
   'socialInstagram',
   'socialTikTok',
   'socialYouTube',
@@ -330,6 +334,14 @@ export class TenantSiteProposalsCsvService {
   }
 
   buildSiteConfig(defaultConfig: JsonObject, input: CanonicalProposalInput, warnings: RowIssue[] = []): JsonObject {
+    if (((defaultConfig.template as JsonObject)?.templateVersion) === '2.0.0') {
+      const built = buildDeterministicProposal(defaultConfig, input);
+      if (input.paletteOverrides) applyPaletteOverrides(built.config, input.paletteOverrides);
+      if (input.configOverrides) applyAllowedConfigOverrides(built.config, input.configOverrides, warnings);
+      forceTemplateContract(built.config);
+      validateSiteConfig(built.config);
+      return built.config;
+    }
     const config = deepClone(defaultConfig);
     const year = String(new Date().getFullYear());
     const category = input.category || 'Studio professionale';

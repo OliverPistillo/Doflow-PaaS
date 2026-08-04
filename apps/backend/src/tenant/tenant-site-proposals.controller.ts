@@ -90,6 +90,21 @@ export class TenantSiteProposalsController {
     return this.service.get(id);
   }
 
+  @Post(':id/template-upgrade')
+  upgradeTemplate(@Param('id') id: string, @Body() body: unknown) {
+    return this.service.upgradeTemplate(id, body);
+  }
+
+  @Post(':id/personalize')
+  personalize(@Param('id') id: string, @Body() body: unknown) {
+    return this.service.personalizeProposal(id, body);
+  }
+
+  @Get(':id/personalizations')
+  personalizations(@Param('id') id: string) {
+    return this.service.listPersonalizations(id);
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() body: Record<string, any>) {
     return this.service.update(id, body);

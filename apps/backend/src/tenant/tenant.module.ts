@@ -44,6 +44,12 @@ import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-temp
 import { TenantSiteProposalsArtifactService } from './tenant-site-proposals-artifact.service';
 import { TenantSiteProposalsDoflowGuard } from './tenant-site-proposals-doflow.guard';
 import { FileStorageService } from '../file-storage.service';
+import { TenantSiteProposalsWebsiteFetcherService } from './tenant-site-proposals-website-fetcher.service';
+import { TenantSiteProposalsWebsiteExtractorService } from './tenant-site-proposals-website-extractor.service';
+import { TenantSiteProposalsBrandService } from './tenant-site-proposals-brand.service';
+import { TenantSiteProposalsAiService } from './tenant-site-proposals-ai.service';
+import { TenantSiteProposalsPersonalizationService } from './tenant-site-proposals-personalization.service';
+import { TenantSiteProposalsImageService } from './tenant-site-proposals-image.service';
 
 import { Tenant } from '../superadmin/entities/tenant.entity';
 import { TenantSubscription } from '../superadmin/entities/tenant-subscription.entity';
@@ -110,6 +116,12 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantSiteProposalsArtifactService,
     TenantSiteProposalsDoflowGuard,
     FileStorageService,
+    TenantSiteProposalsWebsiteFetcherService,
+    TenantSiteProposalsWebsiteExtractorService,
+    TenantSiteProposalsBrandService,
+    TenantSiteProposalsImageService,
+    TenantSiteProposalsAiService,
+    TenantSiteProposalsPersonalizationService,
   ],
 })
 export class TenantModule {}
