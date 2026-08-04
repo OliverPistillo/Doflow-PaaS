@@ -5,6 +5,8 @@ import {
   HeadBucketCommand,
   ListBucketsCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
+  DeleteObjectsCommand,
 } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
 import { DataSource } from 'typeorm';
@@ -154,6 +156,56 @@ export class FileStorageService {
 
     this.logger.log(`Generated object uploaded: ${key} (${buffer.length} bytes)`);
     return { bucket: this.bucket, key, contentType, size: buffer.length };
+  }
+
+  async deleteGeneratedPrefix(prefix: string): Promise<number> {
+    const match = /^doflow\/site-proposals\/([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/$/i.exec(
+      prefix,
+    );
+    if (
+      !match ||
+      !prefix ||
+      prefix.startsWith('/') ||
+      prefix.includes('..') ||
+      prefix.includes('\\') ||
+      prefix.includes('\0')
+    ) {
+      throw new ForbiddenException('Invalid generated object prefix');
+    }
+
+    let continuationToken: string | undefined;
+    let deleted = 0;
+    do {
+      const page = await this.s3.send(
+        new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        }),
+      );
+      const keys = (page.Contents || [])
+        .map((object) => object.Key)
+        .filter((key): key is string => Boolean(key));
+
+      for (let index = 0; index < keys.length; index += 1000) {
+        const chunk = keys.slice(index, index + 1000);
+        const result = await this.s3.send(
+          new DeleteObjectsCommand({
+            Bucket: this.bucket,
+            Delete: { Objects: chunk.map((Key) => ({ Key })), Quiet: true },
+          }),
+        );
+        if (result.Errors?.length) {
+          throw new Error('Generated object deletion failed');
+        }
+        deleted += chunk.length;
+      }
+
+      continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (continuationToken);
+
+    this.logger.log(`Generated proposal objects deleted: ${match[1].slice(0, 8)} (${deleted})`);
+    return deleted;
   }
 
   async listFiles(req: Request) {

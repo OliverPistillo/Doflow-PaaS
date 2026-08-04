@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { TenantSiteProposalsService } from './tenant-site-proposals.service';
 
 const uuid = '550e8400-e29b-41d4-a716-446655440000';
@@ -8,13 +8,41 @@ function makeService(request: any, queryMock = jest.fn()) {
   const csv = { parseCsvFile: jest.fn(), buildPreviewRows: jest.fn(), normalizeRow: jest.fn(), buildSiteConfig: jest.fn() } as any;
   const templates = { listTemplates: jest.fn().mockResolvedValue([{ slug: 'colsova' }]), getDefaultConfig: jest.fn(), renderHtml: jest.fn(), buildRedirectFiles: jest.fn() } as any;
   const artifacts = { createZip: jest.fn() } as any;
-  const storage = { uploadGeneratedBuffer: jest.fn(), downloadObjectStream: jest.fn() } as any;
+  const storage = { uploadGeneratedBuffer: jest.fn(), downloadObjectStream: jest.fn(), deleteGeneratedPrefix: jest.fn() } as any;
   const service = new TenantSiteProposalsService(ds, csv, templates, artifacts, storage, request);
   (service as any).ensure = jest.fn().mockResolvedValue(undefined);
   return { service, ds, csv, templates, artifacts, storage, queryMock };
 }
 
 describe('TenantSiteProposalsService', () => {
+  it('lists active and archived proposals with disjoint scopes', async () => {
+    const active = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    active.queryMock.mockResolvedValueOnce([{ total: 0 }]).mockResolvedValueOnce([]);
+    await active.service.list({ scope: 'active' });
+    expect(active.queryMock.mock.calls[0][0]).toContain("deleted_at IS NULL AND status <> 'archived'");
+
+    const archived = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    archived.queryMock.mockResolvedValueOnce([{ total: 0 }]).mockResolvedValueOnce([]);
+    await archived.service.list({ scope: 'archived', status: 'archived' });
+    expect(archived.queryMock.mock.calls[0][0]).toContain("deleted_at IS NOT NULL AND status = 'archived'");
+    expect(archived.queryMock.mock.calls[1][0]).toContain('archived_from_status');
+  });
+
+  it('rejects invalid list scopes and archived status filters', async () => {
+    const { service } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    await expect(service.list({ scope: 'unknown' })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.list({ scope: 'archived', status: 'draft' })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('normalizes unique bulk UUIDs and enforces validation limits', () => {
+    const { service } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    expect((service as any).normalizeBulkIds({ ids: [uuid, uuid] })).toEqual([uuid]);
+    expect(() => (service as any).normalizeBulkIds({ ids: [] })).toThrow('Seleziona almeno una proposta');
+    const tooMany = Array.from({ length: 101 }, (_, index) => `550e8400-e29b-41d4-a716-${String(index).padStart(12, '0')}`);
+    expect(() => (service as any).normalizeBulkIds({ ids: tooMany })).toThrow('massimo 100');
+    expect(() => (service as any).normalizeBulkIds({ ids: ['not-a-uuid'] })).toThrow('ID proposta non valido');
+  });
+
   it('rejects non-doflow tenant and roles below manager', async () => {
     expect(() => makeService({ user: { role: 'manager', tenantId: 'federicanerone' } }).service['assertAccess'](false)).toThrow(NotFoundException);
     expect(() => makeService({ user: { role: 'viewer', tenantId: 'doflow' } }).service['assertAccess'](false)).toThrow(ForbiddenException);
@@ -114,7 +142,116 @@ describe('TenantSiteProposalsService', () => {
     await expect(service.downloadArtifact(uuid, 'html')).resolves.toMatchObject({ filename: 'index.html' });
     queryMock.mockResolvedValueOnce([{ id: uuid, status: 'archived' }]);
     await service.archive(uuid);
-    expect(queryMock.mock.calls.some((call) => String(call[0]).includes('deleted_at = COALESCE'))).toBe(true);
+    expect(queryMock.mock.calls.some((call) => String(call[0]).includes('archived_from_status = CASE'))).toBe(true);
+  });
+
+  it('bulk archives only active proposals and records activity', async () => {
+    const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    queryMock.mockResolvedValueOnce([{ id: uuid, status: 'archived', deleted_at: 'now' }]).mockResolvedValue([]);
+    await expect(service.archiveBulk({ ids: [uuid] })).resolves.toMatchObject({ requested: 1, affected: 1 });
+    expect(queryMock.mock.calls[0][0]).toContain("deleted_at IS NULL AND status <> 'archived'");
+    expect(queryMock.mock.calls.some(([sql]) => String(sql).includes('PROPOSAL_ARCHIVED'))).toBe(false);
+    expect(queryMock.mock.calls.some(([sql, params]) => String(sql).includes('site_proposal_activity') && params[1] === 'PROPOSAL_ARCHIVED')).toBe(true);
+  });
+
+  it('restores archived proposals using previous status and legacy fallbacks', async () => {
+    const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    queryMock.mockResolvedValueOnce([{ id: uuid, status: 'ready', deleted_at: null }]).mockResolvedValue([]);
+    await service.restore(uuid);
+    const sql = String(queryMock.mock.calls[0][0]);
+    expect(sql).toContain("WHEN archived_from_status = ANY($1::text[]) THEN archived_from_status");
+    expect(sql).toContain("WHEN last_generated_at IS NOT NULL THEN 'generated'");
+    expect(sql).toContain("ELSE 'draft'");
+    expect(sql).toContain('archived_from_status = NULL, deleted_at = NULL');
+    expect(queryMock.mock.calls.some(([, params]) => params?.[1] === 'PROPOSAL_RESTORED')).toBe(true);
+  });
+
+  it.each([
+    [{ id: uuid, archived_from_status: null, last_generated_at: 'now', status: 'generated' }, 'generated'],
+    [{ id: uuid, archived_from_status: null, last_generated_at: null, status: 'draft' }, 'draft'],
+  ])('returns the legacy restore fallback status %s', async (restored, expectedStatus) => {
+    const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    queryMock.mockResolvedValueOnce([restored]).mockResolvedValue([]);
+    await expect(service.restore(uuid)).resolves.toMatchObject({ status: expectedStatus });
+  });
+
+  it('bulk restores only archived proposals', async () => {
+    const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    queryMock.mockResolvedValueOnce([{ id: uuid, status: 'generated', deleted_at: null }]).mockResolvedValue([]);
+    await expect(service.restoreBulk({ ids: [uuid] })).resolves.toMatchObject({ requested: 1, affected: 1 });
+    expect(queryMock.mock.calls[0][0]).toContain("deleted_at IS NOT NULL AND status = 'archived'");
+  });
+
+  it('restricts permanent deletion to admin and deletes storage before the database row', async () => {
+    const manager = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    await expect(manager.service.delete(uuid)).rejects.toBeInstanceOf(ForbiddenException);
+
+    const runner: any = { isTransactionActive: false };
+    runner.connect = jest.fn().mockResolvedValue(undefined);
+    runner.startTransaction = jest.fn().mockImplementation(async () => { runner.isTransactionActive = true; });
+    runner.query = jest.fn()
+      .mockResolvedValueOnce([{ id: uuid }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    runner.commitTransaction = jest.fn().mockImplementation(async () => { runner.isTransactionActive = false; });
+    runner.rollbackTransaction = jest.fn();
+    runner.release = jest.fn().mockResolvedValue(undefined);
+    const query = jest.fn();
+    const admin = makeService({ user: { id: uuid, role: 'admin', tenantId: 'doflow' } }, query);
+    admin.ds.createQueryRunner = jest.fn().mockReturnValue(runner);
+    admin.storage.deleteGeneratedPrefix.mockResolvedValue(4);
+
+    await expect(admin.service.delete(uuid)).resolves.toEqual({ deleted: true, id: uuid, storageObjectsDeleted: 4 });
+    expect(runner.query.mock.calls[0][0]).toContain('FOR UPDATE');
+    expect(admin.storage.deleteGeneratedPrefix).toHaveBeenCalledWith(`doflow/site-proposals/${uuid}/`);
+    expect(runner.query.mock.calls[2][0]).toContain('DELETE FROM "doflow".site_proposals');
+    expect(runner.commitTransaction).toHaveBeenCalled();
+    expect(runner.release).toHaveBeenCalled();
+  });
+
+  it.each(['admin', 'owner', 'superadmin'])('allows permanent deletion access for %s', (role) => {
+    const { service } = makeService({ user: { id: uuid, role, tenantId: 'doflow' } });
+    expect(() => (service as any).assertPermanentDeleteAccess()).not.toThrow();
+  });
+
+  it('returns conflict for running generations and rolls back storage failures', async () => {
+    const runner: any = { isTransactionActive: false };
+    runner.connect = jest.fn();
+    runner.startTransaction = jest.fn().mockImplementation(async () => { runner.isTransactionActive = true; });
+    runner.query = jest.fn().mockResolvedValueOnce([{ id: uuid }]).mockResolvedValueOnce([{ id: 'running' }]);
+    runner.commitTransaction = jest.fn();
+    runner.rollbackTransaction = jest.fn().mockImplementation(async () => { runner.isTransactionActive = false; });
+    runner.release = jest.fn();
+    const running = makeService({ user: { id: uuid, role: 'admin', tenantId: 'doflow' } });
+    running.ds.createQueryRunner = jest.fn().mockReturnValue(runner);
+    await expect(running.service.delete(uuid)).rejects.toBeInstanceOf(ConflictException);
+    expect(running.storage.deleteGeneratedPrefix).not.toHaveBeenCalled();
+    expect(runner.rollbackTransaction).toHaveBeenCalled();
+
+    const storageRunner: any = { ...runner, isTransactionActive: false };
+    storageRunner.connect = jest.fn();
+    storageRunner.startTransaction = jest.fn().mockImplementation(async () => { storageRunner.isTransactionActive = true; });
+    storageRunner.query = jest.fn().mockResolvedValueOnce([{ id: uuid }]).mockResolvedValueOnce([]);
+    storageRunner.rollbackTransaction = jest.fn().mockImplementation(async () => { storageRunner.isTransactionActive = false; });
+    storageRunner.release = jest.fn();
+    const failed = makeService({ user: { id: uuid, role: 'admin', tenantId: 'doflow' } });
+    failed.ds.createQueryRunner = jest.fn().mockReturnValue(storageRunner);
+    failed.storage.deleteGeneratedPrefix.mockRejectedValue(new Error('storage unavailable'));
+    await expect(failed.service.delete(uuid)).rejects.toThrow('storage unavailable');
+    expect(storageRunner.query).toHaveBeenCalledTimes(2);
+    expect(storageRunner.rollbackTransaction).toHaveBeenCalled();
+  });
+
+  it('continues bulk deletion after a sanitized individual failure', async () => {
+    const second = '650e8400-e29b-41d4-a716-446655440000';
+    const { service } = makeService({ user: { id: uuid, role: 'admin', tenantId: 'doflow' } });
+    jest.spyOn(service, 'delete').mockResolvedValueOnce({ deleted: true, id: uuid, storageObjectsDeleted: 1 }).mockRejectedValueOnce(new Error('bucket secret SQL'));
+    await expect(service.deleteBulk({ ids: [uuid, second] })).resolves.toEqual({
+      requested: 2,
+      deleted: 1,
+      deletedIds: [uuid],
+      failed: [{ id: second, message: 'Eliminazione non riuscita.' }],
+    });
   });
 
   it('lists proposal activity with bounded pagination after checking the proposal', async () => {

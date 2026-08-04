@@ -54,6 +54,7 @@ export const ACTIVITY = {
   generated: 'GENERATED',
   generationFailed: 'GENERATION_FAILED',
   proposalArchived: 'PROPOSAL_ARCHIVED',
+  proposalRestored: 'PROPOSAL_RESTORED',
 } as const;
 
 export const ROUTE_REDIRECT_ANCHORS: Record<string, string> = {

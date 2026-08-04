@@ -48,6 +48,10 @@ describe('ensureDoflowSiteProposalTables', () => {
     expect(lockCall[1]).toEqual(['doflow', 'site-proposals-schema-v1']);
     const firstCreateIndex = runner.query.mock.calls.findIndex(([sql]: [string]) => /CREATE (?:EXTENSION|TABLE|INDEX)/.test(sql));
     expect(firstCreateIndex).toBeGreaterThan(0);
+    const archiveColumn = runner.query.mock.calls.find(([sql]: [string]) =>
+      sql.includes('ALTER TABLE "doflow".site_proposals ADD COLUMN IF NOT EXISTS archived_from_status TEXT'),
+    );
+    expect(archiveColumn).toBeDefined();
 
     const seedCall = runner.query.mock.calls.find(([sql]: [string]) => sql.includes('INSERT INTO "doflow".site_proposal_templates'));
     expect(seedCall).toBeDefined();

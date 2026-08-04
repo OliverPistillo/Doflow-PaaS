@@ -1,4 +1,5 @@
 import type { JsonObject, SiteConfig } from "@/lib/tenant-site-proposals-api";
+import { getDoFlowUser } from "@/lib/jwt";
 
 export const proposalStatusLabel: Record<string, string> = { draft: "Bozza", ready: "Pronta", generated: "Generata", error: "Errore", archived: "Archiviata" };
 export const importStatusLabel: Record<string, string> = { preview: "Anteprima", confirmed: "Confermato", generated: "Generato", partial: "Generato parzialmente", failed: "Errore" };
@@ -18,6 +19,10 @@ export function getErrorMessage(error: unknown) {
   if (/429|troppe richieste/i.test(raw)) return "Troppe richieste. Riprova tra poco.";
   if (/sql|stack|s3|token/i.test(raw)) return "Operazione non completata. Riprova o contatta un amministratore.";
   return raw && raw.length < 280 ? raw : "Operazione non completata. Riprova tra poco.";
+}
+export function hasPermanentProposalDeleteRole() {
+  const role = String(getDoFlowUser()?.role || "").trim().toLowerCase();
+  return role === "admin" || role === "owner" || role === "superadmin";
 }
 export function downloadBlob(blob: Blob, filename: string) { const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = filename; anchor.style.display = "none"; document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url); }
 export function slugify(value: string) { return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80); }

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { DataSource } from 'typeorm';
 import { Readable } from 'stream';
@@ -163,15 +163,24 @@ export class TenantSiteProposalsService {
     this.assertAccess(false);
     await this.ensure();
     const schema = this.schema();
+    const scope = String(query.scope || 'active');
+    if (scope !== 'active' && scope !== 'archived') {
+      throw new BadRequestException('Scope proposte non valido.');
+    }
+    if (scope === 'archived' && query.status && query.status !== 'archived') {
+      throw new BadRequestException('Nell’Archivio lo stato deve essere archived.');
+    }
     const limit = Math.max(1, Math.min(100, Number(query.limit || 25) || 25));
     const offset = Math.max(0, Number(query.offset || 0) || 0);
     const allowedSort = new Set(['updated_at', 'created_at', 'display_name', 'status']);
     const sortBy = allowedSort.has(String(query.sortBy || '')) ? String(query.sortBy) : 'updated_at';
     const sortOrder = String(query.sortOrder || 'desc').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-    const where = ['deleted_at IS NULL'];
+    const where = scope === 'archived'
+      ? ["deleted_at IS NOT NULL", "status = 'archived'"]
+      : ["deleted_at IS NULL", "status <> 'archived'"];
     const params: unknown[] = [];
     for (const [field, column] of Object.entries({ status: 'status', templateSlug: 'template_slug', companyId: 'company_id', importBatchId: 'import_batch_id' })) {
-      if (query[field]) {
+      if (query[field] && !(scope === 'archived' && field === 'status')) {
         params.push(query[field]);
         where.push(`${column} = $${params.length}`);
       }
@@ -182,7 +191,7 @@ export class TenantSiteProposalsService {
     }
     const sqlWhere = where.join(' AND ');
     const count = await this.one(`SELECT count(*)::int total FROM "${schema}".site_proposals WHERE ${sqlWhere}`, params);
-    const items = await this.ds().query(`SELECT id, display_name, status, template_slug, template_version, company_id, current_version, last_generated_at, updated_at FROM "${schema}".site_proposals WHERE ${sqlWhere} ORDER BY ${sortBy} ${sortOrder} NULLS LAST LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, limit, offset]);
+    const items = await this.ds().query(`SELECT id, display_name, status, archived_from_status, template_slug, template_version, company_id, current_version, last_generated_at, updated_at, deleted_at FROM "${schema}".site_proposals WHERE ${sqlWhere} ORDER BY ${sortBy} ${sortOrder} NULLS LAST LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, limit, offset]);
     return { items, total: Number(count?.total || 0), limit, offset };
   }
 
@@ -358,15 +367,179 @@ export class TenantSiteProposalsService {
     const user = this.assertAccess(true);
     this.assertUuid(id);
     await this.ensure();
-    const row = await this.one(`UPDATE "${this.schema()}".site_proposals SET status = 'archived', deleted_at = COALESCE(deleted_at, now()), updated_by = $1, updated_at = now() WHERE id = $2 AND deleted_at IS NULL RETURNING *`, [this.userIdOrNull(user.id), id]);
-    if (!row) throw new NotFoundException('Proposta non trovata');
+    const row = await this.one(`UPDATE "${this.schema()}".site_proposals SET archived_from_status = CASE WHEN status <> 'archived' THEN status ELSE archived_from_status END, status = 'archived', deleted_at = COALESCE(deleted_at, now()), updated_by = $1, updated_at = now() WHERE id = $2 AND deleted_at IS NULL AND status <> 'archived' RETURNING *`, [this.userIdOrNull(user.id), id]);
+    if (!row) {
+      const archived = await this.one(`SELECT * FROM "${this.schema()}".site_proposals WHERE id = $1 AND deleted_at IS NOT NULL AND status = 'archived'`, [id]);
+      if (archived) return archived;
+      throw new NotFoundException('Proposta non trovata');
+    }
     await this.activity(id, ACTIVITY.proposalArchived, user, {});
     return row;
+  }
+
+  async archiveBulk(body: unknown) {
+    const user = this.assertAccess(true);
+    const ids = this.normalizeBulkIds(body);
+    await this.ensure();
+    const items = await this.ds().query(
+      `UPDATE "${this.schema()}".site_proposals
+       SET archived_from_status = CASE WHEN status <> 'archived' THEN status ELSE archived_from_status END,
+           status = 'archived', deleted_at = now(), updated_at = now(), updated_by = $1
+       WHERE id = ANY($2::uuid[]) AND deleted_at IS NULL AND status <> 'archived'
+       RETURNING id, status, deleted_at`,
+      [this.userIdOrNull(user.id), ids],
+    );
+    for (const item of items) await this.activity(item.id, ACTIVITY.proposalArchived, user, {});
+    return { requested: ids.length, affected: items.length, items };
+  }
+
+  async restore(id: string) {
+    const user = this.assertAccess(true);
+    this.assertUuid(id);
+    await this.ensure();
+    const row = await this.restoreArchived(id, user);
+    if (!row) throw new NotFoundException('Proposta archiviata non trovata');
+    await this.activity(id, ACTIVITY.proposalRestored, user, {});
+    return row;
+  }
+
+  async restoreBulk(body: unknown) {
+    const user = this.assertAccess(true);
+    const ids = this.normalizeBulkIds(body);
+    await this.ensure();
+    const items = await this.ds().query(
+      `UPDATE "${this.schema()}".site_proposals
+       SET status = CASE
+             WHEN archived_from_status = ANY($1::text[]) THEN archived_from_status
+             WHEN last_generated_at IS NOT NULL THEN 'generated'
+             ELSE 'draft'
+           END,
+           archived_from_status = NULL, deleted_at = NULL, updated_at = now(), updated_by = $2
+       WHERE id = ANY($3::uuid[]) AND deleted_at IS NOT NULL AND status = 'archived'
+       RETURNING id, status, deleted_at`,
+      [['draft', 'ready', 'generated', 'error'], this.userIdOrNull(user.id), ids],
+    );
+    for (const item of items) await this.activity(item.id, ACTIVITY.proposalRestored, user, {});
+    return { requested: ids.length, affected: items.length, items };
+  }
+
+  async delete(id: string) {
+    this.assertPermanentDeleteAccess();
+    this.assertUuid(id);
+    await this.ensure();
+    const runner = this.ds().createQueryRunner();
+    let originalError: unknown;
+    try {
+      await runner.connect();
+      await runner.startTransaction();
+      const proposals = await runner.query(
+        `SELECT id FROM "${this.schema()}".site_proposals WHERE id = $1 FOR UPDATE`,
+        [id],
+      );
+      if (!proposals[0]) throw new NotFoundException('Proposta non trovata');
+      const running = await runner.query(
+        `SELECT id FROM "${this.schema()}".site_proposal_generations WHERE proposal_id = $1 AND status = 'running' LIMIT 1`,
+        [id],
+      );
+      if (running[0]) throw new ConflictException('La proposta ha una generazione in corso.');
+      const prefix = `${GENERATED_STORAGE_PREFIX}/${id}/`;
+      const storageObjectsDeleted = await this.fileStorage.deleteGeneratedPrefix(prefix);
+      await runner.query(`DELETE FROM "${this.schema()}".site_proposals WHERE id = $1`, [id]);
+      await runner.commitTransaction();
+      return { deleted: true, id, storageObjectsDeleted };
+    } catch (error) {
+      originalError = error;
+      if (runner.isTransactionActive) {
+        try {
+          await runner.rollbackTransaction();
+        } catch {
+          // Preserve the original operation error.
+        }
+      }
+      throw error;
+    } finally {
+      try {
+        await runner.release();
+      } catch (releaseError) {
+        if (!originalError) throw releaseError;
+      }
+    }
+  }
+
+  async deleteBulk(body: unknown) {
+    this.assertPermanentDeleteAccess();
+    const ids = this.normalizeBulkIds(body);
+    const deletedIds: string[] = [];
+    const failed: Array<{ id: string; message: string }> = [];
+    for (const id of ids) {
+      try {
+        await this.delete(id);
+        deletedIds.push(id);
+      } catch (error) {
+        failed.push({ id, message: this.permanentDeleteErrorMessage(error) });
+      }
+    }
+    return { requested: ids.length, deleted: deletedIds.length, deletedIds, failed };
   }
 
   private async ensure() {
     const schema = this.schema();
     await ensureDoflowSiteProposalTables(this.dataSource, schema);
+  }
+
+  private async restoreArchived(id: string, user: AuthUserRef) {
+    return this.one(
+      `UPDATE "${this.schema()}".site_proposals
+       SET status = CASE
+             WHEN archived_from_status = ANY($1::text[]) THEN archived_from_status
+             WHEN last_generated_at IS NOT NULL THEN 'generated'
+             ELSE 'draft'
+           END,
+           archived_from_status = NULL, deleted_at = NULL, updated_at = now(), updated_by = $2
+       WHERE id = $3 AND deleted_at IS NOT NULL AND status = 'archived'
+       RETURNING *`,
+      [['draft', 'ready', 'generated', 'error'], this.userIdOrNull(user.id), id],
+    );
+  }
+
+  private normalizeBulkIds(body: unknown): string[] {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      throw new BadRequestException('Seleziona almeno una proposta.');
+    }
+    assertNoPrototypePollution(body as Record<string, unknown>);
+    const ids = (body as Record<string, unknown>).ids;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new BadRequestException('Seleziona almeno una proposta.');
+    }
+    const unique: string[] = [];
+    const seen = new Set<string>();
+    for (const value of ids) {
+      if (typeof value !== 'string' || !UUID_RE.test(value)) {
+        throw new BadRequestException('ID proposta non valido.');
+      }
+      if (!seen.has(value)) {
+        seen.add(value);
+        unique.push(value);
+      }
+    }
+    if (unique.length > 100) {
+      throw new BadRequestException('Puoi gestire al massimo 100 proposte alla volta.');
+    }
+    return unique;
+  }
+
+  private assertPermanentDeleteAccess(): AuthUserRef {
+    const user = this.assertAccess(true);
+    if (!hasRoleAtLeast(user.role, 'admin')) {
+      throw new ForbiddenException('Admin o superiore richiesto.');
+    }
+    return user;
+  }
+
+  private permanentDeleteErrorMessage(error: unknown): string {
+    if (error instanceof ConflictException) return 'La proposta ha una generazione in corso.';
+    if (error instanceof NotFoundException) return 'Proposta non trovata.';
+    return 'Eliminazione non riuscita.';
   }
 
   private schema(): string {

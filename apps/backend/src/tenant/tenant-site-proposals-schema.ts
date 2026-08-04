@@ -128,6 +128,7 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_fingerprint" ON "${s}".site_proposals(fingerprint)`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_updated_at" ON "${s}".site_proposals(updated_at)`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_deleted_at" ON "${s}".site_proposals(deleted_at)`);
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS archived_from_status TEXT`);
 
     await runner.query(`
     CREATE TABLE IF NOT EXISTS "${s}".site_proposal_versions (

@@ -66,4 +66,28 @@ describe('TenantSiteProposalsController', () => {
 
     await expect(controller.generateImport('import-id')).resolves.toBe(batch);
   });
+
+  it('delegates static bulk archive, restore and delete routes', () => {
+    const body = { ids: ['proposal-id'] };
+    const service = { archiveBulk: jest.fn(), restoreBulk: jest.fn(), deleteBulk: jest.fn() } as any;
+    const controller = new TenantSiteProposalsController(service);
+    controller.archiveBulk(body);
+    controller.restoreBulk(body);
+    controller.deleteBulk(body);
+    expect(service.archiveBulk).toHaveBeenCalledWith(body);
+    expect(service.restoreBulk).toHaveBeenCalledWith(body);
+    expect(service.deleteBulk).toHaveBeenCalledWith(body);
+    expect(Reflect.getMetadata('path', controller.archiveBulk)).toBe('bulk/archive');
+    expect(Reflect.getMetadata('path', controller.restoreBulk)).toBe('bulk/restore');
+    expect(Reflect.getMetadata('path', controller.deleteBulk)).toBe('bulk');
+  });
+
+  it('delegates single restore and permanent delete routes', () => {
+    const service = { restore: jest.fn(), delete: jest.fn() } as any;
+    const controller = new TenantSiteProposalsController(service);
+    controller.restore('proposal-id');
+    controller.delete('proposal-id');
+    expect(service.restore).toHaveBeenCalledWith('proposal-id');
+    expect(service.delete).toHaveBeenCalledWith('proposal-id');
+  });
 });

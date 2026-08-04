@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -57,6 +58,21 @@ export class TenantSiteProposalsController {
   @Get()
   list(@Query() query: Record<string, any>) {
     return this.service.list(query);
+  }
+
+  @Post('bulk/archive')
+  archiveBulk(@Body() body: unknown) {
+    return this.service.archiveBulk(body);
+  }
+
+  @Post('bulk/restore')
+  restoreBulk(@Body() body: unknown) {
+    return this.service.restoreBulk(body);
+  }
+
+  @Delete('bulk')
+  deleteBulk(@Body() body: unknown) {
+    return this.service.deleteBulk(body);
   }
 
   @Post()
@@ -144,6 +160,16 @@ export class TenantSiteProposalsController {
   @Patch(':id/archive')
   archive(@Param('id') id: string) {
     return this.service.archive(id);
+  }
+
+  @Patch(':id/restore')
+  restore(@Param('id') id: string) {
+    return this.service.restore(id);
+  }
+
+  @Delete(':id')
+  delete(@Param('id') id: string) {
+    return this.service.delete(id);
   }
 
   private generationFailureMessage(value: unknown): string {
