@@ -66,13 +66,13 @@ export function SiteProposalDetail({ id }: { id: string }) {
   const generate = useCallback(async (saveFirst = false) => {
     if (dirty && !saveFirst) { toast.error("Sono presenti modifiche non salvate. Usa Salva e genera."); return; }
     if (saveFirst && !(await save())) return; setGenerating(true);
-    try { await generateSiteProposal(id); toast.success("HTML e ZIP generati dall’attuale configurazione."); await load(); changeTab("sito"); }
+    try { await generateSiteProposal(id); toast.success("HTML e ZIP generati dall’attuale configurazione."); await load(); const params = new URLSearchParams(searchParams.toString()); params.set("tab", "sito"); params.delete("generationId"); router.replace(`${pathname}?${params}`, { scroll: false }); }
     catch (value) { toast.error(getErrorMessage(value)); }
     finally { setGenerating(false); }
-  }, [dirty, id, load, save]);
+  }, [dirty, id, load, pathname, router, save, searchParams]);
   const prepare = async () => {
     setPreparing(true);
-    try { await prepareSiteProposal(id, { force: true }); toast.success("Rigenerazione completa accodata."); setPrepareOpen(false); await load(); }
+    try { await prepareSiteProposal(id, { force: true }); toast.success("Rigenerazione completa accodata."); setPrepareOpen(false); const params = new URLSearchParams(searchParams.toString()); params.delete("generationId"); router.replace(`${pathname}?${params}`, { scroll: false }); await load(); }
     catch (value) { toast.error(getErrorMessage(value)); }
     finally { setPreparing(false); }
   };

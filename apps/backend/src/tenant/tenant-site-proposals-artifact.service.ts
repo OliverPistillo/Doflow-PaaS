@@ -17,8 +17,8 @@ const FIXED_ARCHIVE_DATE = new Date('1980-01-01T00:00:00.000Z');
 
 @Injectable()
 export class TenantSiteProposalsArtifactService {
-  async createZip(html: string, redirects: { path: string; html: string }[]): Promise<GeneratedZip> {
-    const entries = ['index.html', ...redirects.map((r) => r.path), 'README-ANTEPRIMA.txt'];
+  async createZip(html: string, redirects: { path: string; html: string }[], generatedLogos: { path: string; bytes: Buffer }[] = []): Promise<GeneratedZip> {
+    const entries = ['index.html', ...redirects.map((r) => r.path), ...generatedLogos.map((logo) => logo.path), 'README-ANTEPRIMA.txt'];
     const chunks: Buffer[] = [];
     const archive = archiver('zip', { zlib: { level: 9 } });
     const stream = new PassThrough();
@@ -31,6 +31,7 @@ export class TenantSiteProposalsArtifactService {
     });
     archive.append(html, { name: 'index.html', date: FIXED_ARCHIVE_DATE });
     for (const redirect of redirects) archive.append(redirect.html, { name: redirect.path, date: FIXED_ARCHIVE_DATE });
+    for (const logo of generatedLogos) archive.append(logo.bytes, { name: logo.path, date: FIXED_ARCHIVE_DATE });
     archive.append(README, { name: 'README-ANTEPRIMA.txt', date: FIXED_ARCHIVE_DATE });
     await archive.finalize();
     await done;

@@ -23,7 +23,8 @@ import { TenantSiteProposalsPreparationQueueService } from './tenant-site-propos
 import { TenantSiteProposalsGenerationCoreService } from './tenant-site-proposals-generation-core.service';
 import { evaluateProposalReadiness } from './tenant-site-proposals-readiness';
 import { AuthUserRef, JsonObject, PreviewRow, RowIssue } from './tenant-site-proposals.types';
-import { hasProposalContentProfileAdapter } from './tenant-site-proposals-content-profile-adapters';
+import { getProposalContentProfileAdapter, hasProposalContentProfileAdapter } from './tenant-site-proposals-content-profile-adapters';
+import { evaluateProposalPersonalizationDelta } from './tenant-site-proposals-personalization-delta';
 import {
   allowedStatusTransition,
   assertNoPrototypePollution,
@@ -600,6 +601,10 @@ export class TenantSiteProposalsService {
     try {
       const registration = await this.templates.getRegistration(String(proposal.template_slug), String(proposal.template_version), this.templateContext());
       validateSiteConfig(proposal.site_config as JsonObject, registration);
+      if (hasProposalContentProfileAdapter(registration.contentProfile)) {
+        const base = await this.templates.getDefaultConfig(registration.slug, registration.version, this.templateContext());
+        if (!evaluateProposalPersonalizationDelta(base, proposal.site_config as JsonObject, getProposalContentProfileAdapter(registration.contentProfile)).sufficient) return false;
+      }
       return true;
     } catch { return false; }
   }

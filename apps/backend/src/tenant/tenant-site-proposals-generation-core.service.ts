@@ -6,7 +6,7 @@ import { ACTIVITY, GENERATED_STORAGE_PREFIX, SITE_PROPOSALS_TENANT } from './ten
 import { TenantSiteProposalsArtifactService } from './tenant-site-proposals-artifact.service';
 import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
 import { ProposalPreparationActor } from './tenant-site-proposals.types';
-import { cleanString, UUID_RE } from './tenant-site-proposals-validation';
+import { cleanString, sha256, UUID_RE } from './tenant-site-proposals-validation';
 
 @Injectable()
 export class TenantSiteProposalsGenerationCoreService {
@@ -41,14 +41,16 @@ export class TenantSiteProposalsGenerationCoreService {
       const context = { schema, dataSource: this.dataSource };
       const rendered = await this.templates.renderHtml(proposal.site_config, context);
       const redirects = await this.templates.buildRedirectFiles(proposal.site_config);
-      const zip = await this.artifacts.createZip(rendered.html, redirects);
+      const configSha256 = sha256(JSON.stringify(proposal.site_config));
+      const generatedLogos = this.generatedLogos(proposal.site_config);
+      const zip = await this.artifacts.createZip(rendered.html, redirects, generatedLogos);
       const prefix = `${GENERATED_STORAGE_PREFIX}/${proposalId}/${generation.id}/`;
       const htmlKey = `${prefix}index.html`; const zipKey = `${prefix}demo.zip`;
       await this.storage.uploadGeneratedBuffer(htmlKey, Buffer.from(rendered.html, 'utf8'), 'text/html; charset=utf-8');
       await this.storage.uploadGeneratedBuffer(zipKey, zip.buffer, 'application/zip');
       const completed = (await this.dataSource.query(`UPDATE "${schema}".site_proposal_generations SET status='completed',html_key=$1,zip_key=$2,html_sha256=$3,zip_sha256=$4,html_size=$5,zip_size=$6,completed_at=now() WHERE id=$7 RETURNING *`, [htmlKey, zipKey, rendered.sha256, zip.sha256, rendered.size, zip.size, generation.id]))[0];
       await this.dataSource.query(`UPDATE "${schema}".site_proposals SET status='generated',last_generated_at=now(),updated_at=now() WHERE id=$1`, [proposalId]);
-      await this.activity(schema, proposalId, ACTIVITY.generated, actor, { generationId: generation.id });
+      await this.activity(schema, proposalId, ACTIVITY.generated, actor, { generationId: generation.id, proposalVersion: proposal.current_version, configSha256: configSha256.slice(0, 16), htmlSha256: rendered.sha256.slice(0, 16), logoSourceMethod: generatedLogos.length ? 'generated' : this.logoSource(proposal.site_config) });
       return completed;
     } catch (error) {
       const message = cleanString(error instanceof Error ? error.message : String(error), 500) || 'Generazione non riuscita.';
@@ -61,6 +63,23 @@ export class TenantSiteProposalsGenerationCoreService {
   private schema(value: string) { const schema = safeSchema(value, 'site proposal generation core'); if (schema !== SITE_PROPOSALS_TENANT) throw new BadRequestException('Schema tenant non consentito'); return schema; }
   private uuid(value: string) { if (!UUID_RE.test(value)) throw new BadRequestException('UUID proposta non valido'); }
   private userId(value?: string | null) { return value && UUID_RE.test(value) ? value : null; }
+  private generatedLogos(config: any) {
+    const images = config?.images || {}; const brand = config?.brand || {};
+    const generated = (slot: 'logoDefault'|'logoLight') => images?.[slot]?.sourceMethod === 'generated' || brand.logoSourceMethod === 'generated';
+    const source = (slot: 'logoDefault'|'logoLight') => images?.[slot]?.src || brand?.[slot] || '';
+    const names = { logoDefault: 'assets/generated/logo-default.svg', logoLight: 'assets/generated/logo-light.svg' } as const;
+    const values: { path: string; bytes: Buffer }[] = [];
+    for (const slot of ['logoDefault','logoLight'] as const) {
+      if (!generated(slot)) continue;
+      const match = /^data:image\/svg\+xml;base64,([a-z0-9+/=]+)$/i.exec(String(source(slot)));
+      if (!match) continue;
+      const bytes = Buffer.from(match[1], 'base64');
+      if (!/^<svg\b/i.test(bytes.toString('utf8'))) continue;
+      values.push({ path: names[slot], bytes });
+    }
+    return values;
+  }
+  private logoSource(config: any) { return String(config?.images?.logoDefault?.sourceMethod || config?.brand?.logoSourceMethod || 'text-fallback'); }
   private activity(schema: string, proposalId: string, action: string, actor: ProposalPreparationActor, metadata: object) {
     return this.dataSource.query(`INSERT INTO "${schema}".site_proposal_activity (proposal_id,action,metadata,actor_user_id,actor_email) VALUES ($1,$2,$3::jsonb,$4,$5)`, [proposalId, action, JSON.stringify(metadata), this.userId(actor.id), cleanString(actor.email, 320) || null]);
   }

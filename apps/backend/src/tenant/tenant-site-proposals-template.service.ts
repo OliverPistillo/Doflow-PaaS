@@ -16,6 +16,7 @@ import { getProposalContentProfileAdapter, hasProposalContentProfileAdapter } fr
 
 const SCRIPT_RE = /<script\s+id=["']template-config["']\s+type=["']application\/json["']\s*>([\s\S]*?)<\/script>/gi;
 const UNSAFE_JSON_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+const RENDER_COMPILER_VERSION = 'proposal-renderer-v2';
 type ThemeManifest = TemplateManifest | ModularThemeManifest;
 type LoadedTemplate = { html: string; config: JsonObject; sha256: string; manifest: ThemeManifest; registration: SiteProposalTemplateRegistration };
 export type SiteProposalTemplateContext = { schema: string; dataSource: DataSource };
@@ -34,6 +35,7 @@ function equal(left: unknown, right: unknown): boolean {
 @Injectable()
 export class TenantSiteProposalsTemplateService {
   private readonly cache = new Map<string, { expiresAt: number; pending: Promise<LoadedTemplate> }>();
+  private readonly renderCache = new Map<string, { expiresAt: number; value: RenderedHtml }>();
   constructor(
     @Optional() private readonly fileStorage?: FileStorageService,
     @Optional() private readonly compiler?: TenantSiteProposalsThemeCompilerService,
@@ -91,14 +93,21 @@ export class TenantSiteProposalsTemplateService {
     this.assertProtectedConfig(config, loaded.config, registration);
     forceTemplateContract(config, registration);
     validateSiteConfig(config, registration);
+    const serializedConfig = this.safeJson(config);
+    const cacheKey = `${loaded.sha256}:${sha256(serializedConfig)}:${RENDER_COMPILER_VERSION}`;
+    const cached = this.renderCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return { ...cached.value };
     const matches = [...loaded.html.matchAll(SCRIPT_RE)];
     if (matches.length !== 1) throw new BadRequestException('Nodo template-config mancante o duplicato');
     const match = matches[0];
     const payloadOffset = match[0].indexOf(match[1]);
     const payloadStart = match.index! + payloadOffset;
-    const rendered = `${loaded.html.slice(0, payloadStart)}${this.safeJson(config)}${loaded.html.slice(payloadStart + match[1].length)}`;
+    const rendered = `${loaded.html.slice(0, payloadStart)}${serializedConfig}${loaded.html.slice(payloadStart + match[1].length)}`;
     this.verifyRendered(rendered, registration);
-    return { html: rendered, sha256: sha256(rendered), size: Buffer.byteLength(rendered) };
+    const value = { html: rendered, sha256: sha256(rendered), size: Buffer.byteLength(rendered) };
+    if (this.renderCache.size >= 100) this.renderCache.delete(this.renderCache.keys().next().value!);
+    this.renderCache.set(cacheKey, { expiresAt: Date.now() + 5 * 60_000, value });
+    return { ...value };
   }
 
   async buildRedirectFiles(config: JsonObject): Promise<{ path: string; html: string }[]> {
@@ -118,6 +127,7 @@ export class TenantSiteProposalsTemplateService {
 
   invalidate(schema?: string, slug?: string, version?: string) {
     for (const key of this.cache.keys()) if ((!schema || key.startsWith(`${schema}:`)) && (!slug || key.includes(`${slug}@`)) && (!version || key.endsWith(`:${version}`) || key.includes(`@${version}:`))) this.cache.delete(key);
+    this.renderCache.clear();
   }
 
   private load(registration: DynamicRegistration, context?: SiteProposalTemplateContext) {

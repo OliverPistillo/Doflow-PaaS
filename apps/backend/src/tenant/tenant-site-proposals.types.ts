@@ -103,7 +103,7 @@ export type ProposalPreparationJobData = ProposalPreparationOptions & {
 };
 
 export type PersonalizationStatus = 'idle' | 'running' | 'completed' | 'fallback' | 'failed';
-export type ProposalImageSourceMethod = 'website' | 'catalog' | 'catalog_fallback' | 'manual' | 'stock_local';
+export type ProposalImageSourceMethod = 'website' | 'catalog' | 'catalog_fallback' | 'manual' | 'extracted' | 'generated' | 'text-fallback' | 'stock_local';
 export type WebsiteImageCandidate = {
   url: string;
   alt: string;

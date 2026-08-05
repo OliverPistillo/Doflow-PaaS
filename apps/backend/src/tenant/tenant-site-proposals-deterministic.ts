@@ -26,6 +26,18 @@ function firstThree(input: CanonicalProposalInput) {
 
 export type DeterministicPackage = { config: JsonObject; analysis: JsonObject; email: { subject: string; body: string } };
 
+function logoConfig(assets: JsonObject, key: 'logoDefault' | 'logoLight', fallback: string, alt: string): JsonObject {
+  const metadata = isObject(assets[`${key}Asset`]) ? assets[`${key}Asset`] as JsonObject : {};
+  const src = String(assets[key] || fallback || '');
+  return {
+    src, alt, objectPosition: 'center', sourceMethod: String(assets.sourceMethod || (fallback ? 'manual' : 'text-fallback')),
+    ...(metadata.sha256 ? { sha256: metadata.sha256 } : {}),
+    ...(metadata.mime ? { mime: metadata.mime } : {}),
+    ...(metadata.width ? { width: metadata.width } : {}),
+    ...(metadata.height ? { height: metadata.height } : {}),
+  };
+}
+
 function buildBasicDeterministicProposal(base: JsonObject, input: CanonicalProposalInput, snapshot?: WebsiteSnapshot, assets: JsonObject = {}): DeterministicPackage {
   const config = deepClone(base);
   const fingerprint = buildFingerprint(input) || sha256(`${input.businessName}:${input.city || ''}`);
@@ -77,8 +89,8 @@ function buildBasicDeterministicProposal(base: JsonObject, input: CanonicalPropo
   };
   config.seo = { title: `${input.businessName} | ${category}${city ? ` a ${city}` : ''}`.slice(0, 70), description: `Scopri ${input.businessName}: ${category.toLowerCase()}, informazioni chiare e un contatto semplice${city ? ` a ${city}` : ''}.`.slice(0, 165) };
   config.images = {
-    logoDefault: { src: String(assets.logoDefault || input.logoUrl || ''), alt: `Logo ${input.businessName}` },
-    logoLight: { src: String(assets.logoLight || ''), alt: `Logo chiaro ${input.businessName}` },
+    logoDefault: logoConfig(assets, 'logoDefault', input.logoUrl || '', `Logo ${input.businessName}`),
+    logoLight: logoConfig(assets, 'logoLight', input.logoUrl || '', `Logo chiaro ${input.businessName}`),
     hero: imageSlot('hero', input.heroImageUrl, images.hero),
     consultation: imageSlot('consultation', input.consultationImageUrl, images.consultation),
     feature: imageSlot('feature', input.productsImageUrl, images.feature),
@@ -182,7 +194,9 @@ function beautyIdentity(config: JsonObject, input: CanonicalProposalInput, snaps
     professionalTitle: input.professionalTitle || currentBrand.professionalTitle || '', initials: initialsFor(input.businessName),
     logoDefault: String(assets.logoDefault || input.logoUrl || currentBrand.logoDefault || ''),
     logoLight: String(assets.logoLight || currentBrand.logoLight || ''),
-    logoMethod: assets.logoDefault || input.logoUrl ? 'website' : 'package', warnings: (assets.warnings as unknown[]) || [],
+    logoMethod: String(assets.sourceMethod || (input.logoUrl ? 'manual' : 'text-fallback')), logoSourceMethod: String(assets.sourceMethod || (input.logoUrl ? 'manual' : 'text-fallback')),
+    logoDefaultMetadata: deepClone((assets.logoDefaultAsset || {}) as JsonObject), logoLightMetadata: deepClone((assets.logoLightAsset || {}) as JsonObject),
+    warnings: (assets.warnings as unknown[]) || [],
   };
   config.business = {
     ...currentBusiness, city: input.city || '', citySlug: normalizeSlug(input.city || ''), address: input.address || currentBusiness.address || '',
@@ -297,7 +311,7 @@ function buildColsovaConversionProposal(base: JsonObject, input: CanonicalPropos
   const currentBusiness = (config.business || {}) as JsonObject;
   const social = snapshot?.social || {};
   config.sourceWebsite = { url: input.websiteUrl || snapshot?.sourceUrl || '', title: snapshot?.title || '', description: snapshot?.description || '', overview: input.overview || '' };
-  config.brand = { ...((config.brand || {}) as JsonObject), name: input.businessName, descriptor: input.descriptor || category, monogram: initialsFor(input.businessName), logoMethod: assets.logoDefault ? 'website' : 'text-fallback', warnings: (assets.warnings as unknown[]) || [] };
+  config.brand = { ...((config.brand || {}) as JsonObject), name: input.businessName, descriptor: input.descriptor || category, monogram: initialsFor(input.businessName), logoMethod: String(assets.sourceMethod || (input.logoUrl ? 'manual' : 'text-fallback')), logoSourceMethod: String(assets.sourceMethod || (input.logoUrl ? 'manual' : 'text-fallback')), warnings: (assets.warnings as unknown[]) || [] };
   config.business = {
     ...currentBusiness, city, citySlug: normalizeSlug(city), address: input.address || currentBusiness.address || '',
     phoneDisplay: input.phone || snapshot?.phones[0] || currentBusiness.phoneDisplay || '', phoneHref: normalizePhoneHref(input.phone || snapshot?.phones[0]),
@@ -313,8 +327,8 @@ function buildColsovaConversionProposal(base: JsonObject, input: CanonicalPropos
   };
   config.images = {
     ...baseImages,
-    logoDefault: { ...((baseImages.logoDefault || {}) as JsonObject), src: String(assets.logoDefault || input.logoUrl || ((baseImages.logoDefault as JsonObject)?.src || '')), alt: `Logo ${input.businessName}` },
-    logoLight: { ...((baseImages.logoLight || {}) as JsonObject), src: String(assets.logoLight || ((baseImages.logoLight as JsonObject)?.src || '')), alt: `Logo chiaro ${input.businessName}` },
+    logoDefault: { ...((baseImages.logoDefault || {}) as JsonObject), ...logoConfig(assets, 'logoDefault', input.logoUrl || '', `Logo ${input.businessName}`) },
+    logoLight: { ...((baseImages.logoLight || {}) as JsonObject), ...logoConfig(assets, 'logoLight', input.logoUrl || '', `Logo chiaro ${input.businessName}`) },
     hero: image('hero', input.heroImageUrl), consultation: image('consultation', input.consultationImageUrl), feature: image('feature', input.productsImageUrl),
   };
   const serviceDescriptions = [

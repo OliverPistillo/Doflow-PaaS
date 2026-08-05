@@ -100,6 +100,8 @@ export type ThemeCompilationReport = {
   assets: ThemeCompilationAssetReport[];
   sourceFileCount: number;
   deterministic: true;
+  compilerVersion: string;
+  configSha256: string;
 };
 
 export type CompiledThemeArtifact = {

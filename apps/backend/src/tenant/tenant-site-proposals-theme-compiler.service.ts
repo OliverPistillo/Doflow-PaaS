@@ -10,6 +10,7 @@ import { TenantSiteProposalsThemePackageService, ValidatedThemePackage } from '.
 const TEMPLATE_CONFIG_RE = /<script\s+id=["']template-config["']\s+type=["']application\/json["']\s*>([\s\S]*?)<\/script>/gi;
 const COMPILED_CSP = "default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'";
 const FIXED_ZIP_DATE = new Date('1980-01-01T00:00:00.000Z');
+const COMPILER_VERSION = 'modular-compiler-v2';
 
 @Injectable()
 export class TenantSiteProposalsThemeCompilerService {
@@ -69,7 +70,7 @@ export class TenantSiteProposalsThemeCompilerService {
         const parts = html.split(alias);
         if (parts.length > 1) { referencesReplaced += parts.length - 1; html = parts.join(dataUri); }
       }
-      if (!referencesReplaced) throw new BadRequestException(`Asset non referenziato durante la compilazione: ${assetPath}`);
+      if (!referencesReplaced && !config) throw new BadRequestException(`Asset non referenziato durante la compilazione: ${assetPath}`);
       assetReport.push({ ...asset, dataUriSize: Buffer.byteLength(dataUri), referencesReplaced });
     }
 
@@ -81,7 +82,8 @@ export class TenantSiteProposalsThemeCompilerService {
     const compilationReport = {
       format: 'standalone' as const,
       styleEntries: [...manifest.styleEntries], scriptEntries: [...manifest.scriptEntries], assets: assetReport,
-      sourceFileCount: Object.keys(files).length, deterministic: true as const,
+      sourceFileCount: Object.keys(files).length, deterministic: true as const, compilerVersion: COMPILER_VERSION,
+      configSha256: sha256(this.safeJson(config || JSON.parse(configMatches[0][1]))),
     };
     return { html, sha256: sha256(html), size, sourcePackageSha256: source.sourcePackageSha256, assetReport, compilationReport };
   }

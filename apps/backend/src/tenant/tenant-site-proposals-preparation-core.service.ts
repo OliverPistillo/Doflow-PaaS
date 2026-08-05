@@ -16,6 +16,8 @@ import { TenantSiteProposalsWebsiteFetcherService } from './tenant-site-proposal
 import { CanonicalProposalInput, JsonObject, ProposalPreparationActor, ProposalPreparationJobData, WebsiteSnapshot } from './tenant-site-proposals.types';
 import { assertNoPrototypePollution, buildFingerprint, cleanString, deepClone, sha256, UUID_RE, validateSiteConfig } from './tenant-site-proposals-validation';
 import { getProposalContentProfileAdapter } from './tenant-site-proposals-content-profile-adapters';
+import { assertProposalPersonalizationDelta, evaluateProposalPersonalizationDelta } from './tenant-site-proposals-personalization-delta';
+import { TenantSiteProposalsLogoGeneratorService } from './tenant-site-proposals-logo-generator.service';
 
 const JOB_KEYS = ['preparationRunId','tenantSchema','proposalId','actorUserId','actorEmail','force','generate','reason','targetTemplateSlug','targetTemplateVersion'];
 
@@ -30,6 +32,7 @@ export class TenantSiteProposalsPreparationCoreService {
     private readonly ai: TenantSiteProposalsAiService,
     private readonly templates: TenantSiteProposalsTemplateService,
     private readonly generation: TenantSiteProposalsGenerationCoreService,
+    private readonly logoGenerator: TenantSiteProposalsLogoGeneratorService = new TenantSiteProposalsLogoGeneratorService(),
   ) {}
 
   async prepare(raw: ProposalPreparationJobData) {
@@ -58,7 +61,7 @@ export class TenantSiteProposalsPreparationCoreService {
       const targetVersion = data.targetTemplateVersion || proposal.template_version;
       const registration = await this.templates.getRegistration(targetSlug, targetVersion, { schema, dataSource: this.dataSource });
       if (!registration.isActive) throw new BadRequestException('La versione tema target non è attiva');
-      getProposalContentProfileAdapter(registration.contentProfile);
+      const adapter = getProposalContentProfileAdapter(registration.contentProfile);
       const context = { schema, dataSource: this.dataSource };
       const base = await this.templates.getDefaultConfig(targetSlug, targetVersion, context);
       const canonical = this.canonical(proposal);
@@ -74,6 +77,7 @@ export class TenantSiteProposalsPreparationCoreService {
       }
       let brandAssets: JsonObject = { warnings: [], logoDefault: '', logoLight: '' };
       if (snapshot) try { brandAssets = await this.brand.extract(snapshot); } catch { warnings.push('Logo non elaborabile: preservato il fallback del tema.'); }
+      brandAssets = this.resolveLogoAssets(canonical, currentConfig, brandAssets, base, registration.contentProfile, warnings);
       const initial = buildDeterministicProposalForTemplate(base, registration, canonical, snapshot, brandAssets);
       const currentImages = (currentConfig.images || initial.config.images) as JsonObject;
       const resolved = await this.images.resolveImages(snapshot, currentImages, buildFingerprint(canonical), canonical.category || canonical.descriptor, data.force);
@@ -81,6 +85,7 @@ export class TenantSiteProposalsPreparationCoreService {
       let built = buildDeterministicProposalForTemplate(base, registration, canonical, snapshot, brandAssets);
       this.preserveManualValues(built.config, currentConfig, brandAssets, data.force);
       if (object(brandAssets.palette)) built.config.palette = mapBrandPaletteForContentProfile(brandAssets.palette as JsonObject, registration.contentProfile, built.config.palette as JsonObject);
+      assertProposalPersonalizationDelta(base, built.config, adapter);
 
       const snapshotHash = sha256(JSON.stringify({ finalUrl: snapshot?.finalUrl || canonical.websiteUrl || '', text: snapshot?.text || '', template: `${registration.slug}@${registration.version}`, profile: registration.contentProfile }));
       const run = (await runner.query(`INSERT INTO "${schema}".site_proposal_personalizations (proposal_id,status,provider,model,source_url,final_url,snapshot_hash,extracted_data,brand_assets,warnings,created_by,started_at) VALUES ($1,'running','local',$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,now()) RETURNING id`, [data.proposalId, this.ai.configuration().model, canonical.websiteUrl || null, snapshot?.finalUrl || null, snapshotHash, JSON.stringify(this.publicSnapshot(snapshot)), JSON.stringify(brandAssets), JSON.stringify(warnings), this.userId(actor.id)]))[0];
@@ -90,12 +95,16 @@ export class TenantSiteProposalsPreparationCoreService {
         const generated = await this.ai.generate(this.aiPayload(canonical, snapshot, built.config.palette as JsonObject), built.config.textLimits as JsonObject, registration.contentProfile);
         const candidate = applyAiOutputForProfile(built, generated.output, registration);
         this.assertPostconditions(candidate, registration);
+        const aiDelta = evaluateProposalPersonalizationDelta(built.config, candidate.config, adapter);
+        if (!aiDelta.sufficient) throw new ProposalAiUnavailableError('visible_delta_insufficient');
         built = candidate; provider = 'gemini'; personalizationStatus = 'completed'; model = generated.model;
       } catch (error) {
         if (!(error instanceof ProposalAiUnavailableError)) warnings.push('Output AI rifiutato: applicato il motore locale.');
         else warnings.push(`Gemini non disponibile (${error.reason}): applicato il motore locale.`);
       }
-      (built.config.personalization as JsonObject) = { ...((built.config.personalization || {}) as JsonObject), preparationRunId: data.preparationRunId, status: personalizationStatus, provider, model, sourceUrl: snapshot?.finalUrl || canonical.websiteUrl || '', snapshotHash, completedAt: new Date().toISOString(), warnings, copyMethod: provider === 'gemini' ? 'ai' : 'deterministic' };
+      const finalDelta = assertProposalPersonalizationDelta(base, built.config, adapter);
+      const configSha256 = sha256(JSON.stringify(built.config));
+      (built.config.personalization as JsonObject) = { ...((built.config.personalization || {}) as JsonObject), preparationRunId: data.preparationRunId, status: personalizationStatus, provider, model, sourceUrl: snapshot?.finalUrl || canonical.websiteUrl || '', snapshotHash, completedAt: new Date().toISOString(), warnings, copyMethod: provider === 'gemini' ? 'ai' : 'deterministic', changedVisiblePaths: finalDelta.changedVisiblePaths, unchangedVisiblePaths: finalDelta.unchangedVisiblePaths, changedVisibleCount: finalDelta.changedVisibleCount, personalizationFingerprint: finalDelta.personalizationFingerprint, configSha256 };
       this.assertPostconditions(built, registration);
 
       const nextVersion = Number(proposal.current_version || 0) + 1;
@@ -104,7 +113,7 @@ export class TenantSiteProposalsPreparationCoreService {
       if (!current) throw new NotFoundException('Proposta non trovata');
       await runner.query(`UPDATE "${schema}".site_proposals SET template_slug=$1,template_version=$2,site_config=$3::jsonb,commercial_analysis=$4::jsonb,email_subject=$5,email_body=$6,current_version=$7,personalization_status=$8,latest_personalization_id=$9,last_personalized_at=now(),updated_by=$10,updated_at=now() WHERE id=$11`, [registration.slug, registration.version, JSON.stringify(built.config), JSON.stringify(built.analysis), built.email.subject, built.email.body, nextVersion, personalizationStatus, runId, this.userId(actor.id), data.proposalId]);
       await runner.query(`INSERT INTO "${schema}".site_proposal_versions (proposal_id,version,site_config,commercial_analysis,email_subject,email_body,reason,created_by) VALUES ($1,$2,$3::jsonb,$4::jsonb,$5,$6,$7,$8)`, [data.proposalId, nextVersion, JSON.stringify(built.config), JSON.stringify(built.analysis), built.email.subject, built.email.body, data.reason, this.userId(actor.id)]);
-      await runner.query(`UPDATE "${schema}".site_proposal_personalizations SET status=$1,provider=$2,model=$3,website_analysis=$4::jsonb,generated_content=$5::jsonb,brand_assets=$6::jsonb,warnings=$7::jsonb,completed_at=now() WHERE id=$8`, [personalizationStatus, provider, model || null, JSON.stringify(built.analysis), JSON.stringify({ content: built.config.content, seo: built.config.seo, email: built.email }), JSON.stringify(brandAssets), JSON.stringify(warnings), runId]);
+      await runner.query(`UPDATE "${schema}".site_proposal_personalizations SET status=$1,provider=$2,model=$3,website_analysis=$4::jsonb,generated_content=$5::jsonb,brand_assets=$6::jsonb,warnings=$7::jsonb,completed_at=now() WHERE id=$8`, [personalizationStatus, provider, model || null, JSON.stringify(built.analysis), JSON.stringify({ content: built.config.content, seo: built.config.seo, email: built.email, delta: finalDelta, configSha256 }), JSON.stringify(brandAssets), JSON.stringify(warnings), runId]);
       if (proposal.template_slug !== registration.slug || proposal.template_version !== registration.version) await this.activityWith(runner, schema, data.proposalId, ACTIVITY.proposalTemplateUpgraded, actor, { from: `${proposal.template_slug}@${proposal.template_version}`, to: `${registration.slug}@${registration.version}` });
       await runner.commitTransaction();
       personalizationCommitted = true;
@@ -189,6 +198,29 @@ export class TenantSiteProposalsPreparationCoreService {
     for (const slot of ['hero','consultation','feature']) if (object(currentImages[slot]) && (currentImages[slot] as JsonObject).sourceMethod === 'manual') nextImages[slot] = deepClone(currentImages[slot]);
     if (!force && object(current.palette) && object(next.palette) && Object.keys(current.palette).sort().join('|') === Object.keys(next.palette).sort().join('|')) next.palette = deepClone(current.palette);
   }
+  private resolveLogoAssets(input: CanonicalProposalInput, current: JsonObject, extracted: JsonObject, base: JsonObject, contentProfile: string, warnings: string[]): JsonObject {
+    const currentImages = object(current.images) ? current.images : {};
+    const currentBrand = object(current.brand) ? current.brand : {};
+    const manualDefault = this.manualLogo(currentImages.logoDefault) || (currentBrand.logoSourceMethod === 'manual' ? this.logoSrc(currentBrand.logoDefault) : '') || this.validLogo(input.logoUrl);
+    const manualLight = this.manualLogo(currentImages.logoLight) || (currentBrand.logoSourceMethod === 'manual' ? this.logoSrc(currentBrand.logoLight) : '');
+    if (manualDefault) return { ...extracted, logoDefault: manualDefault, logoLight: manualLight || manualDefault, logoSource: 'manual', sourceMethod: 'manual' };
+    const currentExtracted = ['extracted','website'].includes(String((object(currentImages.logoDefault) ? currentImages.logoDefault.sourceMethod : '') || currentBrand.logoSourceMethod || currentBrand.logoMethod || ''));
+    const extractedDefault = this.validLogo(extracted.logoDefault) || (currentExtracted ? this.logoSrc(currentImages.logoDefault) || this.logoSrc(currentBrand.logoDefault) : '');
+    const extractedLight = this.validLogo(extracted.logoLight) || (currentExtracted ? this.logoSrc(currentImages.logoLight) || this.logoSrc(currentBrand.logoLight) : '');
+    if (extractedDefault) return { ...extracted, logoDefault: extractedDefault, logoLight: extractedLight || extractedDefault, logoSource: 'extracted', sourceMethod: 'extracted' };
+    try {
+      const generated = this.logoGenerator.generate({ businessName: input.businessName, descriptor: input.descriptor || input.category, palette: object(extracted.palette) ? extracted.palette : object(base.palette) ? base.palette : {}, contentProfile: contentProfile as any, fingerprint: buildFingerprint(input) });
+      const { bytes: _defaultBytes, ...defaultAsset } = generated.defaultLogo;
+      const { bytes: _lightBytes, ...lightAsset } = generated.lightLogo;
+      return { ...extracted, logoDefault: generated.defaultLogo.dataUri, logoLight: generated.lightLogo.dataUri, logoDefaultAsset: defaultAsset, logoLightAsset: lightAsset, logoMetadata: generated.metadata, logoSource: 'generated', sourceMethod: 'generated' };
+    } catch {
+      warnings.push('Logo automatico non disponibile: applicato il fallback testuale.');
+      return { ...extracted, logoDefault: '', logoLight: '', logoSource: 'text-fallback', sourceMethod: 'text-fallback' };
+    }
+  }
+  private manualLogo(value: unknown) { return object(value) && value.sourceMethod === 'manual' ? this.validLogo(value.src) : ''; }
+  private logoSrc(value: unknown) { return typeof value === 'string' ? this.validLogo(value) : object(value) ? this.validLogo(value.src) : ''; }
+  private validLogo(value: unknown) { const logo = typeof value === 'string' ? value.trim() : ''; return /^(?:data:image\/(?:svg\+xml|png|jpe?g|webp);base64,[a-z0-9+/=]+|https:\/\/[^\s]+)$/i.test(logo) ? logo : ''; }
   private assertPostconditions(built: DeterministicPackage, registration: SiteProposalTemplateRegistration) {
     validateSiteConfig(built.config, registration);
     const analysis = built.analysis; const email = built.email; const seo = built.config.seo as JsonObject;
