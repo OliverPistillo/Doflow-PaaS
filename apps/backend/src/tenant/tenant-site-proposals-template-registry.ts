@@ -58,8 +58,8 @@ export const SITE_PROPOSAL_TEMPLATE_REGISTRY: readonly SiteProposalTemplateRegis
     sourceSha256: 'cdc959eaa870485134fc2e93bade901eebf20e0af54d2d8d4113c904790da5a6',
     directory: 'aurea/1.2.0', isActive: true, isLatest: true,
     categoryTags: ['beauty', 'wellness', 'editoriale'], contractVersion: '2.1', contentProfile: 'beauty-editorial-v1',
-    templateSize: 384117, isBuiltin: true, format: 'modular', formatVersion: '1.0', runtimeAdapterStatus: 'pending',
-    selectableForProposal: false, selectableForImport: false, visible: true, preview: true, download: true, defaultCandidate: false,
+    templateSize: 384117, isBuiltin: true, format: 'modular', formatVersion: '1.0', runtimeAdapterStatus: 'ready',
+    selectableForProposal: true, selectableForImport: true, visible: true, preview: true, download: true, defaultCandidate: true,
     recommendationTags: ['medicina estetica', 'beauty premium', 'wellness', 'professionisti', 'elegante', 'editoriale'],
   },
   {
@@ -67,8 +67,8 @@ export const SITE_PROPOSAL_TEMPLATE_REGISTRY: readonly SiteProposalTemplateRegis
     sourceSha256: '9f990c78514508cfe832a69e8a5caec21271085bed8eb977ff9dfce9ce6bd2c2',
     directory: 'luce/1.2.0', isActive: true, isLatest: true,
     categoryTags: ['beauty', 'cliniche', 'conversione'], contractVersion: '2.1', contentProfile: 'beauty-conversion-v1',
-    templateSize: 347122, isBuiltin: true, format: 'modular', formatVersion: '1.0', runtimeAdapterStatus: 'pending',
-    selectableForProposal: false, selectableForImport: false, visible: true, preview: true, download: true, defaultCandidate: false,
+    templateSize: 347122, isBuiltin: true, format: 'modular', formatVersion: '1.0', runtimeAdapterStatus: 'ready',
+    selectableForProposal: true, selectableForImport: true, visible: true, preview: true, download: true, defaultCandidate: true,
     recommendationTags: ['cliniche', 'centro estetico', 'medicina estetica', 'molti servizi', 'conversione', 'prenotazione'],
   },
 ] as const;

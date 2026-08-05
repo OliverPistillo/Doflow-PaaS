@@ -13,7 +13,7 @@ describe('site proposal template registry V2',()=>{
     expect(getTemplateRegistration('colsova').version).toBe('2.4.1');
     expect(getTemplateRegistration('colsova','1.0.0').isLatest).toBe(false);
     expect(getTemplateRegistration('colsova','2.0.0').isLatest).toBe(false);
-    for (const slug of ['aurea','luce']) expect(getTemplateRegistration(slug,'1.2.0')).toMatchObject({format:'modular',runtimeAdapterStatus:'pending',selectableForProposal:false});
+    for (const slug of ['aurea','luce']) expect(getTemplateRegistration(slug,'1.2.0')).toMatchObject({format:'modular',runtimeAdapterStatus:'ready',selectableForProposal:true,selectableForImport:true,defaultCandidate:true});
   });
   it('rejects unknown slugs and versions',()=>{expect(()=>getTemplateRegistration('unknown')).toThrow(NotFoundException);expect(()=>getTemplateRegistration('colsova','9.0.0')).toThrow(NotFoundException)});
   it.each(['1.0.0','2.0.0'])('matches the standalone source hash and size for %s',(version)=>{const item=getTemplateRegistration('colsova',version);const bytes=fs.readFileSync(path.join(__dirname,'site-proposal-templates',...item.directory.split('/'),'template.html'));expect(crypto.createHash('sha256').update(bytes).digest('hex')).toBe(item.sourceSha256);expect(bytes).toHaveLength(item.templateSize)});

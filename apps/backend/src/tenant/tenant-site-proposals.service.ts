@@ -23,6 +23,7 @@ import { TenantSiteProposalsPreparationQueueService } from './tenant-site-propos
 import { TenantSiteProposalsGenerationCoreService } from './tenant-site-proposals-generation-core.service';
 import { evaluateProposalReadiness } from './tenant-site-proposals-readiness';
 import { AuthUserRef, JsonObject, PreviewRow, RowIssue } from './tenant-site-proposals.types';
+import { hasProposalContentProfileAdapter } from './tenant-site-proposals-content-profile-adapters';
 import {
   allowedStatusTransition,
   assertNoPrototypePollution,
@@ -308,7 +309,7 @@ export class TenantSiteProposalsService {
     const targetSlug = payload.targetSlug ? String(payload.targetSlug) : current.template_slug;
     const target = await this.templates.getRegistration(targetSlug, payload.targetVersion ? String(payload.targetVersion) : undefined, this.templateContext());
     if (current.template_slug === target.slug && current.template_version === target.version) return { proposal: current, idempotent: true };
-    if (!['proposal-basic-v2','colsova-conversion-v1'].includes(target.contentProfile)) throw new BadRequestException('Profilo target non supportato per l’upgrade.');
+    if (!hasProposalContentProfileAdapter(target.contentProfile)) throw new BadRequestException('Profilo target non supportato per l’upgrade.');
     if (this.preparationQueue) return { queued: await this.preparationQueue.enqueue(this.schema(), id, user, { force: true, generate: true, reason: 'template_upgrade', targetTemplateSlug: target.slug, targetTemplateVersion: target.version }), idempotent: false };
     const running = await this.one(`SELECT id FROM "${this.schema()}".site_proposal_generations WHERE proposal_id=$1 AND status='running' LIMIT 1`, [id]);
     if (running) throw new ConflictException('La proposta ha una generazione in corso.');

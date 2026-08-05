@@ -15,6 +15,7 @@ import { TenantSiteProposalsWebsiteExtractorService } from './tenant-site-propos
 import { TenantSiteProposalsWebsiteFetcherService } from './tenant-site-proposals-website-fetcher.service';
 import { CanonicalProposalInput, JsonObject, ProposalPreparationActor, ProposalPreparationJobData, WebsiteSnapshot } from './tenant-site-proposals.types';
 import { assertNoPrototypePollution, buildFingerprint, cleanString, deepClone, sha256, UUID_RE, validateSiteConfig } from './tenant-site-proposals-validation';
+import { getProposalContentProfileAdapter } from './tenant-site-proposals-content-profile-adapters';
 
 const JOB_KEYS = ['preparationRunId','tenantSchema','proposalId','actorUserId','actorEmail','force','generate','reason','targetTemplateSlug','targetTemplateVersion'];
 
@@ -57,6 +58,7 @@ export class TenantSiteProposalsPreparationCoreService {
       const targetVersion = data.targetTemplateVersion || proposal.template_version;
       const registration = await this.templates.getRegistration(targetSlug, targetVersion, { schema, dataSource: this.dataSource });
       if (!registration.isActive) throw new BadRequestException('La versione tema target non è attiva');
+      getProposalContentProfileAdapter(registration.contentProfile);
       const context = { schema, dataSource: this.dataSource };
       const base = await this.templates.getDefaultConfig(targetSlug, targetVersion, context);
       const canonical = this.canonical(proposal);
@@ -145,7 +147,7 @@ export class TenantSiteProposalsPreparationCoreService {
         generationComplete = true;
       }
     }
-    const readiness = evaluateProposalReadiness({ emailSubject: proposal.email_subject, emailBody: proposal.email_body, commercialAnalysis: proposal.commercial_analysis, siteConfigValid: true, generationComplete, requireGeneration: data.generate });
+    const readiness = evaluateProposalReadiness({ emailSubject: proposal.email_subject, emailBody: proposal.email_body, commercialAnalysis: proposal.commercial_analysis, siteConfigValid: true, generationComplete, requireGeneration: data.generate, adapterReady: registration.runtimeAdapterStatus === 'ready', themeActive: registration.isActive });
     if (!readiness.complete) throw new ProposalAiUnavailableError(`readiness_incomplete:${readiness.reasons.join(',')}`);
     const personalization = object(config.personalization) ? config.personalization as JsonObject : {};
     const provider: 'gemini'|'local' = personalization.provider === 'gemini' ? 'gemini' : 'local';
@@ -182,6 +184,8 @@ export class TenantSiteProposalsPreparationCoreService {
     for (const key of ['address','phoneDisplay','phoneHref','email','socialLinkedIn','socialInstagram','socialFacebook','hours']) if (currentBusiness[key]) nextBusiness[key] = currentBusiness[key];
     const currentImages = object(current.images) ? current.images : {}; const nextImages = next.images as JsonObject;
     if (!assets.logoDefault) for (const slot of ['logoDefault','logoLight']) if (object(currentImages[slot]) && (currentImages[slot] as JsonObject).src) nextImages[slot] = deepClone(currentImages[slot]);
+    const currentBrand = object(current.brand) ? current.brand : {}; const nextBrand = object(next.brand) ? next.brand : {};
+    if (!assets.logoDefault) for (const slot of ['logoDefault','logoLight']) if (typeof currentBrand[slot] === 'string' && currentBrand[slot]) nextBrand[slot] = currentBrand[slot];
     for (const slot of ['hero','consultation','feature']) if (object(currentImages[slot]) && (currentImages[slot] as JsonObject).sourceMethod === 'manual') nextImages[slot] = deepClone(currentImages[slot]);
     if (!force && object(current.palette) && object(next.palette) && Object.keys(current.palette).sort().join('|') === Object.keys(next.palette).sort().join('|')) next.palette = deepClone(current.palette);
   }

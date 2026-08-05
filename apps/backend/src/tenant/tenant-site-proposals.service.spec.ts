@@ -62,10 +62,38 @@ describe('TenantSiteProposalsService', () => {
     csv.parseCsvFile.mockReturnValue({ rows: [{ business_name: 'A' }] });
     queryMock.mockResolvedValueOnce([]);
     templates.getRegistration.mockRejectedValue(new BadRequestException('Tema disponibile in anteprima, adattatore di generazione non ancora attivo.'));
-    await expect(service.previewImport({ originalname:'x.csv',mimetype:'text/csv',buffer:Buffer.from('a') } as any, 'aurea', '1.2.0')).rejects.toThrow('adattatore di generazione non ancora attivo');
+    await expect(service.previewImport({ originalname:'x.csv',mimetype:'text/csv',buffer:Buffer.from('a') } as any, 'preview-only', '1.0.0')).rejects.toThrow('adattatore di generazione non ancora attivo');
     expect(csv.buildPreviewRows).not.toHaveBeenCalled();
   });
   it('uses the unique global DB default without a Colsova preference', async () => { const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } }); queryMock.mockResolvedValueOnce([{ slug: 'luce', version: '1.2.0' }]); await expect((service as any).defaultThemeSelection()).resolves.toEqual({ slug: 'luce', version: '1.2.0' }); expect(queryMock.mock.calls[0][0]).not.toContain("CASE WHEN t.slug='colsova'"); });
+
+  it('respects Aurea as the global DB default', async () => {
+    const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    queryMock.mockResolvedValueOnce([{ slug: 'aurea', version: '1.2.0' }]);
+    await expect((service as any).defaultThemeSelection()).resolves.toEqual({ slug: 'aurea', version: '1.2.0' });
+  });
+
+  it.each([
+    ['colsova', 'aurea', 'beauty-editorial-v1'],
+    ['colsova', 'luce', 'beauty-conversion-v1'],
+    ['aurea', 'luce', 'beauty-conversion-v1'],
+    ['luce', 'aurea', 'beauty-editorial-v1'],
+    ['aurea', 'colsova', 'colsova-conversion-v1'],
+  ])('queues a complete cross-profile change from %s to %s', async (from, to, contentProfile) => {
+    const { service, templates } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    jest.spyOn(service, 'get').mockResolvedValue({ proposal: { id: uuid, template_slug: from, template_version: from === 'colsova' ? '2.4.1' : '1.2.0' } } as any);
+    templates.getRegistration.mockResolvedValue({ slug: to, version: to === 'colsova' ? '2.4.1' : '1.2.0', contentProfile });
+    const enqueue = jest.fn().mockResolvedValue({ queued: true, preparationRunId: uuid });
+    (service as any).preparationQueue = { enqueue };
+    await expect(service.upgradeTemplate(uuid, { targetSlug: to })).resolves.toMatchObject({ idempotent: false });
+    expect(enqueue).toHaveBeenCalledWith('doflow', uuid, expect.objectContaining({ id: uuid }), expect.objectContaining({
+      force: true,
+      generate: true,
+      reason: 'template_upgrade',
+      targetTemplateSlug: to,
+      targetTemplateVersion: to === 'colsova' ? '2.4.1' : '1.2.0',
+    }));
+  });
 
   it('confirmImport is idempotent when batch is already confirmed', async () => {
     const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });

@@ -8,8 +8,8 @@ Package built-in modulare derivato dal template standalone fornito dall’utente
 - JavaScript: `scripts/theme.js`
 - Asset: `assets/images` e `assets/icons`
 - Content profile: `beauty-conversion-v1`
-- Runtime adapter: `pending`
-- Selezionabile: no; disponibile soltanto in Libreria, anteprima e download
+- Runtime adapter: `ready` (`beauty-conversion-v1`)
+- Selezionabile: sì; disponibile in Libreria, anteprima, download, nuove proposte, import e cambio tema
 - Form demo: presente, intercettato localmente e senza rete
 - Recensioni: tre recensioni dimostrative del sorgente
 

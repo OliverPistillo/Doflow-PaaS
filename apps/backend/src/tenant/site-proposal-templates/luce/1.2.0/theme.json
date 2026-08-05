@@ -15,7 +15,7 @@
   ],
   "assetRoot": "assets",
   "contentProfile": "beauty-conversion-v1",
-  "runtimeAdapterStatus": "pending",
+  "runtimeAdapterStatus": "ready",
   "categories": [
     "beauty",
     "cliniche",

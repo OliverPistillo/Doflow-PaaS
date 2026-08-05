@@ -13,6 +13,7 @@ Testi, immagini e recensioni placeholder devono essere verificati prima di quals
 Il file e destinato a una valutazione grafica e commerciale.
 E consigliato valutarlo sia da desktop sia da smartphone.
 `;
+const FIXED_ARCHIVE_DATE = new Date('1980-01-01T00:00:00.000Z');
 
 @Injectable()
 export class TenantSiteProposalsArtifactService {
@@ -28,9 +29,9 @@ export class TenantSiteProposalsArtifactService {
       stream.on('error', reject);
       archive.on('error', reject);
     });
-    archive.append(html, { name: 'index.html' });
-    for (const redirect of redirects) archive.append(redirect.html, { name: redirect.path });
-    archive.append(README, { name: 'README-ANTEPRIMA.txt' });
+    archive.append(html, { name: 'index.html', date: FIXED_ARCHIVE_DATE });
+    for (const redirect of redirects) archive.append(redirect.html, { name: redirect.path, date: FIXED_ARCHIVE_DATE });
+    archive.append(README, { name: 'README-ANTEPRIMA.txt', date: FIXED_ARCHIVE_DATE });
     await archive.finalize();
     await done;
     const buffer = Buffer.concat(chunks);

@@ -7,6 +7,7 @@ import {
 } from './tenant-site-proposals.constants';
 import { CanonicalProposalInput, JsonObject, RowIssue } from './tenant-site-proposals.types';
 import { getTemplateRegistration, SiteProposalTemplateRegistration } from './tenant-site-proposals-template-registry';
+import { getProposalContentProfileAdapter } from './tenant-site-proposals-content-profile-adapters';
 
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -287,7 +288,7 @@ function validateSiteConfigV2(config: JsonObject, registration: SiteProposalTemp
   if (template.schemaVersion !== registration.schemaVersion || template.layoutLocked !== true) throw new BadRequestException('Contratto template del Tema Colsova 2.0 non valido');
   if (registration.contentProfile === 'colsova-conversion-v1') return validateColsovaConversionConfig(config, registration);
   if (registration.contentProfile === 'beauty-editorial-v1' || registration.contentProfile === 'beauty-conversion-v1') {
-    return validatePendingBeautyConfig(config, registration);
+    return validateBeautyConfig(config, registration);
   }
   const editing = config.editingContract as JsonObject | undefined;
   const fixed = editing?.fixedCounts as JsonObject | undefined;
@@ -324,17 +325,13 @@ function validateSiteConfigV2(config: JsonObject, registration: SiteProposalTemp
   return [];
 }
 
-const BEAUTY_PROFILE_COUNTS: Readonly<Record<'beauty-editorial-v1' | 'beauty-conversion-v1', Readonly<Record<string, number>>>> = {
-  'beauty-editorial-v1': { services: 4, results: 3, trustItems: 4 },
-  'beauty-conversion-v1': { services: 5, results: 3, reviews: 3, trustItems: 5, ctaItems: 4 },
-};
-
-function validatePendingBeautyConfig(config: JsonObject, registration: SiteProposalTemplateRegistration): RowIssue[] {
-  const profile = registration.contentProfile as keyof typeof BEAUTY_PROFILE_COUNTS;
+function validateBeautyConfig(config: JsonObject, registration: SiteProposalTemplateRegistration): RowIssue[] {
+  const profile = registration.contentProfile as 'beauty-editorial-v1' | 'beauty-conversion-v1';
+  const adapter = getProposalContentProfileAdapter(profile);
   const editing = requireObject(config.editingContract, 'editingContract');
   if (editing.contractVersion !== '2.0') throw new BadRequestException('Contratto editoriale del tema beauty non valido');
   const fixed = requireObject(editing.fixedCounts, 'editingContract.fixedCounts');
-  for (const [key, count] of Object.entries(BEAUTY_PROFILE_COUNTS[profile])) {
+  for (const [key, count] of Object.entries(adapter.fixedCounts)) {
     if (Number(fixed[key]) !== count) throw new BadRequestException(`Conteggio fisso non valido: ${key}`);
   }
   const content = requireObject(config.content, 'content');
@@ -342,10 +339,33 @@ function validatePendingBeautyConfig(config: JsonObject, registration: SitePropo
     ? [[content.services, 4, 'content.services'], [(content.results as JsonObject)?.items, 3, 'content.results.items'], [content.trust, 4, 'content.trust']]
     : [[content.services, 5, 'content.services'], [(content.reviews as JsonObject)?.items, 3, 'content.reviews.items'], [content.trust, 5, 'content.trust'], [(content.cta as JsonObject)?.items, 4, 'content.cta.items']];
   collections.forEach(([value, count, field]) => requireArray(value, count, field));
+  requireTextFields(content.hero, ['eyebrow','title','accent','description','primaryCta','secondaryCta'], 'content.hero');
+  requireArray(content.trust, Number(adapter.fixedCounts.trustItems), 'content.trust').forEach((item, index) => requireTextFields(item, ['title','description'], `content.trust.${index}`));
+  requireTextFields(content.servicesIntro, ['eyebrow','title','cta'], 'content.servicesIntro');
+  requireArray(content.services, Number(adapter.fixedCounts.services), 'content.services').forEach((item, index) => requireTextFields(item, profile === 'beauty-editorial-v1' ? ['title','description','cta'] : ['title','description','price','cta'], `content.services.${index}`));
+  requireTextFields(content.about, ['eyebrow','title','description','cta'], 'content.about');
+  if (profile === 'beauty-editorial-v1') {
+    const results = requireTextFields(content.results, ['eyebrow','title','notice'], 'content.results');
+    requireArray(results.items, 3, 'content.results.items').forEach((item, index) => requireTextFields(item, ['quote'], `content.results.items.${index}`));
+    requireTextFields(content.booking, ['eyebrow','title','description','cta','badge'], 'content.booking');
+    requireTextFields(content.newsletter, ['title','description','placeholder','cta'], 'content.newsletter');
+    requireTextFields(content.footer, ['description','copyright','privacy','cookie'], 'content.footer');
+  } else {
+    const about = requireObject(content.about, 'content.about');
+    requireArray(about.points, 4, 'content.about.points').forEach((item) => { if (typeof item !== 'string' || !item.trim()) throw new BadRequestException('Punto about non valido'); });
+    requireTextFields(content.results, ['eyebrow','title','notice'], 'content.results');
+    const cta = requireTextFields(content.cta, ['eyebrow','title','description','button'], 'content.cta');
+    const ctaItems = requireArray(cta.items, 4, 'content.cta.items');
+    if (ctaItems.some((item) => typeof item !== 'string' || !item.trim()) || ctaItems[3] !== 'Supporto costante e dedicato') throw new BadRequestException('CTA Luce non valida');
+    requireTextFields(content.newsletter, ['eyebrow','title','placeholder','button','note'], 'content.newsletter');
+    requireTextFields(content.footer, ['description','copyright','privacy'], 'content.footer');
+    const reviews = requireTextFields(content.reviews, ['eyebrow','title','rating','ratingText'], 'content.reviews');
+    requireArray(reviews.items, 3, 'content.reviews.items').forEach((item, index) => requireTextFields(item, ['text','name'], `content.reviews.items.${index}`));
+  }
   const images = requireObject(config.images, 'images');
   if (profile === 'beauty-conversion-v1') requireArray(images.results, 3, 'images.results');
   const brand = requireObject(config.brand, 'brand');
-  for (const slot of ['logoDefault', 'logoLight', 'hero', 'consultation', 'feature']) {
+  for (const slot of adapter.imageSlots) {
     if (slot.startsWith('logo')) {
       const src = String(brand[slot] || '');
       if (!src || !isSafeImageSource(src)) throw new BadRequestException(`Sorgente immagine non valida: brand.${slot}`);
@@ -356,9 +376,13 @@ function validatePendingBeautyConfig(config: JsonObject, registration: SitePropo
     if (src && !isSafeImageSource(src)) throw new BadRequestException(`Sorgente immagine non valida: ${slot}`);
   }
   const palette = requireObject(config.palette, 'palette');
-  if (!Object.keys(palette).length || Object.values(palette).some((value) => !validateColor(value))) throw new BadRequestException('Palette del tema beauty non valida');
+  if (Object.keys(palette).sort().join('|') !== [...adapter.paletteKeys].sort().join('|') || Object.values(palette).some((value) => !validateColor(value))) throw new BadRequestException('Palette del tema beauty non valida');
   const routing = requireObject(config.routing, 'routing');
-  if (routing.localPreviewMode !== true || !isJsonObject(routing.labels) || !Array.isArray(routing.treatments)) throw new BadRequestException('Routing del tema beauty non valido');
+  if (
+    (routing.localPreviewMode !== undefined && routing.localPreviewMode !== true) ||
+    !isJsonObject(routing.labels) ||
+    !Array.isArray(routing.treatments)
+  ) throw new BadRequestException('Routing del tema beauty non valido');
   if (routing.paths !== undefined) {
     if (!isJsonObject(routing.paths)) throw new BadRequestException('Routing del tema beauty non valido');
     for (const value of Object.values(routing.paths as JsonObject)) {

@@ -7,6 +7,8 @@ export type ProposalReadinessInput = {
   siteConfigValid: boolean;
   generationComplete?: boolean;
   requireGeneration?: boolean;
+  adapterReady?: boolean;
+  themeActive?: boolean;
 };
 
 export type ProposalReadiness = { complete: boolean; reasons: string[] };
@@ -26,6 +28,8 @@ export function evaluateProposalReadiness(input: ProposalReadinessInput): Propos
   for (const key of ['strengths','improvementAreas','opportunities','whyDoflow','evidence']) if (!populatedArray(analysis[key])) reasons.push(`analysis_${key}`);
   if (typeof analysis.requiresManualReview !== 'boolean') reasons.push('analysis_review');
   if (!input.siteConfigValid) reasons.push('site_config');
+  if (input.adapterReady === false) reasons.push('adapter');
+  if (input.themeActive === false) reasons.push('theme');
   if (input.requireGeneration && !input.generationComplete) reasons.push('generation');
   return { complete: reasons.length === 0, reasons };
 }

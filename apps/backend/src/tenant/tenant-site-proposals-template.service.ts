@@ -12,6 +12,7 @@ import { deepClone, forceTemplateContract, redirectAnchorFor, safeRelativeRoute,
 import { ModularThemeManifest } from './tenant-site-proposals-theme-package.types';
 import { TenantSiteProposalsThemeCompilerService } from './tenant-site-proposals-theme-compiler.service';
 import { TenantSiteProposalsThemePackageService } from './tenant-site-proposals-theme-package.service';
+import { getProposalContentProfileAdapter, hasProposalContentProfileAdapter } from './tenant-site-proposals-content-profile-adapters';
 
 const SCRIPT_RE = /<script\s+id=["']template-config["']\s+type=["']application\/json["']\s*>([\s\S]*?)<\/script>/gi;
 const UNSAFE_JSON_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
@@ -166,6 +167,7 @@ export class TenantSiteProposalsTemplateService {
     if (!registration.defaultConfig || !registration.manifest) throw new BadRequestException('Metadata package modulare mancanti');
     const html = bytes.toString('utf8');
     const config = this.configFromHtml(html);
+    config.textLimits = deepClone(registration.manifest.textLimits as JsonObject);
     forceTemplateContract(config, registration);
     validateSiteConfig(config, registration);
     this.verifyRendered(html, registration);
@@ -184,6 +186,7 @@ export class TenantSiteProposalsTemplateService {
     const compiler = this.compiler || new TenantSiteProposalsThemeCompilerService(validator);
     const compiled = compiler.compileValidated(validated, undefined, true);
     const config = this.configFromHtml(compiled.html);
+    config.textLimits = deepClone(modular.manifest.textLimits as JsonObject);
     forceTemplateContract(config, registration);
     validateSiteConfig(config, registration);
     this.verifyRendered(compiled.html, registration);
@@ -234,7 +237,8 @@ export class TenantSiteProposalsTemplateService {
   }
 
   private assertRuntimeAdapter(registration: SiteProposalTemplateRegistration, allowPending: boolean) {
-    if (!allowPending && (registration.runtimeAdapterStatus !== 'ready' || !registration.selectableForProposal)) {
+    const adapterAvailable = registration.contentProfile === 'colsova-legacy-v1' || hasProposalContentProfileAdapter(registration.contentProfile);
+    if (!allowPending && (registration.runtimeAdapterStatus !== 'ready' || !registration.selectableForProposal || !adapterAvailable)) {
       throw new BadRequestException('Tema disponibile in anteprima, adattatore di generazione non ancora attivo.');
     }
   }
@@ -270,6 +274,14 @@ export class TenantSiteProposalsTemplateService {
       const content = config.content as JsonObject; const baseContent = base.content as JsonObject;
       const features = config.features as JsonObject;
       if (features?.reviewsMode === 'demo' && (!equal(content?.reviews, baseContent?.reviews) || !equal((content?.reviewsIntro as JsonObject)?.disclaimer, (baseContent?.reviewsIntro as JsonObject)?.disclaimer))) throw new BadRequestException('Recensioni dimostrative protette modificate');
+    }
+    if (hasProposalContentProfileAdapter(registration.contentProfile)) {
+      const adapter = getProposalContentProfileAdapter(registration.contentProfile);
+      const content = (config.content || {}) as JsonObject;
+      const baseContent = (base.content || {}) as JsonObject;
+      for (const key of adapter.protectedContentPaths) {
+        if (!equal(content[key], baseContent[key])) throw new BadRequestException(`Contenuto protetto modificato: ${key}`);
+      }
     }
   }
 

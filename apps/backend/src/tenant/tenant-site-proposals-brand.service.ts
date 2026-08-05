@@ -16,19 +16,21 @@ function sanitizeSvg(buffer: Buffer): Buffer {
 }
 
 export function mapBrandPaletteForContentProfile(palette: JsonObject, profile: string, base: JsonObject): JsonObject {
-  if (profile !== 'colsova-conversion-v1') return { ...base, ...palette };
-  return {
-    ink: palette.dark || base.ink,
-    inkSoft: palette.secondary || palette.dark || base.inkSoft,
-    muted: palette.muted || base.muted,
-    ivory: palette.light || base.ivory,
-    cream: base.cream,
-    sand: palette.secondary || base.sand,
-    sandSoft: base.sandSoft,
-    gold: palette.primary || base.gold,
-    goldDeep: palette.primaryHover || base.goldDeep,
-    white: palette.textOnPrimary === '#ffffff' ? palette.textOnPrimary : base.white,
+  const safe = (value: unknown, fallback: unknown) => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : fallback;
+  const mappings: Record<string, () => JsonObject> = {
+    'colsova-conversion-v1': () => ({
+      ink: safe(palette.dark, base.ink), inkSoft: safe(palette.secondary || palette.dark, base.inkSoft), muted: safe(palette.muted, base.muted),
+      ivory: safe(palette.light, base.ivory), cream: base.cream, sand: safe(palette.secondary, base.sand), sandSoft: base.sandSoft,
+      gold: safe(palette.primary, base.gold), goldDeep: safe(palette.primaryHover, base.goldDeep), white: palette.textOnPrimary === '#ffffff' ? '#ffffff' : base.white,
+    }),
+    'beauty-editorial-v1': () => ({
+      ink: safe(palette.dark, base.ink), gold: safe(palette.primary, base.gold), cream: safe(palette.secondary, base.cream), paper: safe(palette.light, base.paper), dark: safe(palette.primaryHover || palette.dark, base.dark),
+    }),
+    'beauty-conversion-v1': () => ({
+      ink: safe(palette.dark, base.ink), accent: safe(palette.primary, base.accent), peach: safe(palette.secondary, base.peach), paper: safe(palette.light, base.paper), soft: safe(palette.accent, base.soft),
+    }),
   };
+  return mappings[profile]?.() || { ...base, ...palette };
 }
 @Injectable()
 export class TenantSiteProposalsBrandService {

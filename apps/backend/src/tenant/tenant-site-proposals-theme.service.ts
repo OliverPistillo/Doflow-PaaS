@@ -15,6 +15,7 @@ import { TenantSiteProposalsThemeCompilerService } from './tenant-site-proposals
 import { getTemplateRegistration } from './tenant-site-proposals-template-registry';
 import { AuthUserRef, JsonObject } from './tenant-site-proposals.types';
 import { assertNoPrototypePollution, UUID_RE } from './tenant-site-proposals-validation';
+import { hasProposalContentProfileAdapter } from './tenant-site-proposals-content-profile-adapters';
 
 @Injectable()
 export class TenantSiteProposalsThemeService {
@@ -68,15 +69,16 @@ export class TenantSiteProposalsThemeService {
         compiled: compiled ? Buffer.from(compiled.html, 'utf8') : undefined,
       });
       storedPrefix = keys.prefix;
+      const runtimeAdapterStatus = hasProposalContentProfileAdapter(validated.contentProfile) ? 'ready' : 'pending';
       const versions = await runner.query(`
         INSERT INTO "${this.schema()}".site_proposal_theme_versions
           (theme_id,version,schema_version,contract_version,content_profile,status,is_builtin,is_immutable,template_sha256,template_size,zip_sha256,zip_size,manifest,default_config,template_storage_key,zip_storage_key,validation_report,created_by,source_format,format_version,compiled_sha256,compiled_size,runtime_adapter_status)
         VALUES ($1,$2,$3,$4,$5,'draft',false,true,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13,$14::jsonb,$15,$16,$17,$18,$19,$20) RETURNING *
-      `, [themes[0].id, version, validated.manifest.schemaVersion, validated.manifest.contractVersion, validated.contentProfile, validated.templateSha256, validated.templateSize, validated.zipSha256, validated.zipSize, JSON.stringify(validated.manifest), JSON.stringify(validated.defaultConfig), keys.templateKey, keys.zipKey, JSON.stringify(validated.validationReport), this.userId(user), validated.format, validated.format === 'modular' ? '1.0' : null, compiled?.sha256 || null, compiled?.size || null, validated.format === 'modular' ? 'pending' : 'ready']);
+      `, [themes[0].id, version, validated.manifest.schemaVersion, validated.manifest.contractVersion, validated.contentProfile, validated.templateSha256, validated.templateSize, validated.zipSha256, validated.zipSize, JSON.stringify(validated.manifest), JSON.stringify(validated.defaultConfig), keys.templateKey, keys.zipKey, JSON.stringify(validated.validationReport), this.userId(user), validated.format, validated.format === 'modular' ? '1.0' : null, compiled?.sha256 || null, compiled?.size || null, runtimeAdapterStatus]);
       await this.activity(runner, themes[0].id, versions[0].id, 'THEME_UPLOADED', user, { version, contentProfile: validated.contentProfile });
       await runner.commitTransaction();
       this.templates.invalidate(this.schema(), slug, version);
-      return { manifest: validated.manifest, format: validated.format, runtimeAdapterStatus: validated.format === 'modular' ? 'pending' : 'ready', hash: { template: validated.templateSha256, zip: validated.zipSha256, compiled: compiled?.sha256 }, sizes: { template: validated.templateSize, zip: validated.zipSize, compiled: compiled?.size }, contentProfile: validated.contentProfile, validationReport: validated.validationReport, warnings: validated.warnings, status: 'draft', previewUrl: `/tenant/commercial/site-proposals/themes/${slug}/${version}/preview` };
+      return { manifest: validated.manifest, format: validated.format, runtimeAdapterStatus, hash: { template: validated.templateSha256, zip: validated.zipSha256, compiled: compiled?.sha256 }, sizes: { template: validated.templateSize, zip: validated.zipSize, compiled: compiled?.size }, contentProfile: validated.contentProfile, validationReport: validated.validationReport, warnings: validated.warnings, status: 'draft', previewUrl: `/tenant/commercial/site-proposals/themes/${slug}/${version}/preview` };
     } catch (error) {
       original = error;
       if (runner.isTransactionActive) await runner.rollbackTransaction().catch(() => undefined);
@@ -121,7 +123,7 @@ export class TenantSiteProposalsThemeService {
       const row = (await runner.query(`SELECT v.*,t.id theme_id,t.is_active theme_active FROM "${this.schema()}".site_proposal_themes t JOIN "${this.schema()}".site_proposal_theme_versions v ON v.theme_id=t.id WHERE t.slug=$1 AND v.version=$2`, [slug, version]))[0];
       if (!row) throw new NotFoundException('Tema non trovato');
       if (row.runtime_adapter_status !== 'ready') throw new ConflictException('Tema disponibile in anteprima, adattatore di generazione non ancora attivo.');
-      if (row.status !== 'active' || row.theme_active !== true || !['2.0'].includes(String(row.schema_version)) || !['2.0','2.1'].includes(String(row.contract_version)) || !['proposal-basic-v2','colsova-conversion-v1'].includes(String(row.content_profile))) throw new ConflictException('Solo una versione attiva e compatibile può diventare predefinita');
+      if (row.status !== 'active' || row.theme_active !== true || !['2.0'].includes(String(row.schema_version)) || !['2.0','2.1'].includes(String(row.contract_version)) || !hasProposalContentProfileAdapter(String(row.content_profile))) throw new ConflictException('Solo una versione attiva e compatibile può diventare predefinita');
       await runner.query(`UPDATE "${this.schema()}".site_proposal_themes SET default_version=NULL,updated_at=CASE WHEN default_version IS NOT NULL THEN now() ELSE updated_at END WHERE default_version IS NOT NULL`);
       await runner.query(`UPDATE "${this.schema()}".site_proposal_themes SET default_version=$1,updated_at=now() WHERE id=$2`, [version, row.theme_id]);
       await this.activity(runner, row.theme_id, row.id, 'THEME_DEFAULT_SET', user, { version });

@@ -7,8 +7,8 @@ import { sha256 } from './tenant-site-proposals-validation';
 
 const ROOT = path.join(__dirname, 'site-proposal-templates');
 const THEMES = [
-  { slug: 'aurea', version: '1.2.0', profile: 'beauty-editorial-v1', status: 'pending', source: 'cdc959eaa870485134fc2e93bade901eebf20e0af54d2d8d4113c904790da5a6', size: 384117 },
-  { slug: 'luce', version: '1.2.0', profile: 'beauty-conversion-v1', status: 'pending', source: '9f990c78514508cfe832a69e8a5caec21271085bed8eb977ff9dfce9ce6bd2c2', size: 347122 },
+  { slug: 'aurea', version: '1.2.0', profile: 'beauty-editorial-v1', status: 'ready', source: 'cdc959eaa870485134fc2e93bade901eebf20e0af54d2d8d4113c904790da5a6', size: 384117 },
+  { slug: 'luce', version: '1.2.0', profile: 'beauty-conversion-v1', status: 'ready', source: '9f990c78514508cfe832a69e8a5caec21271085bed8eb977ff9dfce9ce6bd2c2', size: 347122 },
   { slug: 'colsova', version: '2.4.1', profile: 'colsova-conversion-v1', status: 'ready', source: '395a7f9e77d120558e5e45d3485c65f07be0cb339ad6a207a5562ec8b491d263', size: 2276156 },
 ] as const;
 
@@ -92,10 +92,10 @@ describe('built-in modular proposal themes', () => {
     expect(first.html.match(/id="template-config"/g)).toHaveLength(1);
   });
 
-  it('keeps pending themes visible but not selectable or eligible as default', () => {
+  it('exposes runtime-ready beauty themes for selection and global default', () => {
     for (const slug of ['aurea', 'luce']) {
       const item = getTemplateRegistration(slug, '1.2.0');
-      expect(item).toMatchObject({ format: 'modular', runtimeAdapterStatus: 'pending', visible: true, preview: true, download: true, selectableForProposal: false, selectableForImport: false, defaultCandidate: false });
+      expect(item).toMatchObject({ format: 'modular', runtimeAdapterStatus: 'ready', visible: true, preview: true, download: true, selectableForProposal: true, selectableForImport: true, defaultCandidate: true });
     }
     expect(latestTemplateRegistration('colsova')).toMatchObject({ version: '2.4.1', format: 'modular', runtimeAdapterStatus: 'ready', selectableForProposal: true, selectableForImport: true, defaultCandidate: true });
     expect(SITE_PROPOSAL_TEMPLATE_REGISTRY.filter((item) => item.isLatest)).toHaveLength(3);

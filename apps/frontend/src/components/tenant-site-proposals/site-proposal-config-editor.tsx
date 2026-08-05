@@ -1,32 +1,53 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Clipboard, Settings2 } from "lucide-react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CommercialSectionCard } from "@/components/tenant-commercial/commercial-ui";
 import type { JsonObject, SiteConfig } from "@/lib/tenant-site-proposals-api";
-import { getPath, hasUnsafePrototype, setPath, textLimit } from "./site-proposal-utils";
+import { getPath, setPath, textLimit } from "./site-proposal-utils";
 
 const value = (input: unknown) => typeof input === "string" || typeof input === "number" ? String(input) : "";
-function Field({ config, path, label, multiline, onChange }: { config: SiteConfig; path: string; label: string; multiline?: boolean; onChange: (next: SiteConfig) => void }) { const current=value(getPath(config,path));const limit=textLimit(config,path);return <div><Label htmlFor={path}>{label}</Label>{multiline?<Textarea id={path} className="mt-1 min-h-24" value={current} onChange={(e)=>onChange(setPath(config,path,e.target.value))}/>:<Input id={path} className="mt-1" value={current} onChange={(e)=>onChange(setPath(config,path,e.target.value))}/>} {limit?<p className="mt-1 text-right text-xs text-slate-400">{current.length}/{limit}</p>:null}</div>; }
+const labelFor = (path: string) => path.split(".").filter((part) => !/^\d+$/.test(part)).slice(-2).join(" · ").replace(/([a-z])([A-Z])/g, "$1 $2");
+
+function Field({ config, path, label, multiline, onChange }: { config: SiteConfig; path: string; label: string; multiline?: boolean; onChange: (next: SiteConfig) => void }) {
+  const current = value(getPath(config, path));
+  const limit = textLimit(config, path);
+  const common = { id: path, value: current, maxLength: limit || undefined, onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => onChange(setPath(config, path, event.target.value)) };
+  return <div><Label htmlFor={path}>{label}</Label>{multiline ? <Textarea {...common} className="mt-1 min-h-24" /> : <Input {...common} className="mt-1" />} {limit ? <p className="mt-1 text-right text-xs text-slate-400">{current.length}/{limit}</p> : null}</div>;
+}
+
+function editableContentPaths(content: JsonObject, profile: string) {
+  const paths: string[] = [];
+  const visit = (candidate: unknown, path: string) => {
+    if (profile === "beauty-conversion-v1" && (path === "content.reviews" || path.startsWith("content.reviews."))) return;
+    if (typeof candidate === "string" || typeof candidate === "number") { paths.push(path); return; }
+    if (Array.isArray(candidate)) candidate.forEach((item, index) => visit(item, `${path}.${index}`));
+    else if (candidate && typeof candidate === "object") Object.entries(candidate as JsonObject).forEach(([key, item]) => visit(item, `${path}.${key}`));
+  };
+  visit(content, "content");
+  return paths;
+}
 
 export function SiteProposalConfigEditor({ config, onChange }: { config: SiteConfig; onChange: (next: SiteConfig) => void }) {
-  const [json,setJson]=useState(()=>JSON.stringify(config,null,2));const [error,setError]=useState<string|null>(null);useEffect(()=>setJson(JSON.stringify(config,null,2)),[config]);
-  const version=String((config.template as JsonObject).templateVersion||"");const v2=version==="2.0.0";const content=config.content as JsonObject;
-  const services=(v2?content.services:((content.treatments as JsonObject)?.cards||[])) as JsonObject[];const images=config.images||{};
-  const changeImage=(slot:string,next:SiteConfig)=>onChange(v2?setPath(next,`images.${slot}.sourceMethod`,"manual"):next);
-  const apply=()=>{try{const parsed=JSON.parse(json) as SiteConfig;if(hasUnsafePrototype(parsed))throw new Error("Chiavi non consentite");onChange(parsed);setError(null);toast.success("JSON applicato al draft.");}catch(e){setError(e instanceof Error?e.message:"JSON non valido");}};
+  const editing = (config.editingContract || {}) as JsonObject;
+  const fixedCounts = (editing.fixedCounts || {}) as JsonObject;
+  const profile = String((config.personalization as JsonObject | undefined)?.contentProfile || (Number(fixedCounts.reviews) === 3 && Number(fixedCounts.ctaItems) === 4 ? "beauty-conversion-v1" : Number(fixedCounts.services) === 4 ? "beauty-editorial-v1" : ""));
+  const imageSlots = Array.isArray(editing.imageSlots) ? editing.imageSlots.filter((item): item is string => typeof item === "string") : ["hero", "consultation", "feature"];
+  const contentPaths = useMemo(() => editableContentPaths(config.content as JsonObject, profile), [config.content, profile]);
+  const images = config.images || {};
+  const visualSlots = imageSlots.filter((slot) => !slot.startsWith("logo") && images[slot] && typeof images[slot] === "object" && !Array.isArray(images[slot]));
+  const brand = config.brand as JsonObject;
+  const logoDefaultPath = typeof brand.logoDefault === "string" ? "brand.logoDefault" : (images.logoDefault ? "images.logoDefault.src" : "images.logo.src");
+  const logoLightPath = typeof brand.logoLight === "string" ? "brand.logoLight" : (images.logoLight ? "images.logoLight.src" : "");
+  const changeImage = (slot: string, next: SiteConfig) => onChange(setPath(next, `images.${slot}.sourceMethod`, "manual"));
+
   return <div className="space-y-5">
-    <CommercialSectionCard title="Identità"><div className="grid gap-4 md:grid-cols-2"><Field config={config} path="brand.name" label="Nome" onChange={onChange}/><Field config={config} path="brand.descriptor" label="Categoria / descrittore" onChange={onChange}/><Field config={config} path="brand.professionalTitle" label="Qualifica" onChange={onChange}/><Field config={config} path="business.city" label="Città" onChange={onChange}/><div className="md:col-span-2"><Field config={config} path="sourceWebsite.url" label="Sito attuale" onChange={onChange}/></div></div></CommercialSectionCard>
-    <CommercialSectionCard title="Brand"><div className="grid gap-4 lg:grid-cols-2"><Field config={config} path={v2?"images.logoDefault.src":"images.logo.src"} label="Logo default" onChange={onChange}/>{v2?<Field config={config} path="images.logoLight.src" label="Logo light" onChange={onChange}/>:null}<Field config={config} path="brand.logoMethod" label="Metodo rilevamento" onChange={onChange}/><div><Label>Palette principale</Label><div className="mt-2 flex flex-wrap gap-2">{Array.isArray(config.palette)?config.palette.slice(0,4).map((item)=><span key={item.variable} className="rounded-lg border px-2 py-1 text-xs"><i className="mr-2 inline-block h-3 w-3 rounded-full" style={{background:item.value}}/>{item.variable}</span>):Object.entries(config.palette).slice(0,4).map(([key,color])=><span key={key} className="rounded-lg border px-2 py-1 text-xs"><i className="mr-2 inline-block h-3 w-3 rounded-full" style={{background:String(color)}}/>{key}</span>)}</div></div></div>{Array.isArray((config.brand as JsonObject).warnings)&&((config.brand as JsonObject).warnings as unknown[]).length?<p className="mt-4 text-sm text-amber-700">{((config.brand as JsonObject).warnings as unknown[]).join(" · ")}</p>:null}</CommercialSectionCard>
-    <CommercialSectionCard title="Servizi"><div className="grid gap-4 lg:grid-cols-3">{services.slice(0,3).map((service,index)=><div key={index} className="space-y-3 rounded-xl border p-4"><Field config={config} path={v2?`content.services.${index}.title`:`content.treatments.cards.${index}.title`} label={`Servizio ${index+1}`} onChange={onChange}/><Field config={config} path={v2?`content.services.${index}.description`:`content.treatments.cards.${index}.description`} label="Descrizione" multiline onChange={onChange}/></div>)}</div></CommercialSectionCard>
-    <CommercialSectionCard title="Immagini"><div className="grid gap-4 lg:grid-cols-3">{Object.entries(images).filter(([slot])=>v2?["hero","consultation","feature"].includes(slot):["hero","consultation","products"].includes(slot)).map(([slot,image])=><div key={slot} className="rounded-xl border p-4">{image.src?<img src={String(image.src)} alt={String(image.alt||slot)} className="mb-3 h-36 w-full rounded-lg object-cover"/>:null}<Field config={config} path={`images.${slot}.src`} label={slot} onChange={(next)=>changeImage(slot,next)}/><Field config={config} path={`images.${slot}.alt`} label="Testo alternativo" onChange={onChange}/><p className="mt-2 text-xs text-slate-500">Metodo: {String(image.sourceMethod||((config.personalization as JsonObject)?.assetMethod)||"manual")}</p></div>)}</div></CommercialSectionCard>
-    <CommercialSectionCard title="Contenuti principali"><div className="grid gap-4 lg:grid-cols-2"><Field config={config} path={v2?"content.hero.title":"content.hero.titleLine"} label="Titolo hero" onChange={onChange}/><Field config={config} path="content.hero.description" label="Descrizione hero" multiline onChange={onChange}/>{v2?<><Field config={config} path="content.approach.title" label="Titolo approccio" onChange={onChange}/><Field config={config} path="content.approach.description" label="Approccio" multiline onChange={onChange}/><Field config={config} path="content.hero.primaryCta" label="CTA primaria" onChange={onChange}/><Field config={config} path="content.hero.secondaryCta" label="CTA secondaria" onChange={onChange}/></>:null}</div></CommercialSectionCard>
-    <Collapsible><CommercialSectionCard title="Impostazioni avanzate"><CollapsibleTrigger asChild><Button variant="outline"><Settings2 className="mr-2 h-4 w-4"/>Apri SEO, routing, palette, trust, FAQ e JSON</Button></CollapsibleTrigger><CollapsibleContent className="mt-4 space-y-3"><Textarea value={json} onChange={(e)=>setJson(e.target.value)} className="min-h-[520px] font-mono text-xs" aria-label="Configurazione JSON avanzata"/>{error?<p className="text-sm text-rose-600">{error}</p>:null}<div className="flex gap-2"><Button variant="outline" onClick={()=>navigator.clipboard.writeText(json).then(()=>toast.success("SiteConfig copiato.")).catch(()=>toast.error("Copia non disponibile."))}><Clipboard className="mr-2 h-4 w-4"/>Copia</Button><Button onClick={apply}>Applica JSON al draft</Button></div></CollapsibleContent></CommercialSectionCard></Collapsible>
+    <CommercialSectionCard title="Identità"><div className="grid gap-4 md:grid-cols-2"><Field config={config} path="brand.name" label="Nome" onChange={onChange}/><Field config={config} path="brand.descriptor" label="Categoria / descrittore" onChange={onChange}/><Field config={config} path="brand.professionalTitle" label="Qualifica" onChange={onChange}/><Field config={config} path="business.city" label="Città" onChange={onChange}/><Field config={config} path="business.phoneDisplay" label="Telefono" onChange={onChange}/><Field config={config} path="business.email" label="Email" onChange={onChange}/><div className="md:col-span-2"><Field config={config} path="sourceWebsite.url" label="Sito attuale" onChange={onChange}/></div></div></CommercialSectionCard>
+    <CommercialSectionCard title="Brand"><div className="grid gap-4 lg:grid-cols-2"><Field config={config} path={logoDefaultPath} label="Logo default" onChange={onChange}/>{logoLightPath ? <Field config={config} path={logoLightPath} label="Logo light" onChange={onChange}/> : null}<div><Label>Palette del tema</Label><div className="mt-2 flex flex-wrap gap-2">{Array.isArray(config.palette) ? config.palette.map((item) => <span key={item.variable} className="rounded-lg border px-2 py-1 text-xs"><i className="mr-2 inline-block h-3 w-3 rounded-full" style={{background: item.value}}/>{item.variable}</span>) : Object.entries(config.palette).map(([key, color]) => <span key={key} className="rounded-lg border px-2 py-1 text-xs"><i className="mr-2 inline-block h-3 w-3 rounded-full" style={{background: String(color)}}/>{key}</span>)}</div></div></div></CommercialSectionCard>
+    <CommercialSectionCard title="Immagini"><div className="grid gap-4 lg:grid-cols-3">{visualSlots.map((slot) => { const image = images[slot] as JsonObject; return <div key={slot} className="rounded-xl border p-4">{image.src ? <img src={String(image.src)} alt={String(image.alt || slot)} className="mb-3 h-36 w-full rounded-lg object-cover"/> : null}<Field config={config} path={`images.${slot}.src`} label={slot} onChange={(next) => changeImage(slot, next)}/><Field config={config} path={`images.${slot}.alt`} label="Testo alternativo" onChange={onChange}/><Field config={config} path={`images.${slot}.objectPosition`} label="Posizione immagine" onChange={onChange}/><p className="mt-2 text-xs text-slate-500">Metodo: {String(image.sourceMethod || "package")}</p></div>; })}</div></CommercialSectionCard>
+    <CommercialSectionCard title="Contenuti del tema"><p className="mb-4 text-sm text-slate-500">Campi generati dal contratto del profilo {profile || "del tema"}. Le sezioni protette non sono modificabili.</p><div className="grid gap-4 lg:grid-cols-2">{contentPaths.map((path) => <Field key={path} config={config} path={path} label={labelFor(path)} multiline={/description|text|quote|notice|copyright/i.test(path)} onChange={onChange}/>)}</div></CommercialSectionCard>
+    <CommercialSectionCard title="SEO"><div className="grid gap-4 lg:grid-cols-2"><Field config={config} path="seo.title" label="Titolo SEO" onChange={onChange}/><Field config={config} path="seo.description" label="Descrizione SEO" multiline onChange={onChange}/></div></CommercialSectionCard>
   </div>;
 }

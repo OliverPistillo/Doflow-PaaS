@@ -15,7 +15,7 @@
   ],
   "assetRoot": "assets",
   "contentProfile": "beauty-editorial-v1",
-  "runtimeAdapterStatus": "pending",
+  "runtimeAdapterStatus": "ready",
   "categories": [
     "beauty",
     "wellness",

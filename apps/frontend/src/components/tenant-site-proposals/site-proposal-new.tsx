@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, FileUp, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ import { CommercialPageHeader, CommercialSectionCard } from "@/components/tenant
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
 import { createSiteProposal, fetchProposalThemePreview, listProposalThemes, previewImport, type ProposalTheme } from "@/lib/tenant-site-proposals-api";
 import { downloadCsvTemplate, getErrorMessage } from "./site-proposal-utils";
+import { recommendProposalTheme } from "./site-proposal-theme-recommendation";
 
 const MAX_CSV_BYTES = 2 * 1024 * 1024;
 const sourceFields = [
@@ -40,8 +41,8 @@ export function SiteProposalNew() {
     listProposalThemes()
       .then((items) => {
         if (!active) return;
-        const activeItems = items.filter((item) => item.status === "active");
-        const selectable = activeItems.filter((item) => item.runtime_adapter_status !== "pending");
+        const activeItems = items.filter((item) => item.is_active && item.status === "active");
+        const selectable = activeItems.filter((item) => item.runtime_adapter_status === "ready");
         setTemplates(activeItems);
         const preferred = selectable.find((item) => item.default_version === item.version) || selectable.find((item) => item.slug === "colsova" && item.version === "2.4.1") || selectable[0];
         setTemplateKey(preferred ? `${preferred.slug}@${preferred.version}` : "");
@@ -51,8 +52,9 @@ export function SiteProposalNew() {
   }, []);
 
   const selected = templates.find((item) => `${item.slug}@${item.version}` === templateKey);
-  const selectableTemplates = templates.filter((item) => item.runtime_adapter_status !== "pending");
+  const selectableTemplates = templates.filter((item) => item.is_active && item.status === "active" && item.runtime_adapter_status === "ready");
   const pendingTemplates = templates.filter((item) => item.runtime_adapter_status === "pending");
+  const recommendation = useMemo(() => recommendProposalTheme(selectableTemplates, manual), [selectableTemplates, manual]);
   const pickFile = (next: File | null) => {
     setFileError(null);
     if (!next) { setFile(null); return; }
@@ -109,9 +111,9 @@ export function SiteProposalNew() {
         <div className="grid gap-3 md:grid-cols-[260px_1fr]">
           <Select value={templateKey} onValueChange={setTemplateKey} disabled={busy}>
             <SelectTrigger className="h-11"><SelectValue placeholder="Seleziona tema" /></SelectTrigger>
-            <SelectContent>{selectableTemplates.map((item) => <SelectItem key={`${item.slug}@${item.version}`} value={`${item.slug}@${item.version}`}>{item.name} · {item.version}{item.default_version === item.version ? " · Predefinito" : ""}</SelectItem>)}</SelectContent>
+            <SelectContent>{selectableTemplates.map((item) => { const key = `${item.slug}@${item.version}`; return <SelectItem key={key} value={key}>{item.name} · {item.version}{item.default_version === item.version ? " · Predefinito" : ""}{recommendation?.key === key ? " · Consigliato" : ""}</SelectItem>; })}</SelectContent>
           </Select>
-          {selected ? <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600"><strong className="text-slate-900">{selected.name}</strong> · {(selected.categories || []).slice(0, 4).join(", ")} · {selected.content_profile} · Versione immutabile <Button size="sm" variant="outline" className="ml-3" onClick={() => void fetchProposalThemePreview(selected.slug, selected.version).then(setPreviewHtml).catch((error) => toast.error(getErrorMessage(error)))}>Anteprima</Button></div> : <p className="text-sm text-slate-500">Caricamento temi…</p>}
+          {selected ? <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600"><strong className="text-slate-900">{selected.name}</strong> · {(selected.categories || []).slice(0, 4).join(", ")} · {selected.content_profile} · Adattatore attivo · Versione immutabile {recommendation?.key === `${selected.slug}@${selected.version}` ? <span className="font-medium text-indigo-700">· Consigliato per questa attività ({recommendation.reason})</span> : null} <Button size="sm" variant="outline" className="ml-3" onClick={() => void fetchProposalThemePreview(selected.slug, selected.version).then(setPreviewHtml).catch((error) => toast.error(getErrorMessage(error)))}>Anteprima</Button></div> : <p className="text-sm text-slate-500">Caricamento temi…</p>}
         </div>
         {pendingTemplates.length ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><strong>Altri temi in preparazione:</strong> {pendingTemplates.map((item) => `${item.name} ${item.version}`).join(", ")}. Saranno selezionabili dopo l&apos;integrazione del profilo di generazione.</div> : null}
         {previewHtml ? <div className="mt-4 overflow-hidden rounded-xl border bg-white"><div className="flex justify-end border-b p-2"><Button size="sm" variant="ghost" onClick={() => setPreviewHtml("")}>Chiudi</Button></div><iframe title="Anteprima tema selezionato" srcDoc={previewHtml} sandbox="allow-scripts" referrerPolicy="no-referrer" className="h-[620px] w-full" /></div> : null}

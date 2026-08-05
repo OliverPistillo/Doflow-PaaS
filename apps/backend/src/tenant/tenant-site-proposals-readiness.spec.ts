@@ -13,6 +13,8 @@ describe('proposal semantic readiness', () => {
     ['empty analysis', { commercialAnalysis: {} }, 'analysis_summary'],
     ['invalid site config', { siteConfigValid: false }, 'site_config'],
     ['stale generation', { generationComplete: false }, 'generation'],
+    ['missing runtime adapter', { adapterReady: false }, 'adapter'],
+    ['disabled theme', { themeActive: false }, 'theme'],
   ])('invalidates positive state for %s', (_name, override, reason) => { const result = evaluateProposalReadiness({ ...complete, ...override }); expect(result.complete).toBe(false); expect(result.reasons).toContain(reason); });
   it('does not require generation while content is only being edited', () => expect(evaluateProposalReadiness({ ...complete, generationComplete: false, requireGeneration: false }).complete).toBe(true));
 });
