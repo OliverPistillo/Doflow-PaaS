@@ -6,6 +6,7 @@ import { TenantSiteProposalsAiService, ProposalAiUnavailableError } from './tena
 import { mapBrandPaletteForContentProfile, TenantSiteProposalsBrandService } from './tenant-site-proposals-brand.service';
 import { applyAiOutputForProfile, buildDeterministicProposalForTemplate, DeterministicPackage } from './tenant-site-proposals-deterministic';
 import { TenantSiteProposalsGenerationCoreService } from './tenant-site-proposals-generation-core.service';
+import { evaluateProposalReadiness } from './tenant-site-proposals-readiness';
 import { TenantSiteProposalsImageService } from './tenant-site-proposals-image.service';
 import { ensureDoflowSiteProposalTables } from './tenant-site-proposals-schema';
 import { getTemplateRegistration, SiteProposalTemplateRegistration } from './tenant-site-proposals-template-registry';
@@ -15,7 +16,7 @@ import { TenantSiteProposalsWebsiteFetcherService } from './tenant-site-proposal
 import { CanonicalProposalInput, JsonObject, ProposalPreparationActor, ProposalPreparationJobData, WebsiteSnapshot } from './tenant-site-proposals.types';
 import { assertNoPrototypePollution, buildFingerprint, cleanString, deepClone, sha256, UUID_RE, validateSiteConfig } from './tenant-site-proposals-validation';
 
-const JOB_KEYS = ['tenantSchema','proposalId','actorUserId','actorEmail','force','generate','reason','targetTemplateSlug','targetTemplateVersion'];
+const JOB_KEYS = ['preparationRunId','tenantSchema','proposalId','actorUserId','actorEmail','force','generate','reason','targetTemplateSlug','targetTemplateVersion'];
 
 @Injectable()
 export class TenantSiteProposalsPreparationCoreService {
@@ -34,15 +35,22 @@ export class TenantSiteProposalsPreparationCoreService {
     const data = this.job(raw); const schema = data.tenantSchema;
     await ensureDoflowSiteProposalTables(this.dataSource, schema);
     const actor: ProposalPreparationActor = { id: data.actorUserId, email: data.actorEmail };
-    const runner = this.dataSource.createQueryRunner(); let locked = false; let runId: string | undefined;
+    const runner = this.dataSource.createQueryRunner(); let locked = false; let runId: string | undefined; let personalizationCommitted = false;
     try {
       await runner.connect();
       locked = Boolean((await runner.query(`SELECT pg_try_advisory_lock(hashtext($1),hashtext($2)) locked`, [schema, data.proposalId]))[0]?.locked);
       if (!locked) return { status: 'duplicate', proposalId: data.proposalId };
       const proposal = (await runner.query(`SELECT * FROM "${schema}".site_proposals WHERE id=$1 AND deleted_at IS NULL AND status<>'archived'`, [data.proposalId]))[0];
       if (!proposal) throw new NotFoundException('Proposta non trovata');
-      if (proposal.preparation_status === 'running') return { status: 'duplicate', proposalId: data.proposalId };
       await runner.query(`UPDATE "${schema}".site_proposals SET preparation_status='running',preparation_error=NULL,preparation_started_at=now(),updated_at=now() WHERE id=$1`, [data.proposalId]);
+      const persistedPersonalization = object(proposal.site_config) && object((proposal.site_config as JsonObject).personalization)
+        ? (proposal.site_config as JsonObject).personalization as JsonObject
+        : {};
+      if (persistedPersonalization.preparationRunId === data.preparationRunId) {
+        personalizationCommitted = true;
+        runId = typeof proposal.latest_personalization_id === 'string' ? proposal.latest_personalization_id : undefined;
+        return await this.finalizePreparedProposal(data, proposal, actor, runner, true);
+      }
       await this.activity(schema, data.proposalId, ACTIVITY.proposalPreparationStarted, actor, { reason: data.reason });
 
       const targetSlug = data.targetTemplateSlug || proposal.template_slug;
@@ -85,7 +93,7 @@ export class TenantSiteProposalsPreparationCoreService {
         if (!(error instanceof ProposalAiUnavailableError)) warnings.push('Output AI rifiutato: applicato il motore locale.');
         else warnings.push(`Gemini non disponibile (${error.reason}): applicato il motore locale.`);
       }
-      (built.config.personalization as JsonObject) = { ...((built.config.personalization || {}) as JsonObject), status: personalizationStatus, provider, model, sourceUrl: snapshot?.finalUrl || canonical.websiteUrl || '', snapshotHash, completedAt: new Date().toISOString(), warnings, copyMethod: provider === 'gemini' ? 'ai' : 'deterministic' };
+      (built.config.personalization as JsonObject) = { ...((built.config.personalization || {}) as JsonObject), preparationRunId: data.preparationRunId, status: personalizationStatus, provider, model, sourceUrl: snapshot?.finalUrl || canonical.websiteUrl || '', snapshotHash, completedAt: new Date().toISOString(), warnings, copyMethod: provider === 'gemini' ? 'ai' : 'deterministic' };
       this.assertPostconditions(built, registration);
 
       const nextVersion = Number(proposal.current_version || 0) + 1;
@@ -97,20 +105,23 @@ export class TenantSiteProposalsPreparationCoreService {
       await runner.query(`UPDATE "${schema}".site_proposal_personalizations SET status=$1,provider=$2,model=$3,website_analysis=$4::jsonb,generated_content=$5::jsonb,brand_assets=$6::jsonb,warnings=$7::jsonb,completed_at=now() WHERE id=$8`, [personalizationStatus, provider, model || null, JSON.stringify(built.analysis), JSON.stringify({ content: built.config.content, seo: built.config.seo, email: built.email }), JSON.stringify(brandAssets), JSON.stringify(warnings), runId]);
       if (proposal.template_slug !== registration.slug || proposal.template_version !== registration.version) await this.activityWith(runner, schema, data.proposalId, ACTIVITY.proposalTemplateUpgraded, actor, { from: `${proposal.template_slug}@${proposal.template_version}`, to: `${registration.slug}@${registration.version}` });
       await runner.commitTransaction();
-
-      if (data.generate) {
-        const generated = await this.generation.generate(schema, actor, data.proposalId);
-        if (generated.status !== 'completed') throw new Error(generated.error_message || 'Generazione automatica non riuscita');
-      }
-      const preparationStatus = provider === 'gemini' ? 'ready' : 'fallback';
-      await runner.query(`UPDATE "${schema}".site_proposals SET preparation_status=$1,preparation_error=NULL,preparation_completed_at=now(),updated_at=now() WHERE id=$2`, [preparationStatus, data.proposalId]);
-      await this.activity(schema, data.proposalId, provider === 'gemini' ? ACTIVITY.proposalPreparationReady : ACTIVITY.proposalPreparationFallback, actor, { provider, personalizationId: runId });
-      return { status: preparationStatus, provider, proposalId: data.proposalId, warnings };
+      personalizationCommitted = true;
+      return await this.finalizePreparedProposal(data, {
+        ...proposal,
+        template_slug: registration.slug,
+        template_version: registration.version,
+        site_config: built.config,
+        commercial_analysis: built.analysis,
+        email_subject: built.email.subject,
+        email_body: built.email.body,
+        current_version: nextVersion,
+        latest_personalization_id: runId,
+      }, actor, runner, false);
     } catch (error) {
       if (runner.isTransactionActive) await runner.rollbackTransaction().catch(() => undefined);
       const message = this.error(error);
       await this.dataSource.query(`UPDATE "${data.tenantSchema}".site_proposals SET preparation_status='failed',preparation_error=$1,preparation_completed_at=now(),updated_at=now() WHERE id=$2`, [message, data.proposalId]).catch(() => undefined);
-      if (runId) await this.dataSource.query(`UPDATE "${data.tenantSchema}".site_proposal_personalizations SET status='failed',error_message=$1,completed_at=now() WHERE id=$2`, [message, runId]).catch(() => undefined);
+      if (runId && !personalizationCommitted) await this.dataSource.query(`UPDATE "${data.tenantSchema}".site_proposal_personalizations SET status='failed',error_message=$1,completed_at=now() WHERE id=$2`, [message, runId]).catch(() => undefined);
       await this.activity(data.tenantSchema, data.proposalId, ACTIVITY.proposalPreparationFailed, { id: data.actorUserId, email: data.actorEmail }, { message }).catch(() => undefined);
       throw error;
     } finally {
@@ -119,11 +130,37 @@ export class TenantSiteProposalsPreparationCoreService {
     }
   }
 
+  private async finalizePreparedProposal(data: ProposalPreparationJobData, proposal: any, actor: ProposalPreparationActor, runner: { query: (...args: any[]) => Promise<any> }, resume: boolean) {
+    const schema = data.tenantSchema;
+    const config = proposal.site_config as JsonObject;
+    const registration = await this.registration(schema, String(proposal.template_slug), String(proposal.template_version));
+    validateSiteConfig(config, registration);
+    let generationComplete = !data.generate;
+    if (data.generate) {
+      const existing = resume ? (await runner.query(`SELECT id FROM "${schema}".site_proposal_generations WHERE proposal_id=$1 AND proposal_version=$2 AND status='completed' ORDER BY completed_at DESC LIMIT 1`, [data.proposalId, proposal.current_version]))[0] : undefined;
+      if (existing) generationComplete = true;
+      else {
+        const generated = await this.generation.generate(schema, actor, data.proposalId);
+        if (generated.status !== 'completed') throw new Error(generated.error_message || 'Generazione automatica non riuscita');
+        generationComplete = true;
+      }
+    }
+    const readiness = evaluateProposalReadiness({ emailSubject: proposal.email_subject, emailBody: proposal.email_body, commercialAnalysis: proposal.commercial_analysis, siteConfigValid: true, generationComplete, requireGeneration: data.generate });
+    if (!readiness.complete) throw new ProposalAiUnavailableError(`readiness_incomplete:${readiness.reasons.join(',')}`);
+    const personalization = object(config.personalization) ? config.personalization as JsonObject : {};
+    const provider: 'gemini'|'local' = personalization.provider === 'gemini' ? 'gemini' : 'local';
+    const preparationStatus = provider === 'gemini' ? 'ready' : 'fallback';
+    const warnings = Array.isArray(personalization.warnings) ? personalization.warnings.filter((value): value is string => typeof value === 'string') : [];
+    await runner.query(`UPDATE "${schema}".site_proposals SET preparation_status=$1,preparation_error=NULL,preparation_completed_at=now(),updated_at=now() WHERE id=$2`, [preparationStatus, data.proposalId]);
+    await this.activity(schema, data.proposalId, provider === 'gemini' ? ACTIVITY.proposalPreparationReady : ACTIVITY.proposalPreparationFallback, actor, { provider, personalizationId: proposal.latest_personalization_id || null, resumed: resume });
+    return { status: preparationStatus, provider, proposalId: data.proposalId, warnings };
+  }
+
   private job(raw: ProposalPreparationJobData): ProposalPreparationJobData {
     assertNoPrototypePollution(raw, 'preparationJob');
     if (!object(raw) || Object.keys(raw).some((key) => !JOB_KEYS.includes(key))) throw new BadRequestException('Dati job non validi');
     const schema = safeSchema(raw.tenantSchema, 'site proposal preparation job');
-    if (schema !== SITE_PROPOSALS_TENANT || !UUID_RE.test(raw.proposalId)) throw new BadRequestException('Job preparation non autorizzato');
+    if (schema !== SITE_PROPOSALS_TENANT || !UUID_RE.test(raw.proposalId) || !UUID_RE.test(raw.preparationRunId)) throw new BadRequestException('Job preparation non autorizzato');
     if (typeof raw.force !== 'boolean' || typeof raw.generate !== 'boolean' || typeof raw.reason !== 'string' || !raw.reason.trim()) throw new BadRequestException('Opzioni job non valide');
     if (raw.targetTemplateSlug && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(raw.targetTemplateSlug)) throw new BadRequestException('Tema target non valido');
     if (raw.targetTemplateVersion && !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(raw.targetTemplateVersion)) throw new BadRequestException('Versione target non valida');

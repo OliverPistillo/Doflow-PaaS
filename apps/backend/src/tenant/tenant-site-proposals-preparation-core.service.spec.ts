@@ -4,7 +4,7 @@ import { TenantSiteProposalsPreparationCoreService } from './tenant-site-proposa
 jest.mock('./tenant-site-proposals-schema', () => ({ ensureDoflowSiteProposalTables: jest.fn().mockResolvedValue(undefined) }));
 
 const proposalId = '550e8400-e29b-41d4-a716-446655440000';
-const validJob = { tenantSchema: 'doflow', proposalId, actorUserId: null, actorEmail: null, force: false, generate: true, reason: 'test', targetTemplateSlug: 'colsova', targetTemplateVersion: '2.4.1' };
+const validJob = { preparationRunId: '650e8400-e29b-41d4-a716-446655440000', tenantSchema: 'doflow', proposalId, actorUserId: null, actorEmail: null, force: false, generate: true, reason: 'test', targetTemplateSlug: 'colsova', targetTemplateVersion: '2.4.1' };
 
 describe('site proposal preparation core security and lock', () => {
   const make = () => {
@@ -19,4 +19,13 @@ describe('site proposal preparation core security and lock', () => {
   it('rejects invalid target template options', () => { const { core } = make(); expect(() => (core as any).job({ ...validJob, targetTemplateSlug: '../colsova' })).toThrow(BadRequestException); expect(() => (core as any).job({ ...validJob, targetTemplateVersion: 'latest' })).toThrow(BadRequestException); });
   it('always releases an acquired advisory lock when the proposal is absent', async () => { const { core, runner } = make(); runner.query.mockResolvedValueOnce([{ locked: true }]).mockResolvedValueOnce([]).mockResolvedValueOnce([]); await expect(core.prepare(validJob)).rejects.toBeInstanceOf(NotFoundException); expect(runner.query).toHaveBeenCalledWith(expect.stringContaining('pg_advisory_unlock'), ['doflow', proposalId]); expect(runner.release).toHaveBeenCalledTimes(1); });
   it('returns duplicate and still unlocks when advisory lock is unavailable', async () => { const { core, runner } = make(); runner.query.mockResolvedValueOnce([{ locked: false }]); await expect(core.prepare(validJob)).resolves.toMatchObject({ status: 'duplicate', proposalId }); expect(runner.query.mock.calls.some(([sql]) => String(sql).includes('pg_advisory_unlock'))).toBe(false); expect(runner.release).toHaveBeenCalledTimes(1); });
+  it('resumes the same persistent run without creating a second personalization or proposal version', async () => {
+    const { core, runner } = make();
+    const proposal = { id: proposalId, template_slug: 'colsova', template_version: '2.4.1', current_version: 4, latest_personalization_id: '750e8400-e29b-41d4-a716-446655440000', site_config: { personalization: { preparationRunId: validJob.preparationRunId, provider: 'gemini' } } };
+    runner.query.mockResolvedValueOnce([{ locked: true }]).mockResolvedValueOnce([proposal]).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    const finalize = jest.spyOn(core as any, 'finalizePreparedProposal').mockResolvedValue({ status: 'ready', provider: 'gemini', proposalId });
+    await expect(core.prepare(validJob)).resolves.toMatchObject({ status: 'ready' });
+    expect(finalize).toHaveBeenCalledWith(validJob, proposal, expect.anything(), runner, true);
+    expect(runner.query.mock.calls.some(([sql]) => /INSERT INTO .*site_proposal_(?:personalizations|versions)/.test(String(sql)))).toBe(false);
+  });
 });

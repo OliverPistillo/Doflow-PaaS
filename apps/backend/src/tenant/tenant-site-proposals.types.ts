@@ -95,6 +95,7 @@ export type ProposalPreparationOptions = {
   targetTemplateVersion?: string;
 };
 export type ProposalPreparationJobData = ProposalPreparationOptions & {
+  preparationRunId: string;
   tenantSchema: string;
   proposalId: string;
   actorUserId: string | null;

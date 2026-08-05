@@ -59,6 +59,13 @@ describe('ensureDoflowSiteProposalTables', () => {
     expect(ddl).toContain('ADD COLUMN IF NOT EXISTS last_personalized_at TIMESTAMPTZ');
     expect(ddl).toContain('site_proposal_personalizations(proposal_id)');
     expect(ddl).toContain('site_proposal_personalizations(snapshot_hash)');
+    expect(ddl).toContain('site_proposal_preparation_runs');
+    expect(ddl).toContain('site_proposal_theme_storage_cleanup');
+    expect(ddl).toContain('site_proposal_preparation_runs_active');
+    expect(ddl).toContain("site_proposal_generations_running");
+    expect(ddl).toContain('site_proposal_themes_global_default');
+    expect(ddl).toContain("g.proposal_version=p.current_version");
+    expect(ddl).not.toContain('WHERE p.preparation_status IS NULL');
 
     const seedCall = runner.query.mock.calls.find(([sql]: [string]) => sql.includes('INSERT INTO "doflow".site_proposal_templates'));
     expect(seedCall).toBeDefined();

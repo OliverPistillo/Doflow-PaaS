@@ -9,9 +9,10 @@ function makeService(request: any, queryMock = jest.fn()) {
   const templates = { listTemplates: jest.fn().mockResolvedValue([{ slug: 'colsova' }]), getDefaultConfig: jest.fn(), renderHtml: jest.fn(), buildRedirectFiles: jest.fn() } as any;
   const artifacts = { createZip: jest.fn() } as any;
   const storage = { uploadGeneratedBuffer: jest.fn(), downloadObjectStream: jest.fn(), deleteGeneratedPrefix: jest.fn() } as any;
-  const service = new TenantSiteProposalsService(ds, csv, templates, artifacts, storage, request);
+  const generationCore = { generate: jest.fn() } as any;
+  const service = new TenantSiteProposalsService(ds, csv, templates, artifacts, storage, request, undefined, undefined, generationCore);
   (service as any).ensure = jest.fn().mockResolvedValue(undefined);
-  return { service, ds, csv, templates, artifacts, storage, queryMock };
+  return { service, ds, csv, templates, artifacts, storage, generationCore, queryMock };
 }
 
 describe('TenantSiteProposalsService', () => {
@@ -56,6 +57,7 @@ describe('TenantSiteProposalsService', () => {
     const result = await service.previewImport({ originalname: 'x.csv', mimetype: 'text/csv', buffer: Buffer.from('a') } as any);
     expect(result.rows[0].errors[0].code).toBe('DUPLICATE_ROW');
   });
+  it('uses the unique global DB default without a Colsova preference', async () => { const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } }); queryMock.mockResolvedValueOnce([{ slug: 'luce', version: '1.2.0' }]); await expect((service as any).defaultThemeSelection()).resolves.toEqual({ slug: 'luce', version: '1.2.0' }); expect(queryMock.mock.calls[0][0]).not.toContain("CASE WHEN t.slug='colsova'"); });
 
   it('confirmImport is idempotent when batch is already confirmed', async () => {
     const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
@@ -96,29 +98,36 @@ describe('TenantSiteProposalsService', () => {
     expect(queryMock).toHaveBeenCalledWith(expect.stringContaining('site_proposal_activity'), expect.any(Array));
   });
 
-  it('generation uses safe S3 prefix and completed status', async () => {
-    const { service, queryMock, templates, artifacts, storage } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
-    jest.spyOn(service, 'get').mockResolvedValue({ proposal: { id: uuid, current_version: 1, template_slug: 'colsova', template_version: '1.0.0', site_config: {} } } as any);
-    queryMock.mockResolvedValueOnce([{ id: '650e8400-e29b-41d4-a716-446655440000' }]).mockResolvedValue([{ id: 'gen', status: 'completed' }]);
-    templates.renderHtml.mockResolvedValue({ html: '<html></html>', sha256: 'h', size: 13 });
-    templates.buildRedirectFiles.mockResolvedValue([]);
-    artifacts.createZip.mockResolvedValue({ buffer: Buffer.from('zip'), sha256: 'z', size: 3, entries: [] });
-    const result = await service.generateProposal(uuid);
-    expect(storage.uploadGeneratedBuffer.mock.calls[0][0]).toContain(`doflow/site-proposals/${uuid}/`);
-    expect(result.status).toBe('completed');
+  it('delegates generation exclusively to the shared generation core', async () => {
+    const { service, generationCore } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    generationCore.generate.mockResolvedValue({ id: 'gen', status: 'completed' });
+    await expect(service.generateProposal(uuid)).resolves.toMatchObject({ status: 'completed' });
+    expect(generationCore.generate).toHaveBeenCalledWith('doflow', expect.objectContaining({ id: uuid }), uuid);
   });
 
-  it('records a failed generation and returns its sanitized failure result', async () => {
-    const { service, queryMock, templates } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
-    jest.spyOn(service, 'get').mockResolvedValue({ proposal: { id: uuid, current_version: 1, template_slug: 'colsova', template_version: '1.0.0', site_config: {} } } as any);
-    queryMock.mockResolvedValueOnce([{ id: '650e8400-e29b-41d4-a716-446655440000' }]).mockResolvedValue([]);
-    templates.renderHtml.mockRejectedValue(new Error('Render non riuscito'));
-
-    const result = await service.generateProposal(uuid);
-
-    expect(result).toMatchObject({ status: 'failed', error_message: 'Render non riuscito' });
-    expect(queryMock).toHaveBeenCalledWith(expect.stringContaining("site_proposal_generations SET status = 'failed'"), expect.any(Array));
-    expect(queryMock).toHaveBeenCalledWith(expect.stringContaining("site_proposals SET status = 'error'"), [uuid]);
+  it.each([
+    ['empty email body', { emailBody: '' }],
+    ['email without demo link', { emailBody: 'Testo manuale '.repeat(30) }],
+    ['empty analysis', { commercialAnalysis: {} }],
+  ])('invalidates positive preparation state after PATCH with %s', async (_name, patch) => {
+    const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    const current: any = { id: uuid, status: 'generated', current_version: 2, template_slug: 'colsova', template_version: '2.4.1', site_config: {}, commercial_analysis: { summary: 'Sintesi commerciale sufficientemente lunga e verificabile per il test.', strengths: ['a'], improvementAreas: ['b'], opportunities: ['c'], whyDoflow: ['d'], evidence: ['e'], requiresManualReview: true }, email_subject: 'Oggetto valido', email_body: `${'Testo completo '.repeat(25)}[LINK_DEMO]`, preparation_status: 'ready', personalization_status: 'completed' };
+    jest.spyOn(service, 'get').mockResolvedValue({ proposal: current } as any); (service as any).siteConfigValid = jest.fn().mockResolvedValue(true); (service as any).createVersion = jest.fn(); (service as any).activity = jest.fn();
+    queryMock.mockResolvedValueOnce([{ ...current, email_body: (patch as any).emailBody ?? current.email_body, commercial_analysis: (patch as any).commercialAnalysis ?? current.commercial_analysis, preparation_status: 'idle', personalization_status: 'idle' }]);
+    const result: any = await service.update(uuid, patch as any);
+    expect(result.readiness.complete).toBe(false); expect(queryMock.mock.calls[0][0]).toContain("preparation_status='idle'"); expect(queryMock.mock.calls[0][0]).toContain("personalization_status='idle'");
+    if ('emailBody' in patch) expect(result.email_body).toBe((patch as any).emailBody);
+  });
+  it('isolates a failed batch enqueue and continues all following rows', async () => {
+    const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    const ids = Array.from({ length: 5 }, (_, index) => `750e8400-e29b-41d4-a716-${String(index + 1).padStart(12, '0')}`);
+    queryMock.mockResolvedValueOnce(ids.map((id) => ({ id, template_slug: 'colsova', template_version: '2.4.1' })));
+    const enqueue = jest.fn().mockResolvedValue({ queued: true, pendingDispatch: false }).mockRejectedValueOnce(new Error('second failed'));
+    // Put the isolated failure on the second row while preserving processing of rows three to five.
+    enqueue.mockReset().mockResolvedValueOnce({ queued: true }).mockRejectedValueOnce(new Error('second failed')).mockResolvedValue({ queued: true });
+    (service as any).preparationQueue = { enqueue };
+    const result: any = await service.prepareImport(uuid, { force: true });
+    expect(enqueue).toHaveBeenCalledTimes(5); expect(result).toMatchObject({ total: 5, queued: 4, failed: 1 }); expect(result.results[1]).toMatchObject({ proposalId: ids[1], failed: true });
   });
 
   it('keeps batch generation summaries when individual generations fail', async () => {

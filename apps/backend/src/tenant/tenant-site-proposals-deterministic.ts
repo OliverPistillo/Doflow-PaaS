@@ -261,7 +261,16 @@ export function applyAiOutputForProfile(built: DeterministicPackage, output: Jso
       for (const key of ['developerCredit','developerUrl']) if (originalFooter[key] !== undefined) footer[key] = originalFooter[key];
     }
   } else {
-    next.config.content = deepClone(generated);
+    const allowed = ['hero','approach','services','benefits','trustItems','faq','contact','footer'];
+    next.config.content = { ...baseContent };
+    for (const key of allowed) {
+      if (!Object.prototype.hasOwnProperty.call(generated, key)) continue;
+      const current = baseContent[key];
+      const replacement = generated[key];
+      (next.config.content as JsonObject)[key] = isObject(current) && isObject(replacement)
+        ? { ...deepClone(current), ...deepClone(replacement) }
+        : deepClone(replacement);
+    }
   }
   next.config.seo = deepClone(output.seo as JsonObject);
   return next;

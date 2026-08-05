@@ -111,9 +111,22 @@ export class TenantSiteProposalsAiService {
 
   private validateBasicContent(value: unknown) {
     const content = exact(value, BASIC_CONTENT_KEYS);
-    array(content.services, 3, 3).forEach((item) => exact(item, ['title', 'description']));
-    array(content.trustItems, 6, 6).forEach((item) => exact(item, ['title', 'description']));
-    array(content.faq, 6, 6).forEach((item) => exact(item, ['question', 'answer']));
+    const fields = (value: unknown, keys: readonly string[]) => {
+      const row = exact(value, keys);
+      keys.forEach((key) => nonEmpty(row[key], 1, 5000, 'content_incomplete'));
+      return row;
+    };
+    fields(content.hero, ['eyebrow', 'title', 'description', 'primaryCta', 'secondaryCta']);
+    fields(content.approach, ['title', 'description']);
+    array(content.services, 3, 3).forEach((item) => fields(item, ['title', 'description']));
+    const benefits = exact(content.benefits, ['title', 'description', 'items']);
+    nonEmpty(benefits.title, 1, 5000, 'content_incomplete');
+    nonEmpty(benefits.description, 1, 5000, 'content_incomplete');
+    array(benefits.items, 3, 3).forEach((item) => nonEmpty(item, 1, 1000, 'content_incomplete'));
+    array(content.trustItems, 6, 6).forEach((item) => fields(item, ['title', 'description']));
+    array(content.faq, 6, 6).forEach((item) => fields(item, ['question', 'answer']));
+    fields(content.contact, ['title', 'description', 'cta']);
+    fields(content.footer, ['text']);
   }
 
   private validateConversionContent(value: unknown) {
@@ -145,8 +158,16 @@ export class TenantSiteProposalsAiService {
       improvementAreas: { type: 'array', minItems: 1, items: { type: 'object', additionalProperties: false, required: ['label', 'evidence', 'businessImpact'], properties: { label: string, evidence: string, businessImpact: string } } },
       opportunities: { type: 'array', minItems: 1, items: string }, whyDoflow: { type: 'array', minItems: 1, items: string }, evidence: { type: 'array', minItems: 1, items: string }, requiresManualReview: { type: 'boolean' },
     } };
+    const pair = { type: 'object', additionalProperties: false, required: ['title', 'description'], properties: { title: string, description: string } };
     const basicContent = { type: 'object', additionalProperties: false, required: BASIC_CONTENT_KEYS, properties: {
-      hero: { type: 'object' }, approach: { type: 'object' }, services: { type: 'array', minItems: 3, maxItems: 3 }, benefits: { type: 'object' }, trustItems: { type: 'array', minItems: 6, maxItems: 6 }, faq: { type: 'array', minItems: 6, maxItems: 6 }, contact: { type: 'object' }, footer: { type: 'object' },
+      hero: { type: 'object', additionalProperties: false, required: ['eyebrow', 'title', 'description', 'primaryCta', 'secondaryCta'], properties: { eyebrow: string, title: string, description: string, primaryCta: string, secondaryCta: string } },
+      approach: pair,
+      services: { type: 'array', minItems: 3, maxItems: 3, items: pair },
+      benefits: { type: 'object', additionalProperties: false, required: ['title', 'description', 'items'], properties: { title: string, description: string, items: { type: 'array', minItems: 3, maxItems: 3, items: string } } },
+      trustItems: { type: 'array', minItems: 6, maxItems: 6, items: pair },
+      faq: { type: 'array', minItems: 6, maxItems: 6, items: { type: 'object', additionalProperties: false, required: ['question', 'answer'], properties: { question: string, answer: string } } },
+      contact: { type: 'object', additionalProperties: false, required: ['title', 'description', 'cta'], properties: { title: string, description: string, cta: string } },
+      footer: { type: 'object', additionalProperties: false, required: ['text'], properties: { text: string } },
     } };
     const conversionContent = { type: 'object', additionalProperties: false, required: CONVERSION_CONTENT_KEYS, properties: Object.fromEntries(CONVERSION_CONTENT_KEYS.map((key) => [key, key === 'services' ? { type: 'array', minItems: 3, maxItems: 3 } : key === 'faq' ? { type: 'array', minItems: 6, maxItems: 6 } : key === 'headerCta' ? string : { type: 'object' }])) };
     return { type: 'object', additionalProperties: false, required: ROOT_KEYS, properties: { analysis, content: profile === 'colsova-conversion-v1' ? conversionContent : basicContent, seo: { type: 'object', additionalProperties: false, required: ['title', 'description'], properties: { title: string, description: string } }, email: { type: 'object', additionalProperties: false, required: ['subject', 'body'], properties: { subject: { type: 'string', minLength: 8 }, body: { type: 'string', minLength: 250 } } } } };

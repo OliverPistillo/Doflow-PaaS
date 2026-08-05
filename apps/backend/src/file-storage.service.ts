@@ -15,6 +15,16 @@ import { Readable } from 'stream';
 
 type StorageProbeStatus = 'ok' | 'warn' | 'down';
 
+export class ThemePackageUploadError extends Error {
+  constructor(
+    public readonly storagePrefix: string,
+    public readonly cleanupRequired: boolean,
+    public readonly originalError: unknown,
+  ) {
+    super('Theme package upload failed');
+  }
+}
+
 @Injectable()
 export class FileStorageService {
   private readonly logger = new Logger(FileStorageService.name);
@@ -158,7 +168,7 @@ export class FileStorageService {
     return { bucket: this.bucket, key, contentType, size: buffer.length };
   }
 
-  private proposalThemePrefix(slug: string, version: string): string {
+  proposalThemePrefix(slug: string, version: string): string {
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
       throw new ForbiddenException('Invalid proposal theme identity');
     }
@@ -169,13 +179,22 @@ export class FileStorageService {
     const prefix = this.proposalThemePrefix(slug, version);
     const docs = input.documentation || {};
     for (const name of Object.keys(docs)) if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.(?:md|txt)$/i.test(name) || name.startsWith('.')) throw new ForbiddenException('Invalid theme documentation name');
-    const uploads = [
-      this.uploadGeneratedBuffer(`${prefix}source.zip`, input.zip, 'application/zip'),
-      this.uploadGeneratedBuffer(`${prefix}template.html`, input.template, 'text/html; charset=utf-8'),
-      this.uploadGeneratedBuffer(`${prefix}theme.json`, input.manifest, 'application/json'),
-      ...Object.entries(docs).map(([name, buffer]) => this.uploadGeneratedBuffer(`${prefix}${name}`, buffer, name.toLowerCase().endsWith('.md') ? 'text/markdown; charset=utf-8' : 'text/plain; charset=utf-8')),
+    const uploads: Array<{ key: string; buffer: Buffer; contentType: string }> = [
+      { key: `${prefix}source.zip`, buffer: input.zip, contentType: 'application/zip' },
+      { key: `${prefix}template.html`, buffer: input.template, contentType: 'text/html; charset=utf-8' },
+      { key: `${prefix}theme.json`, buffer: input.manifest, contentType: 'application/json' },
+      ...Object.entries(docs).sort(([left], [right]) => left.localeCompare(right)).map(([name, buffer]) => ({ key: `${prefix}${name}`, buffer, contentType: name.toLowerCase().endsWith('.md') ? 'text/markdown; charset=utf-8' : 'text/plain; charset=utf-8' })),
     ];
-    await Promise.all(uploads);
+    const uploadedKeys: string[] = [];
+    try {
+      for (const upload of uploads) {
+        await this.uploadGeneratedBuffer(upload.key, upload.buffer, upload.contentType);
+        uploadedKeys.push(upload.key);
+      }
+    } catch (error) {
+      const cleanup = await Promise.allSettled(uploadedKeys.map((key) => this.deleteThemeObjects(prefix, [key])));
+      throw new ThemePackageUploadError(prefix, cleanup.some((result) => result.status === 'rejected'), error);
+    }
     return { prefix, zipKey: `${prefix}source.zip`, templateKey: `${prefix}template.html` };
   }
 
@@ -192,19 +211,29 @@ export class FileStorageService {
 
   async deleteThemePrefix(slug: string, version: string): Promise<number> {
     const prefix = this.proposalThemePrefix(slug, version);
+    return this.deleteThemeStoragePrefix(prefix);
+  }
+
+  async deleteThemeStoragePrefix(prefix: string): Promise<number> {
+    if (!/^doflow\/site-proposal-themes\/[a-z0-9]+(?:-[a-z0-9]+)*\/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\/$/.test(prefix)) throw new ForbiddenException('Invalid proposal theme storage prefix');
     let continuationToken: string | undefined;
     let deleted = 0;
     do {
       const page = await this.s3.send(new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix, ContinuationToken: continuationToken }));
       const keys = (page.Contents || []).map((object) => object.Key).filter((key): key is string => Boolean(key) && key!.startsWith(prefix));
       if (keys.length) {
-        const result = await this.s3.send(new DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true } }));
-        if (result.Errors?.length) throw new Error('Theme object deletion failed');
+        await this.deleteThemeObjects(prefix, keys);
         deleted += keys.length;
       }
       continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
     } while (continuationToken);
     return deleted;
+  }
+
+  private async deleteThemeObjects(prefix: string, keys: string[]): Promise<void> {
+    if (!keys.length || keys.some((key) => !key.startsWith(prefix) || key.includes('..') || key.includes('\\') || key.includes('\0'))) throw new ForbiddenException('Invalid theme object key');
+    const result = await this.s3.send(new DeleteObjectsCommand({ Bucket: this.bucket, Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true } }));
+    if (result.Errors?.length) throw new Error('Theme object deletion failed');
   }
 
   private async readBody(body: unknown): Promise<Buffer> {

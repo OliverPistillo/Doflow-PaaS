@@ -42,6 +42,7 @@ export type SiteProposal = {
   personalization_status?: PersonalizationStatus | null; latest_personalization_id?: string | null; last_personalized_at?: string | null;
   preparation_status?: PreparationStatus | null; preparation_error?: string | null; preparation_queued_at?: string | null; preparation_started_at?: string | null; preparation_completed_at?: string | null; latest_preparation_job_id?: string | null;
   source_data?: JsonObject; site_config?: SiteConfig; validation_warnings?: SiteProposalImportWarning[]; commercial_analysis?: CommercialAnalysis; email_subject?: string | null; email_body?: string | null;
+  readiness?: { complete: boolean; reasons: string[] };
 };
 export type SiteProposalDetail = { proposal: SiteProposal; latestGeneration?: SiteProposalGeneration | null; versionCount: number; activityCount: number };
 export type SiteProposalVersion = { id: string; proposal_id: string; version: number; site_config: SiteConfig; commercial_analysis: CommercialAnalysis; email_subject?: string | null; email_body?: string | null; reason?: string | null; created_by?: string | null; created_at?: string | null };

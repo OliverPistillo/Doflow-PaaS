@@ -1,13 +1,14 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { DataSource } from 'typeorm';
-import { FileStorageService } from '../file-storage.service';
+import { FileStorageService, ThemePackageUploadError } from '../file-storage.service';
 import { safeSchema } from '../common/schema.utils';
 import { hasRoleAtLeast } from '../roles';
 import { SITE_PROPOSALS_TENANT } from './tenant-site-proposals.constants';
 import { ensureDoflowSiteProposalTables } from './tenant-site-proposals-schema';
 import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
 import { TenantSiteProposalsThemePackageService } from './tenant-site-proposals-theme-package.service';
+import { TenantSiteProposalsThemeStorageCleanupService } from './tenant-site-proposals-theme-storage-cleanup.service';
 import { AuthUserRef, JsonObject } from './tenant-site-proposals.types';
 import { assertNoPrototypePollution, UUID_RE } from './tenant-site-proposals-validation';
 
@@ -18,6 +19,7 @@ export class TenantSiteProposalsThemeService {
     private readonly packages: TenantSiteProposalsThemePackageService,
     private readonly storage: FileStorageService,
     private readonly templates: TenantSiteProposalsTemplateService,
+    private readonly cleanup: TenantSiteProposalsThemeStorageCleanupService,
     @Inject(REQUEST) private readonly request: any,
   ) {}
 
@@ -48,13 +50,13 @@ export class TenantSiteProposalsThemeService {
     const slug = String(validated.manifest.slug); const version = String(validated.manifest.version);
     await this.ensure();
     if (await this.row(slug, version)) throw new ConflictException('Questa versione del tema esiste già ed è immutabile');
-    const runner = this.ds().createQueryRunner(); let stored = false; let original: unknown;
+    const runner = this.ds().createQueryRunner(); let storedPrefix: string | undefined; let original: unknown;
     try {
       await runner.connect(); await runner.startTransaction();
       const themes = await runner.query(`INSERT INTO "${this.schema()}".site_proposal_themes (slug,name,description,source_kind,is_active,categories,created_by) VALUES ($1,$2,$3,'uploaded',true,$4::jsonb,$5) ON CONFLICT(slug) DO UPDATE SET updated_at=now() RETURNING id,source_kind`, [slug, validated.manifest.name, validated.manifest.description || null, JSON.stringify(validated.manifest.categories), this.userId(user)]);
       if (themes[0]?.source_kind === 'builtin') throw new ConflictException('Lo slug di un tema built-in non può essere riutilizzato');
       const keys = await this.storage.uploadThemePackage(slug, version, { zip: file.buffer, template: validated.template, manifest: validated.manifestBuffer, documentation: validated.documentation });
-      stored = true;
+      storedPrefix = keys.prefix;
       const versions = await runner.query(`
         INSERT INTO "${this.schema()}".site_proposal_theme_versions
           (theme_id,version,schema_version,contract_version,content_profile,status,is_builtin,is_immutable,template_sha256,template_size,zip_sha256,zip_size,manifest,default_config,template_storage_key,zip_storage_key,validation_report,created_by)
@@ -67,7 +69,11 @@ export class TenantSiteProposalsThemeService {
     } catch (error) {
       original = error;
       if (runner.isTransactionActive) await runner.rollbackTransaction().catch(() => undefined);
-      if (stored) await this.storage.deleteThemePrefix(slug, version).catch(() => undefined);
+      const cleanupPrefix = storedPrefix || (error instanceof ThemePackageUploadError && error.cleanupRequired ? error.storagePrefix : undefined);
+      if (cleanupPrefix) {
+        const cleanupId = await this.cleanup.record(cleanupPrefix).catch(() => undefined);
+        if (cleanupId) await this.cleanup.process(cleanupId).catch(() => undefined);
+      }
       throw error;
     } finally { await runner.release().catch((error) => { if (!original) throw error; }); }
   }
@@ -90,12 +96,21 @@ export class TenantSiteProposalsThemeService {
   disable(slug: string, version: string) { return this.setStatus(slug, version, 'disabled'); }
 
   async setDefault(slug: string, version: string) {
-    const user = this.access(true); this.identity(slug, version); await this.ensure(); const row = await this.row(slug, version);
-    if (!row) throw new NotFoundException('Tema non trovato');
-    if (row.status !== 'active') throw new ConflictException('Solo una versione attiva può diventare predefinita');
-    await this.ds().query(`UPDATE "${this.schema()}".site_proposal_themes SET default_version=$1,updated_at=now() WHERE id=$2`, [version, row.theme_id]);
-    await this.activity(this.ds(), row.theme_id, row.id, 'THEME_DEFAULT_SET', user, { version });
-    this.templates.invalidate(this.schema(), slug);
+    const user = this.access(true); this.identity(slug, version); await this.ensure();
+    const runner = this.ds().createQueryRunner(); let original: unknown;
+    try {
+      await runner.connect(); await runner.startTransaction();
+      await runner.query(`SELECT id FROM "${this.schema()}".site_proposal_themes FOR UPDATE`);
+      const row = (await runner.query(`SELECT v.*,t.id theme_id,t.is_active theme_active FROM "${this.schema()}".site_proposal_themes t JOIN "${this.schema()}".site_proposal_theme_versions v ON v.theme_id=t.id WHERE t.slug=$1 AND v.version=$2`, [slug, version]))[0];
+      if (!row) throw new NotFoundException('Tema non trovato');
+      if (row.status !== 'active' || row.theme_active !== true || !['2.0'].includes(String(row.schema_version)) || !['2.0'].includes(String(row.contract_version)) || !['proposal-basic-v2','colsova-conversion-v1'].includes(String(row.content_profile))) throw new ConflictException('Solo una versione attiva e compatibile può diventare predefinita');
+      await runner.query(`UPDATE "${this.schema()}".site_proposal_themes SET default_version=NULL,updated_at=CASE WHEN default_version IS NOT NULL THEN now() ELSE updated_at END WHERE default_version IS NOT NULL`);
+      await runner.query(`UPDATE "${this.schema()}".site_proposal_themes SET default_version=$1,updated_at=now() WHERE id=$2`, [version, row.theme_id]);
+      await this.activity(runner, row.theme_id, row.id, 'THEME_DEFAULT_SET', user, { version });
+      await runner.commitTransaction();
+    } catch (error) { original = error; if (runner.isTransactionActive) await runner.rollbackTransaction().catch(() => undefined); throw error; }
+    finally { await runner.release().catch((error) => { if (!original) throw error; }); }
+    this.templates.invalidate(this.schema());
     return this.get(slug, version);
   }
 
@@ -111,12 +126,13 @@ export class TenantSiteProposalsThemeService {
       if (row.status === 'active') throw new ConflictException('Disattiva il tema prima di eliminarlo');
       const used = (await runner.query(`SELECT 1 FROM "${this.schema()}".site_proposals WHERE template_slug=$1 AND template_version=$2 LIMIT 1`, [slug, version]))[0];
       if (used) throw new ConflictException('Il tema è stato utilizzato da almeno una proposta');
-      await this.storage.deleteThemePrefix(slug, version);
+      const cleanupId = await this.cleanup.record(this.storage.proposalThemePrefix(slug, version), runner);
       await this.activity(runner, row.theme_id, row.id, 'THEME_DELETED', user, { version });
       await runner.query(`DELETE FROM "${this.schema()}".site_proposal_theme_versions WHERE id=$1`, [row.id]);
       await runner.query(`DELETE FROM "${this.schema()}".site_proposal_themes t WHERE t.id=$1 AND t.source_kind='uploaded' AND NOT EXISTS (SELECT 1 FROM "${this.schema()}".site_proposal_theme_versions v WHERE v.theme_id=t.id)`, [row.theme_id]);
       await runner.commitTransaction(); this.templates.invalidate(this.schema(), slug, version);
-      return { deleted: true, slug, version };
+      const cleanupStatus = await this.cleanup.process(cleanupId);
+      return { deleted: true, slug, version, cleanupPending: cleanupStatus !== 'completed' };
     } catch (error) { original = error; if (runner.isTransactionActive) await runner.rollbackTransaction().catch(() => undefined); throw error; }
     finally { await runner.release().catch((error) => { if (!original) throw error; }); }
   }

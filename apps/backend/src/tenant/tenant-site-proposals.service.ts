@@ -22,6 +22,7 @@ import { buildDeterministicProposal } from './tenant-site-proposals-deterministi
 import { getTemplateRegistration } from './tenant-site-proposals-template-registry';
 import { TenantSiteProposalsPreparationQueueService } from './tenant-site-proposals-preparation-queue.service';
 import { TenantSiteProposalsGenerationCoreService } from './tenant-site-proposals-generation-core.service';
+import { evaluateProposalReadiness } from './tenant-site-proposals-readiness';
 import { AuthUserRef, JsonObject, PreviewRow, RowIssue } from './tenant-site-proposals.types';
 import {
   allowedStatusTransition,
@@ -155,9 +156,14 @@ export class TenantSiteProposalsService {
       proposals.push(inserted);
     }
     await this.ds().query(`UPDATE "${schema}".site_proposal_import_batches SET status = 'confirmed', confirmed_at = now() WHERE id = $1`, [id]);
-    const queued = [];
-    if (this.preparationQueue) for (const proposal of proposals) queued.push(await this.preparationQueue.enqueue(schema, String(proposal.id), user, { force: false, generate: true, reason: 'csv_import', targetTemplateSlug: batch.template_slug, targetTemplateVersion: batch.template_version }));
-    return { batch: await this.getImport(id), proposals, queued: queued.length, idempotent: false };
+    const dispatches: Array<{ proposalId: string; status: 'queued'|'pending_dispatch'|'failed'; error?: string }> = [];
+    if (this.preparationQueue) for (const proposal of proposals) {
+      try {
+        const result = await this.preparationQueue.enqueue(schema, String(proposal.id), user, { force: false, generate: true, reason: 'csv_import', targetTemplateSlug: batch.template_slug, targetTemplateVersion: batch.template_version });
+        dispatches.push({ proposalId: String(proposal.id), status: result.pendingDispatch ? 'pending_dispatch' : 'queued' });
+      } catch (error) { dispatches.push({ proposalId: String(proposal.id), status: 'failed', error: this.sanitizeError(error) }); }
+    }
+    return { batch: await this.getImport(id), proposals, queued: dispatches.filter((item) => item.status === 'queued').length, pendingDispatch: dispatches.filter((item) => item.status === 'pending_dispatch').length, failed: dispatches.filter((item) => item.status === 'failed').length, dispatches, idempotent: false };
   }
 
   async generateImport(id: string) {
@@ -206,7 +212,13 @@ export class TenantSiteProposalsService {
     }
     const sqlWhere = where.join(' AND ');
     const count = await this.one(`SELECT count(*)::int total FROM "${schema}".site_proposals WHERE ${sqlWhere}`, params);
-    const items = await this.ds().query(`SELECT id, display_name, status, archived_from_status, template_slug, template_version, company_id, current_version, last_generated_at, preparation_status, preparation_error, preparation_queued_at, preparation_started_at, preparation_completed_at, latest_preparation_job_id, updated_at, deleted_at FROM "${schema}".site_proposals WHERE ${sqlWhere} ORDER BY ${sortBy} ${sortOrder} NULLS LAST LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, limit, offset]);
+    const rows = await this.ds().query(`SELECT id, display_name, status, archived_from_status, template_slug, template_version, company_id, current_version, last_generated_at, preparation_status, preparation_error, preparation_queued_at, preparation_started_at, preparation_completed_at, latest_preparation_job_id, personalization_status, email_subject, email_body, commercial_analysis, site_config, EXISTS(SELECT 1 FROM "${schema}".site_proposal_generations g WHERE g.proposal_id=site_proposals.id AND g.status='completed' AND g.proposal_version=site_proposals.current_version) generation_complete, updated_at, deleted_at FROM "${schema}".site_proposals WHERE ${sqlWhere} ORDER BY ${sortBy} ${sortOrder} NULLS LAST LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, limit, offset]);
+    const items = await Promise.all(rows.map(async (row: any) => {
+      const readiness = evaluateProposalReadiness({ emailSubject: row.email_subject, emailBody: row.email_body, commercialAnalysis: row.commercial_analysis, siteConfigValid: await this.siteConfigValid(row), generationComplete: row.generation_complete === true, requireGeneration: ['ready','fallback'].includes(row.preparation_status) });
+      const { email_subject: _subject, email_body: _body, commercial_analysis: _analysis, site_config: _config, generation_complete: _generation, ...item } = row;
+      if (!readiness.complete && ['ready','fallback'].includes(item.preparation_status)) { item.preparation_status = 'idle'; item.personalization_status = 'idle'; item.preparation_error = null; }
+      return { ...item, readiness };
+    }));
     return { items, total: Number(count?.total || 0), limit, offset };
   }
 
@@ -247,7 +259,9 @@ export class TenantSiteProposalsService {
     const latestGeneration = await this.one(`SELECT * FROM "${this.schema()}".site_proposal_generations WHERE proposal_id = $1 ORDER BY created_at DESC LIMIT 1`, [id]);
     const versionCount = await this.one(`SELECT count(*)::int count FROM "${this.schema()}".site_proposal_versions WHERE proposal_id = $1`, [id]);
     const activityCount = await this.one(`SELECT count(*)::int count FROM "${this.schema()}".site_proposal_activity WHERE proposal_id = $1`, [id]);
-    return { proposal, latestGeneration, versionCount: Number(versionCount?.count || 0), activityCount: Number(activityCount?.count || 0) };
+    const readiness = evaluateProposalReadiness({ emailSubject: proposal.email_subject, emailBody: proposal.email_body, commercialAnalysis: proposal.commercial_analysis, siteConfigValid: await this.siteConfigValid(proposal), generationComplete: latestGeneration?.status === 'completed' && Number(latestGeneration?.proposal_version) === Number(proposal.current_version), requireGeneration: ['ready','fallback'].includes(proposal.preparation_status) });
+    if (!readiness.complete && ['ready','fallback'].includes(proposal.preparation_status)) { proposal.preparation_status = 'idle'; proposal.personalization_status = 'idle'; proposal.preparation_error = null; }
+    return { proposal: { ...proposal, readiness }, latestGeneration, versionCount: Number(versionCount?.count || 0), activityCount: Number(activityCount?.count || 0) };
   }
 
   personalizeProposal(id: string, body: unknown) {
@@ -270,9 +284,12 @@ export class TenantSiteProposalsService {
     if (!this.preparationQueue) throw new ConflictException('Coda di preparazione non disponibile');
     await this.ensure(); const force = payload.force === true;
     const rows = await this.ds().query(`SELECT id,template_slug,template_version FROM "${this.schema()}".site_proposals WHERE import_batch_id=$1 AND deleted_at IS NULL AND status<>'archived' ${force ? '' : "AND coalesce(preparation_status,'idle') NOT IN ('running','ready','fallback')"} ORDER BY source_row_index LIMIT 50`, [id]);
-    const results = [];
-    for (const row of rows) results.push(await this.preparationQueue.enqueue(this.schema(), row.id, user, { force, generate: true, reason: 'existing_batch', targetTemplateSlug: row.template_slug, targetTemplateVersion: row.template_version }));
-    return { total: rows.length, queued: results.filter((result) => result.queued).length, results };
+    const results: Array<Record<string, unknown>> = [];
+    for (const row of rows) {
+      try { results.push({ proposalId: row.id, ...(await this.preparationQueue.enqueue(this.schema(), row.id, user, { force, generate: true, reason: 'existing_batch', targetTemplateSlug: row.template_slug, targetTemplateVersion: row.template_version })) }); }
+      catch (error) { results.push({ proposalId: row.id, queued: false, failed: true, error: this.sanitizeError(error) }); }
+    }
+    return { total: rows.length, queued: results.filter((result) => result.queued).length, pendingDispatch: results.filter((result) => result.pendingDispatch).length, failed: results.filter((result) => result.failed).length, results };
   }
 
   listPersonalizations(id: string) {
@@ -344,7 +361,7 @@ export class TenantSiteProposalsService {
     const nextVersion = Number(current.current_version) + 1;
     const next = {
       site_config: siteConfig,
-      commercial_analysis: body.commercialAnalysis || current.commercial_analysis,
+      commercial_analysis: body.commercialAnalysis ?? current.commercial_analysis,
       email_subject: body.emailSubject ?? current.email_subject,
       email_body: body.emailBody ?? current.email_body,
     };
@@ -353,14 +370,16 @@ export class TenantSiteProposalsService {
     const map: Record<string, string> = { displayName: 'display_name', status: 'status', companyId: 'company_id', contactId: 'contact_id', leadId: 'lead_id', opportunityId: 'opportunity_id' };
     for (const [input, column] of Object.entries(map)) if (input in body) { params.push(body[input] || null); sets.push(`${column} = $${params.length}`); }
     params.push(JSON.stringify(next.site_config), JSON.stringify(next.commercial_analysis), next.email_subject, next.email_body, nextVersion, this.userIdOrNull(user.id), id);
+    const contentChanged = ['siteConfig','commercialAnalysis','emailSubject','emailBody'].some((key) => Object.prototype.hasOwnProperty.call(body, key));
+    const readiness = evaluateProposalReadiness({ emailSubject: next.email_subject, emailBody: next.email_body, commercialAnalysis: next.commercial_analysis, siteConfigValid: await this.siteConfigValid({ ...current, site_config: siteConfig }), generationComplete: false, requireGeneration: contentChanged });
     const updated = await this.one(
-      `UPDATE "${this.schema()}".site_proposals SET ${sets.length ? `${sets.join(', ')},` : ''} site_config = $${params.length - 6}::jsonb, commercial_analysis = $${params.length - 5}::jsonb, email_subject = $${params.length - 4}, email_body = $${params.length - 3}, current_version = $${params.length - 2}, updated_by = $${params.length - 1}, updated_at = now() WHERE id = $${params.length} AND deleted_at IS NULL RETURNING *`,
+      `UPDATE "${this.schema()}".site_proposals SET ${sets.length ? `${sets.join(', ')},` : ''} site_config = $${params.length - 6}::jsonb, commercial_analysis = $${params.length - 5}::jsonb, email_subject = $${params.length - 4}, email_body = $${params.length - 3}, current_version = $${params.length - 2}, updated_by = $${params.length - 1}${contentChanged ? ", preparation_status='idle', preparation_error=NULL, personalization_status='idle'" : ''}, updated_at = now() WHERE id = $${params.length} AND deleted_at IS NULL RETURNING *`,
       params,
     );
     await this.createVersion(updated, nextVersion, user, 'update');
     await this.activity(id, ACTIVITY.proposalUpdated, user, {});
     if ('companyId' in body || 'contactId' in body || 'leadId' in body || 'opportunityId' in body) await this.activity(id, ACTIVITY.crmLinkUpdated, user, {});
-    return updated;
+    return { ...updated, readiness };
   }
 
   async listVersions(id: string) {
@@ -394,31 +413,8 @@ export class TenantSiteProposalsService {
     const user = this.assertAccess(true);
     this.assertUuid(id);
     await this.ensure();
-    if (this.generationCore) return this.generationCore.generate(this.schema(), user, id);
-    const schema = this.schema();
-    const proposal = (await this.get(id)).proposal;
-    const generation = await this.one(`INSERT INTO "${schema}".site_proposal_generations (proposal_id, proposal_version, template_slug, template_version, status, created_by, started_at) VALUES ($1,$2,$3,$4,'running',$5,now()) RETURNING *`, [id, proposal.current_version, proposal.template_slug, proposal.template_version, this.userIdOrNull(user.id)]);
-    await this.activity(id, ACTIVITY.generationStarted, user, {});
-    try {
-      const rendered = await this.templates.renderHtml(proposal.site_config);
-      const redirects = await this.templates.buildRedirectFiles(proposal.site_config);
-      const zip = await this.artifacts.createZip(rendered.html, redirects);
-      const prefix = `${GENERATED_STORAGE_PREFIX}/${id}/${generation.id}/`;
-      const htmlKey = `${prefix}index.html`;
-      const zipKey = `${prefix}demo.zip`;
-      await this.fileStorage.uploadGeneratedBuffer(htmlKey, Buffer.from(rendered.html, 'utf8'), 'text/html; charset=utf-8');
-      await this.fileStorage.uploadGeneratedBuffer(zipKey, zip.buffer, 'application/zip');
-      const completed = await this.one(`UPDATE "${schema}".site_proposal_generations SET status = 'completed', html_key = $1, zip_key = $2, html_sha256 = $3, zip_sha256 = $4, html_size = $5, zip_size = $6, completed_at = now() WHERE id = $7 RETURNING *`, [htmlKey, zipKey, rendered.sha256, zip.sha256, rendered.size, zip.size, generation.id]);
-      await this.ds().query(`UPDATE "${schema}".site_proposals SET status = 'generated', last_generated_at = now(), updated_at = now() WHERE id = $1`, [id]);
-      await this.activity(id, ACTIVITY.generated, user, {});
-      return completed;
-    } catch (error) {
-      const message = this.sanitizeError(error);
-      await this.ds().query(`UPDATE "${schema}".site_proposal_generations SET status = 'failed', error_message = $1, completed_at = now() WHERE id = $2`, [message, generation.id]);
-      await this.ds().query(`UPDATE "${schema}".site_proposals SET status = 'error', updated_at = now() WHERE id = $1`, [id]);
-      await this.activity(id, ACTIVITY.generationFailed, user, { message });
-      return { ...generation, status: 'failed', error_message: message };
-    }
+    if (!this.generationCore) throw new Error('Generation core non registrato');
+    return this.generationCore.generate(this.schema(), user, id);
   }
 
   async listGenerations(id: string) {
@@ -593,10 +589,18 @@ export class TenantSiteProposalsService {
        FROM "${this.schema()}".site_proposal_themes t
        JOIN "${this.schema()}".site_proposal_theme_versions v ON v.theme_id=t.id AND v.version=t.default_version
        WHERE t.is_active=true AND v.status='active' AND t.default_version IS NOT NULL
-       ORDER BY CASE WHEN t.slug='colsova' THEN 0 ELSE 1 END, t.updated_at DESC
+              ORDER BY t.updated_at DESC
        LIMIT 1`,
     );
     return rows[0] ? { slug: String(rows[0].slug), version: String(rows[0].version) } : null;
+  }
+
+  private async siteConfigValid(proposal: any): Promise<boolean> {
+    try {
+      const registration = await this.templates.getRegistration(String(proposal.template_slug), String(proposal.template_version), this.templateContext());
+      validateSiteConfig(proposal.site_config as JsonObject, registration);
+      return true;
+    } catch { return false; }
   }
 
   private async restoreArchived(id: string, user: AuthUserRef) {

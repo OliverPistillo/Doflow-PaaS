@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import * as cheerio from 'cheerio';
 import * as yauzl from 'yauzl';
 import { JsonObject, ProposalContentProfile } from './tenant-site-proposals.types';
 import { assertNoPrototypePollution, sha256 } from './tenant-site-proposals-validation';
@@ -11,6 +12,13 @@ const MAX_DOCUMENT = 1024 * 1024;
 const SCRIPT_RE = /<script\s+id=["']template-config["']\s+type=["']application\/json["']\s*>([\s\S]*?)<\/script>/gi;
 const REQUIRED_MANIFEST = ['name','slug','version','schemaVersion','contractVersion','entry','templateSha256','size','categories','standalone'] as const;
 const EXECUTABLE_EXTENSIONS = /\.(?:exe|dll|com|bat|cmd|ps1|sh|bash|js|mjs|cjs|jar|php|py|rb|pl|cgi|msi|scr|app|deb|rpm)$/i;
+const SUPPORTED_PACKAGE_CONTRACTS = new Set([
+  '2.0|2.0|proposal-basic-v2',
+  '2.0|2.0|colsova-conversion-v1',
+]);
+const CSP_NONE_DIRECTIVES = ['default-src', 'connect-src', 'object-src', 'frame-src', 'form-action', 'base-uri'] as const;
+const CSP_HASH = /^'sha(?:256|384|512)-[A-Za-z0-9+/]+={0,2}'$/;
+const TRUSTED_SELF_IMAGE_TEMPLATE_SHA256 = new Set(['395a7f9e77d120558e5e45d3485c65f07be0cb339ad6a207a5562ec8b491d263']);
 
 type PackageEntry = { path: string; buffer: Buffer };
 export type ValidatedThemePackage = {
@@ -65,7 +73,9 @@ export class TenantSiteProposalsThemePackageService {
     const templateMetadata = object(defaultConfig.template) ? defaultConfig.template : {};
     if (templateMetadata.slug !== manifest.slug || templateMetadata.templateVersion !== manifest.version || templateMetadata.schemaVersion !== manifest.schemaVersion) throw new BadRequestException('Metadata template non coerenti con il manifest');
     const contentProfile = this.contentProfile(manifest, defaultConfig);
-    this.validateTemplateSecurity(html);
+    const contractKey = `${String(manifest.schemaVersion)}|${String(manifest.contractVersion)}|${contentProfile}`;
+    if (!SUPPORTED_PACKAGE_CONTRACTS.has(contractKey)) throw new BadRequestException('Combinazione schemaVersion, contractVersion e contentProfile non supportata');
+    this.validateTemplateSecurity(html, TRUSTED_SELF_IMAGE_TEMPLATE_SHA256.has(templateSha256));
     this.validateDataUris(html);
     this.validateProfile(defaultConfig, contentProfile);
 
@@ -150,21 +160,42 @@ export class TenantSiteProposalsThemePackageService {
     throw new BadRequestException('Struttura tema non riconosciuta: contentProfile obbligatorio');
   }
 
-  private validateTemplateSecurity(html: string) {
-    if (!/<meta\b(?=[^>]*name=["']robots["'])(?=[^>]*content=["'][^"']*noindex[^"']*nofollow[^"']*noarchive)/i.test(html)) throw new BadRequestException('robots noindex,nofollow,noarchive mancante');
-    const cspTag = /<meta\b(?=[^>]*http-equiv=["']Content-Security-Policy["'])[^>]*>/i.exec(html)?.[0];
-    const csp = cspTag ? /\bcontent\s*=\s*(["'])(.*?)\1/i.exec(cspTag)?.[2]?.toLowerCase() : undefined;
-    if (!csp) throw new BadRequestException('CSP mancante');
-    for (const directive of ["default-src 'none'", "connect-src 'none'", "object-src 'none'", "frame-src 'none'", "form-action 'none'"]) if (!csp.includes(directive)) throw new BadRequestException(`CSP insufficiente: ${directive}`);
-    const forbidden: Array<[RegExp, string]> = [
-      [/<script\b[^>]*\bsrc\s*=/i, 'script esterno'], [/<link\b[^>]*\brel=["'][^"']*stylesheet/i, 'stylesheet esterno'],
-      [/<iframe\b/i, 'iframe'], [/<object\b/i, 'object'], [/<embed\b/i, 'embed'], [/<base\b[^>]*href/i, 'base href'],
-      [/<meta\b(?=[^>]*http-equiv=["']refresh)/i, 'meta refresh'], [/\son[a-z]+\s*=/i, 'event handler inline'],
-      [/\beval\s*\(/i, 'eval'], [/new\s+Function\b/i, 'new Function'], [/document\.write\s*\(/i, 'document.write'],
-      [/\bfetch\s*\(/i, 'fetch'], [/XMLHttpRequest/i, 'XMLHttpRequest'], [/\bWebSocket\b/i, 'WebSocket'],
-      [/\blocalStorage\b/i, 'localStorage'], [/\bsessionStorage\b/i, 'sessionStorage'], [/javascript\s*:/i, 'javascript URL'],
+  private validateTemplateSecurity(html: string, allowTrustedSelfImages = false) {
+    const $ = cheerio.load(html);
+    const robots = $('meta').filter((_, element) => String($(element).attr('name') || '').toLowerCase() === 'robots');
+    if (robots.length !== 1) throw new BadRequestException('robots noindex,nofollow,noarchive mancante o duplicato');
+    const robotTokens = new Set(String(robots.attr('content') || '').toLowerCase().split(',').map((token) => token.trim()));
+    if (!['noindex', 'nofollow', 'noarchive'].every((token) => robotTokens.has(token))) throw new BadRequestException('robots noindex,nofollow,noarchive mancante');
+
+    const cspMetas = $('meta').filter((_, element) => String($(element).attr('http-equiv') || '').toLowerCase() === 'content-security-policy');
+    if (cspMetas.length !== 1) throw new BadRequestException('La meta CSP deve essere unica');
+    this.parseAndValidateCsp(String(cspMetas.attr('content') || ''), allowTrustedSelfImages);
+
+    for (const selector of ['iframe', 'object', 'embed', 'base[href]']) if ($(selector).length) throw new BadRequestException(`Template non sicuro: ${selector}`);
+    if ($('meta').filter((_, element) => String($(element).attr('http-equiv') || '').toLowerCase() === 'refresh').length) throw new BadRequestException('Template non sicuro: meta refresh');
+    if ($('script[src]').length) throw new BadRequestException('Template non sicuro: script esterno');
+    if ($('link[rel]').filter((_, element) => String($(element).attr('rel') || '').toLowerCase().split(/\s+/).includes('stylesheet')).length) throw new BadRequestException('Template non sicuro: stylesheet esterno');
+    $('*').each((_, element) => {
+      const attributes = element.type === 'tag' ? element.attribs || {} : {};
+      for (const [name, value] of Object.entries(attributes)) {
+        if (/^on/i.test(name)) throw new BadRequestException('Template non sicuro: event handler inline');
+        if (/javascript\s*:/i.test(value)) throw new BadRequestException('Template non sicuro: javascript URL');
+        if (['src', 'poster'].includes(name.toLowerCase()) && /^(?:https?:)?\/\//i.test(value.trim())) throw new BadRequestException('Template base con risorsa esterna hardcoded');
+        if (name.toLowerCase() === 'srcset' && /(?:https?:\/\/|(?:^|[\s,])\/\/)/i.test(value)) throw new BadRequestException('Template base con risorsa esterna hardcoded');
+        if (name.toLowerCase() === 'href' && /^(?:https?:)?\/\//i.test(value.trim()) && value.trim().toLowerCase() !== 'https://doflow.it/') throw new BadRequestException('Template base con collegamento esterno hardcoded');
+        if (name.toLowerCase() === 'style' && /(?:url\s*\(\s*["']?(?:https?:)?\/\/|@import)/i.test(value)) throw new BadRequestException('Template base con CSS esterno hardcoded');
+      }
+    });
+
+    const css = $('style').map((_, element) => $(element).html() || '').get().join('\n');
+    const cssChecks: Array<[RegExp, string]> = [
+      [/@import\b/i, 'CSS @import'], [/url\(\s*["']?https?:\/\//i, 'CSS URL esterno'], [/url\(\s*["']?\/\//i, 'CSS URL protocol-relative'],
+      [/(?:^|[;{])\s*expression\s*\(/i, 'CSS expression'], [/(?:^|[;{])\s*behavior\s*:/i, 'CSS behavior'], [/javascript\s*:/i, 'CSS javascript URL'],
     ];
-    for (const [pattern, label] of forbidden) if (pattern.test(html)) throw new BadRequestException(`Template non sicuro: ${label}`);
+    for (const [pattern, label] of cssChecks) if (pattern.test(css)) throw new BadRequestException(`Template non sicuro: ${label}`);
+
+    const applicationJs = $('script').filter((_, element) => $(element).attr('id') !== 'template-config').map((_, element) => $(element).html() || '').get().join('\n');
+    this.validateApplicationJavascript(applicationJs);
     for (const match of html.matchAll(/<form\b([^>]*)>/gi)) {
       const action = /\baction\s*=\s*["']([^"']*)["']/i.exec(match[1])?.[1] || '';
       if (action && action !== '#') throw new BadRequestException('Form action esterna non consentita');
@@ -175,6 +206,55 @@ export class TenantSiteProposalsThemePackageService {
       if (href && /^[a-z][a-z0-9+.-]*:/i.test(href) && !/^(?:https|tel|mailto):/i.test(href)) throw new BadRequestException('Link esterno non HTTPS');
       if (/\btarget\s*=\s*["']_blank["']/i.test(match[1]) && !/\brel\s*=\s*["'][^"']*noopener[^"']*noreferrer/i.test(match[1])) throw new BadRequestException('Link target blank senza noopener noreferrer');
     }
+  }
+
+  private parseAndValidateCsp(raw: string, allowTrustedSelfImages = false): Map<string, string[]> {
+    if (!raw.trim() || /[\r\n\t]/.test(raw)) throw new BadRequestException('CSP mancante o con whitespace ambiguo');
+    const directives = new Map<string, string[]>();
+    for (const fragment of raw.split(';')) {
+      const trimmed = fragment.trim();
+      if (!trimmed) continue;
+      const parts = trimmed.split(/ +/);
+      const name = parts.shift() || '';
+      if (!/^[a-z][a-z0-9-]*$/.test(name) || parts.length === 0 || parts.some((token) => !token || /\s/.test(token))) throw new BadRequestException('Direttiva CSP non valida o ambigua');
+      if (directives.has(name)) throw new BadRequestException(`Direttiva CSP duplicata: ${name}`);
+      const tokens = parts.map((token) => {
+        if (!CSP_HASH.test(token) && token !== token.toLowerCase()) throw new BadRequestException('Token CSP con casing ambiguo');
+        return token;
+      });
+      if (new Set(tokens).size !== tokens.length) throw new BadRequestException(`Token CSP duplicato in ${name}`);
+      if (tokens.includes("'none'") && tokens.length !== 1) throw new BadRequestException(`CSP non valida: 'none' combinato in ${name}`);
+      directives.set(name, tokens);
+    }
+    for (const name of CSP_NONE_DIRECTIVES) {
+      const tokens = directives.get(name);
+      if (!tokens || tokens.length !== 1 || tokens[0] !== "'none'") throw new BadRequestException(`CSP insufficiente: ${name} deve contenere soltanto 'none'`);
+    }
+    for (const name of ['script-src', 'style-src']) {
+      const tokens = directives.get(name);
+      if (!tokens?.length || tokens.some((token) => token !== "'unsafe-inline'" && !CSP_HASH.test(token))) throw new BadRequestException(`CSP ${name} contiene sorgenti non supportate`);
+    }
+    const imageTokens = directives.get('img-src');
+    const allowedImages = allowTrustedSelfImages ? ['data:', 'https:', "'self'"] : ['data:', 'https:'];
+    if (!imageTokens?.length || imageTokens.some((token) => !allowedImages.includes(token))) throw new BadRequestException('CSP img-src contiene sorgenti non supportate');
+    return directives;
+  }
+
+  private validateApplicationJavascript(source: string) {
+    const withoutComments = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+    const canonical = withoutComments.toLowerCase().replace(/[\s?.'"`\[\]+]/g, '');
+    const forbidden: Array<[RegExp, string]> = [
+      [/eval\(/, 'eval'], [/newfunction/, 'new Function'], [/documentwrite\(/, 'document.write'], [/fetch\(/, 'fetch'],
+      [/xmlhttprequest/, 'XMLHttpRequest'], [/websocket/, 'WebSocket'], [/eventsource/, 'EventSource'], [/sendbeacon/, 'sendBeacon'],
+      [/webtransport/, 'WebTransport'], [/importscripts/, 'importScripts'], [/serviceworker/, 'serviceWorker'], [/rtcpeerconnection/, 'RTCPeerConnection'],
+      [/locationassign\(/, 'location.assign'], [/locationreplace\(/, 'location.replace'], [/windowopen\(/, 'window.open'],
+      [/formsubmit\(/, 'form.submit'], [/requestsubmit\(/, 'requestSubmit'], [/new(?:window)?image\(/, 'Image constructor'],
+      [/createelement\(/, 'creazione dinamica di elementi'],
+      [/localstorage/, 'localStorage'], [/sessionstorage/, 'sessionStorage'], [/indexeddb/, 'indexedDB'], [/javascript:/, 'javascript URL'],
+    ];
+    for (const [pattern, label] of forbidden) if (pattern.test(canonical)) throw new BadRequestException(`Template non sicuro: ${label}`);
+    const withoutProtectedDeveloperCredit = source.replace(/https:\/\/doflow\.it\//gi, '');
+    if (/https?:\/\//i.test(withoutProtectedDeveloperCredit) || /["'`]\/\//.test(withoutProtectedDeveloperCredit)) throw new BadRequestException('JavaScript con URL esterno hardcoded');
   }
 
   private validateDataUris(html: string) {

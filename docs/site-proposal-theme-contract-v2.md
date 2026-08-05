@@ -61,7 +61,9 @@ Un form demo è ammesso soltanto senza action esterna, con `form-action 'none'`,
 
 Il caricamento accetta ZIP fino a 5 MiB, massimo 25 file, massimo 10 MiB non compressi, `template.html` fino a 5 MiB e ogni documento fino a 1 MiB. Il backend rifiuta path assoluti, traversal, file nascosti, symlink, file eseguibili, nomi duplicati case-insensitive, più radici e possibili ZIP bomb.
 
-Il template richiede `noindex,nofollow,noarchive` e CSP con almeno `default-src 'none'`, `connect-src 'none'`, `object-src 'none'`, `frame-src 'none'` e `form-action 'none'`. Sono vietati script e stylesheet esterni, iframe, object, embed, base href, meta refresh, handler inline, `eval`, `new Function`, `document.write`, `fetch`, XMLHttpRequest, WebSocket, localStorage, sessionStorage e URL `javascript:`. I collegamenti web esterni sono soltanto HTTPS; `_blank` richiede `noopener noreferrer`.
+Il template richiede `noindex,nofollow,noarchive`. La CSP viene analizzata per direttive e token, rifiutando meta o direttive duplicate e la convivenza di `'none'` con altri token. `default-src`, `connect-src`, `object-src`, `frame-src`, `form-action` e `base-uri` devono contenere esclusivamente `'none'`; script e style accettano soltanto inline/hash supportati, mentre le immagini accettano esclusivamente origini previste dal contratto. Sono vietati script e stylesheet esterni, iframe, object, embed, base href, meta refresh, handler inline e primitive di rete, inclusi `fetch`, XMLHttpRequest, WebSocket, EventSource, WebTransport e `sendBeacon`. La validazione JavaScript è conservativa, non esegue mai il codice caricato e considera anche notazione a parentesi e proprietà composte.
+
+Sono supportate soltanto le combinazioni contrattuali dichiarate dal backend: schema `2.0`, contratto `2.0` e profilo `proposal-basic-v2` oppure `colsova-conversion-v1`. Versioni future o combinazioni arbitrarie sono rifiutate fino a un aggiornamento esplicito dell'allowlist.
 
 I template verificati possono incorporare data URI `image/webp`, `image/png`, `image/jpeg` e SVG sanitizzati. Il limite è 1 MiB codificato per singola immagine fotografica e 3 MiB codificati complessivi. Questa eccezione vale soltanto nel validatore dei pacchetti tema e non amplia il limite degli URL immagine inseriti via API.
 
@@ -69,7 +71,7 @@ I template verificati possono incorporare data URI `image/webp`, `image/png`, `i
 
 L’upload salva una nuova versione come `draft` e restituisce manifest, hash, dimensioni, profilo, warning, report e URL di preview. Un admin, owner o superadmin può attivarla e impostarla come predefinita; un manager può consultare, scaricare e visualizzare l’anteprima. Disattivazione, default ed eliminazione sono registrati nell’attività.
 
-Le versioni built-in, attive, predefinite o già usate non sono eliminabili. Lo storage viene rimosso prima del record DB: un errore storage conserva il record. I temi caricati restano in MinIO sotto `doflow/site-proposal-themes/{slug}/{version}/`, mai nel filesystem del container. Il resolver riceve sempre lo schema tenant validato e separa la cache per schema, slug, versione e hash.
+Le versioni built-in, attive, predefinite o già usate non sono eliminabili. L'eliminazione è DB-first: la stessa transazione elimina i record ed inserisce una richiesta persistente di cleanup; soltanto dopo il commit viene rimosso lo storage. Un errore lascia il cleanup recuperabile e idempotente, senza ripristinare un record ormai eliminato. Anche un upload parziale elimina best-effort gli oggetti già scritti e registra i cleanup rimasti. I temi caricati restano in MinIO sotto `doflow/site-proposal-themes/{slug}/{version}/`, mai nel filesystem del container. Il resolver riceve sempre lo schema tenant validato e separa la cache per schema, slug, versione e hash.
 
 La preview usa il config base tramite API autenticata e un iframe con `sandbox="allow-scripts"`, `referrerPolicy="no-referrer"`, senza same-origin, form, popup o top-navigation.
 
@@ -88,6 +90,6 @@ La preview usa il config base tramite API autenticata e un iframe con `sandbox="
 
 ## Preparazione automatica e AI
 
-Creazione manuale e conferma CSV accodano la preparazione; il worker recupera il sito pubblico, sceglie asset, costruisce il pacchetto locale, prova Gemini, valida semanticamente l’output e genera HTML e ZIP. Qualsiasi errore provider o output incompleto usa il motore locale e produce stato `fallback`, senza falso badge AI.
+Creazione manuale e conferma CSV creano prima un preparation run persistente con UUID. Il dispatcher usa quell'UUID come `jobId`, ritenta tre volte con backoff esponenziale e recupera periodicamente run pending rimasti fra commit DB e `queue.add`; l'indice parziale impedisce due run attivi per proposta. Il worker recupera il sito pubblico, sceglie asset, costruisce il pacchetto locale, prova Gemini, valida semanticamente l’output e genera HTML e ZIP. Qualsiasi errore provider o output incompleto usa il motore locale e produce stato `fallback`, senza falso badge AI.
 
 Per essere valido, l’output AI deve includere analisi interna completa, SEO, contenuto conforme al profilo e una email con oggetto non vuoto, corpo di almeno 250 caratteri e `[LINK_DEMO]`. L’AI non può produrre recensioni, HTML o URL. La chiave Gemini resta server-side e test/build non effettuano chiamate reali.

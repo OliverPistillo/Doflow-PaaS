@@ -169,6 +169,7 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_generations_proposal" ON "${s}".site_proposal_generations(proposal_id)`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_generations_status" ON "${s}".site_proposal_generations(status)`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_generations_created_at" ON "${s}".site_proposal_generations(created_at)`);
+    await runner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "uidx_${s}_site_proposal_generations_running" ON "${s}".site_proposal_generations(proposal_id) WHERE status='running'`);
 
     await runner.query(`
     CREATE TABLE IF NOT EXISTS "${s}".site_proposal_activity (
@@ -199,27 +200,51 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_personalizations_snapshot" ON "${s}".site_proposal_personalizations(snapshot_hash)`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_personalizations_created" ON "${s}".site_proposal_personalizations(created_at)`);
 
-    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS preparation_status TEXT DEFAULT 'idle'`);
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS preparation_status TEXT`);
     await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS preparation_error TEXT`);
     await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS preparation_queued_at TIMESTAMPTZ`);
     await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS preparation_started_at TIMESTAMPTZ`);
     await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS preparation_completed_at TIMESTAMPTZ`);
     await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS latest_preparation_job_id TEXT`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_preparation" ON "${s}".site_proposals(preparation_status)`);
+    const completeHistoricalProposal = `
+      p.deleted_at IS NULL AND p.status <> 'archived'
+      AND length(trim(coalesce(p.email_subject,''))) >= 8
+      AND length(trim(coalesce(p.email_body,''))) >= 250
+      AND position('[LINK_DEMO]' in coalesce(p.email_body,'')) > 0
+      AND length(trim(coalesce(p.commercial_analysis->>'summary',''))) >= 40
+      AND jsonb_array_length(CASE WHEN jsonb_typeof(p.commercial_analysis->'strengths')='array' THEN p.commercial_analysis->'strengths' ELSE '[]'::jsonb END) > 0
+      AND jsonb_array_length(CASE WHEN jsonb_typeof(p.commercial_analysis->'improvementAreas')='array' THEN p.commercial_analysis->'improvementAreas' ELSE '[]'::jsonb END) > 0
+      AND jsonb_typeof(p.site_config->'template')='object' AND jsonb_typeof(p.site_config->'content')='object'
+      AND EXISTS (SELECT 1 FROM "${s}".site_proposal_generations g WHERE g.proposal_id=p.id AND g.status='completed' AND g.proposal_version=p.current_version)
+    `;
+    await runner.query(`UPDATE "${s}".site_proposals SET preparation_status='idle' WHERE preparation_status IS NULL`);
+    await runner.query(`UPDATE "${s}".site_proposals p SET preparation_status='idle' WHERE p.preparation_status IN ('ready','fallback') AND NOT (${completeHistoricalProposal})`);
+    await runner.query(`UPDATE "${s}".site_proposals p SET preparation_status=CASE WHEN p.personalization_status='fallback' THEN 'fallback' ELSE 'ready' END WHERE p.preparation_status='idle' AND (${completeHistoricalProposal}) AND p.personalization_status IN ('completed','fallback')`);
+    await runner.query(`ALTER TABLE "${s}".site_proposals ALTER COLUMN preparation_status SET DEFAULT 'idle'`);
+
     await runner.query(`
-      UPDATE "${s}".site_proposals p
-      SET preparation_status = CASE
-        WHEN p.status = 'generated'
-          AND length(trim(coalesce(p.email_subject,''))) >= 8
-          AND length(trim(coalesce(p.email_body,''))) >= 250
-          AND position('[LINK_DEMO]' in coalesce(p.email_body,'')) > 0
-          AND length(trim(coalesce(p.commercial_analysis->>'summary',''))) >= 40
-          AND EXISTS (SELECT 1 FROM "${s}".site_proposal_generations g WHERE g.proposal_id=p.id AND g.status='completed')
-        THEN 'ready'
-        ELSE 'idle'
-      END
-      WHERE p.preparation_status IS NULL
+      CREATE TABLE IF NOT EXISTS "${s}".site_proposal_preparation_runs (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        proposal_id UUID NOT NULL REFERENCES "${s}".site_proposals(id) ON DELETE CASCADE,
+        job_id TEXT UNIQUE NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('pending','dispatched','running','completed','failed')),
+        force BOOLEAN NOT NULL DEFAULT false,
+        reason TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        created_by UUID,
+        actor_email TEXT,
+        job_data JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        dispatched_at TIMESTAMPTZ,
+        started_at TIMESTAMPTZ,
+        completed_at TIMESTAMPTZ,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
     `);
+    await runner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "uidx_${s}_site_proposal_preparation_runs_active" ON "${s}".site_proposal_preparation_runs(proposal_id) WHERE status IN ('pending','dispatched','running')`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_preparation_runs_dispatch" ON "${s}".site_proposal_preparation_runs(status,updated_at)`);
 
     await runner.query(`
       CREATE TABLE IF NOT EXISTS "${s}".site_proposal_themes (
@@ -239,6 +264,15 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_themes_slug" ON "${s}".site_proposal_themes(slug)`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_themes_source" ON "${s}".site_proposal_themes(source_kind)`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_themes_created" ON "${s}".site_proposal_themes(created_at)`);
+    await runner.query(`
+      WITH ranked AS (
+        SELECT id,row_number() OVER (ORDER BY updated_at DESC,id) AS position
+        FROM "${s}".site_proposal_themes WHERE default_version IS NOT NULL
+      )
+      UPDATE "${s}".site_proposal_themes t SET default_version=NULL
+      FROM ranked r WHERE t.id=r.id AND r.position > 1
+    `);
+    await runner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "uidx_${s}_site_proposal_themes_global_default" ON "${s}".site_proposal_themes((1)) WHERE default_version IS NOT NULL`);
     await runner.query(`
       CREATE TABLE IF NOT EXISTS "${s}".site_proposal_theme_versions (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -280,6 +314,19 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
       )
     `);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_theme_activity_created" ON "${s}".site_proposal_theme_activity(created_at)`);
+    await runner.query(`
+      CREATE TABLE IF NOT EXISTS "${s}".site_proposal_theme_storage_cleanup (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        storage_prefix TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('pending','running','completed','failed')),
+        attempts INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        completed_at TIMESTAMPTZ
+      )
+    `);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_theme_cleanup_status" ON "${s}".site_proposal_theme_storage_cleanup(status,updated_at)`);
 
     const templateService = new TenantSiteProposalsTemplateService();
     const manifests = await templateService.getAllManifests();
@@ -310,10 +357,10 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
       const defaultConfig = await templateService.getDefaultConfig(registration.slug, registration.version);
       const insertedThemes = await runner.query(`
         INSERT INTO "${s}".site_proposal_themes (slug,name,description,source_kind,is_active,default_version,categories)
-        VALUES ($1,$2,'Tema integrato e versionato','builtin',true,$3,$4::jsonb)
+        VALUES ($1,$2,'Tema integrato e versionato','builtin',true,NULL,$3::jsonb)
         ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name, categories=EXCLUDED.categories, updated_at=now()
         RETURNING id
-      `, [registration.slug, registration.name, registration.slug === 'colsova' ? '2.4.1' : (registration.isLatest ? registration.version : null), JSON.stringify(registration.categoryTags)]);
+      `, [registration.slug, registration.name, JSON.stringify(registration.categoryTags)]);
       const themeId = insertedThemes[0]?.id || (await runner.query(`SELECT id FROM "${s}".site_proposal_themes WHERE slug=$1`, [registration.slug]))[0]?.id;
       await runner.query(`
         INSERT INTO "${s}".site_proposal_theme_versions
@@ -327,6 +374,17 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
         registration.version === '2.4.1' ? 1673508 : null,
         JSON.stringify(manifest), JSON.stringify(defaultConfig), JSON.stringify({ valid: true, builtin: true, contentProfile: registration.contentProfile })]);
     }
+
+    await runner.query(`
+      UPDATE "${s}".site_proposal_themes
+      SET default_version='2.4.1',updated_at=now()
+      WHERE slug='colsova' AND default_version IS NULL
+        AND NOT EXISTS (SELECT 1 FROM "${s}".site_proposal_themes WHERE default_version IS NOT NULL)
+        AND EXISTS (
+          SELECT 1 FROM "${s}".site_proposal_theme_versions v
+          WHERE v.theme_id="${s}".site_proposal_themes.id AND v.version='2.4.1' AND v.status='active'
+        )
+    `);
 
     await runner.commitTransaction();
   } catch (error) {

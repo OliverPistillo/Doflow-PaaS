@@ -19,11 +19,23 @@ export class TenantSiteProposalsGenerationCoreService {
 
   async generate(schemaInput: string, actor: ProposalPreparationActor, proposalId: string) {
     const schema = this.schema(schemaInput); this.uuid(proposalId);
-    const running = (await this.dataSource.query(`SELECT id FROM "${schema}".site_proposal_generations WHERE proposal_id=$1 AND status='running' LIMIT 1`, [proposalId]))[0];
-    if (running) throw new ConflictException('La proposta ha una generazione in corso.');
-    const proposal = (await this.dataSource.query(`SELECT * FROM "${schema}".site_proposals WHERE id=$1 AND deleted_at IS NULL AND status<>'archived'`, [proposalId]))[0];
-    if (!proposal) throw new NotFoundException('Proposta non trovata');
-    const generation = (await this.dataSource.query(`INSERT INTO "${schema}".site_proposal_generations (proposal_id,proposal_version,template_slug,template_version,status,created_by,started_at) VALUES ($1,$2,$3,$4,'running',$5,now()) RETURNING *`, [proposalId, proposal.current_version, proposal.template_slug, proposal.template_version, this.userId(actor.id)]))[0];
+    const runner = this.dataSource.createQueryRunner();
+    let proposal: any; let generation: any; let original: unknown;
+    try {
+      await runner.connect(); await runner.startTransaction();
+      await runner.query('SELECT pg_advisory_xact_lock(hashtext($1),hashtext($2))', [schema, `generation:${proposalId}`]);
+      proposal = (await runner.query(`SELECT * FROM "${schema}".site_proposals WHERE id=$1 AND deleted_at IS NULL AND status<>'archived' FOR UPDATE`, [proposalId]))[0];
+      if (!proposal) throw new NotFoundException('Proposta non trovata');
+      const running = (await runner.query(`SELECT id FROM "${schema}".site_proposal_generations WHERE proposal_id=$1 AND status='running' LIMIT 1`, [proposalId]))[0];
+      if (running) throw new ConflictException('La proposta ha una generazione in corso.');
+      generation = (await runner.query(`INSERT INTO "${schema}".site_proposal_generations (proposal_id,proposal_version,template_slug,template_version,status,created_by,started_at) VALUES ($1,$2,$3,$4,'running',$5,now()) RETURNING *`, [proposalId, proposal.current_version, proposal.template_slug, proposal.template_version, this.userId(actor.id)]))[0];
+      await runner.commitTransaction();
+    } catch (error) {
+      original = error;
+      if (runner.isTransactionActive) await runner.rollbackTransaction().catch(() => undefined);
+      if ((error as { code?: string })?.code === '23505') throw new ConflictException('La proposta ha una generazione in corso.');
+      throw error;
+    } finally { await runner.release().catch((error) => { if (!original) throw error; }); }
     await this.activity(schema, proposalId, ACTIVITY.generationStarted, actor, { generationId: generation.id });
     try {
       const context = { schema, dataSource: this.dataSource };
