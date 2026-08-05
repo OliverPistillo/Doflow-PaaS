@@ -39,7 +39,7 @@ export class TenantSiteProposalsController {
   listThemes() { return this.themes.list(); }
 
   @Post('themes/upload')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
   uploadTheme(@UploadedFile() file?: Express.Multer.File) { return this.themes.upload(file); }
 
   @Get('themes/:slug/:version')

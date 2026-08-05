@@ -1,6 +1,8 @@
-import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { DataSource } from 'typeorm';
+import * as path from 'path';
+import { Readable } from 'stream';
 import { FileStorageService, ThemePackageUploadError } from '../file-storage.service';
 import { safeSchema } from '../common/schema.utils';
 import { hasRoleAtLeast } from '../roles';
@@ -9,6 +11,8 @@ import { ensureDoflowSiteProposalTables } from './tenant-site-proposals-schema';
 import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
 import { TenantSiteProposalsThemePackageService } from './tenant-site-proposals-theme-package.service';
 import { TenantSiteProposalsThemeStorageCleanupService } from './tenant-site-proposals-theme-storage-cleanup.service';
+import { TenantSiteProposalsThemeCompilerService } from './tenant-site-proposals-theme-compiler.service';
+import { getTemplateRegistration } from './tenant-site-proposals-template-registry';
 import { AuthUserRef, JsonObject } from './tenant-site-proposals.types';
 import { assertNoPrototypePollution, UUID_RE } from './tenant-site-proposals-validation';
 
@@ -21,6 +25,7 @@ export class TenantSiteProposalsThemeService {
     private readonly templates: TenantSiteProposalsTemplateService,
     private readonly cleanup: TenantSiteProposalsThemeStorageCleanupService,
     @Inject(REQUEST) private readonly request: any,
+    @Optional() private readonly compiler?: TenantSiteProposalsThemeCompilerService,
   ) {}
 
   async list() {
@@ -29,6 +34,7 @@ export class TenantSiteProposalsThemeService {
       SELECT t.id,t.slug,t.name,t.description,t.source_kind,t.is_active,t.default_version,t.categories,t.created_at,t.updated_at,
         v.id version_id,v.version,v.schema_version,v.contract_version,v.content_profile,v.status,v.is_builtin,v.is_immutable,
         v.template_sha256,v.template_size,v.zip_sha256,v.zip_size,v.validation_report,v.created_at version_created_at,
+        v.source_format,v.format_version,v.compiled_sha256,v.compiled_size,v.runtime_adapter_status,v.manifest,
         (SELECT count(*)::int FROM "${s}".site_proposals p WHERE p.template_slug=t.slug AND p.template_version=v.version) usages
       FROM "${s}".site_proposal_themes t JOIN "${s}".site_proposal_theme_versions v ON v.theme_id=t.id
       ORDER BY t.name,v.created_at DESC
@@ -48,6 +54,7 @@ export class TenantSiteProposalsThemeService {
     if (!file?.buffer) throw new BadRequestException('Seleziona un file ZIP');
     const validated = await this.packages.validate(file.buffer);
     const slug = String(validated.manifest.slug); const version = String(validated.manifest.version);
+    const compiled = validated.format === 'modular' ? this.themeCompiler().compileValidated(validated, undefined, false) : undefined;
     await this.ensure();
     if (await this.row(slug, version)) throw new ConflictException('Questa versione del tema esiste già ed è immutabile');
     const runner = this.ds().createQueryRunner(); let storedPrefix: string | undefined; let original: unknown;
@@ -55,17 +62,21 @@ export class TenantSiteProposalsThemeService {
       await runner.connect(); await runner.startTransaction();
       const themes = await runner.query(`INSERT INTO "${this.schema()}".site_proposal_themes (slug,name,description,source_kind,is_active,categories,created_by) VALUES ($1,$2,$3,'uploaded',true,$4::jsonb,$5) ON CONFLICT(slug) DO UPDATE SET updated_at=now() RETURNING id,source_kind`, [slug, validated.manifest.name, validated.manifest.description || null, JSON.stringify(validated.manifest.categories), this.userId(user)]);
       if (themes[0]?.source_kind === 'builtin') throw new ConflictException('Lo slug di un tema built-in non può essere riutilizzato');
-      const keys = await this.storage.uploadThemePackage(slug, version, { zip: file.buffer, template: validated.template, manifest: validated.manifestBuffer, documentation: validated.documentation });
+      const keys = await this.storage.uploadThemePackage(slug, version, {
+        zip: file.buffer, template: validated.template, manifest: validated.manifestBuffer, documentation: validated.documentation,
+        packageFiles: validated.format === 'modular' ? validated.files : undefined,
+        compiled: compiled ? Buffer.from(compiled.html, 'utf8') : undefined,
+      });
       storedPrefix = keys.prefix;
       const versions = await runner.query(`
         INSERT INTO "${this.schema()}".site_proposal_theme_versions
-          (theme_id,version,schema_version,contract_version,content_profile,status,is_builtin,is_immutable,template_sha256,template_size,zip_sha256,zip_size,manifest,default_config,template_storage_key,zip_storage_key,validation_report,created_by)
-        VALUES ($1,$2,$3,$4,$5,'draft',false,true,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13,$14::jsonb,$15) RETURNING *
-      `, [themes[0].id, version, validated.manifest.schemaVersion, validated.manifest.contractVersion, validated.contentProfile, validated.templateSha256, validated.templateSize, validated.zipSha256, validated.zipSize, JSON.stringify(validated.manifest), JSON.stringify(validated.defaultConfig), keys.templateKey, keys.zipKey, JSON.stringify(validated.validationReport), this.userId(user)]);
+          (theme_id,version,schema_version,contract_version,content_profile,status,is_builtin,is_immutable,template_sha256,template_size,zip_sha256,zip_size,manifest,default_config,template_storage_key,zip_storage_key,validation_report,created_by,source_format,format_version,compiled_sha256,compiled_size,runtime_adapter_status)
+        VALUES ($1,$2,$3,$4,$5,'draft',false,true,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12,$13,$14::jsonb,$15,$16,$17,$18,$19,$20) RETURNING *
+      `, [themes[0].id, version, validated.manifest.schemaVersion, validated.manifest.contractVersion, validated.contentProfile, validated.templateSha256, validated.templateSize, validated.zipSha256, validated.zipSize, JSON.stringify(validated.manifest), JSON.stringify(validated.defaultConfig), keys.templateKey, keys.zipKey, JSON.stringify(validated.validationReport), this.userId(user), validated.format, validated.format === 'modular' ? '1.0' : null, compiled?.sha256 || null, compiled?.size || null, validated.format === 'modular' ? 'pending' : 'ready']);
       await this.activity(runner, themes[0].id, versions[0].id, 'THEME_UPLOADED', user, { version, contentProfile: validated.contentProfile });
       await runner.commitTransaction();
       this.templates.invalidate(this.schema(), slug, version);
-      return { manifest: validated.manifest, hash: { template: validated.templateSha256, zip: validated.zipSha256 }, sizes: { template: validated.templateSize, zip: validated.zipSize }, contentProfile: validated.contentProfile, validationReport: validated.validationReport, warnings: validated.warnings, status: 'draft', previewUrl: `/tenant/commercial/site-proposals/themes/${slug}/${version}/preview` };
+      return { manifest: validated.manifest, format: validated.format, runtimeAdapterStatus: validated.format === 'modular' ? 'pending' : 'ready', hash: { template: validated.templateSha256, zip: validated.zipSha256, compiled: compiled?.sha256 }, sizes: { template: validated.templateSize, zip: validated.zipSize, compiled: compiled?.size }, contentProfile: validated.contentProfile, validationReport: validated.validationReport, warnings: validated.warnings, status: 'draft', previewUrl: `/tenant/commercial/site-proposals/themes/${slug}/${version}/preview` };
     } catch (error) {
       original = error;
       if (runner.isTransactionActive) await runner.rollbackTransaction().catch(() => undefined);
@@ -88,7 +99,13 @@ export class TenantSiteProposalsThemeService {
     this.access(false); this.identity(slug, version); await this.ensure();
     const row = await this.row(slug, version);
     if (!row) throw new NotFoundException('Tema non trovato');
-    if (row.is_builtin) throw new NotFoundException('Il pacchetto sorgente del tema built-in non è disponibile per il download');
+    if (row.is_builtin) {
+      const registration = getTemplateRegistration(slug, version);
+      if (registration.format !== 'modular' || !registration.download) throw new NotFoundException('Il pacchetto sorgente del tema built-in non è disponibile per il download');
+      const root = path.join(__dirname, 'site-proposal-templates', ...registration.directory.split('/'));
+      const zip = await this.themeCompiler().buildDirectoryZip(root);
+      return { stream: Readable.from(zip.buffer), contentType: 'application/zip', contentLength: zip.size };
+    }
     return this.storage.downloadThemePackage(slug, version);
   }
 
@@ -103,7 +120,8 @@ export class TenantSiteProposalsThemeService {
       await runner.query(`SELECT id FROM "${this.schema()}".site_proposal_themes FOR UPDATE`);
       const row = (await runner.query(`SELECT v.*,t.id theme_id,t.is_active theme_active FROM "${this.schema()}".site_proposal_themes t JOIN "${this.schema()}".site_proposal_theme_versions v ON v.theme_id=t.id WHERE t.slug=$1 AND v.version=$2`, [slug, version]))[0];
       if (!row) throw new NotFoundException('Tema non trovato');
-      if (row.status !== 'active' || row.theme_active !== true || !['2.0'].includes(String(row.schema_version)) || !['2.0'].includes(String(row.contract_version)) || !['proposal-basic-v2','colsova-conversion-v1'].includes(String(row.content_profile))) throw new ConflictException('Solo una versione attiva e compatibile può diventare predefinita');
+      if (row.runtime_adapter_status !== 'ready') throw new ConflictException('Tema disponibile in anteprima, adattatore di generazione non ancora attivo.');
+      if (row.status !== 'active' || row.theme_active !== true || !['2.0'].includes(String(row.schema_version)) || !['2.0','2.1'].includes(String(row.contract_version)) || !['proposal-basic-v2','colsova-conversion-v1'].includes(String(row.content_profile))) throw new ConflictException('Solo una versione attiva e compatibile può diventare predefinita');
       await runner.query(`UPDATE "${this.schema()}".site_proposal_themes SET default_version=NULL,updated_at=CASE WHEN default_version IS NOT NULL THEN now() ELSE updated_at END WHERE default_version IS NOT NULL`);
       await runner.query(`UPDATE "${this.schema()}".site_proposal_themes SET default_version=$1,updated_at=now() WHERE id=$2`, [version, row.theme_id]);
       await this.activity(runner, row.theme_id, row.id, 'THEME_DEFAULT_SET', user, { version });
@@ -169,6 +187,7 @@ export class TenantSiteProposalsThemeService {
   private context() { return { schema: this.schema(), dataSource: this.ds() }; }
   private userId(user: AuthUserRef) { return UUID_RE.test(user.id) ? user.id : null; }
   private ensure() { return ensureDoflowSiteProposalTables(this.dataSource, this.schema()); }
+  private themeCompiler() { return this.compiler || new TenantSiteProposalsThemeCompilerService(this.packages); }
   private activity(db: Pick<DataSource, 'query'> | { query: (...args: any[]) => Promise<any> }, themeId: string, versionId: string | null, action: string, user: AuthUserRef, metadata: JsonObject) {
     assertNoPrototypePollution(metadata, 'themeActivity');
     return db.query(`INSERT INTO "${this.schema()}".site_proposal_theme_activity (theme_id,version_id,action,metadata,actor_user_id,actor_email) VALUES ($1,$2,$3,$4::jsonb,$5,$6)`, [themeId, versionId, action, JSON.stringify(metadata), this.userId(user), user.email || null]);

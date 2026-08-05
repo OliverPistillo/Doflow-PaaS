@@ -93,3 +93,11 @@ La preview usa il config base tramite API autenticata e un iframe con `sandbox="
 Creazione manuale e conferma CSV creano prima un preparation run persistente con UUID. Il dispatcher usa quell'UUID come `jobId`, ritenta tre volte con backoff esponenziale e recupera periodicamente run pending rimasti fra commit DB e `queue.add`; l'indice parziale impedisce due run attivi per proposta. Il worker recupera il sito pubblico, sceglie asset, costruisce il pacchetto locale, prova Gemini, valida semanticamente l’output e genera HTML e ZIP. Qualsiasi errore provider o output incompleto usa il motore locale e produce stato `fallback`, senza falso badge AI.
 
 Per essere valido, l’output AI deve includere analisi interna completa, SEO, contenuto conforme al profilo e una email con oggetto non vuoto, corpo di almeno 250 caratteri e `[LINK_DEMO]`. L’AI non può produrre recensioni, HTML o URL. La chiave Gemini resta server-side e test/build non effettuano chiamate reali.
+
+## Estensione package modulare 1.0
+
+Il formato standalone storico resta supportato. Il formato modulare usa schema `2.0`, contratto `2.1` e `formatVersion: 1.0`; separa `template.html`, entry CSS/JavaScript e asset locali dichiarati da `assetMap`. Il manifest governa collection, conteggi, feature, palette, slot, path editabili/protetti e limiti. I dettagli normativi sono in `docs/site-proposal-theme-package-v1.md`.
+
+Per i modulari il limite è 10 MiB ZIP, 80 file, 25 MiB non compressi, 6 MiB per asset, 1 MiB per CSS/JS e tre entry massime per tipo. Il compilatore produce HTML standalone deterministico, incorpora le entry nell’ordine dichiarato, converte gli asset in data URI senza modificarne i byte e applica la CSP compilata.
+
+`colsova-conversion-v1` è runtime-ready. `beauty-editorial-v1` e `beauty-conversion-v1` sono ammessi soltanto per libreria, preview e download finché l’adapter resta pending. Un upload non può autoassegnarsi stato ready, fiducia, built-in, default o eccezioni di rete.

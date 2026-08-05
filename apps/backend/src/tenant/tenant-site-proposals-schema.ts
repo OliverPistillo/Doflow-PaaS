@@ -293,12 +293,22 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
         template_storage_key TEXT,
         zip_storage_key TEXT,
         validation_report JSONB,
+        source_format TEXT NOT NULL DEFAULT 'standalone' CHECK (source_format IN ('standalone','modular')),
+        format_version TEXT,
+        compiled_sha256 TEXT,
+        compiled_size BIGINT,
+        runtime_adapter_status TEXT NOT NULL DEFAULT 'ready' CHECK (runtime_adapter_status IN ('ready','pending')),
         created_by UUID,
         activated_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         UNIQUE(theme_id, version)
       )
     `);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_theme_versions ADD COLUMN IF NOT EXISTS source_format TEXT NOT NULL DEFAULT 'standalone'`);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_theme_versions ADD COLUMN IF NOT EXISTS format_version TEXT`);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_theme_versions ADD COLUMN IF NOT EXISTS compiled_sha256 TEXT`);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_theme_versions ADD COLUMN IF NOT EXISTS compiled_size BIGINT`);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_theme_versions ADD COLUMN IF NOT EXISTS runtime_adapter_status TEXT NOT NULL DEFAULT 'ready'`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_theme_versions_status" ON "${s}".site_proposal_theme_versions(status)`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_theme_versions_created" ON "${s}".site_proposal_theme_versions(created_at)`);
     await runner.query(`
@@ -355,6 +365,7 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
 
     for (const { registration, manifest } of manifests) {
       const defaultConfig = await templateService.getDefaultConfig(registration.slug, registration.version);
+      const compiled = registration.format === 'modular' ? await templateService.renderHtml(defaultConfig, undefined, true) : undefined;
       const insertedThemes = await runner.query(`
         INSERT INTO "${s}".site_proposal_themes (slug,name,description,source_kind,is_active,default_version,categories)
         VALUES ($1,$2,'Tema integrato e versionato','builtin',true,NULL,$3::jsonb)
@@ -364,15 +375,19 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
       const themeId = insertedThemes[0]?.id || (await runner.query(`SELECT id FROM "${s}".site_proposal_themes WHERE slug=$1`, [registration.slug]))[0]?.id;
       await runner.query(`
         INSERT INTO "${s}".site_proposal_theme_versions
-          (theme_id,version,schema_version,contract_version,content_profile,status,is_builtin,is_immutable,template_sha256,template_size,zip_sha256,zip_size,manifest,default_config,validation_report,activated_at)
-        VALUES ($1,$2,$3,$4,$5,'active',true,true,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,now())
+          (theme_id,version,schema_version,contract_version,content_profile,status,is_builtin,is_immutable,template_sha256,template_size,zip_sha256,zip_size,manifest,default_config,validation_report,activated_at,source_format,format_version,compiled_sha256,compiled_size,runtime_adapter_status)
+        VALUES ($1,$2,$3,$4,$5,'active',true,true,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,now(),$13,$14,$15,$16,$17)
         ON CONFLICT (theme_id,version) DO UPDATE SET
           status='active', content_profile=EXCLUDED.content_profile, manifest=EXCLUDED.manifest,
-          default_config=EXCLUDED.default_config, validation_report=EXCLUDED.validation_report
+          default_config=EXCLUDED.default_config, validation_report=EXCLUDED.validation_report,
+          source_format=EXCLUDED.source_format,format_version=EXCLUDED.format_version,
+          compiled_sha256=EXCLUDED.compiled_sha256,compiled_size=EXCLUDED.compiled_size,
+          runtime_adapter_status=EXCLUDED.runtime_adapter_status
       `, [themeId, registration.version, registration.schemaVersion, registration.contractVersion, registration.contentProfile, registration.sourceSha256, registration.templateSize,
         registration.version === '2.4.1' ? 'bc9be4d9249e06ee113331b0890b8d3c4efc8140bbadcd237a1cd68040549ad6' : null,
         registration.version === '2.4.1' ? 1673508 : null,
-        JSON.stringify(manifest), JSON.stringify(defaultConfig), JSON.stringify({ valid: true, builtin: true, contentProfile: registration.contentProfile })]);
+        JSON.stringify(manifest), JSON.stringify(defaultConfig), JSON.stringify({ valid: true, builtin: true, contentProfile: registration.contentProfile }),
+        registration.format, registration.formatVersion || null, compiled?.sha256 || null, compiled?.size || null, registration.runtimeAdapterStatus]);
     }
 
     await runner.query(`
@@ -382,7 +397,7 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
         AND NOT EXISTS (SELECT 1 FROM "${s}".site_proposal_themes WHERE default_version IS NOT NULL)
         AND EXISTS (
           SELECT 1 FROM "${s}".site_proposal_theme_versions v
-          WHERE v.theme_id="${s}".site_proposal_themes.id AND v.version='2.4.1' AND v.status='active'
+          WHERE v.theme_id="${s}".site_proposal_themes.id AND v.version='2.4.1' AND v.status='active' AND v.runtime_adapter_status='ready'
         )
     `);
 

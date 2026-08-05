@@ -1,6 +1,6 @@
-import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { TenantSiteProposalsThemeCompilerService } from './tenant-site-proposals-theme-compiler.service';
 
 const ROOT = path.join(__dirname, 'site-proposal-templates', 'colsova', '2.4.1');
 const TEMPLATE = path.join(ROOT, 'template.html');
@@ -10,12 +10,16 @@ describe('Tema Colsova 2.4.1 package', () => {
   const files = ['template.html', 'theme.json', 'README.md', 'NOTE-REVISIONE.md', 'ASSET-CREDITS.md'];
   let html: string;
   let config: any;
-  beforeAll(() => { html = fs.readFileSync(TEMPLATE, 'utf8'); config = JSON.parse([...html.matchAll(SCRIPT_RE)][0][1]); });
+  beforeAll(async () => {
+    const source = fs.readFileSync(TEMPLATE, 'utf8');
+    config = JSON.parse([...source.matchAll(SCRIPT_RE)][0][1]);
+    html = (await new TenantSiteProposalsThemeCompilerService().compileDirectory(ROOT)).html;
+  });
 
-  it('contains exactly the five supplied files', () => expect(fs.readdirSync(ROOT).sort()).toEqual([...files].sort()));
-  it('matches the exact template hash and byte size', () => { const bytes = fs.readFileSync(TEMPLATE); expect(bytes).toHaveLength(2276156); expect(crypto.createHash('sha256').update(bytes).digest('hex')).toBe('395a7f9e77d120558e5e45d3485c65f07be0cb339ad6a207a5562ec8b491d263'); });
+  it('contains the modular source files and preserved documentation', () => { for (const file of files) expect(fs.existsSync(path.join(ROOT,file))).toBe(true); for (const directory of ['styles','scripts','assets/images','assets/icons']) expect(fs.statSync(path.join(ROOT,directory)).isDirectory()).toBe(true); });
+  it('preserves the exact standalone provenance', () => { const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'theme.json'), 'utf8')); expect(manifest.provenance).toMatchObject({sourceTemplateSha256:'395a7f9e77d120558e5e45d3485c65f07be0cb339ad6a207a5562ec8b491d263',sourceTemplateSize:2276156}); });
   it('contains one template-config', () => expect([...html.matchAll(SCRIPT_RE)]).toHaveLength(1));
-  it('has the exact manifest identity and categories', () => { const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'theme.json'), 'utf8')); expect(manifest).toMatchObject({ name: 'Tema Colsova', slug: 'colsova', version: '2.4.1', schemaVersion: '2.0', contractVersion: '2.0', entry: 'template.html', standalone: true }); expect(manifest.categories).toEqual(['medicina-estetica', 'beauty', 'wellness', 'lead-generation']); });
+  it('has the exact modular manifest identity and categories', () => { const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'theme.json'), 'utf8')); expect(manifest).toMatchObject({ name: 'Tema Colsova', slug: 'colsova', version: '2.4.1', schemaVersion: '2.0', contractVersion: '2.1', format:'modular', entry: 'template.html', runtimeAdapterStatus:'ready' }); expect(manifest.categories).toEqual(['beauty', 'wellness', 'lead-generation']); });
   it('declares all exact fixed counts', () => expect(config.editingContract.fixedCounts).toEqual({ services: 3, reviews: 6, faqs: 6, trustItems: 4, consultationHighlights: 3, processSteps: 3 }));
   it('contains the exact conversion collections', () => { expect(config.content.services).toHaveLength(3); expect(config.content.reviews).toHaveLength(6); expect(config.content.faq).toHaveLength(6); expect(config.content.trust.items).toHaveLength(4); expect(config.content.consultation.highlights).toHaveLength(3); expect(config.content.process.steps).toHaveLength(3); });
   it('declares the five required image slots', () => expect(Object.keys(config.images)).toEqual(['logoDefault', 'logoLight', 'hero', 'consultation', 'feature']));

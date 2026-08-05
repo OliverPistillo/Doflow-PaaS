@@ -231,7 +231,7 @@ export function validateSiteConfig(config: JsonObject, selected?: SiteProposalTe
   const warnings: RowIssue[] = [];
   const template = config.template as JsonObject | undefined;
   const registration = selected || getTemplateRegistration(String(template?.slug || COLSOVA_TEMPLATE.slug), String(template?.templateVersion || ''));
-  if (registration.contractVersion === '2.0') return validateSiteConfigV2(config, registration);
+  if (registration.contractVersion !== '1.0') return validateSiteConfigV2(config, registration);
   const editingContract = config.editingContract as JsonObject | undefined;
   const fixed = editingContract?.fixedCounts as JsonObject | undefined;
   const content = config.content as JsonObject | undefined;
@@ -286,6 +286,9 @@ function validateSiteConfigV2(config: JsonObject, registration: SiteProposalTemp
   const template = config.template as JsonObject;
   if (template.schemaVersion !== registration.schemaVersion || template.layoutLocked !== true) throw new BadRequestException('Contratto template del Tema Colsova 2.0 non valido');
   if (registration.contentProfile === 'colsova-conversion-v1') return validateColsovaConversionConfig(config, registration);
+  if (registration.contentProfile === 'beauty-editorial-v1' || registration.contentProfile === 'beauty-conversion-v1') {
+    return validatePendingBeautyConfig(config, registration);
+  }
   const editing = config.editingContract as JsonObject | undefined;
   const fixed = editing?.fixedCounts as JsonObject | undefined;
   const content = config.content as JsonObject | undefined;
@@ -318,6 +321,51 @@ function validateSiteConfigV2(config: JsonObject, registration: SiteProposalTemp
   if (!isJsonObject(config.textLimits) || Object.values(config.textLimits).some((v) => !Number.isFinite(Number(v)) || Number(v) <= 0)) throw new BadRequestException('textLimits del Tema Colsova 2.0 non validi');
   const serialized = JSON.stringify(content).toLowerCase();
   if (/sostituire|immagine hero|prodotti \/ studio|\bplaceholder\b|recensione di/.test(serialized)) throw new BadRequestException('Il SiteConfig V2 contiene placeholder tecnici');
+  return [];
+}
+
+const BEAUTY_PROFILE_COUNTS: Readonly<Record<'beauty-editorial-v1' | 'beauty-conversion-v1', Readonly<Record<string, number>>>> = {
+  'beauty-editorial-v1': { services: 4, results: 3, trustItems: 4 },
+  'beauty-conversion-v1': { services: 5, results: 3, reviews: 3, trustItems: 5, ctaItems: 4 },
+};
+
+function validatePendingBeautyConfig(config: JsonObject, registration: SiteProposalTemplateRegistration): RowIssue[] {
+  const profile = registration.contentProfile as keyof typeof BEAUTY_PROFILE_COUNTS;
+  const editing = requireObject(config.editingContract, 'editingContract');
+  if (editing.contractVersion !== '2.0') throw new BadRequestException('Contratto editoriale del tema beauty non valido');
+  const fixed = requireObject(editing.fixedCounts, 'editingContract.fixedCounts');
+  for (const [key, count] of Object.entries(BEAUTY_PROFILE_COUNTS[profile])) {
+    if (Number(fixed[key]) !== count) throw new BadRequestException(`Conteggio fisso non valido: ${key}`);
+  }
+  const content = requireObject(config.content, 'content');
+  const collections: ReadonlyArray<[unknown, number, string]> = profile === 'beauty-editorial-v1'
+    ? [[content.services, 4, 'content.services'], [(content.results as JsonObject)?.items, 3, 'content.results.items'], [content.trust, 4, 'content.trust']]
+    : [[content.services, 5, 'content.services'], [(content.reviews as JsonObject)?.items, 3, 'content.reviews.items'], [content.trust, 5, 'content.trust'], [(content.cta as JsonObject)?.items, 4, 'content.cta.items']];
+  collections.forEach(([value, count, field]) => requireArray(value, count, field));
+  const images = requireObject(config.images, 'images');
+  if (profile === 'beauty-conversion-v1') requireArray(images.results, 3, 'images.results');
+  const brand = requireObject(config.brand, 'brand');
+  for (const slot of ['logoDefault', 'logoLight', 'hero', 'consultation', 'feature']) {
+    if (slot.startsWith('logo')) {
+      const src = String(brand[slot] || '');
+      if (!src || !isSafeImageSource(src)) throw new BadRequestException(`Sorgente immagine non valida: brand.${slot}`);
+      continue;
+    }
+    const image = requireObject(images[slot], `images.${slot}`);
+    const src = String(image.src || '');
+    if (src && !isSafeImageSource(src)) throw new BadRequestException(`Sorgente immagine non valida: ${slot}`);
+  }
+  const palette = requireObject(config.palette, 'palette');
+  if (!Object.keys(palette).length || Object.values(palette).some((value) => !validateColor(value))) throw new BadRequestException('Palette del tema beauty non valida');
+  const routing = requireObject(config.routing, 'routing');
+  if (routing.localPreviewMode !== true || !isJsonObject(routing.labels) || !Array.isArray(routing.treatments)) throw new BadRequestException('Routing del tema beauty non valido');
+  if (routing.paths !== undefined) {
+    if (!isJsonObject(routing.paths)) throw new BadRequestException('Routing del tema beauty non valido');
+    for (const value of Object.values(routing.paths as JsonObject)) {
+      if (typeof value !== 'string') throw new BadRequestException('Route non sicura');
+      if (!value.startsWith('#')) safeRelativeRoute(value);
+    }
+  }
   return [];
 }
 

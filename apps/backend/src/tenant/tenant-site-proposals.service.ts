@@ -19,7 +19,6 @@ import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-temp
 import { TenantSiteProposalsArtifactService } from './tenant-site-proposals-artifact.service';
 import { TenantSiteProposalsPersonalizationService } from './tenant-site-proposals-personalization.service';
 import { buildDeterministicProposal } from './tenant-site-proposals-deterministic';
-import { getTemplateRegistration } from './tenant-site-proposals-template-registry';
 import { TenantSiteProposalsPreparationQueueService } from './tenant-site-proposals-preparation-queue.service';
 import { TenantSiteProposalsGenerationCoreService } from './tenant-site-proposals-generation-core.service';
 import { evaluateProposalReadiness } from './tenant-site-proposals-readiness';
@@ -75,7 +74,7 @@ export class TenantSiteProposalsService {
     const templateSlug = requestedTemplateSlug || configuredDefault?.slug || COLSOVA_LATEST_TEMPLATE.slug;
     const templateVersion = requestedTemplateVersion || configuredDefault?.version;
     const parsed = this.csv.parseCsvFile(file);
-    const registration = this.registrationOrUploaded(templateSlug, templateVersion);
+    const registration = await this.templates.getRegistration(templateSlug, templateVersion, this.templateContext());
     const defaultConfig = await this.templates.getDefaultConfig(templateSlug, templateVersion, this.templateContext());
     const previewRows = this.csv.buildPreviewRows(parsed.rows, defaultConfig);
     const errors = previewRows.flatMap((row) => row.errors.map((error) => ({ rowIndex: row.rowIndex, ...error })));
@@ -88,7 +87,7 @@ export class TenantSiteProposalsService {
       `,
       [
         templateSlug,
-        registration?.version || String((defaultConfig.template as JsonObject).templateVersion),
+        registration.version,
         cleanString(file.originalname, 255) || 'import.csv',
         cleanString(file.mimetype, 100) || null,
         sha256(file.buffer),
@@ -232,6 +231,7 @@ export class TenantSiteProposalsService {
     const sourceData = (body.sourceData && typeof body.sourceData === 'object' ? body.sourceData : {}) as Record<string, string>;
     const canonical = this.csv.normalizeRow({ ...sourceData, business_name: body.displayName || sourceData.business_name || sourceData.businessName || sourceData.name }, []);
     const warnings: RowIssue[] = [];
+    await this.templates.getRegistration(templateSlug, templateVersion, this.templateContext());
     const baseConfig = await this.templates.getDefaultConfig(templateSlug, templateVersion, this.templateContext());
     const selectedTemplate = (baseConfig.template || {}) as JsonObject;
     const siteConfig = this.csv.buildSiteConfig(baseConfig, canonical, warnings);
@@ -588,7 +588,7 @@ export class TenantSiteProposalsService {
       `SELECT t.slug, t.default_version AS version
        FROM "${this.schema()}".site_proposal_themes t
        JOIN "${this.schema()}".site_proposal_theme_versions v ON v.theme_id=t.id AND v.version=t.default_version
-       WHERE t.is_active=true AND v.status='active' AND t.default_version IS NOT NULL
+       WHERE t.is_active=true AND v.status='active' AND v.runtime_adapter_status='ready' AND t.default_version IS NOT NULL
               ORDER BY t.updated_at DESC
        LIMIT 1`,
     );
@@ -752,5 +752,4 @@ export class TenantSiteProposalsService {
   }
 
   private templateContext() { return { schema: this.schema(), dataSource: this.ds() }; }
-  private registrationOrUploaded(slug: string, version?: string) { try { return getTemplateRegistration(slug, version); } catch { return undefined; } }
 }

@@ -7,6 +7,26 @@ jest.mock('./tenant-site-proposals-schema', () => ({ ensureDoflowSiteProposalTab
 const cleanupId = '550e8400-e29b-41d4-a716-446655440000';
 
 describe('proposal theme storage hardening', () => {
+  it('stores every modular source entry and the compiled preview under a server-side prefix', async () => {
+    const storage = new FileStorageService() as any;
+    storage.s3 = { send: jest.fn().mockResolvedValue({}) };
+    const result = await storage.uploadThemePackage('custom','1.2.0',{
+      zip:Buffer.from('zip'),template:Buffer.from('html'),manifest:Buffer.from('{}'),compiled:Buffer.from('compiled'),
+      packageFiles:{'theme.json':Buffer.from('{}'),'template.html':Buffer.from('html'),'styles/theme.css':Buffer.from('css'),'scripts/theme.js':Buffer.from('js'),'assets/images/a.webp':Buffer.from('asset')},
+    });
+    const keys=storage.s3.send.mock.calls.map(([command]:any[])=>command.input.Key);
+    expect(keys).toEqual([
+      'doflow/site-proposal-themes/custom/1.2.0/source.zip',
+      'doflow/site-proposal-themes/custom/1.2.0/assets/images/a.webp',
+      'doflow/site-proposal-themes/custom/1.2.0/scripts/theme.js',
+      'doflow/site-proposal-themes/custom/1.2.0/styles/theme.css',
+      'doflow/site-proposal-themes/custom/1.2.0/template.html',
+      'doflow/site-proposal-themes/custom/1.2.0/theme.json',
+      'doflow/site-proposal-themes/custom/1.2.0/compiled.html',
+    ]);
+    expect(result).toMatchObject({prefix:'doflow/site-proposal-themes/custom/1.2.0/',compiledKey:'doflow/site-proposal-themes/custom/1.2.0/compiled.html'});
+  });
+
   it('removes every successfully uploaded object after a later upload fails', async () => {
     const storage = new FileStorageService() as any;
     let puts = 0;
@@ -56,11 +76,21 @@ describe('proposal theme storage hardening', () => {
 
   it('sets exactly one global default without privileging Colsova', async () => {
     const statements: string[] = [];
-    const runner: any = { isTransactionActive: false, connect: jest.fn(), startTransaction: jest.fn(async () => { runner.isTransactionActive = true; }), commitTransaction: jest.fn(async () => { runner.isTransactionActive = false; }), rollbackTransaction: jest.fn(), release: jest.fn().mockResolvedValue(undefined), query: jest.fn(async (sql: string) => { statements.push(sql); if (sql.includes('SELECT v.*,t.id theme_id')) return [{ id: 'version', theme_id: 'theme', status: 'active', theme_active: true, schema_version: '2.0', contract_version: '2.0', content_profile: 'proposal-basic-v2' }]; return []; }) };
+    const runner: any = { isTransactionActive: false, connect: jest.fn(), startTransaction: jest.fn(async () => { runner.isTransactionActive = true; }), commitTransaction: jest.fn(async () => { runner.isTransactionActive = false; }), rollbackTransaction: jest.fn().mockResolvedValue(undefined), release: jest.fn().mockResolvedValue(undefined), query: jest.fn(async (sql: string) => { statements.push(sql); if (sql.includes('SELECT v.*,t.id theme_id')) return [{ id: 'version', theme_id: 'theme', status: 'active', theme_active: true, schema_version: '2.0', contract_version: '2.0', content_profile: 'proposal-basic-v2', runtime_adapter_status: 'ready' }]; return []; }) };
     const ds: any = { createQueryRunner: () => runner, query: jest.fn() }; const templates = { invalidate: jest.fn() };
     const service = new TenantSiteProposalsThemeService(ds, {} as any, {} as any, templates as any, {} as any, { user: { id: cleanupId, role: 'admin', tenantId: 'doflow' } }); (service as any).ensure = jest.fn(); jest.spyOn(service, 'get').mockResolvedValue({ slug: 'custom', version: '1.0.0' } as any);
     await expect(service.setDefault('custom', '1.0.0')).resolves.toMatchObject({ slug: 'custom' });
     const clear = statements.findIndex((sql) => sql.includes('SET default_version=NULL')); const select = statements.findIndex((sql) => sql.includes('SET default_version=$1'));
     expect(clear).toBeGreaterThan(-1); expect(clear).toBeLessThan(select); expect(runner.commitTransaction).toHaveBeenCalled(); expect(templates.invalidate).toHaveBeenCalledWith('doflow');
+  });
+
+  it('rejects a pending runtime adapter before changing the global default', async () => {
+    const statements: string[] = [];
+    const runner: any = { isTransactionActive: false, connect: jest.fn(), startTransaction: jest.fn(async () => { runner.isTransactionActive = true; }), commitTransaction: jest.fn(), rollbackTransaction: jest.fn(async () => { runner.isTransactionActive = false; }), release: jest.fn().mockResolvedValue(undefined), query: jest.fn(async (sql: string) => { statements.push(sql); if (sql.includes('SELECT v.*,t.id theme_id')) return [{ id:'version',theme_id:'theme',status:'active',theme_active:true,schema_version:'2.0',contract_version:'2.1',content_profile:'beauty-editorial-v1',runtime_adapter_status:'pending' }]; return []; }) };
+    const service = new TenantSiteProposalsThemeService({ createQueryRunner: () => runner } as any, {} as any, {} as any, { invalidate: jest.fn() } as any, {} as any, { user: { id: cleanupId, role: 'admin', tenantId: 'doflow' } });
+    (service as any).ensure = jest.fn();
+    await expect(service.setDefault('aurea','1.2.0')).rejects.toThrow('adattatore di generazione non ancora attivo');
+    expect(statements.some((sql) => sql.includes('SET default_version=NULL'))).toBe(false);
+    expect(runner.commitTransaction).not.toHaveBeenCalled();
   });
 });

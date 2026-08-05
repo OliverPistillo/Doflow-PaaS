@@ -1,0 +1,223 @@
+{
+  "name": "Tema Luce",
+  "slug": "luce",
+  "version": "1.2.0",
+  "schemaVersion": "2.0",
+  "contractVersion": "2.1",
+  "formatVersion": "1.0",
+  "format": "modular",
+  "entry": "template.html",
+  "styleEntries": [
+    "styles/theme.css"
+  ],
+  "scriptEntries": [
+    "scripts/theme.js"
+  ],
+  "assetRoot": "assets",
+  "contentProfile": "beauty-conversion-v1",
+  "runtimeAdapterStatus": "pending",
+  "categories": [
+    "beauty",
+    "cliniche",
+    "conversione"
+  ],
+  "recommendationTags": [
+    "cliniche",
+    "centro estetico",
+    "medicina estetica",
+    "molti servizi",
+    "conversione",
+    "prenotazione"
+  ],
+  "collections": {
+    "about.points": {
+      "path": "content.about.points",
+      "count": 4
+    },
+    "cta.items": {
+      "path": "content.cta.items",
+      "count": 4
+    },
+    "reviews.items": {
+      "path": "content.reviews.items",
+      "count": 3
+    },
+    "services": {
+      "path": "content.services",
+      "count": 5
+    },
+    "trust": {
+      "path": "content.trust",
+      "count": 5
+    }
+  },
+  "fixedCounts": {
+    "services": 5,
+    "results": 3,
+    "reviews": 3,
+    "trustItems": 5,
+    "ctaItems": 4
+  },
+  "features": {
+    "results": true,
+    "reviews": true,
+    "newsletter": true,
+    "mobileCta": true
+  },
+  "paletteKeys": [
+    "ink",
+    "accent",
+    "peach",
+    "paper",
+    "soft"
+  ],
+  "imageSlots": [
+    "logoDefault",
+    "logoLight",
+    "hero",
+    "consultation",
+    "feature"
+  ],
+  "socialSlots": [
+    "socialLinkedIn",
+    "socialInstagram",
+    "socialFacebook"
+  ],
+  "editablePaths": [
+    "brand",
+    "business",
+    "seo",
+    "palette",
+    "routing",
+    "images",
+    "content",
+    "features"
+  ],
+  "protectedPaths": [
+    "template",
+    "editingContract"
+  ],
+  "textLimits": {
+    "brand.name": 80,
+    "brand.descriptor": 120,
+    "seo.title": 70,
+    "seo.description": 180,
+    "content.hero.eyebrow": 80,
+    "content.hero.title": 120,
+    "content.hero.accent": 90,
+    "content.hero.description": 320,
+    "content.servicesIntro.title": 140,
+    "content.services.*.title": 90,
+    "content.services.*.description": 280,
+    "content.about.title": 140,
+    "content.about.description": 420,
+    "content.results.title": 140,
+    "content.results.notice": 220,
+    "content.cta.title": 140,
+    "content.cta.description": 300,
+    "content.cta.items.*": 100,
+    "content.booking.title": 140,
+    "content.booking.description": 320,
+    "content.newsletter.title": 160,
+    "content.newsletter.note": 240,
+    "content.footer.description": 320,
+    "content.footer.copyright": 180,
+    "content.reviews.title": 150,
+    "content.reviews.items.*.text": 360,
+    "content.reviews.items.*.name": 90
+  },
+  "assetMap": {
+    "brand.logoDefault": {
+      "path": "assets/icons/7c10e9c483b9ba5c128f7ee8574a2cc881bba0e8d5590dc3f062677253a12681.svg",
+      "mime": "image/svg+xml",
+      "sha256": "7c10e9c483b9ba5c128f7ee8574a2cc881bba0e8d5590dc3f062677253a12681",
+      "size": 810
+    },
+    "brand.logoLight": {
+      "path": "assets/icons/7c10e9c483b9ba5c128f7ee8574a2cc881bba0e8d5590dc3f062677253a12681.svg",
+      "mime": "image/svg+xml",
+      "sha256": "7c10e9c483b9ba5c128f7ee8574a2cc881bba0e8d5590dc3f062677253a12681",
+      "size": 810
+    },
+    "images.consultation.src": {
+      "path": "assets/images/c2405008b5002e6a019cd9039395fe39d4b83d9b69c0fe7feb3c089353a4e748.webp",
+      "mime": "image/webp",
+      "sha256": "c2405008b5002e6a019cd9039395fe39d4b83d9b69c0fe7feb3c089353a4e748",
+      "size": 49174
+    },
+    "images.feature.src": {
+      "path": "assets/images/9f4740d089e476f52acd427f2e647bec2660ab6a08db3305b78376a67c965e28.webp",
+      "mime": "image/webp",
+      "sha256": "9f4740d089e476f52acd427f2e647bec2660ab6a08db3305b78376a67c965e28",
+      "size": 19670
+    },
+    "images.hero.src": {
+      "path": "assets/images/bd2f78731cfc6c7ea26a29f178e6a2fc1f361aa1c1183883ee732708b3df344c.webp",
+      "mime": "image/webp",
+      "sha256": "bd2f78731cfc6c7ea26a29f178e6a2fc1f361aa1c1183883ee732708b3df344c",
+      "size": 50718
+    },
+    "images.results.0.src": {
+      "path": "assets/images/588896205a90fbdd11d7b75ed7c2f1b3913608d44eb28974d89048bc1406dee5.webp",
+      "mime": "image/webp",
+      "sha256": "588896205a90fbdd11d7b75ed7c2f1b3913608d44eb28974d89048bc1406dee5",
+      "size": 12114
+    },
+    "images.results.1.src": {
+      "path": "assets/images/293ef069bda2172e9b4a56dee845ab2a37f92b75dbe6363dafc942e937e472ab.webp",
+      "mime": "image/webp",
+      "sha256": "293ef069bda2172e9b4a56dee845ab2a37f92b75dbe6363dafc942e937e472ab",
+      "size": 13604
+    },
+    "images.results.2.src": {
+      "path": "assets/images/5521fbc364d60b709311b155973a48546e32835e41cc81b156f0754e0945485e.webp",
+      "mime": "image/webp",
+      "sha256": "5521fbc364d60b709311b155973a48546e32835e41cc81b156f0754e0945485e",
+      "size": 10296
+    },
+    "images.services.0.src": {
+      "path": "assets/images/534d99f9a0da1a5d110ea05f984bd5c1686c30e55479079eb88d46308c0c00c1.webp",
+      "mime": "image/webp",
+      "sha256": "534d99f9a0da1a5d110ea05f984bd5c1686c30e55479079eb88d46308c0c00c1",
+      "size": 14736
+    },
+    "images.services.1.src": {
+      "path": "assets/images/60a9c163ab6acf7043210c973752aecf1bbd34d402a7bf433056e409ac6df2ef.webp",
+      "mime": "image/webp",
+      "sha256": "60a9c163ab6acf7043210c973752aecf1bbd34d402a7bf433056e409ac6df2ef",
+      "size": 13390
+    },
+    "images.services.2.src": {
+      "path": "assets/images/8ddeb240248c6a9ad606998fde66375b301889539b4954b9160f6c81d1332fe0.webp",
+      "mime": "image/webp",
+      "sha256": "8ddeb240248c6a9ad606998fde66375b301889539b4954b9160f6c81d1332fe0",
+      "size": 16400
+    },
+    "images.services.3.src": {
+      "path": "assets/images/c5e33dfc7bd7ac966378adb8250cd133609fb70663f577440ebb82f1265c75df.webp",
+      "mime": "image/webp",
+      "sha256": "c5e33dfc7bd7ac966378adb8250cd133609fb70663f577440ebb82f1265c75df",
+      "size": 9654
+    },
+    "images.services.4.src": {
+      "path": "assets/images/c52015f2f113573b13d80f16d47bfdc49013fe0ac829c862696c60b1ab69a056.webp",
+      "mime": "image/webp",
+      "sha256": "c52015f2f113573b13d80f16d47bfdc49013fe0ac829c862696c60b1ab69a056",
+      "size": 14034
+    }
+  },
+  "security": {
+    "allowDemoForms": true,
+    "allowExternalHttpsLinks": false,
+    "networkAccess": false
+  },
+  "provenance": {
+    "sourceType": "user-supplied-standalone",
+    "sourceTemplateSha256": "9f990c78514508cfe832a69e8a5caec21271085bed8eb977ff9dfce9ce6bd2c2",
+    "sourceTemplateSize": 347122,
+    "normalizations": [
+      "template.templateVersion: 1.1.0 → 1.2.0",
+      "content.cta.items[3] reso dinamico preservando testo, icona, ordine e layout"
+    ]
+  }
+}

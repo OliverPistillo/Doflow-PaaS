@@ -6,7 +6,7 @@ const uuid = '550e8400-e29b-41d4-a716-446655440000';
 function makeService(request: any, queryMock = jest.fn()) {
   const ds = { query: queryMock } as any;
   const csv = { parseCsvFile: jest.fn(), buildPreviewRows: jest.fn(), normalizeRow: jest.fn(), buildSiteConfig: jest.fn() } as any;
-  const templates = { listTemplates: jest.fn().mockResolvedValue([{ slug: 'colsova' }]), getDefaultConfig: jest.fn(), renderHtml: jest.fn(), buildRedirectFiles: jest.fn() } as any;
+  const templates = { listTemplates: jest.fn().mockResolvedValue([{ slug: 'colsova' }]), getRegistration: jest.fn().mockResolvedValue({ slug: 'colsova', version: '2.4.1' }), getDefaultConfig: jest.fn(), renderHtml: jest.fn(), buildRedirectFiles: jest.fn() } as any;
   const artifacts = { createZip: jest.fn() } as any;
   const storage = { uploadGeneratedBuffer: jest.fn(), downloadObjectStream: jest.fn(), deleteGeneratedPrefix: jest.fn() } as any;
   const generationCore = { generate: jest.fn() } as any;
@@ -56,6 +56,14 @@ describe('TenantSiteProposalsService', () => {
     queryMock.mockResolvedValueOnce([{ slug: 'colsova', version: '2.4.1' }]).mockResolvedValueOnce([{ id: uuid, status: 'preview' }]);
     const result = await service.previewImport({ originalname: 'x.csv', mimetype: 'text/csv', buffer: Buffer.from('a') } as any);
     expect(result.rows[0].errors[0].code).toBe('DUPLICATE_ROW');
+  });
+  it('rejects a manipulated import payload selecting a pending theme', async () => {
+    const { service, csv, templates, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    csv.parseCsvFile.mockReturnValue({ rows: [{ business_name: 'A' }] });
+    queryMock.mockResolvedValueOnce([]);
+    templates.getRegistration.mockRejectedValue(new BadRequestException('Tema disponibile in anteprima, adattatore di generazione non ancora attivo.'));
+    await expect(service.previewImport({ originalname:'x.csv',mimetype:'text/csv',buffer:Buffer.from('a') } as any, 'aurea', '1.2.0')).rejects.toThrow('adattatore di generazione non ancora attivo');
+    expect(csv.buildPreviewRows).not.toHaveBeenCalled();
   });
   it('uses the unique global DB default without a Colsova preference', async () => { const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } }); queryMock.mockResolvedValueOnce([{ slug: 'luce', version: '1.2.0' }]); await expect((service as any).defaultThemeSelection()).resolves.toEqual({ slug: 'luce', version: '1.2.0' }); expect(queryMock.mock.calls[0][0]).not.toContain("CASE WHEN t.slug='colsova'"); });
 

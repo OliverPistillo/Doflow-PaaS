@@ -59,10 +59,11 @@ export type SiteProposalPersonalization = { id: string; status: PersonalizationS
 export type SiteProposalPersonalizationResult = { cached: boolean; status: "completed" | "fallback"; provider?: string; personalizationId?: string; proposalVersion?: number; warnings?: string[]; personalization?: SiteProposalPersonalization };
 export type ProposalTheme = {
   id: string; theme_id?: string; version_id?: string; slug: string; name: string; description?: string | null; source_kind: "builtin" | "uploaded"; is_active: boolean; default_version?: string | null; categories: string[];
-  version: string; schema_version: string; contract_version: string; content_profile: "proposal-basic-v2" | "colsova-conversion-v1" | "colsova-legacy-v1"; status: "draft" | "active" | "disabled"; is_builtin: boolean; is_immutable: boolean;
+  version: string; schema_version: string; contract_version: string; content_profile: "proposal-basic-v2" | "colsova-conversion-v1" | "colsova-legacy-v1" | "beauty-editorial-v1" | "beauty-conversion-v1"; status: "draft" | "active" | "disabled"; is_builtin: boolean; is_immutable: boolean;
   template_sha256: string; template_size: number | string; zip_sha256?: string | null; zip_size?: number | string | null; validation_report?: JsonObject; usages?: number; version_created_at?: string;
+  source_format?: "standalone" | "modular"; format_version?: string | null; compiled_sha256?: string | null; compiled_size?: number | string | null; runtime_adapter_status?: "ready" | "pending"; manifest?: JsonObject;
 };
-export type ThemeUploadResult = { manifest: JsonObject; hash: { template: string; zip: string }; sizes: { template: number; zip: number }; contentProfile: string; validationReport: JsonObject; warnings: string[]; status: "draft"; previewUrl: string };
+export type ThemeUploadResult = { manifest: JsonObject; format?: "standalone" | "modular"; runtimeAdapterStatus?: "ready" | "pending"; hash: { template: string; zip: string; compiled?: string }; sizes: { template: number; zip: number; compiled?: number }; contentProfile: string; validationReport: JsonObject; warnings: string[]; status: "draft"; previewUrl: string };
 
 const LIST_KEYS = new Set(["scope", "search", "status", "templateSlug", "companyId", "importBatchId", "limit", "offset", "sortBy", "sortOrder"]);
 const ACTIVITY_KEYS = new Set(["limit", "offset"]);

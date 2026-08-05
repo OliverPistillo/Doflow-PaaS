@@ -9,7 +9,7 @@ import { TenantSiteProposalsGenerationCoreService } from './tenant-site-proposal
 import { evaluateProposalReadiness } from './tenant-site-proposals-readiness';
 import { TenantSiteProposalsImageService } from './tenant-site-proposals-image.service';
 import { ensureDoflowSiteProposalTables } from './tenant-site-proposals-schema';
-import { getTemplateRegistration, SiteProposalTemplateRegistration } from './tenant-site-proposals-template-registry';
+import { SiteProposalTemplateRegistration } from './tenant-site-proposals-template-registry';
 import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
 import { TenantSiteProposalsWebsiteExtractorService } from './tenant-site-proposals-website-extractor.service';
 import { TenantSiteProposalsWebsiteFetcherService } from './tenant-site-proposals-website-fetcher.service';
@@ -55,7 +55,7 @@ export class TenantSiteProposalsPreparationCoreService {
 
       const targetSlug = data.targetTemplateSlug || proposal.template_slug;
       const targetVersion = data.targetTemplateVersion || proposal.template_version;
-      const registration = await this.registration(schema, targetSlug, targetVersion);
+      const registration = await this.templates.getRegistration(targetSlug, targetVersion, { schema, dataSource: this.dataSource });
       if (!registration.isActive) throw new BadRequestException('La versione tema target non è attiva');
       const context = { schema, dataSource: this.dataSource };
       const base = await this.templates.getDefaultConfig(targetSlug, targetVersion, context);
@@ -133,7 +133,7 @@ export class TenantSiteProposalsPreparationCoreService {
   private async finalizePreparedProposal(data: ProposalPreparationJobData, proposal: any, actor: ProposalPreparationActor, runner: { query: (...args: any[]) => Promise<any> }, resume: boolean) {
     const schema = data.tenantSchema;
     const config = proposal.site_config as JsonObject;
-    const registration = await this.registration(schema, String(proposal.template_slug), String(proposal.template_version));
+    const registration = await this.templates.getRegistration(String(proposal.template_slug), String(proposal.template_version), { schema, dataSource: this.dataSource });
     validateSiteConfig(config, registration);
     let generationComplete = !data.generate;
     if (data.generate) {
@@ -165,13 +165,6 @@ export class TenantSiteProposalsPreparationCoreService {
     if (raw.targetTemplateSlug && !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(raw.targetTemplateSlug)) throw new BadRequestException('Tema target non valido');
     if (raw.targetTemplateVersion && !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(raw.targetTemplateVersion)) throw new BadRequestException('Versione target non valida');
     return { ...raw, tenantSchema: schema, actorUserId: raw.actorUserId && UUID_RE.test(raw.actorUserId) ? raw.actorUserId : null, actorEmail: cleanString(raw.actorEmail, 320) || null };
-  }
-
-  private async registration(schema: string, slug: string, version: string): Promise<SiteProposalTemplateRegistration> {
-    try { return getTemplateRegistration(slug, version); } catch { /* uploaded theme */ }
-    const row = (await this.dataSource.query(`SELECT t.slug,t.name,t.categories,t.default_version,v.* FROM "${schema}".site_proposal_themes t JOIN "${schema}".site_proposal_theme_versions v ON v.theme_id=t.id WHERE t.slug=$1 AND v.version=$2 AND t.is_active=true AND v.status='active'`, [slug, version]))[0];
-    if (!row) throw new NotFoundException('Tema target non trovato');
-    return { slug, name: row.name, version, schemaVersion: row.schema_version, sourceSha256: row.template_sha256, directory: '', isActive: true, isLatest: row.default_version === version, categoryTags: row.categories || [], contractVersion: row.contract_version, contentProfile: row.content_profile, templateSize: Number(row.template_size), isBuiltin: false };
   }
 
   private canonical(proposal: any): CanonicalProposalInput {

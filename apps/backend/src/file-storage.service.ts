@@ -175,16 +175,38 @@ export class FileStorageService {
     return `doflow/site-proposal-themes/${slug}/${version}/`;
   }
 
-  async uploadThemePackage(slug: string, version: string, input: { zip: Buffer; template: Buffer; manifest: Buffer; documentation?: Record<string, Buffer> }) {
+  async uploadThemePackage(slug: string, version: string, input: { zip: Buffer; template: Buffer; manifest: Buffer; documentation?: Record<string, Buffer>; packageFiles?: Readonly<Record<string, Buffer>>; compiled?: Buffer }) {
     const prefix = this.proposalThemePrefix(slug, version);
     const docs = input.documentation || {};
     for (const name of Object.keys(docs)) if (!/^[A-Za-z0-9][A-Za-z0-9._-]*\.(?:md|txt)$/i.test(name) || name.startsWith('.')) throw new ForbiddenException('Invalid theme documentation name');
-    const uploads: Array<{ key: string; buffer: Buffer; contentType: string }> = [
+    const packageFiles = input.packageFiles || {};
+    for (const name of Object.keys(packageFiles)) {
+      if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(name) || name.startsWith('/') || name.includes('..') || name.includes('\\') || name.split('/').some((part) => !part || part.startsWith('.'))) {
+        throw new ForbiddenException('Invalid modular theme package path');
+      }
+    }
+    const contentType = (name: string) => name.endsWith('.html') ? 'text/html; charset=utf-8'
+      : name.endsWith('.json') ? 'application/json'
+      : name.endsWith('.css') ? 'text/css; charset=utf-8'
+      : name.endsWith('.js') ? 'text/javascript; charset=utf-8'
+      : name.endsWith('.svg') ? 'image/svg+xml'
+      : name.endsWith('.webp') ? 'image/webp'
+      : name.endsWith('.png') ? 'image/png'
+      : /\.jpe?g$/i.test(name) ? 'image/jpeg'
+      : name.endsWith('.md') ? 'text/markdown; charset=utf-8'
+      : 'application/octet-stream';
+    const baseUploads: Array<{ key: string; buffer: Buffer; contentType: string }> = [
       { key: `${prefix}source.zip`, buffer: input.zip, contentType: 'application/zip' },
-      { key: `${prefix}template.html`, buffer: input.template, contentType: 'text/html; charset=utf-8' },
-      { key: `${prefix}theme.json`, buffer: input.manifest, contentType: 'application/json' },
+      ...(Object.keys(packageFiles).length
+        ? Object.entries(packageFiles).sort(([left], [right]) => left.localeCompare(right)).map(([name, buffer]) => ({ key: `${prefix}${name}`, buffer, contentType: contentType(name) }))
+        : [
+          { key: `${prefix}template.html`, buffer: input.template, contentType: 'text/html; charset=utf-8' },
+          { key: `${prefix}theme.json`, buffer: input.manifest, contentType: 'application/json' },
+        ]),
+      ...(input.compiled ? [{ key: `${prefix}compiled.html`, buffer: input.compiled, contentType: 'text/html; charset=utf-8' }] : []),
       ...Object.entries(docs).sort(([left], [right]) => left.localeCompare(right)).map(([name, buffer]) => ({ key: `${prefix}${name}`, buffer, contentType: name.toLowerCase().endsWith('.md') ? 'text/markdown; charset=utf-8' : 'text/plain; charset=utf-8' })),
     ];
+    const uploads = [...new Map(baseUploads.map((upload) => [upload.key, upload])).values()];
     const uploadedKeys: string[] = [];
     try {
       for (const upload of uploads) {
@@ -195,11 +217,17 @@ export class FileStorageService {
       const cleanup = await Promise.allSettled(uploadedKeys.map((key) => this.deleteThemeObjects(prefix, [key])));
       throw new ThemePackageUploadError(prefix, cleanup.some((result) => result.status === 'rejected'), error);
     }
-    return { prefix, zipKey: `${prefix}source.zip`, templateKey: `${prefix}template.html` };
+    return { prefix, zipKey: `${prefix}source.zip`, templateKey: `${prefix}template.html`, compiledKey: input.compiled ? `${prefix}compiled.html` : undefined };
   }
 
   async readThemeTemplate(slug: string, version: string): Promise<Buffer> {
     const key = `${this.proposalThemePrefix(slug, version)}template.html`;
+    const item = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    return this.readBody(item.Body);
+  }
+
+  async readThemeCompiled(slug: string, version: string): Promise<Buffer> {
+    const key = `${this.proposalThemePrefix(slug, version)}compiled.html`;
     const item = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
     return this.readBody(item.Body);
   }

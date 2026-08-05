@@ -1,0 +1,202 @@
+{
+  "name": "Tema Aurea",
+  "slug": "aurea",
+  "version": "1.2.0",
+  "schemaVersion": "2.0",
+  "contractVersion": "2.1",
+  "formatVersion": "1.0",
+  "format": "modular",
+  "entry": "template.html",
+  "styleEntries": [
+    "styles/theme.css"
+  ],
+  "scriptEntries": [
+    "scripts/theme.js"
+  ],
+  "assetRoot": "assets",
+  "contentProfile": "beauty-editorial-v1",
+  "runtimeAdapterStatus": "pending",
+  "categories": [
+    "beauty",
+    "wellness",
+    "editoriale"
+  ],
+  "recommendationTags": [
+    "medicina estetica",
+    "beauty premium",
+    "wellness",
+    "professionisti",
+    "elegante",
+    "editoriale"
+  ],
+  "collections": {
+    "results.items": {
+      "path": "content.results.items",
+      "count": 3
+    },
+    "services": {
+      "path": "content.services",
+      "count": 4
+    },
+    "trust": {
+      "path": "content.trust",
+      "count": 4
+    }
+  },
+  "fixedCounts": {
+    "services": 4,
+    "results": 3,
+    "trustItems": 4
+  },
+  "features": {
+    "results": true,
+    "newsletter": true,
+    "mobileCta": true
+  },
+  "paletteKeys": [
+    "ink",
+    "gold",
+    "cream",
+    "paper",
+    "dark"
+  ],
+  "imageSlots": [
+    "logoDefault",
+    "logoLight",
+    "hero",
+    "consultation",
+    "feature"
+  ],
+  "socialSlots": [
+    "socialLinkedIn",
+    "socialInstagram",
+    "socialFacebook"
+  ],
+  "editablePaths": [
+    "brand",
+    "business",
+    "seo",
+    "palette",
+    "routing",
+    "images",
+    "content",
+    "features"
+  ],
+  "protectedPaths": [
+    "template",
+    "editingContract"
+  ],
+  "textLimits": {
+    "brand.name": 80,
+    "brand.descriptor": 120,
+    "seo.title": 70,
+    "seo.description": 180,
+    "content.hero.eyebrow": 80,
+    "content.hero.title": 120,
+    "content.hero.accent": 90,
+    "content.hero.description": 320,
+    "content.servicesIntro.title": 140,
+    "content.services.*.title": 90,
+    "content.services.*.description": 280,
+    "content.about.title": 140,
+    "content.about.description": 420,
+    "content.results.title": 140,
+    "content.results.notice": 220,
+    "content.cta.title": 140,
+    "content.cta.description": 300,
+    "content.cta.items.*": 100,
+    "content.booking.title": 140,
+    "content.booking.description": 320,
+    "content.newsletter.title": 160,
+    "content.newsletter.note": 240,
+    "content.footer.description": 320,
+    "content.footer.copyright": 180
+  },
+  "assetMap": {
+    "brand.logoDefault": {
+      "path": "assets/icons/df9d4ea358f93c2b4a3d8e337548af205316ad98c6909d080743c1b9bae8018e.svg",
+      "mime": "image/svg+xml",
+      "sha256": "df9d4ea358f93c2b4a3d8e337548af205316ad98c6909d080743c1b9bae8018e",
+      "size": 826
+    },
+    "brand.logoLight": {
+      "path": "assets/icons/885066d3ec83c65fef7b066cf55ee69bc8680e64520fb91c820fd9b812f96418.svg",
+      "mime": "image/svg+xml",
+      "sha256": "885066d3ec83c65fef7b066cf55ee69bc8680e64520fb91c820fd9b812f96418",
+      "size": 826
+    },
+    "images.consultation.src": {
+      "path": "assets/images/941af47e27b750d8a3e06e9329f99dac5cd9f7f9cadd051ece98e1f92858050c.webp",
+      "mime": "image/webp",
+      "sha256": "941af47e27b750d8a3e06e9329f99dac5cd9f7f9cadd051ece98e1f92858050c",
+      "size": 42344
+    },
+    "images.feature.src": {
+      "path": "assets/images/60b38eb2829448dab82a84f70f47ce8ec90bb8538af7c72202a56a994e4f04d8.webp",
+      "mime": "image/webp",
+      "sha256": "60b38eb2829448dab82a84f70f47ce8ec90bb8538af7c72202a56a994e4f04d8",
+      "size": 44356
+    },
+    "images.hero.src": {
+      "path": "assets/images/60b38eb2829448dab82a84f70f47ce8ec90bb8538af7c72202a56a994e4f04d8.webp",
+      "mime": "image/webp",
+      "sha256": "60b38eb2829448dab82a84f70f47ce8ec90bb8538af7c72202a56a994e4f04d8",
+      "size": 44356
+    },
+    "images.results.0.src": {
+      "path": "assets/images/11c14533ef8718891563f6cda149f847705c6d95976e64a74cf58abcda8a2924.webp",
+      "mime": "image/webp",
+      "sha256": "11c14533ef8718891563f6cda149f847705c6d95976e64a74cf58abcda8a2924",
+      "size": 18954
+    },
+    "images.results.1.src": {
+      "path": "assets/images/6ff7c16c34e35070aede3178529ab0d283ef208c7410ac8e6ea791471f3f0f47.webp",
+      "mime": "image/webp",
+      "sha256": "6ff7c16c34e35070aede3178529ab0d283ef208c7410ac8e6ea791471f3f0f47",
+      "size": 17604
+    },
+    "images.results.2.src": {
+      "path": "assets/images/e09561bd9d8939dfba9f836e3567daa889188aa0636df7051fd8660ca22ace7f.webp",
+      "mime": "image/webp",
+      "sha256": "e09561bd9d8939dfba9f836e3567daa889188aa0636df7051fd8660ca22ace7f",
+      "size": 17580
+    },
+    "images.services.0.src": {
+      "path": "assets/images/cc60cd092a220707309fa517fbe63e32ea317e7804657b78bbd89dddbf29393f.webp",
+      "mime": "image/webp",
+      "sha256": "cc60cd092a220707309fa517fbe63e32ea317e7804657b78bbd89dddbf29393f",
+      "size": 18788
+    },
+    "images.services.1.src": {
+      "path": "assets/images/89a47c90f0a5da68e67d587411de6beeaeb6ec9119727403bab60654c2172c48.webp",
+      "mime": "image/webp",
+      "sha256": "89a47c90f0a5da68e67d587411de6beeaeb6ec9119727403bab60654c2172c48",
+      "size": 17786
+    },
+    "images.services.2.src": {
+      "path": "assets/images/830025014c911e2a35c91028965b11735772accf0e10a4dc519aca27138618bb.webp",
+      "mime": "image/webp",
+      "sha256": "830025014c911e2a35c91028965b11735772accf0e10a4dc519aca27138618bb",
+      "size": 17150
+    },
+    "images.services.3.src": {
+      "path": "assets/images/ab2efbaab32f96fd55b6d6abd7cb04269813b11e0dc7ed488cabea3e041ae018.webp",
+      "mime": "image/webp",
+      "sha256": "ab2efbaab32f96fd55b6d6abd7cb04269813b11e0dc7ed488cabea3e041ae018",
+      "size": 16102
+    }
+  },
+  "security": {
+    "allowDemoForms": true,
+    "allowExternalHttpsLinks": false,
+    "networkAccess": false
+  },
+  "provenance": {
+    "sourceType": "user-supplied-standalone",
+    "sourceTemplateSha256": "cdc959eaa870485134fc2e93bade901eebf20e0af54d2d8d4113c904790da5a6",
+    "sourceTemplateSize": 384117,
+    "normalizations": [
+      "template.templateVersion: 1.1.0 → 1.2.0"
+    ]
+  }
+}

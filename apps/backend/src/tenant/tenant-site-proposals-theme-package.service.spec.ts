@@ -1,7 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import archiver from 'archiver';
 import { PassThrough } from 'stream';
-import * as fs from 'fs';
 import * as path from 'path';
 import { TenantSiteProposalsThemePackageService } from './tenant-site-proposals-theme-package.service';
 import { sha256 } from './tenant-site-proposals-validation';
@@ -31,7 +30,11 @@ describe('theme ZIP package validator', () => {
   const service = new TenantSiteProposalsThemePackageService();
   it('accepts a valid package', async () => expect(service.validate(await zip(basicPackage()))).resolves.toMatchObject({ contentProfile: 'proposal-basic-v2', validationReport: { valid: true } }));
   it('accepts one optional root folder', async () => expect(service.validate(await zip(basicPackage('tema-test/')))).resolves.toMatchObject({ contentProfile: 'proposal-basic-v2' }));
-  it('accepts the copied standalone Colsova package', async () => { const root = path.join(__dirname, 'site-proposal-templates', 'colsova', '2.4.1'); const files: Record<string, Buffer> = {}; for (const name of fs.readdirSync(root)) files[`tema-colsova-2.4.1/${name}`] = fs.readFileSync(path.join(root, name)); const value = await service.validate(await zip(files)); expect(value).toMatchObject({ contentProfile: 'colsova-conversion-v1', templateSha256: '395a7f9e77d120558e5e45d3485c65f07be0cb339ad6a207a5562ec8b491d263', templateSize: 2276156 }); });
+  it('accepts the modular Colsova built-in package', async () => {
+    const root = path.join(__dirname, 'site-proposal-templates', 'colsova', '2.4.1');
+    const value = await service.validateDirectory(root, true);
+    expect(value).toMatchObject({ contentProfile: 'colsova-conversion-v1', format: 'modular', modularPackage: { manifest: { provenance: { sourceTemplateSha256: '395a7f9e77d120558e5e45d3485c65f07be0cb339ad6a207a5562ec8b491d263', sourceTemplateSize: 2276156 } } } });
+  });
   it.each([
     ['manifest missing', () => { const files = basicPackage(); delete files['theme.json']; return files; }],
     ['template missing', () => { const files = basicPackage(); delete files['template.html']; return files; }],

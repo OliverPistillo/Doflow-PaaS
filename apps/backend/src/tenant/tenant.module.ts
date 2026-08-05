@@ -53,6 +53,7 @@ import { TenantSiteProposalsPersonalizationService } from './tenant-site-proposa
 import { TenantSiteProposalsImageService } from './tenant-site-proposals-image.service';
 import { SITE_PROPOSAL_PREPARATION_QUEUE } from './tenant-site-proposals.constants';
 import { TenantSiteProposalsThemePackageService } from './tenant-site-proposals-theme-package.service';
+import { TenantSiteProposalsThemeCompilerService } from './tenant-site-proposals-theme-compiler.service';
 import { TenantSiteProposalsThemeService } from './tenant-site-proposals-theme.service';
 import { TenantSiteProposalsGenerationCoreService } from './tenant-site-proposals-generation-core.service';
 import { TenantSiteProposalsPreparationCoreService } from './tenant-site-proposals-preparation-core.service';
@@ -133,6 +134,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantSiteProposalsAiService,
     TenantSiteProposalsPersonalizationService,
     TenantSiteProposalsThemePackageService,
+    TenantSiteProposalsThemeCompilerService,
     TenantSiteProposalsThemeService,
     TenantSiteProposalsGenerationCoreService,
     TenantSiteProposalsPreparationCoreService,

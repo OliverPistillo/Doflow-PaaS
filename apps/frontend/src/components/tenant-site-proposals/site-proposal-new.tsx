@@ -41,8 +41,9 @@ export function SiteProposalNew() {
       .then((items) => {
         if (!active) return;
         const activeItems = items.filter((item) => item.status === "active");
+        const selectable = activeItems.filter((item) => item.runtime_adapter_status !== "pending");
         setTemplates(activeItems);
-        const preferred = activeItems.find((item) => item.default_version === item.version) || activeItems.find((item) => item.slug === "colsova" && item.version === "2.4.1") || activeItems[0];
+        const preferred = selectable.find((item) => item.default_version === item.version) || selectable.find((item) => item.slug === "colsova" && item.version === "2.4.1") || selectable[0];
         setTemplateKey(preferred ? `${preferred.slug}@${preferred.version}` : "");
       })
       .catch((error) => toast.error(getErrorMessage(error)));
@@ -50,6 +51,8 @@ export function SiteProposalNew() {
   }, []);
 
   const selected = templates.find((item) => `${item.slug}@${item.version}` === templateKey);
+  const selectableTemplates = templates.filter((item) => item.runtime_adapter_status !== "pending");
+  const pendingTemplates = templates.filter((item) => item.runtime_adapter_status === "pending");
   const pickFile = (next: File | null) => {
     setFileError(null);
     if (!next) { setFile(null); return; }
@@ -106,10 +109,11 @@ export function SiteProposalNew() {
         <div className="grid gap-3 md:grid-cols-[260px_1fr]">
           <Select value={templateKey} onValueChange={setTemplateKey} disabled={busy}>
             <SelectTrigger className="h-11"><SelectValue placeholder="Seleziona tema" /></SelectTrigger>
-            <SelectContent>{templates.map((item) => <SelectItem key={`${item.slug}@${item.version}`} value={`${item.slug}@${item.version}`}>{item.name} · {item.version}{item.default_version === item.version ? " · Predefinito" : ""}</SelectItem>)}</SelectContent>
+            <SelectContent>{selectableTemplates.map((item) => <SelectItem key={`${item.slug}@${item.version}`} value={`${item.slug}@${item.version}`}>{item.name} · {item.version}{item.default_version === item.version ? " · Predefinito" : ""}</SelectItem>)}</SelectContent>
           </Select>
           {selected ? <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600"><strong className="text-slate-900">{selected.name}</strong> · {(selected.categories || []).slice(0, 4).join(", ")} · {selected.content_profile} · Versione immutabile <Button size="sm" variant="outline" className="ml-3" onClick={() => void fetchProposalThemePreview(selected.slug, selected.version).then(setPreviewHtml).catch((error) => toast.error(getErrorMessage(error)))}>Anteprima</Button></div> : <p className="text-sm text-slate-500">Caricamento temi…</p>}
         </div>
+        {pendingTemplates.length ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><strong>Altri temi in preparazione:</strong> {pendingTemplates.map((item) => `${item.name} ${item.version}`).join(", ")}. Saranno selezionabili dopo l&apos;integrazione del profilo di generazione.</div> : null}
         {previewHtml ? <div className="mt-4 overflow-hidden rounded-xl border bg-white"><div className="flex justify-end border-b p-2"><Button size="sm" variant="ghost" onClick={() => setPreviewHtml("")}>Chiudi</Button></div><iframe title="Anteprima tema selezionato" srcDoc={previewHtml} sandbox="allow-scripts" referrerPolicy="no-referrer" className="h-[620px] w-full" /></div> : null}
       </CommercialSectionCard>
       <Tabs defaultValue="csv">

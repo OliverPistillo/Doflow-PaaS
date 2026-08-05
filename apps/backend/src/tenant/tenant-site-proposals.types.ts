@@ -84,7 +84,7 @@ export type TemplateManifest = {
   sourceSha256: string;
 };
 
-export type ProposalContentProfile = 'colsova-legacy-v1' | 'proposal-basic-v2' | 'colsova-conversion-v1';
+export type ProposalContentProfile = 'colsova-legacy-v1' | 'proposal-basic-v2' | 'colsova-conversion-v1' | 'beauty-editorial-v1' | 'beauty-conversion-v1';
 export type PreparationStatus = 'idle' | 'queued' | 'running' | 'ready' | 'fallback' | 'failed';
 export type ProposalPreparationActor = { id?: string | null; email?: string | null; role?: string | null };
 export type ProposalPreparationOptions = {

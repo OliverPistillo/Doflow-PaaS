@@ -99,8 +99,14 @@ describe('ensureDoflowSiteProposalTables', () => {
     expect(createQueryRunner).toHaveBeenCalledTimes(1);
     expect(runner.commitTransaction).toHaveBeenCalledTimes(1);
     const templateInserts = runner.query.mock.calls.filter(([sql]: [string]) => sql.includes('INSERT INTO "doflow".site_proposal_templates'));
-    expect(templateInserts).toHaveLength(3);
-    expect(templateInserts.map((call: any[]) => call[1][2])).toEqual(['1.0.0', '2.0.0', '2.4.1']);
+    expect(templateInserts).toHaveLength(5);
+    expect(templateInserts.map((call: any[]) => `${call[1][0]}@${call[1][2]}`)).toEqual([
+      'colsova@1.0.0',
+      'colsova@2.0.0',
+      'colsova@2.4.1',
+      'aurea@1.2.0',
+      'luce@1.2.0',
+    ]);
   });
 
   it('keeps provisioning isolated between different DataSources', async () => {
