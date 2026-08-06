@@ -21,3 +21,7 @@
 ## 2026-06-30 - [Projects UX Deletions & Custom Confirm Dialogs]
 **Learning:** Native `window.confirm` dialogs are highly inaccessible, lack unified styling, and degrade premium SaaS experiences. Replacing them with an accessible `AlertDialog` wrapper like the existing custom `useConfirm` hook ensures keyboard operability, screen reader support, and design continuity.
 **Action:** Always replace legacy browser native confirm dialogs with the custom, accessible `ConfirmDialog` hook.
+
+## 2026-07-01 - [Centralized CRM Confirm Dialog Modernization]
+**Learning:** When refactoring key delete action triggers within shared components like `CrmResourcePage` (which powers Companies, Contacts, Leads, Opportunities, and Activities), replacing raw `window.confirm` calls with the custom `useConfirm` / `ConfirmDialog` immediately upgrades the visual quality and keyboard accessibility across multiple core pages simultaneously. Sighted users get an integrated UI experience, while screen reader users gain standard keyboard-operable AlertDialog modals.
+**Action:** Always check for shared or generic resource pages (like `CrmResourcePage`) when applying micro-UX improvements to maximize platform-wide enhancement with minimal footprint.
