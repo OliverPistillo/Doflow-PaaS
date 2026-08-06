@@ -13,6 +13,7 @@ import { PageHeader, PageShell } from "@/components/ui/page-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/useConfirm";
 import { getDoFlowUser } from "@/lib/jwt";
 import {
   archiveDocument,
@@ -61,6 +62,7 @@ function saveBlob(blob: Blob, filename: string) {
 export function DocumentDetailPage({ documentId }: { documentId: string }) {
   const router = useRouter();
   const { toast } = useToast();
+  const { ConfirmDialog, confirm } = useConfirm();
   const canViewFinance = canViewFinanceDocuments(getDoFlowUser()?.role);
   const [document, setDocument] = useState<TenantDocument | null>(null);
   const [folders, setFolders] = useState<DocumentFolder[]>([]);
@@ -218,7 +220,17 @@ export function DocumentDetailPage({ documentId }: { documentId: string }) {
             ) : (
               <Button className="w-full" variant="outline" onClick={() => mutateStatus("archive")}><Archive className="mr-2 h-4 w-4" /> Archivia</Button>
             )}
-            <Button className="w-full" variant="outline" onClick={() => { if (window.confirm("Eliminare questo documento?")) void mutateStatus("delete"); }}>
+            <Button className="w-full" variant="outline" onClick={async () => {
+              const ok = await confirm({
+                title: "Eliminare questo documento?",
+                description: "L'operazione è soft delete.",
+                confirmLabel: "Elimina",
+                variant: "destructive",
+              });
+              if (ok) {
+                void mutateStatus("delete");
+              }
+            }}>
               <Trash2 className="mr-2 h-4 w-4 text-destructive" />
               Elimina soft delete
             </Button>
@@ -273,6 +285,7 @@ export function DocumentDetailPage({ documentId }: { documentId: string }) {
           )}
         </CardContent>
       </Card>
+      <ConfirmDialog />
     </PageShell>
   );
 }
