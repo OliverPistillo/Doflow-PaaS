@@ -184,7 +184,6 @@ export function applyAllowedConfigOverrides(config: JsonObject, overrides: JsonO
     }
     setPath(config, parts, value);
   }
-  forceTemplateContract(config);
 }
 
 export function applyPaletteOverrides(config: JsonObject, overrides: JsonObject) {

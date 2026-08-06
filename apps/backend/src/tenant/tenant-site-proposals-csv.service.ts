@@ -361,8 +361,8 @@ export class TenantSiteProposalsCsvService {
     canonical.productsImageUrl = validateImageUrl(canonical.productsImageUrl);
     canonical.services = canonical.services.map((s) => cleanString(s, 160)).filter(Boolean) as string[];
     canonical.brands = canonical.brands.map((s) => cleanString(s, 100)).filter(Boolean) as string[];
-    canonical.paletteOverrides = paletteOverrides;
-    canonical.configOverrides = configOverrides;
+    if (Object.keys(paletteOverrides).length > 0) canonical.paletteOverrides = paletteOverrides;
+    if (Object.keys(configOverrides).length > 0) canonical.configOverrides = configOverrides;
     return canonical;
   }
 
@@ -371,8 +371,8 @@ export class TenantSiteProposalsCsvService {
       const built = registration
         ? buildDeterministicProposalForTemplate(defaultConfig, registration, input)
         : buildDeterministicProposal(defaultConfig, input);
-      if (input.paletteOverrides) applyPaletteOverrides(built.config, input.paletteOverrides);
-      if (input.configOverrides) applyAllowedConfigOverrides(built.config, input.configOverrides, warnings);
+      if (input.paletteOverrides && Object.keys(input.paletteOverrides).length > 0) applyPaletteOverrides(built.config, input.paletteOverrides);
+      if (input.configOverrides && Object.keys(input.configOverrides).length > 0) applyAllowedConfigOverrides(built.config, input.configOverrides, warnings);
       forceTemplateContract(built.config, registration);
       validateSiteConfig(built.config, registration);
       return built.config;
@@ -426,8 +426,8 @@ export class TenantSiteProposalsCsvService {
       products: { ...((((config.images as JsonObject)?.products) || {}) as JsonObject), src: input.productsImageUrl || '', alt: `${input.businessName} - servizi` },
     };
     config.content = this.buildContent(config, input, firstThree, warnings);
-    if (input.paletteOverrides) applyPaletteOverrides(config, input.paletteOverrides);
-    if (input.configOverrides) applyAllowedConfigOverrides(config, input.configOverrides, warnings);
+    if (input.paletteOverrides && Object.keys(input.paletteOverrides).length > 0) applyPaletteOverrides(config, input.paletteOverrides);
+    if (input.configOverrides && Object.keys(input.configOverrides).length > 0) applyAllowedConfigOverrides(config, input.configOverrides, warnings);
     forceTemplateContract(config, registration);
     validateSiteConfig(config, registration);
     return config;

@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { TenantSiteProposalsCsvService } from './tenant-site-proposals-csv.service';
 import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
+import type { DynamicRegistration } from './tenant-site-proposals-template.service';
 import { getTemplateRegistration } from './tenant-site-proposals-template-registry';
 import {
   buildSiteProposalCsvTemplate,
@@ -8,6 +9,37 @@ import {
   csvTemplateHeaders,
 } from '../../../frontend/src/components/tenant-site-proposals/site-proposal-csv-template';
 import { ITALIAN_CSV_FIXTURE } from './tenant-site-proposals-csv.fixture';
+
+async function uploadedAureaFixture(): Promise<{ defaultConfig: any; registration: DynamicRegistration }> {
+  const templates = new TenantSiteProposalsTemplateService();
+  const defaultConfig = JSON.parse(JSON.stringify(await templates.getDefaultConfig('aurea', '1.2.0')));
+  defaultConfig.template = {
+    ...defaultConfig.template,
+    name: 'Aurea Custom',
+    slug: 'aurea-custom',
+    schemaVersion: '2.0',
+    templateVersion: '3.0.0',
+  };
+  const registration: DynamicRegistration = {
+    ...getTemplateRegistration('aurea', '1.2.0'),
+    slug: 'aurea-custom',
+    name: 'Aurea Custom',
+    version: '3.0.0',
+    schemaVersion: '2.0',
+    contractVersion: '2.1',
+    contentProfile: 'beauty-editorial-v1',
+    sourceSha256: 'uploaded-aurea-custom-3-source',
+    directory: 'uploaded/aurea-custom/3.0.0',
+    isBuiltin: false,
+    sourceKind: 'uploaded',
+    isActive: true,
+    isLatest: true,
+    runtimeAdapterStatus: 'ready',
+    selectableForProposal: true,
+    selectableForImport: true,
+  };
+  return { defaultConfig, registration };
+}
 
 describe('TenantSiteProposalsCsvService', () => {
   let service: TenantSiteProposalsCsvService;
@@ -228,19 +260,36 @@ describe('TenantSiteProposalsCsvService', () => {
     expect(preview[1].errors[0].code).toBe('DUPLICATE_ROW');
   });
 
-  it('validates four uploaded beauty-theme rows and preserves their canonical data', async () => {
-    const templates = new TenantSiteProposalsTemplateService();
-    const base = await templates.getDefaultConfig('aurea', '1.2.0');
-    const registration = { ...getTemplateRegistration('aurea', '1.2.0'), slug: 'aurea-custom', version: '2.0.0', name: 'Aurea Custom', isBuiltin: false };
-    const parsed = service.parseCsvText([
-      'attività;categoria;città;referente pubblico;ruolo pubblico;telefono;email;sito;indirizzo;servizi;note',
-      ...Array.from({ length: 4 }, (_, index) => `Studio ${index + 1};Centro estetico;Roma;Referente ${index + 1};Titolare;+39 06000000${index};info${index}@example.it;https://studio${index}.example.it;Via Roma ${index + 1};Viso|Corpo;Nota ${index + 1}`),
-    ].join('\n'));
-    const preview = service.buildPreviewRows(parsed.rows, base, registration);
+  it('validates the exact four Italian rows with a real uploaded Aurea Custom contract', async () => {
+    const { defaultConfig: uploadedConfig, registration } = await uploadedAureaFixture();
+    const parsed = service.parseCsvText(ITALIAN_CSV_FIXTURE);
+    const normalized = parsed.rows.map((row) => service.normalizeRow(row));
+    const preview = service.buildPreviewRows(parsed.rows, uploadedConfig, registration);
+
+    expect(uploadedConfig.template).toMatchObject({ name: 'Aurea Custom', slug: 'aurea-custom', templateVersion: '3.0.0' });
+    expect(JSON.stringify(uploadedConfig.template)).not.toContain('aurea@1.2.0');
+    expect(normalized.every((row) => row.configOverrides === undefined)).toBe(true);
+    expect(normalized.every((row) => row.paletteOverrides === undefined)).toBe(true);
     expect(preview).toHaveLength(4);
     expect(preview.every((row) => row.valid)).toBe(true);
-    expect(preview[0].canonical).toMatchObject({ businessName: 'Studio 1', category: 'Centro estetico', city: 'Roma', publicContactName: 'Referente 1', professionalTitle: 'Titolare', services: ['Viso', 'Corpo'] });
-    expect((preview[0].siteConfig?.template as any).slug).toBe('aurea-custom');
+    expect(preview.flatMap((row) => row.errors).some((error) => error.message.includes('Template non trovato'))).toBe(false);
+    expect(preview.every((row) => row.canonical?.businessName && row.canonical.category === 'Centro estetico' && row.canonical.city === 'Reggio Emilia')).toBe(true);
+    expect(preview.every((row) => (row.siteConfig?.template as any).slug === 'aurea-custom')).toBe(true);
+    expect(preview.every((row) => (row.siteConfig?.template as any).templateVersion === '3.0.0')).toBe(true);
+  });
+
+  it('applies a real allowed override without losing the uploaded registration', async () => {
+    const { defaultConfig: uploadedConfig, registration } = await uploadedAureaFixture();
+    const lines = ITALIAN_CSV_FIXTURE.replace(/^\uFEFF/, '').trimEnd().split(/\r?\n/);
+    const parsed = service.parseCsvText(`${lines[0]};config.content.hero.eyebrow\n${lines[1]};Titolo uploaded personalizzato`);
+    const canonical = service.normalizeRow(parsed.rows[0]);
+    const preview = service.buildPreviewRows(parsed.rows, uploadedConfig, registration);
+
+    expect(canonical.configOverrides).toEqual({ content: { hero: { eyebrow: 'Titolo uploaded personalizzato' } } });
+    expect(preview).toHaveLength(1);
+    expect(preview[0].valid).toBe(true);
+    expect((preview[0].siteConfig?.content as any).hero.eyebrow).toBe('Titolo uploaded personalizzato');
+    expect(preview[0].siteConfig?.template).toMatchObject({ slug: 'aurea-custom', templateVersion: '3.0.0' });
   });
 
   it('builds a valid SiteConfig with warnings and fixed counts', () => {
