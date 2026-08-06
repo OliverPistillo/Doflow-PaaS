@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import axios, { AxiosResponse } from 'axios';
 import sharp from 'sharp';
 import { getProposalImageCandidates, ProposalImageSlot } from './tenant-site-proposals-image-catalog';
-import { JsonObject, ProposalImageSourceMethod, WebsiteImageCandidate, WebsiteSnapshot } from './tenant-site-proposals.types';
+import { JsonObject, ProposalImageSourceMethod, ThemeImageMode, WebsiteImageCandidate, WebsiteSnapshot } from './tenant-site-proposals.types';
 import { TenantSiteProposalsWebsiteFetcherService } from './tenant-site-proposals-website-fetcher.service';
 
 const CATALOG_HOST = 'images.unsplash.com';
@@ -23,7 +23,16 @@ export class TenantSiteProposalsImageService {
 
   constructor(private readonly fetcher: TenantSiteProposalsWebsiteFetcherService) {}
 
-  async resolveImages(snapshot: WebsiteSnapshot | undefined, currentImages: JsonObject, fingerprint: string, category: string | undefined, force: boolean) {
+  async resolveImages(
+    snapshot: WebsiteSnapshot | undefined,
+    currentImages: JsonObject,
+    fingerprint: string,
+    category: string | undefined,
+    force: boolean,
+    mode: ThemeImageMode = 'hybrid',
+    themeImages: JsonObject = currentImages,
+    assetMap: JsonObject = {},
+  ) {
     const warnings: string[] = [];
     const result = {} as Record<ProposalImageSlot, ResolvedProposalImage>;
     const used = new Set<string>();
@@ -31,37 +40,49 @@ export class TenantSiteProposalsImageService {
       const current = currentImages[slot] as JsonObject | undefined;
       const src = String(current?.src || '');
       const method = String(current?.sourceMethod || '');
-      const preserve = /^https?:\/\//i.test(src) && (method === 'manual' || (!force && !method));
+      const preserve = this.safeImage(src) && (method === 'manual' || (!force && !method));
       if (preserve) {
         result[slot] = { src, alt: String(current?.alt || this.altFor(slot)), objectPosition: String(current?.objectPosition || 'center'), sourceMethod: 'manual' };
         used.add(this.normalize(src));
       }
     }
 
-    const valid = snapshot ? await this.validateWebsiteCandidates(snapshot.photoCandidates || snapshot.imageCandidates.map((url, order) => ({ url, alt: '', context: '', kind: order === 0 ? 'og' : 'content', order }))) : [];
-    for (const slot of ['hero', 'consultation', 'feature'] as ProposalImageSlot[]) {
-      if (result[slot]) continue;
-      const selected = this.rank(valid, slot).find((candidate) => !used.has(this.normalize(candidate.finalUrl)));
-      if (!selected) continue;
-      result[slot] = { src: selected.finalUrl, alt: selected.alt || this.altFor(slot), objectPosition: 'center', sourceMethod: 'website' };
-      used.add(this.normalize(selected.finalUrl));
-    }
-
-    for (const slot of ['hero', 'consultation', 'feature'] as ProposalImageSlot[]) {
-      if (result[slot]) continue;
-      const current = currentImages[slot] as JsonObject | undefined;
-      const src = String(current?.src || '');
-      if (/^data:image\/(?:webp|png|jpeg);base64,/i.test(src)) {
-        result[slot] = { src, alt: String(current?.alt || this.altFor(slot)), objectPosition: String(current?.objectPosition || 'center'), sourceMethod: 'stock_local' };
+    if (mode === 'website' || mode === 'hybrid') {
+      const valid = snapshot ? await this.validateWebsiteCandidates(snapshot.photoCandidates || snapshot.imageCandidates.map((url, order) => ({ url, alt: '', context: '', kind: order === 0 ? 'og' : 'content', order }))) : [];
+      for (const slot of ['hero', 'consultation', 'feature'] as ProposalImageSlot[]) {
+        if (result[slot]) continue;
+        const selected = this.rank(valid, slot).find((candidate) => !used.has(this.normalize(candidate.finalUrl)));
+        if (!selected) continue;
+        result[slot] = { src: selected.finalUrl, alt: selected.alt || this.altFor(slot), objectPosition: 'center', sourceMethod: 'website' };
+        used.add(this.normalize(selected.finalUrl));
       }
     }
 
     for (const slot of ['hero', 'consultation', 'feature'] as ProposalImageSlot[]) {
       if (result[slot]) continue;
-      const resolved = await this.resolveReachableCatalogImage(category, slot, fingerprint, used);
-      result[slot] = resolved.image;
-      warnings.push(...resolved.warnings);
-      used.add(this.normalize(resolved.image.src));
+      const themed = themeImages[slot] as JsonObject | undefined;
+      const src = String(themed?.src || '');
+      if (this.safeImage(src)) {
+        const declaration = assetMap[`images.${slot}.src`] as JsonObject | undefined;
+        result[slot] = {
+          ...themed,
+          src,
+          alt: String(themed?.alt || this.altFor(slot)),
+          objectPosition: String(themed?.objectPosition || 'center'),
+          sourceMethod: 'theme-package',
+          ...(declaration ? { assetSha256: declaration.sha256, assetMime: declaration.mime, assetPath: declaration.path } : {}),
+        } as ResolvedProposalImage;
+      }
+    }
+
+    if (mode === 'website' || mode === 'hybrid') {
+      for (const slot of ['hero', 'consultation', 'feature'] as ProposalImageSlot[]) {
+        if (result[slot]) continue;
+        const resolved = await this.resolveReachableCatalogImage(category, slot, fingerprint, used);
+        result[slot] = resolved.image;
+        warnings.push(...resolved.warnings);
+        used.add(this.normalize(resolved.image.src));
+      }
     }
     return { images: result, warnings: [...new Set(warnings)] };
   }
@@ -144,6 +165,7 @@ export class TenantSiteProposalsImageService {
   }
 
   private assertCatalogUrl(rawUrl: string) { const url = new URL(rawUrl); if (url.protocol !== 'https:' || url.hostname !== CATALOG_HOST || url.username || url.password) throw new Error('URL catalogo non consentito'); return url; }
+  private safeImage(value: string) { return /^https?:\/\/[^\s]+$/i.test(value) || /^data:image\/(?:webp|png|jpe?g|svg\+xml);base64,[a-z0-9+/=]+$/i.test(value); }
   private normalize(rawUrl: string) { try { const url = new URL(rawUrl); url.hash = ''; return url.toString(); } catch { return ''; } }
   private cache(url: string, reachable: boolean) { if (this.availability.size >= this.availabilityMax) this.availability.delete(this.availability.keys().next().value as string); this.availability.set(url, { reachable, expiresAt: Date.now() + this.availabilityTtlMs }); }
   private destroy(value: unknown) { if (value && typeof (value as { destroy?: unknown }).destroy === 'function') (value as { destroy: () => void }).destroy(); }

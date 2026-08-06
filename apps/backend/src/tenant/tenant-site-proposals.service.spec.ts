@@ -166,18 +166,38 @@ describe('TenantSiteProposalsService', () => {
     expect(enqueue).toHaveBeenCalledTimes(5); expect(result).toMatchObject({ total: 5, queued: 4, failed: 1 }); expect(result.results[1]).toMatchObject({ proposalId: ids[1], failed: true });
   });
 
-  it('keeps batch generation summaries when individual generations fail', async () => {
+  it('routes the legacy batch generate action through preparation and isolates enqueue failures', async () => {
     const importId = '650e8400-e29b-41d4-a716-446655440000';
     const proposalId = '750e8400-e29b-41d4-a716-446655440000';
     const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
-    jest.spyOn(service, 'getImport').mockResolvedValue({ id: importId, status: 'confirmed' } as any);
-    jest.spyOn(service, 'generateProposal')
-      .mockResolvedValueOnce({ id: uuid, status: 'completed' } as any)
-      .mockResolvedValueOnce({ id: proposalId, status: 'failed', error_message: 'Render non riuscito' } as any);
-    queryMock.mockResolvedValueOnce([{ id: uuid }, { id: proposalId }]).mockResolvedValue([]);
+    const generate = jest.spyOn(service, 'generateProposal');
+    const enqueue = jest.fn().mockResolvedValueOnce({ queued: true }).mockRejectedValueOnce(new Error('dispatch failed'));
+    (service as any).preparationQueue = { enqueue };
+    queryMock.mockResolvedValueOnce([{ id: uuid, template_slug: 'colsova', template_version: '2.4.1' }, { id: proposalId, template_slug: 'colsova', template_version: '2.4.1' }]).mockResolvedValue([]);
 
-    await expect(service.generateImport(importId)).resolves.toMatchObject({ total: 2, success: 1, failed: 1 });
-    expect(queryMock).toHaveBeenCalledWith(expect.stringContaining('site_proposal_import_batches SET status = $2'), [importId, 'partial']);
+    await expect(service.generateImport(importId)).resolves.toMatchObject({ total: 2, queued: 1, failed: 1 });
+    expect(enqueue).toHaveBeenCalledTimes(2);
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it.each(['queued', 'running'])('returns preparing preview state instead of transient 404 for %s', async (preparationStatus) => {
+    const { service } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    (service as any).one = jest.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce({ id: uuid, preparation_status: preparationStatus, progress_percent: 60, progress_stage: 'images', progress_message: 'Selezione immagini' });
+    await expect(service.previewState(uuid)).resolves.toMatchObject({ status: 'preparing', progressPercent: 60, progressStage: 'images', retryAfterSeconds: 2 });
+  });
+
+  it('streams a previous completed generation consistently during a new preparation', async () => {
+    const generationId = '650e8400-e29b-41d4-a716-446655440000';
+    const { service, storage } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    const stream = { pipe: jest.fn() }; storage.downloadObjectStream.mockResolvedValue({ stream });
+    (service as any).one = jest.fn().mockResolvedValueOnce({ id: generationId, html_key: `doflow/site-proposals/${uuid}/${generationId}/index.html` });
+    await expect(service.previewState(uuid)).resolves.toMatchObject({ status: 'completed', stream });
+  });
+
+  it('returns a coherent application conflict after failure without a completed generation', async () => {
+    const { service } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    (service as any).one = jest.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce({ id: uuid, preparation_status: 'failed', preparation_error: 'Validazione proposta fallita' });
+    await expect(service.previewState(uuid)).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('download verifies generation belongs to proposal and archive is soft', async () => {

@@ -29,15 +29,19 @@ export class TenantSiteProposalsThemeService {
     @Optional() private readonly compiler?: TenantSiteProposalsThemeCompilerService,
   ) {}
 
-  async list() {
+  async list(filter = 'all') {
     this.access(false); await this.ensure(); const s = this.schema();
+    const filters: Record<string, string> = { active: `v.deleted_at IS NULL AND v.status IN ('active','draft')`, disabled: `v.deleted_at IS NULL AND v.status='disabled'`, deleted: `v.deleted_at IS NOT NULL`, all: 'true' };
+    if (!filters[filter]) throw new BadRequestException('Filtro temi non valido');
     return this.ds().query(`
       SELECT t.id,t.slug,t.name,t.description,t.source_kind,t.is_active,t.default_version,t.categories,t.created_at,t.updated_at,
         v.id version_id,v.version,v.schema_version,v.contract_version,v.content_profile,v.status,v.is_builtin,v.is_immutable,
         v.template_sha256,v.template_size,v.zip_sha256,v.zip_size,v.validation_report,v.created_at version_created_at,
-        v.source_format,v.format_version,v.compiled_sha256,v.compiled_size,v.runtime_adapter_status,v.manifest,
+        v.source_format,v.format_version,v.compiled_sha256,v.compiled_size,v.runtime_adapter_status,v.manifest,v.deleted_at,
+        CASE WHEN t.source_kind='uploaded' THEN 'theme' ELSE 'hybrid' END default_image_mode,
         (SELECT count(*)::int FROM "${s}".site_proposals p WHERE p.template_slug=t.slug AND p.template_version=v.version) usages
       FROM "${s}".site_proposal_themes t JOIN "${s}".site_proposal_theme_versions v ON v.theme_id=t.id
+      WHERE ${filters[filter]}
       ORDER BY t.name,v.created_at DESC
     `);
   }
@@ -122,7 +126,7 @@ export class TenantSiteProposalsThemeService {
       await runner.query(`SELECT id FROM "${this.schema()}".site_proposal_themes FOR UPDATE`);
       const row = (await runner.query(`SELECT v.*,t.id theme_id,t.is_active theme_active FROM "${this.schema()}".site_proposal_themes t JOIN "${this.schema()}".site_proposal_theme_versions v ON v.theme_id=t.id WHERE t.slug=$1 AND v.version=$2`, [slug, version]))[0];
       if (!row) throw new NotFoundException('Tema non trovato');
-      if (row.runtime_adapter_status !== 'ready') throw new ConflictException('Tema disponibile in anteprima, adattatore di generazione non ancora attivo.');
+      if (row.deleted_at || row.runtime_adapter_status !== 'ready') throw new ConflictException('Tema disponibile in anteprima, adattatore di generazione non ancora attivo.');
       if (row.status !== 'active' || row.theme_active !== true || !['2.0'].includes(String(row.schema_version)) || !['2.0','2.1'].includes(String(row.contract_version)) || !hasProposalContentProfileAdapter(String(row.content_profile))) throw new ConflictException('Solo una versione attiva e compatibile può diventare predefinita');
       await runner.query(`UPDATE "${this.schema()}".site_proposal_themes SET default_version=NULL,updated_at=CASE WHEN default_version IS NOT NULL THEN now() ELSE updated_at END WHERE default_version IS NOT NULL`);
       await runner.query(`UPDATE "${this.schema()}".site_proposal_themes SET default_version=$1,updated_at=now() WHERE id=$2`, [version, row.theme_id]);
@@ -140,19 +144,33 @@ export class TenantSiteProposalsThemeService {
     try {
       await runner.connect(); await runner.startTransaction();
       const rows = await runner.query(`SELECT v.*,t.slug,t.default_version,t.source_kind FROM "${this.schema()}".site_proposal_theme_versions v JOIN "${this.schema()}".site_proposal_themes t ON t.id=v.theme_id WHERE t.slug=$1 AND v.version=$2 FOR UPDATE`, [slug, version]);
-      const row = rows[0]; if (!row) throw new NotFoundException('Tema non trovato');
+      const row = rows[0];
+      if (!row) {
+        const cleanup = (await runner.query(`SELECT status FROM "${this.schema()}".site_proposal_theme_storage_cleanup WHERE storage_prefix=$1 ORDER BY created_at DESC LIMIT 1`, [this.storage.proposalThemePrefix(slug, version)]))[0];
+        if (cleanup) { await runner.commitTransaction(); return { deleted: true, deletionMode: 'purged', fallbackDefault: null, affectedProposals: 0, storageCleanupStatus: cleanup.status }; }
+        throw new NotFoundException('Tema non trovato');
+      }
       if (row.is_builtin || row.source_kind === 'builtin') throw new ConflictException('I temi built-in non possono essere eliminati');
-      if (row.default_version === version) throw new ConflictException('Il tema predefinito non può essere eliminato');
-      if (row.status === 'active') throw new ConflictException('Disattiva il tema prima di eliminarlo');
-      const used = (await runner.query(`SELECT 1 FROM "${this.schema()}".site_proposals WHERE template_slug=$1 AND template_version=$2 LIMIT 1`, [slug, version]))[0];
-      if (used) throw new ConflictException('Il tema è stato utilizzato da almeno una proposta');
+      const usage = (await runner.query(`SELECT count(*)::int count FROM "${this.schema()}".site_proposals WHERE template_slug=$1 AND template_version=$2`, [slug, version]))[0];
+      const affectedProposals = Number(usage?.count || 0);
+      const historical = (await runner.query(`SELECT count(*)::int count FROM "${this.schema()}".site_proposal_generations g JOIN "${this.schema()}".site_proposals p ON p.id=g.proposal_id WHERE g.template_slug=$1 AND g.template_version=$2`, [slug, version]))[0];
+      const referenced = affectedProposals > 0 || Number(historical?.count || 0) > 0;
+      const fallbackDefault = row.default_version === version ? await this.assignFallbackDefault(runner, row.id) : null;
+      if (referenced) {
+        if (!row.deleted_at) {
+          await runner.query(`UPDATE "${this.schema()}".site_proposal_theme_versions SET status='disabled',deleted_at=now() WHERE id=$1`, [row.id]);
+          await this.activity(runner, row.theme_id, row.id, 'THEME_RETIRED', user, { version, affectedProposals });
+        }
+        await runner.commitTransaction(); this.templates.invalidate(this.schema(), slug, version);
+        return { deleted: true, deletionMode: 'retired', fallbackDefault, affectedProposals, storageCleanupStatus: 'preserved' };
+      }
       const cleanupId = await this.cleanup.record(this.storage.proposalThemePrefix(slug, version), runner);
       await this.activity(runner, row.theme_id, row.id, 'THEME_DELETED', user, { version });
       await runner.query(`DELETE FROM "${this.schema()}".site_proposal_theme_versions WHERE id=$1`, [row.id]);
       await runner.query(`DELETE FROM "${this.schema()}".site_proposal_themes t WHERE t.id=$1 AND t.source_kind='uploaded' AND NOT EXISTS (SELECT 1 FROM "${this.schema()}".site_proposal_theme_versions v WHERE v.theme_id=t.id)`, [row.theme_id]);
       await runner.commitTransaction(); this.templates.invalidate(this.schema(), slug, version);
       const cleanupStatus = await this.cleanup.process(cleanupId);
-      return { deleted: true, slug, version, cleanupPending: cleanupStatus !== 'completed' };
+      return { deleted: true, deletionMode: 'purged', fallbackDefault, affectedProposals, storageCleanupStatus: cleanupStatus, cleanupPending: cleanupStatus !== 'completed' };
     } catch (error) { original = error; if (runner.isTransactionActive) await runner.rollbackTransaction().catch(() => undefined); throw error; }
     finally { await runner.release().catch((error) => { if (!original) throw error; }); }
   }
@@ -160,6 +178,7 @@ export class TenantSiteProposalsThemeService {
   private async setStatus(slug: string, version: string, status: 'active'|'disabled') {
     const user = this.access(true); this.identity(slug, version); await this.ensure(); const row = await this.row(slug, version);
     if (!row) throw new NotFoundException('Tema non trovato');
+    if (row.deleted_at) throw new ConflictException('Il tema è stato eliminato dalla Libreria');
     if (status === 'disabled' && row.default_version === version) throw new ConflictException('Il tema predefinito non può essere disattivato');
     if (status === 'disabled' && row.is_builtin) throw new ConflictException('I temi built-in non possono essere disattivati');
     await this.ds().query(`UPDATE "${this.schema()}".site_proposal_theme_versions SET status=$1,activated_at=CASE WHEN $1='active' THEN now() ELSE activated_at END WHERE id=$2`, [status, row.id]);
@@ -170,6 +189,13 @@ export class TenantSiteProposalsThemeService {
 
   private async row(slug: string, version: string) {
     return (await this.ds().query(`SELECT v.*,t.id theme_id,t.slug,t.name,t.source_kind,t.default_version,t.categories,t.is_active theme_active FROM "${this.schema()}".site_proposal_themes t JOIN "${this.schema()}".site_proposal_theme_versions v ON v.theme_id=t.id WHERE t.slug=$1 AND v.version=$2 LIMIT 1`, [slug, version]))[0];
+  }
+  private async assignFallbackDefault(runner: { query: (...args: any[]) => Promise<any> }, excludedVersionId: string) {
+    const fallback = (await runner.query(`SELECT t.id,t.slug,v.version FROM "${this.schema()}".site_proposal_themes t JOIN "${this.schema()}".site_proposal_theme_versions v ON v.theme_id=t.id WHERE v.id<>$1 AND t.is_active=true AND v.status='active' AND v.deleted_at IS NULL AND v.runtime_adapter_status='ready' ORDER BY CASE WHEN t.slug='colsova' AND v.version='2.4.1' THEN 0 ELSE 1 END,t.updated_at DESC LIMIT 1`, [excludedVersionId]))[0];
+    if (!fallback) throw new ConflictException('Impossibile eliminare il tema predefinito: nessun fallback pronto');
+    await runner.query(`UPDATE "${this.schema()}".site_proposal_themes SET default_version=NULL,updated_at=now() WHERE default_version IS NOT NULL`);
+    await runner.query(`UPDATE "${this.schema()}".site_proposal_themes SET default_version=$1,updated_at=now() WHERE id=$2`, [fallback.version, fallback.id]);
+    return { slug: fallback.slug, version: fallback.version };
   }
   private identity(slug: string, version: string) { if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new BadRequestException('Tema o versione non validi'); }
   private access(write: boolean): AuthUserRef {

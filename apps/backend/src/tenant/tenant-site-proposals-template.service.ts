@@ -229,7 +229,7 @@ export class TenantSiteProposalsTemplateService {
     let versionWhere = 'v.version=t.default_version';
     if (version) { params.push(version); versionWhere = `v.version=$${params.length}`; }
     const statuses = allowDraft ? "('active','draft')" : "('active')";
-    const rows = await safe.dataSource.query(`SELECT t.slug,t.name,t.categories,t.default_version,v.version,v.schema_version,v.contract_version,v.content_profile,v.status,v.template_sha256,v.template_size,v.manifest,v.default_config,v.source_format,v.format_version,v.compiled_sha256,v.compiled_size,v.runtime_adapter_status FROM "${safe.schema}".site_proposal_themes t JOIN "${safe.schema}".site_proposal_theme_versions v ON v.theme_id=t.id WHERE t.slug=$1 AND ${versionWhere} AND t.is_active=true AND v.status IN ${statuses} LIMIT 1`, params);
+    const rows = await safe.dataSource.query(`SELECT t.slug,t.name,t.categories,t.default_version,v.version,v.schema_version,v.contract_version,v.content_profile,v.status,v.template_sha256,v.template_size,v.manifest,v.default_config,v.source_format,v.format_version,v.compiled_sha256,v.compiled_size,v.runtime_adapter_status FROM "${safe.schema}".site_proposal_themes t JOIN "${safe.schema}".site_proposal_theme_versions v ON v.theme_id=t.id WHERE t.slug=$1 AND ${versionWhere} AND t.is_active=true AND v.deleted_at IS NULL AND v.status IN ${statuses} LIMIT 1`, params);
     const row = rows[0];
     if (!row) throw new NotFoundException('Template non trovato');
     const registration = {

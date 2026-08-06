@@ -79,6 +79,33 @@ describe('proposal image pipeline', () => {
     const result = await service.resolveImages(undefined, { hero: { src: publicUrl('manual'), alt: 'Manuale', sourceMethod: 'manual' } }, 'fp', 'generic', true);
     expect(result.images.hero).toMatchObject({ src: publicUrl('manual'), sourceMethod: 'manual' });
   });
+  it('uses uploaded package sentinels exclusively in theme mode and preserves asset metadata', async () => {
+    const themed = { hero: { src: 'data:image/webp;base64,QUJD', alt: 'Sentinella hero' }, consultation: { src: 'data:image/png;base64,QUJD' }, feature: { src: 'data:image/jpeg;base64,QUJD' } };
+    const assetMap = { 'images.hero.src': { path: 'assets/sentinel.webp', mime: 'image/webp', sha256: 'a'.repeat(64) } };
+    const result = await service.resolveImages(snapshot([candidate('site', 'hero')]), {}, 'fp', 'generic', true, 'theme', themed, assetMap);
+    expect(result.images.hero).toMatchObject({ src: themed.hero.src, sourceMethod: 'theme-package', assetSha256: 'a'.repeat(64), assetMime: 'image/webp' });
+    expect(Object.values(result.images).every((image) => image.sourceMethod === 'theme-package')).toBe(true);
+    expect(fetchImage).not.toHaveBeenCalled(); expect(request).not.toHaveBeenCalled();
+  });
+  it('uses website photographs before package fallback in website mode', async () => {
+    const themed = { hero: { src: 'data:image/webp;base64,QUJD' }, consultation: { src: 'data:image/webp;base64,REVG' }, feature: { src: 'data:image/webp;base64,R0hJ' } };
+    const result = await service.resolveImages(snapshot([candidate('site', 'hero')]), {}, 'fp', 'generic', true, 'website', themed);
+    expect(result.images.hero.sourceMethod).toBe('website');
+    expect(result.images.consultation.sourceMethod).toBe('theme-package');
+    expect(request).not.toHaveBeenCalled();
+  });
+  it('honors manual, website and package precedence in hybrid mode', async () => {
+    const themed = { hero: { src: 'data:image/webp;base64,QUJD' }, consultation: { src: 'data:image/webp;base64,REVG' }, feature: { src: 'data:image/webp;base64,R0hJ' } };
+    const current = { hero: { src: publicUrl('manual'), sourceMethod: 'manual' } };
+    const result = await service.resolveImages(snapshot([candidate('site', 'main', 'consultation')]), current, 'fp', 'generic', true, 'hybrid', themed);
+    expect(result.images.hero.sourceMethod).toBe('manual'); expect(result.images.consultation.sourceMethod).toBe('website'); expect(result.images.feature.sourceMethod).toBe('theme-package');
+  });
+  it('uses manual images then package assets without website or catalog in manual mode', async () => {
+    const themed = { hero: { src: 'data:image/webp;base64,QUJD' }, consultation: { src: 'data:image/webp;base64,REVG' }, feature: { src: 'data:image/webp;base64,R0hJ' } };
+    const result = await service.resolveImages(snapshot([candidate('site')]), { hero: { src: publicUrl('manual'), sourceMethod: 'manual' } }, 'fp', 'generic', true, 'manual', themed);
+    expect(result.images.hero.sourceMethod).toBe('manual'); expect(result.images.consultation.sourceMethod).toBe('theme-package'); expect(result.images.feature.sourceMethod).toBe('theme-package');
+    expect(fetchImage).not.toHaveBeenCalled(); expect(request).not.toHaveBeenCalled();
+  });
   it('records website sourceMethod on validated photographs', async () => {
     const result = await service.resolveImages(snapshot([candidate('site', 'og')]), {}, 'fp', 'generic', false);
     expect(result.images.hero.sourceMethod).toBe('website');

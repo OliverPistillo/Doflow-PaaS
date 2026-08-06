@@ -36,7 +36,7 @@ export class TenantSiteProposalsController {
   }
 
   @Get('themes')
-  listThemes() { return this.themes.list(); }
+  listThemes(@Query('status') status?: string) { return this.themes.list(status || 'active'); }
 
   @Post('themes/upload')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
@@ -125,6 +125,9 @@ export class TenantSiteProposalsController {
     return this.service.listActivity(id, { limit, offset });
   }
 
+  @Get(':id/preparation')
+  preparationStatus(@Param('id') id: string) { return this.service.getPreparationStatus(id); }
+
   @Get(':id')
   get(@Param('id') id: string) {
     return this.service.get(id);
@@ -179,7 +182,12 @@ export class TenantSiteProposalsController {
 
   @Get(':id/preview')
   async preview(@Param('id') id: string, @Query('generationId') generationId: string | undefined, @Res() res: Response) {
-    const stream = await this.service.previewHtml(id, generationId);
+    const preview = await this.service.previewState(id, generationId);
+    if (preview.status === 'preparing') {
+      res.status(202).set({ 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': String(preview.retryAfterSeconds), 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+      res.json({ status: 'preparing', progressPercent: preview.progressPercent, progressStage: preview.progressStage, progressMessage: preview.progressMessage, retryAfterSeconds: preview.retryAfterSeconds });
+      return;
+    }
     res.set({
       'Content-Type': 'text/html; charset=utf-8',
       'Content-Disposition': 'inline',
@@ -188,7 +196,7 @@ export class TenantSiteProposalsController {
       'Content-Security-Policy': "default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'; connect-src 'none'; media-src 'none'",
       'Cross-Origin-Resource-Policy': 'same-origin',
     });
-    stream.pipe(res);
+    preview.stream.pipe(res);
   }
 
   @Get(':id/download/html')

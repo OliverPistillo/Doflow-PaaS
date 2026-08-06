@@ -1,6 +1,7 @@
 import { FileStorageService, ThemePackageUploadError } from '../file-storage.service';
 import { TenantSiteProposalsThemeService } from './tenant-site-proposals-theme.service';
 import { TenantSiteProposalsThemeStorageCleanupService } from './tenant-site-proposals-theme-storage-cleanup.service';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 
 jest.mock('./tenant-site-proposals-schema', () => ({ ensureDoflowSiteProposalTables: jest.fn().mockResolvedValue(undefined) }));
 
@@ -92,5 +93,30 @@ describe('proposal theme storage hardening', () => {
     await expect(service.setDefault('aurea','1.2.0')).rejects.toThrow('adattatore di generazione non ancora attivo');
     expect(statements.some((sql) => sql.includes('SET default_version=NULL'))).toBe(false);
     expect(runner.commitTransaction).not.toHaveBeenCalled();
+  });
+
+  it('retires an uploaded theme with references, preserves storage and assigns Colsova fallback when default', async () => {
+    const runner: any = { isTransactionActive: false, connect: jest.fn(), startTransaction: jest.fn(async () => { runner.isTransactionActive = true; }), commitTransaction: jest.fn(async () => { runner.isTransactionActive = false; }), rollbackTransaction: jest.fn(), release: jest.fn().mockResolvedValue(undefined), query: jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT v.*')) return [{ id: 'version', theme_id: 'theme', slug: 'custom', version: '1.0.0', source_kind: 'uploaded', is_builtin: false, status: 'active', default_version: '1.0.0' }];
+      if (sql.includes('count(*)::int count FROM "doflow".site_proposals')) return [{ count: 2 }];
+      if (sql.includes('site_proposal_generations g')) return [{ count: 1 }];
+      if (sql.includes('SELECT t.id,t.slug')) return [{ id: 'colsova-theme', slug: 'colsova', version: '2.4.1' }];
+      return [];
+    }) };
+    const cleanup = { record: jest.fn(), process: jest.fn() }; const templates = { invalidate: jest.fn() }; const storage = { proposalThemePrefix: jest.fn() };
+    const service = new TenantSiteProposalsThemeService({ createQueryRunner: () => runner } as any, {} as any, storage as any, templates as any, cleanup as any, { user: { id: cleanupId, role: 'admin', tenantId: 'doflow' } }); (service as any).ensure = jest.fn();
+    await expect(service.delete('custom','1.0.0')).resolves.toMatchObject({ deleted: true, deletionMode: 'retired', affectedProposals: 2, fallbackDefault: { slug: 'colsova', version: '2.4.1' }, storageCleanupStatus: 'preserved' });
+    expect(runner.query.mock.calls.some(([sql]: [string]) => sql.includes("status='disabled',deleted_at=now()"))).toBe(true); expect(cleanup.record).not.toHaveBeenCalled(); expect(runner.commitTransaction).toHaveBeenCalled();
+  });
+
+  it('rejects physical deletion of built-in themes', async () => {
+    const runner: any = { isTransactionActive: false, connect: jest.fn(), startTransaction: jest.fn(async () => { runner.isTransactionActive = true; }), commitTransaction: jest.fn(), rollbackTransaction: jest.fn(async () => { runner.isTransactionActive = false; }), release: jest.fn().mockResolvedValue(undefined), query: jest.fn(async (sql: string) => sql.includes('SELECT v.*') ? [{ id: 'version', theme_id: 'theme', source_kind: 'builtin', is_builtin: true }] : []) };
+    const service = new TenantSiteProposalsThemeService({ createQueryRunner: () => runner } as any, {} as any, { proposalThemePrefix: jest.fn() } as any, { invalidate: jest.fn() } as any, {} as any, { user: { id: cleanupId, role: 'admin', tenantId: 'doflow' } }); (service as any).ensure = jest.fn();
+    await expect(service.delete('colsova','2.4.1')).rejects.toBeInstanceOf(ConflictException); expect(runner.commitTransaction).not.toHaveBeenCalled();
+  });
+
+  it('keeps manager theme deletion read-only', async () => {
+    const service = new TenantSiteProposalsThemeService({} as any, {} as any, {} as any, {} as any, {} as any, { user: { id: cleanupId, role: 'manager', tenantId: 'doflow' } });
+    await expect(service.delete('custom','1.0.0')).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

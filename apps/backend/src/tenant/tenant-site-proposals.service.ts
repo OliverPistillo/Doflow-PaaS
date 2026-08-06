@@ -22,7 +22,7 @@ import { buildDeterministicProposal } from './tenant-site-proposals-deterministi
 import { TenantSiteProposalsPreparationQueueService } from './tenant-site-proposals-preparation-queue.service';
 import { TenantSiteProposalsGenerationCoreService } from './tenant-site-proposals-generation-core.service';
 import { evaluateProposalReadiness } from './tenant-site-proposals-readiness';
-import { AuthUserRef, JsonObject, PreviewRow, RowIssue } from './tenant-site-proposals.types';
+import { AuthUserRef, JsonObject, PreviewRow, RowIssue, ThemeImageMode } from './tenant-site-proposals.types';
 import { getProposalContentProfileAdapter, hasProposalContentProfileAdapter } from './tenant-site-proposals-content-profile-adapters';
 import { evaluateProposalPersonalizationDelta } from './tenant-site-proposals-personalization-delta';
 import {
@@ -108,9 +108,9 @@ export class TenantSiteProposalsService {
     this.assertAccess(false);
     this.assertUuid(id);
     await this.ensure();
-    const row = await this.one(`SELECT * FROM "${this.schema()}".site_proposal_import_batches WHERE id = $1`, [id]);
+    const row = await this.one(`SELECT b.*,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',p.id,'source_row_index',p.source_row_index,'display_name',p.display_name,'preparation_status',p.preparation_status,'preparation_error',p.preparation_error,'latest_preparation_job_id',p.latest_preparation_job_id,'progress_percent',p.progress_percent,'progress_stage',p.progress_stage,'progress_message',p.progress_message,'progress_updated_at',p.progress_updated_at,'preparation_heartbeat_at',p.preparation_heartbeat_at,'personalization_status',p.personalization_status) ORDER BY p.source_row_index) FROM "${this.schema()}".site_proposals p WHERE p.import_batch_id=b.id),'[]'::jsonb) proposal_progress FROM "${this.schema()}".site_proposal_import_batches b WHERE b.id = $1`, [id]);
     if (!row) throw new NotFoundException('Import non trovato');
-    return row;
+    return { ...row, proposalProgress: (Array.isArray(row.proposal_progress) ? row.proposal_progress : []).map((item: any) => ({ ...item, ...this.progress(item, false, false) })) };
   }
 
   async confirmImport(id: string) {
@@ -130,6 +130,7 @@ export class TenantSiteProposalsService {
     }
 
     const rows = (batch.rows || []) as PreviewRow[];
+    const imageMode = await this.defaultImageMode(batch.template_slug, batch.template_version);
     const proposals: JsonObject[] = [];
     for (const row of rows.filter((r) => r.valid && r.canonical && r.siteConfig)) {
       const warnings = [...(row.warnings || [])];
@@ -143,13 +144,13 @@ export class TenantSiteProposalsService {
         `
         INSERT INTO "${schema}".site_proposals
           (import_batch_id, source_row_index, source_row_hash, fingerprint, template_slug, template_version, status, display_name,
-           company_id, source_data, site_config, validation_warnings, commercial_analysis, email_subject, email_body, current_version, created_by, updated_by)
-        VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14,1,$15,$15)
+           company_id, source_data, site_config, validation_warnings, commercial_analysis, email_subject, email_body, current_version, image_mode, created_by, updated_by)
+        VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,$8,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14,1,$15,$16,$16)
         ON CONFLICT (import_batch_id, source_row_index) WHERE import_batch_id IS NOT NULL AND source_row_index IS NOT NULL
         DO UPDATE SET updated_at = "${schema}".site_proposals.updated_at
         RETURNING *
         `,
-        [id, row.rowIndex, row.sourceRowHash, row.fingerprint, batch.template_slug, batch.template_version, row.displayName, match.companyId, JSON.stringify(row.canonical), JSON.stringify(deterministic.config), JSON.stringify(warnings), JSON.stringify(analysis), email.subject, email.body, this.userIdOrNull(user.id)],
+        [id, row.rowIndex, row.sourceRowHash, row.fingerprint, batch.template_slug, batch.template_version, row.displayName, match.companyId, JSON.stringify(row.canonical), JSON.stringify(deterministic.config), JSON.stringify(warnings), JSON.stringify(analysis), email.subject, email.body, imageMode, this.userIdOrNull(user.id)],
       );
       await this.createVersion(inserted, 1, user, 'initial');
       await this.activity(inserted.id, ACTIVITY.proposalCreated, user, {});
@@ -164,21 +165,16 @@ export class TenantSiteProposalsService {
         dispatches.push({ proposalId: String(proposal.id), status: result.pendingDispatch ? 'pending_dispatch' : 'queued' });
       } catch (error) { dispatches.push({ proposalId: String(proposal.id), status: 'failed', error: this.sanitizeError(error) }); }
     }
-    return { batch: await this.getImport(id), proposals, queued: dispatches.filter((item) => item.status === 'queued').length, pendingDispatch: dispatches.filter((item) => item.status === 'pending_dispatch').length, failed: dispatches.filter((item) => item.status === 'failed').length, dispatches, idempotent: false };
+    const preparedProposals = proposals.map((proposal) => {
+      const dispatch = dispatches.find((item) => item.proposalId === String(proposal.id));
+      const active = dispatch?.status === 'queued' || dispatch?.status === 'pending_dispatch';
+      return { ...proposal, preparation_status: active ? 'queued' : dispatch?.status === 'failed' ? 'failed' : proposal.preparation_status, ...this.progress({ ...proposal, preparation_status: active ? 'queued' : dispatch?.status === 'failed' ? 'failed' : proposal.preparation_status, latest_preparation_job_id: null, progress_percent: active ? 5 : 0, progress_stage: active ? 'queueing' : dispatch?.status === 'failed' ? 'failed' : 'waiting', progress_message: active ? 'Accodamento completato' : dispatch?.error || 'In attesa' }, false, false) };
+    });
+    return { batch: await this.getImport(id), proposals: preparedProposals, queued: dispatches.filter((item) => item.status === 'queued').length, pendingDispatch: dispatches.filter((item) => item.status === 'pending_dispatch').length, failed: dispatches.filter((item) => item.status === 'failed').length, dispatches, idempotent: false };
   }
 
   async generateImport(id: string) {
-    this.assertAccess(true);
-    this.assertUuid(id);
-    await this.ensure();
-    const batch = await this.getImport(id);
-    if (!['confirmed', 'generated', 'partial'].includes(batch.status)) throw new BadRequestException('Import non confermato');
-    const proposals = await this.ds().query(`SELECT id FROM "${this.schema()}".site_proposals WHERE import_batch_id = $1 AND deleted_at IS NULL AND status <> 'archived' ORDER BY source_row_index LIMIT 50`, [id]);
-    const results = [];
-    for (const proposal of proposals) results.push(await this.generateProposal(proposal.id));
-    const failures = results.filter((r: any) => r.status === 'failed');
-    await this.ds().query(`UPDATE "${this.schema()}".site_proposal_import_batches SET status = $2, generated_at = now() WHERE id = $1`, [id, failures.length ? 'partial' : 'generated']);
-    return { total: results.length, success: results.length - failures.length, failed: failures.length, results };
+    return this.prepareImport(id, {});
   }
 
   async list(query: Record<string, any>) {
@@ -213,12 +209,12 @@ export class TenantSiteProposalsService {
     }
     const sqlWhere = where.join(' AND ');
     const count = await this.one(`SELECT count(*)::int total FROM "${schema}".site_proposals WHERE ${sqlWhere}`, params);
-    const rows = await this.ds().query(`SELECT id, display_name, status, archived_from_status, template_slug, template_version, company_id, current_version, last_generated_at, preparation_status, preparation_error, preparation_queued_at, preparation_started_at, preparation_completed_at, latest_preparation_job_id, personalization_status, email_subject, email_body, commercial_analysis, site_config, EXISTS(SELECT 1 FROM "${schema}".site_proposal_generations g WHERE g.proposal_id=site_proposals.id AND g.status='completed' AND g.proposal_version=site_proposals.current_version) generation_complete, updated_at, deleted_at FROM "${schema}".site_proposals WHERE ${sqlWhere} ORDER BY ${sortBy} ${sortOrder} NULLS LAST LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, limit, offset]);
+    const rows = await this.ds().query(`SELECT id, display_name, status, archived_from_status, template_slug, template_version, company_id, current_version, image_mode, last_generated_at, preparation_status, preparation_error, preparation_queued_at, preparation_started_at, preparation_completed_at, latest_preparation_job_id, progress_percent, progress_stage, progress_message, progress_updated_at, preparation_heartbeat_at, personalization_status, email_subject, email_body, commercial_analysis, site_config, EXISTS(SELECT 1 FROM "${schema}".site_proposal_generations g WHERE g.proposal_id=site_proposals.id AND g.status='completed' AND g.proposal_version=site_proposals.current_version) generation_complete, updated_at, deleted_at FROM "${schema}".site_proposals WHERE ${sqlWhere} ORDER BY ${sortBy} ${sortOrder} NULLS LAST LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, limit, offset]);
     const items = await Promise.all(rows.map(async (row: any) => {
       const readiness = evaluateProposalReadiness({ emailSubject: row.email_subject, emailBody: row.email_body, commercialAnalysis: row.commercial_analysis, siteConfigValid: await this.siteConfigValid(row), generationComplete: row.generation_complete === true, requireGeneration: ['ready','fallback'].includes(row.preparation_status) });
       const { email_subject: _subject, email_body: _body, commercial_analysis: _analysis, site_config: _config, generation_complete: _generation, ...item } = row;
       if (!readiness.complete && ['ready','fallback'].includes(item.preparation_status)) { item.preparation_status = 'idle'; item.personalization_status = 'idle'; item.preparation_error = null; }
-      return { ...item, readiness };
+      return { ...item, readiness, ...this.progress(item, row.generation_complete === true, readiness.complete) };
     }));
     return { items, total: Number(count?.total || 0), limit, offset };
   }
@@ -240,16 +236,18 @@ export class TenantSiteProposalsService {
     const deterministic = buildDeterministicProposal(siteConfig, canonical);
     const analysis = deterministic.analysis;
     const email = deterministic.email;
+    const imageMode = await this.defaultImageMode(String(selectedTemplate.slug), String(selectedTemplate.templateVersion));
     const inserted = await this.one(
       `INSERT INTO "${this.schema()}".site_proposals
-       (source_row_hash, fingerprint, template_slug, template_version, status, display_name, source_data, site_config, validation_warnings, commercial_analysis, email_subject, email_body, created_by, updated_by)
-       VALUES ($1,$2,$3,$4,'draft',$5,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb,$10,$11,$12,$12) RETURNING *`,
-      [sha256(JSON.stringify(canonical)), buildFingerprint(canonical), String(selectedTemplate.slug), String(selectedTemplate.templateVersion), canonical.businessName, JSON.stringify(canonical), JSON.stringify(deterministic.config), JSON.stringify(warnings), JSON.stringify(analysis), email.subject, email.body, this.userIdOrNull(user.id)],
+       (source_row_hash, fingerprint, template_slug, template_version, status, display_name, source_data, site_config, validation_warnings, commercial_analysis, email_subject, email_body, image_mode, created_by, updated_by)
+       VALUES ($1,$2,$3,$4,'draft',$5,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb,$10,$11,$12,$13,$13) RETURNING *`,
+      [sha256(JSON.stringify(canonical)), buildFingerprint(canonical), String(selectedTemplate.slug), String(selectedTemplate.templateVersion), canonical.businessName, JSON.stringify(canonical), JSON.stringify(deterministic.config), JSON.stringify(warnings), JSON.stringify(analysis), email.subject, email.body, imageMode, this.userIdOrNull(user.id)],
     );
     await this.createVersion(inserted, 1, user, 'manual_create');
     await this.activity(inserted.id, ACTIVITY.proposalCreated, user, {});
     const queued = this.preparationQueue ? await this.preparationQueue.enqueue(this.schema(), inserted.id, user, { force: false, generate: true, reason: 'manual_create', targetTemplateSlug: String(selectedTemplate.slug), targetTemplateVersion: String(selectedTemplate.templateVersion) }) : null;
-    return { ...inserted, preparation_status: queued?.status || inserted.preparation_status || 'idle', preparation: queued };
+    const preparationStatus = queued?.status || inserted.preparation_status || 'idle';
+    return { ...inserted, preparation_status: preparationStatus, preparation: queued, ...this.progress({ ...inserted, preparation_status: preparationStatus, latest_preparation_job_id: queued?.jobId || null, progress_percent: queued ? 5 : 0, progress_stage: queued ? 'queueing' : 'waiting', progress_message: queued ? 'Accodamento completato' : 'In attesa' }, false, false) };
   }
 
   async get(id: string) {
@@ -263,7 +261,14 @@ export class TenantSiteProposalsService {
     const activityCount = await this.one(`SELECT count(*)::int count FROM "${this.schema()}".site_proposal_activity WHERE proposal_id = $1`, [id]);
     const readiness = evaluateProposalReadiness({ emailSubject: proposal.email_subject, emailBody: proposal.email_body, commercialAnalysis: proposal.commercial_analysis, siteConfigValid: await this.siteConfigValid(proposal), generationComplete: latestGeneration?.status === 'completed' && Number(latestGeneration?.proposal_version) === Number(proposal.current_version), requireGeneration: ['ready','fallback'].includes(proposal.preparation_status) });
     if (!readiness.complete && ['ready','fallback'].includes(proposal.preparation_status)) { proposal.preparation_status = 'idle'; proposal.personalization_status = 'idle'; proposal.preparation_error = null; }
-    return { proposal: { ...proposal, readiness }, latestGeneration, versionCount: Number(versionCount?.count || 0), activityCount: Number(activityCount?.count || 0) };
+    return { proposal: { ...proposal, readiness, ...this.progress(proposal, latestGeneration?.status === 'completed', readiness.complete) }, latestGeneration, versionCount: Number(versionCount?.count || 0), activityCount: Number(activityCount?.count || 0) };
+  }
+
+  async getPreparationStatus(id: string) {
+    this.assertAccess(false); this.assertUuid(id); await this.ensure();
+    const row = await this.one(`SELECT p.*,EXISTS(SELECT 1 FROM "${this.schema()}".site_proposal_generations g WHERE g.proposal_id=p.id AND g.status='completed') can_preview FROM "${this.schema()}".site_proposals p WHERE p.id=$1 AND p.deleted_at IS NULL`, [id]);
+    if (!row) throw new NotFoundException('Proposta non trovata');
+    return this.progress(row, row.can_preview === true, await this.siteConfigValid(row) && !['queued','running'].includes(String(row.preparation_status)));
   }
 
   personalizeProposal(id: string, body: unknown) {
@@ -347,7 +352,7 @@ export class TenantSiteProposalsService {
     this.assertUuid(id);
     assertNoPrototypePollution(body);
     await this.ensure();
-    const allowed = new Set(['displayName', 'status', 'siteConfig', 'commercialAnalysis', 'emailSubject', 'emailBody', 'companyId', 'contactId', 'leadId', 'opportunityId']);
+    const allowed = new Set(['displayName', 'status', 'siteConfig', 'commercialAnalysis', 'emailSubject', 'emailBody', 'companyId', 'contactId', 'leadId', 'opportunityId', 'imageMode', 'applyThemeImages', 'resetThemeImageSlot']);
     for (const key of Object.keys(body)) if (!allowed.has(key)) throw new BadRequestException(`Campo non consentito: ${key}`);
     const current = (await this.get(id)).proposal;
     if (body.status && (!PROPOSAL_STATUSES.includes(body.status) || !allowedStatusTransition(current.status, body.status))) throw new BadRequestException('Status non valido');
@@ -357,6 +362,24 @@ export class TenantSiteProposalsService {
       const template = (siteConfig.template || {}) as JsonObject;
       const registration = await this.templates.getRegistration(String(template.slug || current.template_slug), String(template.templateVersion || current.template_version), this.templateContext());
       forceTemplateContract(siteConfig, registration);
+      validateSiteConfig(siteConfig, registration);
+    }
+    const imageMode = body.imageMode === undefined ? current.image_mode as ThemeImageMode : this.assertImageMode(body.imageMode);
+    if (body.applyThemeImages === true || body.resetThemeImageSlot !== undefined) {
+      const slot = body.resetThemeImageSlot === undefined ? undefined : String(body.resetThemeImageSlot);
+      if (slot && !['hero','consultation','feature'].includes(slot)) throw new BadRequestException('Slot immagine non valido');
+      const registration = await this.templates.getRegistration(current.template_slug, current.template_version, this.templateContext());
+      const base = await this.templates.getDefaultConfig(current.template_slug, current.template_version, this.templateContext());
+      const manifest = ((registration as typeof registration & { manifest?: JsonObject }).manifest || {}) as JsonObject;
+      const assetMap = (manifest.assetMap || {}) as JsonObject;
+      const nextImages = (siteConfig.images || {}) as JsonObject;
+      const baseImages = (base.images || {}) as JsonObject;
+      for (const key of (slot ? [slot] : ['hero','consultation','feature'])) {
+        const themed = deepClone((baseImages[key] || {}) as JsonObject);
+        const declaration = assetMap[`images.${key}.src`] as JsonObject | undefined;
+        nextImages[key] = { ...themed, sourceMethod: 'theme-package', ...(declaration ? { assetSha256: declaration.sha256, assetMime: declaration.mime, assetPath: declaration.path } : {}) };
+      }
+      siteConfig.images = nextImages;
       validateSiteConfig(siteConfig, registration);
     }
     for (const key of ['companyId', 'contactId', 'leadId', 'opportunityId']) if (body[key]) await this.assertCrmRecord(key, body[key]);
@@ -371,8 +394,10 @@ export class TenantSiteProposalsService {
     const params: unknown[] = [];
     const map: Record<string, string> = { displayName: 'display_name', status: 'status', companyId: 'company_id', contactId: 'contact_id', leadId: 'lead_id', opportunityId: 'opportunity_id' };
     for (const [input, column] of Object.entries(map)) if (input in body) { params.push(body[input] || null); sets.push(`${column} = $${params.length}`); }
+    params.push(imageMode);
+    sets.push(`image_mode = $${params.length}`);
     params.push(JSON.stringify(next.site_config), JSON.stringify(next.commercial_analysis), next.email_subject, next.email_body, nextVersion, this.userIdOrNull(user.id), id);
-    const contentChanged = ['siteConfig','commercialAnalysis','emailSubject','emailBody'].some((key) => Object.prototype.hasOwnProperty.call(body, key));
+    const contentChanged = ['siteConfig','commercialAnalysis','emailSubject','emailBody','imageMode','applyThemeImages','resetThemeImageSlot'].some((key) => Object.prototype.hasOwnProperty.call(body, key));
     const readiness = evaluateProposalReadiness({ emailSubject: next.email_subject, emailBody: next.email_body, commercialAnalysis: next.commercial_analysis, siteConfigValid: await this.siteConfigValid({ ...current, site_config: siteConfig }), generationComplete: false, requireGeneration: contentChanged });
     const updated = await this.one(
       `UPDATE "${this.schema()}".site_proposals SET ${sets.length ? `${sets.join(', ')},` : ''} site_config = $${params.length - 6}::jsonb, commercial_analysis = $${params.length - 5}::jsonb, email_subject = $${params.length - 4}, email_body = $${params.length - 3}, current_version = $${params.length - 2}, updated_by = $${params.length - 1}${contentChanged ? ", preparation_status='idle', preparation_error=NULL, personalization_status='idle'" : ''}, updated_at = now() WHERE id = $${params.length} AND deleted_at IS NULL RETURNING *`,
@@ -446,6 +471,22 @@ export class TenantSiteProposalsService {
   async previewHtml(id: string, generationId?: string) {
     const html = await this.downloadArtifact(id, 'html', generationId);
     return html.stream;
+  }
+
+  async previewState(id: string, generationId?: string) {
+    this.assertAccess(false); this.assertUuid(id); if (generationId) this.assertUuid(generationId); await this.ensure();
+    const generation = await this.one(`SELECT * FROM "${this.schema()}".site_proposal_generations WHERE proposal_id=$1 AND status='completed' ${generationId ? 'AND id=$2' : ''} ORDER BY completed_at DESC LIMIT 1`, generationId ? [id, generationId] : [id]);
+    if (generation) {
+      const key = String(generation.html_key || '');
+      const expected = `${GENERATED_STORAGE_PREFIX}/${id}/${generation.id}/`;
+      if (!key.startsWith(expected)) throw new ForbiddenException('Artifact non valido');
+      return { status: 'completed' as const, stream: (await this.fileStorage.downloadObjectStream(key)).stream };
+    }
+    const proposal = await this.one(`SELECT * FROM "${this.schema()}".site_proposals WHERE id=$1 AND deleted_at IS NULL`, [id]);
+    if (!proposal) throw new NotFoundException('Proposta non trovata');
+    if (['queued','running'].includes(String(proposal.preparation_status))) return { status: 'preparing' as const, ...this.progress(proposal, false, false), retryAfterSeconds: 2 };
+    if (proposal.preparation_status === 'failed') throw new ConflictException(this.sanitizeError(proposal.preparation_error || 'Preparazione non riuscita.'));
+    throw new NotFoundException('Generazione non trovata');
   }
 
   async downloadArtifact(id: string, type: 'html' | 'zip', generationId?: string): Promise<{ stream: Readable; contentType?: string; contentLength?: number; filename: string }> {
@@ -590,7 +631,7 @@ export class TenantSiteProposalsService {
       `SELECT t.slug, t.default_version AS version
        FROM "${this.schema()}".site_proposal_themes t
        JOIN "${this.schema()}".site_proposal_theme_versions v ON v.theme_id=t.id AND v.version=t.default_version
-       WHERE t.is_active=true AND v.status='active' AND v.runtime_adapter_status='ready' AND t.default_version IS NOT NULL
+       WHERE t.is_active=true AND v.status='active' AND v.deleted_at IS NULL AND v.runtime_adapter_status='ready' AND t.default_version IS NOT NULL
               ORDER BY t.updated_at DESC
        LIMIT 1`,
     );
@@ -605,6 +646,9 @@ export class TenantSiteProposalsService {
         const base = await this.templates.getDefaultConfig(registration.slug, registration.version, this.templateContext());
         if (!evaluateProposalPersonalizationDelta(base, proposal.site_config as JsonObject, getProposalContentProfileAdapter(registration.contentProfile)).sufficient) return false;
       }
+      const config = proposal.site_config as JsonObject; const brand = (config.brand || {}) as JsonObject; const images = (config.images || {}) as JsonObject; const logo = (images.logoDefault || {}) as JsonObject;
+      const name = cleanString(brand.name, 160); const method = String(logo.sourceMethod || brand.logoSourceMethod || ''); const src = String(logo.src || brand.logoDefault || '');
+      if (name && (!/^(?:https:\/\/[^\s]+|data:image\/(?:svg\+xml|png|jpe?g|webp);base64,[a-z0-9+/=]+)$/i.test(src) || (brand.useThemeLogo !== true && ['theme-package','stock_local','text-fallback',''].includes(method)))) return false;
       return true;
     } catch { return false; }
   }
@@ -755,6 +799,31 @@ export class TenantSiteProposalsService {
 
   private sanitizeError(error: unknown): string {
     return cleanString(error instanceof Error ? error.message : String(error), 500) || 'Generation failed';
+  }
+
+  private async defaultImageMode(slug: string, version: string): Promise<ThemeImageMode> {
+    const row = await this.one(`SELECT t.source_kind FROM "${this.schema()}".site_proposal_themes t JOIN "${this.schema()}".site_proposal_theme_versions v ON v.theme_id=t.id WHERE t.slug=$1 AND v.version=$2 AND v.deleted_at IS NULL LIMIT 1`, [slug, version]);
+    return row?.source_kind === 'uploaded' ? 'theme' : 'hybrid';
+  }
+  private assertImageMode(value: unknown): ThemeImageMode {
+    if (!['theme','website','hybrid','manual'].includes(String(value))) throw new BadRequestException('Modalità immagini non valida');
+    return value as ThemeImageMode;
+  }
+  private progress(row: any, canPreview: boolean, canGenerate: boolean) {
+    const status = String(row.preparation_status || 'idle');
+    const provider = row.personalization_status === 'completed' ? 'gemini' : row.personalization_status === 'fallback' ? 'local' : null;
+    return {
+      preparationRunId: row.latest_preparation_job_id || null,
+      preparationStatus: status,
+      progressPercent: Math.max(0, Math.min(100, Number(row.progress_percent || 0))),
+      progressStage: String(row.progress_stage || 'waiting'),
+      progressMessage: cleanString(row.progress_message, 180) || 'In attesa',
+      progressUpdatedAt: row.progress_updated_at || null,
+      heartbeatAt: row.preparation_heartbeat_at || null,
+      provider,
+      canPreview,
+      canGenerate: canGenerate && !['queued','running'].includes(status),
+    };
   }
 
   private templateContext() { return { schema: this.schema(), dataSource: this.ds() }; }

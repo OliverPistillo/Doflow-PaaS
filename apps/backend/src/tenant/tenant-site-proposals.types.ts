@@ -86,6 +86,20 @@ export type TemplateManifest = {
 
 export type ProposalContentProfile = 'colsova-legacy-v1' | 'proposal-basic-v2' | 'colsova-conversion-v1' | 'beauty-editorial-v1' | 'beauty-conversion-v1';
 export type PreparationStatus = 'idle' | 'queued' | 'running' | 'ready' | 'fallback' | 'failed';
+export type ThemeImageMode = 'theme' | 'website' | 'hybrid' | 'manual';
+export type PreparationProgressStage = 'waiting' | 'queueing' | 'loading-data' | 'loading-theme' | 'identity' | 'base-content' | 'ai' | 'local' | 'images' | 'logo' | 'validation' | 'html' | 'zip' | 'artifacts' | 'ready' | 'failed';
+export type PreparationProgress = {
+  preparationRunId: string | null;
+  preparationStatus: PreparationStatus;
+  progressPercent: number;
+  progressStage: PreparationProgressStage | string;
+  progressMessage: string;
+  progressUpdatedAt: string | null;
+  heartbeatAt: string | null;
+  provider: 'gemini' | 'local' | null;
+  canPreview: boolean;
+  canGenerate: boolean;
+};
 export type ProposalPreparationActor = { id?: string | null; email?: string | null; role?: string | null };
 export type ProposalPreparationOptions = {
   force: boolean;
@@ -103,7 +117,7 @@ export type ProposalPreparationJobData = ProposalPreparationOptions & {
 };
 
 export type PersonalizationStatus = 'idle' | 'running' | 'completed' | 'fallback' | 'failed';
-export type ProposalImageSourceMethod = 'website' | 'catalog' | 'catalog_fallback' | 'manual' | 'extracted' | 'generated' | 'text-fallback' | 'stock_local';
+export type ProposalImageSourceMethod = 'website' | 'catalog' | 'catalog_fallback' | 'manual' | 'theme-package' | 'extracted' | 'generated' | 'text-fallback' | 'stock_local';
 export type WebsiteImageCandidate = {
   url: string;
   alt: string;

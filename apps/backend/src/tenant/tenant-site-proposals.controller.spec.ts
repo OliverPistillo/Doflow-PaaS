@@ -101,4 +101,32 @@ describe('TenantSiteProposalsController', () => {
     expect(service.personalizeProposal).toHaveBeenCalledWith('proposal-id', { force: false });
     expect(service.listPersonalizations).toHaveBeenCalledWith('proposal-id');
   });
+
+  it('returns 202 with Retry-After and real persisted progress while preparation is running', async () => {
+    const service = { previewState: jest.fn().mockResolvedValue({ status: 'preparing', progressPercent: 60, progressStage: 'images', progressMessage: 'Selezione immagini', retryAfterSeconds: 2 }) } as any;
+    const controller = new TenantSiteProposalsController(service, {} as any);
+    const response: any = { status: jest.fn(), set: jest.fn(), json: jest.fn() }; response.status.mockReturnValue(response); response.set.mockReturnValue(response);
+    await controller.preview('proposal-id', undefined, response);
+    expect(response.status).toHaveBeenCalledWith(202);
+    expect(response.set).toHaveBeenCalledWith(expect.objectContaining({ 'Retry-After': '2', 'Content-Type': 'application/json; charset=utf-8' }));
+    expect(response.json).toHaveBeenCalledWith({ status: 'preparing', progressPercent: 60, progressStage: 'images', progressMessage: 'Selezione immagini', retryAfterSeconds: 2 });
+  });
+
+  it('streams HTML only after preview completion and preserves hardened headers', async () => {
+    const stream = { pipe: jest.fn() };
+    const service = { previewState: jest.fn().mockResolvedValue({ status: 'completed', stream }) } as any;
+    const controller = new TenantSiteProposalsController(service, {} as any);
+    const response: any = { set: jest.fn() }; response.set.mockReturnValue(response);
+    await controller.preview('proposal-id', undefined, response);
+    expect(response.set).toHaveBeenCalledWith(expect.objectContaining({ 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': expect.stringContaining("default-src 'none'") }));
+    expect(stream.pipe).toHaveBeenCalledWith(response);
+  });
+
+  it('exposes a dedicated preparation status route', () => {
+    const service = { getPreparationStatus: jest.fn() } as any;
+    const controller = new TenantSiteProposalsController(service, {} as any);
+    controller.preparationStatus('proposal-id');
+    expect(service.getPreparationStatus).toHaveBeenCalledWith('proposal-id');
+    expect(Reflect.getMetadata('path', controller.preparationStatus)).toBe(':id/preparation');
+  });
 });

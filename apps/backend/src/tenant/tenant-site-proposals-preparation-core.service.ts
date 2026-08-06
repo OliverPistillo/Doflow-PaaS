@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
 import { ACTIVITY, SITE_PROPOSALS_TENANT } from './tenant-site-proposals.constants';
@@ -13,11 +13,12 @@ import { SiteProposalTemplateRegistration } from './tenant-site-proposals-templa
 import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
 import { TenantSiteProposalsWebsiteExtractorService } from './tenant-site-proposals-website-extractor.service';
 import { TenantSiteProposalsWebsiteFetcherService } from './tenant-site-proposals-website-fetcher.service';
-import { CanonicalProposalInput, JsonObject, ProposalPreparationActor, ProposalPreparationJobData, WebsiteSnapshot } from './tenant-site-proposals.types';
+import { CanonicalProposalInput, JsonObject, ProposalPreparationActor, ProposalPreparationJobData, ThemeImageMode, WebsiteSnapshot } from './tenant-site-proposals.types';
 import { assertNoPrototypePollution, buildFingerprint, cleanString, deepClone, sha256, UUID_RE, validateSiteConfig } from './tenant-site-proposals-validation';
 import { getProposalContentProfileAdapter } from './tenant-site-proposals-content-profile-adapters';
 import { assertProposalPersonalizationDelta, evaluateProposalPersonalizationDelta } from './tenant-site-proposals-personalization-delta';
 import { TenantSiteProposalsLogoGeneratorService } from './tenant-site-proposals-logo-generator.service';
+import { TenantSiteProposalsPreparationProgressService } from './tenant-site-proposals-preparation-progress.service';
 
 const JOB_KEYS = ['preparationRunId','tenantSchema','proposalId','actorUserId','actorEmail','force','generate','reason','targetTemplateSlug','targetTemplateVersion'];
 
@@ -33,6 +34,7 @@ export class TenantSiteProposalsPreparationCoreService {
     private readonly templates: TenantSiteProposalsTemplateService,
     private readonly generation: TenantSiteProposalsGenerationCoreService,
     private readonly logoGenerator: TenantSiteProposalsLogoGeneratorService = new TenantSiteProposalsLogoGeneratorService(),
+    @Optional() private readonly progress?: TenantSiteProposalsPreparationProgressService,
   ) {}
 
   async prepare(raw: ProposalPreparationJobData) {
@@ -64,6 +66,7 @@ export class TenantSiteProposalsPreparationCoreService {
       const adapter = getProposalContentProfileAdapter(registration.contentProfile);
       const context = { schema, dataSource: this.dataSource };
       const base = await this.templates.getDefaultConfig(targetSlug, targetVersion, context);
+      await this.report(data, 18, 'loading-theme', 'Caricamento tema');
       const canonical = this.canonical(proposal);
       const currentConfig = (proposal.site_config || {}) as JsonObject;
       this.overlayManualCanonical(canonical, currentConfig);
@@ -77,41 +80,59 @@ export class TenantSiteProposalsPreparationCoreService {
       }
       let brandAssets: JsonObject = { warnings: [], logoDefault: '', logoLight: '' };
       if (snapshot) try { brandAssets = await this.brand.extract(snapshot); } catch { warnings.push('Logo non elaborabile: preservato il fallback del tema.'); }
-      brandAssets = this.resolveLogoAssets(canonical, currentConfig, brandAssets, base, registration.contentProfile, warnings);
-      const initial = buildDeterministicProposalForTemplate(base, registration, canonical, snapshot, brandAssets);
-      const currentImages = (currentConfig.images || initial.config.images) as JsonObject;
-      const resolved = await this.images.resolveImages(snapshot, currentImages, buildFingerprint(canonical), canonical.category || canonical.descriptor, data.force);
-      brandAssets.images = resolved.images; warnings.push(...resolved.warnings);
+      await this.report(data, 25, 'identity', 'Analisi identità e contatti');
       let built = buildDeterministicProposalForTemplate(base, registration, canonical, snapshot, brandAssets);
       this.preserveManualValues(built.config, currentConfig, brandAssets, data.force);
       if (object(brandAssets.palette)) built.config.palette = mapBrandPaletteForContentProfile(brandAssets.palette as JsonObject, registration.contentProfile, built.config.palette as JsonObject);
       assertProposalPersonalizationDelta(base, built.config, adapter);
+      await this.report(data, 35, 'base-content', 'Creazione contenuti base');
 
       const snapshotHash = sha256(JSON.stringify({ finalUrl: snapshot?.finalUrl || canonical.websiteUrl || '', text: snapshot?.text || '', template: `${registration.slug}@${registration.version}`, profile: registration.contentProfile }));
       const run = (await runner.query(`INSERT INTO "${schema}".site_proposal_personalizations (proposal_id,status,provider,model,source_url,final_url,snapshot_hash,extracted_data,brand_assets,warnings,created_by,started_at) VALUES ($1,'running','local',$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,now()) RETURNING id`, [data.proposalId, this.ai.configuration().model, canonical.websiteUrl || null, snapshot?.finalUrl || null, snapshotHash, JSON.stringify(this.publicSnapshot(snapshot)), JSON.stringify(brandAssets), JSON.stringify(warnings), this.userId(actor.id)]))[0];
       runId = run.id;
       let provider: 'gemini'|'local' = 'local'; let personalizationStatus: 'completed'|'fallback' = 'fallback'; let model = '';
+      let aiOutput: JsonObject | undefined;
+      const aiAvailable = this.ai.configuration().available;
+      await this.report(data, 48, aiAvailable ? 'ai' : 'local', aiAvailable ? 'Personalizzazione AI' : 'Personalizzazione locale', aiAvailable ? undefined : 'local');
       try {
         const generated = await this.ai.generate(this.aiPayload(canonical, snapshot, built.config.palette as JsonObject), built.config.textLimits as JsonObject, registration.contentProfile);
         const candidate = applyAiOutputForProfile(built, generated.output, registration);
         this.assertPostconditions(candidate, registration);
         const aiDelta = evaluateProposalPersonalizationDelta(built.config, candidate.config, adapter);
         if (!aiDelta.sufficient) throw new ProposalAiUnavailableError('visible_delta_insufficient');
-        built = candidate; provider = 'gemini'; personalizationStatus = 'completed'; model = generated.model;
+        aiOutput = generated.output; provider = 'gemini'; personalizationStatus = 'completed'; model = generated.model;
       } catch (error) {
         if (!(error instanceof ProposalAiUnavailableError)) warnings.push('Output AI rifiutato: applicato il motore locale.');
         else warnings.push(`Gemini non disponibile (${error.reason}): applicato il motore locale.`);
       }
+      const themeChanged = proposal.template_slug !== registration.slug || proposal.template_version !== registration.version;
+      const imageMode = themeChanged ? (registration.isBuiltin ? 'hybrid' : 'theme') : this.imageMode(proposal.image_mode, registration.isBuiltin);
+      const currentImages = (currentConfig.images || built.config.images) as JsonObject;
+      const themeImages = (base.images || {}) as JsonObject;
+      const registrationManifest = (registration as SiteProposalTemplateRegistration & { manifest?: JsonObject }).manifest;
+      const assetMap = object(registrationManifest?.assetMap) ? registrationManifest.assetMap as JsonObject : {};
+      const resolved = await this.images.resolveImages(snapshot, currentImages, buildFingerprint(canonical), canonical.category || canonical.descriptor, data.force, imageMode, themeImages, assetMap);
+      brandAssets.images = resolved.images; warnings.push(...resolved.warnings);
+      await this.report(data, 60, 'images', 'Selezione immagini', provider);
+      brandAssets = this.resolveLogoAssets(canonical, currentConfig, brandAssets, base, registration.contentProfile, warnings);
+      await this.report(data, 70, 'logo', 'Creazione o applicazione logo', provider);
+      built = buildDeterministicProposalForTemplate(base, registration, canonical, snapshot, brandAssets);
+      this.preserveManualValues(built.config, currentConfig, brandAssets, data.force);
+      if (object(brandAssets.palette)) built.config.palette = mapBrandPaletteForContentProfile(brandAssets.palette as JsonObject, registration.contentProfile, built.config.palette as JsonObject);
+      if (aiOutput) built = applyAiOutputForProfile(built, aiOutput, registration);
+      this.applyThemeAssetMetadata(imageMode, base, built.config, currentConfig, assetMap);
       const finalDelta = assertProposalPersonalizationDelta(base, built.config, adapter);
       const configSha256 = sha256(JSON.stringify(built.config));
-      (built.config.personalization as JsonObject) = { ...((built.config.personalization || {}) as JsonObject), preparationRunId: data.preparationRunId, status: personalizationStatus, provider, model, sourceUrl: snapshot?.finalUrl || canonical.websiteUrl || '', snapshotHash, completedAt: new Date().toISOString(), warnings, copyMethod: provider === 'gemini' ? 'ai' : 'deterministic', changedVisiblePaths: finalDelta.changedVisiblePaths, unchangedVisiblePaths: finalDelta.unchangedVisiblePaths, changedVisibleCount: finalDelta.changedVisibleCount, personalizationFingerprint: finalDelta.personalizationFingerprint, configSha256 };
+      (built.config.personalization as JsonObject) = { ...((built.config.personalization || {}) as JsonObject), preparationRunId: data.preparationRunId, status: personalizationStatus, provider, model, imageMode, sourceUrl: snapshot?.finalUrl || canonical.websiteUrl || '', snapshotHash, completedAt: new Date().toISOString(), warnings, copyMethod: provider === 'gemini' ? 'ai' : 'deterministic', changedVisiblePaths: finalDelta.changedVisiblePaths, unchangedVisiblePaths: finalDelta.unchangedVisiblePaths, changedVisibleCount: finalDelta.changedVisibleCount, personalizationFingerprint: finalDelta.personalizationFingerprint, configSha256 };
       this.assertPostconditions(built, registration);
+      this.assertThemeImages(imageMode, base, built.config, currentConfig, assetMap);
+      await this.report(data, 78, 'validation', 'Validazione proposta', provider);
 
       const nextVersion = Number(proposal.current_version || 0) + 1;
       await runner.startTransaction();
       const current = (await runner.query(`SELECT id FROM "${schema}".site_proposals WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, [data.proposalId]))[0];
       if (!current) throw new NotFoundException('Proposta non trovata');
-      await runner.query(`UPDATE "${schema}".site_proposals SET template_slug=$1,template_version=$2,site_config=$3::jsonb,commercial_analysis=$4::jsonb,email_subject=$5,email_body=$6,current_version=$7,personalization_status=$8,latest_personalization_id=$9,last_personalized_at=now(),updated_by=$10,updated_at=now() WHERE id=$11`, [registration.slug, registration.version, JSON.stringify(built.config), JSON.stringify(built.analysis), built.email.subject, built.email.body, nextVersion, personalizationStatus, runId, this.userId(actor.id), data.proposalId]);
+      await runner.query(`UPDATE "${schema}".site_proposals SET template_slug=$1,template_version=$2,site_config=$3::jsonb,commercial_analysis=$4::jsonb,email_subject=$5,email_body=$6,current_version=$7,personalization_status=$8,latest_personalization_id=$9,last_personalized_at=now(),image_mode=$10,updated_by=$11,updated_at=now() WHERE id=$12`, [registration.slug, registration.version, JSON.stringify(built.config), JSON.stringify(built.analysis), built.email.subject, built.email.body, nextVersion, personalizationStatus, runId, imageMode, this.userId(actor.id), data.proposalId]);
       await runner.query(`INSERT INTO "${schema}".site_proposal_versions (proposal_id,version,site_config,commercial_analysis,email_subject,email_body,reason,created_by) VALUES ($1,$2,$3::jsonb,$4::jsonb,$5,$6,$7,$8)`, [data.proposalId, nextVersion, JSON.stringify(built.config), JSON.stringify(built.analysis), built.email.subject, built.email.body, data.reason, this.userId(actor.id)]);
       await runner.query(`UPDATE "${schema}".site_proposal_personalizations SET status=$1,provider=$2,model=$3,website_analysis=$4::jsonb,generated_content=$5::jsonb,brand_assets=$6::jsonb,warnings=$7::jsonb,completed_at=now() WHERE id=$8`, [personalizationStatus, provider, model || null, JSON.stringify(built.analysis), JSON.stringify({ content: built.config.content, seo: built.config.seo, email: built.email, delta: finalDelta, configSha256 }), JSON.stringify(brandAssets), JSON.stringify(warnings), runId]);
       if (proposal.template_slug !== registration.slug || proposal.template_version !== registration.version) await this.activityWith(runner, schema, data.proposalId, ACTIVITY.proposalTemplateUpgraded, actor, { from: `${proposal.template_slug}@${proposal.template_version}`, to: `${registration.slug}@${registration.version}` });
@@ -131,6 +152,7 @@ export class TenantSiteProposalsPreparationCoreService {
     } catch (error) {
       if (runner.isTransactionActive) await runner.rollbackTransaction().catch(() => undefined);
       const message = this.error(error);
+      await this.report(data, 0, 'failed', message, undefined, true).catch(() => undefined);
       await this.dataSource.query(`UPDATE "${data.tenantSchema}".site_proposals SET preparation_status='failed',preparation_error=$1,preparation_completed_at=now(),updated_at=now() WHERE id=$2`, [message, data.proposalId]).catch(() => undefined);
       if (runId && !personalizationCommitted) await this.dataSource.query(`UPDATE "${data.tenantSchema}".site_proposal_personalizations SET status='failed',error_message=$1,completed_at=now() WHERE id=$2`, [message, runId]).catch(() => undefined);
       await this.activity(data.tenantSchema, data.proposalId, ACTIVITY.proposalPreparationFailed, { id: data.actorUserId, email: data.actorEmail }, { message }).catch(() => undefined);
@@ -151,7 +173,10 @@ export class TenantSiteProposalsPreparationCoreService {
       const existing = resume ? (await runner.query(`SELECT id FROM "${schema}".site_proposal_generations WHERE proposal_id=$1 AND proposal_version=$2 AND status='completed' ORDER BY completed_at DESC LIMIT 1`, [data.proposalId, proposal.current_version]))[0] : undefined;
       if (existing) generationComplete = true;
       else {
-        const generated = await this.generation.generate(schema, actor, data.proposalId);
+        const generated = await this.generation.generate(schema, actor, data.proposalId, {
+          preparationRunId: data.preparationRunId,
+          onProgress: async (percent, stage, message) => this.report(data, percent, stage, message),
+        });
         if (generated.status !== 'completed') throw new Error(generated.error_message || 'Generazione automatica non riuscita');
         generationComplete = true;
       }
@@ -162,6 +187,7 @@ export class TenantSiteProposalsPreparationCoreService {
     const provider: 'gemini'|'local' = personalization.provider === 'gemini' ? 'gemini' : 'local';
     const preparationStatus = provider === 'gemini' ? 'ready' : 'fallback';
     const warnings = Array.isArray(personalization.warnings) ? personalization.warnings.filter((value): value is string => typeof value === 'string') : [];
+    await this.report(data, 100, 'ready', provider === 'gemini' ? 'Pronta con AI' : 'Pronta localmente', provider);
     await runner.query(`UPDATE "${schema}".site_proposals SET preparation_status=$1,preparation_error=NULL,preparation_completed_at=now(),updated_at=now() WHERE id=$2`, [preparationStatus, data.proposalId]);
     await this.activity(schema, data.proposalId, provider === 'gemini' ? ACTIVITY.proposalPreparationReady : ACTIVITY.proposalPreparationFallback, actor, { provider, personalizationId: proposal.latest_personalization_id || null, resumed: resume });
     return { status: preparationStatus, provider, proposalId: data.proposalId, warnings };
@@ -221,6 +247,29 @@ export class TenantSiteProposalsPreparationCoreService {
   private manualLogo(value: unknown) { return object(value) && value.sourceMethod === 'manual' ? this.validLogo(value.src) : ''; }
   private logoSrc(value: unknown) { return typeof value === 'string' ? this.validLogo(value) : object(value) ? this.validLogo(value.src) : ''; }
   private validLogo(value: unknown) { const logo = typeof value === 'string' ? value.trim() : ''; return /^(?:data:image\/(?:svg\+xml|png|jpe?g|webp);base64,[a-z0-9+/=]+|https:\/\/[^\s]+)$/i.test(logo) ? logo : ''; }
+  private imageMode(value: unknown, builtIn: boolean): ThemeImageMode {
+    return ['theme','website','hybrid','manual'].includes(String(value)) ? value as ThemeImageMode : builtIn ? 'hybrid' : 'theme';
+  }
+  private assertThemeImages(mode: ThemeImageMode, base: JsonObject, finalConfig: JsonObject, current: JsonObject, assetMap: JsonObject) {
+    if (mode !== 'theme') return;
+    for (const role of Object.keys(assetMap).filter((key) => key.startsWith('images.') && key.endsWith('.src'))) {
+      const ownerPath = role.slice(0, -4); const baseAsset = this.pathValue(base, ownerPath); const finalAsset = this.pathValue(finalConfig, ownerPath); const currentAsset = this.pathValue(current, ownerPath);
+      const manual = object(currentAsset) && currentAsset.sourceMethod === 'manual';
+      if (!manual && (!object(baseAsset) || !object(finalAsset) || finalAsset.src !== baseAsset.src || finalAsset.sourceMethod !== 'theme-package')) throw new Error(`theme_package_image_postcondition:${ownerPath}`);
+    }
+  }
+  private applyThemeAssetMetadata(mode: ThemeImageMode, base: JsonObject, finalConfig: JsonObject, current: JsonObject, assetMap: JsonObject) {
+    if (mode !== 'theme') return;
+    for (const [role, rawDeclaration] of Object.entries(assetMap)) {
+      if (!role.startsWith('images.') || !role.endsWith('.src') || !object(rawDeclaration)) continue;
+      const ownerPath = role.slice(0, -4); const baseAsset = this.pathValue(base, ownerPath); const finalAsset = this.pathValue(finalConfig, ownerPath); const currentAsset = this.pathValue(current, ownerPath);
+      if (!object(baseAsset) || !object(finalAsset) || (object(currentAsset) && currentAsset.sourceMethod === 'manual')) continue;
+      finalAsset.src = baseAsset.src; finalAsset.sourceMethod = 'theme-package'; finalAsset.assetSha256 = rawDeclaration.sha256; finalAsset.assetMime = rawDeclaration.mime; finalAsset.assetPath = rawDeclaration.path;
+    }
+  }
+  private pathValue(root: unknown, path: string): unknown {
+    return path.split('.').reduce<unknown>((value, part) => value && typeof value === 'object' ? (value as Record<string, unknown>)[part] : undefined, root);
+  }
   private assertPostconditions(built: DeterministicPackage, registration: SiteProposalTemplateRegistration) {
     validateSiteConfig(built.config, registration);
     const analysis = built.analysis; const email = built.email; const seo = built.config.seo as JsonObject;
@@ -235,6 +284,9 @@ export class TenantSiteProposalsPreparationCoreService {
   private activity(schema: string, id: string, action: string, actor: ProposalPreparationActor, metadata: JsonObject) { return this.activityWith(this.dataSource, schema, id, action, actor, metadata); }
   private activityWith(db: Pick<DataSource, 'query'> | { query: (...args: any[]) => Promise<any> }, schema: string, id: string, action: string, actor: ProposalPreparationActor, metadata: JsonObject) { return db.query(`INSERT INTO "${schema}".site_proposal_activity (proposal_id,action,metadata,actor_user_id,actor_email) VALUES ($1,$2,$3::jsonb,$4,$5)`, [id, action, JSON.stringify(metadata), this.userId(actor.id), cleanString(actor.email, 320) || null]); }
   private error(value: unknown) { const message = cleanString(value instanceof Error ? value.message : String(value), 300) || 'Preparazione non riuscita.'; return /stack|sql|postgres|s3|redis|token|api.?key/i.test(message) ? 'Preparazione non riuscita.' : message; }
+  private report(data: ProposalPreparationJobData, percent: number, stage: any, message: string, provider?: 'gemini'|'local', failed = false) {
+    return this.progress?.update(data.tenantSchema, data.preparationRunId, data.proposalId, { percent, stage, message, provider, failed }) || Promise.resolve();
+  }
 }
 
 function object(value: unknown): value is JsonObject { return Boolean(value) && typeof value === 'object' && !Array.isArray(value); }

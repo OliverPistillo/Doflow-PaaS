@@ -303,7 +303,7 @@ function validateSiteConfigV2(config: JsonObject, registration: SiteProposalTemp
     if (src && !isSafeImageSource(src)) throw new BadRequestException(`Sorgente immagine non valida: ${slot}`);
     if (['hero', 'consultation', 'feature'].includes(slot)) {
       const method = String((images![slot] as JsonObject).sourceMethod || '');
-      if (method && !['website', 'catalog', 'catalog_fallback', 'manual', 'stock_local'].includes(method)) throw new BadRequestException(`Metodo immagine non valido: ${slot}`);
+      if (method && !['website', 'catalog', 'catalog_fallback', 'manual', 'stock_local', 'theme-package'].includes(method)) throw new BadRequestException(`Metodo immagine non valido: ${slot}`);
     }
   }
   if (!isJsonObject(config.palette)) throw new BadRequestException('Palette del Tema Colsova 2.0 non valida');

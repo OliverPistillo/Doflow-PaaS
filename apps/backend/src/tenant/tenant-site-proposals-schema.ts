@@ -206,6 +206,12 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
     await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS preparation_started_at TIMESTAMPTZ`);
     await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS preparation_completed_at TIMESTAMPTZ`);
     await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS latest_preparation_job_id TEXT`);
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS progress_percent SMALLINT NOT NULL DEFAULT 0 CHECK (progress_percent BETWEEN 0 AND 100)`);
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS progress_stage TEXT NOT NULL DEFAULT 'waiting'`);
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS progress_message TEXT NOT NULL DEFAULT 'In attesa'`);
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS progress_updated_at TIMESTAMPTZ`);
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS preparation_heartbeat_at TIMESTAMPTZ`);
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS image_mode TEXT NOT NULL DEFAULT 'hybrid' CHECK (image_mode IN ('theme','website','hybrid','manual'))`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_preparation" ON "${s}".site_proposals(preparation_status)`);
     const completeHistoricalProposal = `
       p.deleted_at IS NULL AND p.status <> 'archived'
@@ -240,11 +246,23 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
         dispatched_at TIMESTAMPTZ,
         started_at TIMESTAMPTZ,
         completed_at TIMESTAMPTZ,
+        progress_percent SMALLINT NOT NULL DEFAULT 0 CHECK (progress_percent BETWEEN 0 AND 100),
+        progress_stage TEXT NOT NULL DEFAULT 'waiting',
+        progress_message TEXT NOT NULL DEFAULT 'In attesa',
+        progress_updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        provider TEXT,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
     await runner.query(`CREATE UNIQUE INDEX IF NOT EXISTS "uidx_${s}_site_proposal_preparation_runs_active" ON "${s}".site_proposal_preparation_runs(proposal_id) WHERE status IN ('pending','dispatched','running')`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_preparation_runs_dispatch" ON "${s}".site_proposal_preparation_runs(status,updated_at)`);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_preparation_runs ADD COLUMN IF NOT EXISTS progress_percent SMALLINT NOT NULL DEFAULT 0 CHECK (progress_percent BETWEEN 0 AND 100)`);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_preparation_runs ADD COLUMN IF NOT EXISTS progress_stage TEXT NOT NULL DEFAULT 'waiting'`);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_preparation_runs ADD COLUMN IF NOT EXISTS progress_message TEXT NOT NULL DEFAULT 'In attesa'`);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_preparation_runs ADD COLUMN IF NOT EXISTS progress_updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_preparation_runs ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT now()`);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_preparation_runs ADD COLUMN IF NOT EXISTS provider TEXT`);
 
     await runner.query(`
       CREATE TABLE IF NOT EXISTS "${s}".site_proposal_themes (
@@ -309,6 +327,7 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
     await runner.query(`ALTER TABLE "${s}".site_proposal_theme_versions ADD COLUMN IF NOT EXISTS compiled_sha256 TEXT`);
     await runner.query(`ALTER TABLE "${s}".site_proposal_theme_versions ADD COLUMN IF NOT EXISTS compiled_size BIGINT`);
     await runner.query(`ALTER TABLE "${s}".site_proposal_theme_versions ADD COLUMN IF NOT EXISTS runtime_adapter_status TEXT NOT NULL DEFAULT 'ready'`);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_theme_versions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_theme_versions_status" ON "${s}".site_proposal_theme_versions(status)`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_theme_versions_created" ON "${s}".site_proposal_theme_versions(created_at)`);
     await runner.query(`

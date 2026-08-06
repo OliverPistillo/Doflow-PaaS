@@ -61,6 +61,7 @@ import { TenantSiteProposalsPreparationQueueService } from './tenant-site-propos
 import { TenantSiteProposalsPreparationWorker } from './tenant-site-proposals-preparation.worker';
 import { TenantSiteProposalsThemeStorageCleanupService } from './tenant-site-proposals-theme-storage-cleanup.service';
 import { TenantSiteProposalsLogoGeneratorService } from './tenant-site-proposals-logo-generator.service';
+import { TenantSiteProposalsPreparationProgressService } from './tenant-site-proposals-preparation-progress.service';
 
 import { Tenant } from '../superadmin/entities/tenant.entity';
 import { TenantSubscription } from '../superadmin/entities/tenant-subscription.entity';
@@ -142,7 +143,8 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantSiteProposalsPreparationQueueService,
     TenantSiteProposalsPreparationWorker,
     TenantSiteProposalsThemeStorageCleanupService,
-    TenantSiteProposalsLogoGeneratorService,
+      TenantSiteProposalsLogoGeneratorService,
+      TenantSiteProposalsPreparationProgressService,
   ],
 })
 export class TenantModule {}
