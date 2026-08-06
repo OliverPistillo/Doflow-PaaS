@@ -21,6 +21,7 @@ import { getDoFlowUser } from "@/lib/jwt";
 import { money, shortDate } from "@/components/tenant-crm/crm-core";
 import { useToast } from "@/hooks/use-toast";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
+import { useConfirm } from "@/hooks/useConfirm";
 
 type Row = Record<string, any>;
 type ListResponse<T = Row> = { items: T[]; total?: number; limit?: number; offset?: number };
@@ -369,7 +370,15 @@ function InvoiceForm({ form, setForm, relations }: { form: Row; setForm: (update
   );
 }
 
-function InvoiceItemsPanel({ invoice, onReload }: { invoice: Row; onReload: () => Promise<void> }) {
+function InvoiceItemsPanel({
+  invoice,
+  onReload,
+  confirm,
+}: {
+  invoice: Row;
+  onReload: () => Promise<void>;
+  confirm: (opts: { title: string; description?: string; confirmLabel?: string; variant?: "default" | "destructive" }) => Promise<boolean>;
+}) {
   const [form, setForm] = useState<Row>({ name: "", quantity: 1, unit_price: 0, discount: 0, tax_rate: 0 });
 
   const add = async () => {
@@ -378,7 +387,13 @@ function InvoiceItemsPanel({ invoice, onReload }: { invoice: Row; onReload: () =
     await onReload();
   };
   const remove = async (item: Row) => {
-    if (!window.confirm("Eliminare questa riga fattura?")) return;
+    const ok = await confirm({
+      title: "Eliminare questa riga fattura?",
+      description: "L'operazione rimuoverà questa riga in modo definitivo.",
+      confirmLabel: "Elimina",
+      variant: "destructive",
+    });
+    if (!ok) return;
     await apiFetch(`/tenant/finance/invoices/${invoice.id}/items/${item.id}`, { method: "DELETE" });
     await onReload();
   };
@@ -415,6 +430,7 @@ function InvoiceItemsPanel({ invoice, onReload }: { invoice: Row; onReload: () =
 export function FinanceInvoicesPage() {
   const { toast } = useToast();
   const router = useRouter();
+  const { ConfirmDialog, confirm } = useConfirm();
   const { relations, reloadRelations } = useFinanceRelations();
   const [items, setItems] = useState<Row[]>([]);
   const [selected, setSelected] = useState<Row | null>(null);
@@ -487,7 +503,13 @@ export function FinanceInvoicesPage() {
   };
 
   const remove = async (row: Row) => {
-    if (!window.confirm("Eliminare questa fattura?")) return;
+    const ok = await confirm({
+      title: "Eliminare questa fattura?",
+      description: "Questa operazione eliminerà la fattura in modo definitivo.",
+      confirmLabel: "Elimina",
+      variant: "destructive",
+    });
+    if (!ok) return;
     await apiFetch(`/tenant/finance/invoices/${row.id}`, { method: "DELETE" });
     await load();
   };
@@ -520,6 +542,7 @@ export function FinanceInvoicesPage() {
 
   return (
     <div className="flex-1 space-y-5 p-4 md:p-6">
+      <ConfirmDialog />
       <FinanceHeader title="Fatture" description="Fatture reali tenant-scoped. Niente PDF/XML/SDI in questa fase.">
         <Button onClick={() => router.push("/finance/invoices/new")}><Plus className="mr-2 h-4 w-4" /> Nuova fattura</Button>
       </FinanceHeader>
@@ -582,7 +605,7 @@ export function FinanceInvoicesPage() {
                 <Input type="date" value={paymentForm.payment_date || ""} onChange={(e) => setPaymentForm((p) => ({ ...p, payment_date: e.target.value }))} />
                 <Button onClick={() => registerPayment(selected)}>Registra pagamento</Button>
               </div>
-              <InvoiceItemsPanel invoice={selected} onReload={() => loadInvoice(selected)} />
+              <InvoiceItemsPanel invoice={selected} onReload={() => loadInvoice(selected)} confirm={confirm} />
             </div>
           ) : null}
         </DialogContent>
@@ -829,6 +852,7 @@ function FinanceCrudPage({
   emptyText: string;
   extraAction?: (row: Row, reload: () => Promise<void>) => ReactNode;
 }) {
+  const { ConfirmDialog, confirm } = useConfirm();
   const [items, setItems] = useState<Row[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("__all__");
@@ -874,7 +898,13 @@ function FinanceCrudPage({
   };
 
   const remove = async (row: Row) => {
-    if (!window.confirm("Eliminare questo record?")) return;
+    const ok = await confirm({
+      title: "Eliminare questo record?",
+      description: "Questa operazione eliminerà il record in modo definitivo.",
+      confirmLabel: "Elimina",
+      variant: "destructive",
+    });
+    if (!ok) return;
     await apiFetch(`${path}/${row.id}`, { method: "DELETE" });
     await load();
   };
@@ -883,6 +913,7 @@ function FinanceCrudPage({
 
   return (
     <div className="flex-1 space-y-5 p-4 md:p-6">
+      <ConfirmDialog />
       <FinanceHeader title={title} description={description}>
         <Button onClick={() => open()}><Plus className="mr-2 h-4 w-4" /> Nuovo</Button>
       </FinanceHeader>
