@@ -7,7 +7,13 @@ const uuid = '550e8400-e29b-41d4-a716-446655440000';
 function makeService(request: any, queryMock = jest.fn()) {
   const ds = { query: queryMock } as any;
   const csv = { parseCsvFile: jest.fn(), buildPreviewRows: jest.fn(), normalizeRow: jest.fn(), buildSiteConfig: jest.fn() } as any;
-  const templates = { listTemplates: jest.fn().mockResolvedValue([{ slug: 'colsova' }]), getRegistration: jest.fn().mockResolvedValue({ slug: 'colsova', version: '2.4.1' }), getDefaultConfig: jest.fn(), renderHtml: jest.fn(), buildRedirectFiles: jest.fn() } as any;
+  const registration = { slug: 'colsova', version: '2.4.1', contentProfile: 'colsova-conversion-v1', sourceSha256: 'sha', isBuiltin: true, sourceKind: 'builtin' };
+  const templates = {
+    listTemplates: jest.fn().mockResolvedValue([{ slug: 'colsova' }]),
+    getRegistration: jest.fn().mockResolvedValue(registration),
+    resolveRuntimeTheme: jest.fn().mockResolvedValue(registration),
+    getDefaultConfig: jest.fn(), getDefaultConfigForRegistration: jest.fn(), renderHtml: jest.fn(), buildRedirectFiles: jest.fn(),
+  } as any;
   const artifacts = { createZip: jest.fn() } as any;
   const storage = { uploadGeneratedBuffer: jest.fn(), downloadObjectStream: jest.fn(), deleteGeneratedPrefix: jest.fn() } as any;
   const generationCore = { generate: jest.fn() } as any;
@@ -62,8 +68,8 @@ describe('TenantSiteProposalsService', () => {
     const { service, csv, templates, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
     csv.parseCsvFile.mockReturnValue({ rows: [{ business_name: 'A' }] });
     queryMock.mockResolvedValueOnce([]);
-    templates.getRegistration.mockRejectedValue(new BadRequestException('Tema disponibile in anteprima, adattatore di generazione non ancora attivo.'));
-    await expect(service.previewImport({ originalname:'x.csv',mimetype:'text/csv',buffer:Buffer.from('a') } as any, 'preview-only', '1.0.0')).rejects.toThrow('adattatore di generazione non ancora attivo');
+    templates.resolveRuntimeTheme.mockRejectedValue(new BadRequestException('Il tema è disponibile in Libreria, ma il relativo adattatore non è attivo.'));
+    await expect(service.previewImport({ originalname:'x.csv',mimetype:'text/csv',buffer:Buffer.from('a') } as any, 'preview-only', '1.0.0')).rejects.toThrow('relativo adattatore non è attivo');
     expect(csv.buildPreviewRows).not.toHaveBeenCalled();
   });
   it('uses the unique global DB default without a Colsova preference', async () => { const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } }); queryMock.mockResolvedValueOnce([{ slug: 'luce', version: '1.2.0' }]); await expect((service as any).defaultThemeSelection()).resolves.toEqual({ slug: 'luce', version: '1.2.0' }); expect(queryMock.mock.calls[0][0]).not.toContain("CASE WHEN t.slug='colsova'"); });
@@ -116,7 +122,7 @@ describe('TenantSiteProposalsService', () => {
     (service as any).createVersion = jest.fn();
     (service as any).activity = jest.fn();
     (service as any).one = jest.fn(async (sql: string, params: any[]) => sql.includes('INSERT INTO') ? { id: ids[Number(params[1]) - 1], source_row_index: params[1], display_name: params[6], preparation_status: 'idle' } : undefined);
-    const built = jest.spyOn(deterministic, 'buildDeterministicProposal').mockReturnValue({ config: { content: {} }, analysis: {}, email: { subject: 'Oggetto', body: 'Corpo [LINK_DEMO]' } } as any);
+    const built = jest.spyOn(deterministic, 'buildDeterministicProposalForTemplate').mockReturnValue({ config: { content: {} }, analysis: {}, email: { subject: 'Oggetto', body: 'Corpo [LINK_DEMO]' } } as any);
     const enqueue = jest.fn().mockResolvedValue({ queued: true, pendingDispatch: false });
     (service as any).preparationQueue = { enqueue };
     queryMock.mockImplementation(async (sql: string) => sql.includes('LEFT JOIN LATERAL') ? ids.map((id, index) => ({ id, display_name: `Impresa ${index + 1}`, source_row_index: index + 1, preparation_status: 'queued', preparation_run_status: 'dispatched', progress_percent: 0, progress_stage: 'waiting', progress_message: 'In attesa' })) : []);
@@ -137,7 +143,7 @@ describe('TenantSiteProposalsService', () => {
     (service as any).createVersion = jest.fn();
     (service as any).activity = jest.fn();
     (service as any).one = jest.fn(async (sql: string, params: any[]) => sql.includes('INSERT INTO') ? { id: ids[Number(params[1]) - 1], source_row_index: params[1], display_name: params[6], preparation_status: 'idle' } : undefined);
-    const built = jest.spyOn(deterministic, 'buildDeterministicProposal').mockReturnValue({ config: { content: {} }, analysis: {}, email: { subject: 'Oggetto', body: 'Corpo [LINK_DEMO]' } } as any);
+    const built = jest.spyOn(deterministic, 'buildDeterministicProposalForTemplate').mockReturnValue({ config: { content: {} }, analysis: {}, email: { subject: 'Oggetto', body: 'Corpo [LINK_DEMO]' } } as any);
     const enqueue = jest.fn().mockResolvedValueOnce({ queued: true }).mockRejectedValueOnce(new Error('dispatch failed')).mockResolvedValue({ queued: true });
     (service as any).preparationQueue = { enqueue };
     queryMock.mockImplementation(async (sql: string) => sql.includes('LEFT JOIN LATERAL') ? ids.map((id, index) => ({ id, preparation_status: index === 1 ? 'idle' : 'queued', preparation_run_status: index === 1 ? null : 'dispatched', progress_percent: 0, progress_stage: index === 1 ? 'dispatch-failed' : 'waiting' })) : []);

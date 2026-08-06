@@ -26,7 +26,8 @@ import {
   validateWebsiteUrl,
   wordSafeLimit,
 } from './tenant-site-proposals-validation';
-import { buildDeterministicProposal } from './tenant-site-proposals-deterministic';
+import { buildDeterministicProposal, buildDeterministicProposalForTemplate } from './tenant-site-proposals-deterministic';
+import { SiteProposalTemplateRegistration } from './tenant-site-proposals-template-registry';
 
 type ParsedCsv = {
   headers: string[];
@@ -235,7 +236,7 @@ export class TenantSiteProposalsCsvService {
     };
   }
 
-  buildPreviewRows(rows: Record<string, string>[], defaultConfig: JsonObject): PreviewRow[] {
+  buildPreviewRows(rows: Record<string, string>[], defaultConfig: JsonObject, registration?: SiteProposalTemplateRegistration): PreviewRow[] {
     const seen = new Set<string>();
     return rows.map((row, index) => {
       const errors: RowIssue[] = [];
@@ -250,7 +251,7 @@ export class TenantSiteProposalsCsvService {
         }
         seen.add(sourceRowHash);
         warnings.push(...templateCategoryWarnings(canonical.category));
-        const siteConfig = this.buildSiteConfig(defaultConfig, canonical, warnings);
+        const siteConfig = this.buildSiteConfig(defaultConfig, canonical, warnings, registration);
         return {
           rowIndex: index + 1,
           valid: errors.length === 0,
@@ -333,13 +334,15 @@ export class TenantSiteProposalsCsvService {
     return canonical;
   }
 
-  buildSiteConfig(defaultConfig: JsonObject, input: CanonicalProposalInput, warnings: RowIssue[] = []): JsonObject {
+  buildSiteConfig(defaultConfig: JsonObject, input: CanonicalProposalInput, warnings: RowIssue[] = [], registration?: SiteProposalTemplateRegistration): JsonObject {
     if (((defaultConfig.template as JsonObject)?.schemaVersion) === '2.0') {
-      const built = buildDeterministicProposal(defaultConfig, input);
+      const built = registration
+        ? buildDeterministicProposalForTemplate(defaultConfig, registration, input)
+        : buildDeterministicProposal(defaultConfig, input);
       if (input.paletteOverrides) applyPaletteOverrides(built.config, input.paletteOverrides);
       if (input.configOverrides) applyAllowedConfigOverrides(built.config, input.configOverrides, warnings);
-      forceTemplateContract(built.config);
-      validateSiteConfig(built.config);
+      forceTemplateContract(built.config, registration);
+      validateSiteConfig(built.config, registration);
       return built.config;
     }
     const config = deepClone(defaultConfig);
@@ -393,8 +396,8 @@ export class TenantSiteProposalsCsvService {
     config.content = this.buildContent(config, input, firstThree, warnings);
     if (input.paletteOverrides) applyPaletteOverrides(config, input.paletteOverrides);
     if (input.configOverrides) applyAllowedConfigOverrides(config, input.configOverrides, warnings);
-    forceTemplateContract(config);
-    validateSiteConfig(config);
+    forceTemplateContract(config, registration);
+    validateSiteConfig(config, registration);
     return config;
   }
 

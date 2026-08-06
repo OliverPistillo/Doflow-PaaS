@@ -134,6 +134,40 @@ describe('proposal theme storage hardening', () => {
     await expect(service.delete('colsova','2.4.1')).rejects.toBeInstanceOf(ConflictException); expect(runner.commitTransaction).not.toHaveBeenCalled();
   });
 
+  it('exposes only obsolete built-in versions as removable using generic semver ordering', async () => {
+    const versions = ['1.0.0', '2.0.0', '2.4.1'].map((version) => ({
+      slug: 'colsova', name: 'Colsova', version, source_kind: 'builtin', is_builtin: true, is_active: true, status: 'active',
+      runtime_adapter_status: 'ready', deleted_at: null, default_version: '2.4.1', usages: 0, historical_usages: 0,
+    }));
+    const service = new TenantSiteProposalsThemeService({ query: jest.fn().mockResolvedValue(versions) } as any, {} as any, {} as any, {} as any, {} as any, { user: { id: cleanupId, role: 'owner', tenantId: 'doflow' } });
+    (service as any).ensure = jest.fn();
+    await expect(service.list('all')).resolves.toEqual([
+      expect.objectContaining({ version: '1.0.0', obsolete: true, canDelete: true, deletionMode: 'retire' }),
+      expect.objectContaining({ version: '2.0.0', obsolete: true, canDelete: true, deletionMode: 'retire' }),
+      expect.objectContaining({ version: '2.4.1', obsolete: false, canDelete: false, deletionMode: null }),
+    ]);
+  });
+
+  it('retires an obsolete built-in without deleting its package or historical references', async () => {
+    const runner: any = { isTransactionActive: false, connect: jest.fn(), startTransaction: jest.fn(async () => { runner.isTransactionActive = true; }), commitTransaction: jest.fn(async () => { runner.isTransactionActive = false; }), rollbackTransaction: jest.fn(), release: jest.fn().mockResolvedValue(undefined), query: jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT v.*')) return [{ id: 'version-2', theme_id: 'theme', slug: 'colsova', version: '2.0.0', source_kind: 'builtin', status: 'active', default_version: null }];
+      if (sql.includes('count(*)::int count FROM "doflow".site_proposals')) return [{ count: 2 }];
+      if (sql.includes('site_proposal_generations g')) return [{ count: 3 }];
+      if (sql.includes('SELECT version,status')) return [
+        { version: '2.0.0', status: 'active', runtime_adapter_status: 'ready', deleted_at: null },
+        { version: '2.4.1', status: 'active', runtime_adapter_status: 'ready', deleted_at: null },
+      ];
+      return [];
+    }) };
+    const cleanup = { record: jest.fn(), process: jest.fn() }; const storage = { proposalThemePrefix: jest.fn() };
+    const service = new TenantSiteProposalsThemeService({ createQueryRunner: () => runner } as any, {} as any, storage as any, { invalidate: jest.fn() } as any, cleanup as any, { user: { id: cleanupId, role: 'owner', tenantId: 'doflow' } });
+    (service as any).ensure = jest.fn();
+    await expect(service.delete('colsova', '2.0.0')).resolves.toMatchObject({ deletionMode: 'retired', affectedProposals: 2, storageCleanupStatus: 'preserved' });
+    expect(runner.query.mock.calls.some(([sql]: [string]) => sql.includes("status='disabled',deleted_at=now()"))).toBe(true);
+    expect(cleanup.record).not.toHaveBeenCalled();
+    expect(storage.proposalThemePrefix).not.toHaveBeenCalled();
+  });
+
   it('keeps manager theme deletion read-only', async () => {
     const service = new TenantSiteProposalsThemeService({} as any, {} as any, {} as any, {} as any, {} as any, { user: { id: cleanupId, role: 'manager', tenantId: 'doflow' } });
     await expect(service.delete('custom','1.0.0')).rejects.toBeInstanceOf(ForbiddenException);

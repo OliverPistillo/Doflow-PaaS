@@ -71,6 +71,9 @@ describe('ensureDoflowSiteProposalTables', () => {
     expect(seedCall).toBeDefined();
     expect(seedCall[0]).toContain('ON CONFLICT (slug, version) DO UPDATE');
     expect(seedCall[0]).not.toContain('DO NOTHING');
+    const versionSeed = runner.query.mock.calls.find(([sql]: [string]) => sql.includes('INSERT INTO "doflow".site_proposal_theme_versions'));
+    expect(versionSeed[0]).toContain('WHERE "doflow".site_proposal_theme_versions.deleted_at IS NULL');
+    expect(versionSeed[0]).not.toContain("status='active'");
     const manifest = JSON.parse(seedCall[1][5]);
     expect(manifest).toMatchObject({
       name: 'Tema Colsova',

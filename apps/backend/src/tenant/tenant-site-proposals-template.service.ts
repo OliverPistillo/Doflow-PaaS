@@ -20,7 +20,15 @@ const RENDER_COMPILER_VERSION = 'proposal-renderer-v2';
 type ThemeManifest = TemplateManifest | ModularThemeManifest;
 type LoadedTemplate = { html: string; config: JsonObject; sha256: string; manifest: ThemeManifest; registration: SiteProposalTemplateRegistration };
 export type SiteProposalTemplateContext = { schema: string; dataSource: DataSource };
-type DynamicRegistration = SiteProposalTemplateRegistration & { manifest?: ThemeManifest; defaultConfig?: JsonObject; compiledSha256?: string; compiledSize?: number };
+export type RuntimeThemePurpose = 'import-preview' | 'import-confirm' | 'proposal-create' | 'preparation' | 'generation' | 'preview';
+export type DynamicRegistration = SiteProposalTemplateRegistration & {
+  manifest?: ThemeManifest;
+  defaultConfig?: JsonObject;
+  compiledSha256?: string;
+  compiledSize?: number;
+  versionId?: string;
+  sourceKind?: 'builtin' | 'uploaded';
+};
 
 function object(value: unknown): value is JsonObject { return !!value && typeof value === 'object' && !Array.isArray(value); }
 function equal(left: unknown, right: unknown): boolean {
@@ -64,16 +72,84 @@ export class TenantSiteProposalsTemplateService {
   }
 
   async getRegistration(slug: string, version: string | undefined, context: SiteProposalTemplateContext, allowDraft = false, allowPending = false): Promise<SiteProposalTemplateRegistration> {
-    return this.resolveRegistration(slug, version, context, allowDraft, allowPending);
+    return this.resolveRuntimeTheme({ slug, version, context, purpose: allowDraft || allowPending ? 'preview' : 'generation' });
   }
 
-  async getDefaultConfig(slug = 'colsova', version?: string, context?: SiteProposalTemplateContext): Promise<JsonObject> {
-    const registration = await this.resolveRegistration(slug, version, context, true);
+  async resolveRuntimeTheme(input: { slug: string; version?: string; context?: SiteProposalTemplateContext; purpose: RuntimeThemePurpose }): Promise<DynamicRegistration> {
+    const { slug, version, context, purpose } = input;
+    const historical = purpose === 'preview';
+    let builtin: SiteProposalTemplateRegistration | undefined;
+    try { builtin = getTemplateRegistration(slug, version); } catch (error) { if (!(error instanceof NotFoundException)) throw error; }
+
+    if (!context) {
+      if (!builtin) throw new NotFoundException(`Tema ${slug}${version ? `@${version}` : ''} non trovato.`);
+      this.assertRuntimeAdapter(builtin, historical);
+      return { ...builtin, sourceKind: 'builtin' };
+    }
+
+    const safe = this.context(context);
+    const params: unknown[] = [slug];
+    let versionWhere = 'v.version=t.default_version';
+    if (version) { params.push(version); versionWhere = `v.version=$${params.length}`; }
+    const rows = await safe.dataSource.query(`
+      SELECT t.slug,t.name,t.categories,t.default_version,t.source_kind,t.is_active theme_active,
+        v.id version_id,v.version,v.schema_version,v.contract_version,v.content_profile,v.status,v.is_builtin,
+        v.template_sha256,v.template_size,v.manifest,v.default_config,v.source_format,v.format_version,
+        v.compiled_sha256,v.compiled_size,v.runtime_adapter_status,v.deleted_at,v.template_storage_key
+      FROM "${safe.schema}".site_proposal_themes t
+      JOIN "${safe.schema}".site_proposal_theme_versions v ON v.theme_id=t.id
+      WHERE t.slug=$1 AND ${versionWhere}
+      LIMIT 1
+    `, params);
+    const row = rows[0];
+
+    if (!row) {
+      if (builtin) {
+        this.assertRuntimeAdapter(builtin, historical);
+        return { ...builtin, sourceKind: 'builtin' };
+      }
+      throw new NotFoundException(`Tema ${slug}${version ? `@${version}` : ''} non trovato.`);
+    }
+    if (!historical) {
+      if (row.deleted_at) throw new BadRequestException('Il tema selezionato è stato ritirato e non può essere usato per nuovi import.');
+      if (row.theme_active !== true || row.status === 'disabled') throw new BadRequestException('Il tema selezionato è disattivato.');
+      if (row.status !== 'active') throw new BadRequestException('Il tema selezionato non è attivo.');
+    }
+
+    if (row.source_kind === 'builtin' && builtin) {
+      this.assertRuntimeAdapter(builtin, historical);
+      return { ...builtin, versionId: row.version_id, sourceKind: 'builtin' };
+    }
+    if (row.source_kind !== 'uploaded') throw new NotFoundException(`Tema ${slug}@${row.version} non trovato.`);
+    const registration = {
+      slug: row.slug, name: row.name, version: row.version, schemaVersion: row.schema_version, sourceSha256: row.template_sha256,
+      directory: '', isActive: row.status === 'active', isLatest: row.default_version === row.version, categoryTags: Array.isArray(row.categories) ? row.categories : [],
+      contractVersion: row.contract_version, contentProfile: row.content_profile, templateSize: Number(row.template_size), isBuiltin: false,
+      format: row.source_format === 'modular' ? 'modular' : 'standalone', formatVersion: row.format_version || undefined,
+      runtimeAdapterStatus: row.runtime_adapter_status === 'ready' ? 'ready' : 'pending',
+      selectableForProposal: row.runtime_adapter_status === 'ready', selectableForImport: row.runtime_adapter_status === 'ready',
+      visible: true, preview: true, download: true, defaultCandidate: row.runtime_adapter_status === 'ready', recommendationTags: [],
+      manifest: row.manifest, defaultConfig: row.default_config, compiledSha256: row.compiled_sha256 || undefined,
+      compiledSize: row.compiled_size ? Number(row.compiled_size) : undefined, versionId: row.version_id, sourceKind: 'uploaded',
+    } as DynamicRegistration;
+    if (!historical && (!registration.manifest || !registration.defaultConfig || (registration.format === 'modular' && (!registration.compiledSha256 || !registration.compiledSize || !row.template_storage_key)))) {
+      throw new BadRequestException('Il package del tema non è disponibile nello storage.');
+    }
+    this.assertRuntimeAdapter(registration, historical);
+    return registration;
+  }
+
+  async getDefaultConfigForRegistration(registration: DynamicRegistration, context?: SiteProposalTemplateContext): Promise<JsonObject> {
     const loaded = await this.load(registration, context);
     const config = deepClone(loaded.config);
     forceTemplateContract(config, registration);
     validateSiteConfig(config, registration);
     return config;
+  }
+
+  async getDefaultConfig(slug = 'colsova', version?: string, context?: SiteProposalTemplateContext): Promise<JsonObject> {
+    const registration = await this.resolveRegistration(slug, version, context, true);
+    return this.getDefaultConfigForRegistration(registration, context);
   }
 
   async getManifest(slug = 'colsova', version?: string, context?: SiteProposalTemplateContext): Promise<TemplateManifest> {
@@ -206,9 +282,13 @@ export class TenantSiteProposalsTemplateService {
   private async readUploaded(registration: DynamicRegistration, context?: SiteProposalTemplateContext): Promise<Buffer> {
     this.context(context);
     if (!this.fileStorage) throw new NotFoundException('Storage temi non disponibile');
-    return registration.format === 'modular'
-      ? this.fileStorage.readThemeCompiled(registration.slug, registration.version)
-      : this.fileStorage.readThemeTemplate(registration.slug, registration.version);
+    try {
+      return await (registration.format === 'modular'
+        ? this.fileStorage.readThemeCompiled(registration.slug, registration.version)
+        : this.fileStorage.readThemeTemplate(registration.slug, registration.version));
+    } catch {
+      throw new BadRequestException('Il package del tema non è disponibile nello storage.');
+    }
   }
 
   private context(context?: SiteProposalTemplateContext): SiteProposalTemplateContext {
@@ -219,37 +299,13 @@ export class TenantSiteProposalsTemplateService {
   }
 
   private async resolveRegistration(slug: string, version: string | undefined, context: SiteProposalTemplateContext | undefined, allowDraft: boolean, allowPending = true): Promise<DynamicRegistration> {
-    try {
-      const builtin = getTemplateRegistration(slug, version);
-      this.assertRuntimeAdapter(builtin, allowPending);
-      return builtin;
-    } catch (error) { if (!(error instanceof NotFoundException)) throw error; }
-    const safe = this.context(context);
-    const params: unknown[] = [slug];
-    let versionWhere = 'v.version=t.default_version';
-    if (version) { params.push(version); versionWhere = `v.version=$${params.length}`; }
-    const statuses = allowDraft ? "('active','draft')" : "('active')";
-    const rows = await safe.dataSource.query(`SELECT t.slug,t.name,t.categories,t.default_version,v.version,v.schema_version,v.contract_version,v.content_profile,v.status,v.template_sha256,v.template_size,v.manifest,v.default_config,v.source_format,v.format_version,v.compiled_sha256,v.compiled_size,v.runtime_adapter_status FROM "${safe.schema}".site_proposal_themes t JOIN "${safe.schema}".site_proposal_theme_versions v ON v.theme_id=t.id WHERE t.slug=$1 AND ${versionWhere} AND t.is_active=true AND v.deleted_at IS NULL AND v.status IN ${statuses} LIMIT 1`, params);
-    const row = rows[0];
-    if (!row) throw new NotFoundException('Template non trovato');
-    const registration = {
-      slug: row.slug, name: row.name, version: row.version, schemaVersion: row.schema_version, sourceSha256: row.template_sha256,
-      directory: '', isActive: row.status === 'active', isLatest: row.default_version === row.version, categoryTags: Array.isArray(row.categories) ? row.categories : [],
-      contractVersion: row.contract_version, contentProfile: row.content_profile, templateSize: Number(row.template_size), isBuiltin: false,
-      format: row.source_format === 'modular' ? 'modular' : 'standalone', formatVersion: row.format_version || undefined,
-      runtimeAdapterStatus: row.runtime_adapter_status === 'ready' ? 'ready' : 'pending',
-      selectableForProposal: row.runtime_adapter_status === 'ready', selectableForImport: row.runtime_adapter_status === 'ready',
-      visible: true, preview: true, download: true, defaultCandidate: row.runtime_adapter_status === 'ready', recommendationTags: [],
-      manifest: row.manifest, defaultConfig: row.default_config, compiledSha256: row.compiled_sha256 || undefined, compiledSize: row.compiled_size ? Number(row.compiled_size) : undefined,
-    } as DynamicRegistration;
-    this.assertRuntimeAdapter(registration, allowPending);
-    return registration;
+    return this.resolveRuntimeTheme({ slug, version, context, purpose: allowDraft || allowPending ? 'preview' : 'generation' });
   }
 
   private assertRuntimeAdapter(registration: SiteProposalTemplateRegistration, allowPending: boolean) {
     const adapterAvailable = registration.contentProfile === 'colsova-legacy-v1' || hasProposalContentProfileAdapter(registration.contentProfile);
     if (!allowPending && (registration.runtimeAdapterStatus !== 'ready' || !registration.selectableForProposal || !adapterAvailable)) {
-      throw new BadRequestException('Tema disponibile in anteprima, adattatore di generazione non ancora attivo.');
+      throw new BadRequestException('Il tema è disponibile in Libreria, ma il relativo adattatore non è attivo.');
     }
   }
 

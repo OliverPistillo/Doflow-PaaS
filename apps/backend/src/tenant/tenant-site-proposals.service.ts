@@ -18,7 +18,7 @@ import { TenantSiteProposalsCsvService } from './tenant-site-proposals-csv.servi
 import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
 import { TenantSiteProposalsArtifactService } from './tenant-site-proposals-artifact.service';
 import { TenantSiteProposalsPersonalizationService } from './tenant-site-proposals-personalization.service';
-import { buildDeterministicProposal } from './tenant-site-proposals-deterministic';
+import { buildDeterministicProposal, buildDeterministicProposalForTemplate } from './tenant-site-proposals-deterministic';
 import { TenantSiteProposalsPreparationQueueService } from './tenant-site-proposals-preparation-queue.service';
 import { TenantSiteProposalsGenerationCoreService } from './tenant-site-proposals-generation-core.service';
 import { evaluateProposalReadiness } from './tenant-site-proposals-readiness';
@@ -76,29 +76,28 @@ export class TenantSiteProposalsService {
     const templateSlug = requestedTemplateSlug || configuredDefault?.slug || COLSOVA_LATEST_TEMPLATE.slug;
     const templateVersion = requestedTemplateVersion || configuredDefault?.version;
     const parsed = this.csv.parseCsvFile(file);
-    const registration = await this.templates.getRegistration(templateSlug, templateVersion, this.templateContext());
-    const defaultConfig = await this.templates.getDefaultConfig(templateSlug, templateVersion, this.templateContext());
-    const previewRows = this.csv.buildPreviewRows(parsed.rows, defaultConfig);
+    const registration = await this.templates.resolveRuntimeTheme({ slug: templateSlug, version: templateVersion, context: this.templateContext(), purpose: 'import-preview' });
+    const defaultConfig = await this.templates.getDefaultConfigForRegistration(registration, this.templateContext());
+    const previewRows = this.csv.buildPreviewRows(parsed.rows, defaultConfig, registration);
     const errors = previewRows.flatMap((row) => row.errors.map((error) => ({ rowIndex: row.rowIndex, ...error })));
     const rows = await this.ds().query(
       `
       INSERT INTO "${this.schema()}".site_proposal_import_batches
-        (template_slug, template_version, original_filename, content_type, source_sha256, status, row_count, valid_count, invalid_count, rows, errors, created_by)
-      VALUES ($1, $2, $3, $4, $5, 'preview', $6, $7, $8, $9::jsonb, $10::jsonb, $11)
+        (template_slug, template_version, template_version_id, template_source_kind, content_profile, template_manifest_sha256,
+         original_filename, content_type, source_sha256, status, row_count, valid_count, invalid_count, rows, errors, created_by)
+      VALUES ($1, $2, $3::uuid, $4, $5, $6, $7, $8, $9, 'preview', $10, $11, $12, $13::jsonb, $14::jsonb, $15)
       RETURNING *
       `,
       [
         templateSlug,
         registration.version,
-        cleanString(file.originalname, 255) || 'import.csv',
-        cleanString(file.mimetype, 100) || null,
-        sha256(file.buffer),
-        previewRows.length,
-        previewRows.filter((r) => r.valid).length,
-        previewRows.filter((r) => !r.valid).length,
-        JSON.stringify(previewRows),
-        JSON.stringify(errors),
-        this.userIdOrNull(user.id),
+        registration.versionId || null,
+        registration.sourceKind || (registration.isBuiltin ? 'builtin' : 'uploaded'),
+        registration.contentProfile,
+        registration.sourceSha256,
+        cleanString(file.originalname, 255) || 'import.csv', cleanString(file.mimetype, 100) || null, sha256(file.buffer),
+        previewRows.length, previewRows.filter((r) => r.valid).length, previewRows.filter((r) => !r.valid).length,
+        JSON.stringify(previewRows), JSON.stringify(errors), this.userIdOrNull(user.id),
       ],
     );
     return { batch: rows[0], rows: previewRows };
@@ -129,6 +128,16 @@ export class TenantSiteProposalsService {
       );
     }
 
+    const registration = await this.templates.resolveRuntimeTheme({
+      slug: String(batch.template_slug), version: String(batch.template_version), context: this.templateContext(), purpose: 'import-confirm',
+    });
+    if ((batch.template_version_id && batch.template_version_id !== registration.versionId)
+      || (batch.template_source_kind && batch.template_source_kind !== (registration.sourceKind || (registration.isBuiltin ? 'builtin' : 'uploaded')))
+      || (batch.content_profile && batch.content_profile !== registration.contentProfile)
+      || (batch.template_manifest_sha256 && batch.template_manifest_sha256 !== registration.sourceSha256)) {
+      throw new ConflictException('Il tema selezionato è cambiato dopo l’anteprima. Crea una nuova anteprima import.');
+    }
+
     const rows = (batch.rows || []) as PreviewRow[];
     const imageMode = await this.defaultImageMode(batch.template_slug, batch.template_version);
     const proposals: JsonObject[] = [];
@@ -137,7 +146,7 @@ export class TenantSiteProposalsService {
       const match = await this.matchCompany(row.canonical!, warnings);
       const existingActive = await this.one(`SELECT id FROM "${schema}".site_proposals WHERE fingerprint = $1 AND deleted_at IS NULL LIMIT 1`, [row.fingerprint]);
       if (existingActive) warnings.push({ code: 'EXISTING_ACTIVE_PROPOSAL', message: 'Esiste gia una proposta attiva con lo stesso fingerprint.' });
-      const deterministic = buildDeterministicProposal(row.siteConfig!, row.canonical!);
+      const deterministic = buildDeterministicProposalForTemplate(row.siteConfig!, registration, row.canonical!);
       const analysis = deterministic.analysis;
       const email = deterministic.email;
       const inserted = await this.one(
@@ -250,11 +259,11 @@ export class TenantSiteProposalsService {
     const sourceData = (body.sourceData && typeof body.sourceData === 'object' ? body.sourceData : {}) as Record<string, string>;
     const canonical = this.csv.normalizeRow({ ...sourceData, business_name: body.displayName || sourceData.business_name || sourceData.businessName || sourceData.name }, []);
     const warnings: RowIssue[] = [];
-    await this.templates.getRegistration(templateSlug, templateVersion, this.templateContext());
-    const baseConfig = await this.templates.getDefaultConfig(templateSlug, templateVersion, this.templateContext());
+    const registration = await this.templates.resolveRuntimeTheme({ slug: templateSlug, version: templateVersion, context: this.templateContext(), purpose: 'proposal-create' });
+    const baseConfig = await this.templates.getDefaultConfigForRegistration(registration, this.templateContext());
     const selectedTemplate = (baseConfig.template || {}) as JsonObject;
-    const siteConfig = this.csv.buildSiteConfig(baseConfig, canonical, warnings);
-    const deterministic = buildDeterministicProposal(siteConfig, canonical);
+    const siteConfig = this.csv.buildSiteConfig(baseConfig, canonical, warnings, registration);
+    const deterministic = buildDeterministicProposalForTemplate(siteConfig, registration, canonical);
     const analysis = deterministic.analysis;
     const email = deterministic.email;
     const imageMode = await this.defaultImageMode(String(selectedTemplate.slug), String(selectedTemplate.templateVersion));

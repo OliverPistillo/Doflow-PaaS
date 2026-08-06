@@ -195,4 +195,30 @@ describe('TenantSiteProposalsTemplateService', () => {
     expect(zip.entries.join('|')).not.toContain('email');
     expect(zip.entries.join('|')).not.toContain('commercial');
   });
+
+  it('resolves an exact uploaded Aurea Custom runtime theme from DB instead of the built-in registry', async () => {
+    const query = jest.fn().mockResolvedValue([{
+      slug: 'aurea-custom', name: 'Aurea Custom', categories: ['beauty'], default_version: '2.0.0', source_kind: 'uploaded', theme_active: true,
+      version_id: '650e8400-e29b-41d4-a716-446655440000', version: '2.0.0', schema_version: '2.0', contract_version: '2.1',
+      content_profile: 'beauty-editorial-v1', status: 'active', is_builtin: false, template_sha256: 'source-sha', template_size: 100,
+      manifest: { slug: 'aurea-custom', version: '2.0.0' }, default_config: { template: { slug: 'aurea-custom' } }, source_format: 'modular',
+      format_version: '1.0', compiled_sha256: 'compiled-sha', compiled_size: 200, runtime_adapter_status: 'ready', deleted_at: null,
+      template_storage_key: 'doflow/site-proposal-themes/aurea-custom/2.0.0/template.html',
+    }]);
+    const resolved = await service.resolveRuntimeTheme({ slug: 'aurea-custom', version: '2.0.0', context: { schema: 'doflow', dataSource: { query } as any }, purpose: 'import-preview' });
+    expect(resolved).toMatchObject({ slug: 'aurea-custom', version: '2.0.0', sourceKind: 'uploaded', isBuiltin: false, contentProfile: 'beauty-editorial-v1', runtimeAdapterStatus: 'ready' });
+    expect(query.mock.calls[0][1]).toEqual(['aurea-custom', '2.0.0']);
+  });
+
+  it.each([
+    [{ theme_active: false, status: 'active', deleted_at: null, runtime_adapter_status: 'ready' }, 'Il tema selezionato è disattivato.'],
+    [{ theme_active: true, status: 'disabled', deleted_at: new Date(), runtime_adapter_status: 'ready' }, 'Il tema selezionato è stato ritirato'],
+    [{ theme_active: true, status: 'active', deleted_at: null, runtime_adapter_status: 'pending' }, 'relativo adattatore non è attivo'],
+  ])('returns a clear unusable-theme error for uploaded imports', async (state, message) => {
+    const row = { slug: 'aurea-custom', name: 'Aurea Custom', categories: [], default_version: '2.0.0', source_kind: 'uploaded', version_id: '650e8400-e29b-41d4-a716-446655440000',
+      version: '2.0.0', schema_version: '2.0', contract_version: '2.1', content_profile: 'beauty-editorial-v1', is_builtin: false,
+      template_sha256: 'sha', template_size: 10, manifest: {}, default_config: {}, source_format: 'modular', format_version: '1.0',
+      compiled_sha256: 'compiled', compiled_size: 20, template_storage_key: 'key', ...state };
+    await expect(service.resolveRuntimeTheme({ slug: row.slug, version: row.version, context: { schema: 'doflow', dataSource: { query: jest.fn().mockResolvedValue([row]) } as any }, purpose: 'import-preview' })).rejects.toThrow(message);
+  });
 });

@@ -87,6 +87,10 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_import_batches_status" ON "${s}".site_proposal_import_batches(status)`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_import_batches_created_at" ON "${s}".site_proposal_import_batches(created_at)`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposal_import_batches_source_sha256" ON "${s}".site_proposal_import_batches(source_sha256)`);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_import_batches ADD COLUMN IF NOT EXISTS template_version_id UUID`);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_import_batches ADD COLUMN IF NOT EXISTS template_source_kind TEXT`);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_import_batches ADD COLUMN IF NOT EXISTS content_profile TEXT`);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_import_batches ADD COLUMN IF NOT EXISTS template_manifest_sha256 TEXT`);
 
     await runner.query(`
     CREATE TABLE IF NOT EXISTS "${s}".site_proposals (
@@ -397,11 +401,12 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
           (theme_id,version,schema_version,contract_version,content_profile,status,is_builtin,is_immutable,template_sha256,template_size,zip_sha256,zip_size,manifest,default_config,validation_report,activated_at,source_format,format_version,compiled_sha256,compiled_size,runtime_adapter_status)
         VALUES ($1,$2,$3,$4,$5,'active',true,true,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,now(),$13,$14,$15,$16,$17)
         ON CONFLICT (theme_id,version) DO UPDATE SET
-          status='active', content_profile=EXCLUDED.content_profile, manifest=EXCLUDED.manifest,
+          content_profile=EXCLUDED.content_profile, manifest=EXCLUDED.manifest,
           default_config=EXCLUDED.default_config, validation_report=EXCLUDED.validation_report,
           source_format=EXCLUDED.source_format,format_version=EXCLUDED.format_version,
           compiled_sha256=EXCLUDED.compiled_sha256,compiled_size=EXCLUDED.compiled_size,
           runtime_adapter_status=EXCLUDED.runtime_adapter_status
+        WHERE "${s}".site_proposal_theme_versions.deleted_at IS NULL
       `, [themeId, registration.version, registration.schemaVersion, registration.contractVersion, registration.contentProfile, registration.sourceSha256, registration.templateSize,
         registration.version === '2.4.1' ? 'bc9be4d9249e06ee113331b0890b8d3c4efc8140bbadcd237a1cd68040549ad6' : null,
         registration.version === '2.4.1' ? 1673508 : null,

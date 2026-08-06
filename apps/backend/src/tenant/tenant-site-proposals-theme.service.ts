@@ -12,7 +12,7 @@ import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-temp
 import { TenantSiteProposalsThemePackageService } from './tenant-site-proposals-theme-package.service';
 import { TenantSiteProposalsThemeStorageCleanupService } from './tenant-site-proposals-theme-storage-cleanup.service';
 import { TenantSiteProposalsThemeCompilerService } from './tenant-site-proposals-theme-compiler.service';
-import { getTemplateRegistration } from './tenant-site-proposals-template-registry';
+import { getTemplateRegistration, SITE_PROPOSAL_TEMPLATE_REGISTRY } from './tenant-site-proposals-template-registry';
 import { AuthUserRef, JsonObject } from './tenant-site-proposals.types';
 import { assertNoPrototypePollution, UUID_RE } from './tenant-site-proposals-validation';
 import { hasProposalContentProfileAdapter } from './tenant-site-proposals-content-profile-adapters';
@@ -31,8 +31,8 @@ export class TenantSiteProposalsThemeService {
 
   async list(filter = 'all') {
     this.access(false); await this.ensure(); const s = this.schema();
-    const filters: Record<string, string> = { active: `v.deleted_at IS NULL AND v.status IN ('active','draft')`, disabled: `v.deleted_at IS NULL AND v.status='disabled'`, deleted: `v.deleted_at IS NOT NULL`, all: 'true' };
-    if (!filters[filter]) throw new BadRequestException('Filtro temi non valido');
+    const filters = new Set(['active', 'disabled', 'deleted', 'all']);
+    if (!filters.has(filter)) throw new BadRequestException('Filtro temi non valido');
     const rows = await this.ds().query(`
       SELECT t.id,t.slug,t.name,t.description,t.source_kind,t.is_active,t.default_version,t.categories,t.created_at,t.updated_at,
         v.id version_id,v.version,v.schema_version,v.contract_version,v.content_profile,v.status,v.is_builtin,v.is_immutable,
@@ -42,18 +42,23 @@ export class TenantSiteProposalsThemeService {
         (SELECT count(*)::int FROM "${s}".site_proposals p WHERE p.template_slug=t.slug AND p.template_version=v.version) usages,
         (SELECT count(*)::int FROM "${s}".site_proposal_generations g WHERE g.template_slug=t.slug AND g.template_version=v.version) historical_usages
       FROM "${s}".site_proposal_themes t JOIN "${s}".site_proposal_theme_versions v ON v.theme_id=t.id
-      WHERE ${filters[filter]}
       ORDER BY t.name,v.created_at DESC
     `);
-    return rows.map((row: any) => this.publicTheme(row));
+    return rows
+      .filter((row: any) => filter === 'all'
+        || (filter === 'active' && !row.deleted_at && ['active', 'draft'].includes(row.status))
+        || (filter === 'disabled' && !row.deleted_at && row.status === 'disabled')
+        || (filter === 'deleted' && Boolean(row.deleted_at)))
+      .map((row: any) => this.publicTheme(row, rows));
   }
 
   async get(slug: string, version: string) {
     this.access(false); this.identity(slug, version); await this.ensure();
     const row = await this.row(slug, version);
     if (!row) throw new NotFoundException('Tema non trovato');
+    const siblings = await this.ds().query(`SELECT t.slug,t.source_kind,v.version,v.status,v.runtime_adapter_status,v.deleted_at FROM "${this.schema()}".site_proposal_themes t JOIN "${this.schema()}".site_proposal_theme_versions v ON v.theme_id=t.id WHERE t.id=$1`, [row.theme_id]);
     const { template_storage_key: _templateKey, zip_storage_key: _zipKey, default_config: _defaultConfig, ...publicRow } = row;
-    return this.publicTheme(publicRow);
+    return this.publicTheme(publicRow, siblings);
   }
 
   async upload(file?: Express.Multer.File) {
@@ -152,11 +157,28 @@ export class TenantSiteProposalsThemeService {
         if (cleanup) { await runner.commitTransaction(); return { deleted: true, deletionMode: 'purged', fallbackDefault: null, affectedProposals: 0, storageCleanupStatus: cleanup.status }; }
         throw new NotFoundException('Tema non trovato');
       }
-      if (row.source_kind === 'builtin') throw new ConflictException('I temi built-in non possono essere eliminati');
       const usage = (await runner.query(`SELECT count(*)::int count FROM "${this.schema()}".site_proposals WHERE template_slug=$1 AND template_version=$2`, [slug, version]))[0];
       const affectedProposals = Number(usage?.count || 0);
       const historical = (await runner.query(`SELECT count(*)::int count FROM "${this.schema()}".site_proposal_generations g JOIN "${this.schema()}".site_proposals p ON p.id=g.proposal_id WHERE g.template_slug=$1 AND g.template_version=$2`, [slug, version]))[0];
       const referenced = affectedProposals > 0 || Number(historical?.count || 0) > 0;
+      if (row.source_kind === 'builtin') {
+        if (row.deleted_at) {
+          await runner.commitTransaction();
+          return { deleted: true, deletionMode: 'retired', fallbackDefault: null, affectedProposals, storageCleanupStatus: 'preserved' };
+        }
+        const versions = await runner.query(`SELECT version,status,runtime_adapter_status,deleted_at FROM "${this.schema()}".site_proposal_theme_versions WHERE theme_id=$1 FOR UPDATE`, [row.theme_id]);
+        const replacement = this.latestReadyBuiltin(slug, version, versions);
+        if (!replacement) throw new ConflictException('La versione corrente di un tema integrato non può essere eliminata.');
+        let fallbackDefault = null;
+        if (row.default_version === version) {
+          await runner.query(`UPDATE "${this.schema()}".site_proposal_themes SET default_version=$1,updated_at=now() WHERE id=$2`, [replacement, row.theme_id]);
+          fallbackDefault = { slug, version: replacement };
+        }
+        await runner.query(`UPDATE "${this.schema()}".site_proposal_theme_versions SET status='disabled',deleted_at=now() WHERE id=$1`, [row.id]);
+        await this.activity(runner, row.theme_id, row.id, 'THEME_RETIRED', user, { version, affectedProposals, builtIn: true, replacement });
+        await runner.commitTransaction(); this.templates.invalidate(this.schema(), slug, version);
+        return { deleted: true, deletionMode: 'retired', fallbackDefault, affectedProposals, storageCleanupStatus: 'preserved' };
+      }
       const fallbackDefault = row.default_version === version ? await this.assignFallbackDefault(runner, row.id) : null;
       if (referenced) {
         if (!row.deleted_at) {
@@ -192,12 +214,13 @@ export class TenantSiteProposalsThemeService {
   private async row(slug: string, version: string) {
     return (await this.ds().query(`SELECT v.*,t.id theme_id,t.slug,t.name,t.source_kind,t.default_version,t.categories,t.is_active theme_active FROM "${this.schema()}".site_proposal_themes t JOIN "${this.schema()}".site_proposal_theme_versions v ON v.theme_id=t.id WHERE t.slug=$1 AND v.version=$2 LIMIT 1`, [slug, version]))[0];
   }
-  private publicTheme(row: any) {
+  private publicTheme(row: any, rows: any[] = []) {
     const builtIn = row.source_kind === 'builtin';
     const usageCount = Number(row.usages || 0);
     const historicalUsageCount = Number(row.historical_usages || 0);
     const retired = Boolean(row.deleted_at);
-    const deletionMode = builtIn ? null : usageCount > 0 || historicalUsageCount > 0 ? 'retire' : 'purge';
+    const obsolete = builtIn && !retired && Boolean(this.latestReadyBuiltin(row.slug, row.version, rows.filter((item: any) => item.slug === row.slug)));
+    const deletionMode = builtIn ? obsolete ? 'retire' : null : usageCount > 0 || historicalUsageCount > 0 ? 'retire' : 'purge';
     return {
       ...row,
       status: retired ? 'retired' : row.status,
@@ -208,14 +231,35 @@ export class TenantSiteProposalsThemeService {
       isDefault: row.default_version === row.version,
       usageCount,
       historicalUsageCount,
-      canDelete: !builtIn,
+      obsolete,
+      canDelete: !retired && (!builtIn || obsolete),
       deletionMode,
       deleteReason: builtIn
-        ? 'I temi built-in sono protetti.'
+        ? obsolete
+          ? 'La vecchia versione verrà ritirata; proposte e generazioni storiche resteranno disponibili.'
+          : 'La versione corrente di un tema integrato non può essere eliminata.'
         : deletionMode === 'retire'
           ? 'Il tema verrà ritirato; package e generazioni storiche saranno preservati.'
           : 'Il tema verrà eliminato definitivamente con cleanup storage DB-first.',
     };
+  }
+  private latestReadyBuiltin(slug: string, currentVersion: string, rows: any[]) {
+    const registered = new Set(SITE_PROPOSAL_TEMPLATE_REGISTRY.filter((item) => item.slug === slug && item.isActive && item.runtimeAdapterStatus === 'ready').map((item) => item.version));
+    const candidates = rows
+      .filter((item: any) => registered.has(String(item.version)) && item.status === 'active' && !item.deleted_at && item.runtime_adapter_status === 'ready')
+      .map((item: any) => String(item.version))
+      .filter((candidate: string) => this.compareSemver(candidate, currentVersion) > 0)
+      .sort((left: string, right: string) => this.compareSemver(right, left));
+    if (rows.length) return candidates[0] || null;
+    return SITE_PROPOSAL_TEMPLATE_REGISTRY
+      .filter((item) => item.slug === slug && item.isActive && item.runtimeAdapterStatus === 'ready' && this.compareSemver(item.version, currentVersion) > 0)
+      .sort((left, right) => this.compareSemver(right.version, left.version))[0]?.version || null;
+  }
+  private compareSemver(left: string, right: string) {
+    const parse = (value: string) => value.split('-')[0].split('.').map((part) => Number(part));
+    const a = parse(left); const b = parse(right);
+    for (let index = 0; index < 3; index += 1) if ((a[index] || 0) !== (b[index] || 0)) return (a[index] || 0) - (b[index] || 0);
+    return left.localeCompare(right);
   }
   private async assignFallbackDefault(runner: { query: (...args: any[]) => Promise<any> }, excludedVersionId: string) {
     const fallback = (await runner.query(`SELECT t.id,t.slug,v.version FROM "${this.schema()}".site_proposal_themes t JOIN "${this.schema()}".site_proposal_theme_versions v ON v.theme_id=t.id WHERE v.id<>$1 AND t.is_active=true AND v.status='active' AND v.deleted_at IS NULL AND v.runtime_adapter_status='ready' ORDER BY CASE WHEN t.slug='colsova' AND v.version='2.4.1' THEN 0 ELSE 1 END,t.updated_at DESC LIMIT 1`, [excludedVersionId]))[0];

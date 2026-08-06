@@ -65,7 +65,7 @@ export type ProposalTheme = {
   version: string; schema_version: string; contract_version: string; content_profile: "proposal-basic-v2" | "colsova-conversion-v1" | "colsova-legacy-v1" | "beauty-editorial-v1" | "beauty-conversion-v1"; status: "draft" | "active" | "disabled" | "retired"; is_builtin: boolean; is_immutable: boolean; deleted_at?: string | null; default_image_mode?: ThemeImageMode;
   template_sha256: string; template_size: number | string; zip_sha256?: string | null; zip_size?: number | string | null; validation_report?: JsonObject; usages?: number; version_created_at?: string;
   source_format?: "standalone" | "modular"; format_version?: string | null; compiled_sha256?: string | null; compiled_size?: number | string | null; runtime_adapter_status?: "ready" | "pending"; manifest?: JsonObject;
-  builtIn?: boolean; sourceType?: "builtin" | "uploaded"; active?: boolean; isDefault?: boolean; usageCount?: number; historicalUsageCount?: number; canDelete?: boolean; deletionMode?: "purge" | "retire" | null; deleteReason?: string;
+  builtIn?: boolean; sourceType?: "builtin" | "uploaded"; active?: boolean; isDefault?: boolean; usageCount?: number; historicalUsageCount?: number; obsolete?: boolean; canDelete?: boolean; deletionMode?: "purge" | "retire" | null; deleteReason?: string;
 };
 export type ThemeUploadResult = { manifest: JsonObject; format?: "standalone" | "modular"; runtimeAdapterStatus?: "ready" | "pending"; hash: { template: string; zip: string; compiled?: string }; sizes: { template: number; zip: number; compiled?: number }; contentProfile: string; validationReport: JsonObject; warnings: string[]; status: "draft"; previewUrl: string };
 

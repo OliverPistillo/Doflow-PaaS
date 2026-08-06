@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { TenantSiteProposalsCsvService } from './tenant-site-proposals-csv.service';
 import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
+import { getTemplateRegistration } from './tenant-site-proposals-template-registry';
 
 describe('TenantSiteProposalsCsvService', () => {
   let service: TenantSiteProposalsCsvService;
@@ -141,6 +142,21 @@ describe('TenantSiteProposalsCsvService', () => {
     expect(preview[0].valid).toBe(true);
     expect(preview[1].valid).toBe(false);
     expect(preview[1].errors[0].code).toBe('DUPLICATE_ROW');
+  });
+
+  it('validates four uploaded beauty-theme rows and preserves their canonical data', async () => {
+    const templates = new TenantSiteProposalsTemplateService();
+    const base = await templates.getDefaultConfig('aurea', '1.2.0');
+    const registration = { ...getTemplateRegistration('aurea', '1.2.0'), slug: 'aurea-custom', version: '2.0.0', name: 'Aurea Custom', isBuiltin: false };
+    const parsed = service.parseCsvText([
+      'attività;categoria;città;referente pubblico;ruolo pubblico;telefono;email;sito;indirizzo;servizi;note',
+      ...Array.from({ length: 4 }, (_, index) => `Studio ${index + 1};Centro estetico;Roma;Referente ${index + 1};Titolare;+39 06000000${index};info${index}@example.it;https://studio${index}.example.it;Via Roma ${index + 1};Viso|Corpo;Nota ${index + 1}`),
+    ].join('\n'));
+    const preview = service.buildPreviewRows(parsed.rows, base, registration);
+    expect(preview).toHaveLength(4);
+    expect(preview.every((row) => row.valid)).toBe(true);
+    expect(preview[0].canonical).toMatchObject({ businessName: 'Studio 1', category: 'Centro estetico', city: 'Roma', publicContactName: 'Referente 1', professionalTitle: 'Titolare', services: ['Viso', 'Corpo'] });
+    expect((preview[0].siteConfig?.template as any).slug).toBe('aurea-custom');
   });
 
   it('builds a valid SiteConfig with warnings and fixed counts', () => {
