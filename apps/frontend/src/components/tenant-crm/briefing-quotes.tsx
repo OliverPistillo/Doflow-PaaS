@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
 import { money, shortDate } from "@/components/tenant-crm/crm-core";
+import { useConfirm } from "@/hooks/useConfirm";
 import { useToast } from "@/hooks/use-toast";
 import { canUseFinanceFrontend } from "@/components/tenant-finance/finance-core";
 import { contractsApi } from "@/lib/tenant-contracts-api";
@@ -252,6 +253,7 @@ export function BriefingListPage({
 }) {
   const router = useRouter();
   const [items, setItems] = useState<Row[]>([]);
+  const { ConfirmDialog, confirm } = useConfirm();
   const [materials, setMaterials] = useState<Row[]>([]);
   const [selected, setSelected] = useState<Row | null>(null);
   const [editing, setEditing] = useState<Row | null>(null);
@@ -331,7 +333,13 @@ export function BriefingListPage({
   };
 
   const remove = async (row: Row) => {
-    if (!window.confirm("Eliminare questo briefing?")) return;
+    const ok = await confirm({
+      title: "Elimina briefing?",
+      description: `Sei sicuro di voler eliminare il briefing "${row.title}"?`,
+      confirmLabel: "Elimina",
+      variant: "destructive",
+    });
+    if (!ok) return;
     await apiFetch(`/tenant/briefing/${row.id}`, { method: "DELETE" });
     await load();
   };
@@ -348,7 +356,13 @@ export function BriefingListPage({
   };
 
   const deleteMaterial = async (material: Row) => {
-    if (!window.confirm("Eliminare questa richiesta materiale?")) return;
+    const ok = await confirm({
+      title: "Elimina richiesta materiale?",
+      description: `Sei sicuro di voler eliminare la richiesta "${material.title}"?`,
+      confirmLabel: "Elimina",
+      variant: "destructive",
+    });
+    if (!ok) return;
     await apiFetch(`/tenant/briefing/materials/${material.id}`, { method: "DELETE" });
     if (selected) await loadMaterials(selected);
   };
@@ -357,6 +371,7 @@ export function BriefingListPage({
 
   return (
     <div className="flex-1 space-y-5 p-4 md:p-6">
+      <ConfirmDialog />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
@@ -581,6 +596,7 @@ export function BriefingCreatePage() {
 export function BriefingTemplatesPage() {
   const [items, setItems] = useState<Row[]>([]);
   const [editing, setEditing] = useState<Row | null>(null);
+  const { ConfirmDialog, confirm } = useConfirm();
   const [form, setForm] = useState<Record<string, any>>({ name: "", type: "website", schema_json: "{}" });
   const [error, setError] = useState<string | null>(null);
 
@@ -612,7 +628,13 @@ export function BriefingTemplatesPage() {
   };
 
   const remove = async (row: Row) => {
-    if (!window.confirm("Eliminare questo template briefing?")) return;
+    const ok = await confirm({
+      title: "Elimina template briefing?",
+      description: `Sei sicuro di voler eliminare il template "${row.name}"?`,
+      confirmLabel: "Elimina",
+      variant: "destructive",
+    });
+    if (!ok) return;
     await apiFetch(`/tenant/briefing/templates/${row.id}`, { method: "DELETE" });
     await load();
   };
@@ -626,6 +648,7 @@ export function BriefingTemplatesPage() {
       createLabel="Nuovo template"
       onCreate={() => open()}
     >
+      <ConfirmDialog />
       <ErrorBox error={error} />
       <SimpleTable
         rows={items}
@@ -661,6 +684,7 @@ export function QuotesListPage({
   const router = useRouter();
   const { toast } = useToast();
   const [items, setItems] = useState<Row[]>([]);
+  const { ConfirmDialog, confirm } = useConfirm();
   const [selected, setSelected] = useState<Row | null>(null);
   const [editing, setEditing] = useState<Row | null>(null);
   const [editForm, setEditForm] = useState<Record<string, any>>({});
@@ -761,7 +785,13 @@ export function QuotesListPage({
   };
 
   const remove = async (row: Row) => {
-    if (!window.confirm("Eliminare questo preventivo?")) return;
+    const ok = await confirm({
+      title: "Elimina preventivo?",
+      description: `Sei sicuro di voler eliminare il preventivo "${row.title}"?`,
+      confirmLabel: "Elimina",
+      variant: "destructive",
+    });
+    if (!ok) return;
     await apiFetch(`/tenant/quotes/${row.id}`, { method: "DELETE" });
     await load();
   };
@@ -883,6 +913,7 @@ export function QuotesListPage({
 
   return (
     <div className="space-y-5 px-4 py-6 sm:px-6 lg:px-8">
+      <ConfirmDialog />
       <CommercialPageHeader
         title={title}
         description={description === "Preventivi reali tenant-scoped, con righe e totali calcolati dal backend."
@@ -1109,6 +1140,7 @@ export function ServiceTemplatesPage() {
   const [items, setItems] = useState<Row[]>([]);
   const [editing, setEditing] = useState<Row | null>(null);
   const [form, setForm] = useState<Record<string, any>>({ name: "", billing_type: "one_time", default_unit_price: 0, default_quantity: 1, is_active: true });
+  const { ConfirmDialog, confirm } = useConfirm();
 
   const load = async () => {
     const data = await loadList("/tenant/quotes/service-templates", new URLSearchParams({ limit: "100" }));
@@ -1132,7 +1164,13 @@ export function ServiceTemplatesPage() {
   };
 
   const remove = async (row: Row) => {
-    if (!window.confirm("Eliminare questo template servizio?")) return;
+    const ok = await confirm({
+      title: "Elimina template servizio?",
+      description: `Sei sicuro di voler eliminare il template di servizio "${row.name}"?`,
+      confirmLabel: "Elimina",
+      variant: "destructive",
+    });
+    if (!ok) return;
     await apiFetch(`/tenant/quotes/service-templates/${row.id}`, { method: "DELETE" });
     await load();
   };
@@ -1146,6 +1184,7 @@ export function ServiceTemplatesPage() {
       createLabel="Nuovo servizio"
       onCreate={() => open()}
     >
+      <ConfirmDialog />
       <SimpleTable
         rows={items}
         columns={[
