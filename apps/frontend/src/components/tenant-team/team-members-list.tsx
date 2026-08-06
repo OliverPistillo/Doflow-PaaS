@@ -5,6 +5,7 @@ import { Eye, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { TeamMember, TeamWorkloadItem } from "@/lib/tenant-team-api";
 import {
   AVAILABILITY_LABELS,
@@ -76,7 +77,19 @@ export function TeamMembersList({
               <div className="flex flex-wrap gap-2">
                 <Button asChild size="sm" variant="outline"><Link href={`/team/members/${member.id}`}><Eye className="mr-2 h-4 w-4" /> Apri</Link></Button>
                 {canManageTeam() && onDelete ? (
-                  <Button size="sm" variant="outline" onClick={() => onDelete(member)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onDelete(member)}
+                        aria-label="Archivia membro team"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Archivia membro</TooltipContent>
+                  </Tooltip>
                 ) : null}
               </div>
             </CardContent>
