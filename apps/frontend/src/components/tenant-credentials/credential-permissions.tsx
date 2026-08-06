@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/useConfirm";
 import { teamApi, type TeamMember } from "@/lib/tenant-team-api";
 import { credentialsApi } from "@/lib/tenant-credentials-api";
 import type { CredentialPermission } from "@/lib/tenant-credentials-types";
@@ -21,6 +22,7 @@ export function CredentialPermissions({ credentialId }: { credentialId: string }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ user_id: "", can_view_metadata: true, can_reveal_secret: false, can_edit: false, can_manage_permissions: false });
+  const { ConfirmDialog, confirm } = useConfirm();
 
   const load = async () => {
     setLoading(true);
@@ -66,7 +68,13 @@ export function CredentialPermissions({ credentialId }: { credentialId: string }
   };
 
   const remove = async (row: CredentialPermission) => {
-    if (!window.confirm("Rimuovere questo permesso?")) return;
+    const ok = await confirm({
+      title: "Rimuovere questo permesso?",
+      description: "L'utente non avrà più l'accesso configurato per questa credenziale.",
+      confirmLabel: "Rimuovi",
+      variant: "destructive",
+    });
+    if (!ok) return;
     try {
       await credentialsApi.deletePermission(credentialId, row.id);
       setRows((prev) => prev.filter((item) => item.id !== row.id));
@@ -121,6 +129,7 @@ export function CredentialPermissions({ credentialId }: { credentialId: string }
           ))}
         </div>
       ) : <CredentialsEmptyState>Nessun ACL specifico configurato.</CredentialsEmptyState>}
+      <ConfirmDialog />
     </div>
   );
 }
