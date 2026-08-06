@@ -139,8 +139,10 @@ export function SiteProposalImportDetail({ id }: { id: string }) {
   }, [id]);
 
   useEffect(() => { void load(); }, [load]);
-  const hasActive = proposals.some((proposal) => ["pending", "queued", "running"].includes(proposal.preparationStatus || proposal.preparation_status || ""));
-  useEffect(() => { if (!hasActive) return; let timer: number | undefined; let cancelled = false; const poll = async () => { await load(true); if (!cancelled) timer = window.setTimeout(poll, document.visibilityState === "hidden" ? 6000 : 1800); }; timer = window.setTimeout(poll, 1800); return () => { cancelled = true; if (timer) window.clearTimeout(timer); }; }, [hasActive, load]);
+  const hasRunning = proposals.some((proposal) => (proposal.preparationStatus || proposal.preparation_status) === "running");
+  const hasQueued = proposals.some((proposal) => ["pending", "queued"].includes(proposal.preparationStatus || proposal.preparation_status || ""));
+  const hasActive = hasRunning || hasQueued;
+  useEffect(() => { if (!hasActive) return; let timer: number | undefined; let cancelled = false; const delay = () => document.visibilityState === "hidden" ? 10000 : hasRunning ? 2000 : 6000; const poll = async () => { await load(true); if (!cancelled) timer = window.setTimeout(poll, delay()); }; timer = window.setTimeout(poll, delay()); return () => { cancelled = true; if (timer) window.clearTimeout(timer); }; }, [hasActive, hasRunning, load]);
 
   const confirm = async () => {
     if (!batch || batch.valid_count === 0) {
@@ -187,7 +189,7 @@ export function SiteProposalImportDetail({ id }: { id: string }) {
     fallback: proposals.filter((item) => statusOf(item) === "fallback" || (statusOf(item) === "ready" && item.provider === "local")).length,
     failed: proposals.filter((item) => statusOf(item) === "failed").length,
   };
-  const hasRecoveryCandidates = proposals.some((item) => statusOf(item) === "idle");
+  const hasRecoveryCandidates = proposals.some((item) => statusOf(item) === "idle" || item.stalled || item.canRetryDispatch);
   const averageProgress = proposals.length ? Math.round(proposals.reduce((sum, proposal) => sum + Number(proposal.progressPercent ?? (proposal as SiteProposal & { progress_percent?: number }).progress_percent ?? 0), 0) / proposals.length) : 0;
 
   return (

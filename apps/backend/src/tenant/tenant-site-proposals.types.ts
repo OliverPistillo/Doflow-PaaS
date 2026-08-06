@@ -99,6 +99,12 @@ export type PreparationProgress = {
   provider: 'gemini' | 'local' | null;
   canPreview: boolean;
   canGenerate: boolean;
+  queueState: string | null;
+  workerReady: boolean;
+  stalled: boolean;
+  stalledReason: string | null;
+  canRetryDispatch: boolean;
+  lastHeartbeatAt: string | null;
 };
 export type ProposalPreparationActor = { id?: string | null; email?: string | null; role?: string | null };
 export type ProposalPreparationOptions = {

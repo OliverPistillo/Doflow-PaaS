@@ -1,3 +1,4 @@
+import { Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { SITE_PROPOSAL_PREPARATION_JOB, SITE_PROPOSAL_PREPARATION_QUEUE } from './tenant-site-proposals.constants';
@@ -20,8 +21,27 @@ export function preparationWorkerConfiguration() {
 }
 
 @Processor(SITE_PROPOSAL_PREPARATION_QUEUE, preparationWorkerConfiguration())
-export class TenantSiteProposalsPreparationWorker extends WorkerHost {
+export class TenantSiteProposalsPreparationWorker extends WorkerHost implements OnApplicationBootstrap {
+  private readonly logger = new Logger(TenantSiteProposalsPreparationWorker.name);
+  private listenersRegistered = false;
   constructor(private readonly core: TenantSiteProposalsPreparationCoreService, private readonly dispatch: TenantSiteProposalsPreparationQueueService) { super(); }
+
+  async onApplicationBootstrap() {
+    this.registerWorkerEvents();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        this.worker.waitUntilReady(),
+        new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error('Worker readiness timeout')), 10_000); }),
+      ]);
+      this.dispatch.setWorkerReady(true);
+      this.logger.log('Preparation worker ready');
+    } catch (error) {
+      this.dispatch.setWorkerReady(false);
+      this.logger.error(`Preparation worker unavailable: ${this.error(error)}`);
+    } finally { if (timeout) clearTimeout(timeout); }
+  }
+
   async process(job: Job<ProposalPreparationJobData>) {
     if (job.name !== SITE_PROPOSAL_PREPARATION_JOB) throw new Error('Unsupported site proposal preparation job');
     await this.dispatch.markRunning(job.data);
@@ -36,5 +56,25 @@ export class TenantSiteProposalsPreparationWorker extends WorkerHost {
       if (permanent || job.attemptsMade + 1 >= Number(job.opts.attempts || 1)) await this.dispatch.markFailed(job.data, error);
       throw error;
     }
+  }
+
+  private registerWorkerEvents() {
+    if (this.listenersRegistered) return;
+    this.listenersRegistered = true;
+    this.worker.on('ready', () => { this.dispatch.setWorkerReady(true); this.logger.log('Preparation worker ready'); });
+    this.worker.on('active', (job) => this.logger.log(`Preparation worker active run=${job.data?.preparationRunId || 'unknown'} proposal=${job.data?.proposalId || 'unknown'} attempt=${job.attemptsMade + 1}`));
+    this.worker.on('completed', (job) => this.logger.log(`Preparation worker completed run=${job.data?.preparationRunId || 'unknown'} proposal=${job.data?.proposalId || 'unknown'}`));
+    this.worker.on('failed', (job, error) => this.logger.warn(`Preparation worker failed run=${job?.data?.preparationRunId || 'unknown'} proposal=${job?.data?.proposalId || 'unknown'}: ${this.error(error)}`));
+    this.worker.on('stalled', (jobId) => this.logger.warn(`Preparation worker stalled job=${jobId}`));
+    this.worker.on('error', (error) => {
+      this.dispatch.setWorkerReady(false);
+      this.logger.error(`Preparation worker error: ${this.error(error)}`);
+    });
+    this.worker.on('closed', () => this.dispatch.setWorkerReady(false));
+  }
+
+  private error(error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return /redis|password|token|secret|authorization|cookie|stack/i.test(message) ? 'Errore del sottosistema di accodamento' : message.slice(0, 240);
   }
 }

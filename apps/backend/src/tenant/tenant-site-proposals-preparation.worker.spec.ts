@@ -8,7 +8,17 @@ describe('site proposal preparation worker', () => {
   it('accepts bounded configuration', () => { process.env.SITE_PROPOSALS_PREPARATION_CONCURRENCY = '4'; process.env.SITE_PROPOSALS_PREPARATION_RATE_MAX = '12'; process.env.SITE_PROPOSALS_PREPARATION_RATE_DURATION_MS = '30000'; expect(preparationWorkerConfiguration()).toEqual({ concurrency: 4, limiter: { max: 12, duration: 30000 } }); });
   it('falls back for out of range configuration', () => { process.env.SITE_PROPOSALS_PREPARATION_CONCURRENCY = '5'; process.env.SITE_PROPOSALS_PREPARATION_RATE_MAX = '0'; process.env.SITE_PROPOSALS_PREPARATION_RATE_DURATION_MS = '999'; expect(preparationWorkerConfiguration()).toEqual({ concurrency: 2, limiter: { max: 4, duration: 60000 } }); });
   const data = { preparationRunId: '650e8400-e29b-41d4-a716-446655440000', tenantSchema: 'doflow', proposalId: '550e8400-e29b-41d4-a716-446655440000' };
-  const dispatch = () => ({ markRunning: jest.fn(), markCompleted: jest.fn(), markFailed: jest.fn() });
+  const dispatch = () => ({ markRunning: jest.fn(), markCompleted: jest.fn(), markFailed: jest.fn(), setWorkerReady: jest.fn() });
+  it('waits for the real BullMQ worker readiness and registers lifecycle listeners', async () => {
+    const state = dispatch();
+    const instance = new TenantSiteProposalsPreparationWorker({ prepare: jest.fn() } as any, state as any);
+    const bullWorker = { waitUntilReady: jest.fn().mockResolvedValue({}), on: jest.fn().mockReturnThis() };
+    (instance as any)._worker = bullWorker;
+    await instance.onApplicationBootstrap();
+    expect(bullWorker.waitUntilReady).toHaveBeenCalledTimes(1);
+    expect(state.setWorkerReady).toHaveBeenCalledWith(true);
+    expect(bullWorker.on.mock.calls.map(([event]) => event)).toEqual(expect.arrayContaining(['ready','active','completed','failed','stalled','error','closed']));
+  });
   it('delegates server-side job data directly to the request-independent core', async () => { const core = { prepare: jest.fn().mockResolvedValue({ status: 'ready' }) }; const state = dispatch(); const worker = new TenantSiteProposalsPreparationWorker(core as any, state as any); await expect(worker.process({ name: SITE_PROPOSAL_PREPARATION_JOB, data, attemptsMade: 0, opts: { attempts: 3 } } as any)).resolves.toEqual({ status: 'ready' }); expect(core.prepare).toHaveBeenCalledWith(data); expect(state.markRunning).toHaveBeenCalledWith(data); expect(state.markCompleted).toHaveBeenCalledWith(data); });
   it('rejects unrelated jobs', async () => { const worker = new TenantSiteProposalsPreparationWorker({ prepare: jest.fn() } as any, dispatch() as any); await expect(worker.process({ name: 'other', data: {} } as any)).rejects.toThrow(/Unsupported/); });
   it('discards permanent input failures without scheduling further attempts', async () => { const error: any = new Error('invalid'); error.status = 400; const core = { prepare: jest.fn().mockRejectedValue(error) }; const state = dispatch(); const job = { name: SITE_PROPOSAL_PREPARATION_JOB, data, attemptsMade: 0, opts: { attempts: 3 }, discard: jest.fn() }; const worker = new TenantSiteProposalsPreparationWorker(core as any, state as any); await expect(worker.process(job as any)).rejects.toBe(error); expect(job.discard).toHaveBeenCalled(); expect(state.markFailed).toHaveBeenCalled(); });

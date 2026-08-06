@@ -45,6 +45,14 @@ describe('TenantSiteProposalsService', () => {
     await expect(service.list({ scope: 'archived', status: 'draft' })).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('exposes sanitized stalled queue diagnostics in preparation status', async () => {
+    const queryMock = jest.fn().mockResolvedValue([{ id: uuid, template_slug: 'colsova', template_version: '2.4.1', preparation_status: 'queued', latest_preparation_job_id: uuid, progress_percent: 5, progress_stage: 'queueing', progress_message: 'Accodamento completato', progress_updated_at: '2026-01-01T00:00:00Z', preparation_heartbeat_at: '2026-01-01T00:00:00Z', can_preview: false }]);
+    const { service } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } }, queryMock);
+    (service as any).siteConfigValid = jest.fn().mockResolvedValue(false);
+    (service as any).preparationQueue = { getDiagnostics: jest.fn().mockResolvedValue({ queueState: 'missing', workerReady: true, stalled: true, stalledReason: 'Il job di accodamento non è presente.', canRetryDispatch: true, lastHeartbeatAt: '2026-01-01T00:00:00Z' }) };
+    await expect(service.getPreparationStatus(uuid)).resolves.toMatchObject({ preparationRunId: uuid, progressPercent: 5, queueState: 'missing', workerReady: true, stalled: true, canRetryDispatch: true });
+  });
+
   it('normalizes unique bulk UUIDs and enforces validation limits', () => {
     const { service } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
     expect((service as any).normalizeBulkIds({ ids: [uuid, uuid] })).toEqual([uuid]);

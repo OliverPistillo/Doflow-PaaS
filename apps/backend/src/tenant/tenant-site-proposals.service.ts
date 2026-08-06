@@ -109,7 +109,7 @@ export class TenantSiteProposalsService {
     await this.ensure();
     const row = await this.one(`SELECT b.*,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',p.id,'source_row_index',p.source_row_index,'display_name',p.display_name,'preparation_status',p.preparation_status,'preparation_error',p.preparation_error,'latest_preparation_job_id',p.latest_preparation_job_id,'progress_percent',p.progress_percent,'progress_stage',p.progress_stage,'progress_message',p.progress_message,'progress_updated_at',p.progress_updated_at,'preparation_heartbeat_at',p.preparation_heartbeat_at,'personalization_status',p.personalization_status) ORDER BY p.source_row_index) FROM "${this.schema()}".site_proposals p WHERE p.import_batch_id=b.id),'[]'::jsonb) proposal_progress FROM "${this.schema()}".site_proposal_import_batches b WHERE b.id = $1`, [id]);
     if (!row) throw new NotFoundException('Import non trovato');
-    return { ...row, proposalProgress: (Array.isArray(row.proposal_progress) ? row.proposal_progress : []).map((item: any) => ({ ...item, ...this.progress(item, false, false) })) };
+    return { ...row, proposalProgress: await Promise.all((Array.isArray(row.proposal_progress) ? row.proposal_progress : []).map(async (item: any) => ({ ...item, ...(await this.progressWithDiagnostics(item, false, false)) }))) };
   }
 
   async confirmImport(id: string) {
@@ -193,7 +193,7 @@ export class TenantSiteProposalsService {
       WHERE p.import_batch_id=$1::uuid
       ORDER BY p.source_row_index
     `, [id]);
-    return rows.map((item: any) => ({ ...item, ...this.progress(item, false, false) }));
+    return Promise.all(rows.map(async (item: any) => ({ ...item, ...(await this.progressWithDiagnostics(item, false, false)) })));
   }
 
   private importDispatchCounts(proposals: any[]) {
@@ -244,7 +244,7 @@ export class TenantSiteProposalsService {
       const readiness = evaluateProposalReadiness({ emailSubject: row.email_subject, emailBody: row.email_body, commercialAnalysis: row.commercial_analysis, siteConfigValid: await this.siteConfigValid(row), generationComplete: row.generation_complete === true, requireGeneration: ['ready','fallback'].includes(row.preparation_status) });
       const { email_subject: _subject, email_body: _body, commercial_analysis: _analysis, site_config: _config, generation_complete: _generation, ...item } = row;
       if (!readiness.complete && ['ready','fallback'].includes(item.preparation_status)) { item.preparation_status = 'idle'; item.personalization_status = 'idle'; item.preparation_error = null; }
-      return { ...item, readiness, ...this.progress(item, row.generation_complete === true, readiness.complete) };
+      return { ...item, readiness, ...(await this.progressWithDiagnostics(item, row.generation_complete === true, readiness.complete)) };
     }));
     return { items, total: Number(count?.total || 0), limit, offset };
   }
@@ -291,14 +291,14 @@ export class TenantSiteProposalsService {
     const activityCount = await this.one(`SELECT count(*)::int count FROM "${this.schema()}".site_proposal_activity WHERE proposal_id = $1`, [id]);
     const readiness = evaluateProposalReadiness({ emailSubject: proposal.email_subject, emailBody: proposal.email_body, commercialAnalysis: proposal.commercial_analysis, siteConfigValid: await this.siteConfigValid(proposal), generationComplete: latestGeneration?.status === 'completed' && Number(latestGeneration?.proposal_version) === Number(proposal.current_version), requireGeneration: ['ready','fallback'].includes(proposal.preparation_status) });
     if (!readiness.complete && ['ready','fallback'].includes(proposal.preparation_status)) { proposal.preparation_status = 'idle'; proposal.personalization_status = 'idle'; proposal.preparation_error = null; }
-    return { proposal: { ...proposal, readiness, ...this.progress(proposal, latestGeneration?.status === 'completed', readiness.complete) }, latestGeneration, versionCount: Number(versionCount?.count || 0), activityCount: Number(activityCount?.count || 0) };
+    return { proposal: { ...proposal, readiness, ...(await this.progressWithDiagnostics(proposal, latestGeneration?.status === 'completed', readiness.complete)) }, latestGeneration, versionCount: Number(versionCount?.count || 0), activityCount: Number(activityCount?.count || 0) };
   }
 
   async getPreparationStatus(id: string) {
     this.assertAccess(false); this.assertUuid(id); await this.ensure();
     const row = await this.one(`SELECT p.*,EXISTS(SELECT 1 FROM "${this.schema()}".site_proposal_generations g WHERE g.proposal_id=p.id AND g.status='completed') can_preview FROM "${this.schema()}".site_proposals p WHERE p.id=$1 AND p.deleted_at IS NULL`, [id]);
     if (!row) throw new NotFoundException('Proposta non trovata');
-    return this.progress(row, row.can_preview === true, await this.siteConfigValid(row) && !['queued','running'].includes(String(row.preparation_status)));
+    return this.progressWithDiagnostics(row, row.can_preview === true, await this.siteConfigValid(row) && !['queued','running'].includes(String(row.preparation_status)));
   }
 
   personalizeProposal(id: string, body: unknown) {
@@ -514,7 +514,7 @@ export class TenantSiteProposalsService {
     }
     const proposal = await this.one(`SELECT * FROM "${this.schema()}".site_proposals WHERE id=$1 AND deleted_at IS NULL`, [id]);
     if (!proposal) throw new NotFoundException('Proposta non trovata');
-    if (['pending','queued','running'].includes(String(proposal.preparation_status))) return { status: 'preparing' as const, ...this.progress(proposal, false, false), retryAfterSeconds: 2 };
+    if (['pending','queued','running'].includes(String(proposal.preparation_status))) return { status: 'preparing' as const, ...(await this.progressWithDiagnostics(proposal, false, false)), retryAfterSeconds: 2 };
     if (proposal.preparation_status === 'failed') throw new ConflictException(this.sanitizeError(proposal.preparation_error || 'Preparazione non riuscita.'));
     throw new NotFoundException('Generazione non trovata');
   }
@@ -853,7 +853,25 @@ export class TenantSiteProposalsService {
       provider,
       canPreview,
       canGenerate: canGenerate && !['queued','running'].includes(status),
+      queueState: null,
+      workerReady: false,
+      stalled: false,
+      stalledReason: null,
+      canRetryDispatch: false,
+      lastHeartbeatAt: row.preparation_heartbeat_at || null,
     };
+  }
+
+  private async progressWithDiagnostics(row: any, canPreview: boolean, canGenerate: boolean) {
+    const progress = this.progress(row, canPreview, canGenerate);
+    if (!this.preparationQueue || typeof this.preparationQueue.getDiagnostics !== 'function') return progress;
+    const diagnostics = await this.preparationQueue.getDiagnostics(
+      progress.preparationRunId,
+      progress.preparationStatus,
+      progress.heartbeatAt,
+      progress.progressUpdatedAt,
+    );
+    return { ...progress, ...diagnostics };
   }
 
   private templateContext() { return { schema: this.schema(), dataSource: this.ds() }; }

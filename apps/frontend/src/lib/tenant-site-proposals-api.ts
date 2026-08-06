@@ -10,7 +10,7 @@ export type GenerationStatus = "running" | "completed" | "failed";
 export type PersonalizationStatus = "idle" | "running" | "completed" | "fallback" | "failed";
 export type PreparationStatus = "idle" | "pending" | "queued" | "running" | "ready" | "fallback" | "failed";
 export type ThemeImageMode = "theme" | "website" | "hybrid" | "manual";
-export type PreparationProgress = { preparationRunId?: string | null; preparationStatus?: PreparationStatus; progressPercent?: number; progressStage?: string; progressMessage?: string; progressUpdatedAt?: string | null; heartbeatAt?: string | null; provider?: "gemini" | "local" | null; canPreview?: boolean; canGenerate?: boolean };
+export type PreparationProgress = { preparationRunId?: string | null; preparationStatus?: PreparationStatus; progressPercent?: number; progressStage?: string; progressMessage?: string; progressUpdatedAt?: string | null; heartbeatAt?: string | null; provider?: "gemini" | "local" | null; canPreview?: boolean; canGenerate?: boolean; queueState?: string | null; workerReady?: boolean; stalled?: boolean; stalledReason?: string | null; canRetryDispatch?: boolean; lastHeartbeatAt?: string | null };
 
 export type SiteProposalTemplateManifest = {
   name: string; slug: string; version: string; versione?: string; schemaVersion: string; layoutLocked: boolean;
