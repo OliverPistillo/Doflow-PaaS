@@ -53,7 +53,7 @@ describe('site proposal preparation queue', () => {
       }),
     };
     const dataSource = {
-      query: jest.fn(async (sql: string) => sql.includes('SELECT p.id AS proposal_id,p.latest_preparation_job_id AS run_id') ? options.orphanCandidates || [] : []),
+      query: jest.fn(async (sql: string, _params?: unknown[]) => sql.includes('SELECT p.id AS proposal_id,p.latest_preparation_job_id AS run_id') ? options.orphanCandidates || [] : []),
       createQueryRunner: jest.fn(() => runner),
     };
     const progress = options.progress;
@@ -214,16 +214,16 @@ describe('site proposal preparation queue', () => {
       proposal_id: proposalId, preparation_status: 'queued', proposal_progress_percent: 0,
       proposal_progress_stage: 'waiting', run_id: runId, job_id: runId, reason: 'csv_import',
       job_data: { ...data, reason: 'csv_import', actorUserId: actorId, targetTemplateSlug: 'colsova', targetTemplateVersion: '2.4.1' },
-      attempts: 3, last_error: 'core failure', run_progress_percent: null,
+      attempts: 3, last_error: 'Errore temporaneo di dispatch', run_progress_percent: 5,
     };
-    const oldJob = { ...bullJob('failed', 3, 3), failedReason: 'core failure' };
+    const oldJob = { ...bullJob('failed', 3, 3), failedReason: 'null value in column "progress_stage" violates not-null constraint' };
     const progress = { update: jest.fn().mockResolvedValue({}) };
     const { service, queue, runner } = make({ orphanCandidates: [{ proposal_id: proposalId, run_id: runId }], orphan, job: oldJob, progress });
     await expect(service.recoverOrphanedFailedProposals()).resolves.toBe(1);
     expect(queue.add).toHaveBeenCalledTimes(1);
     expect(queue.add).toHaveBeenCalledWith('prepare-proposal', expect.objectContaining({
       proposalId, actorUserId: actorId, force: false, generate: true,
-      reason: 'recovery_failed_progress_finalization', targetTemplateSlug: 'colsova', targetTemplateVersion: '2.4.1',
+      reason: 'recovery_typeorm_mutation_result', targetTemplateSlug: 'colsova', targetTemplateVersion: '2.4.1',
     }), expect.objectContaining({ attempts: 3 }));
     expect(runner.query.mock.calls.filter(([sql]) => String(sql).includes('INSERT INTO "doflow".site_proposal_preparation_runs'))).toHaveLength(1);
     expect(runner.query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO "doflow".site_proposals'))).toBe(false);
@@ -233,8 +233,8 @@ describe('site proposal preparation queue', () => {
     const orphan = {
       proposal_id: proposalId, preparation_status: 'queued', proposal_progress_percent: 0,
       proposal_progress_stage: 'waiting', run_id: runId, job_id: runId,
-      reason: 'recovery_failed_progress_finalization', job_data: { ...data, reason: 'recovery_failed_progress_finalization' },
-      attempts: 3, last_error: 'core failure', run_progress_percent: 10,
+      reason: 'recovery_typeorm_mutation_result', job_data: { ...data, reason: 'recovery_typeorm_mutation_result' },
+      attempts: 3, last_error: 'null value in column "progress_stage" violates not-null constraint', run_progress_percent: 10,
     };
     const { service, queue, runner } = make({ orphanCandidates: [{ proposal_id: proposalId, run_id: runId }], orphan, job: bullJob('failed', 3, 3) });
     await expect(service.recoverOrphanedFailedProposals()).resolves.toBe(0);
@@ -247,6 +247,31 @@ describe('site proposal preparation queue', () => {
     await expect(service.recoverOrphanedFailedProposals()).resolves.toBe(0);
     expect(queue.getJob).not.toHaveBeenCalled();
     expect(queue.add).not.toHaveBeenCalled();
+  });
+
+  it('prefilters only low-progress failed runs without completed generations', async () => {
+    const { service, dataSource, queue } = make({ orphanCandidates: [] });
+    await expect(service.recoverOrphanedFailedProposals()).resolves.toBe(0);
+    const sql = dataSource.query.mock.calls[0][0];
+    expect(sql).toContain('COALESCE(r.progress_percent,p.progress_percent,0)<=10');
+    expect(sql).toContain('NOT EXISTS');
+    expect(dataSource.query.mock.calls[0][1]).toEqual(['recovery_typeorm_mutation_result']);
+    expect(queue.add).not.toHaveBeenCalled();
+  });
+
+  it('does not automatically retry a real application failure unrelated to progress bookkeeping', async () => {
+    const orphan = {
+      proposal_id: proposalId, preparation_status: 'failed', proposal_progress_percent: 5,
+      proposal_progress_stage: 'failed', preparation_error: 'Website non raggiungibile',
+      run_id: runId, job_id: runId, reason: 'csv_import', job_data: { ...data, reason: 'csv_import' },
+      attempts: 3, last_error: 'Website non raggiungibile', run_progress_percent: 5,
+    };
+    const job = { ...bullJob('failed', 3, 3), failedReason: 'Website non raggiungibile' };
+    const { service, queue, runner } = make({ orphanCandidates: [{ proposal_id: proposalId, run_id: runId }], orphan, job });
+    await expect(service.recoverOrphanedFailedProposals()).resolves.toBe(0);
+    expect(queue.getJob).toHaveBeenCalledWith(runId);
+    expect(queue.add).not.toHaveBeenCalled();
+    expect(runner.query.mock.calls.some(([sql]) => String(sql).includes("preparation_status='failed'"))).toBe(false);
   });
 
   it('processes four orphaned proposals independently without duplicate candidate recovery', async () => {

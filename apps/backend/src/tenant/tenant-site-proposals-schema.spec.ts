@@ -142,10 +142,14 @@ describe('ensureDoflowSiteProposalTables', () => {
 
     expect(legacyRunProgress).toBe(0);
     const ddl = runner.query.mock.calls.map(([sql]: [string]) => sql).join('\n');
-    expect(ddl).toContain("progress_stage=COALESCE(progress_stage,CASE WHEN status='failed' THEN 'failed' ELSE 'waiting' END)");
+    expect(ddl).toContain("progress_stage=COALESCE(NULLIF(BTRIM(progress_stage),''),CASE WHEN status='failed' THEN 'failed' ELSE 'waiting' END)");
     expect(ddl).toContain('progress_updated_at=COALESCE(progress_updated_at,updated_at,created_at,now())');
     expect(ddl).toContain('ALTER COLUMN progress_percent SET DEFAULT 0');
     expect(ddl).toContain('ALTER COLUMN progress_percent SET NOT NULL');
+    expect(ddl).toContain("ALTER COLUMN progress_stage SET DEFAULT 'waiting'");
+    expect(ddl).toContain('ALTER COLUMN progress_stage SET NOT NULL');
+    expect(ddl).toContain("ALTER COLUMN progress_message SET DEFAULT 'In attesa'");
+    expect(ddl).toContain('ALTER COLUMN progress_message SET NOT NULL');
     expect(runner.query.mock.calls.filter(([sql]: [string]) => sql.includes('UPDATE "doflow".site_proposal_preparation_runs') && sql.includes('progress_percent=COALESCE'))).toHaveLength(1);
   });
 
@@ -157,7 +161,14 @@ describe('ensureDoflowSiteProposalTables', () => {
     expect(repair).toBeDefined();
     expect(repair[0]).toContain("WHEN preparation_status='failed' THEN 'failed'");
     expect(repair[0]).toContain("WHEN preparation_status IN ('ready','fallback') THEN 'ready'");
-    expect(repair[0]).toContain('WHERE progress_percent IS NULL OR progress_stage IS NULL');
+    expect(repair[0]).toContain("WHERE progress_percent IS NULL OR progress_stage IS NULL OR BTRIM(progress_stage)=''");
+    const ddl = runner.query.mock.calls.map(([sql]: [string]) => sql).join('\n');
+    expect(ddl.match(/site_proposals ALTER COLUMN progress_percent SET DEFAULT 0/g)).toHaveLength(1);
+    expect(ddl.match(/site_proposals ALTER COLUMN progress_percent SET NOT NULL/g)).toHaveLength(1);
+    expect(ddl.match(/site_proposals ALTER COLUMN progress_stage SET DEFAULT 'waiting'/g)).toHaveLength(1);
+    expect(ddl.match(/site_proposals ALTER COLUMN progress_stage SET NOT NULL/g)).toHaveLength(1);
+    expect(ddl.match(/site_proposals ALTER COLUMN progress_message SET DEFAULT 'In attesa'/g)).toHaveLength(1);
+    expect(ddl.match(/site_proposals ALTER COLUMN progress_message SET NOT NULL/g)).toHaveLength(1);
   });
 
   it('removes a failed Promise from cache and retries with a new QueryRunner', async () => {

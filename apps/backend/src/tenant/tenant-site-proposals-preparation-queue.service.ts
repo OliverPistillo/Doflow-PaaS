@@ -13,7 +13,7 @@ import { TenantSiteProposalsPreparationProgressService } from './tenant-site-pro
 
 const QUEUE_READY_TIMEOUT_MS = 10_000;
 const RUNNING_STALE_MS = 5 * 60_000;
-const FAILED_PROGRESS_RECOVERY_REASON = 'recovery_failed_progress_finalization';
+const TYPEORM_MUTATION_RECOVERY_REASON = 'recovery_typeorm_mutation_result';
 export const PREPARATION_STALLED_MS = 2 * 60_000;
 
 type RecoverableRun = {
@@ -157,10 +157,16 @@ export class TenantSiteProposalsPreparationQueueService implements OnApplication
       FROM "${SITE_PROPOSALS_TENANT}".site_proposals p
       JOIN "${SITE_PROPOSALS_TENANT}".site_proposal_preparation_runs r
         ON r.id::text=p.latest_preparation_job_id
-      WHERE p.preparation_status IN ('queued','running') AND r.status='failed'
+      WHERE p.deleted_at IS NULL AND p.status<>'archived' AND r.status='failed'
+        AND COALESCE(r.progress_percent,p.progress_percent,0)<=10
+        AND COALESCE(r.reason,'')<>$1::text
+        AND NOT EXISTS (
+          SELECT 1 FROM "${SITE_PROPOSALS_TENANT}".site_proposal_generations g
+          WHERE g.proposal_id=p.id AND g.proposal_version=p.current_version AND g.status='completed'
+        )
       ORDER BY r.updated_at ASC
       LIMIT 50
-    `);
+    `, [TYPEORM_MUTATION_RECOVERY_REASON]);
     let recovered = 0;
     for (const row of rows) {
       if (await this.recoverOrphanedFailedProposal(String(row.proposal_id), String(row.run_id))) recovered += 1;
@@ -178,15 +184,21 @@ export class TenantSiteProposalsPreparationQueueService implements OnApplication
       await runner.startTransaction();
       const orphan = (await runner.query(`
         SELECT p.id AS proposal_id,p.preparation_status,p.progress_percent AS proposal_progress_percent,
-          p.progress_stage AS proposal_progress_stage,r.id AS run_id,r.job_id,r.reason,r.job_data,
+          p.progress_stage AS proposal_progress_stage,p.preparation_error,r.id AS run_id,r.job_id,r.reason,r.job_data,
           r.attempts,r.last_error,r.progress_percent AS run_progress_percent
         FROM "${SITE_PROPOSALS_TENANT}".site_proposals p
         JOIN "${SITE_PROPOSALS_TENANT}".site_proposal_preparation_runs r
           ON r.id=$2::uuid AND r.proposal_id=p.id
         WHERE p.id=$1::uuid AND p.latest_preparation_job_id=r.id::text
-          AND p.preparation_status IN ('queued','running') AND r.status='failed'
+          AND p.deleted_at IS NULL AND p.status<>'archived' AND r.status='failed'
+          AND COALESCE(r.progress_percent,p.progress_percent,0)<=10
+          AND COALESCE(r.reason,'')<>$3::text
+          AND NOT EXISTS (
+            SELECT 1 FROM "${SITE_PROPOSALS_TENANT}".site_proposal_generations g
+            WHERE g.proposal_id=p.id AND g.proposal_version=p.current_version AND g.status='completed'
+          )
         FOR UPDATE OF p,r
-      `, [proposalId, runId]))[0];
+      `, [proposalId, runId, TYPEORM_MUTATION_RECOVERY_REASON]))[0];
       if (!orphan) {
         await runner.commitTransaction();
         return false;
@@ -195,9 +207,16 @@ export class TenantSiteProposalsPreparationQueueService implements OnApplication
       const jobState = oldJob ? await oldJob.getState().catch(() => 'unknown') : 'missing';
       const jobData = this.recoveryJobData(orphan.job_data, oldJob?.data);
       const attempts = Math.max(Number(orphan.attempts || 0), Number(oldJob?.attemptsMade || 0));
+      const failureEvidence = [orphan.last_error, orphan.preparation_error, oldJob?.failedReason]
+        .map((value) => String(value || ''))
+        .join(' ');
+      if (!/progress_stage/i.test(failureEvidence) || !/(null value|not-?null constraint)/i.test(failureEvidence)) {
+        await runner.commitTransaction();
+        return false;
+      }
       this.logger.warn(`Orphaned failed proposal detected oldRun=${runId} proposal=${proposalId} jobState=${jobState} attempts=${attempts}`);
 
-      const failure = this.error(orphan.last_error || oldJob?.failedReason || 'Preparazione non riuscita');
+      const failure = this.error(oldJob?.failedReason || orphan.last_error || orphan.preparation_error || 'Preparazione non riuscita');
       const percent = Math.max(0, Math.min(100, Number(orphan.run_progress_percent || 0)));
       await runner.query(`
         UPDATE "${SITE_PROPOSALS_TENANT}".site_proposal_preparation_runs
@@ -214,19 +233,16 @@ export class TenantSiteProposalsPreparationQueueService implements OnApplication
         WHERE id=$2::uuid AND latest_preparation_job_id=$1::text
       `, [runId, proposalId, failure, percent]);
 
-      const alreadyAttempted = orphan.reason === FAILED_PROGRESS_RECOVERY_REASON || jobData?.reason === FAILED_PROGRESS_RECOVERY_REASON;
-      const progressFinalizationFailure = orphan.proposal_progress_percent == null
-        || Number(orphan.proposal_progress_percent) === 0
-        || orphan.proposal_progress_stage === 'waiting';
+      const alreadyAttempted = orphan.reason === TYPEORM_MUTATION_RECOVERY_REASON || jobData?.reason === TYPEORM_MUTATION_RECOVERY_REASON;
       if (alreadyAttempted) {
         this.logger.warn(`Recovery skipped because already attempted oldRun=${runId} proposal=${proposalId}`);
-      } else if (progressFinalizationFailure) {
+      } else {
         recovery = {
           actor: { id: jobData?.actorUserId || null, email: jobData?.actorEmail || null },
           options: {
             force: false,
             generate: true,
-            reason: FAILED_PROGRESS_RECOVERY_REASON,
+            reason: TYPEORM_MUTATION_RECOVERY_REASON,
             targetTemplateSlug: jobData?.targetTemplateSlug,
             targetTemplateVersion: jobData?.targetTemplateVersion,
           },
