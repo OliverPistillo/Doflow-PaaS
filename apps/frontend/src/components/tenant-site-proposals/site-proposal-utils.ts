@@ -1,5 +1,6 @@
 import type { JsonObject, SiteConfig } from "@/lib/tenant-site-proposals-api";
 import { getDoFlowUser } from "@/lib/jwt";
+import { buildSiteProposalCsvTemplate, csvTemplateHeaders } from "./site-proposal-csv-template";
 
 export const proposalStatusLabel: Record<string, string> = { draft: "Bozza", ready: "Pronta", generated: "Generata", error: "Errore", archived: "Archiviata" };
 export const importStatusLabel: Record<string, string> = { preview: "Anteprima", confirmed: "Confermato", generated: "Generato", partial: "Generato parzialmente", failed: "Errore" };
@@ -32,7 +33,7 @@ export function setPath<T extends JsonObject>(object: T, path: string, value: un
 export function textLimit(config: SiteConfig, path: string) { return Number(config.textLimits?.[path] || 0); }
 export function hasUnsafePrototype(value: unknown): boolean { if (!value || typeof value !== "object") return false; if (Array.isArray(value)) return value.some(hasUnsafePrototype); return Object.entries(value as JsonObject).some(([key, child]) => ["__proto__", "prototype", "constructor"].includes(key) || hasUnsafePrototype(child)); }
 export function isSafeRoute(value: string) { return value.startsWith("#") || (!/^[a-z][a-z0-9+.-]*:/i.test(value) && !value.startsWith("/") && !value.includes("..") && !value.includes("\\") && !value.includes("?") && !/[{}]/.test(value.replaceAll("{citySlug}", ""))); }
-export const csvHeaders = ["business_name", "professional_title", "descriptor", "category", "city", "website_url", "email", "phone", "address", "opening_hours", "services", "brands", "notes", "lead_priority", "overview", "target_audience", "primary_goal", "tone_of_voice", "primary_color", "secondary_color", "accent_color", "background_color", "logo_url", "hero_image_url", "consultation_image_url", "products_image_url", "palette_json", "images_json", "reviews_json", "faqs_json", "treatment_cards_json", "product_points_json", "routes_json"];
-export function downloadCsvTemplate() { const example = ["Studio Esempio", "Dott.ssa", "Medicina estetica", "Wellness", "Roma", "https://example.it", "info@example.it", "+39 000 000 0000", "Via Esempio 1", "Su appuntamento", "Consulenza;Trattamento viso;Trattamento corpo", "", "Dati da verificare", "media", "Presentazione dello studio", "Persone interessate al benessere", "Richieste di consulenza", "Professionale e chiaro", "#AD8147", "#28241F", "#8D6536", "#FBF9F5", "", "", "", "", "", "", "", "", "", "", ""];
-  downloadBlob(new Blob([`\uFEFF${csvHeaders.join(";")}\r\n${example.join(";")}\r\n`], { type: "text/csv;charset=utf-8" }), "modello-proposte-web-doflow.csv");
+export const csvHeaders = csvTemplateHeaders;
+export function downloadCsvTemplate() {
+  downloadBlob(new Blob([buildSiteProposalCsvTemplate()], { type: "text/csv;charset=utf-8" }), "modello-proposte-web-doflow.csv");
 }

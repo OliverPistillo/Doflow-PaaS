@@ -2,6 +2,12 @@ import { BadRequestException } from '@nestjs/common';
 import { TenantSiteProposalsCsvService } from './tenant-site-proposals-csv.service';
 import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
 import { getTemplateRegistration } from './tenant-site-proposals-template-registry';
+import {
+  buildSiteProposalCsvTemplate,
+  csvTemplateExample,
+  csvTemplateHeaders,
+} from '../../../frontend/src/components/tenant-site-proposals/site-proposal-csv-template';
+import { ITALIAN_CSV_FIXTURE } from './tenant-site-proposals-csv.fixture';
 
 describe('TenantSiteProposalsCsvService', () => {
   let service: TenantSiteProposalsCsvService;
@@ -27,6 +33,11 @@ describe('TenantSiteProposalsCsvService', () => {
     expect(parsed.rows[0].business_name).toBe('Studio, Demo');
     expect(parsed.rows[0].notes).toContain('"uno"');
     expect(parsed.rows[0].notes).toContain('seconda');
+  });
+
+  it('supports semicolons and escaped double quotes inside quoted cells', () => {
+    const parsed = service.parseCsvText('business_name;notes\nStudio Demo;"Viso; percorso ""premium"""');
+    expect(parsed.rows[0]).toMatchObject({ business_name: 'Studio Demo', notes: 'Viso; percorso "premium"' });
   });
 
   it('ignores blank rows and suffixes duplicate headers', () => {
@@ -74,7 +85,7 @@ describe('TenantSiteProposalsCsvService', () => {
     const canonical = preview[0].canonical!;
 
     expect(parsed.headers).toEqual([
-      'città', 'ambito', 'nome_azienda_struttura', 'nome_e_cognome_pubblico', 'ruolo_pubblico', 'telefono', 'email', 'indirizzo', 'sito_web', 'fonte_contatti', 'fonte_persona_ruolo', 'completezza', 'note', 'data_verifica',
+      'citta', 'ambito', 'nome_azienda_struttura', 'nome_e_cognome_pubblico', 'ruolo_pubblico', 'telefono', 'email', 'indirizzo', 'sito_web', 'fonte_contatti', 'fonte_persona_ruolo', 'completezza', 'note', 'data_verifica',
     ]);
     expect(preview[0].valid).toBe(true);
     expect(canonical).toMatchObject({
@@ -82,6 +93,27 @@ describe('TenantSiteProposalsCsvService', () => {
     });
     expect(preview[0].sourceRow.nome_azienda_struttura).toBe('Studio Esempio');
     expect(preview[0].siteConfig).toBeDefined();
+  });
+
+  it('normalizes the exact four-row Italian fixture before validation and preserves source data', () => {
+    const parsed = service.parseCsvText(ITALIAN_CSV_FIXTURE);
+    const preview = service.buildPreviewRows(parsed.rows, defaultConfig);
+
+    expect(parsed.delimiter).toBe(';');
+    expect(parsed.headers).toHaveLength(14);
+    expect(preview).toHaveLength(4);
+    expect(preview.filter((row) => row.valid)).toHaveLength(4);
+    expect(preview.filter((row) => !row.valid)).toHaveLength(0);
+    expect(preview.every((row) => Boolean(row.canonical?.businessName))).toBe(true);
+    expect(preview.every((row) => row.canonical?.category === 'Centro estetico')).toBe(true);
+    expect(preview.every((row) => row.canonical?.city === 'Reggio Emilia')).toBe(true);
+    expect(preview.every((row) => Boolean(row.canonical?.websiteUrl))).toBe(true);
+    expect(preview[0].sourceRow.nome_azienda_struttura).toBe('Studio Aurora');
+    expect(preview[0].sourceRow.note).toBe("L'accoglienza / percorso; follow-up");
+    expect(preview[1].canonical?.publicContactName).toBeFalsy();
+    expect(preview[1].canonical?.professionalTitle).toBeFalsy();
+    expect(preview[1].canonical?.personRoleSource).toBeFalsy();
+    expect(preview[3].sourceRow.note).toBe('Percorso "premium" / viso, corpo.');
   });
 
   it('accepts all 49 non-empty rows from the real-world header shape', () => {
@@ -124,7 +156,59 @@ describe('TenantSiteProposalsCsvService', () => {
     expect(preview[0]).toMatchObject({ rowIndex: 1, valid: false, displayName: undefined });
     expect(preview[0].errors[0]).toMatchObject({ code: 'BUSINESS_NAME_REQUIRED' });
     expect(preview[0].errors[0].message).toContain('Nome dell’attività mancante');
-    expect(preview[0].sourceRow).toEqual({ città: 'Reggio Emilia', ambito: 'Centro estetico', fonte_contatti: 'https://example.it' });
+    expect(preview[0].sourceRow).toEqual({ citta: 'Reggio Emilia', ambito: 'Centro estetico', fonte_contatti: 'https://example.it' });
+  });
+
+  it('maps the supported Italian header variants to the existing canonical schema', () => {
+    const canonical = service.normalizeRow({
+      'Nome struttura': 'Studio Alias',
+      Comune: 'Bologna',
+      Categoria: 'Wellness',
+      'Ruolo referente': 'Titolare',
+      'Numero di telefono': '+39 051 100000',
+      'E-mail': 'info@studio-alias.it',
+      Sede: 'Via Centro 1',
+      'URL sito': 'https://studio-alias.it',
+      Annotazioni: 'Nota',
+    });
+    expect(canonical).toMatchObject({
+      businessName: 'Studio Alias', city: 'Bologna', category: 'Wellness', professionalTitle: 'Titolare',
+      phone: '+39 051 100000', email: 'info@studio-alias.it', address: 'Via Centro 1', websiteUrl: 'https://studio-alias.it', notes: 'Nota',
+    });
+  });
+
+  it('normalizes dots in regular headers while preserving config override paths', () => {
+    const parsed = service.parseCsvText('Nome azienda / struttura;Sito.web;config.content.hero.titleLine\nStudio Demo;https://studio-demo.it;Titolo personalizzato');
+    expect(parsed.headers).toEqual(['nome_azienda_struttura', 'sito_web', 'config.content.hero.titleline']);
+    expect(service.normalizeRow(parsed.rows[0])).toMatchObject({
+      businessName: 'Studio Demo',
+      websiteUrl: 'https://studio-demo.it',
+      configOverrides: { content: { hero: { titleline: 'Titolo personalizzato' } } },
+    });
+  });
+
+  it('rejects inconsistent column counts with a readable row-specific message', () => {
+    expect(() => service.parseCsvText('business_name;city;notes\nStudio Demo;Roma;Nota;Valore fuori colonna')).toThrow(
+      'Riga CSV 2: numero di colonne non coerente. Attese 3, trovate 4.',
+    );
+  });
+
+  it('round-trips the actual 33-column downloadable template through the import parser', () => {
+    const generated = buildSiteProposalCsvTemplate();
+    const parsed = service.parseCsvText(generated);
+    const preview = service.buildPreviewRows(parsed.rows, defaultConfig);
+
+    expect(csvTemplateHeaders).toHaveLength(33);
+    expect(csvTemplateExample).toHaveLength(33);
+    expect(parsed.headers).toHaveLength(33);
+    expect(Object.keys(parsed.rows[0])).toHaveLength(33);
+    expect(preview).toHaveLength(1);
+    expect(preview[0].valid).toBe(true);
+    expect(preview[0].canonical?.businessName).toBe('Studio Esempio');
+    expect(preview[0].canonical?.services).toEqual(['Consulenza', 'Trattamento viso', 'Trattamento corpo']);
+    expect(preview[0].canonical?.notes).toBe('Dati da verificare');
+    expect(preview[0].canonical?.leadPriority).toBe('media');
+    expect(generated).toContain('"Consulenza;Trattamento viso;Trattamento corpo"');
   });
 
   it('parses services with semicolon, pipe, newline and JSON array without splitting commas', () => {

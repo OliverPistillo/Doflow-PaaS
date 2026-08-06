@@ -35,6 +35,24 @@ type ParsedCsv = {
   delimiter: string;
 };
 
+export function normalizeCsvHeader(header: string): string {
+  const normalized = String(header || '')
+    .replace(/^\uFEFF/, '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+  if (['__proto__', 'prototype', 'constructor'].includes(normalized)) return normalized;
+  const punctuation = normalized.startsWith('config.')
+    ? /[\\/|:;,\-–—()[\]{}!?"']/g
+    : /[.\\/|:;,\-–—()[\]{}!?"']/g;
+  return normalized
+    .replace(punctuation, '_')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
 const ALIASES: Record<string, keyof CanonicalProposalInput> = {
   business_name: 'businessName',
   businessname: 'businessName',
@@ -58,6 +76,7 @@ const ALIASES: Record<string, keyof CanonicalProposalInput> = {
   titolo_professionale: 'professionalTitle',
   ruolo: 'professionalTitle',
   ruolo_pubblico: 'professionalTitle',
+  ruolo_referente: 'professionalTitle',
   qualifica_pubblica: 'professionalTitle',
   descriptor: 'descriptor',
   descrittore: 'descriptor',
@@ -73,18 +92,23 @@ const ALIASES: Record<string, keyof CanonicalProposalInput> = {
   settore_attività: 'category',
   city: 'city',
   citta: 'city',
-  città: 'city',
+  comune: 'city',
+  localita: 'city',
   website_url: 'websiteUrl',
   website: 'websiteUrl',
   sito: 'websiteUrl',
   sito_web: 'websiteUrl',
+  url_sito: 'websiteUrl',
   email: 'email',
   mail: 'email',
+  e_mail: 'email',
   phone: 'phone',
   telefono: 'phone',
+  numero_di_telefono: 'phone',
   cellulare: 'phone',
   address: 'address',
   indirizzo: 'address',
+  sede: 'address',
   opening_hours: 'openingHours',
   orari: 'openingHours',
   orari_apertura: 'openingHours',
@@ -106,6 +130,7 @@ const ALIASES: Record<string, keyof CanonicalProposalInput> = {
   youtube: 'socialYouTube',
   notes: 'notes',
   note: 'notes',
+  annotazioni: 'notes',
   lead_priority: 'leadPriority',
   priorita: 'leadPriority',
   priorità: 'leadPriority',
@@ -222,6 +247,13 @@ export class TenantSiteProposalsCsvService {
         `Il CSV contiene ${rows.length} righe dati; il limite attuale e ${CSV_LIMITS.maxRows}. Dividi il file in piu importazioni.`,
       );
     }
+    rows.forEach((row, index) => {
+      if (row.length !== headers.length) {
+        throw new BadRequestException(
+          `Riga CSV ${index + 2}: numero di colonne non coerente. Attese ${headers.length}, trovate ${row.length}.`,
+        );
+      }
+    });
     return {
       headers,
       delimiter,
@@ -501,17 +533,7 @@ export class TenantSiteProposalsCsvService {
   }
 
   private canonicalHeader(header: string): string {
-    const normalized = String(header || '')
-      .replace(/^\uFEFF/, '')
-      .normalize('NFKC')
-      .trim()
-      .toLowerCase();
-    if (['__proto__', 'prototype', 'constructor'].includes(normalized)) return normalized;
-    return normalized
-      .replace(/[\\/|:;,\-–—()[\]{}!?"']/g, '_')
-      .replace(/\s+/g, '_')
-      .replace(/_+/g, '_')
-      .replace(/^_+|_+$/g, '');
+    return normalizeCsvHeader(header);
   }
 
   private isMissingValue(value: string): boolean {

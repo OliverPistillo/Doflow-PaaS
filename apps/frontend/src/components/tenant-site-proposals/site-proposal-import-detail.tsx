@@ -216,7 +216,7 @@ export function SiteProposalImportDetail({ id }: { id: string }) {
             {batch.rows.map((row) => (
               <details key={row.rowIndex} className="rounded-xl border border-slate-200 bg-white">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3">
-                  <span className="min-w-0"><strong className="text-sm text-slate-900">#{row.rowIndex} {row.displayName || "Riga senza nome"}</strong><span className="ml-2 text-xs text-slate-500">{displayValue(row.canonical?.city)}</span></span>
+                  <span className="min-w-0"><strong className="text-sm text-slate-900">#{row.rowIndex} {row.displayName || "Riga senza nome"}</strong><span className="ml-2 text-xs text-slate-500">{displayValue(row.canonical?.city)}</span>{!row.valid && row.errors[0]?.message ? <span className="mt-1 block text-xs text-rose-700">{row.errors[0].message}</span> : null}</span>
                   <Badge className={row.valid ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>{row.valid ? "Valida" : "Non valida"}</Badge>
                 </summary>
                 <PreviewRowDetails row={row} />

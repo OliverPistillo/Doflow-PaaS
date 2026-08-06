@@ -1,6 +1,9 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { TenantSiteProposalsService } from './tenant-site-proposals.service';
 import * as deterministic from './tenant-site-proposals-deterministic';
+import { TenantSiteProposalsCsvService } from './tenant-site-proposals-csv.service';
+import { ITALIAN_CSV_FIXTURE } from './tenant-site-proposals-csv.fixture';
+import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
 
 const uuid = '550e8400-e29b-41d4-a716-446655440000';
 
@@ -113,7 +116,11 @@ describe('TenantSiteProposalsService', () => {
 
   it('confirms four valid rows and automatically creates four real queued preparation runs', async () => {
     const ids = Array.from({ length: 4 }, (_, index) => `750e8400-e29b-41d4-a716-${String(index + 1).padStart(12, '0')}`);
-    const rows = ids.map((_, index) => ({ rowIndex: index + 1, valid: true, errors: [], warnings: [], canonical: { businessName: `Impresa ${index + 1}`, city: 'Roma', services: ['Servizio'] }, sourceRowHash: `hash-${index}`, fingerprint: `fingerprint-${index}`, siteConfig: { template: { slug: 'colsova', templateVersion: '2.4.1' } }, displayName: `Impresa ${index + 1}`, sourceRow: {} }));
+    const csvService = new TenantSiteProposalsCsvService();
+    const defaultConfig = await new TenantSiteProposalsTemplateService().getDefaultConfig('colsova', '1.0.0');
+    const rows = csvService.buildPreviewRows(csvService.parseCsvText(ITALIAN_CSV_FIXTURE).rows, defaultConfig);
+    expect(rows).toHaveLength(4);
+    expect(rows.every((row) => row.valid && row.canonical?.businessName && row.canonical.city === 'Reggio Emilia')).toBe(true);
     const batch = { id: uuid, status: 'preview', valid_count: 4, rows, template_slug: 'colsova', template_version: '2.4.1' };
     const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
     jest.spyOn(service, 'getImport').mockResolvedValueOnce(batch as any).mockResolvedValueOnce({ ...batch, status: 'confirmed' } as any);
