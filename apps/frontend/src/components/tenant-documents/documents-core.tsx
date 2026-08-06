@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader, PageShell } from "@/components/ui/page-shell";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/hooks/useConfirm";
 import { getDoFlowUser } from "@/lib/jwt";
 import {
   archiveDocument,
@@ -51,6 +52,7 @@ const DEFAULT_FILTERS: DocumentFilters = {
 
 export function DocumentsPage() {
   const { toast } = useToast();
+  const { ConfirmDialog, confirm } = useConfirm();
   const role = getDoFlowUser()?.role;
   const canViewFinance = canViewFinanceDocuments(role);
   const [summary, setSummary] = useState<DocumentSummary | null>(null);
@@ -203,13 +205,20 @@ export function DocumentsPage() {
           onDownload={download}
           onArchive={(doc) => void runAction(() => archiveDocument(doc.id), "Documento archiviato")}
           onRestore={(doc) => void runAction(() => restoreDocument(doc.id), "Documento ripristinato")}
-          onDelete={(doc) => {
-            if (window.confirm("Eliminare questo documento? L'operazione è soft delete.")) {
+          onDelete={async (doc) => {
+            const ok = await confirm({
+              title: "Eliminare questo documento?",
+              description: "L'operazione è un soft delete.",
+              confirmLabel: "Elimina",
+              variant: "destructive",
+            });
+            if (ok) {
               void runAction(() => deleteDocument(doc.id), "Documento eliminato");
             }
           }}
         />
       )}
+      <ConfirmDialog />
     </PageShell>
   );
 }
