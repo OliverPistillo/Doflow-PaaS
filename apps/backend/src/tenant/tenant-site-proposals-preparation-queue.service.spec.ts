@@ -20,12 +20,14 @@ describe('site proposal preparation queue', () => {
     job?: any;
     paused?: boolean;
     progress?: any;
+    orphanCandidates?: any[];
+    orphan?: any;
   } = {}) => {
     const proposal = Object.prototype.hasOwnProperty.call(options, 'proposal') ? options.proposal : { id: proposalId, preparation_status: 'idle', status: 'draft' };
     let paused = options.paused === true;
     const queue = {
       add: jest.fn().mockResolvedValue({ id: runId }),
-      getJob: jest.fn().mockResolvedValue(options.job || null),
+      getJob: jest.fn(async (id: string) => id === runId ? options.job || null : null),
       waitUntilReady: jest.fn().mockResolvedValue({}),
       isPaused: jest.fn(async () => paused),
       resume: jest.fn(async () => { paused = false; }),
@@ -41,6 +43,7 @@ describe('site proposal preparation queue', () => {
       connect: jest.fn(), startTransaction: jest.fn(async function (this: any) { this.isTransactionActive = true; }),
       commitTransaction: jest.fn(async function (this: any) { this.isTransactionActive = false; }), rollbackTransaction: jest.fn(async function (this: any) { this.isTransactionActive = false; }), release: jest.fn().mockResolvedValue(undefined),
       query: jest.fn(async (sql: string) => {
+        if (sql.includes('SELECT p.id AS proposal_id') && sql.includes('FOR UPDATE OF p,r')) return options.orphan ? [options.orphan] : [];
         if (sql.includes('site_proposals WHERE id=$1::uuid FOR UPDATE')) return proposal ? [proposal] : [];
         if (sql.includes('site_proposal_preparation_runs WHERE proposal_id')) return active ? [active] : [];
         if (sql.includes('site_proposal_preparation_runs WHERE id=$1::uuid') && sql.includes('FOR UPDATE SKIP LOCKED')) return recoveryRun ? [recoveryRun] : [];
@@ -49,7 +52,10 @@ describe('site proposal preparation queue', () => {
         return [];
       }),
     };
-    const dataSource = { query: jest.fn().mockResolvedValue([]), createQueryRunner: jest.fn(() => runner) };
+    const dataSource = {
+      query: jest.fn(async (sql: string) => sql.includes('SELECT p.id AS proposal_id,p.latest_preparation_job_id AS run_id') ? options.orphanCandidates || [] : []),
+      createQueryRunner: jest.fn(() => runner),
+    };
     const progress = options.progress;
     return { service: new TenantSiteProposalsPreparationQueueService(queue as any, dataSource as any, progress), queue, dataSource, runner, progress };
   };
@@ -140,11 +146,18 @@ describe('site proposal preparation queue', () => {
 
   it('marks a failed job terminal when BullMQ attempts are exhausted', async () => {
     const job = bullJob('failed', 3, 3);
-    const progress = { update: jest.fn().mockResolvedValue({}) };
-    const { service, runner } = make({ recoveryRun: { id: runId, proposal_id: proposalId, job_id: runId, status: 'dispatched', attempts: 3, heartbeat_at: '2026-01-01T00:00:00Z', job_data: data }, job, progress });
+    const progress = { failRun: jest.fn().mockResolvedValue({}) };
+    const { service } = make({ recoveryRun: { id: runId, proposal_id: proposalId, job_id: runId, status: 'dispatched', attempts: 3, heartbeat_at: '2026-01-01T00:00:00Z', job_data: data }, job, progress });
     await expect(service.reconcileRun(runId)).resolves.toMatchObject({ recovered: true, queueState: 'failed' });
-    expect(runner.query.mock.calls.some(([sql]) => String(sql).includes("SET status='failed'"))).toBe(true);
-    expect(progress.update).toHaveBeenCalledWith('doflow', runId, proposalId, expect.objectContaining({ stage: 'failed', failed: true }));
+    expect(progress.failRun).toHaveBeenCalledWith('doflow', runId, proposalId, 'Preparazione non riuscita dopo i tentativi previsti.');
+  });
+
+  it('delegates final failure to the atomic progress transaction', async () => {
+    const progress = { failRun: jest.fn().mockResolvedValue({ progress_percent: 0 }) };
+    const { service, dataSource } = make({ progress });
+    await service.markFailed(data, new Error('core failure'));
+    expect(progress.failRun).toHaveBeenCalledWith('doflow', runId, proposalId, 'core failure');
+    expect(dataSource.query).not.toHaveBeenCalledWith(expect.stringContaining("status='failed'"), expect.anything());
   });
 
   it('leaves a recent running heartbeat untouched', async () => {
@@ -194,5 +207,54 @@ describe('site proposal preparation queue', () => {
     const ids = results.map(({ result }) => result.jobId);
     expect(new Set(ids).size).toBe(4);
     results.forEach(({ result, progress }, index) => expect(progress.update).toHaveBeenCalledWith('doflow', result.jobId, `550e8400-e29b-41d4-a716-44665544000${index}`, expect.objectContaining({ percent: 5 })));
+  });
+
+  it('detects an orphaned failed run and queues one new recovery run for the same proposal', async () => {
+    const orphan = {
+      proposal_id: proposalId, preparation_status: 'queued', proposal_progress_percent: 0,
+      proposal_progress_stage: 'waiting', run_id: runId, job_id: runId, reason: 'csv_import',
+      job_data: { ...data, reason: 'csv_import', actorUserId: actorId, targetTemplateSlug: 'colsova', targetTemplateVersion: '2.4.1' },
+      attempts: 3, last_error: 'core failure', run_progress_percent: null,
+    };
+    const oldJob = { ...bullJob('failed', 3, 3), failedReason: 'core failure' };
+    const progress = { update: jest.fn().mockResolvedValue({}) };
+    const { service, queue, runner } = make({ orphanCandidates: [{ proposal_id: proposalId, run_id: runId }], orphan, job: oldJob, progress });
+    await expect(service.recoverOrphanedFailedProposals()).resolves.toBe(1);
+    expect(queue.add).toHaveBeenCalledTimes(1);
+    expect(queue.add).toHaveBeenCalledWith('prepare-proposal', expect.objectContaining({
+      proposalId, actorUserId: actorId, force: false, generate: true,
+      reason: 'recovery_failed_progress_finalization', targetTemplateSlug: 'colsova', targetTemplateVersion: '2.4.1',
+    }), expect.objectContaining({ attempts: 3 }));
+    expect(runner.query.mock.calls.filter(([sql]) => String(sql).includes('INSERT INTO "doflow".site_proposal_preparation_runs'))).toHaveLength(1);
+    expect(runner.query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO "doflow".site_proposals'))).toBe(false);
+  });
+
+  it('reconciles but never retries a recovery run a second time', async () => {
+    const orphan = {
+      proposal_id: proposalId, preparation_status: 'queued', proposal_progress_percent: 0,
+      proposal_progress_stage: 'waiting', run_id: runId, job_id: runId,
+      reason: 'recovery_failed_progress_finalization', job_data: { ...data, reason: 'recovery_failed_progress_finalization' },
+      attempts: 3, last_error: 'core failure', run_progress_percent: 10,
+    };
+    const { service, queue, runner } = make({ orphanCandidates: [{ proposal_id: proposalId, run_id: runId }], orphan, job: bullJob('failed', 3, 3) });
+    await expect(service.recoverOrphanedFailedProposals()).resolves.toBe(0);
+    expect(queue.add).not.toHaveBeenCalled();
+    expect(runner.query.mock.calls.some(([sql]) => String(sql).includes("preparation_status='failed'"))).toBe(true);
+  });
+
+  it('does not inspect or retry unrelated failed BullMQ history when no proposal is orphaned', async () => {
+    const { service, queue } = make({ job: bullJob('failed', 3, 3) });
+    await expect(service.recoverOrphanedFailedProposals()).resolves.toBe(0);
+    expect(queue.getJob).not.toHaveBeenCalled();
+    expect(queue.add).not.toHaveBeenCalled();
+  });
+
+  it('processes four orphaned proposals independently without duplicate candidate recovery', async () => {
+    const ids = ['550e8400-e29b-41d4-a716-446655440001','550e8400-e29b-41d4-a716-446655440002','550e8400-e29b-41d4-a716-446655440003','550e8400-e29b-41d4-a716-446655440004'];
+    const candidates = ids.map((id, index) => ({ proposal_id: id, run_id: `650e8400-e29b-41d4-a716-44665544000${index + 1}` }));
+    const { service } = make({ orphanCandidates: candidates });
+    const recover = jest.spyOn(service as any, 'recoverOrphanedFailedProposal').mockResolvedValue(true);
+    await expect(service.recoverOrphanedFailedProposals()).resolves.toBe(4);
+    expect(recover.mock.calls).toEqual(candidates.map(({ proposal_id, run_id }) => [proposal_id, run_id]));
   });
 });

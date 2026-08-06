@@ -267,6 +267,47 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
     await runner.query(`ALTER TABLE "${s}".site_proposal_preparation_runs ADD COLUMN IF NOT EXISTS progress_updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`);
     await runner.query(`ALTER TABLE "${s}".site_proposal_preparation_runs ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT now()`);
     await runner.query(`ALTER TABLE "${s}".site_proposal_preparation_runs ADD COLUMN IF NOT EXISTS provider TEXT`);
+    await runner.query(`
+      UPDATE "${s}".site_proposal_preparation_runs
+      SET progress_percent=COALESCE(progress_percent,0::smallint),
+          progress_stage=COALESCE(progress_stage,CASE WHEN status='failed' THEN 'failed' ELSE 'waiting' END),
+          progress_message=COALESCE(progress_message,CASE
+            WHEN status='failed' THEN CASE
+              WHEN COALESCE(last_error,'') ~* '(stack|sql|postgres|redis|token|secret|password|api.?key|cookie|authorization|null value in column|violates .*constraint|relation ["'']*)'
+                THEN 'Preparazione non riuscita'
+              ELSE COALESCE(NULLIF(LEFT(BTRIM(last_error),180),''),'Preparazione non riuscita')
+            END
+            ELSE 'In attesa'
+          END),
+          progress_updated_at=COALESCE(progress_updated_at,updated_at,created_at,now()),
+          heartbeat_at=COALESCE(heartbeat_at,updated_at,created_at,now())
+      WHERE progress_percent IS NULL OR progress_stage IS NULL OR progress_message IS NULL
+        OR progress_updated_at IS NULL OR heartbeat_at IS NULL
+    `);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_preparation_runs ALTER COLUMN progress_percent SET DEFAULT 0`);
+    await runner.query(`ALTER TABLE "${s}".site_proposal_preparation_runs ALTER COLUMN progress_percent SET NOT NULL`);
+    await runner.query(`
+      UPDATE "${s}".site_proposals
+      SET progress_percent=COALESCE(progress_percent,0::smallint),
+          progress_stage=COALESCE(progress_stage,CASE
+            WHEN preparation_status='failed' THEN 'failed'
+            WHEN preparation_status IN ('ready','fallback') THEN 'ready'
+            ELSE 'waiting'
+          END),
+          progress_message=COALESCE(progress_message,CASE
+            WHEN preparation_status='failed' THEN CASE
+              WHEN COALESCE(preparation_error,'') ~* '(stack|sql|postgres|redis|token|secret|password|api.?key|cookie|authorization|null value in column|violates .*constraint|relation ["'']*)'
+                THEN 'Preparazione non riuscita'
+              ELSE COALESCE(NULLIF(LEFT(BTRIM(preparation_error),180),''),'Preparazione non riuscita')
+            END
+            WHEN preparation_status IN ('ready','fallback') THEN 'Preparazione completata'
+            ELSE 'In attesa'
+          END),
+          progress_updated_at=COALESCE(progress_updated_at,updated_at,created_at,now()),
+          preparation_heartbeat_at=COALESCE(preparation_heartbeat_at,updated_at,created_at,now())
+      WHERE progress_percent IS NULL OR progress_stage IS NULL OR progress_message IS NULL
+        OR progress_updated_at IS NULL OR preparation_heartbeat_at IS NULL
+    `);
 
     await runner.query(`
       CREATE TABLE IF NOT EXISTS "${s}".site_proposal_themes (

@@ -129,6 +129,37 @@ describe('ensureDoflowSiteProposalTables', () => {
     expect(runnerB.commitTransaction).toHaveBeenCalledTimes(1);
   });
 
+  it('backfills legacy NULL progress and hardens the run percentage idempotently', async () => {
+    let legacyRunProgress: number | null = null;
+    const runner = createRunner(async (sql) => {
+      if (sql.includes('UPDATE "doflow".site_proposal_preparation_runs') && sql.includes('progress_percent=COALESCE')) legacyRunProgress = legacyRunProgress ?? 0;
+      return [];
+    });
+    const { dataSource } = createDataSource(runner);
+
+    await ensureDoflowSiteProposalTables(dataSource, 'doflow');
+    await ensureDoflowSiteProposalTables(dataSource, 'doflow');
+
+    expect(legacyRunProgress).toBe(0);
+    const ddl = runner.query.mock.calls.map(([sql]: [string]) => sql).join('\n');
+    expect(ddl).toContain("progress_stage=COALESCE(progress_stage,CASE WHEN status='failed' THEN 'failed' ELSE 'waiting' END)");
+    expect(ddl).toContain('progress_updated_at=COALESCE(progress_updated_at,updated_at,created_at,now())');
+    expect(ddl).toContain('ALTER COLUMN progress_percent SET DEFAULT 0');
+    expect(ddl).toContain('ALTER COLUMN progress_percent SET NOT NULL');
+    expect(runner.query.mock.calls.filter(([sql]: [string]) => sql.includes('UPDATE "doflow".site_proposal_preparation_runs') && sql.includes('progress_percent=COALESCE'))).toHaveLength(1);
+  });
+
+  it('repairs only NULL proposal progress fields with status-coherent defaults', async () => {
+    const runner = createRunner();
+    const { dataSource } = createDataSource(runner);
+    await ensureDoflowSiteProposalTables(dataSource, 'doflow');
+    const repair = runner.query.mock.calls.find(([sql]: [string]) => sql.includes('UPDATE "doflow".site_proposals') && sql.includes('progress_percent=COALESCE'));
+    expect(repair).toBeDefined();
+    expect(repair[0]).toContain("WHEN preparation_status='failed' THEN 'failed'");
+    expect(repair[0]).toContain("WHEN preparation_status IN ('ready','fallback') THEN 'ready'");
+    expect(repair[0]).toContain('WHERE progress_percent IS NULL OR progress_stage IS NULL');
+  });
+
   it('removes a failed Promise from cache and retries with a new QueryRunner', async () => {
     const ddlError = new Error('DDL failed');
     const firstRunner = createRunner(async (sql) => {

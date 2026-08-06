@@ -50,11 +50,18 @@ export class TenantSiteProposalsPreparationWorker extends WorkerHost implements 
       await this.dispatch.markCompleted(job.data);
       return result;
     } catch (error) {
-      const status = Number((error as { status?: number })?.status || (error as { getStatus?: () => number })?.getStatus?.() || 0);
+      const originalError = error;
+      const status = Number((originalError as { status?: number })?.status || (originalError as { getStatus?: () => number })?.getStatus?.() || 0);
       const permanent = [400, 401, 403, 404, 422].includes(status);
       if (permanent && typeof job.discard === 'function') job.discard();
-      if (permanent || job.attemptsMade + 1 >= Number(job.opts.attempts || 1)) await this.dispatch.markFailed(job.data, error);
-      throw error;
+      if (permanent || job.attemptsMade + 1 >= Number(job.opts.attempts || 1)) {
+        try {
+          await this.dispatch.markFailed(job.data, originalError);
+        } catch (bookkeepingError) {
+          this.logger.error(`Preparation failure bookkeeping failed run=${job.data.preparationRunId} proposal=${job.data.proposalId}: ${this.error(bookkeepingError)}`);
+        }
+      }
+      throw originalError;
     }
   }
 

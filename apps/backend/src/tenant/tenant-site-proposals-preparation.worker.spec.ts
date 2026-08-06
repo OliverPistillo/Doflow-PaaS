@@ -23,4 +23,15 @@ describe('site proposal preparation worker', () => {
   it('rejects unrelated jobs', async () => { const worker = new TenantSiteProposalsPreparationWorker({ prepare: jest.fn() } as any, dispatch() as any); await expect(worker.process({ name: 'other', data: {} } as any)).rejects.toThrow(/Unsupported/); });
   it('discards permanent input failures without scheduling further attempts', async () => { const error: any = new Error('invalid'); error.status = 400; const core = { prepare: jest.fn().mockRejectedValue(error) }; const state = dispatch(); const job = { name: SITE_PROPOSAL_PREPARATION_JOB, data, attemptsMade: 0, opts: { attempts: 3 }, discard: jest.fn() }; const worker = new TenantSiteProposalsPreparationWorker(core as any, state as any); await expect(worker.process(job as any)).rejects.toBe(error); expect(job.discard).toHaveBeenCalled(); expect(state.markFailed).toHaveBeenCalled(); });
   it('leaves transient failures retryable until the third attempt', async () => { const error = new Error('temporary'); const core = { prepare: jest.fn().mockRejectedValue(error) }; const state = dispatch(); const worker = new TenantSiteProposalsPreparationWorker(core as any, state as any); await expect(worker.process({ name: SITE_PROPOSAL_PREPARATION_JOB, data, attemptsMade: 0, opts: { attempts: 3 }, discard: jest.fn() } as any)).rejects.toBe(error); expect(state.markFailed).not.toHaveBeenCalled(); await expect(worker.process({ name: SITE_PROPOSAL_PREPARATION_JOB, data, attemptsMade: 2, opts: { attempts: 3 }, discard: jest.fn() } as any)).rejects.toBe(error); expect(state.markFailed).toHaveBeenCalled(); });
+  it('rethrows the original preparation error when atomic failure bookkeeping fails', async () => {
+    const original = new Error('original core failure');
+    const core = { prepare: jest.fn().mockRejectedValue(original) };
+    const state = dispatch();
+    state.markFailed.mockRejectedValue(new Error('secondary persistence failure'));
+    const worker = new TenantSiteProposalsPreparationWorker(core as any, state as any);
+    const log = jest.spyOn((worker as any).logger, 'error').mockImplementation();
+    await expect(worker.process({ name: SITE_PROPOSAL_PREPARATION_JOB, data, attemptsMade: 2, opts: { attempts: 3 }, discard: jest.fn() } as any)).rejects.toBe(original);
+    expect(state.markFailed).toHaveBeenCalledWith(data, original);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('Preparation failure bookkeeping failed'));
+  });
 });

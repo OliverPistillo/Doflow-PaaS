@@ -13,6 +13,7 @@ import { TenantSiteProposalsPreparationProgressService } from './tenant-site-pro
 
 const QUEUE_READY_TIMEOUT_MS = 10_000;
 const RUNNING_STALE_MS = 5 * 60_000;
+const FAILED_PROGRESS_RECOVERY_REASON = 'recovery_failed_progress_finalization';
 export const PREPARATION_STALLED_MS = 2 * 60_000;
 
 type RecoverableRun = {
@@ -132,6 +133,7 @@ export class TenantSiteProposalsPreparationQueueService implements OnApplication
     try {
       await ensureDoflowSiteProposalTables(this.dataSource, SITE_PROPOSALS_TENANT);
       await this.ensureQueueOperational();
+      let recovered = await this.recoverOrphanedFailedProposals();
       const rows = await this.dataSource.query(`
         SELECT id FROM "${SITE_PROPOSALS_TENANT}".site_proposal_preparation_runs
         WHERE (
@@ -141,13 +143,109 @@ export class TenantSiteProposalsPreparationQueueService implements OnApplication
         )
         ORDER BY created_at ASC LIMIT 50
       `);
-      let recovered = 0;
       for (const row of rows) {
         const result = await this.reconcileRun(String(row.id));
         if (result.recovered) recovered += 1;
       }
       return recovered;
     } finally { this.recovering = false; }
+  }
+
+  async recoverOrphanedFailedProposals(): Promise<number> {
+    const rows = await this.dataSource.query(`
+      SELECT p.id AS proposal_id,p.latest_preparation_job_id AS run_id
+      FROM "${SITE_PROPOSALS_TENANT}".site_proposals p
+      JOIN "${SITE_PROPOSALS_TENANT}".site_proposal_preparation_runs r
+        ON r.id::text=p.latest_preparation_job_id
+      WHERE p.preparation_status IN ('queued','running') AND r.status='failed'
+      ORDER BY r.updated_at ASC
+      LIMIT 50
+    `);
+    let recovered = 0;
+    for (const row of rows) {
+      if (await this.recoverOrphanedFailedProposal(String(row.proposal_id), String(row.run_id))) recovered += 1;
+    }
+    return recovered;
+  }
+
+  private async recoverOrphanedFailedProposal(proposalId: string, runId: string): Promise<boolean> {
+    if (!UUID_RE.test(proposalId) || !UUID_RE.test(runId)) return false;
+    const runner = this.dataSource.createQueryRunner();
+    let recovery: { actor: ProposalPreparationActor; options: Partial<ProposalPreparationOptions> } | undefined;
+    let original: unknown;
+    try {
+      await runner.connect();
+      await runner.startTransaction();
+      const orphan = (await runner.query(`
+        SELECT p.id AS proposal_id,p.preparation_status,p.progress_percent AS proposal_progress_percent,
+          p.progress_stage AS proposal_progress_stage,r.id AS run_id,r.job_id,r.reason,r.job_data,
+          r.attempts,r.last_error,r.progress_percent AS run_progress_percent
+        FROM "${SITE_PROPOSALS_TENANT}".site_proposals p
+        JOIN "${SITE_PROPOSALS_TENANT}".site_proposal_preparation_runs r
+          ON r.id=$2::uuid AND r.proposal_id=p.id
+        WHERE p.id=$1::uuid AND p.latest_preparation_job_id=r.id::text
+          AND p.preparation_status IN ('queued','running') AND r.status='failed'
+        FOR UPDATE OF p,r
+      `, [proposalId, runId]))[0];
+      if (!orphan) {
+        await runner.commitTransaction();
+        return false;
+      }
+      const oldJob = await this.queue.getJob(String(orphan.job_id));
+      const jobState = oldJob ? await oldJob.getState().catch(() => 'unknown') : 'missing';
+      const jobData = this.recoveryJobData(orphan.job_data, oldJob?.data);
+      const attempts = Math.max(Number(orphan.attempts || 0), Number(oldJob?.attemptsMade || 0));
+      this.logger.warn(`Orphaned failed proposal detected oldRun=${runId} proposal=${proposalId} jobState=${jobState} attempts=${attempts}`);
+
+      const failure = this.error(orphan.last_error || oldJob?.failedReason || 'Preparazione non riuscita');
+      const percent = Math.max(0, Math.min(100, Number(orphan.run_progress_percent || 0)));
+      await runner.query(`
+        UPDATE "${SITE_PROPOSALS_TENANT}".site_proposal_preparation_runs
+        SET status='failed',completed_at=COALESCE(completed_at,now()),last_error=$3::text,
+          progress_percent=COALESCE(progress_percent,0::smallint),progress_stage='failed',
+          progress_message=$3::text,progress_updated_at=now(),heartbeat_at=now(),updated_at=now()
+        WHERE id=$1::uuid AND proposal_id=$2::uuid
+      `, [runId, proposalId, failure]);
+      await runner.query(`
+        UPDATE "${SITE_PROPOSALS_TENANT}".site_proposals
+        SET preparation_status='failed',preparation_error=$3::text,preparation_completed_at=now(),
+          progress_percent=COALESCE($4::smallint,0::smallint),progress_stage='failed',progress_message=$3::text,
+          progress_updated_at=now(),preparation_heartbeat_at=now(),updated_at=now()
+        WHERE id=$2::uuid AND latest_preparation_job_id=$1::text
+      `, [runId, proposalId, failure, percent]);
+
+      const alreadyAttempted = orphan.reason === FAILED_PROGRESS_RECOVERY_REASON || jobData?.reason === FAILED_PROGRESS_RECOVERY_REASON;
+      const progressFinalizationFailure = orphan.proposal_progress_percent == null
+        || Number(orphan.proposal_progress_percent) === 0
+        || orphan.proposal_progress_stage === 'waiting';
+      if (alreadyAttempted) {
+        this.logger.warn(`Recovery skipped because already attempted oldRun=${runId} proposal=${proposalId}`);
+      } else if (progressFinalizationFailure) {
+        recovery = {
+          actor: { id: jobData?.actorUserId || null, email: jobData?.actorEmail || null },
+          options: {
+            force: false,
+            generate: true,
+            reason: FAILED_PROGRESS_RECOVERY_REASON,
+            targetTemplateSlug: jobData?.targetTemplateSlug,
+            targetTemplateVersion: jobData?.targetTemplateVersion,
+          },
+        };
+      }
+      await runner.commitTransaction();
+      this.logger.log(`Failure state reconciled oldRun=${runId} proposal=${proposalId}`);
+    } catch (error) {
+      original = error;
+      if (runner.isTransactionActive) await runner.rollbackTransaction().catch(() => undefined);
+      throw error;
+    } finally {
+      await runner.release().catch((error) => { if (!original) throw error; });
+    }
+
+    if (!recovery) return false;
+    const queued = await this.enqueue(SITE_PROPOSALS_TENANT, proposalId, recovery.actor, recovery.options);
+    this.logger.log(`Automatic recovery queued oldRun=${runId} proposal=${proposalId} newRun=${queued.jobId}`);
+    return true;
   }
 
   async reconcileRun(runId: string): Promise<{ recovered: boolean; queueState: string }> {
@@ -193,9 +291,7 @@ export class TenantSiteProposalsPreparationQueueService implements OnApplication
           await runner.query(`UPDATE "${SITE_PROPOSALS_TENANT}".site_proposal_preparation_runs SET status='dispatched',last_error=NULL,heartbeat_at=now(),updated_at=now() WHERE id=$1::uuid`, [run.id]);
           state = 'waiting'; recovered = true;
         } else {
-          const message = 'Preparazione non riuscita dopo i tentativi previsti.';
-          await runner.query(`UPDATE "${SITE_PROPOSALS_TENANT}".site_proposal_preparation_runs SET status='failed',completed_at=now(),last_error=$2::text,updated_at=now() WHERE id=$1::uuid`, [run.id, message]);
-          await runner.query(`UPDATE "${SITE_PROPOSALS_TENANT}".site_proposals SET preparation_status='failed',preparation_error=$2::text,preparation_completed_at=now(),updated_at=now() WHERE id=$1::uuid AND latest_preparation_job_id=$3::text`, [run.proposal_id, message, run.job_id]);
+          const message = this.error(job.failedReason || 'Preparazione non riuscita dopo i tentativi previsti.');
           failedAfterCommit = new Error(message); recovered = true;
         }
       } else if (state === 'completed' && job) {
@@ -220,7 +316,7 @@ export class TenantSiteProposalsPreparationQueueService implements OnApplication
       throw error;
     } finally { await runner.release(); }
 
-    if (failedAfterCommit && data) await this.updateFailedProgress(data, failedAfterCommit);
+    if (failedAfterCommit && data) await this.markFailed(data, failedAfterCommit);
     if (dispatchAfterCommit && data) {
       const dispatched = await this.dispatch(data);
       return { recovered: dispatched, queueState: dispatched ? 'waiting' : 'unavailable' };
@@ -267,8 +363,8 @@ export class TenantSiteProposalsPreparationQueueService implements OnApplication
 
   async markFailed(data: ProposalPreparationJobData, error: unknown) {
     this.jobData(data);
-    await this.dataSource.query(`UPDATE "${SITE_PROPOSALS_TENANT}".site_proposal_preparation_runs SET status='failed',completed_at=now(),last_error=$2::text,updated_at=now() WHERE id=$1::uuid`, [data.preparationRunId, this.error(error)]);
-    await this.updateFailedProgress(data, error);
+    if (!this.progress) throw new Error('Servizio progresso preparazione non disponibile');
+    await this.progress.failRun(SITE_PROPOSALS_TENANT, data.preparationRunId, data.proposalId, this.error(error));
   }
 
   private async dispatch(data: ProposalPreparationJobData): Promise<boolean> {
@@ -303,12 +399,6 @@ export class TenantSiteProposalsPreparationQueueService implements OnApplication
     }
   }
 
-  private async updateFailedProgress(data: ProposalPreparationJobData, error: unknown) {
-    if (!this.progress) return;
-    try { await this.progress.update(SITE_PROPOSALS_TENANT, data.preparationRunId, data.proposalId, { percent: 0, stage: 'failed', message: this.error(error), failed: true }); }
-    catch (progressError) { this.logger.warn(`Preparation failure progress unavailable run=${data.preparationRunId}: ${this.error(progressError)}`); }
-  }
-
   private async ensureQueueOperational() {
     if (!this.queueReady) await this.readyWithTimeout();
     const resumed = await this.resumeIfPaused();
@@ -337,6 +427,11 @@ export class TenantSiteProposalsPreparationQueueService implements OnApplication
   }
 
   private recent(value: unknown, thresholdMs: number) { const timestamp = new Date(String(value || '')).getTime(); return Number.isFinite(timestamp) && Date.now() - timestamp < thresholdMs; }
+  private recoveryJobData(primary: unknown, fallback: unknown): Partial<ProposalPreparationJobData> | undefined {
+    const value = primary && typeof primary === 'object' && !Array.isArray(primary) ? primary : fallback;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    return value as Partial<ProposalPreparationJobData>;
+  }
   private options(raw: Partial<ProposalPreparationOptions>): ProposalPreparationOptions {
     const allowed = new Set(['force','generate','reason','targetTemplateSlug','targetTemplateVersion']);
     if (!raw || typeof raw !== 'object' || Array.isArray(raw) || Object.keys(raw).some((key) => !allowed.has(key))) throw new BadRequestException('Opzioni preparazione non valide');
@@ -349,5 +444,5 @@ export class TenantSiteProposalsPreparationQueueService implements OnApplication
   private schema(value: string) { const schema = safeSchema(value, 'site proposal preparation enqueue'); if (schema !== SITE_PROPOSALS_TENANT) throw new BadRequestException('Richiesta di preparazione non valida'); return schema; }
   private proposalId(value: string) { if (!UUID_RE.test(value)) throw new BadRequestException('Richiesta di preparazione non valida'); }
   private jobData(data: ProposalPreparationJobData) { if (!data || data.tenantSchema !== SITE_PROPOSALS_TENANT || !UUID_RE.test(data.proposalId) || !UUID_RE.test(data.preparationRunId)) throw new BadRequestException('Job preparazione non valido'); }
-  private error(error: unknown) { const message = cleanString(error instanceof Error ? error.message : String(error), 500) || 'Errore temporaneo di dispatch'; return /stack|sql|postgres|redis|token|secret|password|api.?key|cookie|authorization/i.test(message) ? 'Errore temporaneo di dispatch' : message; }
+  private error(error: unknown) { const message = cleanString(error instanceof Error ? error.message : String(error), 500) || 'Errore temporaneo di dispatch'; return /stack|sql|postgres|redis|token|secret|password|api.?key|cookie|authorization|null value in column|violates .*constraint|relation ["']/i.test(message) ? 'Errore temporaneo di dispatch' : message; }
 }
