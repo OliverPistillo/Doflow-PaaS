@@ -139,7 +139,7 @@ export function SiteProposalImportDetail({ id }: { id: string }) {
   }, [id]);
 
   useEffect(() => { void load(); }, [load]);
-  const hasActive = proposals.some((proposal) => ["queued", "running"].includes(proposal.preparationStatus || proposal.preparation_status || ""));
+  const hasActive = proposals.some((proposal) => ["pending", "queued", "running"].includes(proposal.preparationStatus || proposal.preparation_status || ""));
   useEffect(() => { if (!hasActive) return; let timer: number | undefined; let cancelled = false; const poll = async () => { await load(true); if (!cancelled) timer = window.setTimeout(poll, document.visibilityState === "hidden" ? 6000 : 1800); }; timer = window.setTimeout(poll, 1800); return () => { cancelled = true; if (timer) window.clearTimeout(timer); }; }, [hasActive, load]);
 
   const confirm = async () => {
@@ -179,8 +179,16 @@ export function SiteProposalImportDetail({ id }: { id: string }) {
 
   const warnings = batch.rows.reduce((sum, row) => sum + row.warnings.length, 0);
   const noValidRows = batch.status === "preview" && batch.valid_count === 0;
-  const preparation = { queued: proposals.filter((item) => item.preparation_status === "queued").length, running: proposals.filter((item) => item.preparation_status === "running").length, ready: proposals.filter((item) => item.preparation_status === "ready").length, fallback: proposals.filter((item) => item.preparation_status === "fallback").length, failed: proposals.filter((item) => item.preparation_status === "failed").length };
-  const averageProgress = proposals.length ? Math.round(proposals.reduce((sum, proposal) => sum + Number(proposal.progressPercent || 0), 0) / proposals.length) : 0;
+  const statusOf = (proposal: SiteProposal) => proposal.preparationStatus || proposal.preparation_status || "idle";
+  const preparation = {
+    queued: proposals.filter((item) => ["pending", "queued"].includes(statusOf(item))).length,
+    running: proposals.filter((item) => statusOf(item) === "running").length,
+    ready: proposals.filter((item) => statusOf(item) === "ready" && item.provider === "gemini").length,
+    fallback: proposals.filter((item) => statusOf(item) === "fallback" || (statusOf(item) === "ready" && item.provider === "local")).length,
+    failed: proposals.filter((item) => statusOf(item) === "failed").length,
+  };
+  const hasRecoveryCandidates = proposals.some((item) => statusOf(item) === "idle");
+  const averageProgress = proposals.length ? Math.round(proposals.reduce((sum, proposal) => sum + Number(proposal.progressPercent ?? (proposal as SiteProposal & { progress_percent?: number }).progress_percent ?? 0), 0) / proposals.length) : 0;
 
   return (
     <main className="space-y-5 px-4 py-6 sm:px-6 lg:px-8">
@@ -191,7 +199,7 @@ export function SiteProposalImportDetail({ id }: { id: string }) {
         <span className="text-sm text-slate-500">{batch.row_count} righe · {batch.valid_count} valide · {batch.invalid_count} non valide</span>
         {noValidRows && canCreate("crm") ? <Button asChild variant="outline"><Link href="/commercial/site-proposals/new">Nuovo import</Link></Button> : null}
         {batch.status === "preview" && canCreate("crm") && !noValidRows ? <Button disabled={busy} onClick={() => setConfirmOpen(true)}><CheckCircle2 className="mr-2 h-4 w-4" />Conferma importazione</Button> : null}
-        {["confirmed", "generated", "partial"].includes(batch.status) && canManage("crm") ? <Button disabled={busy || preparation.running > 0} variant="outline" onClick={() => void prepare()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Accoda proposte incomplete</Button> : null}
+        {["confirmed", "generated", "partial"].includes(batch.status) && canManage("crm") && hasRecoveryCandidates ? <Button disabled={busy} variant="outline" onClick={() => void prepare()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Riprova accodamento</Button> : null}
       </div>
       {noValidRows ? <div role="alert" className="flex flex-wrap items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><CircleAlert className="h-4 w-4" />{EMPTY_IMPORT_MESSAGE}</div> : null}
       {error ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
@@ -217,7 +225,7 @@ export function SiteProposalImportDetail({ id }: { id: string }) {
           </div>
         )}
       </CommercialSectionCard>
-      {proposals.length ? <CommercialSectionCard title="Proposte create"><div className="space-y-3">{proposals.map((proposal) => <div key={proposal.id} className="grid items-center gap-3 rounded-xl border border-slate-200 p-3 md:grid-cols-[minmax(12rem,1fr)_minmax(16rem,2fr)_auto]"><div><Link className="font-medium text-indigo-600" href={`/commercial/site-proposals/${proposal.id}`}>{proposal.display_name}</Link><p className="text-xs text-slate-500">Riga {proposal.source_row_index || "—"}</p></div><SiteProposalProgress value={proposal} compact /><Badge className={proposal.preparation_status === "failed" ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-700"}>{proposal.preparation_status || "idle"}</Badge></div>)}</div></CommercialSectionCard> : null}
+      {proposals.length ? <CommercialSectionCard title="Proposte create"><div className="space-y-3">{proposals.map((proposal) => <div key={proposal.id} className="grid items-center gap-3 rounded-xl border border-slate-200 p-3 md:grid-cols-[minmax(12rem,1fr)_minmax(16rem,2fr)_auto]"><div><Link className="font-medium text-indigo-600" href={`/commercial/site-proposals/${proposal.id}`}>{proposal.display_name}</Link><p className="text-xs text-slate-500">Riga {proposal.source_row_index || "—"}</p></div><SiteProposalProgress value={proposal} compact /><Badge className={statusOf(proposal) === "failed" ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-700"}>{statusOf(proposal)}</Badge></div>)}</div></CommercialSectionCard> : null}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader><AlertDialogTitle>Conferma importazione</AlertDialogTitle><AlertDialogDescription>Le righe valide creeranno proposte e verranno accodate automaticamente per personalizzazione e generazione. L’operazione è idempotente.</AlertDialogDescription></AlertDialogHeader>

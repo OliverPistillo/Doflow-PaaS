@@ -33,17 +33,19 @@ export class TenantSiteProposalsThemeService {
     this.access(false); await this.ensure(); const s = this.schema();
     const filters: Record<string, string> = { active: `v.deleted_at IS NULL AND v.status IN ('active','draft')`, disabled: `v.deleted_at IS NULL AND v.status='disabled'`, deleted: `v.deleted_at IS NOT NULL`, all: 'true' };
     if (!filters[filter]) throw new BadRequestException('Filtro temi non valido');
-    return this.ds().query(`
+    const rows = await this.ds().query(`
       SELECT t.id,t.slug,t.name,t.description,t.source_kind,t.is_active,t.default_version,t.categories,t.created_at,t.updated_at,
         v.id version_id,v.version,v.schema_version,v.contract_version,v.content_profile,v.status,v.is_builtin,v.is_immutable,
         v.template_sha256,v.template_size,v.zip_sha256,v.zip_size,v.validation_report,v.created_at version_created_at,
         v.source_format,v.format_version,v.compiled_sha256,v.compiled_size,v.runtime_adapter_status,v.manifest,v.deleted_at,
         CASE WHEN t.source_kind='uploaded' THEN 'theme' ELSE 'hybrid' END default_image_mode,
-        (SELECT count(*)::int FROM "${s}".site_proposals p WHERE p.template_slug=t.slug AND p.template_version=v.version) usages
+        (SELECT count(*)::int FROM "${s}".site_proposals p WHERE p.template_slug=t.slug AND p.template_version=v.version) usages,
+        (SELECT count(*)::int FROM "${s}".site_proposal_generations g WHERE g.template_slug=t.slug AND g.template_version=v.version) historical_usages
       FROM "${s}".site_proposal_themes t JOIN "${s}".site_proposal_theme_versions v ON v.theme_id=t.id
       WHERE ${filters[filter]}
       ORDER BY t.name,v.created_at DESC
     `);
+    return rows.map((row: any) => this.publicTheme(row));
   }
 
   async get(slug: string, version: string) {
@@ -51,7 +53,7 @@ export class TenantSiteProposalsThemeService {
     const row = await this.row(slug, version);
     if (!row) throw new NotFoundException('Tema non trovato');
     const { template_storage_key: _templateKey, zip_storage_key: _zipKey, default_config: _defaultConfig, ...publicRow } = row;
-    return publicRow;
+    return this.publicTheme(publicRow);
   }
 
   async upload(file?: Express.Multer.File) {
@@ -105,7 +107,7 @@ export class TenantSiteProposalsThemeService {
     this.access(false); this.identity(slug, version); await this.ensure();
     const row = await this.row(slug, version);
     if (!row) throw new NotFoundException('Tema non trovato');
-    if (row.is_builtin) {
+    if (row.source_kind === 'builtin') {
       const registration = getTemplateRegistration(slug, version);
       if (registration.format !== 'modular' || !registration.download) throw new NotFoundException('Il pacchetto sorgente del tema built-in non è disponibile per il download');
       const root = path.join(__dirname, 'site-proposal-templates', ...registration.directory.split('/'));
@@ -150,7 +152,7 @@ export class TenantSiteProposalsThemeService {
         if (cleanup) { await runner.commitTransaction(); return { deleted: true, deletionMode: 'purged', fallbackDefault: null, affectedProposals: 0, storageCleanupStatus: cleanup.status }; }
         throw new NotFoundException('Tema non trovato');
       }
-      if (row.is_builtin || row.source_kind === 'builtin') throw new ConflictException('I temi built-in non possono essere eliminati');
+      if (row.source_kind === 'builtin') throw new ConflictException('I temi built-in non possono essere eliminati');
       const usage = (await runner.query(`SELECT count(*)::int count FROM "${this.schema()}".site_proposals WHERE template_slug=$1 AND template_version=$2`, [slug, version]))[0];
       const affectedProposals = Number(usage?.count || 0);
       const historical = (await runner.query(`SELECT count(*)::int count FROM "${this.schema()}".site_proposal_generations g JOIN "${this.schema()}".site_proposals p ON p.id=g.proposal_id WHERE g.template_slug=$1 AND g.template_version=$2`, [slug, version]))[0];
@@ -180,7 +182,7 @@ export class TenantSiteProposalsThemeService {
     if (!row) throw new NotFoundException('Tema non trovato');
     if (row.deleted_at) throw new ConflictException('Il tema è stato eliminato dalla Libreria');
     if (status === 'disabled' && row.default_version === version) throw new ConflictException('Il tema predefinito non può essere disattivato');
-    if (status === 'disabled' && row.is_builtin) throw new ConflictException('I temi built-in non possono essere disattivati');
+    if (status === 'disabled' && row.source_kind === 'builtin') throw new ConflictException('I temi built-in non possono essere disattivati');
     await this.ds().query(`UPDATE "${this.schema()}".site_proposal_theme_versions SET status=$1,activated_at=CASE WHEN $1='active' THEN now() ELSE activated_at END WHERE id=$2`, [status, row.id]);
     await this.activity(this.ds(), row.theme_id, row.id, status === 'active' ? 'THEME_ACTIVATED' : 'THEME_DISABLED', user, { version });
     this.templates.invalidate(this.schema(), slug, version);
@@ -189,6 +191,31 @@ export class TenantSiteProposalsThemeService {
 
   private async row(slug: string, version: string) {
     return (await this.ds().query(`SELECT v.*,t.id theme_id,t.slug,t.name,t.source_kind,t.default_version,t.categories,t.is_active theme_active FROM "${this.schema()}".site_proposal_themes t JOIN "${this.schema()}".site_proposal_theme_versions v ON v.theme_id=t.id WHERE t.slug=$1 AND v.version=$2 LIMIT 1`, [slug, version]))[0];
+  }
+  private publicTheme(row: any) {
+    const builtIn = row.source_kind === 'builtin';
+    const usageCount = Number(row.usages || 0);
+    const historicalUsageCount = Number(row.historical_usages || 0);
+    const retired = Boolean(row.deleted_at);
+    const deletionMode = builtIn ? null : usageCount > 0 || historicalUsageCount > 0 ? 'retire' : 'purge';
+    return {
+      ...row,
+      status: retired ? 'retired' : row.status,
+      is_builtin: builtIn,
+      builtIn,
+      sourceType: row.source_kind,
+      active: Boolean(row.is_active ?? row.theme_active) && row.status === 'active' && !retired,
+      isDefault: row.default_version === row.version,
+      usageCount,
+      historicalUsageCount,
+      canDelete: !builtIn,
+      deletionMode,
+      deleteReason: builtIn
+        ? 'I temi built-in sono protetti.'
+        : deletionMode === 'retire'
+          ? 'Il tema verrà ritirato; package e generazioni storiche saranno preservati.'
+          : 'Il tema verrà eliminato definitivamente con cleanup storage DB-first.',
+    };
   }
   private async assignFallbackDefault(runner: { query: (...args: any[]) => Promise<any> }, excludedVersionId: string) {
     const fallback = (await runner.query(`SELECT t.id,t.slug,v.version FROM "${this.schema()}".site_proposal_themes t JOIN "${this.schema()}".site_proposal_theme_versions v ON v.theme_id=t.id WHERE v.id<>$1 AND t.is_active=true AND v.status='active' AND v.deleted_at IS NULL AND v.runtime_adapter_status='ready' ORDER BY CASE WHEN t.slug='colsova' AND v.version='2.4.1' THEN 0 ELSE 1 END,t.updated_at DESC LIMIT 1`, [excludedVersionId]))[0];

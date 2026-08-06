@@ -53,10 +53,10 @@ export class TenantSiteProposalsPreparationQueueService implements OnModuleInit 
       await runner.query(`
         INSERT INTO "${schema}".site_proposal_preparation_runs
           (id,proposal_id,job_id,status,force,reason,created_by,actor_email,job_data,progress_percent,progress_stage,progress_message)
-        VALUES ($1,$2,$1,'pending',$3,$4,$5,$6,$7::jsonb,0,'waiting','In attesa')
-      `, [runId, proposalId, options.force, options.reason, data.actorUserId, data.actorEmail, JSON.stringify(data)]);
-      await runner.query(`UPDATE "${schema}".site_proposals SET preparation_status='queued',preparation_error=NULL,preparation_queued_at=now(),latest_preparation_job_id=$1,progress_percent=0,progress_stage='waiting',progress_message='In attesa',progress_updated_at=now(),preparation_heartbeat_at=now(),updated_at=now() WHERE id=$2`, [runId, proposalId]);
-      await runner.query(`INSERT INTO "${schema}".site_proposal_activity (proposal_id,action,metadata,actor_user_id,actor_email) VALUES ($1,$2,$3::jsonb,$4,$5)`, [proposalId, ACTIVITY.proposalPreparationQueued, JSON.stringify({ jobId: runId, reason: options.reason, dispatch: 'pending' }), data.actorUserId, data.actorEmail]);
+        VALUES ($1::uuid,$2::uuid,$3::text,'pending'::text,$4::boolean,$5::text,$6::uuid,$7::text,$8::jsonb,0,'waiting'::text,'In attesa'::text)
+      `, [runId, proposalId, runId, options.force, options.reason, data.actorUserId, data.actorEmail, JSON.stringify(data)]);
+      await runner.query(`UPDATE "${schema}".site_proposals SET preparation_status='queued',preparation_error=NULL,preparation_queued_at=now(),latest_preparation_job_id=$1::text,progress_percent=0,progress_stage='waiting',progress_message='In attesa',progress_updated_at=now(),preparation_heartbeat_at=now(),updated_at=now() WHERE id=$2::uuid`, [runId, proposalId]);
+      await runner.query(`INSERT INTO "${schema}".site_proposal_activity (proposal_id,action,metadata,actor_user_id,actor_email) VALUES ($1::uuid,$2::text,$3::jsonb,$4::uuid,$5::text)`, [proposalId, ACTIVITY.proposalPreparationQueued, JSON.stringify({ jobId: runId, reason: options.reason, dispatch: 'pending' }), data.actorUserId, data.actorEmail]);
       await runner.commitTransaction();
     } catch (error) {
       original = error;

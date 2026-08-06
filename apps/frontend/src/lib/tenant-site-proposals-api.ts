@@ -8,7 +8,7 @@ export type ProposalStatus = "draft" | "ready" | "generated" | "error" | "archiv
 export type ImportStatus = "preview" | "confirmed" | "generated" | "partial" | "failed";
 export type GenerationStatus = "running" | "completed" | "failed";
 export type PersonalizationStatus = "idle" | "running" | "completed" | "fallback" | "failed";
-export type PreparationStatus = "idle" | "queued" | "running" | "ready" | "fallback" | "failed";
+export type PreparationStatus = "idle" | "pending" | "queued" | "running" | "ready" | "fallback" | "failed";
 export type ThemeImageMode = "theme" | "website" | "hybrid" | "manual";
 export type PreparationProgress = { preparationRunId?: string | null; preparationStatus?: PreparationStatus; progressPercent?: number; progressStage?: string; progressMessage?: string; progressUpdatedAt?: string | null; heartbeatAt?: string | null; provider?: "gemini" | "local" | null; canPreview?: boolean; canGenerate?: boolean };
 
@@ -62,9 +62,10 @@ export type SiteProposalPersonalization = { id: string; status: PersonalizationS
 export type SiteProposalPersonalizationResult = { cached: boolean; status: "completed" | "fallback"; provider?: string; personalizationId?: string; proposalVersion?: number; warnings?: string[]; personalization?: SiteProposalPersonalization };
 export type ProposalTheme = {
   id: string; theme_id?: string; version_id?: string; slug: string; name: string; description?: string | null; source_kind: "builtin" | "uploaded"; is_active: boolean; default_version?: string | null; categories: string[];
-  version: string; schema_version: string; contract_version: string; content_profile: "proposal-basic-v2" | "colsova-conversion-v1" | "colsova-legacy-v1" | "beauty-editorial-v1" | "beauty-conversion-v1"; status: "draft" | "active" | "disabled"; is_builtin: boolean; is_immutable: boolean; deleted_at?: string | null; default_image_mode?: ThemeImageMode;
+  version: string; schema_version: string; contract_version: string; content_profile: "proposal-basic-v2" | "colsova-conversion-v1" | "colsova-legacy-v1" | "beauty-editorial-v1" | "beauty-conversion-v1"; status: "draft" | "active" | "disabled" | "retired"; is_builtin: boolean; is_immutable: boolean; deleted_at?: string | null; default_image_mode?: ThemeImageMode;
   template_sha256: string; template_size: number | string; zip_sha256?: string | null; zip_size?: number | string | null; validation_report?: JsonObject; usages?: number; version_created_at?: string;
   source_format?: "standalone" | "modular"; format_version?: string | null; compiled_sha256?: string | null; compiled_size?: number | string | null; runtime_adapter_status?: "ready" | "pending"; manifest?: JsonObject;
+  builtIn?: boolean; sourceType?: "builtin" | "uploaded"; active?: boolean; isDefault?: boolean; usageCount?: number; historicalUsageCount?: number; canDelete?: boolean; deletionMode?: "purge" | "retire" | null; deleteReason?: string;
 };
 export type ThemeUploadResult = { manifest: JsonObject; format?: "standalone" | "modular"; runtimeAdapterStatus?: "ready" | "pending"; hash: { template: string; zip: string; compiled?: string }; sizes: { template: number; zip: number; compiled?: number }; contentProfile: string; validationReport: JsonObject; warnings: string[]; status: "draft"; previewUrl: string };
 
@@ -108,7 +109,7 @@ export function listTemplates() { return apiFetch<SiteProposalTemplate[]>(endpoi
 export function getTemplate(slug: string, version?: string) { return apiFetch<SiteProposalTemplate>(endpoint(`/templates/${encodeURIComponent(slug)}${version ? `?version=${encodeURIComponent(version)}` : ""}`)); }
 export function previewImport(file: File, templateSlug: string, templateVersion?: string) { const form = new FormData(); form.append("file", file); form.append("templateSlug", templateSlug); if (templateVersion) form.append("templateVersion", templateVersion); return apiFetch<{ batch: SiteProposalImportBatch; rows: SiteProposalImportRow[] }>(endpoint("/imports/preview"), { method: "POST", body: form }); }
 export function getImportBatch(id: string) { return apiFetch<SiteProposalImportBatch>(endpoint(`/imports/${encodeURIComponent(id)}`)); }
-export function confirmImport(id: string) { return apiFetch<{ batch: SiteProposalImportBatch; proposals: SiteProposal[]; idempotent: boolean }>(endpoint(`/imports/${encodeURIComponent(id)}/confirm`), { method: "POST" }); }
+export function confirmImport(id: string) { return apiFetch<{ batch: SiteProposalImportBatch; proposals: SiteProposal[]; created: number; queued: number; pendingDispatch: number; failed: number; proposalIds: string[]; idempotent: boolean }>(endpoint(`/imports/${encodeURIComponent(id)}/confirm`), { method: "POST" }); }
 export function generateImportBatch(id: string) { return apiFetch<{ total: number; success: number; failed: number; results: SiteProposalGeneration[] }>(endpoint(`/imports/${encodeURIComponent(id)}/generate`), { method: "POST" }); }
 export function listSiteProposals(query: SiteProposalListQuery = {}) { return apiFetch<PaginatedResponse<SiteProposal>>(endpoint(queryString(query, LIST_KEYS))); }
 export function createSiteProposal(payload: { templateSlug?: string; templateVersion?: string; displayName: string; sourceData: Record<string, string> }) { return apiFetch<SiteProposal>(endpoint(""), { method: "POST", body: JSON.stringify(payload) }); }

@@ -36,6 +36,28 @@ describe('site proposal preparation queue', () => {
     expect(runner.commitTransaction.mock.invocationCallOrder[0]).toBeLessThan(queue.add.mock.invocationCallOrder[0]);
     expect(queue.add).toHaveBeenCalledWith('prepare-proposal', expect.objectContaining({ preparationRunId: result.jobId, tenantSchema: 'doflow', proposalId, actorUserId: actorId, actorEmail: 'user@example.it' }), expect.objectContaining({ attempts: 3, backoff: { type: 'exponential', delay: 5000 } }));
   });
+  it.each([
+    [false, { id: actorId, email: null }],
+    [true, { id: null, email: null }],
+  ])('uses unambiguous PostgreSQL types for UUID, text, boolean, JSONB and nullable actor fields (force=%s)', async (force, actor) => {
+    const { service, runner } = make();
+    await service.enqueue('doflow', proposalId, actor as any, { force, reason: 'regression_prepare', targetTemplateSlug: undefined, targetTemplateVersion: undefined });
+    const insert = (runner.query.mock.calls as any[][]).find(([sql]) => String(sql).includes('INSERT INTO "doflow".site_proposal_preparation_runs'));
+    expect(insert).toBeDefined();
+    const sql = String(insert![0]);
+    const params = insert![1] as unknown[];
+    expect(sql).toContain("$1::uuid,$2::uuid,$3::text,'pending'::text,$4::boolean,$5::text,$6::uuid,$7::text,$8::jsonb");
+    expect(sql).not.toContain('VALUES ($1,$2,$1');
+    expect(params).toHaveLength(8);
+    expect(params[0]).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(params[1]).toBe(proposalId);
+    expect(params[2]).toBe(params[0]);
+    expect(params[3]).toBe(force);
+    expect(params[4]).toBe('regression_prepare');
+    expect(params[5]).toBe(force ? null : actorId);
+    expect(params[6]).toBeNull();
+    expect(() => JSON.parse(String(params[7]))).not.toThrow();
+  });
   it('keeps a recoverable pending run when BullMQ is unavailable', async () => { const { service, queue, dataSource } = make(); queue.add.mockRejectedValue(new Error('redis unavailable')); await expect(service.enqueue('doflow', proposalId, {}, {})).resolves.toMatchObject({ queued: true, pendingDispatch: true }); expect(dataSource.query.mock.calls.some(([sql]) => String(sql).includes("status='pending'"))).toBe(true); });
   it('creates distinct UUID runs for terminal retries in the same instant', async () => { const first = make(); const second = make(); const a = await first.service.enqueue('doflow', proposalId, {}, { force: true }); const b = await second.service.enqueue('doflow', proposalId, {}, { force: true }); expect(a.jobId).not.toBe(b.jobId); });
   it('recovers a committed pending dispatch idempotently', async () => {

@@ -120,8 +120,8 @@ export class TenantSiteProposalsService {
     const schema = this.schema();
     const batch = await this.getImport(id);
     if (batch.status !== 'preview') {
-      const existing = await this.ds().query(`SELECT id, display_name, status FROM "${schema}".site_proposals WHERE import_batch_id = $1 ORDER BY source_row_index`, [id]);
-      return { batch, proposals: existing, idempotent: true };
+      const existing = await this.importProposals(id);
+      return { batch, proposals: existing, created: existing.length, proposalIds: existing.map((proposal: any) => proposal.id), ...this.importDispatchCounts(existing), idempotent: true };
     }
     if (Number(batch.valid_count || 0) === 0) {
       throw new BadRequestException(
@@ -163,14 +163,35 @@ export class TenantSiteProposalsService {
       try {
         const result = await this.preparationQueue.enqueue(schema, String(proposal.id), user, { force: false, generate: true, reason: 'csv_import', targetTemplateSlug: batch.template_slug, targetTemplateVersion: batch.template_version });
         dispatches.push({ proposalId: String(proposal.id), status: result.pendingDispatch ? 'pending_dispatch' : 'queued' });
-      } catch (error) { dispatches.push({ proposalId: String(proposal.id), status: 'failed', error: this.sanitizeError(error) }); }
+      } catch (error) {
+        const message = this.sanitizeError(error);
+        dispatches.push({ proposalId: String(proposal.id), status: 'failed', error: message });
+        await this.ds().query(`UPDATE "${schema}".site_proposals SET preparation_status='idle',preparation_error=$1::text,progress_stage='dispatch-failed',progress_message='Accodamento da riprovare',progress_updated_at=now(),updated_at=now() WHERE id=$2::uuid`, [message, proposal.id]);
+      }
     }
-    const preparedProposals = proposals.map((proposal) => {
-      const dispatch = dispatches.find((item) => item.proposalId === String(proposal.id));
-      const active = dispatch?.status === 'queued' || dispatch?.status === 'pending_dispatch';
-      return { ...proposal, preparation_status: active ? 'queued' : dispatch?.status === 'failed' ? 'failed' : proposal.preparation_status, ...this.progress({ ...proposal, preparation_status: active ? 'queued' : dispatch?.status === 'failed' ? 'failed' : proposal.preparation_status, latest_preparation_job_id: null, progress_percent: active ? 5 : 0, progress_stage: active ? 'queueing' : dispatch?.status === 'failed' ? 'failed' : 'waiting', progress_message: active ? 'Accodamento completato' : dispatch?.error || 'In attesa' }, false, false) };
-    });
-    return { batch: await this.getImport(id), proposals: preparedProposals, queued: dispatches.filter((item) => item.status === 'queued').length, pendingDispatch: dispatches.filter((item) => item.status === 'pending_dispatch').length, failed: dispatches.filter((item) => item.status === 'failed').length, dispatches, idempotent: false };
+    const preparedProposals = await this.importProposals(id);
+    return { batch: await this.getImport(id), proposals: preparedProposals, created: proposals.length, proposalIds: proposals.map((proposal) => proposal.id), queued: dispatches.filter((item) => item.status === 'queued').length, pendingDispatch: dispatches.filter((item) => item.status === 'pending_dispatch').length, failed: dispatches.filter((item) => item.status === 'failed').length, dispatches, idempotent: false };
+  }
+
+  private async importProposals(id: string) {
+    const rows = await this.ds().query(`
+      SELECT p.*,latest.status preparation_run_status
+      FROM "${this.schema()}".site_proposals p
+      LEFT JOIN LATERAL (
+        SELECT status FROM "${this.schema()}".site_proposal_preparation_runs r
+        WHERE r.proposal_id=p.id ORDER BY r.created_at DESC LIMIT 1
+      ) latest ON true
+      WHERE p.import_batch_id=$1::uuid
+      ORDER BY p.source_row_index
+    `, [id]);
+    return rows.map((item: any) => ({ ...item, ...this.progress(item, false, false) }));
+  }
+
+  private importDispatchCounts(proposals: any[]) {
+    const pendingDispatch = proposals.filter((item) => item.preparation_status === 'queued' && item.preparation_run_status === 'pending').length;
+    const queued = proposals.filter((item) => item.preparation_status === 'queued').length - pendingDispatch;
+    const failed = proposals.filter((item) => item.preparation_status === 'failed').length;
+    return { queued, pendingDispatch, failed };
   }
 
   async generateImport(id: string) {
@@ -484,7 +505,7 @@ export class TenantSiteProposalsService {
     }
     const proposal = await this.one(`SELECT * FROM "${this.schema()}".site_proposals WHERE id=$1 AND deleted_at IS NULL`, [id]);
     if (!proposal) throw new NotFoundException('Proposta non trovata');
-    if (['queued','running'].includes(String(proposal.preparation_status))) return { status: 'preparing' as const, ...this.progress(proposal, false, false), retryAfterSeconds: 2 };
+    if (['pending','queued','running'].includes(String(proposal.preparation_status))) return { status: 'preparing' as const, ...this.progress(proposal, false, false), retryAfterSeconds: 2 };
     if (proposal.preparation_status === 'failed') throw new ConflictException(this.sanitizeError(proposal.preparation_error || 'Preparazione non riuscita.'));
     throw new NotFoundException('Generazione non trovata');
   }

@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { TenantSiteProposalsService } from './tenant-site-proposals.service';
+import * as deterministic from './tenant-site-proposals-deterministic';
 
 const uuid = '550e8400-e29b-41d4-a716-446655440000';
 
@@ -104,6 +105,49 @@ describe('TenantSiteProposalsService', () => {
     expect(result.proposals).toHaveLength(1);
   });
 
+  it('confirms four valid rows and automatically creates four real queued preparation runs', async () => {
+    const ids = Array.from({ length: 4 }, (_, index) => `750e8400-e29b-41d4-a716-${String(index + 1).padStart(12, '0')}`);
+    const rows = ids.map((_, index) => ({ rowIndex: index + 1, valid: true, errors: [], warnings: [], canonical: { businessName: `Impresa ${index + 1}`, city: 'Roma', services: ['Servizio'] }, sourceRowHash: `hash-${index}`, fingerprint: `fingerprint-${index}`, siteConfig: { template: { slug: 'colsova', templateVersion: '2.4.1' } }, displayName: `Impresa ${index + 1}`, sourceRow: {} }));
+    const batch = { id: uuid, status: 'preview', valid_count: 4, rows, template_slug: 'colsova', template_version: '2.4.1' };
+    const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    jest.spyOn(service, 'getImport').mockResolvedValueOnce(batch as any).mockResolvedValueOnce({ ...batch, status: 'confirmed' } as any);
+    (service as any).defaultImageMode = jest.fn().mockResolvedValue('hybrid');
+    (service as any).matchCompany = jest.fn().mockResolvedValue({ companyId: null });
+    (service as any).createVersion = jest.fn();
+    (service as any).activity = jest.fn();
+    (service as any).one = jest.fn(async (sql: string, params: any[]) => sql.includes('INSERT INTO') ? { id: ids[Number(params[1]) - 1], source_row_index: params[1], display_name: params[6], preparation_status: 'idle' } : undefined);
+    const built = jest.spyOn(deterministic, 'buildDeterministicProposal').mockReturnValue({ config: { content: {} }, analysis: {}, email: { subject: 'Oggetto', body: 'Corpo [LINK_DEMO]' } } as any);
+    const enqueue = jest.fn().mockResolvedValue({ queued: true, pendingDispatch: false });
+    (service as any).preparationQueue = { enqueue };
+    queryMock.mockImplementation(async (sql: string) => sql.includes('LEFT JOIN LATERAL') ? ids.map((id, index) => ({ id, display_name: `Impresa ${index + 1}`, source_row_index: index + 1, preparation_status: 'queued', preparation_run_status: 'dispatched', progress_percent: 0, progress_stage: 'waiting', progress_message: 'In attesa' })) : []);
+    try {
+      await expect(service.confirmImport(uuid)).resolves.toMatchObject({ created: 4, queued: 4, pendingDispatch: 0, failed: 0, proposalIds: ids });
+      expect(enqueue).toHaveBeenCalledTimes(4);
+    } finally { built.mockRestore(); }
+  });
+
+  it('isolates one confirm dispatch error and still queues all following valid rows', async () => {
+    const ids = Array.from({ length: 4 }, (_, index) => `760e8400-e29b-41d4-a716-${String(index + 1).padStart(12, '0')}`);
+    const rows = ids.map((_, index) => ({ rowIndex: index + 1, valid: true, errors: [], warnings: [], canonical: { businessName: `Impresa ${index + 1}` }, sourceRowHash: `hash-${index}`, fingerprint: `fingerprint-${index}`, siteConfig: { template: { slug: 'colsova', templateVersion: '2.4.1' } }, displayName: `Impresa ${index + 1}`, sourceRow: {} }));
+    const batch = { id: uuid, status: 'preview', valid_count: 4, rows, template_slug: 'colsova', template_version: '2.4.1' };
+    const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
+    jest.spyOn(service, 'getImport').mockResolvedValueOnce(batch as any).mockResolvedValueOnce({ ...batch, status: 'confirmed' } as any);
+    (service as any).defaultImageMode = jest.fn().mockResolvedValue('hybrid');
+    (service as any).matchCompany = jest.fn().mockResolvedValue({ companyId: null });
+    (service as any).createVersion = jest.fn();
+    (service as any).activity = jest.fn();
+    (service as any).one = jest.fn(async (sql: string, params: any[]) => sql.includes('INSERT INTO') ? { id: ids[Number(params[1]) - 1], source_row_index: params[1], display_name: params[6], preparation_status: 'idle' } : undefined);
+    const built = jest.spyOn(deterministic, 'buildDeterministicProposal').mockReturnValue({ config: { content: {} }, analysis: {}, email: { subject: 'Oggetto', body: 'Corpo [LINK_DEMO]' } } as any);
+    const enqueue = jest.fn().mockResolvedValueOnce({ queued: true }).mockRejectedValueOnce(new Error('dispatch failed')).mockResolvedValue({ queued: true });
+    (service as any).preparationQueue = { enqueue };
+    queryMock.mockImplementation(async (sql: string) => sql.includes('LEFT JOIN LATERAL') ? ids.map((id, index) => ({ id, preparation_status: index === 1 ? 'idle' : 'queued', preparation_run_status: index === 1 ? null : 'dispatched', progress_percent: 0, progress_stage: index === 1 ? 'dispatch-failed' : 'waiting' })) : []);
+    try {
+      await expect(service.confirmImport(uuid)).resolves.toMatchObject({ created: 4, queued: 3, failed: 1, proposalIds: ids });
+      expect(enqueue).toHaveBeenCalledTimes(4);
+      expect(queryMock.mock.calls.some(([sql]) => String(sql).includes("progress_stage='dispatch-failed'"))).toBe(true);
+    } finally { built.mockRestore(); }
+  });
+
   it('rejects a preview import with no valid rows before creating any proposal data', async () => {
     const { service, queryMock } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
     queryMock.mockResolvedValueOnce([{ id: uuid, status: 'preview', valid_count: 0, rows: [] }]);
@@ -180,7 +224,7 @@ describe('TenantSiteProposalsService', () => {
     expect(generate).not.toHaveBeenCalled();
   });
 
-  it.each(['queued', 'running'])('returns preparing preview state instead of transient 404 for %s', async (preparationStatus) => {
+  it.each(['pending', 'queued', 'running'])('returns preparing preview state instead of transient 404 for %s', async (preparationStatus) => {
     const { service } = makeService({ user: { id: uuid, role: 'manager', tenantId: 'doflow' } });
     (service as any).one = jest.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce({ id: uuid, preparation_status: preparationStatus, progress_percent: 60, progress_stage: 'images', progress_message: 'Selezione immagini' });
     await expect(service.previewState(uuid)).resolves.toMatchObject({ status: 'preparing', progressPercent: 60, progressStage: 'images', retryAfterSeconds: 2 });

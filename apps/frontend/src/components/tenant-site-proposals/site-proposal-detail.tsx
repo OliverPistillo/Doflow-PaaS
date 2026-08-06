@@ -29,10 +29,10 @@ const tabs = ["dati", "sito", "contatti", "email", "file", "attivita"] as const;
 type Tab = typeof tabs[number];
 const makeDraft = (detail: DetailResponse): Draft => { const p = detail.proposal; return { displayName: p.display_name, siteConfig: copyJson(p.site_config as SiteConfig), commercialAnalysis: copyJson(p.commercial_analysis || {}), emailSubject: p.email_subject || "", emailBody: p.email_body || "", companyId: p.company_id, contactId: p.contact_id, leadId: p.lead_id, opportunityId: p.opportunity_id }; };
 
-const preparationLabels: Record<PreparationStatus, string> = { idle: "Preparazione incompleta", queued: "In coda", running: "Preparazione in corso", ready: "Pronta con AI", fallback: "Pronta localmente", failed: "Preparazione fallita" };
+const preparationLabels: Record<PreparationStatus, string> = { idle: "Preparazione incompleta", pending: "In attesa di accodamento", queued: "In coda", running: "Preparazione in corso", ready: "Pronta con AI", fallback: "Pronta localmente", failed: "Preparazione fallita" };
 function PreparationBadge({ status, emailValid }: { status?: PreparationStatus | null; emailValid: boolean }) {
   const value: PreparationStatus = emailValid ? (status || "idle") : "idle";
-  const tone = value === "ready" ? "bg-emerald-100 text-emerald-700" : value === "fallback" ? "bg-indigo-100 text-indigo-700" : value === "failed" ? "bg-rose-100 text-rose-700" : value === "queued" || value === "running" ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700";
+  const tone = value === "ready" ? "bg-emerald-100 text-emerald-700" : value === "fallback" ? "bg-indigo-100 text-indigo-700" : value === "failed" ? "bg-rose-100 text-rose-700" : value === "pending" || value === "queued" || value === "running" ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700";
   return <Badge className={tone}>{value === "running" ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}{preparationLabels[value]}</Badge>;
 }
 

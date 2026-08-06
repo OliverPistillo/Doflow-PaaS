@@ -109,8 +109,27 @@ describe('proposal theme storage hardening', () => {
     expect(runner.query.mock.calls.some(([sql]: [string]) => sql.includes("status='disabled',deleted_at=now()"))).toBe(true); expect(cleanup.record).not.toHaveBeenCalled(); expect(runner.commitTransaction).toHaveBeenCalled();
   });
 
+  it('classifies aurea-custom from its uploaded backend registration and exposes deletion even when active and default', async () => {
+    const ds: any = { query: jest.fn().mockResolvedValue([{ slug: 'aurea-custom', version: '2.0.0', source_kind: 'uploaded', is_builtin: true, is_active: true, status: 'active', default_version: '2.0.0', content_profile: 'beauty-editorial-v1', usages: 0, historical_usages: 0 }]) };
+    const service = new TenantSiteProposalsThemeService(ds, {} as any, {} as any, {} as any, {} as any, { user: { id: cleanupId, role: 'owner', tenantId: 'doflow' } });
+    (service as any).ensure = jest.fn();
+    await expect(service.list('all')).resolves.toEqual([expect.objectContaining({ slug: 'aurea-custom', builtIn: false, is_builtin: false, sourceType: 'uploaded', active: true, isDefault: true, canDelete: true, deletionMode: 'purge' })]);
+  });
+
+  it('allows an owner to retire an uploaded theme even if a stale version flag says built-in', async () => {
+    const runner: any = { isTransactionActive: false, connect: jest.fn(), startTransaction: jest.fn(async () => { runner.isTransactionActive = true; }), commitTransaction: jest.fn(async () => { runner.isTransactionActive = false; }), rollbackTransaction: jest.fn(), release: jest.fn().mockResolvedValue(undefined), query: jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT v.*')) return [{ id: 'version', theme_id: 'theme', slug: 'aurea-custom', version: '2.0.0', source_kind: 'uploaded', is_builtin: true, status: 'active', default_version: null }];
+      if (sql.includes('count(*)::int count FROM "doflow".site_proposals')) return [{ count: 1 }];
+      if (sql.includes('site_proposal_generations g')) return [{ count: 0 }];
+      return [];
+    }) };
+    const service = new TenantSiteProposalsThemeService({ createQueryRunner: () => runner } as any, {} as any, { proposalThemePrefix: jest.fn() } as any, { invalidate: jest.fn() } as any, { record: jest.fn(), process: jest.fn() } as any, { user: { id: cleanupId, role: 'owner', tenantId: 'doflow' } });
+    (service as any).ensure = jest.fn();
+    await expect(service.delete('aurea-custom','2.0.0')).resolves.toMatchObject({ deletionMode: 'retired', affectedProposals: 1 });
+  });
+
   it('rejects physical deletion of built-in themes', async () => {
-    const runner: any = { isTransactionActive: false, connect: jest.fn(), startTransaction: jest.fn(async () => { runner.isTransactionActive = true; }), commitTransaction: jest.fn(), rollbackTransaction: jest.fn(async () => { runner.isTransactionActive = false; }), release: jest.fn().mockResolvedValue(undefined), query: jest.fn(async (sql: string) => sql.includes('SELECT v.*') ? [{ id: 'version', theme_id: 'theme', source_kind: 'builtin', is_builtin: true }] : []) };
+    const runner: any = { isTransactionActive: false, connect: jest.fn(), startTransaction: jest.fn(async () => { runner.isTransactionActive = true; }), commitTransaction: jest.fn(), rollbackTransaction: jest.fn(async () => { runner.isTransactionActive = false; }), release: jest.fn().mockResolvedValue(undefined), query: jest.fn(async (sql: string) => sql.includes('SELECT v.*') ? [{ id: 'version', theme_id: 'theme', source_kind: 'builtin', is_builtin: false }] : []) };
     const service = new TenantSiteProposalsThemeService({ createQueryRunner: () => runner } as any, {} as any, { proposalThemePrefix: jest.fn() } as any, { invalidate: jest.fn() } as any, {} as any, { user: { id: cleanupId, role: 'admin', tenantId: 'doflow' } }); (service as any).ensure = jest.fn();
     await expect(service.delete('colsova','2.4.1')).rejects.toBeInstanceOf(ConflictException); expect(runner.commitTransaction).not.toHaveBeenCalled();
   });
