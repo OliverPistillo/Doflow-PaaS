@@ -2,6 +2,8 @@ import { BadRequestException, ForbiddenException, Injectable, Inject, NotFoundEx
 import { REQUEST } from '@nestjs/core';
 import { DataSource } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
+import { ensureLeadIntakeSubmissionsTable } from '../public-lead-intake/public-lead-intake-schema';
+import { isPublicLeadIntakeTenantEnabled } from '../public-lead-intake/public-lead-intake-tenants';
 import { hasRoleAtLeast } from '../roles';
 import { ensureTenantCrmCoreTables } from './tenant-crm-schema';
 
@@ -17,6 +19,7 @@ type ResourceConfig = {
   defaultSort: string;
   joins?: string;
   selectExtra?: string;
+  intakeLink?: 'lead_id' | 'opportunity_id';
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -66,6 +69,7 @@ const RESOURCES: Record<ResourceKey, ResourceConfig> = {
       LEFT JOIN "{schema}".contacts ct ON ct.id = t.contact_id
     `,
     selectExtra: `, c.name AS company_name, concat_ws(' ', ct.first_name, ct.last_name) AS contact_name`,
+    intakeLink: 'lead_id',
   },
   opportunities: {
     table: 'opportunities',
@@ -85,7 +89,8 @@ const RESOURCES: Record<ResourceKey, ResourceConfig> = {
       LEFT JOIN "{schema}".contacts ct ON ct.id = t.contact_id
       LEFT JOIN "{schema}".leads l ON l.id = t.lead_id
     `,
-    selectExtra: `, c.name AS company_name, concat_ws(' ', ct.first_name, ct.last_name) AS contact_name, l.title AS lead_title, COALESCE(t.lead_source, l.source) AS lead_source, COALESCE(t.lead_interest, l.interest) AS lead_interest, COALESCE(t.lead_urgency, l.urgency) AS lead_urgency`,
+    selectExtra: `, c.name AS company_name, concat_ws(' ', ct.first_name, ct.last_name) AS contact_name, ct.email AS contact_email, ct.phone AS contact_phone, l.title AS lead_title, COALESCE(t.lead_source, l.source) AS lead_source, COALESCE(t.lead_interest, l.interest) AS lead_interest, COALESCE(t.lead_urgency, l.urgency) AS lead_urgency`,
+    intakeLink: 'opportunity_id',
   },
   activities: {
     table: 'commercial_activities',
@@ -158,6 +163,9 @@ export class TenantCrmService {
 
   private async ensureSchema(schema: string) {
     await ensureTenantCrmCoreTables(this.dataSource, schema);
+    if (isPublicLeadIntakeTenantEnabled(schema)) {
+      await ensureLeadIntakeSubmissionsTable(this.dataSource, schema);
+    }
   }
 
   private getConfig(resource: ResourceKey): ResourceConfig {
@@ -212,11 +220,44 @@ export class TenantCrmService {
   }
 
   private joins(config: ResourceConfig, schema: string): string {
-    return (config.joins || '').replace(/\{schema\}/g, schema);
+    const baseJoins = (config.joins || '').replace(/\{schema\}/g, schema);
+    if (!config.intakeLink || !isPublicLeadIntakeTenantEnabled(schema)) return baseJoins;
+
+    return `${baseJoins}
+      LEFT JOIN LATERAL (
+        SELECT
+          lis.submission_id,
+          lis.form_data,
+          lis.attribution,
+          lis.landing_url,
+          lis.source_origin,
+          lis.created_at
+        FROM "${schema}".lead_intake_submissions lis
+        WHERE lis.${config.intakeLink} = t.id
+        ORDER BY lis.created_at DESC
+        LIMIT 1
+      ) intake ON true`;
   }
 
-  private select(config: ResourceConfig): string {
-    return `t.*${config.selectExtra || ''}`;
+  private select(config: ResourceConfig, schema: string): string {
+    const baseSelect = `t.*${config.selectExtra || ''}`;
+    if (!config.intakeLink) return baseSelect;
+
+    const intakeSelect = isPublicLeadIntakeTenantEnabled(schema)
+      ? `intake.submission_id AS intake_submission_id,
+         intake.form_data AS intake_form_data,
+         intake.attribution AS intake_attribution,
+         intake.landing_url AS intake_landing_url,
+         intake.source_origin AS intake_source_origin,
+         intake.created_at AS intake_created_at`
+      : `NULL::uuid AS intake_submission_id,
+         NULL::jsonb AS intake_form_data,
+         NULL::jsonb AS intake_attribution,
+         NULL::text AS intake_landing_url,
+         NULL::text AS intake_source_origin,
+         NULL::timestamptz AS intake_created_at`;
+
+    return `${baseSelect}, ${intakeSelect}`;
   }
 
   private cleanBody(config: ResourceConfig, body: Record<string, any>, partial: boolean) {
@@ -273,7 +314,7 @@ export class TenantCrmService {
     );
 
     const rows = await this.dataSource.query(
-      `SELECT ${this.select(config)}
+      `SELECT ${this.select(config, schema)}
        FROM "${schema}".${config.table} t
        ${this.joins(config, schema)}
        WHERE ${where}
@@ -292,7 +333,7 @@ export class TenantCrmService {
     await this.ensureSchema(schema);
     const config = this.getConfig(resource);
     const rows = await this.dataSource.query(
-      `SELECT ${this.select(config)}
+      `SELECT ${this.select(config, schema)}
        FROM "${schema}".${config.table} t
        ${this.joins(config, schema)}
        WHERE t.id = $1 AND t.deleted_at IS NULL
@@ -387,7 +428,7 @@ export class TenantCrmService {
     await this.ensureSchema(schema);
     const { where, params } = this.buildWhere(RESOURCES.opportunities, query);
     const rows = await this.dataSource.query(
-      `SELECT ${this.select(RESOURCES.opportunities)}
+      `SELECT ${this.select(RESOURCES.opportunities, schema)}
        FROM "${schema}".opportunities t
        ${this.joins(RESOURCES.opportunities, schema)}
        WHERE ${where}

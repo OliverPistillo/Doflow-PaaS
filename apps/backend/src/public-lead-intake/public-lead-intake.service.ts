@@ -17,6 +17,7 @@ import { ensureTenantCrmCoreTables } from '../tenant/tenant-crm-schema';
 import { TenantNotificationsService } from '../tenant/tenant-notifications.service';
 import { PublicLeadIntakeDto } from './public-lead-intake.dto';
 import { ensureLeadIntakeSubmissionsTable } from './public-lead-intake-schema';
+import { isPublicLeadIntakeTenantEnabled } from './public-lead-intake-tenants';
 
 type TenantResolution = {
   id: string;
@@ -129,20 +130,12 @@ export class PublicLeadIntakeService {
     }
   }
 
-  private allowedTenants(): Set<string> {
-    const configured = String(process.env.PUBLIC_LEAD_INTAKE_TENANTS || '')
-      .split(',')
-      .map((item) => item.trim().toLowerCase())
-      .filter(Boolean);
-    return new Set(configured.length > 0 ? configured : ['doflow']);
-  }
-
   private async resolveTenant(tenantSlug: string): Promise<TenantResolution> {
     const slug = String(tenantSlug || '').trim().toLowerCase();
     if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(slug)) {
       throw new ForbiddenException('Tenant non autorizzato.');
     }
-    if (!this.allowedTenants().has(slug)) {
+    if (!isPublicLeadIntakeTenantEnabled(slug)) {
       throw new ForbiddenException('Tenant non autorizzato.');
     }
 
@@ -317,9 +310,9 @@ export class PublicLeadIntakeService {
       await runner.query(
         `INSERT INTO "${schema}".lead_intake_submissions (
            submission_id, company_id, contact_id, lead_id, opportunity_id, activity_id,
-           source_origin, landing_url, attribution, privacy_accepted_at, created_at
+           source_origin, landing_url, attribution, form_data, privacy_accepted_at, created_at
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, now(), now())`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, now(), now())`,
         [
           dto.submission_id,
           companyId,
@@ -330,6 +323,7 @@ export class PublicLeadIntakeService {
           origin,
           dto.landing_url,
           JSON.stringify(this.attribution(dto)),
+          JSON.stringify(this.formData(dto)),
         ],
       );
 
@@ -438,7 +432,20 @@ export class PublicLeadIntakeService {
       utm_campaign: dto.utm_campaign || null,
       utm_content: dto.utm_content || null,
       utm_term: dto.utm_term || null,
+      gclid: dto.gclid || null,
+      fbclid: dto.fbclid || null,
+      ttclid: dto.ttclid || null,
       completion_seconds: dto.completion_seconds,
+    };
+  }
+
+  private formData(dto: PublicLeadIntakeDto) {
+    return {
+      form_version: dto.form_version,
+      project_type: dto.project_type,
+      goals: dto.goals,
+      timeline: dto.timeline,
+      province: dto.province,
     };
   }
 

@@ -9,6 +9,7 @@ export function PipelineColumn({
   totalValue,
   showEconomic,
   onMove,
+  onOpenDetails,
   highlightedOpportunityId,
 }: {
   label: string;
@@ -17,6 +18,7 @@ export function PipelineColumn({
   totalValue: number;
   showEconomic: boolean;
   onMove: (id: string, stage: string) => void;
+  onOpenDetails: (item: CommercialOpportunity) => void;
   highlightedOpportunityId?: string | null;
 }) {
   return (
@@ -40,6 +42,7 @@ export function PipelineColumn({
             item={item}
             showEconomic={showEconomic}
             onMove={onMove}
+            onOpenDetails={onOpenDetails}
             highlighted={item.id === highlightedOpportunityId}
           />
         ))}

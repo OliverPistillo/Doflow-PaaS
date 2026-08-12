@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   CheckCircle2, ClipboardCheck, Edit3, Eye, FileCheck2, FileText, Loader2, Plus, RefreshCw,
   Search, Send, Trash2, XCircle, FolderKanban, Receipt,
@@ -27,10 +27,13 @@ import { CommercialPageHeader } from "@/components/tenant-commercial/commercial-
 import { QuotesKpis } from "@/components/tenant-commercial/quotes-kpis";
 import { QuotesFollowUpPanel } from "@/components/tenant-commercial/quotes-follow-up-panel";
 import { QuotesTable } from "@/components/tenant-commercial/quotes-table";
+import { briefingTypeForProject, intakeText, parseIntakeFormData } from "@/lib/public-lead-intake";
 
 type Row = Record<string, any>;
 type ListResponse<T = Row> = { items: T[]; total: number; limit: number; offset: number };
 type Option = { value: string; label: string };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const BRIEFING_STATUSES: Option[] = [
   { value: "draft", label: "Bozza" },
@@ -212,6 +215,7 @@ function useRelations(includeBriefings = false) {
     briefingTemplates: [],
     serviceTemplates: [],
   });
+  const [relationsLoaded, setRelationsLoaded] = useState(false);
 
   const load = async () => {
     const canLoadCrm = canView("crm");
@@ -231,6 +235,7 @@ function useRelations(includeBriefings = false) {
       briefingTemplates: briefingTemplates.items || [],
       serviceTemplates: serviceTemplates.items || [],
     });
+    setRelationsLoaded(true);
   };
 
   useEffect(() => {
@@ -238,7 +243,7 @@ function useRelations(includeBriefings = false) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { relations, reloadRelations: load };
+  return { relations, relationsLoaded, reloadRelations: load };
 }
 
 export function BriefingListPage({
@@ -451,7 +456,7 @@ export function BriefingListPage({
             <DialogDescription>{selected?.title}</DialogDescription>
           </DialogHeader>
           <div>
-            <Button variant="outline" onClick={() => { window.location.href = "/quotes/new"; }}>
+            <Button variant="outline" onClick={() => { if (selected?.id) window.location.href = `/quotes/new?briefing=${encodeURIComponent(selected.id)}`; }}>
               <Send className="mr-2 h-4 w-4" /> Crea preventivo
             </Button>
           </div>
@@ -527,10 +532,38 @@ export function BriefingListPage({
 
 export function BriefingCreatePage() {
   const router = useRouter();
-  const { relations } = useRelations();
+  const searchParams = useSearchParams();
+  const { relations, relationsLoaded } = useRelations();
+  const prefillAttempted = useRef(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<Record<string, any>>({ title: "", type: "website", status: "draft" });
+
+  useEffect(() => {
+    if (!relationsLoaded || prefillAttempted.current) return;
+    const opportunityId = searchParams.get("opportunity");
+    if (!opportunityId || !UUID_RE.test(opportunityId)) {
+      prefillAttempted.current = true;
+      return;
+    }
+    const opportunity = relations.opportunities.find((row) => row.id === opportunityId);
+    prefillAttempted.current = true;
+    if (!opportunity) return;
+
+    const intake = parseIntakeFormData(opportunity.intake_form_data);
+    const company = relations.companies.find((row) => row.id === opportunity.company_id);
+    const titleSubject = intakeText(company?.name) || intakeText(opportunity.company_name) || intakeText(opportunity.title) || "opportunità";
+    const objective = intake.goals.length ? intake.goals.join(", ") : intakeText(opportunity.lead_interest) || "";
+    setForm((current) => ({
+      ...current,
+      opportunity_id: opportunity.id,
+      company_id: opportunity.company_id || "",
+      contact_id: opportunity.contact_id || "",
+      title: `Briefing - ${titleSubject}`,
+      type: briefingTypeForProject(intake.projectType || intakeText(opportunity.service_type)),
+      objective,
+    }));
+  }, [relations, relationsLoaded, searchParams]);
 
   const save = async () => {
     setSaving(true);
@@ -1059,10 +1092,51 @@ function InfoBox({ label, value }: { label: string; value: string }) {
 
 export function QuoteCreatePage() {
   const router = useRouter();
-  const { relations } = useRelations(true);
+  const searchParams = useSearchParams();
+  const { relations, relationsLoaded } = useRelations(true);
+  const prefillAttempted = useRef(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<Record<string, any>>({ title: "", status: "draft", currency: "EUR" });
+
+  useEffect(() => {
+    if (!relationsLoaded || prefillAttempted.current) return;
+    const briefingId = searchParams.get("briefing");
+    const opportunityId = searchParams.get("opportunity");
+    const briefing = briefingId && UUID_RE.test(briefingId)
+      ? relations.briefings.find((row) => row.id === briefingId)
+      : null;
+    const opportunity = !briefing && opportunityId && UUID_RE.test(opportunityId)
+      ? relations.opportunities.find((row) => row.id === opportunityId)
+      : null;
+    prefillAttempted.current = true;
+
+    if (briefing) {
+      const company = relations.companies.find((row) => row.id === briefing.company_id);
+      const titleSubject = intakeText(company?.name) || intakeText(briefing.company_name) || intakeText(briefing.title) || "briefing";
+      setForm((current) => ({
+        ...current,
+        briefing_id: briefing.id,
+        opportunity_id: briefing.opportunity_id || "",
+        company_id: briefing.company_id || "",
+        contact_id: briefing.contact_id || "",
+        title: `Preventivo - ${titleSubject}`,
+      }));
+      return;
+    }
+
+    if (opportunity) {
+      const company = relations.companies.find((row) => row.id === opportunity.company_id);
+      const titleSubject = intakeText(company?.name) || intakeText(opportunity.company_name) || intakeText(opportunity.title) || "opportunità";
+      setForm((current) => ({
+        ...current,
+        opportunity_id: opportunity.id,
+        company_id: opportunity.company_id || "",
+        contact_id: opportunity.contact_id || "",
+        title: `Preventivo - ${titleSubject}`,
+      }));
+    }
+  }, [relations, relationsLoaded, searchParams]);
 
   const save = async () => {
     setSaving(true);

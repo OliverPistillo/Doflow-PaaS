@@ -23,9 +23,11 @@
   var reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   var projectTypes = ["Sito vetrina", "E-commerce", "Landing page", "Altro progetto"];
-  var goals = ["Ricevere più contatti", "Vendere online"];
+  var goals = ["Ricevere più contatti", "Vendere online", "Rafforzare il brand", "Lanciare un nuovo progetto"];
   var timelines = ["Il prima possibile", "Entro 1-2 mesi", "Tra 3 mesi o più", "Sto valutando"];
   var utmKeys = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
+  var clickIdKeys = ["gclid", "fbclid", "ttclid"];
+  var trackingMaxLengths = { utm_source: 120, utm_medium: 120, utm_campaign: 160, utm_content: 160, utm_term: 160, gclid: 512, fbclid: 512, ttclid: 512 };
 
   function field(name) {
     return form.querySelector('[name="' + name + '"]');
@@ -145,18 +147,18 @@
     }
   }
 
-  function utm() {
+  function tracking() {
     var params = new URLSearchParams(window.location.search);
-    return utmKeys.reduce(function (acc, key) {
+    return utmKeys.concat(clickIdKeys).reduce(function (acc, key) {
       var raw = params.get(key);
-      acc[key] = raw ? raw.slice(0, 160) : undefined;
+      acc[key] = raw ? raw.trim().slice(0, trackingMaxLengths[key]) : undefined;
       return acc;
     }, {});
   }
 
   function payload() {
     if (!submissionId) submissionId = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : fallbackUuid();
-    var attribution = utm();
+    var attribution = tracking();
     return {
       submission_id: submissionId,
       form_version: form.getAttribute("data-form-version") || "doflow-contact-v1",
@@ -177,6 +179,9 @@
       utm_campaign: attribution.utm_campaign,
       utm_content: attribution.utm_content,
       utm_term: attribution.utm_term,
+      gclid: attribution.gclid,
+      fbclid: attribution.fbclid,
+      ttclid: attribution.ttclid,
       completion_seconds: Math.max(1, Math.round((Date.now() - startedAt) / 1000))
     };
   }

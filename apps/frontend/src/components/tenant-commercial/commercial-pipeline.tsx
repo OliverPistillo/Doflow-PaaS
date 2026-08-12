@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Archive, Filter, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getDoFlowUser } from "@/lib/jwt";
-import { commercialApi, type CommercialPipeline } from "@/lib/tenant-commercial-api";
+import { commercialApi, type CommercialOpportunity, type CommercialPipeline } from "@/lib/tenant-commercial-api";
 import { CommercialPageHeader } from "./commercial-ui";
 import { groupPipeline, isToday } from "./commercial-utils";
 import { PipelineColumn } from "./pipeline-column";
 import { PipelineSummaryStrip } from "./pipeline-summary-strip";
+import { OpportunityDetailSheet } from "./opportunity-detail-sheet";
 
 function canSeeEconomicValues() {
   const role = String(getDoFlowUser()?.role || "").toLowerCase();
@@ -24,6 +25,8 @@ function normalizePipelineStage(value: string | null) {
     : "all";
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export function CommercialPipelinePage() {
   const searchParams = useSearchParams();
   const stageParam = searchParams.get("stage");
@@ -35,6 +38,8 @@ export function CommercialPipelinePage() {
   const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedOpportunity, setSelectedOpportunity] = useState<CommercialOpportunity | null>(null);
+  const autoOpenedOpportunityRef = useRef<string | null>(null);
   const showEconomic = canSeeEconomicValues();
 
   const load = async () => {
@@ -59,7 +64,7 @@ export function CommercialPipelinePage() {
   }, [stageParam]);
 
   const groups = useMemo(() => groupPipeline(pipeline), [pipeline]);
-  const allItems = (pipeline?.stages || []).flatMap((stage) => stage.items || []);
+  const allItems = useMemo(() => (pipeline?.stages || []).flatMap((stage) => stage.items || []), [pipeline]);
   const visibleGroups = groups.map((group) => ({
     ...group,
     items: group.items.filter((item) => {
@@ -75,6 +80,15 @@ export function CommercialPipelinePage() {
   const conversion = won + lost > 0 ? Math.round((won / (won + lost)) * 100) : 0;
   const followUps = openItems.filter((item) => isToday(item.next_action_at)).length;
   const totalValue = openItems.reduce((sum, item) => sum + Number(item.value_estimate || 0), 0);
+
+  useEffect(() => {
+    if (!highlightedOpportunityId || !UUID_RE.test(highlightedOpportunityId)) return;
+    if (autoOpenedOpportunityRef.current === highlightedOpportunityId) return;
+    const opportunity = allItems.find((item) => item.id === highlightedOpportunityId);
+    if (!opportunity) return;
+    autoOpenedOpportunityRef.current = highlightedOpportunityId;
+    setSelectedOpportunity(opportunity);
+  }, [allItems, highlightedOpportunityId]);
 
   const move = async (id: string, stage: string) => {
     try {
@@ -135,6 +149,7 @@ export function CommercialPipelinePage() {
                 totalValue={group.items.reduce((sum, item) => sum + Number(item.value_estimate || 0), 0)}
                 showEconomic={showEconomic}
                 onMove={move}
+                onOpenDetails={setSelectedOpportunity}
                 highlightedOpportunityId={highlightedOpportunityId}
               />
             ))}
@@ -164,6 +179,13 @@ export function CommercialPipelinePage() {
           ) : null}
         </div>
       ) : null}
+
+      <OpportunityDetailSheet
+        opportunity={selectedOpportunity}
+        open={Boolean(selectedOpportunity)}
+        onOpenChange={(open) => { if (!open) setSelectedOpportunity(null); }}
+        showEconomic={showEconomic}
+      />
     </main>
   );
 }

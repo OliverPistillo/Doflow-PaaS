@@ -63,6 +63,9 @@ export type CommercialOpportunity = {
   company_name?: string | null;
   contact_id?: string | null;
   contact_name?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  lead_id?: string | null;
   title: string;
   service_type?: string | null;
   lead_source?: string | null;
@@ -76,6 +79,12 @@ export type CommercialOpportunity = {
   next_action?: string | null;
   next_action_at?: string | null;
   urgency?: string | null;
+  intake_submission_id?: string | null;
+  intake_form_data?: Record<string, unknown> | null;
+  intake_attribution?: Record<string, unknown> | null;
+  intake_landing_url?: string | null;
+  intake_source_origin?: string | null;
+  intake_created_at?: string | null;
   updated_at?: string | null;
   created_at?: string | null;
 };

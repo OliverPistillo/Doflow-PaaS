@@ -103,3 +103,21 @@ export function isThisMonth(value?: string | null) {
   const today = new Date();
   return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth();
 }
+
+export function pipelineStageLabel(stage: string) {
+  const labels: Record<string, string> = {
+    new_lead: "Nuovo lead",
+    to_contact: "Da contattare",
+    contacted: "Contattato",
+    call_scheduled: "Call fissata",
+    briefing_sent: "Brief inviato",
+    briefing_received: "Brief ricevuto",
+    quote_preparation: "Preventivo in preparazione",
+    quote_sent: "Preventivo inviato",
+    follow_up: "Follow-up",
+    accepted: "Vinta",
+    lost: "Persa",
+    paused: "In pausa",
+  };
+  return labels[stage] || stage;
+}

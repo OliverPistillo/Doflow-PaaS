@@ -34,6 +34,9 @@ const validPayload = {
   utm_campaign: 'summer',
   utm_content: 'hero',
   utm_term: 'crm',
+  gclid: 'google-click-id',
+  fbclid: 'meta-click-id',
+  ttclid: 'tiktok-click-id',
   completion_seconds: 120,
 };
 
@@ -108,8 +111,42 @@ describe('PublicLeadIntakeDto', () => {
   });
 
   it.each([
+    'Ricevere più contatti',
+    'Vendere online',
+    'Rafforzare il brand',
+    'Lanciare un nuovo progetto',
+  ])('accetta singolarmente il goal "%s"', async (goal) => {
+    const errors = await validate(dto({ goals: [goal] }));
+    expect(errors).toHaveLength(0);
+  });
+
+  it('accetta e normalizza i click-id advertising', async () => {
+    const instance = dto({ gclid: ' google-id ', fbclid: ' meta-id ', ttclid: ' tiktok-id ' });
+    const errors = await validate(instance);
+    expect(errors).toHaveLength(0);
+    expect(instance).toEqual(expect.objectContaining({
+      gclid: 'google-id',
+      fbclid: 'meta-id',
+      ttclid: 'tiktok-id',
+    }));
+  });
+
+  it.each(['gclid', 'fbclid', 'ttclid'])('rifiuta oggetti e array per %s', async (field) => {
+    for (const value of [{ id: 'click-id' }, ['click-id']]) {
+      const errors = await validate(dto({ [field]: value }));
+      expect(errors.length).toBeGreaterThan(0);
+    }
+  });
+
+  it.each(['gclid', 'fbclid', 'ttclid'])('rifiuta %s oltre MaxLength', async (field) => {
+    const errors = await validate(dto({ [field]: 'x'.repeat(513) }));
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it.each([
     ['project type non valido', { project_type: 'App custom' }],
-    ['piu di due goals', { goals: ['Ricevere più contatti', 'Vendere online', 'Altro'] }],
+    ['piu di due goals', { goals: ['Ricevere più contatti', 'Vendere online', 'Rafforzare il brand'] }],
+    ['goal non presente nella whitelist', { goals: ['Altro'] }],
     ['timeline non valida', { timeline: 'Domani' }],
     ['email non valida', { email: 'not-an-email' }],
     ['phone non valido', { phone: 'abc' }],
@@ -297,6 +334,32 @@ describe('PublicLeadIntakeService CRM transaction', () => {
       expect.stringContaining('INSERT INTO "doflow".commercial_activities'),
       expect.stringContaining('INSERT INTO "doflow".lead_intake_submissions'),
     ]));
+
+    const intakeCall = runner.query.mock.calls.find(([sql]) => String(sql).includes('INSERT INTO "doflow".lead_intake_submissions'));
+    expect(intakeCall).toBeDefined();
+    const [intakeSql, intakeParams] = intakeCall!;
+    expect(intakeSql).toContain('attribution, form_data');
+    expect(intakeSql).toContain('$9::jsonb, $10::jsonb');
+
+    const attribution = JSON.parse(String(intakeParams?.[8]));
+    expect(attribution).toEqual(expect.objectContaining({
+      gclid: 'google-click-id',
+      fbclid: 'meta-click-id',
+      ttclid: 'tiktok-click-id',
+    }));
+
+    const formData = JSON.parse(String(intakeParams?.[9]));
+    expect(formData).toEqual({
+      form_version: 'doflow-contact-v1',
+      project_type: 'Sito vetrina',
+      goals: ['Ricevere più contatti'],
+      timeline: 'Sto valutando',
+      province: 'MI',
+    });
+    expect(formData).not.toHaveProperty('name');
+    expect(formData).not.toHaveProperty('email');
+    expect(formData).not.toHaveProperty('phone');
+    expect(formData).not.toHaveProperty('company');
   });
 
   it('supporta azienda assente senza creare company', async () => {

@@ -27,6 +27,8 @@ export const PUBLIC_LEAD_PROJECT_TYPES = [
 export const PUBLIC_LEAD_GOALS = [
   'Ricevere più contatti',
   'Vendere online',
+  'Rafforzare il brand',
+  'Lanciare un nuovo progetto',
 ] as const;
 export const PUBLIC_LEAD_TIMELINES = [
   'Il prima possibile',
@@ -145,6 +147,24 @@ export class PublicLeadIntakeDto {
   @IsString()
   @MaxLength(160, { message: 'UTM term troppo lungo.' })
   utm_term?: string;
+
+  @Transform(({ value }) => trimOptional(value))
+  @IsOptional()
+  @IsString()
+  @MaxLength(512, { message: 'Google click ID troppo lungo.' })
+  gclid?: string;
+
+  @Transform(({ value }) => trimOptional(value))
+  @IsOptional()
+  @IsString()
+  @MaxLength(512, { message: 'Meta click ID troppo lungo.' })
+  fbclid?: string;
+
+  @Transform(({ value }) => trimOptional(value))
+  @IsOptional()
+  @IsString()
+  @MaxLength(512, { message: 'TikTok click ID troppo lungo.' })
+  ttclid?: string;
 
   @Transform(({ value }) => Number(value))
   @IsInt({ message: 'Tempo compilazione non valido.' })

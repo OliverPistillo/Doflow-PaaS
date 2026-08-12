@@ -18,9 +18,15 @@ export async function ensureLeadIntakeSubmissionsTable(ds: DataSource, schema: s
       source_origin TEXT,
       landing_url TEXT,
       attribution JSONB DEFAULT '{}'::jsonb,
+      form_data JSONB NOT NULL DEFAULT '{}'::jsonb,
       privacy_accepted_at TIMESTAMPTZ NOT NULL,
       created_at TIMESTAMPTZ DEFAULT now()
     )
+  `);
+
+  await ds.query(`
+    ALTER TABLE "${s}".lead_intake_submissions
+    ADD COLUMN IF NOT EXISTS form_data JSONB NOT NULL DEFAULT '{}'::jsonb
   `);
 
   await ds.query(`CREATE UNIQUE INDEX IF NOT EXISTS "idx_${s}_lead_intake_submission_id" ON "${s}".lead_intake_submissions(submission_id)`);
