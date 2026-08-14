@@ -129,7 +129,7 @@ ARR per tenant medio (Pro)   = €99 × 12 = €1.188/anno
 - **Docker Compose** (Postgres + Redis + Backend + Frontend + Nginx + Certbot)
 - **PNPM Workspaces** monorepo (lockfile coerente, dedup automatico)
 - **TypeORM Migrations** (`pnpm migration:run/revert/generate`)
-- **Healthcheck** Docker (`/api/health`) + supervisor in dev
+- **Healthcheck** Docker (`/api/health/system`) + supervisor in dev
 - **Volumi persistenti** Docker per Postgres data
 - **TLS via Certbot** con auto-renewal (config in `infra/nginx/`)
 
@@ -368,7 +368,7 @@ docker compose up -d --build
 docker compose logs -f backend frontend
 
 # Healthcheck
-curl https://api.tuodominio.com/api/health
+curl https://api.tuodominio.com/api/health/system
 ```
 
 ### Avviare solo i servizi backend (per dev frontend)
