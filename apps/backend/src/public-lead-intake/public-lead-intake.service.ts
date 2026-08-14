@@ -14,6 +14,7 @@ import { RedisService } from '../redis/redis.service';
 import { ANONYMOUS_CLIENT_IP, normalizeIpAddress } from '../common/client-ip.utils';
 import { safeSchema } from '../common/schema.utils';
 import { ensureTenantCrmCoreTables } from '../tenant/tenant-crm-schema';
+import { isDoflowTenant } from '../tenant/commercial-stage-model';
 import { TenantNotificationsService } from '../tenant/tenant-notifications.service';
 import { PublicLeadIntakeDto } from './public-lead-intake.dto';
 import { ensureLeadIntakeSubmissionsTable } from './public-lead-intake-schema';
@@ -274,7 +275,7 @@ export class PublicLeadIntakeService {
            lead_interest, lead_urgency, stage, next_action, next_action_at,
            notes, created_by, updated_by, created_at, updated_at
          )
-         VALUES ($1, $2, $3, $4, $5, 'website_form', $6, $7, 'new_lead', $8, now(), $9, NULL, NULL, now(), now())
+         VALUES ($1, $2, $3, $4, $5, 'website_form', $6, $7, $8, $9, now(), $10, NULL, NULL, now(), now())
          RETURNING id`,
         [
           companyId,
@@ -284,6 +285,7 @@ export class PublicLeadIntakeService {
           dto.project_type,
           dto.goals.join(', '),
           dto.timeline,
+          isDoflowTenant(schema) ? 'new' : 'new_lead',
           'Contattare il lead dal sito',
           notes,
         ],

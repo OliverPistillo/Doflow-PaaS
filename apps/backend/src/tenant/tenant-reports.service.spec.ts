@@ -95,4 +95,51 @@ describe('Tenant reports KPI targets', () => {
 
     expect(summary.kpiTargetsConfigured).toBe(6);
   });
+
+  it('salesReport aggrega alias commerciali doflow senza mescolare quote accepted', async () => {
+    const service = new TenantReportsService(
+      { query: jest.fn().mockResolvedValue([]) } as any,
+      { user: { sub: '11111111-1111-4111-8111-111111111111', role: 'owner', tenantId: 'doflow' } },
+    );
+    jest.spyOn(service as any, 'doflowLeadCommercialStageCounts').mockResolvedValue({ new: 2, lost: 1 });
+    jest.spyOn(service as any, 'tableExists').mockResolvedValue(true);
+    const countRows = jest.spyOn(service as any, 'countRows') as jest.Mock;
+    countRows.mockImplementation(async (...args: unknown[]) => {
+      const table = String(args[1]);
+      const where = String(args[2]);
+      if (table === 'opportunities' && where.includes("= 'lost'")) return 1;
+      if (table === 'opportunities' && where.includes('= ANY') && where.includes('stage')) return where.includes('updated_at') ? 0 : 1;
+      if (table === 'quotes' && where.includes("= 'accepted'")) return 7;
+      if (table === 'quotes' && where.includes("= 'rejected'")) return 3;
+      return 0;
+    });
+    jest.spyOn(service as any, 'sumRows').mockResolvedValue(0);
+    (jest.spyOn(service as any, 'groupCount') as jest.Mock).mockImplementation(async (...args: unknown[]) => {
+      const table = String(args[1]);
+      const column = String(args[2]);
+      if (table === 'opportunities' && column === 'stage') {
+        return { new_lead: 2, to_contact: 1, briefing_sent: 3, accepted: 4 };
+      }
+      return {};
+    });
+    (jest.spyOn(service as any, 'groupSum') as jest.Mock).mockImplementation(async (...args: unknown[]) => (
+      String(args[1]) === 'opportunities' ? { quote_sent: 100, follow_up: 50 } : {}
+    ));
+    jest.spyOn(service as any, 'recentRows').mockResolvedValue([{ id: 'opportunity-1', stage: 'quote_sent' }]);
+
+    const result = await (service as any).salesReport(
+      'doflow',
+      { id: '11111111-1111-4111-8111-111111111111', role: 'owner' },
+      { dateFrom: '2026-08-01', dateTo: '2026-08-31', groupBy: 'month', comparePrevious: false },
+      {},
+    );
+
+    expect(result.openLeads).toBe(2);
+    expect(result.opportunitiesByStage).toEqual({ new: 3, qualified: 3, closed_won: 4 });
+    expect(result.pipelineValueByStage).toEqual({ quote: 150 });
+    expect(result.topOpportunities[0].stage).toBe('quote');
+    expect(result.acceptedQuotes).toBe(7);
+    const activeCall = countRows.mock.calls.find(([, table, where]) => table === 'opportunities' && String(where).includes('= ANY'));
+    expect((activeCall?.[3] as unknown[])?.[0]).toEqual(expect.arrayContaining(['new', 'new_lead', 'briefing_sent', 'appointment', 'quote']));
+  });
 });

@@ -10,15 +10,24 @@ import {
   PlanTier,
 } from '../feature-access/dashboard-widget-access';
 import { TenantEffectivePermissionsService, type TenantModuleKey } from './tenant-effective-permissions.service';
+import {
+  aliasesForCommercialStage,
+  COMMERCIAL_POSITIVE_STAGES,
+  isDoflowTenant,
+} from './commercial-stage-model';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const DASHBOARD_PIPELINE_STAGE_GROUPS = {
+const LEGACY_DASHBOARD_PIPELINE_STAGE_GROUPS = {
   new: ['new_lead', 'to_contact'],
   contacted: ['contacted', 'call_scheduled', 'briefing_sent', 'briefing_received'],
   quote: ['quote_preparation', 'quote_sent', 'follow_up'],
   won: ['accepted'],
 } as const;
+
+const DOFLOW_DASHBOARD_PIPELINE_STAGE_GROUPS = Object.fromEntries(
+  COMMERCIAL_POSITIVE_STAGES.map((stage) => [stage, aliasesForCommercialStage(stage) || [stage]]),
+) as Record<string, readonly string[]>;
 
 @Injectable()
 export class TenantDashboardService {
@@ -247,6 +256,32 @@ export class TenantDashboardService {
       `LOWER(COALESCE(${safeColumn}::text, '')) = ANY($1::text[])`,
       [values.map((s) => s.toLowerCase())],
     );
+  }
+
+  private async countDoflowOpenCommercialLeads(schema: string): Promise<number> {
+    const safe = safeSchema(schema, 'TenantDashboardService.countDoflowOpenCommercialLeads');
+    if (!(await this.tableExists(safe, 'leads'))) return 0;
+    const activeStages = COMMERCIAL_POSITIVE_STAGES
+      .filter((stage) => stage !== 'closed_won')
+      .flatMap((stage) => aliasesForCommercialStage(stage) || []);
+    if (!(await this.tableExists(safe, 'opportunities'))) {
+      return this.countByOptionalStatus(safe, 'leads', activeStages);
+    }
+    const rows = await this.dataSource.query(
+      `SELECT COUNT(*)::int AS count
+       FROM "${safe}".leads l
+       LEFT JOIN LATERAL (
+         SELECT o.stage
+         FROM "${safe}".opportunities o
+         WHERE o.lead_id = l.id AND o.deleted_at IS NULL
+         ORDER BY o.updated_at DESC, o.created_at DESC
+         LIMIT 1
+       ) commercial_opportunity ON true
+       WHERE l.deleted_at IS NULL
+         AND lower(coalesce(commercial_opportunity.stage, l.status, '')) = ANY($1::text[])`,
+      [activeStages],
+    );
+    return Number(rows[0]?.count || 0);
   }
 
   private documentVisibilityWhere(user: TenantDashboardAuthUser, alias = 'd'): string {
@@ -546,18 +581,18 @@ export class TenantDashboardService {
   private async buildPipelineStagesSummary(schema: string, includeEconomicValue: boolean): Promise<DashboardPipelineStagesSummary> {
     const safe = safeSchema(schema, 'TenantDashboardService.buildPipelineStagesSummary');
     const hiddenValue = includeEconomicValue ? 0 : null;
-    const empty = {
-      new: { count: 0, totalValue: hiddenValue },
-      contacted: { count: 0, totalValue: hiddenValue },
-      quote: { count: 0, totalValue: hiddenValue },
-      won: { count: 0, totalValue: hiddenValue },
-    };
+    const groups: Record<string, readonly string[]> = isDoflowTenant(safe)
+      ? DOFLOW_DASHBOARD_PIPELINE_STAGE_GROUPS
+      : LEGACY_DASHBOARD_PIPELINE_STAGE_GROUPS;
+    const empty = Object.fromEntries(
+      Object.keys(groups).map((key) => [key, { count: 0, totalValue: hiddenValue }]),
+    ) as DashboardPipelineStagesSummary;
     if (!(await this.tableExists(safe, 'opportunities'))) return empty;
 
     const hasValue = includeEconomicValue
       && (await this.columnExists(safe, 'opportunities', 'value_estimate'))
       && (await this.isNumericColumn(safe, 'opportunities', 'value_estimate'));
-    const stages = Object.values(DASHBOARD_PIPELINE_STAGE_GROUPS).flat();
+    const stages = Object.values(groups).flat();
     const rows = await this.dataSource.query(
       `SELECT
          stage,
@@ -574,10 +609,10 @@ export class TenantDashboardService {
       totalValue: hasValue ? Number(row.totalValue || 0) : null,
     }]));
 
-    return (Object.keys(DASHBOARD_PIPELINE_STAGE_GROUPS) as DashboardPipelineStageKey[]).reduce<DashboardPipelineStagesSummary>(
+    return Object.keys(groups).reduce<DashboardPipelineStagesSummary>(
       (acc, key) => {
-        acc[key] = DASHBOARD_PIPELINE_STAGE_GROUPS[key].reduce(
-          (sum, stage) => {
+        acc[key] = groups[key].reduce<DashboardPipelineStageSummary>(
+          (sum: DashboardPipelineStageSummary, stage: string) => {
             const item = byStage.get(stage) || { count: 0, totalValue: 0 };
             return {
               count: sum.count + item.count,
@@ -598,12 +633,17 @@ export class TenantDashboardService {
       : (await this.tableExists(schema, 'deals')) ? 'deals' : null;
     const hasQuotes = await this.tableExists(schema, 'quotes');
 
+    const doflowActiveStages = COMMERCIAL_POSITIVE_STAGES
+      .filter((stage) => stage !== 'closed_won')
+      .flatMap((stage) => aliasesForCommercialStage(stage) || []);
     const opportunitiesActive = opportunitiesTable
       ? opportunitiesTable === 'opportunities'
-        ? await this.countByOptionalColumn(schema, opportunitiesTable, 'stage', [
-            'new_lead', 'to_contact', 'contacted', 'call_scheduled', 'briefing_sent',
-            'briefing_received', 'quote_preparation', 'quote_sent', 'follow_up',
-          ])
+        ? await this.countByOptionalColumn(schema, opportunitiesTable, 'stage', isDoflowTenant(schema)
+          ? doflowActiveStages
+          : [
+              'new_lead', 'to_contact', 'contacted', 'call_scheduled', 'briefing_sent',
+              'briefing_received', 'quote_preparation', 'quote_sent', 'follow_up',
+            ])
         : await this.countByOptionalStatus(schema, opportunitiesTable, ['open', 'active', 'in_progress', 'qualified', 'proposal'])
       : 0;
 
@@ -614,13 +654,23 @@ export class TenantDashboardService {
         : opportunitiesTable && (await this.columnExists(schema, opportunitiesTable, 'amount')) ? 'amount' : null;
 
     return {
-      openLeads: await this.countByOptionalStatus(schema, 'leads', [
-        'new', 'to_contact', 'contacted', 'call_scheduled', 'briefing_sent',
-        'briefing_received', 'quote_preparation', 'quote_sent', 'follow_up', 'paused',
-      ]),
+      openLeads: isDoflowTenant(schema)
+        ? await this.countDoflowOpenCommercialLeads(schema)
+        : await this.countByOptionalStatus(schema, 'leads', [
+            'new', 'to_contact', 'contacted', 'call_scheduled', 'briefing_sent',
+            'briefing_received', 'quote_preparation', 'quote_sent', 'follow_up', 'paused',
+          ]),
       activeOpportunities: opportunitiesActive,
       pipelineValue: includeEconomicValue && opportunitiesTable && valueColumn
-        ? await this.sumRows(schema, opportunitiesTable, valueColumn)
+        ? await this.sumRows(
+            schema,
+            opportunitiesTable,
+            valueColumn,
+            isDoflowTenant(schema) && opportunitiesTable === 'opportunities'
+              ? `LOWER(COALESCE(stage::text, '')) = ANY($1::text[])`
+              : 'TRUE',
+            isDoflowTenant(schema) && opportunitiesTable === 'opportunities' ? [doflowActiveStages] : [],
+          )
         : 0,
       sentQuotes: await this.countByOptionalStatus(schema, 'quotes', ['sent', 'viewed', 'pending', 'open']),
       acceptedQuotes: await this.countByOptionalStatus(schema, 'quotes', ['accepted']),
@@ -639,7 +689,12 @@ export class TenantDashboardService {
       followUpsDue: await this.countDueFollowUps(schema),
       wonDeals: opportunitiesTable
         ? opportunitiesTable === 'opportunities'
-          ? await this.countByOptionalColumn(schema, opportunitiesTable, 'stage', ['accepted'])
+          ? await this.countByOptionalColumn(
+              schema,
+              opportunitiesTable,
+              'stage',
+              isDoflowTenant(schema) ? [...(aliasesForCommercialStage('closed_won') || [])] : ['accepted'],
+            )
           : await this.countByOptionalStatus(schema, opportunitiesTable, ['won'])
         : 0,
       lostDeals: opportunitiesTable
@@ -1841,14 +1896,12 @@ interface DashboardSourceFlags {
   [key: string]: boolean;
 }
 
-type DashboardPipelineStageKey = keyof typeof DASHBOARD_PIPELINE_STAGE_GROUPS;
-
 type DashboardPipelineStageSummary = {
   count: number;
   totalValue: number | null;
 };
 
-type DashboardPipelineStagesSummary = Record<DashboardPipelineStageKey, DashboardPipelineStageSummary>;
+type DashboardPipelineStagesSummary = Record<string, DashboardPipelineStageSummary>;
 
 interface DashboardSalesSummary {
   openLeads: number;

@@ -24,8 +24,10 @@ describe('TenantDashboardService pipelineStages', () => {
     expect(summary).toEqual({
       new: { count: 3, totalValue: 1500 },
       contacted: { count: 3, totalValue: 3000 },
+      qualified: { count: 0, totalValue: 0 },
+      appointment: { count: 0, totalValue: 0 },
       quote: { count: 4, totalValue: 4000 },
-      won: { count: 5, totalValue: 5000 },
+      closed_won: { count: 5, totalValue: 5000 },
     });
   });
 
@@ -49,15 +51,34 @@ describe('TenantDashboardService pipelineStages', () => {
     jest.spyOn(service as any, 'buildPipelineStagesSummary').mockResolvedValue({
       new: { count: 1, totalValue: 10 },
       contacted: { count: 2, totalValue: 20 },
-      quote: { count: 3, totalValue: 30 },
-      won: { count: 4, totalValue: 40 },
+      qualified: { count: 3, totalValue: 30 },
+      appointment: { count: 4, totalValue: 40 },
+      quote: { count: 5, totalValue: 50 },
+      closed_won: { count: 6, totalValue: 60 },
     });
+    jest.spyOn(service as any, 'countDoflowOpenCommercialLeads').mockResolvedValue(2);
 
     const summary = await (service as any).buildSalesSummary('doflow', true);
 
     expect(summary.openLeads).toBe(2);
     expect(summary.sentQuotes).toBe(2);
     expect(summary.acceptedQuotes).toBe(2);
-    expect(summary.pipelineStages.won).toEqual({ count: 4, totalValue: 40 });
+    expect(summary.pipelineStages.closed_won).toEqual({ count: 6, totalValue: 60 });
+  });
+
+  it('mantiene i quattro macro-gruppi legacy negli altri tenant', async () => {
+    const { service } = makeService([
+      { stage: 'new_lead', count: 1, totalValue: '10' },
+      { stage: 'accepted', count: 1, totalValue: '20' },
+    ]);
+
+    const summary = await (service as any).buildPipelineStagesSummary('tenantlegacy', true);
+
+    expect(summary).toEqual({
+      new: { count: 1, totalValue: 10 },
+      contacted: { count: 0, totalValue: 0 },
+      quote: { count: 0, totalValue: 0 },
+      won: { count: 1, totalValue: 20 },
+    });
   });
 });

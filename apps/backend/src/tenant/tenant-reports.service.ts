@@ -4,6 +4,13 @@ import { DataSource } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
 import { hasRoleAtLeast } from '../roles';
 import { ensureTenantReportsTables, seedTenantKpiTargets } from './tenant-reports-schema';
+import {
+  aggregateCommercialStageValues,
+  aliasesForCommercialStage,
+  COMMERCIAL_POSITIVE_STAGES,
+  isDoflowTenant,
+  normalizeCommercialStage,
+} from './commercial-stage-model';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ADMIN_ROLES = new Set(['owner', 'admin', 'superadmin', 'super_admin']);
@@ -239,6 +246,39 @@ export class TenantReportsService {
     return Object.fromEntries(rows.map((row: any) => [String(row.key), Number(row.total || 0)]));
   }
 
+  private async doflowLeadCommercialStageCounts(schema: string, user: AuthUser): Promise<Record<string, number>> {
+    const safe = safeSchema(schema, 'TenantReportsService.doflowLeadCommercialStageCounts');
+    if (!(await this.tableExists(safe, 'leads'))) return {};
+    if (!(await this.tableExists(safe, 'opportunities'))) {
+      return aggregateCommercialStageValues(await this.groupCount(
+        safe,
+        'leads',
+        'status',
+        this.isManager(user.role) ? 'TRUE' : 'assigned_to = $1',
+        this.isManager(user.role) ? [] : [this.userIdOrNull(user.id)],
+      ));
+    }
+    const params = this.isManager(user.role) ? [] : [this.userIdOrNull(user.id)];
+    const visibility = this.isManager(user.role) ? 'TRUE' : `l.assigned_to = $1`;
+    const rows = await this.dataSource.query(
+      `SELECT lower(coalesce(commercial_opportunity.stage, l.status, '')) AS key, COUNT(*)::int AS count
+       FROM "${safe}".leads l
+       LEFT JOIN LATERAL (
+         SELECT o.stage
+         FROM "${safe}".opportunities o
+         WHERE o.lead_id = l.id AND o.deleted_at IS NULL
+         ORDER BY o.updated_at DESC, o.created_at DESC
+         LIMIT 1
+       ) commercial_opportunity ON true
+       WHERE l.deleted_at IS NULL AND (${visibility})
+       GROUP BY lower(coalesce(commercial_opportunity.stage, l.status, ''))`,
+      params,
+    );
+    return aggregateCommercialStageValues(
+      Object.fromEntries(rows.map((row: any) => [String(row.key), Number(row.count || 0)])),
+    );
+  }
+
   private periodWhere(column: string, params: unknown[], period: Pick<Period, 'dateFrom' | 'dateTo'>, cast = 'date'): string {
     const safeColumn = this.safeIdentifier(column, 'colonna periodo');
     params.push(period.dateFrom, period.dateTo);
@@ -324,33 +364,81 @@ export class TenantReportsService {
     const leadSourceWhere = query.source ? `AND source = $${newLeadParams.length + 1}` : '';
     if (query.source) newLeadParams.push(String(query.source));
 
-    const openLeads = await this.countRows(schema, 'leads', `${leadVisible} AND LOWER(COALESCE(status, '')) <> ALL($${leadVisibleParams.length + 1}::text[])`, [...leadVisibleParams, ['won', 'lost', 'paused']]);
+    const doflowLeadCounts = isDoflowTenant(schema) ? await this.doflowLeadCommercialStageCounts(schema, user) : null;
+    const openLeads = doflowLeadCounts
+      ? COMMERCIAL_POSITIVE_STAGES.filter((stage) => stage !== 'closed_won').reduce((sum, stage) => sum + Number(doflowLeadCounts[stage] || 0), 0)
+      : await this.countRows(schema, 'leads', `${leadVisible} AND LOWER(COALESCE(status, '')) <> ALL($${leadVisibleParams.length + 1}::text[])`, [...leadVisibleParams, ['won', 'lost', 'paused']]);
     const newLeadsInPeriod = await this.countRows(schema, 'leads', `created_at::date BETWEEN $1::date AND $2::date AND (${newLeadScope}) ${leadSourceWhere}`, newLeadParams);
-    const leadCountByStatus = await this.groupCount(schema, 'leads', 'status', leadVisible, leadVisibleParams);
+    const leadCountByStatus = doflowLeadCounts || await this.groupCount(schema, 'leads', 'status', leadVisible, leadVisibleParams);
     const leadCountBySource = await this.groupCount(schema, 'leads', 'source', leadVisible, leadVisibleParams);
     sources.leads = await this.tableExists(schema, 'leads');
 
     const opportunityVisibleParams: unknown[] = [];
     const opportunityVisible = this.isManager(user.role) ? 'TRUE' : `assigned_to = $1`;
     if (!this.isManager(user.role)) opportunityVisibleParams.push(this.userIdOrNull(user.id));
-    const activeOpportunities = await this.countRows(schema, 'opportunities', `${opportunityVisible} AND LOWER(COALESCE(stage, '')) <> ALL($${opportunityVisibleParams.length + 1}::text[])`, [...opportunityVisibleParams, ['accepted', 'lost', 'paused']]);
+    const activeAliases = COMMERCIAL_POSITIVE_STAGES
+      .filter((stage) => stage !== 'closed_won')
+      .flatMap((stage) => aliasesForCommercialStage(stage) || []);
+    const closedWonAliases = [...(aliasesForCommercialStage('closed_won') || [])];
+    const doflowActiveWhere = `${opportunityVisible} AND LOWER(COALESCE(stage, '')) = ANY($${opportunityVisibleParams.length + 1}::text[])`;
+    const legacyActiveWhere = `${opportunityVisible} AND LOWER(COALESCE(stage, '')) <> ALL($${opportunityVisibleParams.length + 1}::text[])`;
+    const activeOpportunities = await this.countRows(
+      schema,
+      'opportunities',
+      isDoflowTenant(schema) ? doflowActiveWhere : legacyActiveWhere,
+      [...opportunityVisibleParams, isDoflowTenant(schema) ? activeAliases : ['accepted', 'lost', 'paused']],
+    );
     const pipelineValue = this.canSeeFinance(user.role) || this.isManager(user.role)
-      ? await this.sumRows(schema, 'opportunities', 'value_estimate', `${opportunityVisible} AND LOWER(COALESCE(stage, '')) <> ALL($${opportunityVisibleParams.length + 1}::text[])`, [...opportunityVisibleParams, ['accepted', 'lost', 'paused']])
+      ? await this.sumRows(
+          schema,
+          'opportunities',
+          'value_estimate',
+          isDoflowTenant(schema) ? doflowActiveWhere : legacyActiveWhere,
+          [...opportunityVisibleParams, isDoflowTenant(schema) ? activeAliases : ['accepted', 'lost', 'paused']],
+        )
       : 0;
-    const opportunitiesByStage = await this.groupCount(schema, 'opportunities', 'stage', opportunityVisible, opportunityVisibleParams);
-    const pipelineValueByStage = this.isManager(user.role)
+    const rawOpportunitiesByStage = await this.groupCount(schema, 'opportunities', 'stage', opportunityVisible, opportunityVisibleParams);
+    const opportunitiesByStage = isDoflowTenant(schema)
+      ? aggregateCommercialStageValues(rawOpportunitiesByStage)
+      : rawOpportunitiesByStage;
+    const rawPipelineValueByStage = this.isManager(user.role)
       ? await this.groupSum(schema, 'opportunities', 'stage', 'value_estimate', opportunityVisible, opportunityVisibleParams)
       : {};
-    const wonDeals = await this.countRows(schema, 'opportunities', `${opportunityVisible} AND LOWER(COALESCE(stage, '')) = 'accepted'`, opportunityVisibleParams);
+    const pipelineValueByStage = isDoflowTenant(schema)
+      ? aggregateCommercialStageValues(rawPipelineValueByStage)
+      : rawPipelineValueByStage;
+    const wonDeals = await this.countRows(
+      schema,
+      'opportunities',
+      isDoflowTenant(schema)
+        ? `${opportunityVisible} AND LOWER(COALESCE(stage, '')) = ANY($${opportunityVisibleParams.length + 1}::text[])`
+        : `${opportunityVisible} AND LOWER(COALESCE(stage, '')) = 'accepted'`,
+      isDoflowTenant(schema) ? [...opportunityVisibleParams, closedWonAliases] : opportunityVisibleParams,
+    );
     const lostDeals = await this.countRows(schema, 'opportunities', `${opportunityVisible} AND LOWER(COALESCE(stage, '')) = 'lost'`, opportunityVisibleParams);
-    const stagnantOpportunities = await this.recentRows(
+    const rawStagnantOpportunities = await this.recentRows(
       schema,
       'opportunities',
       ['id', 'title', 'stage', 'updated_at', 'value_estimate'],
-      `${opportunityVisible} AND updated_at < now() - interval '14 days' AND LOWER(COALESCE(stage, '')) <> ALL($${opportunityVisibleParams.length + 1}::text[])`,
-      [...opportunityVisibleParams, ['accepted', 'lost', 'paused']],
+      `${opportunityVisible} AND updated_at < now() - interval '14 days' AND ${isDoflowTenant(schema) ? `LOWER(COALESCE(stage, '')) = ANY($${opportunityVisibleParams.length + 1}::text[])` : `LOWER(COALESCE(stage, '')) <> ALL($${opportunityVisibleParams.length + 1}::text[])`}`,
+      [...opportunityVisibleParams, isDoflowTenant(schema) ? activeAliases : ['accepted', 'lost', 'paused']],
       10,
     );
+    const normalizeOpportunityRows = (rows: any[]) => isDoflowTenant(schema)
+      ? rows.map((row) => {
+          const normalized = normalizeCommercialStage(row.stage);
+          return normalized.mapped ? { ...row, stage: normalized.stage } : { ...row, commercial_stage_unmapped: true };
+        })
+      : rows;
+    const stagnantOpportunities = normalizeOpportunityRows(rawStagnantOpportunities);
+    const topOpportunities = normalizeOpportunityRows(await this.recentRows(
+      schema,
+      'opportunities',
+      ['id', 'title', 'stage', 'value_estimate', 'expected_close_date'],
+      isDoflowTenant(schema) ? doflowActiveWhere : legacyActiveWhere,
+      [...opportunityVisibleParams, isDoflowTenant(schema) ? activeAliases : ['accepted', 'lost', 'paused']],
+      10,
+    ));
     sources.opportunities = await this.tableExists(schema, 'opportunities');
 
     const sentQuotes = await this.countRows(schema, 'quotes', `LOWER(COALESCE(status, '')) = 'sent'`);
@@ -389,7 +477,10 @@ export class TenantReportsService {
       followUpsDue,
       wonDeals,
       lostDeals,
-      topOpportunities: await this.recentRows(schema, 'opportunities', ['id', 'title', 'stage', 'value_estimate', 'expected_close_date'], `${opportunityVisible} AND LOWER(COALESCE(stage, '')) <> ALL($${opportunityVisibleParams.length + 1}::text[])`, [...opportunityVisibleParams, ['accepted', 'lost', 'paused']], 10),
+      opportunityConversionRate: wonDeals + lostDeals > 0
+        ? Number(((wonDeals / (wonDeals + lostDeals)) * 100).toFixed(2))
+        : 0,
+      topOpportunities,
       stagnantOpportunities,
       commercialActivities: { completed: activitiesCompleted, open: activitiesOpen },
       sources,

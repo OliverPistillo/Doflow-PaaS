@@ -334,6 +334,8 @@ describe('PublicLeadIntakeService CRM transaction', () => {
       expect.stringContaining('INSERT INTO "doflow".commercial_activities'),
       expect.stringContaining('INSERT INTO "doflow".lead_intake_submissions'),
     ]));
+    const opportunityCall = runner.query.mock.calls.find(([sql]) => String(sql).includes('INSERT INTO "doflow".opportunities'));
+    expect(opportunityCall?.[1]?.[7]).toBe('new');
 
     const intakeCall = runner.query.mock.calls.find(([sql]) => String(sql).includes('INSERT INTO "doflow".lead_intake_submissions'));
     expect(intakeCall).toBeDefined();
@@ -360,6 +362,25 @@ describe('PublicLeadIntakeService CRM transaction', () => {
     expect(formData).not.toHaveProperty('email');
     expect(formData).not.toHaveProperty('phone');
     expect(formData).not.toHaveProperty('company');
+  });
+
+  it('mantiene new_lead per un tenant intake non doflow', async () => {
+    const runnerQuery = jest.fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'company-1' }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'contact-1' }])
+      .mockResolvedValueOnce([{ id: 'lead-1' }])
+      .mockResolvedValueOnce([{ id: 'opportunity-1' }])
+      .mockResolvedValueOnce([{ id: 'activity-1' }])
+      .mockResolvedValueOnce([]);
+    const { service, runner } = makeService({ runnerQuery });
+
+    await (service as any).createCrmRecords('tenantlegacy', dto(), 'https://example.test');
+
+    const opportunityCall = runner.query.mock.calls.find(([sql]) => String(sql).includes('INSERT INTO "tenantlegacy".opportunities'));
+    expect(opportunityCall?.[1]?.[7]).toBe('new_lead');
   });
 
   it('supporta azienda assente senza creare company', async () => {

@@ -3,6 +3,7 @@ import { REQUEST } from '@nestjs/core';
 import { DataSource, QueryRunner } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
 import { hasRoleAtLeast } from '../roles';
+import { isDoflowTenant, normalizeCommercialStage } from './commercial-stage-model';
 import { ensureTenantCrmCoreTables } from './tenant-crm-schema';
 import { ensureTenantBriefingQuoteTables } from './tenant-briefing-quotes-schema';
 
@@ -475,12 +476,31 @@ export class TenantQuotesService {
     );
     if (!rows[0]) throw new NotFoundException('Preventivo non trovato');
     if (rows[0].opportunity_id) {
-      await this.dataSource.query(
+      const nextStage = isDoflowTenant(schema) ? 'closed_won' : 'accepted';
+      let previousStageRaw: string | null = null;
+      if (isDoflowTenant(schema)) {
+        const previousRows = await this.dataSource.query(
+          `SELECT stage FROM "${schema}".opportunities WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+          [rows[0].opportunity_id],
+        );
+        previousStageRaw = previousRows[0]?.stage == null ? null : String(previousRows[0].stage);
+      }
+      const opportunityRows = await this.dataSource.query(
         `UPDATE "${schema}".opportunities
-         SET stage = 'accepted', updated_by = $1, updated_at = now()
-         WHERE id = $2 AND deleted_at IS NULL`,
-        [this.userIdOrNull(user.id), rows[0].opportunity_id],
+         SET stage = $1, updated_by = $2, updated_at = now()
+         WHERE id = $3 AND deleted_at IS NULL
+         RETURNING id`,
+        [nextStage, this.userIdOrNull(user.id), rows[0].opportunity_id],
       );
+      if (isDoflowTenant(schema) && opportunityRows[0]) {
+        const previous = normalizeCommercialStage(previousStageRaw);
+        const metadata: Record<string, unknown> = {
+          previous_stage: previous.mapped ? previous.stage : previous.raw || null,
+          new_stage: nextStage,
+        };
+        if (!previous.mapped || previous.isLegacy) metadata.previous_stage_raw = previous.raw || null;
+        await this.audit(schema, user, 'crm_opportunity_stage_changed', rows[0].opportunity_id, metadata);
+      }
     }
     await this.audit(schema, user, 'quote_accepted', id, { opportunityId: rows[0].opportunity_id || null });
     return this.findOne('quotes', id);
