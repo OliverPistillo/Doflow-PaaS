@@ -7,7 +7,10 @@ import { calendarApi, type CalendarEvent } from "@/lib/tenant-calendar-api";
 import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
 import { reportsApi } from "@/lib/tenant-reports-api";
+import { commercialApi, type CommercialPipeline } from "@/lib/tenant-commercial-api";
+import { isInternalDoflowTenant } from "@/lib/tenant-url";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
+import { groupPipeline, pipelineItems, pipelineTotal } from "@/components/tenant-commercial/commercial-utils";
 import { DashboardDeadlines } from "./dashboard-deadlines";
 import { dashboardCurrency, dashboardDisplayName, dashboardGreeting } from "./dashboard-format";
 import { DashboardKpiCard } from "./dashboard-kpi-card";
@@ -69,15 +72,18 @@ export default function DashboardClient() {
   const [tasks, setTasks] = useState<DashboardTask[]>([]);
   const [deadlines, setDeadlines] = useState<CalendarEvent[]>([]);
   const [snapshots, setSnapshots] = useState<ReportSnapshot[]>([]);
+  const [commercialPipeline, setCommercialPipeline] = useState<CommercialPipeline | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const currentUser = getDoFlowUser();
+    const loadDoflowPipeline = isInternalDoflowTenant(currentUser?.tenantSlug || currentUser?.tenantId);
 
     try {
-      const [summaryResult, projectsResult, tasksResult, deadlinesResult, snapshotsResult] = await Promise.allSettled([
+      const [summaryResult, projectsResult, tasksResult, deadlinesResult, snapshotsResult, pipelineResult] = await Promise.allSettled([
         apiFetch<DashboardSummary>("/tenant/dashboard/summary"),
         canView("projects")
           ? apiFetch<ListResponse<DashboardProject>>("/tenant/projects?limit=4")
@@ -91,6 +97,7 @@ export default function DashboardClient() {
         canView("reports") && canView("finance")
           ? reportsApi.snapshots({ report_key: "executive", limit: 6 })
           : Promise.resolve({ items: [] }),
+        loadDoflowPipeline && canView("crm") ? commercialApi.pipeline() : Promise.resolve(null),
       ]);
 
       if (summaryResult.status === "rejected") throw summaryResult.reason;
@@ -99,6 +106,7 @@ export default function DashboardClient() {
       setTasks(tasksResult.status === "fulfilled" ? tasksResult.value.items || [] : []);
       setDeadlines(deadlinesResult.status === "fulfilled" ? deadlinesResult.value.items || [] : []);
       setSnapshots(snapshotsResult.status === "fulfilled" ? snapshotsResult.value.items || [] : []);
+      setCommercialPipeline(pipelineResult.status === "fulfilled" ? pipelineResult.value : null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Dashboard non disponibile");
       setSummary(null);
@@ -106,6 +114,7 @@ export default function DashboardClient() {
       setTasks([]);
       setDeadlines([]);
       setSnapshots([]);
+      setCommercialPipeline(null);
     } finally {
       setLoading(false);
     }
@@ -116,6 +125,17 @@ export default function DashboardClient() {
   }, [accessLoading, loadDashboard]);
 
   const jwtUser = getDoFlowUser();
+  const doflow = isInternalDoflowTenant(jwtUser?.tenantSlug || jwtUser?.tenantId);
+  const localPipelineGroups = useMemo(
+    () => doflow && commercialPipeline ? groupPipeline(commercialPipeline, true) : null,
+    [commercialPipeline, doflow],
+  );
+  const effectivePipelineStages = localPipelineGroups
+    ? Object.fromEntries(localPipelineGroups.map((group) => [group.id, { count: group.count, totalValue: group.totalValue }]))
+    : summary?.sales?.pipelineStages;
+  const effectivePipelineValue = doflow && commercialPipeline && summary?.user?.canViewFinance
+    ? pipelineTotal(pipelineItems(commercialPipeline, true), true)
+    : summary?.sales?.pipelineValue || 0;
   const email = summary?.user?.email || jwtUser?.email;
   const isExecutive = ["owner", "admin", "superadmin", "super_admin"].includes(
     String(summary?.user?.role || jwtUser?.role || "").toLowerCase(),
@@ -141,7 +161,7 @@ export default function DashboardClient() {
     ...(canView("crm")
       ? [{
           label: "Pipeline commerciale",
-          value: dashboardCurrency(summary?.sales?.pipelineValue || 0),
+          value: dashboardCurrency(effectivePipelineValue),
           icon: BriefcaseBusiness,
           tone: "violet" as const,
         }]
@@ -230,7 +250,7 @@ export default function DashboardClient() {
         {canView("crm") ? (
           <div className="xl:col-span-4">
             <DashboardPipeline
-              pipelineStages={summary?.sales?.pipelineStages}
+              pipelineStages={effectivePipelineStages}
               showEconomic={Boolean(summary?.user?.canViewFinance)}
             />
           </div>

@@ -6,10 +6,19 @@ import { Archive, Filter, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  canonicalCommercialStage,
+  commercialConversion,
+  COMMERCIAL_OUTCOME_STAGES,
+  isOpenCommercialStage,
+  normalizeCommercialStage,
+  normalizeCommercialStageQuery,
+} from "@/lib/commercial-stage-model";
 import { getDoFlowUser } from "@/lib/jwt";
 import { commercialApi, type CommercialOpportunity, type CommercialPipeline } from "@/lib/tenant-commercial-api";
+import { isInternalDoflowTenant } from "@/lib/tenant-url";
 import { CommercialPageHeader } from "./commercial-ui";
-import { groupPipeline, isToday } from "./commercial-utils";
+import { groupPipeline, isToday, pipelineItems } from "./commercial-utils";
 import { PipelineColumn } from "./pipeline-column";
 import { PipelineSummaryStrip } from "./pipeline-summary-strip";
 import { OpportunityDetailSheet } from "./opportunity-detail-sheet";
@@ -19,26 +28,23 @@ function canSeeEconomicValues() {
   return ["owner", "admin", "manager", "superadmin", "super_admin"].includes(role);
 }
 
-function normalizePipelineStage(value: string | null) {
-  return ["new", "contacted", "quote", "won"].includes(String(value || ""))
-    ? String(value)
-    : "all";
-}
-
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function CommercialPipelinePage() {
   const searchParams = useSearchParams();
+  const user = getDoFlowUser();
+  const doflow = isInternalDoflowTenant(user?.tenantSlug || user?.tenantId);
   const stageParam = searchParams.get("stage");
   const highlightedOpportunityId = searchParams.get("opportunity");
   const [pipeline, setPipeline] = useState<CommercialPipeline | null>(null);
   const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState(() => normalizePipelineStage(stageParam));
+  const [stageFilter, setStageFilter] = useState(() => normalizeCommercialStageQuery(stageParam, doflow));
   const [showFilters, setShowFilters] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedOpportunity, setSelectedOpportunity] = useState<CommercialOpportunity | null>(null);
+  const [movingOpportunityId, setMovingOpportunityId] = useState<string | null>(null);
   const autoOpenedOpportunityRef = useRef<string | null>(null);
   const showEconomic = canSeeEconomicValues();
 
@@ -60,11 +66,11 @@ export function CommercialPipelinePage() {
   }, []);
 
   useEffect(() => {
-    setStageFilter(normalizePipelineStage(stageParam));
-  }, [stageParam]);
+    setStageFilter(normalizeCommercialStageQuery(stageParam, doflow));
+  }, [doflow, stageParam]);
 
-  const groups = useMemo(() => groupPipeline(pipeline), [pipeline]);
-  const allItems = useMemo(() => (pipeline?.stages || []).flatMap((stage) => stage.items || []), [pipeline]);
+  const groups = useMemo(() => groupPipeline(pipeline, doflow), [doflow, pipeline]);
+  const allItems = useMemo(() => pipelineItems(pipeline, doflow), [doflow, pipeline]);
   const visibleGroups = groups.map((group) => ({
     ...group,
     items: group.items.filter((item) => {
@@ -73,11 +79,12 @@ export function CommercialPipelinePage() {
       return matchesSearch && (stageFilter === "all" || group.id === stageFilter);
     }),
   })).filter((group) => stageFilter === "all" || group.id === stageFilter);
-  const archived = allItems.filter((item) => ["lost", "paused"].includes(item.stage));
-  const openItems = allItems.filter((item) => !["lost", "paused"].includes(item.stage));
-  const won = allItems.filter((item) => item.stage === "accepted").length;
-  const lost = allItems.filter((item) => item.stage === "lost").length;
-  const conversion = won + lost > 0 ? Math.round((won / (won + lost)) * 100) : 0;
+  const archived = allItems.filter((item) => doflow
+    ? (COMMERCIAL_OUTCOME_STAGES as readonly string[]).includes(canonicalCommercialStage(item.stage) || "")
+    : ["lost", "paused"].includes(item.stage));
+  const openItems = allItems.filter((item) => isOpenCommercialStage(item.stage, doflow));
+  const unmappedItems = doflow ? allItems.filter((item) => !normalizeCommercialStage(item.stage).mapped) : [];
+  const conversion = commercialConversion(allItems, doflow);
   const followUps = openItems.filter((item) => isToday(item.next_action_at)).length;
   const totalValue = openItems.reduce((sum, item) => sum + Number(item.value_estimate || 0), 0);
 
@@ -91,11 +98,15 @@ export function CommercialPipelinePage() {
   }, [allItems, highlightedOpportunityId]);
 
   const move = async (id: string, stage: string) => {
+    if (movingOpportunityId) return;
+    setMovingOpportunityId(id);
     try {
       await commercialApi.moveOpportunity(id, stage);
       await load();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Spostamento opportunità non riuscito.");
+    } finally {
+      setMovingOpportunityId(null);
     }
   };
 
@@ -133,16 +144,31 @@ export function CommercialPipelinePage() {
 
       {error ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
 
+      {unmappedItems.length > 0 ? (
+        <section className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status" data-commercial-unmapped>
+          <p className="font-semibold">Da verificare · {unmappedItems.length}</p>
+          <p className="mt-1 text-xs text-amber-800">Queste trattative hanno una fase non riconosciuta e restano visibili fuori dal percorso positivo.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {unmappedItems.map((item) => (
+              <button key={item.id} type="button" className="rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium" data-visual-sensitive onClick={() => setSelectedOpportunity(item)}>
+                {item.company_name || item.title}
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <PipelineSummaryStrip totalValue={totalValue} deals={openItems.length} followUps={followUps} conversion={conversion} showEconomic={showEconomic} />
 
       {loading ? (
         <div className="flex min-h-80 items-center justify-center text-sm text-slate-500">Caricamento pipeline...</div>
       ) : (
-        <div className="overflow-x-auto pb-3">
-          <div className="flex min-w-max gap-4 xl:min-w-0">
+        <div className="overflow-x-auto pb-3" data-commercial-pipeline-scroll>
+          <div className="flex min-w-max gap-4 xl:min-w-0" data-commercial-pipeline>
             {visibleGroups.map((group) => (
               <PipelineColumn
                 key={group.id}
+                stageId={group.id}
                 label={group.label}
                 color={group.color}
                 items={group.items}
@@ -151,6 +177,8 @@ export function CommercialPipelinePage() {
                 onMove={move}
                 onOpenDetails={setSelectedOpportunity}
                 highlightedOpportunityId={highlightedOpportunityId}
+                doflow={doflow}
+                movingOpportunityId={movingOpportunityId}
               />
             ))}
           </div>
@@ -160,17 +188,19 @@ export function CommercialPipelinePage() {
       {archived.length > 0 ? (
         <div className="text-center">
           <button type="button" onClick={() => setShowArchived((value) => !value)} className="inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700">
-            <Archive className="h-4 w-4" /> {showArchived ? "Nascondi archiviate" : "Mostra archiviate"}
+            <Archive className="h-4 w-4" /> {showArchived
+              ? (doflow ? "Nascondi esiti" : "Nascondi archiviate")
+              : (doflow ? "Mostra esiti" : "Mostra archiviate")}
           </button>
           {showArchived ? (
-            <div className="mx-auto mt-4 max-w-3xl rounded-2xl border border-slate-200 bg-white p-4 text-left">
+            <div className="mx-auto mt-4 max-w-3xl rounded-2xl border border-slate-200 bg-white p-4 text-left" data-commercial-outcomes>
               <div className="divide-y divide-slate-100">
                 {archived.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between gap-4 py-3">
-                    <div><p className="text-sm font-medium text-slate-900">{item.company_name || item.title}</p><p className="text-xs text-slate-500">{item.stage === "lost" ? "Persa" : "In pausa"}</p></div>
-                    <Select value={item.stage} onValueChange={(stage) => move(item.id, stage)}>
+                  <div key={item.id} className="flex items-center justify-between gap-4 py-3" data-commercial-outcome data-visual-sensitive>
+                    <div><p className="text-sm font-medium text-slate-900">{item.company_name || item.title}</p><p className="text-xs text-slate-500">{item.stage === "lost" ? (doflow ? "Perso" : "Persa") : "In pausa"}</p></div>
+                    <Select value={item.stage} onValueChange={(stage) => move(item.id, stage)} disabled={Boolean(movingOpportunityId)}>
                       <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="new_lead">Ripristina</SelectItem><SelectItem value="lost">Persa</SelectItem><SelectItem value="paused">In pausa</SelectItem></SelectContent>
+                      <SelectContent><SelectItem value={doflow ? "new" : "new_lead"}>Ripristina</SelectItem><SelectItem value="lost">{doflow ? "Perso" : "Persa"}</SelectItem><SelectItem value="paused">In pausa</SelectItem></SelectContent>
                     </Select>
                   </div>
                 ))}

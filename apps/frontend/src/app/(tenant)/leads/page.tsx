@@ -11,7 +11,10 @@ import {
   type CrmField,
 } from "@/components/tenant-crm/crm-core";
 import { Badge } from "@/components/ui/badge";
+import { DOFLOW_COMMERCIAL_STAGE_OPTIONS } from "@/lib/commercial-stage-model";
+import { getDoFlowUser } from "@/lib/jwt";
 import { intakeAttributionLabel, intakeText, parseIntakeFormData } from "@/lib/public-lead-intake";
+import { isInternalDoflowTenant } from "@/lib/tenant-url";
 
 const QUALITY_OPTIONS = [
   { value: "low", label: "Bassa" },
@@ -108,16 +111,29 @@ function nextAction(value: unknown, row: CrmRow) {
 }
 
 export default function LeadsPage() {
+  const user = getDoFlowUser();
+  const doflow = isInternalDoflowTenant(user?.tenantSlug || user?.tenantId);
+  const statusOptions = doflow ? DOFLOW_COMMERCIAL_STAGE_OPTIONS : LEAD_STATUS_OPTIONS;
+  const effectiveFields = doflow ? fields.filter((field) => field.key !== "status") : fields;
+  const effectiveColumns = columns.map((column) => column.key === "status"
+    ? {
+        ...column,
+        label: doflow ? "Fase commerciale" : column.label,
+        format: (value: unknown, row: CrmRow) => (
+          <StatusBadge value={String((doflow ? row.commercial_stage : value) || value || "")} options={statusOptions} />
+        ),
+      }
+    : column);
   return (
     <CrmResourcePage
       title="Lead"
       description="Lead commerciali persistenti, senza dati demo."
       resource="leads"
       createLabel="Nuovo lead"
-      fields={fields}
-      columns={columns}
+      fields={effectiveFields}
+      columns={effectiveColumns}
       filterKey="status"
-      filterOptions={LEAD_STATUS_OPTIONS}
+      filterOptions={statusOptions}
       emptyText="Nessun lead reale ancora presente."
     />
   );

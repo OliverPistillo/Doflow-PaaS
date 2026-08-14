@@ -22,6 +22,9 @@ import {
   type CommercialContact,
   type CommercialOpportunity,
 } from "@/lib/tenant-commercial-api";
+import { getDoFlowUser } from "@/lib/jwt";
+import { isOpenCommercialStage } from "@/lib/commercial-stage-model";
+import { isInternalDoflowTenant } from "@/lib/tenant-url";
 import { ClientDetailPanel } from "./client-detail-panel";
 import type { CommercialClientRow } from "./commercial-client-types";
 import { ClientsTable } from "./clients-table";
@@ -56,6 +59,8 @@ const emptyCompany: Partial<CommercialCompany> = {
 };
 
 export function CommercialClients() {
+  const user = getDoFlowUser();
+  const doflow = isInternalDoflowTenant(user?.tenantSlug || user?.tenantId);
   const [companies, setCompanies] = useState<CommercialCompany[]>([]);
   const [contacts, setContacts] = useState<CommercialContact[]>([]);
   const [opportunities, setOpportunities] = useState<CommercialOpportunity[]>([]);
@@ -98,12 +103,12 @@ export function CommercialClients() {
     const companyContacts = contacts.filter((contact) => contact.company_id === company.id);
     const contact = companyContacts.find((item) => item.is_primary) || companyContacts[0];
     const companyOpportunities = opportunities.filter((item) => item.company_id === company.id);
-    const activeOpportunity = companyOpportunities.find((item) => !["accepted", "lost", "paused"].includes(item.stage));
+    const activeOpportunity = companyOpportunities.find((item) => isOpenCommercialStage(item.stage, doflow));
     const companyActivities = activities
       .filter((item) => item.company_id === company.id)
       .sort((a, b) => new Date(b.completed_at || b.updated_at || 0).getTime() - new Date(a.completed_at || a.updated_at || 0).getTime());
     const needsFollowUp = company.status === "dormant" || companyOpportunities.some((item) => {
-      if (!item.next_action_at || ["accepted", "lost", "paused"].includes(item.stage)) return false;
+      if (!item.next_action_at || !isOpenCommercialStage(item.stage, doflow)) return false;
       return new Date(item.next_action_at).getTime() <= Date.now();
     });
     return {
@@ -116,7 +121,7 @@ export function CommercialClients() {
       service: activeOpportunity?.service_type || companyOpportunities[0]?.service_type || undefined,
       needsFollowUp,
     };
-  }), [activities, companies, contacts, opportunities]);
+  }), [activities, companies, contacts, doflow, opportunities]);
 
   const services = useMemo(
     () => Array.from(new Set(rows.map((row) => row.service).filter((value): value is string => Boolean(value)))).sort(),

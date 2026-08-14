@@ -7,22 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { CommercialOpportunity } from "@/lib/tenant-commercial-api";
 import { compactIntakeGoal, intakeAttributionLabel, intakeText, parseIntakeFormData } from "@/lib/public-lead-intake";
 import { cn } from "@/lib/utils";
+import { DOFLOW_COMMERCIAL_STAGE_OPTIONS, LEGACY_COMMERCIAL_STAGE_OPTIONS } from "@/lib/commercial-stage-model";
 import { commercialDate, commercialMoney } from "./commercial-utils";
-
-const stageOptions = [
-  ["new_lead", "Nuovo lead"],
-  ["to_contact", "Da contattare"],
-  ["contacted", "Contattato"],
-  ["call_scheduled", "Call fissata"],
-  ["briefing_sent", "Brief inviato"],
-  ["briefing_received", "Brief ricevuto"],
-  ["quote_preparation", "Preventivo in preparazione"],
-  ["quote_sent", "Preventivo inviato"],
-  ["follow_up", "Follow-up"],
-  ["accepted", "Vinta"],
-  ["lost", "Persa"],
-  ["paused", "In pausa"],
-] as const;
 
 export function PipelineDealCard({
   item,
@@ -30,13 +16,18 @@ export function PipelineDealCard({
   onMove,
   onOpenDetails,
   highlighted = false,
+  doflow,
+  disabled = false,
 }: {
   item: CommercialOpportunity;
   showEconomic: boolean;
   onMove: (id: string, stage: string) => void;
   onOpenDetails: (item: CommercialOpportunity) => void;
   highlighted?: boolean;
+  doflow: boolean;
+  disabled?: boolean;
 }) {
+  const stageOptions = doflow ? DOFLOW_COMMERCIAL_STAGE_OPTIONS : LEGACY_COMMERCIAL_STAGE_OPTIONS;
   const followUpDue = item.next_action_at && new Date(item.next_action_at).getTime() <= Date.now();
   const cardRef = useRef<HTMLElement | null>(null);
   const intake = parseIntakeFormData(item.intake_form_data);
@@ -56,6 +47,8 @@ export function PipelineDealCard({
   return (
     <article
       ref={cardRef}
+      data-commercial-deal
+      data-visual-sensitive
       className={cn(
         "rounded-xl border border-slate-200 bg-white p-3.5 transition-colors hover:border-indigo-200",
         highlighted && "border-indigo-400 ring-2 ring-indigo-200",
@@ -107,7 +100,7 @@ export function PipelineDealCard({
 
       <div className="mt-3 flex items-center gap-2">
         <p className={cn("min-w-0 flex-1 truncate text-[11px] text-slate-500", followUpDue && "text-orange-600")}>
-          {item.stage === "accepted" ? "Vinta" : "Ultimo aggiornamento"}: {commercialDate(item.updated_at)}
+          {item.stage === (doflow ? "closed_won" : "accepted") ? (doflow ? "Chiuso" : "Vinta") : "Ultimo aggiornamento"}: {commercialDate(item.updated_at)}
         </p>
         {item.assigned_to ? (
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600" title="Opportunità assegnata">
@@ -116,12 +109,12 @@ export function PipelineDealCard({
         ) : null}
       </div>
 
-      <Select value={item.stage} onValueChange={(stage) => onMove(item.id, stage)}>
+      <Select value={item.stage} onValueChange={(stage) => onMove(item.id, stage)} disabled={disabled}>
         <SelectTrigger className="mt-3 h-8 rounded-lg border-slate-200 text-xs" aria-label={`Sposta ${item.title}`}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {stageOptions.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+          {stageOptions.map(({ value, label }) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
         </SelectContent>
       </Select>
 

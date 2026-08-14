@@ -49,6 +49,8 @@ export type CommercialLead = {
   company_name?: string | null;
   title: string;
   status?: string | null;
+  commercial_stage?: string | null;
+  commercial_stage_unmapped?: boolean;
   budget_estimate?: number | string | null;
   urgency?: string | null;
   next_action?: string | null;
@@ -74,6 +76,7 @@ export type CommercialOpportunity = {
   value_estimate?: number | string | null;
   probability?: number | null;
   stage: string;
+  commercial_stage_unmapped?: boolean;
   expected_close_date?: string | null;
   assigned_to?: string | null;
   next_action?: string | null;
@@ -107,6 +110,7 @@ export type CommercialActivity = {
 
 export type CommercialPipelineStage = {
   stage: string;
+  kind?: "positive" | "outcome";
   label: string;
   count: number;
   totalValue: number;
@@ -114,7 +118,10 @@ export type CommercialPipelineStage = {
 };
 
 export type CommercialPipeline = {
+  model?: string;
   stages: CommercialPipelineStage[];
+  unmappedCount?: number;
+  unmappedItems?: CommercialOpportunity[];
 };
 
 export type CommercialQuote = {

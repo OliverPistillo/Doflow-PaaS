@@ -19,8 +19,11 @@ export type DashboardSummary = {
     pipelineStages?: {
       new: { count: number; totalValue: number | null };
       contacted: { count: number; totalValue: number | null };
+      qualified?: { count: number; totalValue: number | null };
+      appointment?: { count: number; totalValue: number | null };
       quote: { count: number; totalValue: number | null };
-      won: { count: number; totalValue: number | null };
+      closed_won?: { count: number; totalValue: number | null };
+      won?: { count: number; totalValue: number | null };
     };
     sentQuotes?: number;
     acceptedQuotes?: number;

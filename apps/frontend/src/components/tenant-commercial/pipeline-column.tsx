@@ -3,6 +3,7 @@ import { commercialMoney } from "./commercial-utils";
 import { PipelineDealCard } from "./pipeline-deal-card";
 
 export function PipelineColumn({
+  stageId,
   label,
   color,
   items,
@@ -11,7 +12,10 @@ export function PipelineColumn({
   onMove,
   onOpenDetails,
   highlightedOpportunityId,
+  doflow,
+  movingOpportunityId,
 }: {
+  stageId: string;
   label: string;
   color: string;
   items: CommercialOpportunity[];
@@ -20,15 +24,17 @@ export function PipelineColumn({
   onMove: (id: string, stage: string) => void;
   onOpenDetails: (item: CommercialOpportunity) => void;
   highlightedOpportunityId?: string | null;
+  doflow: boolean;
+  movingOpportunityId?: string | null;
 }) {
   return (
-    <section className="flex min-h-[480px] min-w-[280px] flex-1 flex-col rounded-2xl border border-slate-200/80 bg-slate-50/50 p-3">
+    <section className="flex min-h-[480px] min-w-[280px] flex-1 flex-col rounded-2xl border border-slate-200/80 bg-slate-50/50 p-3" data-commercial-stage={stageId}>
       <header className="px-1 pb-3">
         <div className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
           <h2 className="text-sm font-semibold text-slate-950">{label}</h2>
         </div>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-slate-500" data-visual-sensitive>
           {items.length} {items.length === 1 ? "trattativa" : "trattative"}
           {showEconomic ? ` · ${commercialMoney(totalValue)}` : ""}
         </p>
@@ -44,6 +50,8 @@ export function PipelineColumn({
             onMove={onMove}
             onOpenDetails={onOpenDetails}
             highlighted={item.id === highlightedOpportunityId}
+            doflow={doflow}
+            disabled={Boolean(movingOpportunityId)}
           />
         ))}
       </div>

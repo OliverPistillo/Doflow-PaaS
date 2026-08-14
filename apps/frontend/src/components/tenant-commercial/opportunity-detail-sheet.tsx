@@ -13,6 +13,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import type { CommercialOpportunity } from "@/lib/tenant-commercial-api";
+import { getDoFlowUser } from "@/lib/jwt";
+import { isInternalDoflowTenant } from "@/lib/tenant-url";
 import {
   compactIntakeGoal,
   intakeAttributionLabel,
@@ -46,6 +48,8 @@ export function OpportunityDetailSheet({
   onOpenChange: (open: boolean) => void;
   showEconomic: boolean;
 }) {
+  const user = getDoFlowUser();
+  const doflow = isInternalDoflowTenant(user?.tenantSlug || user?.tenantId);
   const intake = parseIntakeFormData(opportunity?.intake_form_data);
   const projectType = intake.projectType || intakeText(opportunity?.service_type);
   const goals = intake.goals.length ? intake.goals : fallbackGoals(opportunity?.lead_interest);
@@ -115,7 +119,7 @@ export function OpportunityDetailSheet({
             <section className="space-y-3">
               <h3 className="text-sm font-semibold text-slate-950">Trattativa</h3>
               <dl className="grid gap-3 rounded-xl border border-slate-200 p-4 sm:grid-cols-2">
-                <DetailValue label="Fase">{pipelineStageLabel(opportunity.stage)}</DetailValue>
+                <DetailValue label="Fase">{pipelineStageLabel(opportunity.stage, doflow)}</DetailValue>
                 {showEconomic ? <DetailValue label="Valore">{commercialMoney(opportunity.value_estimate)}</DetailValue> : null}
                 {opportunity.probability !== null && opportunity.probability !== undefined ? <DetailValue label="Probabilità">{`${opportunity.probability}%`}</DetailValue> : null}
                 <DetailValue label="Prossima azione">{opportunity.next_action || "-"}</DetailValue>

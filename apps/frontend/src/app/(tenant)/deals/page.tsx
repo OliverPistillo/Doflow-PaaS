@@ -12,6 +12,9 @@ import {
   type CrmColumn,
   type CrmField,
 } from "@/components/tenant-crm/crm-core";
+import { DOFLOW_COMMERCIAL_STAGE_OPTIONS } from "@/lib/commercial-stage-model";
+import { getDoFlowUser } from "@/lib/jwt";
+import { isInternalDoflowTenant } from "@/lib/tenant-url";
 
 const fields: CrmField[] = [
   { key: "company_id", label: "Azienda", type: "relation", relation: "companies" },
@@ -38,16 +41,23 @@ const columns: CrmColumn[] = [
 ];
 
 export default function DealsPage() {
+  const user = getDoFlowUser();
+  const doflow = isInternalDoflowTenant(user?.tenantSlug || user?.tenantId);
+  const stageOptions = doflow ? DOFLOW_COMMERCIAL_STAGE_OPTIONS : OPPORTUNITY_STAGE_OPTIONS;
+  const effectiveFields = fields.map((field) => field.key === "stage" ? { ...field, options: stageOptions } : field);
+  const effectiveColumns = columns.map((column) => column.key === "stage"
+    ? { ...column, format: (value: unknown) => <StatusBadge value={String(value || "")} options={stageOptions} /> }
+    : column);
   return (
     <CrmResourcePage
       title="Opportunita"
       description="Pipeline commerciale reale del tenant doflow."
       resource="opportunities"
       createLabel="Nuova opportunita"
-      fields={fields}
-      columns={columns}
+      fields={effectiveFields}
+      columns={effectiveColumns}
       filterKey="stage"
-      filterOptions={OPPORTUNITY_STAGE_OPTIONS}
+      filterOptions={stageOptions}
       emptyText="Nessuna opportunita reale ancora presente."
       headerActions={(
         <>

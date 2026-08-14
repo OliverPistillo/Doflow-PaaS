@@ -22,7 +22,7 @@ export function PipelineSummaryStrip({
   ];
 
   return (
-    <section className="grid overflow-hidden rounded-2xl border border-slate-200/80 bg-white sm:grid-cols-2 xl:grid-cols-4">
+    <section className="grid overflow-hidden rounded-2xl border border-slate-200/80 bg-white sm:grid-cols-2 xl:grid-cols-4" data-commercial-summary>
       {items.map((item) => {
         const Icon = item.icon;
         return (
@@ -32,7 +32,7 @@ export function PipelineSummaryStrip({
             </span>
             <div>
               <p className="text-xs text-slate-500">{item.label}</p>
-              <p className="mt-0.5 text-xl font-bold text-slate-950">{item.value}</p>
+              <p className="mt-0.5 text-xl font-bold text-slate-950" data-visual-sensitive>{item.value}</p>
             </div>
           </div>
         );

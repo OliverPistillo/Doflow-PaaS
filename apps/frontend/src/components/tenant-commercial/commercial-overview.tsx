@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { FileText, Filter, Target, Users } from "lucide-react";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
+import { commercialConversion, isOpenCommercialStage, normalizeCommercialStage } from "@/lib/commercial-stage-model";
+import { getDoFlowUser } from "@/lib/jwt";
 import {
   commercialApi,
   type CommercialActivity,
@@ -11,6 +13,7 @@ import {
   type CommercialPipeline,
   type CommercialQuote,
 } from "@/lib/tenant-commercial-api";
+import { isInternalDoflowTenant } from "@/lib/tenant-url";
 import {
   commercialMoney,
   groupPipeline,
@@ -27,6 +30,8 @@ import { CommercialKpiCard, CommercialPageHeader } from "./commercial-ui";
 
 export function CommercialOverview() {
   const { canView } = useTenantAccess();
+  const user = getDoFlowUser();
+  const doflow = isInternalDoflowTenant(user?.tenantSlug || user?.tenantId);
   const [contacts, setContacts] = useState<CommercialContact[]>([]);
   const [opportunities, setOpportunities] = useState<CommercialOpportunity[]>([]);
   const [activities, setActivities] = useState<CommercialActivity[]>([]);
@@ -66,16 +71,24 @@ export function CommercialOverview() {
     };
   }, [canView]);
 
-  const groups = useMemo(() => groupPipeline(pipeline), [pipeline]);
+  const groups = useMemo(() => groupPipeline(pipeline, doflow), [doflow, pipeline]);
   const openQuotes = quotes.filter((quote) => !["accepted", "rejected", "expired"].includes(quote.status));
   const closedQuotes = quotes.filter((quote) => ["accepted", "rejected"].includes(quote.status));
-  const closeRate = closedQuotes.length > 0
+  const quoteCloseRate = closedQuotes.length > 0
     ? Math.round((closedQuotes.filter((quote) => quote.status === "accepted").length / closedQuotes.length) * 100)
     : 0;
-  const forecast = pipelineTotal(opportunities);
-  const acquired = quotes
-    .filter((quote) => quote.status === "accepted" && isThisMonth(quote.accepted_at || quote.updated_at))
-    .reduce((sum, quote) => sum + quoteTotal(quote), 0);
+  const closeRate = doflow ? commercialConversion(opportunities, true) : quoteCloseRate;
+  const forecast = pipelineTotal(opportunities, doflow);
+  const acquired = doflow
+    ? opportunities
+        .filter((opportunity) => {
+          const normalized = normalizeCommercialStage(opportunity.stage);
+          return normalized.mapped && normalized.stage === "closed_won" && isThisMonth(opportunity.updated_at);
+        })
+        .reduce((sum, opportunity) => sum + Number(opportunity.value_estimate || 0), 0)
+    : quotes
+        .filter((quote) => quote.status === "accepted" && isThisMonth(quote.accepted_at || quote.updated_at))
+        .reduce((sum, quote) => sum + quoteTotal(quote), 0);
   const todayActions = activities
     .filter((activity) => !activity.completed_at && isToday(activity.due_at))
     .sort((a, b) => new Date(a.due_at || 0).getTime() - new Date(b.due_at || 0).getTime());
@@ -114,9 +127,9 @@ export function CommercialOverview() {
           tone="green"
         />
         <CommercialKpiCard
-          label="Tasso di chiusura"
+          label={doflow ? "Tasso di conversione" : "Tasso di chiusura"}
           value={loading ? "…" : `${closeRate}%`}
-          hint="Preventivi accettati sui chiusi"
+          hint={doflow ? "Chiuso su Chiuso + Perso" : "Preventivi accettati sui chiusi"}
           icon={Target}
           tone="orange"
         />

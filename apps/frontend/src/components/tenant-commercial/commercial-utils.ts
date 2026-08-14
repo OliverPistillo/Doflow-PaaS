@@ -3,37 +3,15 @@ import type {
   CommercialPipeline,
   CommercialQuote,
 } from "@/lib/tenant-commercial-api";
-
-export const PIPELINE_GROUPS = [
-  {
-    id: "new",
-    label: "Nuovi",
-    stages: ["new_lead", "to_contact"],
-    targetStage: "new_lead",
-    color: "#6558e8",
-  },
-  {
-    id: "contacted",
-    label: "Contattati",
-    stages: ["contacted", "call_scheduled", "briefing_sent", "briefing_received"],
-    targetStage: "contacted",
-    color: "#5d8ff5",
-  },
-  {
-    id: "quote",
-    label: "Preventivo",
-    stages: ["quote_preparation", "quote_sent", "follow_up"],
-    targetStage: "quote_sent",
-    color: "#8fc98d",
-  },
-  {
-    id: "won",
-    label: "Vinti",
-    stages: ["accepted"],
-    targetStage: "accepted",
-    color: "#3fbd73",
-  },
-] as const;
+import {
+  canonicalCommercialStage,
+  canonicalizeCommercialStageItem,
+  commercialStageLabel as stageLabel,
+  DOFLOW_PIPELINE_GROUPS,
+  isOpenCommercialStage,
+  LEGACY_PIPELINE_GROUPS,
+  normalizeCommercialStage,
+} from "@/lib/commercial-stage-model";
 
 export function commercialMoney(value: unknown) {
   return new Intl.NumberFormat("it-IT", {
@@ -69,10 +47,24 @@ export function quoteTotal(quote: CommercialQuote) {
   return Number(quote.subtotal || 0) - Number(quote.discount_total || 0) + Number(quote.tax_total || 0);
 }
 
-export function groupPipeline(pipeline: CommercialPipeline | null) {
-  const opportunities = (pipeline?.stages || []).flatMap((stage) => stage.items || []);
-  return PIPELINE_GROUPS.map((group) => {
-    const items = opportunities.filter((item) => group.stages.includes(item.stage as never));
+export function pipelineItems(pipeline: CommercialPipeline | null, doflow: boolean) {
+  const byId = new Map<string, CommercialOpportunity>();
+  for (const item of [
+    ...(pipeline?.stages || []).flatMap((stage) => stage.items || []),
+    ...(pipeline?.unmappedItems || []),
+  ]) {
+    byId.set(item.id, doflow ? canonicalizeCommercialStageItem(item) : item);
+  }
+  return [...byId.values()];
+}
+
+export function groupPipeline(pipeline: CommercialPipeline | null, doflow: boolean) {
+  const opportunities = pipelineItems(pipeline, doflow);
+  const groups = doflow ? DOFLOW_PIPELINE_GROUPS : LEGACY_PIPELINE_GROUPS;
+  return groups.map((group) => {
+    const items = opportunities.filter((item) => doflow
+      ? canonicalCommercialStage(item.stage) === group.id
+      : "stages" in group && group.stages.includes(item.stage as never));
     return {
       ...group,
       items,
@@ -82,9 +74,9 @@ export function groupPipeline(pipeline: CommercialPipeline | null) {
   });
 }
 
-export function pipelineTotal(items: CommercialOpportunity[]) {
+export function pipelineTotal(items: CommercialOpportunity[], doflow: boolean) {
   return items
-    .filter((item) => !["accepted", "lost", "paused"].includes(item.stage))
+    .filter((item) => isOpenCommercialStage(item.stage, doflow))
     .reduce((sum, item) => sum + Number(item.value_estimate || 0), 0);
 }
 
@@ -104,20 +96,6 @@ export function isThisMonth(value?: string | null) {
   return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth();
 }
 
-export function pipelineStageLabel(stage: string) {
-  const labels: Record<string, string> = {
-    new_lead: "Nuovo lead",
-    to_contact: "Da contattare",
-    contacted: "Contattato",
-    call_scheduled: "Call fissata",
-    briefing_sent: "Brief inviato",
-    briefing_received: "Brief ricevuto",
-    quote_preparation: "Preventivo in preparazione",
-    quote_sent: "Preventivo inviato",
-    follow_up: "Follow-up",
-    accepted: "Vinta",
-    lost: "Persa",
-    paused: "In pausa",
-  };
-  return labels[stage] || stage;
+export function pipelineStageLabel(stage: string, doflow = true) {
+  return stageLabel(stage, doflow);
 }
