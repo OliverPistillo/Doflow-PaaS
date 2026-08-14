@@ -7,9 +7,14 @@
     "build:frontend": "pnpm -C apps/frontend build",
     "build:backend": "pnpm -C apps/backend build",
     "build": "pnpm run build:frontend && pnpm run build:backend",
-    "dev": "pnpm --parallel --filter \"./apps/**\" run dev"
+    "dev": "pnpm --parallel --filter \"./apps/**\" run dev",
+    "visual:gate": "node scripts/visual-gate.mjs",
+    "visual:gate:headed": "node scripts/visual-gate.mjs --headed",
+    "visual:gate:auth:clear": "node scripts/visual-gate.mjs --clear-auth",
+    "visual:gate:test": "playwright test --config=playwright.visual.config.ts"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "@types/node": "^25.0.8",
     "cross-env": "^10.1.0",
     "husky": "^9.1.7",

@@ -44,6 +44,14 @@ dist/
 # Test artifacts
 test_UI_*.json
 /app/test_reports/
+/playwright-report/
+/test-results/
+/.visual-gate/
+/.visual-auth/
+/docs/design-references/doflow-crm-projects/actual/*
+!/docs/design-references/doflow-crm-projects/actual/README.md
+/docs/design-references/doflow-crm-projects/diff/*
+!/docs/design-references/doflow-crm-projects/diff/README.md
 
 # Editor
 .vscode/

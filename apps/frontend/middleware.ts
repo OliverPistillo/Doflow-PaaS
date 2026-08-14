@@ -45,6 +45,16 @@ export async function middleware(req: NextRequest, event: NextFetchEvent) {
   headers.delete('x-middleware-subrequest');
   headers.delete('x-middleware-next');
 
+  // Local visual gate only: the browser remains same-origin on localhost and
+  // Next performs the approved server-to-server rewrite. Production keeps the
+  // original Origin header because this flag is never enabled by default.
+  if (
+    process.env.DOFLOW_VISUAL_SERVER_MODE === '1' &&
+    req.nextUrl.pathname.startsWith('/api/')
+  ) {
+    headers.delete('origin');
+  }
+
   // ✅ Hint pathname per SSR tenant resolution
   headers.set('x-doflow-pathname', req.nextUrl.pathname);
 
