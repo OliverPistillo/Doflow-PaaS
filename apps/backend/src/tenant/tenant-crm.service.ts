@@ -5,6 +5,14 @@ import { safeSchema } from '../common/schema.utils';
 import { ensureLeadIntakeSubmissionsTable } from '../public-lead-intake/public-lead-intake-schema';
 import { isPublicLeadIntakeTenantEnabled } from '../public-lead-intake/public-lead-intake-tenants';
 import { hasRoleAtLeast } from '../roles';
+import {
+  aliasesForCommercialStage,
+  COMMERCIAL_OUTCOME_STAGES,
+  COMMERCIAL_POSITIVE_STAGES,
+  commercialStageLabel,
+  isDoflowTenant,
+  normalizeCommercialStage,
+} from './commercial-stage-model';
 import { ensureTenantCrmCoreTables } from './tenant-crm-schema';
 
 type ResourceKey = 'companies' | 'contacts' | 'leads' | 'opportunities' | 'activities';
@@ -192,7 +200,7 @@ export class TenantCrmService {
     return { column, direction };
   }
 
-  private buildWhere(config: ResourceConfig, query: Record<string, any>) {
+  private buildWhere(resource: ResourceKey, config: ResourceConfig, schema: string, query: Record<string, any>) {
     const where = ['t.deleted_at IS NULL'];
     const params: unknown[] = [];
 
@@ -206,6 +214,18 @@ export class TenantCrmService {
     for (const filter of config.filters) {
       const value = query[filter];
       if (value === undefined || value === null || value === '') continue;
+
+      if (isDoflowTenant(schema) && ((resource === 'opportunities' && filter === 'stage') || (resource === 'leads' && filter === 'status'))) {
+        const aliases = aliasesForCommercialStage(value);
+        if (!aliases) throw new BadRequestException('Fase commerciale non valida');
+        params.push(aliases);
+        const source = resource === 'leads'
+          ? "lower(coalesce(commercial_opportunity.stage, t.status, ''))"
+          : "lower(coalesce(t.stage, ''))";
+        where.push(`${source} = ANY($${params.length}::text[])`);
+        continue;
+      }
+
       params.push(value);
       where.push(`t.${filter} = $${params.length}`);
     }
@@ -220,7 +240,17 @@ export class TenantCrmService {
   }
 
   private joins(config: ResourceConfig, schema: string): string {
-    const baseJoins = (config.joins || '').replace(/\{schema\}/g, schema);
+    let baseJoins = (config.joins || '').replace(/\{schema\}/g, schema);
+    if (config.table === 'leads' && isDoflowTenant(schema)) {
+      baseJoins += `
+        LEFT JOIN LATERAL (
+          SELECT o.stage
+          FROM "${schema}".opportunities o
+          WHERE o.lead_id = t.id AND o.deleted_at IS NULL
+          ORDER BY o.updated_at DESC, o.created_at DESC
+          LIMIT 1
+        ) commercial_opportunity ON true`;
+    }
     if (!config.intakeLink || !isPublicLeadIntakeTenantEnabled(schema)) return baseJoins;
 
     return `${baseJoins}
@@ -240,7 +270,10 @@ export class TenantCrmService {
   }
 
   private select(config: ResourceConfig, schema: string): string {
-    const baseSelect = `t.*${config.selectExtra || ''}`;
+    const commercialStageSelect = config.table === 'leads' && isDoflowTenant(schema)
+      ? ', commercial_opportunity.stage AS opportunity_stage'
+      : '';
+    const baseSelect = `t.*${config.selectExtra || ''}${commercialStageSelect}`;
     if (!config.intakeLink) return baseSelect;
 
     const intakeSelect = isPublicLeadIntakeTenantEnabled(schema)
@@ -260,7 +293,7 @@ export class TenantCrmService {
     return `${baseSelect}, ${intakeSelect}`;
   }
 
-  private cleanBody(config: ResourceConfig, body: Record<string, any>, partial: boolean) {
+  private cleanBody(resource: ResourceKey, config: ResourceConfig, schema: string, body: Record<string, any>, partial: boolean) {
     const cleaned: Record<string, unknown> = {};
 
     for (const field of config.writable) {
@@ -291,7 +324,38 @@ export class TenantCrmService {
       cleaned.probability = Math.trunc(p);
     }
 
+    if (resource === 'opportunities' && isDoflowTenant(schema)) {
+      if ('stage' in cleaned) {
+        const normalized = normalizeCommercialStage(cleaned.stage);
+        if (!normalized.mapped) throw new BadRequestException('Fase commerciale non valida');
+        cleaned.stage = normalized.stage;
+      } else if (!partial) {
+        cleaned.stage = 'new';
+      }
+    }
+
     return cleaned;
+  }
+
+  private normalizeReadRow(resource: ResourceKey, schema: string, row: Record<string, any>) {
+    if (!isDoflowTenant(schema)) return row;
+
+    if (resource === 'opportunities') {
+      const normalized = normalizeCommercialStage(row.stage);
+      if (!normalized.mapped) return { ...row, commercial_stage_unmapped: true };
+      return { ...row, stage: normalized.stage };
+    }
+
+    if (resource === 'leads') {
+      const sourceStage = row.opportunity_stage ?? row.status;
+      const normalized = normalizeCommercialStage(sourceStage);
+      if (!normalized.mapped) {
+        return { ...row, commercial_stage: sourceStage, commercial_stage_unmapped: true };
+      }
+      return { ...row, commercial_stage: normalized.stage };
+    }
+
+    return row;
   }
 
   private userIdOrNull(userId: string): string | null {
@@ -306,7 +370,7 @@ export class TenantCrmService {
     const limit = this.normalizeLimit(query.limit);
     const offset = this.normalizeOffset(query.offset);
     const { column, direction } = this.normalizeSort(config, query.sortBy, query.sortOrder);
-    const { where, params } = this.buildWhere(config, query);
+    const { where, params } = this.buildWhere(resource, config, schema, query);
 
     const countRows = await this.dataSource.query(
       `SELECT COUNT(*)::int AS total FROM "${schema}".${config.table} t ${this.joins(config, schema)} WHERE ${where}`,
@@ -323,7 +387,12 @@ export class TenantCrmService {
       [...params, limit, offset],
     );
 
-    return { items: rows, total: Number(countRows[0]?.total || 0), limit, offset };
+    return {
+      items: rows.map((row: Record<string, any>) => this.normalizeReadRow(resource, schema, row)),
+      total: Number(countRows[0]?.total || 0),
+      limit,
+      offset,
+    };
   }
 
   async findOne(resource: ResourceKey, id: string) {
@@ -341,7 +410,7 @@ export class TenantCrmService {
       [id],
     );
     if (!rows[0]) throw new NotFoundException('Record CRM non trovato');
-    return rows[0];
+    return this.normalizeReadRow(resource, schema, rows[0]);
   }
 
   async create(resource: ResourceKey, body: Record<string, any>) {
@@ -349,7 +418,7 @@ export class TenantCrmService {
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const config = this.getConfig(resource);
-    const cleaned = this.cleanBody(config, body, false);
+    const cleaned = this.cleanBody(resource, config, schema, body, false);
     const userId = this.userIdOrNull(user.id);
 
     const columns = [...Object.keys(cleaned), 'created_by', 'updated_by'];
@@ -372,7 +441,7 @@ export class TenantCrmService {
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const config = this.getConfig(resource);
-    const cleaned = this.cleanBody(config, body, true);
+    const cleaned = this.cleanBody(resource, config, schema, body, true);
     const userId = this.userIdOrNull(user.id);
     const entries = Object.entries(cleaned);
 
@@ -382,6 +451,15 @@ export class TenantCrmService {
     const params = entries.map(([, value]) => value);
     params.push(userId, id);
 
+    let previousStageRaw: string | null = null;
+    if (resource === 'opportunities' && isDoflowTenant(schema) && 'stage' in cleaned) {
+      const previousRows = await this.dataSource.query(
+        `SELECT stage FROM "${schema}".opportunities WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+        [id],
+      );
+      previousStageRaw = previousRows[0]?.stage == null ? null : String(previousRows[0].stage);
+    }
+
     const rows = await this.dataSource.query(
       `UPDATE "${schema}".${config.table}
        SET ${sets.join(', ')}, updated_by = $${params.length - 1}, updated_at = now()
@@ -390,7 +468,18 @@ export class TenantCrmService {
       params,
     );
     if (!rows[0]) throw new NotFoundException('Record CRM non trovato');
-    await this.audit(schema, user, `crm_${resource}_updated`, id, cleaned);
+    if (resource === 'opportunities' && isDoflowTenant(schema) && 'stage' in cleaned) {
+      const previous = normalizeCommercialStage(previousStageRaw);
+      const metadata: Record<string, unknown> = {
+        previous_stage: previous.mapped ? previous.stage : previous.raw || null,
+        new_stage: cleaned.stage,
+        changes: cleaned,
+      };
+      if (!previous.mapped || previous.isLegacy) metadata.previous_stage_raw = previous.raw || null;
+      await this.audit(schema, user, 'crm_opportunity_stage_changed', id, metadata);
+    } else {
+      await this.audit(schema, user, `crm_${resource}_updated`, id, cleaned);
+    }
     return this.findOne(resource, id);
   }
 
@@ -414,7 +503,12 @@ export class TenantCrmService {
   }
 
   async updateOpportunityStage(id: string, stage: string) {
-    if (!PIPELINE_STAGES.includes(stage)) throw new BadRequestException('Stage non valido');
+    const schema = this.getSchema();
+    if (isDoflowTenant(schema)) {
+      if (!normalizeCommercialStage(stage).mapped) throw new BadRequestException('Stage non valido');
+    } else if (!PIPELINE_STAGES.includes(stage)) {
+      throw new BadRequestException('Stage non valido');
+    }
     return this.update('opportunities', id, { stage });
   }
 
@@ -426,7 +520,7 @@ export class TenantCrmService {
     this.assertCrmAccess(false);
     const schema = this.getSchema();
     await this.ensureSchema(schema);
-    const { where, params } = this.buildWhere(RESOURCES.opportunities, query);
+    const { where, params } = this.buildWhere('opportunities', RESOURCES.opportunities, schema, query);
     const rows = await this.dataSource.query(
       `SELECT ${this.select(RESOURCES.opportunities, schema)}
        FROM "${schema}".opportunities t
@@ -435,6 +529,37 @@ export class TenantCrmService {
        ORDER BY t.expected_close_date ASC NULLS LAST, t.updated_at DESC`,
       params,
     );
+
+    if (isDoflowTenant(schema)) {
+      const mappedItems: Record<string, any>[] = [];
+      const unmappedItems: Record<string, any>[] = [];
+      for (const row of rows) {
+        const normalized = normalizeCommercialStage(row.stage);
+        if (!normalized.mapped) {
+          unmappedItems.push({ ...row, commercial_stage_unmapped: true });
+          continue;
+        }
+        mappedItems.push({ ...row, stage: normalized.stage });
+      }
+
+      const orderedStages = [...COMMERCIAL_POSITIVE_STAGES, ...COMMERCIAL_OUTCOME_STAGES];
+      return {
+        model: 'doflow-canonical-v1',
+        stages: orderedStages.map((stage) => {
+          const items = mappedItems.filter((row) => row.stage === stage);
+          return {
+            stage,
+            kind: (COMMERCIAL_OUTCOME_STAGES as readonly string[]).includes(stage) ? 'outcome' : 'positive',
+            label: commercialStageLabel(stage),
+            count: items.length,
+            totalValue: items.reduce((sum, row) => sum + Number(row.value_estimate || 0), 0),
+            items,
+          };
+        }),
+        unmappedCount: unmappedItems.length,
+        ...(unmappedItems.length > 0 ? { unmappedItems } : {}),
+      };
+    }
 
     return {
       stages: PIPELINE_STAGES.map((stage) => {
