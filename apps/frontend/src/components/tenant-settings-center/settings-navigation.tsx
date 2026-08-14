@@ -1,8 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Plug, Settings, ShieldCheck, UsersRound } from "lucide-react";
+import { getDoFlowUser } from "@/lib/jwt";
+import { isInternalDoflowTenant } from "@/lib/tenant-url";
 
 const items = [
   { href: "/settings", label: "Generali", icon: Settings, exact: true },
@@ -13,6 +16,15 @@ const items = [
 
 export function SettingsNavigation() {
   const pathname = usePathname();
+  const [isDoflowTenant, setIsDoflowTenant] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const user = getDoFlowUser();
+    setIsDoflowTenant(isInternalDoflowTenant(user?.tenantSlug || user?.tenantId));
+  }, []);
+
+  if (isDoflowTenant !== false) return null;
+
   return (
     <nav className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white p-1.5">
       <div className="flex min-w-max gap-1">

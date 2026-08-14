@@ -59,6 +59,12 @@ export function findActiveTenantSectionId(
       match = { id: section.id, hrefLength: section.href.length };
     }
 
+    for (const href of section.activeHrefs || []) {
+      if (isHrefActive(pathname, href) && href.length >= (match?.hrefLength || 0)) {
+        match = { id: section.id, hrefLength: href.length };
+      }
+    }
+
     for (const child of section.children || []) {
       if (!itemIsAvailable(child, role) || !accessCanSee(child, canView)) continue;
       if (isHrefActive(pathname, child.href) && child.href.length >= (match?.hrefLength || 0)) {
@@ -216,11 +222,15 @@ export function TenantSidebarSection({
   const minPlan = section.minPlan || "STARTER";
   const isLocked = !planIncludes(activePlan, minPlan);
   const hasChildren = children.length > 0;
-  const activeChildHref = children
-    .filter((item) => isHrefActive(pathname, item.href))
-    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+  const matchesHiddenRoute = section.activeHrefs?.some((href) => isHrefActive(pathname, href));
+  const activeChildHref = matchesHiddenRoute
+    ? undefined
+    : children
+        .filter((item) => isHrefActive(pathname, item.href))
+        .sort((a, b) => b.href.length - a.href.length)[0]?.href;
   const active = Boolean(
     (section.href && isHrefActive(pathname, section.href)) ||
+    matchesHiddenRoute ||
     children.some((item) => isHrefActive(pathname, item.href)),
   );
   const compact = state === "collapsed" && !isMobile;

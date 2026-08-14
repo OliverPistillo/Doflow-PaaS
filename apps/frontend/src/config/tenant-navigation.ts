@@ -6,7 +6,6 @@ import {
   BookOpen,
   BriefcaseBusiness,
   Building2,
-  CalendarDays,
   CheckSquare,
   ClipboardCheck,
   CreditCard,
@@ -18,7 +17,6 @@ import {
   KeyRound,
   Layers,
   LockKeyhole,
-  MonitorSmartphone,
   Plug,
   Receipt,
   RefreshCw,
@@ -59,6 +57,7 @@ export type TenantNavigationSection = {
   roles?: TenantNavigationRole[];
   visibility?: TenantVisibility;
   moduleKey?: TenantModuleKey;
+  activeHrefs?: string[];
   children?: TenantNavigationItem[];
 };
 
@@ -75,27 +74,28 @@ export const DOFLOW_TENANT_NAVIGATION: TenantNavigationSection[] = [
     label: "Commerciale",
     icon: Handshake,
     href: "/commercial",
+    activeHrefs: ["/commercial/site-proposals"],
     moduleKey: "crm",
     children: [
       { id: "commercial-overview", label: "Riepilogo", href: "/commercial", icon: BarChart3, moduleKey: "crm" },
       { id: "pipeline", label: "Pipeline", href: "/pipeline", icon: Layers, moduleKey: "crm" },
       { id: "companies", label: "Clienti", href: "/companies", icon: Building2, moduleKey: "crm" },
       { id: "quotes", label: "Preventivi", href: "/quotes", icon: Send, moduleKey: "quotes" },
-      { id: "site-proposals", label: "Proposte web", href: "/commercial/site-proposals", icon: MonitorSmartphone, moduleKey: "crm", visibility: "doflow", roles: ["owner", "admin", "superadmin", "manager"] },
     ],
   },
   {
-    id: "lavoro",
-    label: "Lavoro",
+    id: "projects",
+    label: "Progetti",
     icon: FolderKanban,
-    href: "/work",
+    href: "/projects",
+    activeHrefs: ["/work", "/calendar", "/projects/milestones"],
     minPlan: "PRO",
     moduleKey: "projects",
     children: [
-      { id: "work-overview", label: "Riepilogo", href: "/work", icon: BarChart3, minPlan: "PRO", moduleKey: "projects" },
-      { id: "projects", label: "Progetti", href: "/projects", icon: FolderKanban, minPlan: "PRO", moduleKey: "projects" },
+      { id: "projects-overview", label: "Panoramica", href: "/projects", icon: BarChart3, minPlan: "PRO", moduleKey: "projects" },
+      { id: "projects-flow", label: "Flusso", href: "/projects/timeline", icon: Workflow, minPlan: "PRO", moduleKey: "projects" },
       { id: "tasks", label: "Attività", href: "/projects/tasks", icon: CheckSquare, minPlan: "PRO", moduleKey: "projects" },
-      { id: "calendar", label: "Calendario", href: "/calendar", icon: CalendarDays, minPlan: "PRO", moduleKey: "calendar" },
+      { id: "project-files", label: "File", href: "/projects/files", icon: FolderOpen, minPlan: "PRO", moduleKey: "projects" },
     ],
   },
   {
@@ -119,20 +119,13 @@ export const DOFLOW_TENANT_NAVIGATION: TenantNavigationSection[] = [
     children: [
       { id: "resources-overview", label: "Riepilogo", href: "/resources", icon: BarChart3, minPlan: "PRO", moduleKey: "team" },
       { id: "team", label: "Team", href: "/team", icon: UsersRound, minPlan: "PRO", moduleKey: "team" },
-      { id: "workload", label: "Carichi e disponibilitÃ ", href: "/team/workload", icon: BarChart3, minPlan: "PRO", moduleKey: "team" },
+      { id: "workload", label: "Carichi", href: "/team/workload", icon: BarChart3, minPlan: "PRO", moduleKey: "team" },
       { id: "knowledge", label: "Knowledge", href: "/knowledge", icon: BookOpen, minPlan: "PRO", moduleKey: "knowledge" },
     ],
   },
   {
-    id: "documenti",
-    label: "Documenti",
-    icon: FolderOpen,
-    href: "/documents",
-    moduleKey: "documents",
-  },
-  {
     id: "controllo",
-    label: "Automazioni",
+    label: "Automazioni e controllo",
     icon: Workflow,
     href: "/automations",
     minPlan: "PRO",
@@ -150,9 +143,9 @@ export const DOFLOW_TENANT_NAVIGATION: TenantNavigationSection[] = [
     href: "/settings",
     children: [
       { id: "settings", label: "Generali", href: "/settings", icon: Settings, moduleKey: "settings" },
+      { id: "users", label: "Utenti e permessi", href: "/settings/users", icon: UserCog, minPlan: "PRO", moduleKey: "settings" },
       { id: "integrations", label: "Integrazioni", href: "/settings/integrations", icon: Plug, minPlan: "PRO", moduleKey: "settings" },
       { id: "security", label: "Sicurezza e accessi", href: "/settings/security", icon: ShieldCheck, roles: ["owner", "admin", "superadmin"], moduleKey: "settings" },
-      { id: "users", label: "Utenti e permessi", href: "/settings/users", icon: UserCog, minPlan: "PRO", moduleKey: "settings" },
     ],
   },
 ];
@@ -172,26 +165,36 @@ function hrefMatches(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+// Access control is intentionally independent from the tenant's visible menu.
+// Hidden legacy routes stay mapped so direct access still enforces capabilities.
+export const TENANT_ROUTE_MODULES: Array<[string, TenantModuleKey]> = [
+  ["/dashboard", "dashboard"],
+  ["/commercial/site-proposals", "crm"],
+  ["/commercial", "crm"],
+  ["/pipeline", "crm"],
+  ["/companies", "crm"],
+  ["/quotes", "quotes"],
+  ["/projects/milestones", "projects"],
+  ["/projects", "projects"],
+  ["/work", "projects"],
+  ["/calendar", "calendar"],
+  ["/finance", "finance"],
+  ["/contracts", "contracts"],
+  ["/resources", "team"],
+  ["/team", "team"],
+  ["/knowledge", "knowledge"],
+  ["/documents", "documents"],
+  ["/automations", "automations"],
+  ["/reports", "reports"],
+  ["/settings", "settings"],
+  ["/paperwork", "paperwork"],
+  ["/credentials", "credentials"],
+  ["/notifications", "notifications"],
+];
+
 export function moduleKeyForTenantPath(pathname: string): TenantModuleKey | null {
-  const specialistRoutes: Array<[string, TenantModuleKey]> = [
-    ["/finance", "finance"],
-    ["/contracts", "contracts"],
-    ["/paperwork", "paperwork"],
-    ["/credentials", "credentials"],
-    ["/notifications", "notifications"],
-  ];
   let match: { moduleKey: TenantModuleKey; length: number } | null = null;
-  for (const section of DOFLOW_TENANT_NAVIGATION) {
-    if (section.href && section.moduleKey && hrefMatches(pathname, section.href)) {
-      match = { moduleKey: section.moduleKey, length: section.href.length };
-    }
-    for (const child of section.children || []) {
-      if (child.moduleKey && hrefMatches(pathname, child.href) && child.href.length >= (match?.length || 0)) {
-        match = { moduleKey: child.moduleKey, length: child.href.length };
-      }
-    }
-  }
-  for (const [href, moduleKey] of specialistRoutes) {
+  for (const [href, moduleKey] of TENANT_ROUTE_MODULES) {
     if (hrefMatches(pathname, href) && href.length >= (match?.length || 0)) {
       match = { moduleKey, length: href.length };
     }
