@@ -1,4 +1,4 @@
-export const DOFLOW_TENANT_SCHEMA = 'doflow';
+export { DOFLOW_TENANT_SCHEMA, isDoflowTenant } from './tenant-context';
 
 export const COMMERCIAL_POSITIVE_STAGES = [
   'new',
@@ -51,10 +51,6 @@ export const COMMERCIAL_STAGE_ALIASES: Readonly<Record<string, CanonicalCommerci
 export type CommercialStageNormalization =
   | { mapped: true; stage: CanonicalCommercialStage; raw: string; isLegacy: boolean }
   | { mapped: false; raw: string };
-
-export function isDoflowTenant(schema: string | undefined | null): boolean {
-  return String(schema || '').trim().toLowerCase() === DOFLOW_TENANT_SCHEMA;
-}
 
 export function isCanonicalCommercialStage(value: unknown): value is CanonicalCommercialStage {
   const normalized = String(value ?? '').trim().toLowerCase();

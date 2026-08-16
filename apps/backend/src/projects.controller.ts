@@ -15,6 +15,8 @@ import { AuditService } from './audit.service';
 import { ProjectsEventsService } from './realtime/projects-events.service';
 import { RequireFeature } from './feature-access/feature-access.decorator';
 import { safeSchema } from './common/schema.utils';
+import { isDoflowTenant } from './tenant/tenant-context';
+import { canonicalizeProjectRow } from './tenant/project-stage-model';
 
 type CreateProjectBody = {
   name: string;
@@ -103,7 +105,9 @@ export class ProjectsController {
       `,
     );
 
-    return res.json({ projects: rows });
+    return res.json({
+      projects: isDoflowTenant(schema) ? rows.map((row: any) => canonicalizeProjectRow(row)) : rows,
+    });
   }
 
   @Post()
@@ -136,7 +140,7 @@ export class ProjectsController {
       [body.name, body.description ?? null, authUser.email ?? null],
     );
 
-    const project = rows[0];
+    const project = isDoflowTenant(schema) ? canonicalizeProjectRow(rows[0]) : rows[0];
 
     await this.auditService.log(req, {
       action: 'project_created',

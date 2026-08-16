@@ -11,14 +11,16 @@ import {
   ensureProjectFinancialStatusFromQuote,
   ensureTenantFinanceTables,
 } from './tenant-finance-schema';
+import { isDoflowTenant } from './tenant-context';
+import {
+  aliasesForProjectStage,
+  canonicalizeProjectRow,
+  LEGACY_PROJECT_STATUSES,
+  normalizeProjectStage,
+} from './project-stage-model';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const PROJECT_STATUSES = [
-  'to_start', 'kickoff', 'materials_collection', 'strategy', 'ux_ui', 'copy_content',
-  'development', 'internal_review', 'client_review', 'corrections', 'seo_performance',
-  'qa', 'publishing', 'training', 'delivered', 'maintenance', 'closed', 'blocked',
-];
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 const PROJECT_MEMBER_ROLES = ['project_manager', 'designer', 'developer', 'seo', 'copywriter', 'sales', 'admin', 'member', 'external'];
 const MILESTONE_STATUSES = ['pending', 'in_progress', 'completed', 'blocked', 'skipped'];
@@ -147,7 +149,18 @@ export class TenantProjectsService {
       params.push(`%${search.toLowerCase()}%`);
       where.push(`(lower(coalesce(p.name, '')) LIKE $${params.length} OR lower(coalesce(p.description, '')) LIKE $${params.length})`);
     }
-    for (const field of ['status', 'type', 'priority', 'company_id', 'project_manager_id']) {
+    if (query.status !== undefined && query.status !== null && query.status !== '') {
+      if (isDoflowTenant(schema)) {
+        const aliases = aliasesForProjectStage(query.status);
+        if (!aliases) throw new BadRequestException('Status progetto non valido');
+        params.push(aliases);
+        where.push(`LOWER(COALESCE(p.status, '')) = ANY($${params.length}::text[])`);
+      } else {
+        params.push(query.status);
+        where.push(`p.status = $${params.length}`);
+      }
+    }
+    for (const field of ['type', 'priority', 'company_id', 'project_manager_id']) {
       const value = query[field];
       if (value === undefined || value === null || value === '') continue;
       params.push(value);
@@ -185,7 +198,12 @@ export class TenantProjectsService {
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
       [...params, limit, offset],
     );
-    return { items: rows, total: Number(countRows[0]?.total || 0), limit, offset };
+    return {
+      items: isDoflowTenant(schema) ? rows.map((row: any) => canonicalizeProjectRow(row)) : rows,
+      total: Number(countRows[0]?.total || 0),
+      limit,
+      offset,
+    };
   }
 
   async getProject(id: string) {
@@ -217,14 +235,14 @@ export class TenantProjectsService {
       params,
     );
     if (!rows[0]) throw new NotFoundException('Progetto non trovato');
-    return rows[0];
+    return isDoflowTenant(schema) ? canonicalizeProjectRow(rows[0]) : rows[0];
   }
 
   async createProject(body: Record<string, any>) {
     const user = this.assertCanManage();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
-    const cleaned = this.cleanProjectBody(body, false);
+    const cleaned = this.cleanProjectBody(body, false, schema);
     return this.insertProject(schema, cleaned, this.userIdOrNull(user.id), user);
   }
 
@@ -233,9 +251,15 @@ export class TenantProjectsService {
     this.requireUuid(id);
     const schema = this.getSchema();
     await this.ensureSchema(schema);
-    const cleaned = this.cleanProjectBody(body, true);
+    const cleaned = this.cleanProjectBody(body, true, schema);
     const entries = Object.entries(cleaned);
     if (entries.length === 0) return this.getProject(id);
+    const previousStatusRows = isDoflowTenant(schema) && 'status' in cleaned
+      ? await this.dataSource.query(
+        `SELECT status FROM "${schema}".projects WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+        [id],
+      )
+      : [];
     const sets = entries.map(([field], i) => `${field} = $${i + 1}`);
     const params = entries.map(([, value]) => value);
     params.push(this.userIdOrNull(user.id), id);
@@ -247,7 +271,24 @@ export class TenantProjectsService {
       params,
     );
     if (!rows[0]) throw new NotFoundException('Progetto non trovato');
-    await this.audit(schema, user, 'project_updated', id, cleaned);
+    const updateMetadata = { ...cleaned };
+    if (isDoflowTenant(schema)) delete updateMetadata.status;
+    if (Object.keys(updateMetadata).length > 0) {
+      await this.audit(schema, user, 'project_updated', id, updateMetadata);
+    }
+    if (isDoflowTenant(schema) && 'status' in cleaned) {
+      const previousRaw = String(previousStatusRows[0]?.status ?? '').trim().toLowerCase();
+      const nextStatus = String(cleaned.status || '');
+      if (previousRaw && previousRaw !== nextStatus) {
+        const previous = normalizeProjectStage(previousRaw);
+        await this.audit(schema, user, 'project_status_changed', id, {
+          previous_status: previous.mapped ? previous.stage : 'unknown',
+          new_status: nextStatus,
+          ...(previous.mapped && previous.isLegacy ? { previous_status_raw: previous.raw } : {}),
+          ...(!previous.mapped ? { previous_status_raw: previous.raw } : {}),
+        });
+      }
+    }
     return this.getProject(id);
   }
 
@@ -269,7 +310,6 @@ export class TenantProjectsService {
   }
 
   async updateProjectStatus(id: string, status: string) {
-    if (!PROJECT_STATUSES.includes(status)) throw new BadRequestException('Status progetto non valido');
     return this.updateProject(id, { status });
   }
 
@@ -313,7 +353,7 @@ export class TenantProjectsService {
         : userId;
       const projectType = this.normalizeProjectType(quote.service_type || quote.briefing_type || body.type);
       const name = this.normalizeProjectName(body.name || quote.title || quote.opportunity_title);
-      const status = this.normalizeProjectStatus(body.status);
+      const status = this.normalizeProjectStatus(body.status, schema);
       const priority = this.normalizeProjectPriority(body.priority);
       const progress = this.normalizeProjectProgress(body.progress);
       const projectRows = await runner.query(
@@ -819,19 +859,20 @@ export class TenantProjectsService {
     return { success: true };
   }
 
-  private cleanProjectBody(body: Record<string, any>, partial: boolean) {
+  private cleanProjectBody(body: Record<string, any>, partial: boolean, schema: string) {
     const cleaned = this.pick(body, [
       'company_id', 'contact_id', 'opportunity_id', 'briefing_id', 'quote_id',
       'name', 'description', 'type', 'status', 'priority', 'current_phase', 'progress',
       'project_manager_id', 'start_date', 'due_date', 'delivered_at', 'closed_at',
       'internal_notes', 'client_notes',
     ]);
+    if (isDoflowTenant(schema)) delete cleaned.current_phase;
     if (!partial || 'name' in cleaned) cleaned.name = this.normalizeProjectName(cleaned.name);
     for (const field of ['company_id', 'contact_id', 'opportunity_id', 'briefing_id', 'quote_id', 'project_manager_id']) {
       if (cleaned[field] === '') cleaned[field] = null;
       if (cleaned[field] && !UUID_RE.test(String(cleaned[field]))) throw new BadRequestException(`${field} non valido`);
     }
-    if (!partial || 'status' in cleaned) cleaned.status = this.normalizeProjectStatus(cleaned.status);
+    if (!partial || 'status' in cleaned) cleaned.status = this.normalizeProjectStatus(cleaned.status, schema);
     if (!partial || 'priority' in cleaned) cleaned.priority = this.normalizeProjectPriority(cleaned.priority);
     if (!partial || 'progress' in cleaned) cleaned.progress = this.normalizeProjectProgress(cleaned.progress);
     if ('type' in cleaned) cleaned.type = this.normalizeProjectType(cleaned.type);
@@ -893,10 +934,17 @@ export class TenantProjectsService {
     return name || 'Nuovo progetto';
   }
 
-  private normalizeProjectStatus(value: unknown): string {
+  private normalizeProjectStatus(value: unknown, schema: string): string {
     const status = String(value ?? '').trim();
     if (!status) return 'to_start';
-    if (!PROJECT_STATUSES.includes(status)) throw new BadRequestException('Status progetto non valido');
+    if (isDoflowTenant(schema)) {
+      const normalized = normalizeProjectStage(status);
+      if (!normalized.mapped) throw new BadRequestException('Status progetto non valido');
+      return normalized.stage;
+    }
+    if (!(LEGACY_PROJECT_STATUSES as readonly string[]).includes(status)) {
+      throw new BadRequestException('Status progetto non valido');
+    }
     return status;
   }
 
