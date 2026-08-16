@@ -8,7 +8,6 @@ Questa cartella contiene i riferimenti visuali e i criteri di accettazione per i
 
 - Tenant interessato: **solo `doflow`**.
 - Utenti di direzione: Oliver e Daniele, da risolvere tramite account, ruoli e permessi reali; non hardcodare email o identificativi.
-- Tenant `federicanerone`: protetto e fuori ambito.
 - Altri tenant: devono mantenere il comportamento corrente.
 - Login: **fuori ambito** in questa fase.
 - Client Portal: non deve essere reintrodotto.

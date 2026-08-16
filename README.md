@@ -301,7 +301,6 @@ Il middleware setta `req.tenantConnection` con la connessione TypeORM al schema 
 #### Verticali settoriali (4)
 - `vert.hospitality.bookings` — Camere + channel manager *(Pro, Beta)*
 - `vert.hospitality.menu` — Menu QR + comande digitali *(Pro, Beta)*
-- `vert.beauty` — Trattamenti + schede cliente *(Pro)*
 - `vert.manufacturing` — MES light + macchine utensili *(Enterprise)*
 
 ### 🎨 UX Highlights
@@ -477,7 +476,6 @@ Esempi già protetti:
 
 - `crm.sales-intel` → `/api/sales-intel/*`
 - `ops.kanban` → `/api/projects/*`
-- `vert.beauty` → `/api/clienti`, `/api/trattamenti`, `/api/appuntamenti`, `/api/federicanerone/settings`
 
 ### Superadmin (richiede ruolo `superadmin`)
 

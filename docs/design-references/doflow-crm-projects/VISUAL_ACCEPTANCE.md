@@ -94,7 +94,6 @@ Esempi:
 
 - leak verso altri tenant;
 - permessi errati;
-- modifica a `federicanerone`;
 - modifica del login in questo lavoro;
 - pannello assente o sostituito da cambio pagina;
 - tab essenziali mancanti;

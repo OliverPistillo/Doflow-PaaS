@@ -66,9 +66,6 @@ const MODULES: SeedModule[] = [
   { key: 'vert.hospitality.bookings', name: 'Prenotazioni Hospitality', description: 'Camere, calendar disponibilità, channel manager', category: ModuleCategory.SERVICES, minTier: ModuleTier.PRO, priceMonthly: 29, isBeta: true },
   { key: 'vert.hospitality.menu', name: 'Menu Digitale & Comande', description: 'QR menu, gestione tavoli, kitchen display', category: ModuleCategory.SERVICES, minTier: ModuleTier.PRO, priceMonthly: 19, isBeta: true },
 
-  // ─── VERTICAL: BEAUTY (federicanerone) ──────────────────────
-  { key: 'vert.beauty', name: 'Centro Estetico', description: 'Trattamenti, schede cliente, appuntamenti', category: ModuleCategory.HEALTH, minTier: ModuleTier.PRO, priceMonthly: 19 },
-
 ];
 
 @Injectable()

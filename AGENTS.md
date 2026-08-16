@@ -8,7 +8,6 @@ Queste istruzioni si applicano all’intera repository. Le regole più specifich
 
 - Le modifiche a CRM, Clienti, Pipeline, Progetti, File, Amministrazione, Performance consulente, navigazione e pannello laterale descritte in `docs/design-references/doflow-crm-projects/` si applicano **esclusivamente al tenant `doflow`**.
 - Non propagare le nuove voci di menu, i nuovi layout o i nuovi comportamenti agli altri tenant.
-- Non modificare l'area protetta `federicanerone`.
 - Componenti condivisi possono essere generalizzati internamente soltanto se il comportamento degli altri tenant resta invariato.
 - Il tenant `doflow` è un ambiente operativo reale, non una sandbox distruttiva.
 - Oliver e Daniele sono utenti di direzione/CEO nel tenant `doflow`. Non hardcodare nomi, email o identificativi: individuare account, ruoli e permessi reali nel codice e nei dati disponibili.
@@ -129,7 +128,6 @@ Per ogni schermata coperta da un riferimento:
 Restituire `VISUAL NO-GO` quando si verifica almeno una delle seguenti condizioni:
 
 - la modifica è visibile o attiva in un tenant diverso da `doflow` senza necessità architetturale e senza mantenere la compatibilità precedente;
-- è stata modificata l'area `federicanerone`;
 - è stata modificata la pagina login in questo lavoro;
 - sidebar o topbar non rispettano la shell bianca Doflow;
 - è stato introdotto un logo alternativo o un'identità visiva differente;
@@ -229,7 +227,6 @@ Il report Codex deve indicare:
 
 - obiettivo del task;
 - conferma perimetro tenant `doflow`;
-- conferma che `federicanerone` non è stato modificato;
 - conferma che il login non è stato modificato;
 - root cause o stato iniziale;
 - file modificati;

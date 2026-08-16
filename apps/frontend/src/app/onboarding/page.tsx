@@ -40,7 +40,7 @@ const SECTORS = [
   { id: "retail", name: "Retail / E-commerce", icon: Store, description: "Negozi fisici e online", suggested: ["crm.contacts","fin.invoices","fin.payments","inv.warehouse","inv.suppliers","mkt.campaigns"] },
   { id: "hospitality", name: "Hospitality", icon: Hotel, description: "Hotel, B&B, Airbnb", suggested: ["vert.hospitality.bookings","crm.contacts","fin.invoices","ops.calendar","ops.tasks","mkt.campaigns"] },
   { id: "restaurant", name: "Ristorazione", icon: UtensilsCrossed, description: "Ristoranti e bar", suggested: ["vert.hospitality.menu","inv.warehouse","inv.suppliers","fin.invoices","hr.employees","ops.calendar"] },
-  { id: "beauty", name: "Centro Estetico", icon: Scissors, description: "Saloni, SPA, parrucchieri", suggested: ["vert.beauty","crm.contacts","ops.calendar","fin.invoices","mkt.campaigns","sup.tickets"] },
+  { id: "beauty", name: "Centro Estetico", icon: Scissors, description: "Saloni, SPA, parrucchieri", suggested: ["crm.contacts","ops.calendar","fin.invoices","mkt.campaigns","sup.tickets"] },
   { id: "manufacturing", name: "Manifattura", icon: Factory, description: "Produzione industriale", suggested: ["vert.manufacturing","inv.warehouse","inv.purchase-orders","inv.logistics","hr.employees","crm.deals"] },
   { id: "services", name: "Servizi / Consulenza", icon: Briefcase, description: "Studi e agenzie", suggested: ["crm.contacts","crm.deals","crm.quotes","ops.timesheet","ops.projects","fin.invoices"] },
   { id: "healthcare", name: "Sanità", icon: Stethoscope, description: "Studi medici, cliniche", suggested: ["crm.contacts","ops.calendar","fin.invoices","sup.tickets","hr.employees"] },

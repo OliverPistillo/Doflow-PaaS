@@ -12,7 +12,6 @@ OBIETTIVO
 PERIMETRO TENANT
 - Questa modifica riguarda esclusivamente il tenant `doflow`.
 - Non modificare il comportamento degli altri tenant.
-- Non modificare l'area protetta `federicanerone`.
 - Oliver e Daniele sono utenti CEO/management nel tenant `doflow`, ma non hardcodare nomi, email o ID. Verifica utenti, ruoli e permessi reali.
 - Non introdurre un ruolo globale `ceo` senza una necessità architetturale verificata.
 - Il Client Portal è stato rimosso: non reintrodurre `/client/*`, `/client-portal/*` o token equivalenti.
@@ -127,7 +126,6 @@ REPORT FINALE OBBLIGATORIO
 - file modificati;
 - comportamento prima/dopo;
 - conferma scope solo tenant doflow;
-- conferma federicanerone non modificato;
 - conferma login non modificato;
 - riferimento visuale usato;
 - URL localhost effettivo;
