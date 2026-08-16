@@ -24,6 +24,7 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Doflow",
   description: "La piattaforma all-in-one per gestire il tuo business.",
+  manifest: "/site.webmanifest",
 };
 
 export default function RootLayout({
