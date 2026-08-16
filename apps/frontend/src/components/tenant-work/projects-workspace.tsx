@@ -29,6 +29,8 @@ import { listDocumentsForEntity } from "@/lib/tenant-documents-api";
 import { teamApi, type TeamMember } from "@/lib/tenant-team-api";
 import { isInternalDoflowTenant } from "@/lib/tenant-url";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
+import { DoflowProjectRecordPanel } from "@/components/doflow-record-panel/project-record-panel";
+import { useUnifiedRecordPanelUrl } from "@/components/doflow-record-panel/unified-record-panel";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -62,6 +64,12 @@ export function ProjectsWorkspace() {
   const searchParams = useSearchParams();
   const user = getDoFlowUser();
   const doflow = isInternalDoflowTenant(user?.tenantSlug || user?.tenantId);
+  const recordPanel = useUnifiedRecordPanelUrl({
+    enabled: doflow,
+    paramKey: "project",
+    tabs: ["overview", "flow", "activity", "files"],
+    defaultTab: "overview",
+  });
   const statusParam = searchParams.get("status");
   const projectStageOptions = doflow ? DOFLOW_PROJECT_STAGE_OPTIONS : LEGACY_PROJECT_STAGE_OPTIONS;
   const { canView, canCreate } = useTenantAccess();
@@ -123,7 +131,7 @@ export function ProjectsWorkspace() {
         const normalizedProjects = doflow ? projects.map(canonicalizeProjectItem) : projects;
         setItems(normalizedProjects);
         setTotal(Number(data.total || 0));
-        setSelectedId((current) => current && normalizedProjects.some((item) => item.id === current) ? current : normalizedProjects[0]?.id);
+        setSelectedId((current) => doflow ? undefined : current && normalizedProjects.some((item) => item.id === current) ? current : normalizedProjects[0]?.id);
       } catch (reason) {
         if (!active) return;
         setItems([]);
@@ -250,7 +258,7 @@ export function ProjectsWorkspace() {
         <WorkKpiCard icon={AlertTriangle} label="A rischio" value={loading ? "…" : riskCount} hint={doflow ? "In pausa, urgenti o oltre scadenza" : "Bloccati, urgenti o oltre scadenza"} tone="red" />
       </div>
 
-      <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className={doflow ? "min-w-0" : "grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]"}>
         <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white">
           {loading ? (
             <div className="flex min-h-80 items-center justify-center text-sm text-slate-500">Caricamento progetti…</div>
@@ -274,17 +282,17 @@ export function ProjectsWorkspace() {
                 <tbody className="divide-y divide-slate-100">
                   {items.map((project) => {
                     const owner = memberFor(project, members);
-                    const selected = selectedId === project.id;
+                    const selected = doflow ? recordPanel.recordId === project.id : selectedId === project.id;
                     return (
                       <tr
                         key={project.id}
-                        onClick={() => setSelectedId(project.id)}
+                        onClick={(event) => doflow ? recordPanel.openRecord(project.id, event.currentTarget) : setSelectedId(project.id)}
                         className={selected ? "cursor-pointer bg-indigo-50/65" : "cursor-pointer hover:bg-slate-50"}
                       >
                         <td className="px-5 py-4">
-                          <Link href={`/projects/${project.id}`} onClick={(event) => event.stopPropagation()} className="font-semibold text-indigo-600 hover:text-indigo-700">
-                            {project.name}
-                          </Link>
+                          {doflow ? (
+                            <button type="button" onClick={(event) => { event.stopPropagation(); recordPanel.openRecord(project.id, event.currentTarget); }} className="font-semibold text-indigo-600 hover:text-indigo-700">{project.name}</button>
+                          ) : <Link href={`/projects/${project.id}`} onClick={(event) => event.stopPropagation()} className="font-semibold text-indigo-600 hover:text-indigo-700">{project.name}</Link>}
                         </td>
                         <td className="px-4 py-4 text-slate-700">{project.company_name || "—"}</td>
                         <td className="px-4 py-4">
@@ -308,7 +316,9 @@ export function ProjectsWorkspace() {
                           <span className="inline-flex items-center gap-2 text-slate-600"><CalendarDays className="h-4 w-4" /> {formatShortDate(project.due_date)}</span>
                         </td>
                         {!doflow ? <td className="px-4 py-4"><ProjectStatusBadge value={project.status} /></td> : null}
-                        <td className="px-3 py-4 text-slate-400"><ChevronRight className="h-4 w-4" /></td>
+                        <td className="px-3 py-4 text-slate-400">
+                          {doflow ? <button type="button" aria-label={`Apri ${project.name}`} onClick={(event) => { event.stopPropagation(); recordPanel.openRecord(project.id, event.currentTarget); }} className="rounded-lg p-1 hover:bg-violet-100 hover:text-violet-700"><ChevronRight className="h-4 w-4" /></button> : <ChevronRight className="h-4 w-4" />}
+                        </td>
                       </tr>
                     );
                   })}
@@ -326,7 +336,7 @@ export function ProjectsWorkspace() {
           </footer>
         </section>
 
-        <aside className="min-w-0 rounded-2xl border border-slate-200/80 bg-white p-5 xl:sticky xl:top-5 xl:self-start">
+        {!doflow ? <aside className="min-w-0 rounded-2xl border border-slate-200/80 bg-white p-5 xl:sticky xl:top-5 xl:self-start">
           {!selectedProject ? (
             <WorkEmptyState>Seleziona un progetto per visualizzarne i dettagli.</WorkEmptyState>
           ) : (
@@ -378,8 +388,17 @@ export function ProjectsWorkspace() {
               </div>
             </div>
           )}
-        </aside>
+        </aside> : null}
       </div>
+      {doflow && recordPanel.recordId ? (
+        <DoflowProjectRecordPanel
+          recordId={recordPanel.recordId}
+          fallbackProject={items.find((item) => item.id === recordPanel.recordId)}
+          activeTab={recordPanel.activeTab}
+          onTabChange={recordPanel.setActiveTab}
+          onClose={recordPanel.closeRecord}
+        />
+      ) : null}
       <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 text-xs text-slate-500" aria-label="Viste specialistiche progetti">
         <span>Viste specialistiche:</span>
         <Link href="/projects/kanban" className="font-medium text-indigo-600 hover:text-indigo-700">Kanban</Link>

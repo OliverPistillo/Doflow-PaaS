@@ -25,6 +25,7 @@ export type CommercialCompany = {
   province?: string | null;
   country?: string | null;
   notes?: string | null;
+  owner_user_id?: string | null;
   updated_at?: string | null;
   created_at?: string | null;
 };
@@ -160,14 +161,23 @@ export const commercialApi = {
   companies(query: Record<string, QueryValue> = {}) {
     return apiFetch<CommercialList<CommercialCompany>>(`/tenant/crm/companies${queryString(query)}`);
   },
+  company(id: string) {
+    return apiFetch<CommercialCompany>(`/tenant/crm/companies/${encodeURIComponent(id)}`);
+  },
   contacts(query: Record<string, QueryValue> = {}) {
     return apiFetch<CommercialList<CommercialContact>>(`/tenant/crm/contacts${queryString(query)}`);
+  },
+  contact(id: string) {
+    return apiFetch<CommercialContact>(`/tenant/crm/contacts/${encodeURIComponent(id)}`);
   },
   leads(query: Record<string, QueryValue> = {}) {
     return apiFetch<CommercialList<CommercialLead>>(`/tenant/crm/leads${queryString(query)}`);
   },
   opportunities(query: Record<string, QueryValue> = {}) {
     return apiFetch<CommercialList<CommercialOpportunity>>(`/tenant/crm/opportunities${queryString(query)}`);
+  },
+  opportunity(id: string) {
+    return apiFetch<CommercialOpportunity>(`/tenant/crm/opportunities/${encodeURIComponent(id)}`);
   },
   activities(query: Record<string, QueryValue> = {}) {
     return apiFetch<CommercialList<CommercialActivity>>(`/tenant/crm/activities${queryString(query)}`);

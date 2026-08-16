@@ -38,7 +38,7 @@ export function ClientsTable({
 }: {
   rows: CommercialClientRow[];
   selectedId?: string;
-  onSelect: (row: CommercialClientRow) => void;
+  onSelect: (row: CommercialClientRow, trigger?: HTMLElement | null) => void;
   onEdit: (row: CommercialClientRow) => void;
   onDelete: (row: CommercialClientRow) => void;
 }) {
@@ -70,7 +70,7 @@ export function ClientsTable({
             return (
               <tr
                 key={row.company.id}
-                onClick={() => onSelect(row)}
+                onClick={(event) => onSelect(row, event.currentTarget)}
                 className={cn(
                   "cursor-pointer border-b border-slate-100 transition-colors last:border-b-0 hover:bg-slate-50",
                   selected && "bg-violet-50/70 hover:bg-violet-50",

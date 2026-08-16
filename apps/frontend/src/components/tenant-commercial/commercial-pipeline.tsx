@@ -18,6 +18,8 @@ import { getDoFlowUser } from "@/lib/jwt";
 import { commercialApi, type CommercialOpportunity, type CommercialPipeline } from "@/lib/tenant-commercial-api";
 import { isInternalDoflowTenant } from "@/lib/tenant-url";
 import { CommercialPageHeader } from "./commercial-ui";
+import { DoflowCommercialRecordPanel } from "@/components/doflow-record-panel/commercial-record-panel";
+import { useUnifiedRecordPanelUrl } from "@/components/doflow-record-panel/unified-record-panel";
 import { groupPipeline, isToday, pipelineItems } from "./commercial-utils";
 import { PipelineColumn } from "./pipeline-column";
 import { PipelineSummaryStrip } from "./pipeline-summary-strip";
@@ -35,7 +37,13 @@ export function CommercialPipelinePage() {
   const user = getDoFlowUser();
   const doflow = isInternalDoflowTenant(user?.tenantSlug || user?.tenantId);
   const stageParam = searchParams.get("stage");
-  const highlightedOpportunityId = searchParams.get("opportunity");
+  const recordPanel = useUnifiedRecordPanelUrl({
+    enabled: doflow,
+    paramKey: "opportunity",
+    tabs: ["overview", "activity", "files", "administration"],
+    defaultTab: "overview",
+  });
+  const highlightedOpportunityId = doflow ? recordPanel.recordId : searchParams.get("opportunity");
   const [pipeline, setPipeline] = useState<CommercialPipeline | null>(null);
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState(() => normalizeCommercialStageQuery(stageParam, doflow));
@@ -47,6 +55,11 @@ export function CommercialPipelinePage() {
   const [movingOpportunityId, setMovingOpportunityId] = useState<string | null>(null);
   const autoOpenedOpportunityRef = useRef<string | null>(null);
   const showEconomic = canSeeEconomicValues();
+
+  const openOpportunity = (item: CommercialOpportunity, trigger?: HTMLElement | null) => {
+    setSelectedOpportunity(item);
+    if (doflow) recordPanel.openRecord(item.id, trigger);
+  };
 
   const load = async () => {
     setLoading(true);
@@ -150,7 +163,7 @@ export function CommercialPipelinePage() {
           <p className="mt-1 text-xs text-amber-800">Queste trattative hanno una fase non riconosciuta e restano visibili fuori dal percorso positivo.</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {unmappedItems.map((item) => (
-              <button key={item.id} type="button" className="rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium" data-visual-sensitive onClick={() => setSelectedOpportunity(item)}>
+              <button key={item.id} type="button" className="rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium" data-visual-sensitive onClick={(event) => openOpportunity(item, event.currentTarget)}>
                 {item.company_name || item.title}
               </button>
             ))}
@@ -175,7 +188,7 @@ export function CommercialPipelinePage() {
                 totalValue={group.items.reduce((sum, item) => sum + Number(item.value_estimate || 0), 0)}
                 showEconomic={showEconomic}
                 onMove={move}
-                onOpenDetails={setSelectedOpportunity}
+                onOpenDetails={openOpportunity}
                 highlightedOpportunityId={highlightedOpportunityId}
                 doflow={doflow}
                 movingOpportunityId={movingOpportunityId}
@@ -210,12 +223,25 @@ export function CommercialPipelinePage() {
         </div>
       ) : null}
 
-      <OpportunityDetailSheet
-        opportunity={selectedOpportunity}
-        open={Boolean(selectedOpportunity)}
-        onOpenChange={(open) => { if (!open) setSelectedOpportunity(null); }}
-        showEconomic={showEconomic}
-      />
+      {doflow && recordPanel.recordId ? (
+        <DoflowCommercialRecordPanel
+          kind="opportunity"
+          recordId={recordPanel.recordId}
+          fallbackOpportunity={selectedOpportunity}
+          activeTab={recordPanel.activeTab}
+          onTabChange={recordPanel.setActiveTab}
+          onClose={() => { setSelectedOpportunity(null); recordPanel.closeRecord(); }}
+          showEconomic={showEconomic}
+        />
+      ) : null}
+      {!doflow ? (
+        <OpportunityDetailSheet
+          opportunity={selectedOpportunity}
+          open={Boolean(selectedOpportunity)}
+          onOpenChange={(open) => { if (!open) setSelectedOpportunity(null); }}
+          showEconomic={showEconomic}
+        />
+      ) : null}
     </main>
   );
 }

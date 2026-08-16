@@ -22,7 +22,7 @@ export function PipelineDealCard({
   item: CommercialOpportunity;
   showEconomic: boolean;
   onMove: (id: string, stage: string) => void;
-  onOpenDetails: (item: CommercialOpportunity) => void;
+  onOpenDetails: (item: CommercialOpportunity, trigger?: HTMLElement | null) => void;
   highlighted?: boolean;
   doflow: boolean;
   disabled?: boolean;
@@ -118,7 +118,7 @@ export function PipelineDealCard({
         </SelectContent>
       </Select>
 
-      <Button type="button" variant="ghost" size="sm" className="mt-2 h-8 w-full text-xs text-indigo-700" onClick={() => onOpenDetails(item)}>
+      <Button type="button" variant="ghost" size="sm" className="mt-2 h-8 w-full text-xs text-indigo-700" onClick={(event) => onOpenDetails(item, event.currentTarget)}>
         <Eye className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" /> Dettagli
       </Button>
     </article>

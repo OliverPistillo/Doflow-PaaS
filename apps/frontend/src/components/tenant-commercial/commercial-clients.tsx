@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Clock3, Search, TrendingUp, Users } from "lucide-react";
+import { ChevronDown, Clock3, Search, TrendingUp, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   commercialApi,
   type CommercialActivity,
@@ -30,6 +31,8 @@ import type { CommercialClientRow } from "./commercial-client-types";
 import { ClientsTable } from "./clients-table";
 import { commercialMoney } from "./commercial-utils";
 import { CommercialKpiCard, CommercialPageHeader } from "./commercial-ui";
+import { DoflowCommercialRecordPanel } from "@/components/doflow-record-panel/commercial-record-panel";
+import { useUnifiedRecordPanelUrl } from "@/components/doflow-record-panel/unified-record-panel";
 
 const statusOptions = [
   { value: "prospect", label: "Potenziale" },
@@ -61,6 +64,12 @@ const emptyCompany: Partial<CommercialCompany> = {
 export function CommercialClients() {
   const user = getDoFlowUser();
   const doflow = isInternalDoflowTenant(user?.tenantSlug || user?.tenantId);
+  const recordPanel = useUnifiedRecordPanelUrl({
+    enabled: doflow,
+    paramKey: "company",
+    tabs: ["overview", "activity", "files", "administration"],
+    defaultTab: "overview",
+  });
   const [companies, setCompanies] = useState<CommercialCompany[]>([]);
   const [contacts, setContacts] = useState<CommercialContact[]>([]);
   const [opportunities, setOpportunities] = useState<CommercialOpportunity[]>([]);
@@ -142,7 +151,8 @@ export function CommercialClients() {
       && (service === "all" || row.service === service);
   });
 
-  const selected = rows.find((row) => row.company.id === selectedId);
+  const effectiveSelectedId = doflow ? recordPanel.recordId || undefined : selectedId;
+  const selected = rows.find((row) => row.company.id === effectiveSelectedId);
   const activeClients = rows.filter((row) => row.company.status === "active_client").length;
   const followUps = rows.filter((row) => row.needsFollowUp).length;
   const totalValue = rows.reduce((sum, row) => sum + row.value, 0);
@@ -182,7 +192,10 @@ export function CommercialClients() {
     if (!window.confirm(`Eliminare ${row.company.name}?`)) return;
     try {
       await commercialApi.deleteCompany(row.company.id);
-      if (selectedId === row.company.id) setSelectedId(undefined);
+      if (effectiveSelectedId === row.company.id) {
+        if (doflow) recordPanel.closeRecord();
+        else setSelectedId(undefined);
+      }
       await load();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Eliminazione cliente non riuscita.");
@@ -226,17 +239,67 @@ export function CommercialClients() {
         <CommercialKpiCard label="Valore clienti" value={loading ? "…" : commercialMoney(totalValue)} icon={TrendingUp} tone="green" />
       </div>
 
-      <div className={selected ? "grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]" : ""}>
-        <ClientsTable rows={filteredRows} selectedId={selectedId} onSelect={(row) => setSelectedId(row.company.id)} onEdit={openEdit} onDelete={remove} />
-        {selected ? <ClientDetailPanel row={selected} onClose={() => setSelectedId(undefined)} onOpen={() => openEdit(selected)} /> : null}
+      <div className={!doflow && selected ? "grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]" : ""}>
+        <ClientsTable
+          rows={filteredRows}
+          selectedId={effectiveSelectedId}
+          onSelect={(row, trigger) => {
+            if (doflow) recordPanel.openRecord(row.company.id, trigger);
+            else setSelectedId(row.company.id);
+          }}
+          onEdit={openEdit}
+          onDelete={remove}
+        />
+        {!doflow && selected ? <ClientDetailPanel row={selected} onClose={() => setSelectedId(undefined)} onOpen={() => openEdit(selected)} /> : null}
       </div>
 
+      {doflow && recordPanel.recordId ? (
+        <DoflowCommercialRecordPanel
+          kind="company"
+          recordId={recordPanel.recordId}
+          fallbackClient={selected}
+          activeTab={recordPanel.activeTab}
+          onTabChange={recordPanel.setActiveTab}
+          onClose={recordPanel.closeRecord}
+          showEconomic
+        />
+      ) : null}
+
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
+        <DialogContent className={doflow ? "flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl" : "max-h-[90vh] overflow-y-auto sm:max-w-2xl"}>
+          <DialogHeader className={doflow ? "shrink-0 border-b border-slate-200 px-6 py-5" : undefined}>
             <DialogTitle>{editingId ? "Modifica cliente" : "Nuovo cliente"}</DialogTitle>
             <DialogDescription>I dati vengono salvati nell’anagrafica aziende del tenant.</DialogDescription>
           </DialogHeader>
+          {doflow ? (
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2 sm:col-span-2"><Label>Nome *</Label><Input value={form.name || ""} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} /></div>
+                <div className="grid gap-2"><Label>Stato</Label><Select value={form.status || "prospect"} onValueChange={(value) => setForm((prev) => ({ ...prev, status: value }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{statusOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select></div>
+                <div className="grid gap-2"><Label>Fonte</Label><Input value={form.source || ""} onChange={(event) => setForm((prev) => ({ ...prev, source: event.target.value }))} /></div>
+                <div className="grid gap-2"><Label>Email</Label><Input type="email" value={form.email || ""} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} /></div>
+                <div className="grid gap-2"><Label>Telefono</Label><Input value={form.phone || ""} onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))} /></div>
+                <div className="grid gap-2"><Label>Sito web</Label><Input value={form.website || ""} onChange={(event) => setForm((prev) => ({ ...prev, website: event.target.value }))} /></div>
+                <div className="grid gap-2"><Label>Settore</Label><Input value={form.industry || ""} onChange={(event) => setForm((prev) => ({ ...prev, industry: event.target.value }))} /></div>
+                <div className="grid gap-2"><Label>Dimensione</Label><Input value={form.size || ""} onChange={(event) => setForm((prev) => ({ ...prev, size: event.target.value }))} /></div>
+                <div className="grid gap-2 sm:col-span-2"><Label>Note</Label><Textarea value={form.notes || ""} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} /></div>
+              </div>
+              <Collapsible className="mt-5 rounded-xl border border-slate-200 bg-slate-50/70">
+                <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-slate-900">
+                  Dati fiscali e indirizzo <ChevronDown className="h-4 w-4 text-slate-500" />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="grid gap-4 border-t border-slate-200 px-4 py-4 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:col-span-2"><Label>Ragione sociale</Label><Input value={form.legal_name || ""} onChange={(event) => setForm((prev) => ({ ...prev, legal_name: event.target.value }))} /></div>
+                  <div className="grid gap-2"><Label>Partita IVA</Label><Input value={form.vat_number || ""} onChange={(event) => setForm((prev) => ({ ...prev, vat_number: event.target.value }))} /></div>
+                  <div className="grid gap-2"><Label>Codice fiscale</Label><Input value={form.fiscal_code || ""} onChange={(event) => setForm((prev) => ({ ...prev, fiscal_code: event.target.value }))} /></div>
+                  <div className="grid gap-2 sm:col-span-2"><Label>Indirizzo</Label><Input value={form.address || ""} onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))} /></div>
+                  <div className="grid gap-2"><Label>Città</Label><Input value={form.city || ""} onChange={(event) => setForm((prev) => ({ ...prev, city: event.target.value }))} /></div>
+                  <div className="grid gap-2"><Label>Provincia</Label><Input value={form.province || ""} onChange={(event) => setForm((prev) => ({ ...prev, province: event.target.value }))} /></div>
+                  <div className="grid gap-2"><Label>Paese</Label><Input value={form.country || ""} onChange={(event) => setForm((prev) => ({ ...prev, country: event.target.value }))} /></div>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+          ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2 sm:col-span-2"><Label>Nome *</Label><Input value={form.name || ""} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} /></div>
             <div className="grid gap-2"><Label>Ragione sociale</Label><Input value={form.legal_name || ""} onChange={(event) => setForm((prev) => ({ ...prev, legal_name: event.target.value }))} /></div>
@@ -255,7 +318,8 @@ export function CommercialClients() {
             <div className="grid gap-2"><Label>Paese</Label><Input value={form.country || ""} onChange={(event) => setForm((prev) => ({ ...prev, country: event.target.value }))} /></div>
             <div className="grid gap-2 sm:col-span-2"><Label>Note</Label><Textarea value={form.notes || ""} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} /></div>
           </div>
-          <DialogFooter>
+          )}
+          <DialogFooter className={doflow ? "shrink-0 border-t border-slate-200 bg-white px-6 py-4" : undefined}>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Annulla</Button>
             <Button onClick={save} disabled={saving || !String(form.name || "").trim()}>{saving ? "Salvataggio..." : "Salva cliente"}</Button>
           </DialogFooter>

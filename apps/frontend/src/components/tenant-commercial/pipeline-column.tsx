@@ -22,7 +22,7 @@ export function PipelineColumn({
   totalValue: number;
   showEconomic: boolean;
   onMove: (id: string, stage: string) => void;
-  onOpenDetails: (item: CommercialOpportunity) => void;
+  onOpenDetails: (item: CommercialOpportunity, trigger?: HTMLElement | null) => void;
   highlightedOpportunityId?: string | null;
   doflow: boolean;
   movingOpportunityId?: string | null;
