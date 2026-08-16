@@ -12,6 +12,9 @@ import {
   UsersRound,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { getDoFlowUser } from "@/lib/jwt";
+import { canonicalizeProjectItem } from "@/lib/project-stage-model";
+import { isInternalDoflowTenant } from "@/lib/tenant-url";
 import { calendarApi, type CalendarEvent } from "@/lib/tenant-calendar-api";
 import { teamApi, type TeamMember, type TeamWorkloadItem } from "@/lib/tenant-team-api";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
@@ -67,6 +70,8 @@ function deliveryGroup(value: string, now: Date) {
 }
 
 export function WorkOverview() {
+  const user = getDoFlowUser();
+  const doflow = isInternalDoflowTenant(user?.tenantSlug || user?.tenantId);
   const { canView, canCreate } = useTenantAccess();
   const [projects, setProjects] = useState<WorkProject[]>([]);
   const [tasks, setTasks] = useState<WorkTask[]>([]);
@@ -96,7 +101,10 @@ export function WorkOverview() {
         canView("team") ? teamApi.workload({ limit: 100 }) : Promise.resolve({ items: [] as TeamWorkloadItem[] }),
       ] as const);
       if (!active) return;
-      if (results[0].status === "fulfilled") setProjects(results[0].value.items || []);
+      if (results[0].status === "fulfilled") {
+        const items = results[0].value.items || [];
+        setProjects(doflow ? items.map(canonicalizeProjectItem) : items);
+      }
       if (results[1].status === "fulfilled") setTasks(results[1].value.items || []);
       if (results[2].status === "fulfilled") setDeadlines(results[2].value.items || []);
       if (results[3].status === "fulfilled") setMembers(results[3].value.items || []);
@@ -110,10 +118,10 @@ export function WorkOverview() {
     return () => {
       active = false;
     };
-  }, [canView]);
+  }, [canView, doflow]);
 
   const now = new Date();
-  const activeProjects = projects.filter(projectIsActive);
+  const activeProjects = projects.filter((project) => projectIsActive(project, doflow));
   const weekEnd = endOfWeek(now);
   const weekDeliveries = deadlines.filter((event) => {
     const date = dateValue(event.start_at);
@@ -126,13 +134,13 @@ export function WorkOverview() {
 
   const priorityProjects = useMemo(() => [...activeProjects]
     .sort((a, b) => {
-      const risk = Number(projectIsAtRisk(b, now)) - Number(projectIsAtRisk(a, now));
+      const risk = Number(projectIsAtRisk(b, now, doflow)) - Number(projectIsAtRisk(a, now, doflow));
       if (risk) return risk;
       const aDue = dateValue(a.due_date)?.getTime() ?? Number.MAX_SAFE_INTEGER;
       const bDue = dateValue(b.due_date)?.getTime() ?? Number.MAX_SAFE_INTEGER;
       return aDue - bDue || Number(b.progress || 0) - Number(a.progress || 0);
     })
-    .slice(0, 5), [activeProjects, now]);
+    .slice(0, 5), [activeProjects, doflow, now]);
 
   const upcoming = useMemo(() => deadlines
     .filter((event) => {
@@ -200,12 +208,12 @@ export function WorkOverview() {
                       <p className="truncate text-xs text-slate-500">{project.company_name || "Cliente non collegato"}</p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <WorkProgress value={project.progress} danger={projectIsAtRisk(project, now)} className="flex-1" />
+                      <WorkProgress value={project.progress} danger={projectIsAtRisk(project, now, doflow)} className="flex-1" />
                       <span className="w-9 text-right text-xs font-semibold text-slate-700">{Math.round(Number(project.progress || 0))}%</span>
                     </div>
                     <span className="text-xs text-slate-500">{formatShortDate(project.due_date)}</span>
                     <WorkAvatar name={manager?.display_name} email={manager?.email || project.project_manager_email} size="sm" />
-                    <ProjectStatusBadge value={project.status} />
+                    <ProjectStatusBadge value={project.status} doflow={doflow} />
                   </Link>
                 );
               })}

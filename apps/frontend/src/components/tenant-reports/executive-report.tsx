@@ -1,10 +1,14 @@
 "use client";
 
 import { reportsApi } from "@/lib/tenant-reports-api";
+import { getDoFlowUser } from "@/lib/jwt";
+import { isInternalDoflowTenant } from "@/lib/tenant-url";
 import { formatCurrency } from "./report-utils";
 import { KeyValueList, MetricGrid, ReportPage, Section, SimpleTable, TargetsProgress } from "./reports-core";
 
 export function ExecutiveReportPage() {
+  const user = getDoFlowUser();
+  const doflow = isInternalDoflowTenant(user?.tenantSlug || user?.tenantId);
   return (
     <ReportPage
       reportKey="executive"
@@ -28,7 +32,7 @@ export function ExecutiveReportPage() {
               { label: "Attivi", value: data.projects?.activeProjects },
               { label: "Completati", value: data.projects?.completedProjects },
               { label: "In ritardo", value: data.projects?.lateProjects },
-              { label: "Bloccati", value: data.projects?.blockedProjects },
+              { label: doflow ? "In pausa" : "Bloccati", value: data.projects?.blockedProjects },
               { label: "Task scaduti", value: data.projects?.overdueTasks },
               { label: "Delivery rate", value: data.projects?.projectDeliveryRate, kind: "percent" },
             ]} />
@@ -74,4 +78,3 @@ export function ExecutiveReportPage() {
     />
   );
 }
-

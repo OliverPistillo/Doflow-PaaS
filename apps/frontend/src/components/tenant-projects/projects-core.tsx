@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   CalendarDays, CheckCircle2, ClipboardCheck, Clock, Edit3, Eye, FileText, FolderKanban,
   FolderOpen, KanbanSquare, Loader2, MessageSquare, Plus, Search, Trash2,
@@ -20,6 +20,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
+import {
+  canonicalizeProjectItem,
+  DOFLOW_PROJECT_STAGE_OPTIONS,
+  LEGACY_PROJECT_STAGE_OPTIONS,
+  normalizeProjectStageQuery,
+  projectStageLabel,
+} from "@/lib/project-stage-model";
+import { isInternalDoflowTenant } from "@/lib/tenant-url";
 import { listDocumentsForEntity, type TenantDocument } from "@/lib/tenant-documents-api";
 import { shortDate } from "@/components/tenant-crm/crm-core";
 import { cn } from "@/lib/utils";
@@ -35,26 +43,12 @@ type Row = Record<string, any>;
 type ListResponse<T = Row> = { items: T[]; total?: number; limit?: number; offset?: number };
 type Option = { value: string; label: string };
 
-const PROJECT_STATUSES: Option[] = [
-  { value: "to_start", label: "Da avviare" },
-  { value: "kickoff", label: "Kick-off" },
-  { value: "materials_collection", label: "Raccolta materiali" },
-  { value: "strategy", label: "Strategia" },
-  { value: "ux_ui", label: "UX/UI" },
-  { value: "copy_content", label: "Copy/contenuti" },
-  { value: "development", label: "Sviluppo" },
-  { value: "internal_review", label: "Revisione interna" },
-  { value: "client_review", label: "Revisione cliente" },
-  { value: "corrections", label: "Correzioni" },
-  { value: "seo_performance", label: "SEO/Performance" },
-  { value: "qa", label: "QA" },
-  { value: "publishing", label: "Pubblicazione" },
-  { value: "training", label: "Formazione" },
-  { value: "delivered", label: "Consegnato" },
-  { value: "maintenance", label: "Manutenzione" },
-  { value: "closed", label: "Chiuso" },
-  { value: "blocked", label: "Bloccato" },
-];
+const PROJECT_STATUSES: Option[] = [...LEGACY_PROJECT_STAGE_OPTIONS];
+
+function isDoflowProjectTenant() {
+  const user = getDoFlowUser();
+  return isInternalDoflowTenant(user?.tenantSlug || user?.tenantId);
+}
 
 const PROJECT_TYPES: Option[] = [
   { value: "website", label: "Sito web" },
@@ -181,6 +175,19 @@ function StateBadge({ value, options }: { value?: string; options: Option[] }) {
   return <Badge variant="outline" className={tone}>{labelFor(value, options)}</Badge>;
 }
 
+function ProjectStageBadge({ value, doflow }: { value?: string; doflow: boolean }) {
+  if (!doflow) return <StateBadge value={value} options={PROJECT_STATUSES} />;
+  const label = projectStageLabel(value, true);
+  const tone = value === "paused"
+    ? "border-destructive/30 text-destructive"
+    : value === "delivered"
+      ? "border-emerald-500/30 text-emerald-600"
+      : label === "Da verificare"
+        ? "border-amber-500/30 text-amber-700"
+        : "border-border text-muted-foreground";
+  return <Badge variant="outline" className={tone}>{label}</Badge>;
+}
+
 function EmptyState({ children }: { children: ReactNode }) {
   return <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-12 text-center text-sm text-muted-foreground">{children}</div>;
 }
@@ -273,19 +280,22 @@ function ProjectForm({
   form,
   setForm,
   relations,
+  doflow,
 }: {
   form: Record<string, any>;
   setForm: (updater: (prev: Record<string, any>) => Record<string, any>) => void;
   relations: Record<string, Row[]>;
+  doflow: boolean;
 }) {
+  const projectStatuses: Option[] = doflow ? DOFLOW_PROJECT_STAGE_OPTIONS : PROJECT_STATUSES;
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <div className="grid gap-2 md:col-span-2"><Label>Nome progetto *</Label><Input value={form.name || ""} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} /></div>
       <div className="grid gap-2 md:col-span-2"><Label>Descrizione</Label><Textarea value={form.description || ""} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} /></div>
       <div className="grid gap-2"><Label>Tipo</Label><SelectField value={form.type} options={PROJECT_TYPES} placeholder="Tipo progetto" onChange={(v) => setForm((p) => ({ ...p, type: v }))} /></div>
-      <div className="grid gap-2"><Label>Stato</Label><SelectField value={form.status} options={PROJECT_STATUSES} placeholder="Stato" onChange={(v) => setForm((p) => ({ ...p, status: v }))} /></div>
+      <div className="grid gap-2"><Label>{doflow ? "Fase" : "Stato"}</Label><SelectField value={form.status} options={projectStatuses} placeholder={doflow ? "Fase" : "Stato"} onChange={(v) => setForm((p) => ({ ...p, status: v }))} /></div>
       <div className="grid gap-2"><Label>Priorità</Label><SelectField value={form.priority} options={PRIORITIES} placeholder="Priorità" onChange={(v) => setForm((p) => ({ ...p, priority: v }))} /></div>
-      <div className="grid gap-2"><Label>Fase corrente</Label><Input value={form.current_phase || ""} onChange={(e) => setForm((p) => ({ ...p, current_phase: e.target.value }))} /></div>
+      {!doflow ? <div className="grid gap-2"><Label>Fase corrente</Label><Input value={form.current_phase || ""} onChange={(e) => setForm((p) => ({ ...p, current_phase: e.target.value }))} /></div> : null}
       <div className="grid gap-2"><Label>Azienda</Label><RelationSelect value={form.company_id} rows={relations.companies} placeholder="Nessuna azienda" onChange={(v) => setForm((p) => ({ ...p, company_id: v }))} /></div>
       <div className="grid gap-2"><Label>Contatto</Label><RelationSelect value={form.contact_id} rows={relations.contacts} placeholder="Nessun contatto" onChange={(v) => setForm((p) => ({ ...p, contact_id: v }))} /></div>
       <div className="grid gap-2"><Label>Opportunità</Label><RelationSelect value={form.opportunity_id} rows={relations.opportunities} placeholder="Nessuna opportunità" onChange={(v) => setForm((p) => ({ ...p, opportunity_id: v }))} /></div>
@@ -302,17 +312,31 @@ function ProjectForm({
 
 export function ProjectsListPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const doflow = isDoflowProjectTenant();
+  const projectStatuses: Option[] = doflow ? DOFLOW_PROJECT_STAGE_OPTIONS : PROJECT_STATUSES;
+  const statusParam = searchParams.get("status");
   const { ConfirmDialog, confirm } = useConfirm();
   const { relations } = useProjectRelations(false, false);
   const [items, setItems] = useState<Row[]>([]);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("__all__");
+  const [status, setStatus] = useState(() => {
+    const normalized = normalizeProjectStageQuery(statusParam, doflow);
+    return normalized === "all" ? "__all__" : normalized;
+  });
   const [priority, setPriority] = useState("__all__");
   const [pm, setPm] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Row | null>(null);
   const [form, setForm] = useState<Record<string, any>>({});
+  const [saving, setSaving] = useState(false);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const normalized = normalizeProjectStageQuery(statusParam, doflow);
+    setStatus(normalized === "all" ? "__all__" : normalized);
+  }, [doflow, statusParam]);
 
   const load = async () => {
     setLoading(true);
@@ -324,7 +348,8 @@ export function ProjectsListPage() {
       if (priority !== "__all__") params.set("priority", priority);
       if (pm.trim()) params.set("project_manager_id", pm.trim());
       const data = await loadList("/tenant/projects", params);
-      setItems(data.items || []);
+      const projects = data.items || [];
+      setItems(doflow ? projects.map(canonicalizeProjectItem) : projects);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore caricamento progetti");
       setItems([]);
@@ -337,7 +362,7 @@ export function ProjectsListPage() {
     const timer = window.setTimeout(() => void load(), 250);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, status, priority, pm]);
+  }, [doflow, search, status, priority, pm]);
 
   const openEdit = (row: Row) => {
     setEditing(row);
@@ -347,7 +372,7 @@ export function ProjectsListPage() {
       type: row.type || "",
       status: row.status || "to_start",
       priority: row.priority || "medium",
-      current_phase: row.current_phase || "",
+      ...(!doflow ? { current_phase: row.current_phase || "" } : {}),
       company_id: row.company_id || "",
       contact_id: row.contact_id || "",
       opportunity_id: row.opportunity_id || "",
@@ -363,14 +388,24 @@ export function ProjectsListPage() {
 
   const saveEdit = async () => {
     if (!editing) return;
-    await apiFetch(`/tenant/projects/${editing.id}`, { method: "PATCH", body: JSON.stringify(toBody(form)) });
-    setEditing(null);
-    await load();
+    setSaving(true);
+    try {
+      await apiFetch(`/tenant/projects/${editing.id}`, { method: "PATCH", body: JSON.stringify(toBody(form)) });
+      setEditing(null);
+      await load();
+    } finally {
+      setSaving(false);
+    }
   };
 
   const updateStatus = async (row: Row, next: string) => {
-    await apiFetch(`/tenant/projects/${row.id}/status`, { method: "PATCH", body: JSON.stringify({ status: next }) });
-    await load();
+    setUpdatingStatusId(row.id);
+    try {
+      await apiFetch(`/tenant/projects/${row.id}/status`, { method: "PATCH", body: JSON.stringify({ status: next }) });
+      await load();
+    } finally {
+      setUpdatingStatusId(null);
+    }
   };
 
   const remove = async (row: Row) => {
@@ -406,7 +441,7 @@ export function ProjectsListPage() {
         <CardContent className="space-y-4">
           <div className="grid gap-3 lg:grid-cols-[1fr_180px_160px_260px]">
             <div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cerca progetti..." className="pl-9" /></div>
-            <Select value={status} onValueChange={setStatus}><SelectTrigger><SelectValue placeholder="Stato" /></SelectTrigger><SelectContent><SelectItem value="__all__">Tutti gli stati</SelectItem>{PROJECT_STATUSES.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>
+            <Select value={status} onValueChange={setStatus}><SelectTrigger><SelectValue placeholder={doflow ? "Fase" : "Stato"} /></SelectTrigger><SelectContent><SelectItem value="__all__">Tutti gli stati</SelectItem>{projectStatuses.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>
             <Select value={priority} onValueChange={setPriority}><SelectTrigger><SelectValue placeholder="Priorità" /></SelectTrigger><SelectContent><SelectItem value="__all__">Tutte</SelectItem>{PRIORITIES.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>
             <Input value={pm} onChange={(e) => setPm(e.target.value)} placeholder="Filtro project_manager_id opzionale" />
           </div>
@@ -437,7 +472,7 @@ export function ProjectsListPage() {
                         <p className="text-xs text-muted-foreground">{labelFor(row.type, PROJECT_TYPES)} · {row.project_manager_email || "PM non assegnato"}</p>
                       </td>
                       <td className="px-4 py-3">{row.company_name || "-"}</td>
-                      <td className="px-4 py-3"><StateBadge value={row.status} options={PROJECT_STATUSES} /></td>
+                      <td className="px-4 py-3"><ProjectStageBadge value={row.status} doflow={doflow} /></td>
                       <td className="px-4 py-3"><StateBadge value={row.priority} options={PRIORITIES} /></td>
                       <td className="px-4 py-3">{shortDate(row.due_date)}</td>
                       <td className="px-4 py-3"><Progress value={Number(row.progress || 0)} className="h-2 w-28" /></td>
@@ -446,9 +481,9 @@ export function ProjectsListPage() {
                           <Button size="sm" variant="outline" onClick={() => router.push(`/projects/${row.id}`)}><Eye className="h-4 w-4" /></Button>
                           {canManageProjects() ? <Button size="sm" variant="outline" onClick={() => openEdit(row)}><Edit3 className="h-4 w-4" /></Button> : null}
                           {canManageProjects() ? (
-                            <Select value={row.status || "to_start"} onValueChange={(next) => updateStatus(row, next)}>
+                            <Select value={doflow && projectStageLabel(row.status, true) === "Da verificare" ? undefined : row.status || "to_start"} onValueChange={(next) => updateStatus(row, next)} disabled={updatingStatusId === row.id}>
                               <SelectTrigger className="h-8 w-[160px]"><SelectValue /></SelectTrigger>
-                              <SelectContent>{PROJECT_STATUSES.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
+                              <SelectContent>{projectStatuses.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
                             </Select>
                           ) : null}
                           {canManageProjects() ? <Button size="sm" variant="outline" onClick={() => remove(row)}><Trash2 className="h-4 w-4 text-destructive" /></Button> : null}
@@ -466,8 +501,8 @@ export function ProjectsListPage() {
       <Dialog open={!!editing} onOpenChange={(open) => { if (!open) setEditing(null); }}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader><DialogTitle>Modifica progetto</DialogTitle><DialogDescription>Aggiorna i dati base del progetto.</DialogDescription></DialogHeader>
-          <ProjectForm form={form} setForm={setForm} relations={relations} />
-          <DialogFooter><Button onClick={saveEdit} disabled={!form.name}>Salva</Button></DialogFooter>
+          <ProjectForm form={form} setForm={setForm} relations={relations} doflow={doflow} />
+          <DialogFooter><Button onClick={saveEdit} disabled={saving || !form.name}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Salva</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
@@ -476,6 +511,7 @@ export function ProjectsListPage() {
 
 export function ProjectCreatePage() {
   const router = useRouter();
+  const doflow = isDoflowProjectTenant();
   const { relations } = useProjectRelations(true, true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -502,7 +538,7 @@ export function ProjectCreatePage() {
       <Card>
         <CardContent className="space-y-4 pt-6">
           <ErrorBox error={error} />
-          <ProjectForm form={form} setForm={setForm} relations={relations} />
+          <ProjectForm form={form} setForm={setForm} relations={relations} doflow={doflow} />
           <div className="flex gap-2"><Button onClick={save} disabled={saving || !form.name}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Crea progetto</Button><Button variant="outline" onClick={() => router.push("/projects")}>Annulla</Button></div>
         </CardContent>
       </Card>
@@ -512,6 +548,7 @@ export function ProjectCreatePage() {
 
 export function ProjectDetailPage({ projectId }: { projectId: string }) {
   const router = useRouter();
+  const doflow = isDoflowProjectTenant();
   const { toast } = useToast();
   const { ConfirmDialog, confirm } = useConfirm();
   const { relations } = useProjectRelations(true, true);
@@ -534,6 +571,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const [creatingContract, setCreatingContract] = useState(false);
   const [creatingDossier, setCreatingDossier] = useState(false);
+  const [projectSaving, setProjectSaving] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -548,7 +586,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
         loadList(`/tenant/projects/${projectId}/files`).catch(() => ({ items: [] })),
         listDocumentsForEntity("project", projectId, { limit: 5 }).catch(() => ({ items: [] })),
       ]);
-      setProject(projectData);
+      setProject(doflow ? canonicalizeProjectItem(projectData) : projectData);
       setMilestones(milestonesData.items || []);
       setTasks(tasksData.items || []);
       setMembers(membersData.items || []);
@@ -565,7 +603,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId]);
+  }, [doflow, projectId]);
 
   const openEdit = () => {
     if (!project) return;
@@ -575,7 +613,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
       type: project.type || "",
       status: project.status || "to_start",
       priority: project.priority || "medium",
-      current_phase: project.current_phase || "",
+      ...(!doflow ? { current_phase: project.current_phase || "" } : {}),
       progress: project.progress ?? 0,
       company_id: project.company_id || "",
       contact_id: project.contact_id || "",
@@ -592,9 +630,14 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
   };
 
   const saveProject = async () => {
-    await apiFetch(`/tenant/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(toBody(form)) });
-    setEditOpen(false);
-    await load();
+    setProjectSaving(true);
+    try {
+      await apiFetch(`/tenant/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(toBody(form)) });
+      setEditOpen(false);
+      await load();
+    } finally {
+      setProjectSaving(false);
+    }
   };
 
   const createMilestone = async () => {
@@ -772,7 +815,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
               Crea fattura da progetto
             </Button>
           ) : null}
-          <StateBadge value={project.status} options={PROJECT_STATUSES} />
+          <ProjectStageBadge value={project.status} doflow={doflow} />
           <StateBadge value={project.priority} options={PRIORITIES} />
           {canManageProjects() ? <Button onClick={openEdit}><Edit3 className="mr-2 h-4 w-4" /> Modifica</Button> : null}
         </div>
@@ -789,10 +832,10 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
         </TabsList>
         <TabsContent value="overview">
           <div className="grid gap-4 lg:grid-cols-3">
-            <InfoCard label="Stato" value={labelFor(project.status, PROJECT_STATUSES)} />
+            <InfoCard label={doflow ? "Fase" : "Stato"} value={doflow ? projectStageLabel(project.status, true) : labelFor(project.status, PROJECT_STATUSES)} />
             <InfoCard label="Priorità" value={labelFor(project.priority, PRIORITIES)} />
             <InfoCard label="Scadenza" value={shortDate(project.due_date)} />
-            <InfoCard label="Fase corrente" value={project.current_phase || "-"} />
+            {!doflow ? <InfoCard label="Fase corrente" value={project.current_phase || "-"} /> : null}
             <InfoCard label="Project manager" value={project.project_manager_email || project.project_manager_id || "-"} />
             <InfoCard label="Preventivo" value={project.quote_number || project.quote_title || "-"} />
           </div>
@@ -829,8 +872,8 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader><DialogTitle>Modifica progetto</DialogTitle></DialogHeader>
-          <ProjectForm form={form} setForm={setForm} relations={relations} />
-          <DialogFooter><Button onClick={saveProject} disabled={!form.name}>Salva</Button></DialogFooter>
+          <ProjectForm form={form} setForm={setForm} relations={relations} doflow={doflow} />
+          <DialogFooter><Button onClick={saveProject} disabled={projectSaving || !form.name}>{projectSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Salva</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

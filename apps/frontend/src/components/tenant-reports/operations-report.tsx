@@ -1,9 +1,14 @@
 "use client";
 
 import { reportsApi } from "@/lib/tenant-reports-api";
+import { getDoFlowUser } from "@/lib/jwt";
+import { projectStageLabel } from "@/lib/project-stage-model";
+import { isInternalDoflowTenant } from "@/lib/tenant-url";
 import { KeyValueList, MetricGrid, ReportPage, Section, SimpleTable } from "./reports-core";
 
 export function OperationsReportPage() {
+  const user = getDoFlowUser();
+  const doflow = isInternalDoflowTenant(user?.tenantSlug || user?.tenantId);
   return (
     <ReportPage
       reportKey="operations"
@@ -21,7 +26,7 @@ export function OperationsReportPage() {
                 { label: "Briefing incompleti", value: operations.incompleteBriefings },
                 { label: "Materiali mancanti", value: operations.missingMaterials },
                 { label: "Task scaduti", value: operations.overdueTasks },
-                { label: "Progetti bloccati", value: operations.blockedProjects },
+                { label: doflow ? "Progetti in pausa" : "Progetti bloccati", value: operations.blockedProjects },
                 { label: "Quote ferme", value: operations.staleQuotes },
               ]} />
             </Section>
@@ -31,7 +36,7 @@ export function OperationsReportPage() {
               <SimpleTable rows={operations.openRisks || []} empty="Nessun rischio rilevato." columns={[
                 { key: "type", label: "Tipo" },
                 { key: "name", label: "Nome", format: (value, row) => value || row.title || row.id },
-                { key: "status", label: "Stato" },
+                { key: "status", label: "Stato", format: (value, row) => doflow && row.type === "project_blocked" ? projectStageLabel(value, true) : value || "-" },
                 { key: "due_date", label: "Scadenza", format: (value, row) => value || row.due_at || "-" },
               ]} />
             </Section>
@@ -41,4 +46,3 @@ export function OperationsReportPage() {
     />
   );
 }
-

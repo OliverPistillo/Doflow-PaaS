@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   CalendarDays,
@@ -16,17 +17,24 @@ import {
   X,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { getDoFlowUser } from "@/lib/jwt";
+import {
+  canonicalizeProjectItem,
+  DOFLOW_PROJECT_STAGE_OPTIONS,
+  LEGACY_PROJECT_STAGE_OPTIONS,
+  normalizeProjectStageQuery,
+  projectStageLabel,
+} from "@/lib/project-stage-model";
 import { listDocumentsForEntity } from "@/lib/tenant-documents-api";
 import { teamApi, type TeamMember } from "@/lib/tenant-team-api";
+import { isInternalDoflowTenant } from "@/lib/tenant-url";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  PROJECT_STATUSES,
   addLocalDays,
   dateValue,
   formatShortDate,
-  optionLabel,
   projectIsActive,
   projectIsAtRisk,
   startOfLocalDay,
@@ -51,6 +59,11 @@ function memberFor(project: WorkProject, members: TeamMember[]) {
 }
 
 export function ProjectsWorkspace() {
+  const searchParams = useSearchParams();
+  const user = getDoFlowUser();
+  const doflow = isInternalDoflowTenant(user?.tenantSlug || user?.tenantId);
+  const statusParam = searchParams.get("status");
+  const projectStageOptions = doflow ? DOFLOW_PROJECT_STAGE_OPTIONS : LEGACY_PROJECT_STAGE_OPTIONS;
   const { canView, canCreate } = useTenantAccess();
   const [items, setItems] = useState<WorkProject[]>([]);
   const [allProjects, setAllProjects] = useState<WorkProject[]>([]);
@@ -58,7 +71,7 @@ export function ProjectsWorkspace() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState(() => normalizeProjectStageQuery(statusParam, doflow));
   const [manager, setManager] = useState("all");
   const [selectedId, setSelectedId] = useState<string>();
   const [selectedProject, setSelectedProject] = useState<WorkProject | null>(null);
@@ -78,13 +91,21 @@ export function ProjectsWorkspace() {
       canView("team") ? teamApi.members({ limit: 100 }) : Promise.resolve({ items: [] as TeamMember[] }),
     ] as const).then((results) => {
       if (!active) return;
-      if (results[0].status === "fulfilled") setAllProjects(results[0].value.items || []);
+      if (results[0].status === "fulfilled") {
+        const projects = results[0].value.items || [];
+        setAllProjects(doflow ? projects.map(canonicalizeProjectItem) : projects);
+      }
       if (results[1].status === "fulfilled") setMembers(results[1].value.items || []);
     });
     return () => {
       active = false;
     };
-  }, [canView]);
+  }, [canView, doflow]);
+
+  useEffect(() => {
+    setStatus(normalizeProjectStageQuery(statusParam, doflow));
+    setPage(1);
+  }, [doflow, statusParam]);
 
   useEffect(() => {
     let active = true;
@@ -98,9 +119,11 @@ export function ProjectsWorkspace() {
       try {
         const data = await apiFetch<WorkListResponse<WorkProject>>(`/tenant/projects?${params.toString()}`);
         if (!active) return;
-        setItems(data.items || []);
+        const projects = data.items || [];
+        const normalizedProjects = doflow ? projects.map(canonicalizeProjectItem) : projects;
+        setItems(normalizedProjects);
         setTotal(Number(data.total || 0));
-        setSelectedId((current) => current && data.items.some((item) => item.id === current) ? current : data.items[0]?.id);
+        setSelectedId((current) => current && normalizedProjects.some((item) => item.id === current) ? current : normalizedProjects[0]?.id);
       } catch (reason) {
         if (!active) return;
         setItems([]);
@@ -114,7 +137,7 @@ export function ProjectsWorkspace() {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [manager, page, search, status]);
+  }, [doflow, manager, page, search, status]);
 
   useEffect(() => {
     let active = true;
@@ -137,7 +160,8 @@ export function ProjectsWorkspace() {
         : Promise.resolve({ items: [], total: 0 }),
     ] as const).then((results) => {
       if (!active) return;
-      setSelectedProject(results[0].status === "fulfilled" ? results[0].value : items.find((item) => item.id === selectedId) || null);
+      const selected = results[0].status === "fulfilled" ? results[0].value : items.find((item) => item.id === selectedId) || null;
+      setSelectedProject(selected && doflow ? canonicalizeProjectItem(selected) : selected);
       setMilestones(results[1].status === "fulfilled" ? results[1].value.items || [] : []);
       setTasks(results[2].status === "fulfilled" ? results[2].value.items || [] : []);
       setFiles(results[3].status === "fulfilled" ? results[3].value.items || [] : []);
@@ -147,15 +171,15 @@ export function ProjectsWorkspace() {
     return () => {
       active = false;
     };
-  }, [canView, items, selectedId]);
+  }, [canView, doflow, items, selectedId]);
 
   const now = new Date();
-  const activeCount = allProjects.filter(projectIsActive).length;
+  const activeCount = allProjects.filter((project) => projectIsActive(project, doflow)).length;
   const deliveryCount = allProjects.filter((project) => {
     const due = dateValue(project.due_date);
-    return projectIsActive(project) && due && due >= startOfLocalDay(now) && due <= addLocalDays(startOfLocalDay(now), 7);
+    return projectIsActive(project, doflow) && due && due >= startOfLocalDay(now) && due <= addLocalDays(startOfLocalDay(now), 7);
   }).length;
-  const riskCount = allProjects.filter((project) => projectIsAtRisk(project, now)).length;
+  const riskCount = allProjects.filter((project) => projectIsAtRisk(project, now, doflow)).length;
   const pages = Math.max(1, Math.ceil(total / limit));
   const managers = useMemo(() => {
     const byId = new Map<string, { id: string; label: string }>();
@@ -206,7 +230,7 @@ export function ProjectsWorkspace() {
           <SelectTrigger className="h-12 w-full rounded-xl border-slate-200 bg-white lg:w-44"><SelectValue placeholder="Stato" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tutti gli stati</SelectItem>
-            {PROJECT_STATUSES.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+            {projectStageOptions.map(({ value, label }) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={manager} onValueChange={(value) => { setManager(value); setPage(1); }}>
@@ -221,9 +245,9 @@ export function ProjectsWorkspace() {
       {error ? <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">{error}</p> : null}
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <WorkKpiCard icon={FolderKanban} label="Attivi" value={loading ? "…" : activeCount} hint="Progetti non ancora consegnati o chiusi" />
+        <WorkKpiCard icon={FolderKanban} label="Attivi" value={loading ? "…" : activeCount} hint={doflow ? "Dal primo avvio alla pubblicazione" : "Progetti non ancora consegnati o chiusi"} />
         <WorkKpiCard icon={Clock3} label="In consegna" value={loading ? "…" : deliveryCount} hint="Scadenza nei prossimi 7 giorni" tone="orange" />
-        <WorkKpiCard icon={AlertTriangle} label="A rischio" value={loading ? "…" : riskCount} hint="Bloccati, urgenti o oltre scadenza" tone="red" />
+        <WorkKpiCard icon={AlertTriangle} label="A rischio" value={loading ? "…" : riskCount} hint={doflow ? "In pausa, urgenti o oltre scadenza" : "Bloccati, urgenti o oltre scadenza"} tone="red" />
       </div>
 
       <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -243,7 +267,7 @@ export function ProjectsWorkspace() {
                     <th className="px-4 py-4">Fase</th>
                     <th className="px-4 py-4">Avanzamento</th>
                     <th className="px-4 py-4">Prossima consegna</th>
-                    <th className="px-4 py-4">Stato</th>
+                    {!doflow ? <th className="px-4 py-4">Stato</th> : null}
                     <th className="w-12 px-3 py-4" />
                   </tr>
                 </thead>
@@ -269,17 +293,21 @@ export function ProjectsWorkspace() {
                             <span className="max-w-28 truncate text-slate-700">{owner?.display_name || project.project_manager_email || "—"}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-4 text-slate-700">{project.current_phase || optionLabel(PROJECT_STATUSES, project.status)}</td>
+                        <td className="px-4 py-4">
+                          {doflow
+                            ? <ProjectStatusBadge value={project.status} doflow />
+                            : <span className="text-slate-700">{project.current_phase || projectStageLabel(project.status, false)}</span>}
+                        </td>
                         <td className="px-4 py-4">
                           <div className="flex min-w-32 items-center gap-2">
-                            <div className="w-24"><WorkProgress value={project.progress} danger={projectIsAtRisk(project, now)} /></div>
+                            <div className="w-24"><WorkProgress value={project.progress} danger={projectIsAtRisk(project, now, doflow)} /></div>
                             <span className="text-xs font-semibold text-slate-700">{Math.round(Number(project.progress || 0))}%</span>
                           </div>
                         </td>
                         <td className="px-4 py-4">
                           <span className="inline-flex items-center gap-2 text-slate-600"><CalendarDays className="h-4 w-4" /> {formatShortDate(project.due_date)}</span>
                         </td>
-                        <td className="px-4 py-4"><ProjectStatusBadge value={project.status} /></td>
+                        {!doflow ? <td className="px-4 py-4"><ProjectStatusBadge value={project.status} /></td> : null}
                         <td className="px-3 py-4 text-slate-400"><ChevronRight className="h-4 w-4" /></td>
                       </tr>
                     );
@@ -322,12 +350,14 @@ export function ProjectsWorkspace() {
                 ) : null}
                 <div className="border-y border-slate-100 py-5">
                   <p className="text-xs text-slate-500">Fase</p>
-                  <p className="mt-1 text-sm font-medium text-slate-800">{selectedProject.current_phase || optionLabel(PROJECT_STATUSES, selectedProject.status)}</p>
+                  <p className="mt-1 text-sm font-medium text-slate-800">
+                    {doflow ? projectStageLabel(selectedProject.status, true) : selectedProject.current_phase || projectStageLabel(selectedProject.status, false)}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500">Avanzamento complessivo</p>
                   <p className="mt-1 text-2xl font-bold text-slate-950">{Math.round(Number(selectedProject.progress || 0))}%</p>
-                  <WorkProgress value={selectedProject.progress} danger={projectIsAtRisk(selectedProject, now)} className="mt-3" />
+                  <WorkProgress value={selectedProject.progress} danger={projectIsAtRisk(selectedProject, now, doflow)} className="mt-3" />
                 </div>
                 {nextMilestone ? (
                   <div className="border-t border-slate-100 pt-5">

@@ -57,26 +57,7 @@ export type WorkListResponse<T> = {
   offset?: number;
 };
 
-export const PROJECT_STATUSES = [
-  ["to_start", "Da avviare"],
-  ["kickoff", "Kick-off"],
-  ["materials_collection", "Raccolta materiali"],
-  ["strategy", "Strategia"],
-  ["ux_ui", "UX/UI"],
-  ["copy_content", "Copy/contenuti"],
-  ["development", "Sviluppo"],
-  ["internal_review", "Revisione interna"],
-  ["client_review", "Revisione cliente"],
-  ["corrections", "Correzioni"],
-  ["seo_performance", "SEO/Performance"],
-  ["qa", "QA"],
-  ["publishing", "Pubblicazione"],
-  ["training", "Formazione"],
-  ["delivered", "Consegnato"],
-  ["maintenance", "Manutenzione"],
-  ["closed", "Chiuso"],
-  ["blocked", "Bloccato"],
-] as const;
+export const PROJECT_STATUSES = LEGACY_PROJECT_STAGE_OPTIONS.map((option) => [option.value, option.label] as const);
 
 export const TASK_STATUSES = [
   ["backlog", "Backlog"],
@@ -146,15 +127,15 @@ export function formatTime(value?: string | Date | null) {
   return new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
-export function projectIsActive(project: WorkProject) {
-  return !["delivered", "closed"].includes(String(project.status || ""));
+export function projectIsActive(project: WorkProject, doflow = false) {
+  return isActiveProjectStage(project.status, doflow);
 }
 
-export function projectIsAtRisk(project: WorkProject, now = new Date()) {
+export function projectIsAtRisk(project: WorkProject, now = new Date(), doflow = false) {
   const due = dateValue(project.due_date);
-  return project.status === "blocked"
+  return isRiskProjectStage(project.status, doflow)
     || ["high", "urgent"].includes(String(project.priority || ""))
-    || Boolean(due && due < startOfLocalDay(now) && projectIsActive(project));
+    || Boolean(due && due < startOfLocalDay(now) && projectIsActive(project, doflow));
 }
 
 export function taskIsOpen(task: WorkTask) {
@@ -175,3 +156,8 @@ export function getMetadataText(metadata: unknown, ...keys: string[]) {
   }
   return undefined;
 }
+import {
+  isActiveProjectStage,
+  isRiskProjectStage,
+  LEGACY_PROJECT_STAGE_OPTIONS,
+} from "@/lib/project-stage-model";

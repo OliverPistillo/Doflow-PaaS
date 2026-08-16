@@ -4,8 +4,9 @@ import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { ArrowUpRight, Plus } from "lucide-react";
 import { getInitials } from "@/lib/jwt";
+import { canonicalProjectStage, projectStageLabel } from "@/lib/project-stage-model";
 import { cn } from "@/lib/utils";
-import { optionLabel, PRIORITIES, PROJECT_STATUSES, TASK_STATUSES } from "./work-model";
+import { optionLabel, PRIORITIES, TASK_STATUSES } from "./work-model";
 
 export function WorkPageHeader({
   title,
@@ -162,15 +163,16 @@ export function SoftBadge({
   );
 }
 
-export function ProjectStatusBadge({ value }: { value?: string | null }) {
-  const tone = value === "blocked"
+export function ProjectStatusBadge({ value, doflow = false }: { value?: string | null; doflow?: boolean }) {
+  const canonical = doflow ? canonicalProjectStage(value) : value;
+  const tone = canonical === "paused" || canonical === "blocked"
     ? "red"
-    : ["delivered", "closed"].includes(String(value || ""))
+    : ["delivered", "closed"].includes(String(canonical || ""))
       ? "green"
-      : ["publishing", "training"].includes(String(value || ""))
+      : ["publishing", "training"].includes(String(canonical || ""))
         ? "orange"
         : "slate";
-  return <SoftBadge tone={tone}>{optionLabel(PROJECT_STATUSES, value)}</SoftBadge>;
+  return <SoftBadge tone={tone}>{projectStageLabel(value, doflow)}</SoftBadge>;
 }
 
 export function TaskStatusBadge({ value }: { value?: string | null }) {
