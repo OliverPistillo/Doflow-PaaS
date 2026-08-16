@@ -21,6 +21,7 @@ import {
   Globe,
   Mail,
   Trash2,
+  ShieldCheck,
   Copy,
   Check
 } from "lucide-react";
@@ -59,6 +60,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
+import { isProtectedPlatformTenant } from "@/lib/platform-tenant-protection";
 import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/hooks/useConfirm";
 import { ActivityFeed } from "@/components/dashboard/activity-feed"; // <--- NUOVO IMPORT
@@ -384,7 +386,19 @@ export default function TenantsPage() {
     }
   };
 
-  const handleDeleteTenant = async (tenantId: string, tenantName: string) => {
+  const handleDeleteTenant = async (tenant: TenantRow) => {
+    if (isProtectedPlatformTenant(tenant)) {
+      toast({
+        title: "Tenant protetto",
+        description: "Il tenant interno della piattaforma non può essere eliminato.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const tenantId = tenant.id;
+    const tenantName = tenant.name;
+
     // Primo confirm — avviso completo
     const step1 = await confirm({
       title: "🚨 Zona Pericolosa — Eliminazione Tenant",
@@ -680,13 +694,20 @@ export default function TenantsPage() {
 
                                 <DropdownMenuSeparator />
 
-                                <DropdownMenuItem
-                                    className="text-rose-600 focus:text-rose-700 focus:bg-rose-50 font-bold"
-                                    onClick={() => handleDeleteTenant(t.id, t.name)}
-                                >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Elimina Definitivamente
-                                </DropdownMenuItem>
+                                {isProtectedPlatformTenant(t) ? (
+                                  <DropdownMenuItem disabled className="font-bold">
+                                    <ShieldCheck className="mr-2 h-4 w-4" />
+                                    Tenant protetto
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem
+                                      className="text-rose-600 focus:text-rose-700 focus:bg-rose-50 font-bold"
+                                      onClick={() => handleDeleteTenant(t)}
+                                  >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Elimina Definitivamente
+                                  </DropdownMenuItem>
+                                )}
                                 </DropdownMenuContent>
                             </DropdownMenu>
                             </div>

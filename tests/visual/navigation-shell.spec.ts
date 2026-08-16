@@ -6,6 +6,7 @@ import {
   moduleKeyForTenantPath,
   navigationVisibilityMatchesTenant,
 } from '../../apps/frontend/src/config/tenant-navigation';
+import { isProtectedPlatformTenant } from '../../apps/frontend/src/lib/platform-tenant-protection';
 
 const frontendOrigin = process.env.DOFLOW_VISUAL_FRONTEND_URL || 'http://localhost:3100';
 const actualDir = path.resolve(
@@ -236,6 +237,13 @@ test('modello Builder: Doflow-only, ordine, ruoli, capability e route esistenti'
   expect(commerciale?.activeHrefs || []).not.toContain('/commercial/site-proposals');
   expect(commerciale?.inactiveHrefs).toContain('/commercial/site-proposals');
   for (const route of builderRoutes) expect(moduleKeyForTenantPath(route)).toBe('crm');
+});
+
+test('protezione tenant piattaforma: Doflow non eliminabile e tenant ordinari invariati', () => {
+  expect(isProtectedPlatformTenant({ slug: ' doflow ', schemaName: 'tenant_schema' })).toBe(true);
+  expect(isProtectedPlatformTenant({ slug: 'customer', schemaName: ' DOFLOW ' })).toBe(true);
+  expect(isProtectedPlatformTenant({ slug: 'platform', schema_name: ' public ' })).toBe(true);
+  expect(isProtectedPlatformTenant({ slug: 'customer', schemaName: 'customer' })).toBe(false);
 });
 
 test('desktop commerciale: ordine, active state e screenshot privacy-safe', async ({ page }) => {

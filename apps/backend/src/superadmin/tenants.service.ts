@@ -1,6 +1,7 @@
 import {
   Injectable,
   ConflictException,
+  ForbiddenException,
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
@@ -15,7 +16,7 @@ import { CreateTenantDto } from './dto/create-tenant.dto';
 import { MailService } from '../mail/mail.service';
 import { RedisService } from '../redis/redis.service';
 import { TenantBootstrapService } from '../tenancy/tenant-bootstrap.service';
-import { normalizeSlugToSchema } from '../common/schema.utils';
+import { normalizeSlugToSchema, safeSchema } from '../common/schema.utils';
 import { buildWelcomeEmail, buildPasswordResetAdminEmail } from '../mail/email-templates';
 
 @Injectable()
@@ -147,38 +148,61 @@ export class TenantsService {
     const tenant = await this.tenantsRepo.findOne({ where: { id } });
     if (!tenant) return { message: 'Tenant già eliminato o non trovato' };
 
+    const slug = String(tenant.slug ?? '').trim().toLowerCase();
+    const rawSchema = String(tenant.schemaName ?? '').trim();
+    const normalizedRawSchema = rawSchema.toLowerCase();
+
+    if (slug === 'doflow' || normalizedRawSchema === 'doflow') {
+      throw new ForbiddenException('Il tenant interno Doflow non può essere eliminato');
+    }
+
+    let schemaName: string;
+    try {
+      schemaName = safeSchema(rawSchema, 'TenantsService.delete');
+    } catch {
+      throw new InternalServerErrorException('Configurazione schema tenant non valida');
+    }
+
+    if (schemaName === 'doflow' || schemaName === 'public') {
+      throw new ForbiddenException('Lo schema interno della piattaforma non può essere eliminato');
+    }
+
     const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    // FIX 🟠: transazione mancante — aggiunta per evitare stato inconsistente
-    await queryRunner.startTransaction();
 
     try {
-      // 1. Prima elimina il record (rollbackabile se lo schema drop fallisce)
-      await queryRunner.manager.delete(Tenant, id);
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
 
-      // 2. Poi dropa lo schema (operazione DDL non rollbackabile in PG,
-      //    ma almeno il record è già rimosso — fail qui lascia solo un
-      //    record orfano gestibile manualmente, NON dati senza record)
+      // PostgreSQL include sia il DELETE sia il DROP SCHEMA nella stessa transazione.
+      await queryRunner.manager.delete(Tenant, id);
       await queryRunner.query(
-        `DROP SCHEMA IF EXISTS "${tenant.schemaName}" CASCADE`,
+        `DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`,
       );
 
       await queryRunner.commitTransaction();
-
-      // 3. Rimozione dalla cache
-      const client = this.redisService.getClient();
-      await client.srem(this.WHITELIST_KEY, tenant.slug);
-      await this.redisService.del(`tenant:slug:${tenant.slug}`);
-
-      return { message: 'Tenant eliminato con successo' };
-
-    } catch (err) {
-      await queryRunner.rollbackTransaction();
-      this.logger.error('Errore eliminazione tenant:', err);
+    } catch {
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
+      this.logger.error('Transazione di eliminazione tenant fallita.');
       throw new InternalServerErrorException("Errore durante l'eliminazione");
     } finally {
       await queryRunner.release();
     }
+
+    try {
+      const client = this.redisService.getClient();
+      await client.srem(this.WHITELIST_KEY, tenant.slug);
+      await this.redisService.del(`tenant:slug:${tenant.slug}`);
+    } catch {
+      this.logger.warn('Tenant eliminato, ma il cleanup della cache è ancora pendente.');
+      return {
+        message: 'Tenant eliminato con successo',
+        warning: 'CACHE_CLEANUP_PENDING',
+      };
+    }
+
+    return { message: 'Tenant eliminato con successo' };
   }
 
   // ─── Reset Password ──────────────────────────────────────────

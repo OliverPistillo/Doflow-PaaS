@@ -2,9 +2,10 @@ import { Controller, Get, Post, Body, UseGuards, Delete, Param, Patch } from '@n
 import { TenantsService } from './tenants.service';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PlatformSuperadminGuard } from './platform-superadmin.guard';
 
 @Controller('superadmin/tenants')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PlatformSuperadminGuard)
 export class TenantsController {
   constructor(private readonly tenantsService: TenantsService) {}
 

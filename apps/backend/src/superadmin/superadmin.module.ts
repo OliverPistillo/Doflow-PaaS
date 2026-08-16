@@ -58,6 +58,7 @@ import { AutomationCronService } from './automation-cron.service';
 import { ExportService } from './export.service';
 import { SystemStatsService } from './telemetry.service';
 import { MetricsService } from './metrics.service';
+import { PlatformSuperadminGuard } from './platform-superadmin.guard';
 
 // ── Entities ─────────────────────────────────────────────────────────────────
 import { PlatformDeal } from './entities/platform-deal.entity';
@@ -151,6 +152,7 @@ import { BackupSchedule } from './entities/backup-schedule.entity';
     ExportService,
     SystemStatsService,
     MetricsService,
+    PlatformSuperadminGuard,
   ],
 
   exports: [TenantsService, ModulesService, SubscriptionsService],
