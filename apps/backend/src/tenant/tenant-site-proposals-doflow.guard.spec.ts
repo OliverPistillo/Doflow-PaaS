@@ -10,9 +10,9 @@ describe('TenantSiteProposalsDoflowGuard', () => {
     expect(new TenantSiteProposalsDoflowGuard().canActivate(ctx('doflow'))).toBe(true);
   });
 
-  it('rejects federicanerone, public and missing tenant', () => {
+  it('rejects foreign, public and missing tenant', () => {
     const guard = new TenantSiteProposalsDoflowGuard();
-    expect(() => guard.canActivate(ctx('federicanerone'))).toThrow(ForbiddenException);
+    expect(() => guard.canActivate(ctx('acme'))).toThrow(ForbiddenException);
     expect(() => guard.canActivate(ctx('public'))).toThrow(NotFoundException);
     expect(() => guard.canActivate(ctx())).toThrow(NotFoundException);
   });

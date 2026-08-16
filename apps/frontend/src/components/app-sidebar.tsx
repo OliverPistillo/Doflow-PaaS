@@ -9,9 +9,6 @@ import {
   Users,
   LogOut,
   Shield,
-  UserRound,
-  Scissors,
-  CalendarDays,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -65,12 +62,6 @@ function normalizeRole(r?: string): Role {
   return 'USER';
 }
 
-function isFedericaHost(): boolean {
-  if (typeof window === 'undefined') return false;
-  const host = window.location.host.toLowerCase();
-  return host.startsWith('federicanerone.');
-}
-
 type NavItem = {
   label: string;
   href: string;
@@ -84,14 +75,12 @@ export function AppSidebar(props: AppSidebarProps) {
 
   const [derivedRole, setDerivedRole] = React.useState<Role>('USER');
   const [derivedEmail, setDerivedEmail] = React.useState<string>('—');
-  const [isFederica, setIsFederica] = React.useState(false);
 
   React.useEffect(() => {
     const token = getToken();
     const payload = token ? parseJwtPayload(token) : null;
     setDerivedRole(normalizeRole(payload?.role));
     setDerivedEmail(payload?.email || '—');
-    setIsFederica(isFedericaHost());
   }, []);
 
   const role: Role = props.role ?? derivedRole;
@@ -101,9 +90,7 @@ export function AppSidebar(props: AppSidebarProps) {
   const homePath =
     role === 'SUPER_ADMIN'
       ? '/superadmin/dashboard'
-      : isFederica
-        ? '/federicanerone/clienti'
-        : '/dashboard';
+      : '/dashboard';
 
   const items = React.useMemo<NavItem[]>(() => {
     // ---- Superadmin / piattaforma
@@ -128,30 +115,8 @@ export function AppSidebar(props: AppSidebarProps) {
       },
     ];
 
-    // ---- Federica-only (solo su host federicanerone.*)
-    const federica: NavItem[] = [
-      {
-        label: 'Clienti',
-        icon: UserRound,
-        href: '/federicanerone/clienti',
-        visible: isFederica,
-      },
-      {
-        label: 'Trattamenti',
-        icon: Scissors,
-        href: '/federicanerone/trattamenti',
-        visible: isFederica,
-      },
-      {
-        label: 'Appuntamenti',
-        icon: CalendarDays,
-        href: '/federicanerone/appuntamenti',
-        visible: isFederica,
-      },
-    ];
-
-    return [...base, ...federica].filter((x) => x.visible);
-  }, [role, homePath, isFederica]);
+    return base.filter((x) => x.visible);
+  }, [role, homePath]);
 
   function isActive(href: string) {
     if (!pathname) return false;

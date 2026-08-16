@@ -74,14 +74,14 @@ describe('TenantCrmService lead intake integration', () => {
       user: {
         sub: '11111111-1111-4111-8111-111111111111',
         role: 'manager',
-        tenantId: 'federicanerone',
+        tenantId: 'acme',
       },
     };
     const service = new TenantCrmService(dataSource as any, request);
 
     const result = await service.list('leads', {});
 
-    expect(ensureTenantCrmCoreTables).toHaveBeenCalledWith(dataSource, 'federicanerone');
+    expect(ensureTenantCrmCoreTables).toHaveBeenCalledWith(dataSource, 'acme');
     expect(ensureLeadIntakeSubmissionsTable).not.toHaveBeenCalled();
 
     const statements = query.mock.calls.map(([sql]) => String(sql).replace(/\s+/g, ' '));
@@ -140,13 +140,13 @@ describe('TenantCrmService lead intake integration', () => {
     expect(pipelineSql).toContain('intake.created_at AS intake_created_at');
   });
 
-  it('mantiene opportunities e pipeline compatibili senza DDL o riferimenti intake per federicanerone', async () => {
+  it('mantiene opportunities e pipeline compatibili senza DDL o riferimenti intake per tenant non abilitati', async () => {
     process.env.PUBLIC_LEAD_INTAKE_TENANTS = 'doflow';
     const request = {
       user: {
         sub: '11111111-1111-4111-8111-111111111111',
         role: 'manager',
-        tenantId: 'federicanerone',
+        tenantId: 'acme',
       },
     };
     const listQuery = jest.fn()

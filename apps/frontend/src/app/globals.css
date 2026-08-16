@@ -894,19 +894,6 @@ body {
   background: hsl(var(--background));
 }
 
-/* Tenant brand switches from the review deck */
-.tenant-fed,
-.federica-theme,
-[data-tenant="federicanerone"] {
-  --primary: 38 35% 53%;       /* #B69559 */
-  --ring: 38 35% 53%;
-  --accent: 42 61% 91%;        /* #F5EEDD */
-  --accent-foreground: 38 58% 28%;
-  --chart-4: 39 45% 63%;       /* #C9AD78 */
-  --sidebar-primary: 38 35% 53%;
-  --sidebar-primary-foreground: 0 0% 100%;
-}
-
 .doflow-app-frame {
   background:
     radial-gradient(circle at 12% -8%, hsl(var(--primary) / 0.08), transparent 31rem),
@@ -1057,12 +1044,6 @@ body {
   background: hsl(var(--secondary)) !important;
   color: hsl(var(--foreground)) !important;
 }
-.tenant-fed [data-sidebar="menu-button"][data-active="true"],
-[data-tenant="federicanerone"] [data-sidebar="menu-button"][data-active="true"] {
-  background: hsl(var(--primary)) !important;
-  color: hsl(var(--primary-foreground)) !important;
-}
-
 /* Tables from review: mono uppercase headers, soft hover */
 .doflow-page-shell thead tr,
 .dashboard-content thead tr {

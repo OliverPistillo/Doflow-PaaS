@@ -11,7 +11,7 @@ describe('public lead intake tenant configuration', () => {
   it('abilita solo doflow per default', () => {
     delete process.env.PUBLIC_LEAD_INTAKE_TENANTS;
     expect(isPublicLeadIntakeTenantEnabled('doflow')).toBe(true);
-    expect(isPublicLeadIntakeTenantEnabled('federicanerone')).toBe(false);
+    expect(isPublicLeadIntakeTenantEnabled('other-tenant')).toBe(false);
   });
 
   it('normalizza la stessa lista configurata usata dal public endpoint', () => {

@@ -63,7 +63,7 @@ describe('TenantSiteProposalsService', () => {
   });
 
   it('rejects non-doflow tenant and roles below manager', async () => {
-    expect(() => makeService({ user: { role: 'manager', tenantId: 'federicanerone' } }).service['assertAccess'](false)).toThrow(NotFoundException);
+    expect(() => makeService({ user: { role: 'manager', tenantId: 'acme' } }).service['assertAccess'](false)).toThrow(NotFoundException);
     expect(() => makeService({ user: { role: 'viewer', tenantId: 'doflow' } }).service['assertAccess'](false)).toThrow(ForbiddenException);
   });
 

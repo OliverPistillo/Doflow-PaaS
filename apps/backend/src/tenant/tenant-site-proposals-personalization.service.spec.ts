@@ -133,7 +133,7 @@ describe('proposal personalization coordinator', () => {
 
   it.each([
     ['public', { user: { id: proposalId, role: 'manager', tenantId: 'public' } }, NotFoundException],
-    ['foreign tenant', { user: { id: proposalId, role: 'manager', tenantId: 'federicanerone' } }, ForbiddenException],
+    ['foreign tenant', { user: { id: proposalId, role: 'manager', tenantId: 'acme' } }, ForbiddenException],
   ])('rejects %s before any database query', async (_label, request, exception) => {
     const x = setup([], request);
 

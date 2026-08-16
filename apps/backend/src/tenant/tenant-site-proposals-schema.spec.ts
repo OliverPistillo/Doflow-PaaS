@@ -29,7 +29,7 @@ function createDataSource(...runners: any[]) {
 }
 
 describe('ensureDoflowSiteProposalTables', () => {
-  it.each(['federicanerone', 'public'])('rejects %s before creating a QueryRunner', (schema) => {
+  it.each(['acme', 'public'])('rejects %s before creating a QueryRunner', (schema) => {
     const { dataSource, createQueryRunner } = createDataSource();
     expect(() => ensureDoflowSiteProposalTables(dataSource, schema)).toThrow('only for doflow');
     expect(createQueryRunner).not.toHaveBeenCalled();

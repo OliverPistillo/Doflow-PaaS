@@ -2,8 +2,7 @@
 // Pagina CRM per la gestione delle richieste di preventivo
 // ricevute dal sito web pubblico.
 //
-// REDESIGN v2: Pannello dettaglio con Tabs (Scheda Richiesta, Brief, Allegati, Note)
-// ispirato alla scheda lead di Federica Nerone con layout a griglia,
+// REDESIGN v2: pannello dettaglio con tab e layout a griglia,
 // badge colorati, azioni rapide e sezioni organizzate.
 
 "use client";
