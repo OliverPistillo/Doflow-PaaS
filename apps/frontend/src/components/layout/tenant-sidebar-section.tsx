@@ -27,6 +27,7 @@ import type {
   TenantNavigationRole,
   TenantNavigationSection,
 } from "@/config/tenant-navigation";
+import { navigationVisibilityMatchesTenant } from "@/config/tenant-navigation";
 
 function isHrefActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -44,6 +45,10 @@ function accessCanSee(item: TenantNavigationItem | TenantNavigationSection, canV
   return canView ? canView(item.moduleKey) : true;
 }
 
+function sectionIsInactive(section: TenantNavigationSection, pathname: string): boolean {
+  return Boolean(section.inactiveHrefs?.some((href) => isHrefActive(pathname, href)));
+}
+
 export function findActiveTenantSectionId(
   sections: TenantNavigationSection[],
   pathname: string,
@@ -54,6 +59,7 @@ export function findActiveTenantSectionId(
 
   for (const section of sections) {
     if (!itemIsAvailable(section, role) || !accessCanSee(section, canView)) continue;
+    if (sectionIsInactive(section, pathname)) continue;
 
     if (section.href && isHrefActive(pathname, section.href)) {
       match = { id: section.id, hrefLength: section.href.length };
@@ -84,10 +90,15 @@ export function filterTenantNavigation(
   isDoflowTenant = false,
 ): TenantNavigationSection[] {
   return sections
-    .filter((section) => itemIsAvailable(section, role) && accessCanSee(section, canView))
+    .filter((section) => (
+      navigationVisibilityMatchesTenant(section.visibility, isDoflowTenant)
+      && itemIsAvailable(section, role)
+      && accessCanSee(section, canView)
+    ))
     .map((section) => ({
       ...section,
       children: section.children?.filter((child) => {
+        if (!navigationVisibilityMatchesTenant(child.visibility, isDoflowTenant)) return false;
         if (!itemIsAvailable(child, role) || !accessCanSee(child, canView)) return false;
         if (isDoflowTenant && activePlan && !planIncludes(activePlan, child.minPlan || 'STARTER')) return false;
         return true;
@@ -222,16 +233,19 @@ export function TenantSidebarSection({
   const minPlan = section.minPlan || "STARTER";
   const isLocked = !planIncludes(activePlan, minPlan);
   const hasChildren = children.length > 0;
-  const matchesHiddenRoute = section.activeHrefs?.some((href) => isHrefActive(pathname, href));
-  const activeChildHref = matchesHiddenRoute
+  const matchesInactiveRoute = sectionIsInactive(section, pathname);
+  const matchesHiddenRoute = !matchesInactiveRoute && section.activeHrefs?.some((href) => isHrefActive(pathname, href));
+  const activeChildHref = matchesInactiveRoute || matchesHiddenRoute
     ? undefined
     : children
         .filter((item) => isHrefActive(pathname, item.href))
         .sort((a, b) => b.href.length - a.href.length)[0]?.href;
   const active = Boolean(
-    (section.href && isHrefActive(pathname, section.href)) ||
-    matchesHiddenRoute ||
-    children.some((item) => isHrefActive(pathname, item.href)),
+    !matchesInactiveRoute && (
+      (section.href && isHrefActive(pathname, section.href)) ||
+      matchesHiddenRoute ||
+      children.some((item) => isHrefActive(pathname, item.href))
+    ),
   );
   const compact = state === "collapsed" && !isMobile;
   const contentId = `tenant-sidebar-section-${section.id}`;

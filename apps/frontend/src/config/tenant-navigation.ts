@@ -16,6 +16,7 @@ import {
   Handshake,
   KeyRound,
   Layers,
+  LayoutTemplate,
   LockKeyhole,
   Plug,
   Receipt,
@@ -58,6 +59,7 @@ export type TenantNavigationSection = {
   visibility?: TenantVisibility;
   moduleKey?: TenantModuleKey;
   activeHrefs?: string[];
+  inactiveHrefs?: string[];
   children?: TenantNavigationItem[];
 };
 
@@ -74,7 +76,7 @@ export const DOFLOW_TENANT_NAVIGATION: TenantNavigationSection[] = [
     label: "Commerciale",
     icon: Handshake,
     href: "/commercial",
-    activeHrefs: ["/commercial/site-proposals"],
+    inactiveHrefs: ["/commercial/site-proposals"],
     moduleKey: "crm",
     children: [
       { id: "commercial-overview", label: "Riepilogo", href: "/commercial", icon: BarChart3, moduleKey: "crm" },
@@ -82,6 +84,15 @@ export const DOFLOW_TENANT_NAVIGATION: TenantNavigationSection[] = [
       { id: "companies", label: "Clienti", href: "/companies", icon: Building2, moduleKey: "crm" },
       { id: "quotes", label: "Preventivi", href: "/quotes", icon: Send, moduleKey: "quotes" },
     ],
+  },
+  {
+    id: "builder",
+    label: "Builder",
+    icon: LayoutTemplate,
+    href: "/commercial/site-proposals",
+    roles: ["owner", "admin", "superadmin", "manager"],
+    visibility: "doflow",
+    moduleKey: "crm",
   },
   {
     id: "projects",
@@ -159,6 +170,14 @@ export function isNavigationRole(value: string | undefined | null): value is Ten
 export function normalizeNavigationRole(value: string | undefined | null): TenantNavigationRole {
   const role = String(value || "user").toLowerCase().replace("super_admin", "superadmin");
   return isNavigationRole(role) ? role : "user";
+}
+
+export function navigationVisibilityMatchesTenant(
+  visibility: TenantVisibility | undefined,
+  isDoflowTenant: boolean,
+): boolean {
+  if (!visibility || visibility === "all") return true;
+  return visibility === "doflow" ? isDoflowTenant : !isDoflowTenant;
 }
 
 function hrefMatches(pathname: string, href: string) {
