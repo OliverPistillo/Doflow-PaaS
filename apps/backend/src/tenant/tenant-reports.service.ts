@@ -11,6 +11,13 @@ import {
   isDoflowTenant,
   normalizeCommercialStage,
 } from './commercial-stage-model';
+import {
+  aggregateProjectStageValues,
+  canonicalizeProjectRow,
+  PROJECT_ACTIVE_STAGE_ALIASES,
+  PROJECT_DELIVERED_STAGE_ALIASES,
+  PROJECT_PAUSED_STAGE_ALIASES,
+} from './project-stage-model';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ADMIN_ROLES = new Set(['owner', 'admin', 'superadmin', 'super_admin']);
@@ -497,11 +504,25 @@ export class TenantReportsService {
     const taskScope = this.isManager(user.role) ? 'TRUE' : `assignee_id = $1`;
     const taskParams = this.isManager(user.role) ? [] : [userId];
 
-    const activeProjects = await this.countRows(schema, 'projects', `${projectScope} AND LOWER(COALESCE(status, '')) <> ALL($${projectParams.length + 1}::text[])`, [...projectParams, ['delivered', 'closed']]);
-    const completedProjects = await this.countRows(schema, 'projects', `${projectScope} AND LOWER(COALESCE(status, '')) = ANY($${projectParams.length + 1}::text[])`, [...projectParams, ['delivered', 'closed']]);
-    const lateProjects = await this.countRows(schema, 'projects', `${projectScope} AND due_date IS NOT NULL AND due_date < CURRENT_DATE AND LOWER(COALESCE(status, '')) <> ALL($${projectParams.length + 1}::text[])`, [...projectParams, ['delivered', 'closed']]);
-    const blockedProjects = await this.countRows(schema, 'projects', `${projectScope} AND LOWER(COALESCE(status, '')) = 'blocked'`, projectParams);
-    const projectsByStatus = await this.groupCount(schema, 'projects', 'status', projectScope, projectParams);
+    const doflowProjects = isDoflowTenant(schema);
+    const activeProjectWhere = doflowProjects
+      ? `LOWER(COALESCE(status, '')) = ANY($${projectParams.length + 1}::text[])`
+      : `LOWER(COALESCE(status, '')) <> ALL($${projectParams.length + 1}::text[])`;
+    const activeProjectParams = [...projectParams, doflowProjects ? PROJECT_ACTIVE_STAGE_ALIASES : ['delivered', 'closed']];
+    const deliveredProjectStatuses = doflowProjects ? PROJECT_DELIVERED_STAGE_ALIASES : ['delivered', 'closed'];
+    const activeProjects = await this.countRows(schema, 'projects', `${projectScope} AND ${activeProjectWhere}`, activeProjectParams);
+    const completedProjects = await this.countRows(schema, 'projects', `${projectScope} AND LOWER(COALESCE(status, '')) = ANY($${projectParams.length + 1}::text[])`, [...projectParams, deliveredProjectStatuses]);
+    const lateProjects = await this.countRows(schema, 'projects', `${projectScope} AND due_date IS NOT NULL AND due_date < CURRENT_DATE AND ${activeProjectWhere}`, activeProjectParams);
+    const blockedProjects = await this.countRows(
+      schema,
+      'projects',
+      doflowProjects
+        ? `${projectScope} AND LOWER(COALESCE(status, '')) = ANY($${projectParams.length + 1}::text[])`
+        : `${projectScope} AND LOWER(COALESCE(status, '')) = 'blocked'`,
+      doflowProjects ? [...projectParams, PROJECT_PAUSED_STAGE_ALIASES] : projectParams,
+    );
+    const rawProjectsByStatus = await this.groupCount(schema, 'projects', 'status', projectScope, projectParams);
+    const projectsByStatus = doflowProjects ? aggregateProjectStageValues(rawProjectsByStatus) : rawProjectsByStatus;
     sources.projects = await this.tableExists(schema, 'projects');
 
     const tasksByStatus = await this.groupCount(schema, 'tasks', 'status', taskScope, taskParams);
@@ -520,8 +541,12 @@ export class TenantReportsService {
       schema,
       'projects',
       ['id', 'name', 'status', 'due_date', 'project_manager_id'],
-      `${projectScope} AND (LOWER(COALESCE(status, '')) = 'blocked' OR (due_date IS NOT NULL AND due_date <= CURRENT_DATE + 7 AND LOWER(COALESCE(status, '')) <> ALL($${projectParams.length + 1}::text[])))`,
-      [...projectParams, ['delivered', 'closed']],
+      doflowProjects
+        ? `${projectScope} AND (LOWER(COALESCE(status, '')) = ANY($${projectParams.length + 1}::text[]) OR LOWER(COALESCE(priority, '')) = ANY($${projectParams.length + 2}::text[]) OR (due_date IS NOT NULL AND due_date < CURRENT_DATE AND LOWER(COALESCE(status, '')) = ANY($${projectParams.length + 3}::text[])))`
+        : `${projectScope} AND (LOWER(COALESCE(status, '')) = 'blocked' OR (due_date IS NOT NULL AND due_date <= CURRENT_DATE + 7 AND LOWER(COALESCE(status, '')) <> ALL($${projectParams.length + 1}::text[])))`,
+      doflowProjects
+        ? [...projectParams, PROJECT_PAUSED_STAGE_ALIASES, ['high', 'urgent'], PROJECT_ACTIVE_STAGE_ALIASES]
+        : [...projectParams, ['delivered', 'closed']],
       10,
     );
     const missingMaterials = await this.countRows(schema, 'briefing_material_requests', `LOWER(COALESCE(status, '')) IN ('missing', 'requested')`);
@@ -540,7 +565,7 @@ export class TenantReportsService {
       upcomingMilestones,
       projectDeliveryRate,
       averageProjectAgeDays: await this.averageAgeDays(schema, 'projects', 'created_at', projectScope, projectParams),
-      projectsWithoutRecentActivity: await this.countRows(schema, 'projects', `${projectScope} AND updated_at < now() - interval '14 days' AND LOWER(COALESCE(status, '')) <> ALL($${projectParams.length + 1}::text[])`, [...projectParams, ['delivered', 'closed']]),
+      projectsWithoutRecentActivity: await this.countRows(schema, 'projects', `${projectScope} AND updated_at < now() - interval '14 days' AND ${activeProjectWhere}`, activeProjectParams),
       projectRisks,
       missingMaterials,
       workloadByProject: await this.workloadByProject(schema, user),
@@ -681,7 +706,14 @@ export class TenantReportsService {
     const incompleteBriefings = await this.countRows(schema, 'briefings', `LOWER(COALESCE(status, '')) = ANY($1::text[])`, [['draft', 'sent', 'partially_completed']]);
     const missingMaterials = await this.countRows(schema, 'briefing_material_requests', `LOWER(COALESCE(status, '')) = ANY($1::text[])`, [['missing', 'requested']]);
     const overdueTasks = await this.countRows(schema, 'tasks', `due_at IS NOT NULL AND due_at < now() AND LOWER(COALESCE(status, '')) <> 'done'`);
-    const blockedProjects = await this.countRows(schema, 'projects', `LOWER(COALESCE(status, '')) = 'blocked'`);
+    const blockedProjects = await this.countRows(
+      schema,
+      'projects',
+      isDoflowTenant(schema)
+        ? `LOWER(COALESCE(status, '')) = ANY($1::text[])`
+        : `LOWER(COALESCE(status, '')) = 'blocked'`,
+      isDoflowTenant(schema) ? [PROJECT_PAUSED_STAGE_ALIASES] : [],
+    );
     const staleQuotes = await this.countRows(schema, 'quotes', `LOWER(COALESCE(status, '')) = 'sent' AND updated_at < now() - interval '7 days'`);
     const contractsWaitingSignature = await this.countRows(schema, 'contracts', `signature_status IN ('internal_pending', 'client_pending', 'partially_signed')`);
     const overdueContracts = await this.countRows(schema, 'contracts', `due_date < current_date AND status NOT IN ('signed', 'active', 'cancelled', 'archived')`);
@@ -867,7 +899,14 @@ export class TenantReportsService {
     };
     const dailyDigestAvailable = await this.countRows(schema, 'notification_digests', `digest_date = CURRENT_DATE`) > 0;
     const openRisks = [
-      ...(await this.recentRows(schema, 'projects', ['id', 'name', 'status', 'due_date'], `LOWER(COALESCE(status, '')) = 'blocked'`, [], 5)).map((row) => ({ type: 'project_blocked', ...row })),
+      ...(await this.recentRows(
+        schema,
+        'projects',
+        ['id', 'name', 'status', 'due_date'],
+        isDoflowTenant(schema) ? `LOWER(COALESCE(status, '')) = ANY($1::text[])` : `LOWER(COALESCE(status, '')) = 'blocked'`,
+        isDoflowTenant(schema) ? [PROJECT_PAUSED_STAGE_ALIASES] : [],
+        5,
+      )).map((row) => ({ type: 'project_blocked', ...(isDoflowTenant(schema) ? canonicalizeProjectRow(row) : row) })),
       ...(await this.recentRows(schema, 'tasks', ['id', 'title', 'status', 'due_at'], `due_at IS NOT NULL AND due_at < now() AND LOWER(COALESCE(status, '')) <> 'done'`, [], 5)).map((row) => ({ type: 'task_overdue', ...row })),
       ...(await this.recentRows(schema, 'contracts', ['id', 'title', 'status', 'signature_status', 'due_date'], `due_date < current_date AND status NOT IN ('signed', 'active', 'cancelled', 'archived')`, [], 5)).map((row) => ({ type: 'contract_overdue', ...row })),
       ...(await this.recentRows(schema, 'paperwork_dossiers', ['id', 'title', 'status', 'due_date'], `status = 'blocked' OR (due_date < current_date AND status NOT IN ('completed', 'archived'))`, [], 5)).map((row) => ({ type: 'paperwork_risk', ...row })),
@@ -945,7 +984,12 @@ export class TenantReportsService {
     const activeCustomers = await this.countRows(schema, 'companies', `LOWER(COALESCE(status, '')) = 'active_client'`);
     const prospects = await this.countRows(schema, 'companies', `LOWER(COALESCE(status, '')) = 'prospect'`);
     const dormantCustomers = await this.countRows(schema, 'companies', `LOWER(COALESCE(status, '')) = 'dormant' OR updated_at < now() - interval '90 days'`);
-    const customersWithActiveProjects = await this.countRows(schema, 'companies', `id IN (SELECT company_id FROM "${schema}".projects WHERE deleted_at IS NULL AND company_id IS NOT NULL AND LOWER(COALESCE(status, '')) <> ALL($1::text[]))`, [['delivered', 'closed']]);
+    const customersWithActiveProjects = await this.countRows(
+      schema,
+      'companies',
+      `id IN (SELECT company_id FROM "${schema}".projects WHERE deleted_at IS NULL AND company_id IS NOT NULL AND LOWER(COALESCE(status, '')) ${isDoflowTenant(schema) ? '= ANY' : '<> ALL'}($1::text[]))`,
+      [isDoflowTenant(schema) ? PROJECT_ACTIVE_STAGE_ALIASES : ['delivered', 'closed']],
+    );
     const customersWithRecurringServices = await this.countRows(schema, 'companies', `id IN (SELECT company_id FROM "${schema}".recurring_services WHERE deleted_at IS NULL AND company_id IS NOT NULL AND LOWER(COALESCE(status, '')) = 'active')`);
     const customersWithUpcomingRenewals = await this.countRows(schema, 'companies', `id IN (SELECT company_id FROM "${schema}".renewals WHERE deleted_at IS NULL AND company_id IS NOT NULL AND due_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 30 AND LOWER(COALESCE(status, '')) = ANY($1::text[]))`, [['upcoming', 'reminded']]);
     const customersWithUnpaidInvoices = canFinance
@@ -964,13 +1008,15 @@ export class TenantReportsService {
       ['id', 'name', 'status', 'updated_at'],
       `(LOWER(COALESCE(status, '')) = 'dormant' OR id IN (
         SELECT company_id FROM "${schema}".projects p
-        WHERE p.deleted_at IS NULL AND p.company_id IS NOT NULL AND LOWER(COALESCE(p.status, '')) IN ('delivered', 'closed')
+        WHERE p.deleted_at IS NULL AND p.company_id IS NOT NULL AND ${isDoflowTenant(schema)
+          ? `LOWER(COALESCE(p.status, '')) = ANY($1::text[])`
+          : `LOWER(COALESCE(p.status, '')) IN ('delivered', 'closed')`}
         AND NOT EXISTS (
           SELECT 1 FROM "${schema}".recurring_services rs
           WHERE rs.deleted_at IS NULL AND rs.company_id = p.company_id AND LOWER(COALESCE(rs.status, '')) = 'active'
         )
       ))`,
-      [],
+      isDoflowTenant(schema) ? [PROJECT_DELIVERED_STAGE_ALIASES] : [],
       10,
     );
     return {
@@ -1622,11 +1668,11 @@ export class TenantReportsService {
        JOIN "${schema}".team_members tm ON tm.user_id = pm.user_id AND tm.deleted_at IS NULL
        JOIN "${schema}".projects p ON p.id = pm.project_id AND p.deleted_at IS NULL
        WHERE pm.deleted_at IS NULL
-         AND LOWER(COALESCE(p.status, '')) <> ALL($1::text[])
+         AND LOWER(COALESCE(p.status, '')) ${isDoflowTenant(schema) ? '= ANY' : '<> ALL'}($1::text[])
          AND ($2::boolean OR tm.user_id = $3)
        GROUP BY tm.id, tm.display_name
        ORDER BY active_projects DESC`,
-      [['delivered', 'closed'], this.isManager(user.role), this.userIdOrNull(user.id)],
+      [isDoflowTenant(schema) ? PROJECT_ACTIVE_STAGE_ALIASES : ['delivered', 'closed'], this.isManager(user.role), this.userIdOrNull(user.id)],
     );
   }
 

@@ -18,6 +18,12 @@ import {
   FINANCE_AUTOMATION_TRIGGERS,
 } from './tenant-automations.types';
 import { TenantNotificationsService } from './tenant-notifications.service';
+import { isDoflowTenant } from './tenant-context';
+import {
+  normalizeProjectStage,
+  PROJECT_ACTIVE_STAGE_ALIASES,
+  PROJECT_PAUSED_STAGE_ALIASES,
+} from './project-stage-model';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ADMIN_ROLES = new Set(['owner', 'admin', 'superadmin', 'super_admin']);
@@ -847,11 +853,24 @@ export class TenantAutomationsService {
       case 'commercial_activity_due':
         return this.queryMatches(schema, 'commercial_activities', ['id', 'title', 'due_at', 'assigned_to', 'opportunity_id', 'lead_id'], `deleted_at IS NULL AND completed_at IS NULL AND due_at IS NOT NULL AND due_at <= now()`, [], limit, 'commercial_activity', (r) => ({ title: r.title || 'Attivita commerciale in scadenza', due_date: r.due_at, assigned_to_user_id: r.assigned_to, metadata: { opportunity_id: r.opportunity_id, lead_id: r.lead_id } }));
       case 'project_blocked':
-        return this.queryMatches(schema, 'projects', ['id', 'name', 'status', 'project_manager_id', 'due_date'], `deleted_at IS NULL AND status = 'blocked'`, [], limit, 'project', (r) => ({ title: r.name || 'Progetto bloccato', due_date: r.due_date, owner_user_id: r.project_manager_id }));
+        return this.queryMatches(
+          schema,
+          'projects',
+          ['id', 'name', 'status', 'project_manager_id', 'due_date'],
+          isDoflowTenant(schema) ? `deleted_at IS NULL AND LOWER(COALESCE(status, '')) = ANY($1::text[])` : `deleted_at IS NULL AND status = 'blocked'`,
+          isDoflowTenant(schema) ? [PROJECT_PAUSED_STAGE_ALIASES] : [],
+          limit,
+          'project',
+          (r) => ({ title: r.name || 'Progetto bloccato', due_date: r.due_date, owner_user_id: r.project_manager_id }),
+        );
       case 'project_due_soon':
-        return this.queryMatches(schema, 'projects', ['id', 'name', 'status', 'project_manager_id', 'due_date'], `deleted_at IS NULL AND due_date BETWEEN current_date AND current_date + ($1::int * interval '1 day') AND status NOT IN ('closed', 'delivered')`, [dueDays], limit, 'project', (r) => ({ title: r.name || 'Progetto in consegna', due_date: r.due_date, owner_user_id: r.project_manager_id }));
+        return this.queryMatches(schema, 'projects', ['id', 'name', 'status', 'project_manager_id', 'due_date'], isDoflowTenant(schema)
+          ? `deleted_at IS NULL AND due_date BETWEEN current_date AND current_date + ($1::int * interval '1 day') AND LOWER(COALESCE(status, '')) = ANY($2::text[])`
+          : `deleted_at IS NULL AND due_date BETWEEN current_date AND current_date + ($1::int * interval '1 day') AND status NOT IN ('closed', 'delivered')`, isDoflowTenant(schema) ? [dueDays, PROJECT_ACTIVE_STAGE_ALIASES] : [dueDays], limit, 'project', (r) => ({ title: r.name || 'Progetto in consegna', due_date: r.due_date, owner_user_id: r.project_manager_id }));
       case 'project_overdue':
-        return this.queryMatches(schema, 'projects', ['id', 'name', 'status', 'project_manager_id', 'due_date'], `deleted_at IS NULL AND due_date < current_date AND status NOT IN ('closed', 'delivered')`, [], limit, 'project', (r) => ({ title: r.name || 'Progetto in ritardo', due_date: r.due_date, owner_user_id: r.project_manager_id }));
+        return this.queryMatches(schema, 'projects', ['id', 'name', 'status', 'project_manager_id', 'due_date'], isDoflowTenant(schema)
+          ? `deleted_at IS NULL AND due_date < current_date AND LOWER(COALESCE(status, '')) = ANY($1::text[])`
+          : `deleted_at IS NULL AND due_date < current_date AND status NOT IN ('closed', 'delivered')`, isDoflowTenant(schema) ? [PROJECT_ACTIVE_STAGE_ALIASES] : [], limit, 'project', (r) => ({ title: r.name || 'Progetto in ritardo', due_date: r.due_date, owner_user_id: r.project_manager_id }));
       case 'task_due_today':
         return this.queryMatches(schema, 'tasks', ['id', 'title', 'project_id', 'assignee_id', 'due_at'], `deleted_at IS NULL AND due_at::date = current_date AND status <> 'done'`, [], limit, 'task', (r) => ({ title: r.title || 'Task in scadenza', due_date: r.due_at, assigned_to_user_id: r.assignee_id, project_id: r.project_id }));
       case 'task_overdue':
@@ -1197,8 +1216,14 @@ export class TenantAutomationsService {
   }
 
   private async actionUpdateEntityStatus(schema: string, match: Match, action: Record<string, unknown>) {
-    const nextStatus = this.textOrNull(action.status || action.next_status);
-    if (!nextStatus || !match.entity_id) return;
+    const requestedStatus = this.textOrNull(action.status || action.next_status);
+    if (!requestedStatus || !match.entity_id) return;
+    let nextStatus = requestedStatus;
+    if (match.entity_type === 'project' && isDoflowTenant(schema)) {
+      const normalized = normalizeProjectStage(requestedStatus);
+      if (!normalized.mapped) throw new BadRequestException('Status progetto non valido');
+      nextStatus = normalized.stage;
+    }
     const allowed: Record<string, { table: string; statuses: string[] }> = {
       project: { table: 'projects', statuses: ['blocked', 'to_start', 'closed'] },
       task: { table: 'tasks', statuses: ['blocked', 'ready', 'done'] },
@@ -1206,8 +1231,34 @@ export class TenantAutomationsService {
       paperwork_dossier: { table: 'paperwork_dossiers', statuses: ['blocked', 'waiting', 'archived'] },
     };
     const config = allowed[match.entity_type];
-    if (!config || !config.statuses.includes(nextStatus) || !(await this.tableExists(schema, config.table))) return;
+    const allowedStatus = match.entity_type === 'project' && isDoflowTenant(schema)
+      ? true
+      : Boolean(config?.statuses.includes(nextStatus));
+    if (!config || !allowedStatus || !(await this.tableExists(schema, config.table))) return;
+    const previousRows = match.entity_type === 'project' && isDoflowTenant(schema)
+      ? await this.dataSource.query(`SELECT status FROM "${schema}".projects WHERE id = $1 AND deleted_at IS NULL LIMIT 1`, [match.entity_id])
+      : [];
     await this.dataSource.query(`UPDATE "${schema}".${config.table} SET status = $2, updated_at = now() WHERE id = $1 AND deleted_at IS NULL`, [match.entity_id, nextStatus]);
+    const previousRaw = String(previousRows[0]?.status || '').trim().toLowerCase();
+    if (match.entity_type === 'project' && isDoflowTenant(schema) && previousRaw && previousRaw !== nextStatus) {
+      const previous = normalizeProjectStage(previousRaw);
+      const user = this.request?.user || this.request?.authUser;
+      await this.dataSource.query(
+        `INSERT INTO "${schema}".audit_log (actor_email, actor_role, action, target, metadata, created_at)
+         VALUES ($1, $2, 'project_status_changed', $3, $4::jsonb, now())`,
+        [
+          typeof user?.email === 'string' ? user.email : null,
+          String(user?.role || 'automation').toLowerCase(),
+          match.entity_id,
+          JSON.stringify({
+            previous_status: previous.mapped ? previous.stage : 'unknown',
+            new_status: nextStatus,
+            ...(previous.mapped && previous.isLegacy ? { previous_status_raw: previous.raw } : {}),
+            ...(!previous.mapped ? { previous_status_raw: previous.raw } : {}),
+          }),
+        ],
+      );
+    }
   }
 
   private async actionAddActivityLog(schema: string, match: Match, rule: Record<string, any>, action: Record<string, unknown>) {

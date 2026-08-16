@@ -3,6 +3,8 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { DataSource } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
 import { ensureTenantNotificationsTables, seedTenantNotificationRules } from './tenant-notifications-schema';
+import { isDoflowTenant } from './tenant-context';
+import { PROJECT_ACTIVE_STAGE_ALIASES, PROJECT_PAUSED_STAGE_ALIASES } from './project-stage-model';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -658,12 +660,15 @@ export class TenantNotificationsService {
     if (!(await this.tableExists(schema, 'projects'))) return 0;
     const rows = await this.dataSource.query(
       `SELECT id, name, project_manager_id FROM "${schema}".projects
-       WHERE deleted_at IS NULL AND LOWER(COALESCE(status::text, '')) = 'blocked'`,
+       WHERE deleted_at IS NULL AND ${isDoflowTenant(schema)
+        ? `LOWER(COALESCE(status::text, '')) = ANY($1::text[])`
+        : `LOWER(COALESCE(status::text, '')) = 'blocked'`}`,
+      isDoflowTenant(schema) ? [PROJECT_PAUSED_STAGE_ALIASES] : [],
     );
     let created = 0;
     for (const row of rows) {
       created += await this.notifyUserOrRole(schema, row.project_manager_id, 'manager', {
-        title: `Progetto bloccato: ${row.name}`,
+        title: `Progetto ${isDoflowTenant(schema) ? 'in pausa' : 'bloccato'}: ${row.name}`,
         type: 'project_blocked',
         priority: 'urgent',
         entity_type: 'project',
@@ -673,7 +678,7 @@ export class TenantNotificationsService {
         metadata: {},
       });
       created += await this.notifyRoles(schema, ['owner', 'admin', 'superadmin'], {
-        title: `Progetto bloccato: ${row.name}`,
+        title: `Progetto ${isDoflowTenant(schema) ? 'in pausa' : 'bloccato'}: ${row.name}`,
         type: 'project_blocked',
         priority: 'urgent',
         entity_type: 'project',
@@ -692,7 +697,10 @@ export class TenantNotificationsService {
       `SELECT id, name, due_date, project_manager_id FROM "${schema}".projects
        WHERE deleted_at IS NULL
          AND due_date BETWEEN current_date AND current_date + INTERVAL '7 days'
-         AND LOWER(COALESCE(status::text, '')) NOT IN ('delivered', 'closed', 'done', 'completed')`,
+         AND ${isDoflowTenant(schema)
+          ? `LOWER(COALESCE(status::text, '')) = ANY($1::text[])`
+          : `LOWER(COALESCE(status::text, '')) NOT IN ('delivered', 'closed', 'done', 'completed')`}`,
+      isDoflowTenant(schema) ? [PROJECT_ACTIVE_STAGE_ALIASES] : [],
     );
     let created = 0;
     for (const row of rows) {

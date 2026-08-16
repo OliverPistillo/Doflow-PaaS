@@ -100,6 +100,36 @@ describe('TenantAutomationsService', () => {
     await expect(service.runRuleFromRequest(ruleId, {})).resolves.toMatchObject({ status: 'success' });
     await expect(service.exportRule(ruleId)).resolves.toMatchObject({ rule: expect.objectContaining({ id: ruleId }) });
   });
+
+  it('normalizza gli status progetto Doflow scritti dalle automazioni e genera un solo audit', async () => {
+    const { service, query } = makeService();
+    jest.spyOn(service as any, 'tableExists').mockResolvedValue(true);
+    query.mockImplementation(async (sql: string) => {
+      if (sql.includes('SELECT status FROM "doflow".projects')) return [{ status: 'client_review' }];
+      return [];
+    });
+
+    await (service as any).actionUpdateEntityStatus(
+      'doflow',
+      { entity_type: 'project', entity_id: '33333333-3333-4333-8333-333333333333', title: 'Fixture' },
+      { status: 'blocked' },
+    );
+
+    const update = query.mock.calls.find(([sql]) => String(sql).includes('UPDATE "doflow".projects'));
+    expect(update?.[1]).toEqual(['33333333-3333-4333-8333-333333333333', 'paused']);
+    const audits = query.mock.calls.filter(([sql]) => String(sql).includes('audit_log'));
+    expect(audits).toHaveLength(1);
+    expect(audits[0][1]?.[3]).toContain('"previous_status_raw":"client_review"');
+  });
+
+  it('rifiuta status progetto sconosciuti nelle automazioni Doflow', async () => {
+    const { service } = makeService();
+    await expect((service as any).actionUpdateEntityStatus(
+      'doflow',
+      { entity_type: 'project', entity_id: '33333333-3333-4333-8333-333333333333', title: 'Fixture' },
+      { status: 'unknown' },
+    )).rejects.toBeInstanceOf(BadRequestException);
+  });
 });
 
 describe('seedTenantAutomationTemplatesAndRules', () => {

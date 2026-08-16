@@ -12,6 +12,8 @@ import {
   syncTenantUsersToTeamMembers,
 } from './tenant-team-schema';
 import { TenantNotificationsService } from './tenant-notifications.service';
+import { isDoflowTenant } from './tenant-context';
+import { PROJECT_ACTIVE_STAGE_ALIASES } from './project-stage-model';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -1227,11 +1229,13 @@ export class TenantTeamService {
     const projectRows = await this.dataSource.query(
       `SELECT COUNT(DISTINCT pm.project_id)::int AS count
        FROM "${schema}".project_members pm
-       JOIN "${schema}".projects p ON p.id = pm.project_id
-       WHERE pm.deleted_at IS NULL AND p.deleted_at IS NULL
-         AND pm.user_id = $2::uuid
-         AND lower(COALESCE(p.status, '')) NOT IN ('closed', 'delivered')`,
-      params,
+         JOIN "${schema}".projects p ON p.id = pm.project_id
+         WHERE pm.deleted_at IS NULL AND p.deleted_at IS NULL
+           AND pm.user_id = $2::uuid
+         AND ${isDoflowTenant(schema)
+          ? `lower(COALESCE(p.status, '')) = ANY($3::text[])`
+          : `lower(COALESCE(p.status, '')) NOT IN ('closed', 'delivered')`}`,
+      isDoflowTenant(schema) ? [...params, PROJECT_ACTIVE_STAGE_ALIASES] : params,
     ).catch(() => [{ count: 0 }]);
     const timeRows = await this.dataSource.query(
       `SELECT

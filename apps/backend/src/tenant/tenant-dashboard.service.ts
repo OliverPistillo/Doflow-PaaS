@@ -15,6 +15,10 @@ import {
   COMMERCIAL_POSITIVE_STAGES,
   isDoflowTenant,
 } from './commercial-stage-model';
+import {
+  PROJECT_ACTIVE_STAGE_ALIASES,
+  PROJECT_PAUSED_STAGE_ALIASES,
+} from './project-stage-model';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -759,10 +763,12 @@ export class TenantDashboardService {
 
     const hasStatus = await this.columnExists(schema, 'projects', 'status');
     const where = hasStatus
-      ? `due_date < current_date AND LOWER(COALESCE(status::text, '')) NOT IN ('done', 'closed', 'completed')`
+      ? isDoflowTenant(schema)
+        ? `due_date < current_date AND LOWER(COALESCE(status::text, '')) = ANY($1::text[])`
+        : `due_date < current_date AND LOWER(COALESCE(status::text, '')) NOT IN ('done', 'closed', 'completed')`
       : `due_date < current_date`;
 
-    return this.countRows(schema, 'projects', where);
+    return this.countRows(schema, 'projects', where, hasStatus && isDoflowTenant(schema) ? [PROJECT_ACTIVE_STAGE_ALIASES] : []);
   }
 
   private async buildProjectsSummary(schema: string, user: TenantDashboardAuthUser, audience: DashboardAudience): Promise<DashboardProjectsSummary> {
@@ -810,11 +816,14 @@ export class TenantDashboardService {
         : 'FALSE';
     const taskScopeParams = taskScopeWhere.includes('$1') ? [userUuid] as unknown[] : [];
 
-    const activeProjectStatuses = [
-      'to_start', 'kickoff', 'materials_collection', 'strategy', 'ux_ui', 'copy_content',
-      'development', 'internal_review', 'client_review', 'corrections', 'seo_performance',
-      'qa', 'publishing', 'training', 'maintenance', 'blocked', 'active', 'open', 'in_progress',
-    ];
+    const activeProjectStatuses = isDoflowTenant(schema)
+      ? PROJECT_ACTIVE_STAGE_ALIASES
+      : [
+        'to_start', 'kickoff', 'materials_collection', 'strategy', 'ux_ui', 'copy_content',
+        'development', 'internal_review', 'client_review', 'corrections', 'seo_performance',
+        'qa', 'publishing', 'training', 'maintenance', 'blocked', 'active', 'open', 'in_progress',
+      ];
+    const pausedProjectStatuses = isDoflowTenant(schema) ? PROJECT_PAUSED_STAGE_ALIASES : ['blocked'];
     const openTaskStatuses = ['todo', 'open', 'in_progress', 'review', 'backlog', 'ready', 'internal_review', 'client_review', 'blocked'];
 
     return {
@@ -833,12 +842,17 @@ export class TenantDashboardService {
         ? await this.countRows(
             schema,
             'projects',
-            `${projectScopeWhere} AND due_date < current_date AND LOWER(COALESCE(status::text, '')) NOT IN ('delivered', 'closed', 'done', 'completed')`,
-            scopedProjectParams,
+            `${projectScopeWhere} AND due_date < current_date AND LOWER(COALESCE(status::text, '')) = ANY($${scopedProjectParams.length + 1}::text[])`,
+            [...scopedProjectParams, activeProjectStatuses],
           )
         : 0,
       blockedProjects: hasProjects && (await this.columnExists(schema, 'projects', 'status'))
-        ? await this.countRows(schema, 'projects', `${projectScopeWhere} AND LOWER(COALESCE(status::text, '')) = 'blocked'`, scopedProjectParams)
+        ? await this.countRows(
+          schema,
+          'projects',
+          `${projectScopeWhere} AND LOWER(COALESCE(status::text, '')) = ANY($${scopedProjectParams.length + 1}::text[])`,
+          [...scopedProjectParams, pausedProjectStatuses],
+        )
         : 0,
       upcomingMilestones: hasMilestones && (await this.columnExists(schema, 'milestones', 'due_date'))
         ? audience === 'executive'
@@ -855,7 +869,12 @@ export class TenantDashboardService {
             ))[0]?.count || 0)
         : 0,
       upcomingDeliveries: hasProjects && (await this.columnExists(schema, 'projects', 'due_date'))
-        ? await this.countRows(schema, 'projects', `${projectScopeWhere} AND due_date BETWEEN current_date AND current_date + INTERVAL '14 days'`, scopedProjectParams)
+        ? await this.countRows(
+          schema,
+          'projects',
+          `${projectScopeWhere} AND due_date BETWEEN current_date AND current_date + INTERVAL '14 days' AND LOWER(COALESCE(status::text, '')) = ANY($${scopedProjectParams.length + 1}::text[])`,
+          [...scopedProjectParams, activeProjectStatuses],
+        )
         : 0,
       blockedTasks: hasTasks && (await this.columnExists(schema, 'tasks', 'status'))
         ? await this.countRows(schema, 'tasks', `${taskScopeWhere} AND LOWER(COALESCE(status::text, '')) = 'blocked'`, taskScopeParams)
@@ -1042,8 +1061,10 @@ export class TenantDashboardService {
          JOIN "${safe}".projects p ON p.id = pm.project_id
          WHERE pm.deleted_at IS NULL AND p.deleted_at IS NULL
            AND pm.user_id = $1
-           AND lower(COALESCE(p.status, '')) NOT IN ('closed', 'delivered')`,
-        [userId],
+           AND ${isDoflowTenant(safe)
+            ? `lower(COALESCE(p.status, '')) = ANY($2::text[])`
+            : `lower(COALESCE(p.status, '')) NOT IN ('closed', 'delivered')`}`,
+        isDoflowTenant(safe) ? [userId, PROJECT_ACTIVE_STAGE_ALIASES] : [userId],
       ) : [{ count: 0 }];
       const timeRows = hasTimeEntries ? await this.dataSource.query(
         `SELECT
@@ -1245,7 +1266,14 @@ export class TenantDashboardService {
           `SELECT created_at FROM "${safe}".report_snapshots WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 1`,
         )
       : [];
-    const blockedProjects = await this.countRows(safe, 'projects', `LOWER(COALESCE(status, '')) = 'blocked'`);
+    const blockedProjects = await this.countRows(
+      safe,
+      'projects',
+      isDoflowTenant(safe)
+        ? `LOWER(COALESCE(status, '')) = ANY($1::text[])`
+        : `LOWER(COALESCE(status, '')) = 'blocked'`,
+      isDoflowTenant(safe) ? [PROJECT_PAUSED_STAGE_ALIASES] : [],
+    );
     const overdueTasks = await this.countRows(
       safe,
       'tasks',
