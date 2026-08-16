@@ -15,12 +15,15 @@ Playwright/Chromium
   -> https://api.doflow.it/api/*
 ```
 
-Il runner avvia soltanto il frontend con:
+Il runner crea una build di produzione standalone e avvia soltanto il frontend con:
 
 ```text
 INTERNAL_BACKEND_URL=https://api.doflow.it
 NEXT_PUBLIC_API_URL=
+DOFLOW_VISUAL_SERVER_MODE=1
 ```
+
+La build viene copiata nel runtime temporaneo `.visual-runtime/` usando lo stesso layout del Dockerfile (`.next/standalone`, `.next/static` e `public`) e avviata con `node apps/frontend/server.js` su `localhost:3100`. Il runtime è ignorato da Git e viene eliminato al termine senza toccare `node_modules`.
 
 Usare esattamente `localhost`, non `127.0.0.1`: il flusso login corrente riconosce esplicitamente l'host localhost. Il server mode non usa Docker, WSL, PostgreSQL locale, Redis locale, migrazioni, seed o backend locale.
 
@@ -35,7 +38,7 @@ pnpm visual:gate:headed
 Il comando:
 
 1. verifica Chromium Playwright e la disponibilità della porta `3100`;
-2. avvia Next su `http://localhost:3100` con il proxy verso il backend server;
+2. esegue la build standalone e avvia il server di produzione su `http://localhost:3100` con il proxy verso il backend server;
 3. apre Chromium visibile su `http://localhost:3100/login`;
 4. attende che Oliver completi manualmente login ed eventuale MFA nella finestra;
 5. verifica in memoria tenant `doflow`, ruolo `owner` o equivalente autorizzato e autenticazione completa;

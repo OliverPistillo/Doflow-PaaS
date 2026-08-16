@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { access, chmod, mkdir, readFile, rm } from 'node:fs/promises';
+import { access, chmod, cp, lstat, mkdir, readFile, readdir, readlink, rm, stat, symlink, unlink } from 'node:fs/promises';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -12,6 +12,10 @@ const frontendUrl = `http://localhost:${frontendPort}`;
 const backendUrl = 'https://api.doflow.it';
 const authDir = path.join(root, '.visual-auth');
 const storageStatePath = path.join(authDir, 'storage-state.json');
+const visualRuntimeDir = path.join(root, '.visual-runtime');
+const standaloneDir = path.join(root, 'apps', 'frontend', '.next', 'standalone');
+const staticDir = path.join(root, 'apps', 'frontend', '.next', 'static');
+const publicDir = path.join(root, 'apps', 'frontend', 'public');
 const headed = process.argv.includes('--headed');
 const clearAuth = process.argv.includes('--clear-auth');
 const children = new Set();
@@ -30,7 +34,7 @@ function sleep(ms) {
 
 function spawnProcess(command, args, options = {}) {
   const child = spawn(command, args, {
-    cwd: root,
+    cwd: options.cwd || root,
     stdio: options.stdio || 'inherit',
     env: options.env || process.env,
     windowsHide: true,
@@ -74,13 +78,6 @@ function pnpm(args, options = {}) {
   return run(packageRunner, runnerArgs, options);
 }
 
-function spawnPnpm(args, options = {}) {
-  const runnerArgs = isWindows
-    ? ['/d', '/s', '/c', 'corepack', 'pnpm@10.24.0', ...args]
-    : ['pnpm@10.24.0', ...args];
-  return spawnProcess(packageRunner, runnerArgs, options);
-}
-
 async function stopProcess(child) {
   if (!child || child.exitCode !== null) return;
   if (isWindows) {
@@ -106,6 +103,71 @@ async function assertPortAvailable() {
       server.close(resolve);
     });
   });
+}
+
+async function prepareVisualRuntime(frontendEnv) {
+  await rm(visualRuntimeDir, { recursive: true, force: true });
+  log('Build frontend standalone per il server mode visuale...');
+  await pnpm(['-C', 'apps/frontend', 'build'], {
+    env: frontendEnv,
+    timeoutMs: 30 * 60_000,
+  });
+
+  try {
+    await access(path.join(standaloneDir, 'apps', 'frontend', 'server.js'));
+    await access(staticDir);
+    await access(publicDir);
+  } catch {
+    throw new VisualBlockedError('output standalone frontend incompleto');
+  }
+
+  await mkdir(path.join(visualRuntimeDir, 'apps', 'frontend', '.next'), { recursive: true });
+  // Next emits absolute workspace dependency links on Windows. Rewrite them
+  // inside the standalone tree before either Next or this runner cleans it.
+  await isolateStandaloneDependencyLinks(standaloneDir);
+  await cp(standaloneDir, visualRuntimeDir, { recursive: true });
+  await cp(staticDir, path.join(visualRuntimeDir, 'apps', 'frontend', '.next', 'static'), {
+    recursive: true,
+  });
+  await cp(publicDir, path.join(visualRuntimeDir, 'apps', 'frontend', 'public'), {
+    recursive: true,
+  });
+}
+
+async function isolateStandaloneDependencyLinks(sourceDir) {
+  const workspaceModulesDir = path.join(root, 'node_modules');
+  let recreated = 0;
+
+  async function visit(currentSourceDir) {
+    const entries = await readdir(currentSourceDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const sourcePath = path.join(currentSourceDir, entry.name);
+      const sourceStats = await lstat(sourcePath);
+      if (sourceStats.isSymbolicLink()) {
+        const rawTarget = await readlink(sourcePath);
+        const absoluteTarget = path.resolve(path.dirname(sourcePath), rawTarget);
+        const targetRelativeToModules = path.relative(workspaceModulesDir, absoluteTarget);
+        if (targetRelativeToModules.startsWith('..') || path.isAbsolute(targetRelativeToModules)) {
+          throw new VisualBlockedError('link standalone esterno al workspace node_modules');
+        }
+        const isolatedTarget = path.join(sourceDir, 'node_modules', targetRelativeToModules);
+        await access(isolatedTarget);
+        const targetStats = await stat(absoluteTarget);
+        await unlink(sourcePath);
+        await symlink(
+          path.relative(path.dirname(sourcePath), isolatedTarget),
+          sourcePath,
+          targetStats.isDirectory() ? 'dir' : 'file',
+        );
+        recreated += 1;
+        continue;
+      }
+      if (sourceStats.isDirectory()) await visit(sourcePath);
+    }
+  }
+
+  await visit(sourceDir);
+  log(`Output standalone isolato: ${recreated} link dipendenza resi interni.`);
 }
 
 async function waitFor(url, label, frontendProcess, timeoutMs = 180_000) {
@@ -342,17 +404,20 @@ async function main() {
 
   const frontendEnv = {
     ...process.env,
-    NODE_ENV: 'development',
+    NODE_ENV: 'production',
     INTERNAL_BACKEND_URL: backendUrl,
     NEXT_PUBLIC_API_URL: '',
     DOFLOW_VISUAL_SERVER_MODE: '1',
     DOFLOW_VISUAL_FRONTEND_URL: frontendUrl,
+    PORT: String(frontendPort),
+    HOSTNAME: 'localhost',
   };
-  log(`Avvio frontend locale su ${frontendUrl} con proxy /api verso ${backendUrl}...`);
-  const frontendProcess = spawnPnpm(
-    ['-C', 'apps/frontend', 'exec', 'next', 'dev', '-H', 'localhost', '-p', String(frontendPort)],
-    { env: frontendEnv },
-  );
+  await prepareVisualRuntime(frontendEnv);
+  log(`Avvio frontend standalone su ${frontendUrl} con proxy /api verso ${backendUrl}...`);
+  const frontendProcess = spawnProcess(process.execPath, ['apps/frontend/server.js'], {
+    cwd: visualRuntimeDir,
+    env: frontendEnv,
+  });
 
   try {
     await waitFor(`${frontendUrl}/login`, 'frontend locale', frontendProcess);
@@ -365,6 +430,7 @@ async function main() {
     log('Screenshot privacy-safe salvati in docs/design-references/doflow-crm-projects/actual/.');
   } finally {
     await stopProcess(frontendProcess);
+    await rm(visualRuntimeDir, { recursive: true, force: true });
   }
 }
 

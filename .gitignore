@@ -48,6 +48,7 @@ test_UI_*.json
 /test-results/
 /.visual-gate/
 /.visual-auth/
+/.visual-runtime/
 /docs/design-references/doflow-crm-projects/actual/*
 !/docs/design-references/doflow-crm-projects/actual/README.md
 /docs/design-references/doflow-crm-projects/diff/*
