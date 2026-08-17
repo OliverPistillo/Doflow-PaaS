@@ -4,9 +4,10 @@ import {
 } from '@nestjs/common';
 import { AutomationsService } from './automations.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PlatformSuperadminGuard } from './platform-superadmin.guard';
 
 @Controller('superadmin/automations')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PlatformSuperadminGuard)
 export class AutomationsController {
   constructor(private readonly svc: AutomationsService) {}
 

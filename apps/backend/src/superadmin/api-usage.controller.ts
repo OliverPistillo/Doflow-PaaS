@@ -6,9 +6,10 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { ApiUsageService } from './api-usage.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PlatformSuperadminGuard } from './platform-superadmin.guard';
 
 @Controller('superadmin/api-usage')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PlatformSuperadminGuard)
 export class ApiUsageController {
   constructor(private readonly apiUsageService: ApiUsageService) {}
 

@@ -9,12 +9,13 @@ import {
 } from '@nestjs/common';
 import { SuperadminDashboardService } from './superadmin-dashboard.service';
 import { JwtAuthGuard }               from '../auth/jwt-auth.guard';
+import { PlatformSuperadminGuard } from './platform-superadmin.guard';
 import { GetDealsQueryDto, UpdateDealDto } from './dto/deals.dto';
 
 export const Roles = (...roles: string[]) => SetMetadata('roles', roles);
 
 @Controller('superadmin/dashboard')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PlatformSuperadminGuard)
 export class SuperadminDashboardController {
   constructor(private readonly dashboardService: SuperadminDashboardService) {}
 

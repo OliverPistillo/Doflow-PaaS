@@ -1,10 +1,11 @@
 import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { CalendarService } from './calendar.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PlatformSuperadminGuard } from './platform-superadmin.guard';
 import { CreateEventDto } from './dto/calendar.dto';
 
 @Controller('superadmin/calendar')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PlatformSuperadminGuard)
 export class CalendarController {
   constructor(private readonly service: CalendarService) {}
 

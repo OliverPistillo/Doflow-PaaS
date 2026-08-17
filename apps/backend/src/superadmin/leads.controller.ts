@@ -4,9 +4,10 @@ import {
 } from '@nestjs/common';
 import { LeadsService } from './leads.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PlatformSuperadminGuard } from './platform-superadmin.guard';
 
 @Controller('superadmin/leads')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PlatformSuperadminGuard)
 export class LeadsController {
   constructor(private readonly leadsService: LeadsService) {}
 

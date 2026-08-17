@@ -4,10 +4,11 @@ import {
 } from '@nestjs/common';
 import { ChangelogService } from './changelog.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PlatformSuperadminGuard } from './platform-superadmin.guard';
 
 /** Admin endpoints (protetti) */
 @Controller('superadmin/changelog')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PlatformSuperadminGuard)
 export class ChangelogAdminController {
   constructor(private readonly svc: ChangelogService) {}
 

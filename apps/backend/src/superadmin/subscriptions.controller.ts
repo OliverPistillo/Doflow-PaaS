@@ -6,9 +6,10 @@
 import { Controller, Get, Param, Patch, Body, UseGuards } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PlatformSuperadminGuard } from './platform-superadmin.guard';
 
 @Controller('superadmin/subscriptions')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PlatformSuperadminGuard)
 export class SubscriptionsController {
   constructor(private readonly subsService: SubscriptionsService) {}
 

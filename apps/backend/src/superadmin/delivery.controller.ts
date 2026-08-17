@@ -2,11 +2,12 @@ import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@n
 import { Logger } from '@nestjs/common';
 import { DeliveryService } from './delivery.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PlatformSuperadminGuard } from './platform-superadmin.guard';
 import { CreateTaskDto, UpdateTaskDto } from './dto/delivery.dto';
 import { Roles } from './superadmin-dashboard.controller'; // Riutilizziamo il decorator se esiste, o rimuovilo se da errore
 
 @Controller('superadmin/delivery')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PlatformSuperadminGuard)
 export class DeliveryController {
   private readonly logger = new Logger(DeliveryController.name);
 

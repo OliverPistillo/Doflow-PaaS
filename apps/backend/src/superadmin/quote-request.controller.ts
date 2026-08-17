@@ -36,6 +36,7 @@ import {
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PlatformSuperadminGuard } from './platform-superadmin.guard';
 import { QuoteRequestService, QuoteFormData } from './quote-request.service';
 import { QuoteRequestStatus } from './entities/quote-request.entity';
 
@@ -140,7 +141,7 @@ export class PublicQuoteRequestController {
 // ══════════════════════════════════════════════════════════════════════════════
 
 @Controller('superadmin/quote-requests')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PlatformSuperadminGuard)
 export class AdminQuoteRequestController {
   private readonly logger = new Logger(AdminQuoteRequestController.name);
 

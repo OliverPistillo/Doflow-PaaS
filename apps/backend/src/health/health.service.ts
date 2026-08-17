@@ -4,31 +4,34 @@ import { DataSource } from 'typeorm';
 import { RedisService } from '../redis/redis.service';
 import { WebSocket } from 'ws';
 import { FileStorageService } from '../file-storage.service';
+import * as jwt from 'jsonwebtoken';
 
-type HealthStatus = 'ok' | 'warn' | 'down';
-type Check = { status: HealthStatus; latency_ms?: number; message?: string };
+export type HealthStatus = 'ok' | 'warn' | 'down';
+export type Check = { status: HealthStatus; latency_ms?: number; message?: string };
 
-function statusFromChecks(checks: Record<string, Check>): HealthStatus {
+export function statusFromChecks(checks: Record<string, Check>): HealthStatus {
   const values = Object.values(checks);
   if (values.some((c) => c.status === 'down')) return 'down';
   if (values.some((c) => c.status === 'warn')) return 'warn';
   return 'ok';
 }
 
-// Base64url JSON helper
-function b64urlJson(obj: unknown): string {
-  return Buffer.from(JSON.stringify(obj), 'utf8').toString('base64url');
+export function createHealthProbeToken(secret: string): string {
+  if (!secret) throw new Error('JWT_SECRET is not configured');
+
+  return jwt.sign(
+    {
+      sub: 'health-probe',
+      tenantId: 'public',
+      role: 'superadmin',
+      authStage: 'FULL',
+    },
+    secret,
+    { algorithm: 'HS256', expiresIn: 45 },
+  );
 }
 
-// JWT “fake” compatibile con decodeJwt() che hai in main.ts:
-// il server RAW NON verifica firma, quindi basta che il payload sia decodificabile.
-function makeFakeJwt(payload: Record<string, unknown>): string {
-  const header = b64urlJson({ alg: 'none', typ: 'JWT' });
-  const body = b64urlJson(payload);
-  return `${header}.${body}.x`;
-}
-
-async function wsProbe(url: string, timeoutMs = 800): Promise<{ ok: boolean; latency_ms: number; message?: string }> {
+export async function wsProbe(url: string, timeoutMs = 800): Promise<{ ok: boolean; latency_ms: number; message?: string }> {
   const t0 = Date.now();
   const nonce = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -94,6 +97,23 @@ async function wsProbe(url: string, timeoutMs = 800): Promise<{ ok: boolean; lat
   });
 }
 
+export function wsCheckFromProbe(
+  result: { ok: boolean; latency_ms: number; message?: string },
+): Check {
+  if (result.ok) {
+    return {
+      status: result.latency_ms > 350 ? 'warn' : 'ok',
+      latency_ms: result.latency_ms,
+    };
+  }
+
+  return {
+    status: 'warn',
+    latency_ms: result.latency_ms,
+    message: result.message ?? 'ws probe failed',
+  };
+}
+
 @Injectable()
 export class HealthService {
   constructor(
@@ -142,35 +162,16 @@ export class HealthService {
 
     // WS probe reale (contro il WS RAW in main.ts)
     {
-      // Se vuoi, puoi mettere PORT nell'env. Fallback: 4000 come il tuo main.ts.
-      const port = Number(process.env.PORT ?? 4000);
-      const wsPath = process.env.WS_PATH ?? '/ws';
-
-      const token = makeFakeJwt({
-        sub: 'health',
-        email: 'health@doflow.local',
-        tenantId: 'public',
-        role: 'superadmin',
-      });
-
-      const url = `ws://127.0.0.1:${port}${wsPath}?token=${encodeURIComponent(token)}`;
-
       try {
-        const res = await wsProbe(url, 800);
+        const jwtSecret = process.env.JWT_SECRET;
+        if (!jwtSecret) throw new Error('JWT_SECRET is not configured');
 
-        if (res.ok) {
-          checks.ws = {
-            status: res.latency_ms > 350 ? 'warn' : 'ok',
-            latency_ms: res.latency_ms,
-          };
-        } else {
-          // se API è up ma probe fallisce -> warn (degraded), non down
-          checks.ws = {
-            status: 'warn',
-            latency_ms: res.latency_ms,
-            message: res.message ?? 'ws probe failed',
-          };
-        }
+        const port = Number(process.env.PORT ?? 4000);
+        const wsPath = process.env.WS_PATH ?? '/ws';
+        const token = createHealthProbeToken(jwtSecret);
+        const url = `ws://127.0.0.1:${port}${wsPath}?token=${encodeURIComponent(token)}`;
+        const res = await wsProbe(url, 800);
+        checks.ws = wsCheckFromProbe(res);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'ws error';
         checks.ws = { status: 'down', message: msg };

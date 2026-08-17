@@ -4,9 +4,10 @@ import {
 } from '@nestjs/common';
 import { PlatformNotificationsService } from './platform-notifications.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PlatformSuperadminGuard } from './platform-superadmin.guard';
 
 @Controller('superadmin/notifications')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PlatformSuperadminGuard)
 export class PlatformNotificationsController {
   constructor(private readonly notifService: PlatformNotificationsService) {}
 

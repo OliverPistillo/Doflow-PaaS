@@ -7,10 +7,13 @@ import {
   Logger,
   Patch,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { DataSource } from 'typeorm';
 import { MfaRolesPolicy } from '../security-policy.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PlatformSuperadminGuard } from './platform-superadmin.guard';
 
 function assertSuperAdmin(req: Request) {
   const user = (req as any).authUser ?? (req as any).user;
@@ -19,6 +22,7 @@ function assertSuperAdmin(req: Request) {
 }
 
 @Controller('superadmin')
+@UseGuards(JwtAuthGuard, PlatformSuperadminGuard)
 export class SecurityPolicyController {
   private readonly logger = new Logger(SecurityPolicyController.name);
   constructor(private readonly dataSource: DataSource) {}

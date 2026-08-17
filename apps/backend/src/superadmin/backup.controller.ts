@@ -2,10 +2,11 @@ import { Controller, Get, Post, Put, Delete, Param, Body, UseGuards, Res } from 
 import { Response } from 'express';
 import { BackupService, CreateScheduleDto } from './backup.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PlatformSuperadminGuard } from './platform-superadmin.guard';
 import { BackupType } from './entities/system-backup.entity';
 
 @Controller('superadmin/storage')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PlatformSuperadminGuard)
 export class BackupController {
   constructor(private readonly backupService: BackupService) {}
 

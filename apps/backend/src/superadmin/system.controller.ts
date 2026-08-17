@@ -2,11 +2,14 @@
 // MODIFICATO: aggiunto endpoint GET /health-summary per la Control Room.
 // Aggrega i 3 service status (DB, Redis, API) in un singolo semaforo.
 
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { SystemStatsService } from './telemetry.service';
 import { TelemetryService } from '../telemetry/telemetry.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PlatformSuperadminGuard } from './platform-superadmin.guard';
 
 @Controller('superadmin/system')
+@UseGuards(JwtAuthGuard, PlatformSuperadminGuard)
 export class SystemController {
   constructor(
     private readonly systemStatsService: SystemStatsService,

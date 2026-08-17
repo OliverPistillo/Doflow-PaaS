@@ -13,11 +13,12 @@ import { InvoicePdfService }       from './invoice-pdf.service';
 import { PreventivoPdfService }    from './preventivo-pdf.service';
 import { InvoiceMailService }      from './invoice-mail.service';
 import { JwtAuthGuard }            from '../auth/jwt-auth.guard';
+import { PlatformSuperadminGuard } from './platform-superadmin.guard';
 import { Invoice }                  from './entities/invoice.entity';
 import { Response }                 from 'express';
 
 @Controller('superadmin/finance')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PlatformSuperadminGuard)
 export class FinanceController {
   private readonly logger = new Logger(FinanceController.name);
 
