@@ -87,6 +87,39 @@ export type SalesReport = Record<string, any>;
 export type ProjectsReport = Record<string, any>;
 export type FinanceReport = Record<string, any>;
 export type TeamReport = Record<string, any>;
+export type ConsultantPerformanceItem = {
+  user_id: string;
+  display_name: string;
+  operational_role?: string | null;
+  opportunities_assigned: number;
+  activities_completed: number;
+  follow_ups_overdue: number;
+  appointments: number;
+  calls: number;
+  won: number;
+  lost: number;
+  won_value?: number;
+  conversion_rate: number;
+  projects_managed: number;
+  tasks_assigned: number;
+  tasks_completed: number;
+  tasks_overdue: number;
+  task_completion_rate: number;
+  projects_delivered: number;
+  projects_late: number;
+  timeline_created: number;
+  timeline_completed: number;
+  average_activity_close_hours?: number | null;
+  open_workload: number;
+};
+export type ConsultantPerformanceReport = {
+  period: { dateFrom: string; dateTo: string };
+  permissions: { canViewFinance: boolean };
+  criteria: Record<string, string>;
+  summary: Record<string, number>;
+  items: ConsultantPerformanceItem[];
+  details?: { activities: Record<string, any>[]; projects: Record<string, any>[]; opportunities: Record<string, any>[] };
+};
 export type DocumentsReport = Record<string, any>;
 export type OperationsReport = Record<string, any>;
 export type CustomersReport = Record<string, any>;
@@ -113,6 +146,7 @@ export const reportsApi = {
   projects: (params?: ReportParams) => apiFetch<ProjectsReport>(`/tenant/reports/projects${qs(params)}`),
   finance: (params?: ReportParams) => apiFetch<FinanceReport>(`/tenant/reports/finance${qs(params)}`),
   team: (params?: ReportParams) => apiFetch<TeamReport>(`/tenant/reports/team${qs(params)}`),
+  consultantPerformance: (params?: ReportParams) => apiFetch<ConsultantPerformanceReport>(`/tenant/reports/consultant-performance${qs(params)}`),
   documents: (params?: ReportParams) => apiFetch<DocumentsReport>(`/tenant/reports/documents${qs(params)}`),
   operations: (params?: ReportParams) => apiFetch<OperationsReport>(`/tenant/reports/operations${qs(params)}`),
   customers: (params?: ReportParams) => apiFetch<CustomersReport>(`/tenant/reports/customers${qs(params)}`),
@@ -131,4 +165,3 @@ export const reportsApi = {
   deleteSnapshot: (id: string) => apiFetch<{ success: boolean }>(`/tenant/reports/snapshots/${id}`, { method: "DELETE" }),
   exportReport: (reportKey: string, params?: ReportParams) => apiFetch<{ reportKey: string; format: "json" | "csv"; payload?: unknown; csv?: string }>(`/tenant/reports/${reportKey}/export${qs(params)}`),
 };
-

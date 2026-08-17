@@ -365,11 +365,29 @@ export class TenantDocumentsService {
       where.push(`d.created_at <= $${params.length}::timestamptz`);
     }
 
+    const doflowProjectList = isDoflowTenant(schema) && query.entity_type === 'project';
+    const projectJoins = doflowProjectList
+      ? `LEFT JOIN "${schema}".projects p ON p.id = d.entity_id AND d.entity_type = 'project' AND p.deleted_at IS NULL
+         LEFT JOIN "${schema}".companies c ON c.id = p.company_id AND c.deleted_at IS NULL`
+      : '';
+    const projectFields = doflowProjectList
+      ? `p.name AS project_name, p.status AS project_status, c.name AS company_name`
+      : `NULL::text AS project_name, NULL::text AS project_status, NULL::text AS company_name`;
+    const uploaderLabel = doflowProjectList
+      ? `COALESCE(tm.display_name, NULLIF(u.full_name, ''), split_part(u.email, '@', 1))`
+      : `split_part(u.email, '@', 1)`;
+    const teamJoin = doflowProjectList
+      ? `LEFT JOIN "${schema}".team_members tm ON tm.user_id = d.uploaded_by AND tm.deleted_at IS NULL`
+      : '';
     const rows = await this.dataSource.query(
-      `SELECT d.*, f.name AS folder_name, u.email AS uploaded_by_email
+      `SELECT d.*, f.name AS folder_name, u.email AS uploaded_by_email,
+              ${uploaderLabel} AS uploaded_by_label,
+              ${projectFields}
        FROM "${schema}".documents d
        LEFT JOIN "${schema}".document_folders f ON f.id = d.folder_id
        LEFT JOIN "${schema}".users u ON u.id = d.uploaded_by
+       ${teamJoin}
+       ${projectJoins}
        WHERE ${where.join(' AND ')}
        ORDER BY d.${sortBy} ${sortDir}
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,

@@ -268,4 +268,25 @@ describe('TenantTimelineService', () => {
     await expect(service.list({ record_kind: 'company', record_id: COMPANY_ID, date_from: '2026-09-01', date_to: '2026-08-01' })).rejects.toThrow('Intervallo');
     await expect(service.list({ record_kind: 'company', record_id: COMPANY_ID, types: 'unknown' })).rejects.toThrow('types');
   });
+
+  it('aggrega la timeline globale progetti in una sola query parametrizzata e tenant-scoped', async () => {
+    const query = jest.fn(async (sql: string, params: unknown[] = []) => {
+      if (sql.includes('to_regclass')) return [{ name: null }];
+      if (sql.includes('COUNT(*) OVER()')) return [{
+        id: 'task:event', project_id: PROJECT_ID, project_name: 'Progetto Demo', company_name: 'Cliente Demo',
+        project_status: 'client_review', project_manager_id: USER_ID, type: 'activity', author_user_id: USER_ID,
+        author_label: 'Operatore', created_at: '2026-08-17T10:00:00.000Z', title: 'Verifica', status: 'ready', source: 'project_task', total: 1,
+      }];
+      return [];
+    });
+    const { service } = harness({ query });
+    const result = await service.listProjects({ project_id: PROJECT_ID, operator_id: USER_ID, stage: 'review', types: 'activity', date_from: '2026-08-01', date_to: '2026-08-31' });
+    expect(result.total).toBe(1);
+    expect(result.items[0]).toEqual(expect.objectContaining({ project_status: 'review', author_label: 'Operatore' }));
+    const aggregate = query.mock.calls.find(([sql]) => String(sql).includes('COUNT(*) OVER()'));
+    expect(aggregate).toBeDefined();
+    expect(aggregate?.[1]).toEqual(expect.arrayContaining([PROJECT_ID, USER_ID, ['activity']]));
+    expect(String(aggregate?.[0])).toContain('UNION ALL');
+    expect(String(aggregate?.[0])).toContain('project_members');
+  });
 });

@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { reportsApi, type KpiTarget, type ReportKey, type ReportParams, type ReportSummary } from "@/lib/tenant-reports-api";
 import { getDoFlowUser } from "@/lib/jwt";
+import { isInternalDoflowTenant } from "@/lib/tenant-url";
 import { ReportFilters, useReportParams } from "./report-filters";
 import { ReportsSummaryCards } from "./reports-summary-cards";
 import { badgeTone, canViewFinance, compactJson, downloadText, entriesOf, formatCurrency, formatNumber, formatPercent, isFinanceKey, KPI_STATUS_LABELS, label, REPORT_LABELS } from "./report-utils";
@@ -19,6 +20,8 @@ export function ReportsOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const canFinance = canViewFinance(summary?.user?.role || getDoFlowUser()?.role);
+  const currentUser = getDoFlowUser();
+  const doflow = isInternalDoflowTenant(currentUser?.tenantSlug || currentUser?.tenantId);
 
   useEffect(() => {
     let active = true;
@@ -35,7 +38,7 @@ export function ReportsOverviewPage() {
     { label: "Vendite", href: "/reports/sales", icon: Target },
     { label: "Progetti", href: "/reports/projects", icon: FolderKanban },
     ...(canFinance ? [{ label: "Finance", href: "/reports/finance", icon: Wallet }] : []),
-    { label: "Team", href: "/reports/team", icon: Users },
+    { label: doflow ? "Performance consulenti" : "Team", href: "/reports/team", icon: Users },
     { label: "Documenti", href: "/reports/documents", icon: FileText },
     { label: "Operatività", href: "/reports/operations", icon: Workflow },
     { label: "Clienti", href: "/reports/customers", icon: Building2 },
@@ -273,4 +276,3 @@ export function ReportBadge({ value }: { value?: string | null }) {
 export function reportTitle(key: string) {
   return label(REPORT_LABELS, key);
 }
-

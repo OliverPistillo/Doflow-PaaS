@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@nestjs/common';
 import { seedTenantKpiTargets } from './tenant-reports-schema';
 import { TenantReportsService } from './tenant-reports.service';
 
@@ -141,5 +142,107 @@ describe('Tenant reports KPI targets', () => {
     expect(result.acceptedQuotes).toBe(7);
     const activeCall = countRows.mock.calls.find(([, table, where]) => table === 'opportunities' && String(where).includes('= ANY'));
     expect((activeCall?.[3] as unknown[])?.[0]).toEqual(expect.arrayContaining(['new', 'new_lead', 'briefing_sent', 'appointment', 'quote']));
+  });
+});
+
+describe('Tenant reports consultant performance', () => {
+  const USER_ID = '11111111-1111-4111-8111-111111111111';
+  const performanceRow = {
+    user_id: USER_ID,
+    display_name: 'Consulente Demo',
+    operational_role: 'consultant',
+    status: 'active',
+    opportunities_assigned: 6,
+    activities_completed: 8,
+    follow_ups_overdue: 2,
+    appointments: 3,
+    calls: 4,
+    won: 3,
+    lost: 1,
+    won_value: '12000',
+    projects_managed: 4,
+    tasks_assigned: 10,
+    tasks_completed: 7,
+    tasks_overdue: 2,
+    projects_delivered: 2,
+    projects_late: 1,
+    timeline_created: 18,
+    timeline_completed: 15,
+    average_activity_close_hours: '12.5',
+    open_workload: 5,
+  };
+
+  function performanceService(role = 'owner', tenantId = 'doflow', rows: any[] = [performanceRow]) {
+    const query = jest.fn().mockResolvedValue(rows);
+    return {
+      service: new TenantReportsService(
+        { query } as any,
+        { user: { sub: USER_ID, role, tenantId } },
+      ),
+      query,
+    };
+  }
+
+  it('valida ordine e ampiezza massima del date range prima della query', async () => {
+    const { service, query } = performanceService();
+    await expect(service.consultantPerformance({ date_from: '2026-08-20', date_to: '2026-08-01' })).rejects.toThrow('date_from');
+    await expect(service.consultantPerformance({ date_from: '2025-01-01', date_to: '2026-08-01' })).rejects.toThrow('366');
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('valida user_id e limita un utente non manager alle proprie metriche', async () => {
+    const { service, query } = performanceService('user');
+    await expect(service.consultantPerformance({ user_id: 'invalid' })).rejects.toThrow('user_id');
+    await expect(service.consultantPerformance({ user_id: '22222222-2222-4222-8222-222222222222' })).rejects.toBeInstanceOf(ForbiddenException);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('resta tenant-only Doflow', async () => {
+    const { service, query } = performanceService('owner', 'tenant_legacy');
+    await expect(service.consultantPerformance({})).rejects.toBeInstanceOf(ForbiddenException);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('calcola conversione won/lost e completion rate da metriche trasparenti', async () => {
+    const { service } = performanceService();
+    const result = await service.consultantPerformance({ date_from: '2026-08-01', date_to: '2026-08-31' });
+    expect(result.items[0]).toEqual(expect.objectContaining({ won: 3, lost: 1, conversion_rate: 75, task_completion_rate: 70 }));
+    expect(result.summary.conversionRate).toBe(75);
+  });
+
+  it('espone follow-up e task overdue, consegnati e in ritardo dalle aggregazioni reali', async () => {
+    const { service } = performanceService();
+    const result = await service.consultantPerformance({});
+    expect(result.items[0]).toEqual(expect.objectContaining({
+      follow_ups_overdue: 2,
+      tasks_overdue: 2,
+      projects_delivered: 2,
+      projects_late: 1,
+    }));
+  });
+
+  it('nasconde il valore economico senza ruolo finance anche nel parametro SQL', async () => {
+    const { service, query } = performanceService('manager', 'doflow', [{ ...performanceRow, won_value: null }]);
+    const result = await service.consultantPerformance({});
+    expect(result.permissions.canViewFinance).toBe(false);
+    expect(result.items[0]).not.toHaveProperty('won_value');
+    expect(result.summary).not.toHaveProperty('wonValue');
+    expect(query.mock.calls[0][1][6]).toBe(false);
+  });
+
+  it('espone il valore vinto soltanto con permesso finance', async () => {
+    const { service, query } = performanceService('owner');
+    const result = await service.consultantPerformance({});
+    expect(result.items[0].won_value).toBe(12000);
+    expect(result.summary.wonValue).toBe(12000);
+    expect(query.mock.calls[0][1][6]).toBe(true);
+  });
+
+  it('usa una singola query aggregata per la tabella e non produce N+1', async () => {
+    const { service, query } = performanceService();
+    await service.consultantPerformance({ date_from: '2026-08-01', date_to: '2026-08-31' });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(String(query.mock.calls[0][0])).toContain('WITH consultants AS');
+    expect(String(query.mock.calls[0][0])).toContain('GROUP BY');
   });
 });

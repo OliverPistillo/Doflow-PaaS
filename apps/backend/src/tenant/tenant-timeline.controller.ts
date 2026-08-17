@@ -7,6 +7,11 @@ import { TenantTimelineService } from './tenant-timeline.service';
 export class TenantTimelineController {
   constructor(private readonly service: TenantTimelineService) {}
 
+  @Get('projects')
+  listProjectTimeline(@Query() query: Record<string, any>) {
+    return this.service.listProjects(query || {});
+  }
+
   @Get()
   list(@Query() query: Record<string, any>) {
     return this.service.list(query);

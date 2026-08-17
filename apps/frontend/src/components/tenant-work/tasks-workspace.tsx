@@ -37,6 +37,8 @@ import { BOARD_COLUMNS, TaskBoard, type BoardColumnId } from "./task-board";
 import { type ChecklistSummary } from "./task-card";
 import { TaskListView } from "./task-list-view";
 import { TasksSummaryStrip } from "./tasks-summary-strip";
+import { isInternalDoflowTenant } from "@/lib/tenant-url";
+import { DoflowProjectsTasksView } from "@/components/tenant-projects/project-secondary-views";
 
 type ViewMode = "board" | "list";
 type TaskForm = {
@@ -67,6 +69,11 @@ function toDateTimeLocal(value?: string | null) {
 }
 
 export function TasksWorkspace() {
+  const user = getDoFlowUser();
+  return isInternalDoflowTenant(user?.tenantSlug || user?.tenantId) ? <DoflowProjectsTasksView /> : <LegacyTasksWorkspace />;
+}
+
+function LegacyTasksWorkspace() {
   const { canView, canCreate, canUpdate } = useTenantAccess();
   const [tasks, setTasks] = useState<WorkTask[]>([]);
   const [projects, setProjects] = useState<WorkProject[]>([]);

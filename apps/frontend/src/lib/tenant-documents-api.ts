@@ -38,6 +38,10 @@ export type TenantDocument = {
   entity_id?: string | null;
   uploaded_by?: string | null;
   uploaded_by_email?: string | null;
+  uploaded_by_label?: string | null;
+  project_name?: string | null;
+  project_status?: string | null;
+  company_name?: string | null;
   metadata?: Record<string, unknown> | null;
   version_group_id?: string | null;
   version_number?: number | null;

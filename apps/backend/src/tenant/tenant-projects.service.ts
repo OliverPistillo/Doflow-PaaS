@@ -567,7 +567,7 @@ export class TenantProjectsService {
       params.push(projectId);
       where.push(`t.project_id = $${params.length}`);
     }
-    for (const field of ['project_id', 'assignee_id', 'status']) {
+    for (const field of ['project_id', 'assignee_id', 'status', 'priority']) {
       const value = query[field];
       if (value === undefined || value === null || value === '') continue;
       params.push(value);
@@ -593,12 +593,23 @@ export class TenantProjectsService {
       `SELECT COUNT(*)::int AS total FROM "${schema}".tasks t WHERE ${where.join(' AND ')}`,
       params,
     );
+    const assigneeLabel = isDoflowTenant(schema)
+      ? `COALESCE(tm.display_name, NULLIF(u.full_name, ''), split_part(u.email, '@', 1))`
+      : `split_part(u.email, '@', 1)`;
+    const teamJoin = isDoflowTenant(schema)
+      ? `LEFT JOIN "${schema}".team_members tm ON tm.user_id = t.assignee_id AND tm.deleted_at IS NULL`
+      : '';
     const rows = await this.dataSource.query(
-      `SELECT t.*, p.name AS project_name, m.title AS milestone_title, u.email AS assignee_email
+      `SELECT t.*, p.name AS project_name, p.status AS project_status,
+              p.company_id, c.name AS company_name,
+              m.title AS milestone_title, u.email AS assignee_email,
+              ${assigneeLabel} AS assignee_label
        FROM "${schema}".tasks t
        LEFT JOIN "${schema}".projects p ON p.id = t.project_id
+       LEFT JOIN "${schema}".companies c ON c.id = p.company_id AND c.deleted_at IS NULL
        LEFT JOIN "${schema}".milestones m ON m.id = t.milestone_id
        LEFT JOIN "${schema}".users u ON u.id = t.assignee_id
+       ${teamJoin}
        WHERE ${where.join(' AND ')}
        ORDER BY t.${sortBy} ${sortOrder} NULLS LAST, t.created_at DESC
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,

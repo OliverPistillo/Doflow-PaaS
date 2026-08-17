@@ -19,6 +19,8 @@ export type WorkTask = {
   id: string;
   project_id: string;
   project_name?: string | null;
+  company_name?: string | null;
+  project_status?: string | null;
   milestone_id?: string | null;
   milestone_title?: string | null;
   title: string;
@@ -27,6 +29,7 @@ export type WorkTask = {
   priority?: string | null;
   assignee_id?: string | null;
   assignee_email?: string | null;
+  assignee_label?: string | null;
   due_at?: string | null;
   estimated_minutes?: number | null;
   actual_minutes?: number | null;

@@ -3,8 +3,13 @@
 import { reportsApi } from "@/lib/tenant-reports-api";
 import { formatCurrency, formatNumber } from "./report-utils";
 import { KeyValueList, MetricGrid, ReportPage, Section, SimpleTable } from "./reports-core";
+import { getDoFlowUser } from "@/lib/jwt";
+import { isInternalDoflowTenant } from "@/lib/tenant-url";
+import { ConsultantPerformancePage } from "./consultant-performance";
 
 export function TeamReportPage() {
+  const user = getDoFlowUser();
+  if (isInternalDoflowTenant(user?.tenantSlug || user?.tenantId)) return <ConsultantPerformancePage />;
   return (
     <ReportPage
       reportKey="team"
@@ -47,4 +52,3 @@ export function TeamReportPage() {
     />
   );
 }
-

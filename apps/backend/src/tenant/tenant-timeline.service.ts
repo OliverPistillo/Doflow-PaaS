@@ -2,7 +2,9 @@ import { BadRequestException, ForbiddenException, Injectable, Inject, NotFoundEx
 import { REQUEST } from '@nestjs/core';
 import { DataSource } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
+import { hasRoleAtLeast } from '../roles';
 import { isDoflowTenant } from './tenant-context';
+import { aliasesForProjectStage, canonicalizeProjectRow } from './project-stage-model';
 import { TenantCrmService } from './tenant-crm.service';
 import { TenantEffectivePermissionsService } from './tenant-effective-permissions.service';
 import { TenantProjectsService } from './tenant-projects.service';
@@ -358,6 +360,135 @@ export class TenantTimelineService {
   private async tableExists(schema: string, table: string) {
     const rows = await this.dataSource.query(`SELECT to_regclass($1) AS name`, [`"${schema}"."${table}"`]).catch(() => []);
     return Boolean(rows[0]?.name);
+  }
+
+  async listProjects(query: Record<string, any> = {}) {
+    const schema = this.getSchema();
+    const user = this.getUser();
+    const access = await this.permissions.getCurrentAccess();
+    if (!access.modules.projects?.can_view) throw new ForbiddenException('Permesso progetti insufficiente.');
+    await this.ensureSchema(schema);
+
+    const limit = Math.max(1, Math.min(200, Number(query.limit || 100) || 100));
+    const offset = Math.max(0, Number(query.offset || 0) || 0);
+    const projectId = query.project_id ? this.requireUuid(query.project_id, 'project_id') : null;
+    const operatorId = query.operator_id ? this.requireUuid(query.operator_id, 'operator_id') : null;
+    const dateFrom = this.parseDate(query.date_from, 'date_from');
+    const dateTo = this.parseDate(query.date_to, 'date_to');
+    if (dateFrom && dateTo && dateFrom > dateTo) throw new BadRequestException('Intervallo date non valido');
+    const types = String(query.types || query.type || '').split(',').map((value) => value.trim()).filter(Boolean);
+    if (types.some((value) => !(QUICK_TYPES as readonly string[]).includes(value))) throw new BadRequestException('types non valido');
+    const stageAliases = query.stage ? aliasesForProjectStage(query.stage) : null;
+    if (query.stage && !stageAliases) throw new BadRequestException('stage non valido');
+
+    const params: unknown[] = [hasRoleAtLeast(user.role, 'manager'), UUID_RE.test(user.id) ? user.id : null];
+    const where = [
+      `($1::boolean OR e.project_manager_id = $2::uuid OR EXISTS (
+        SELECT 1 FROM "${schema}".project_members pm
+        WHERE pm.project_id = e.project_id AND pm.user_id = $2::uuid AND pm.deleted_at IS NULL
+      ) OR EXISTS (
+        SELECT 1 FROM "${schema}".tasks scoped_task
+        WHERE scoped_task.project_id = e.project_id AND scoped_task.assignee_id = $2::uuid AND scoped_task.deleted_at IS NULL
+      ))`,
+    ];
+    if (projectId) { params.push(projectId); where.push(`e.project_id = $${params.length}::uuid`); }
+    if (operatorId) { params.push(operatorId); where.push(`e.author_user_id = $${params.length}::uuid`); }
+    if (types.length) { params.push(types); where.push(`e.type = ANY($${params.length}::text[])`); }
+    if (stageAliases) { params.push(stageAliases); where.push(`LOWER(COALESCE(e.project_status, '')) = ANY($${params.length}::text[])`); }
+    if (dateFrom) { params.push(dateFrom); where.push(`e.created_at >= $${params.length}::timestamptz`); }
+    if (dateTo) { params.push(dateTo); where.push(`e.created_at <= $${params.length}::timestamptz`); }
+    const search = text(query.search, 200).toLowerCase();
+    if (search) {
+      params.push(`%${search}%`);
+      where.push(`(LOWER(COALESCE(e.project_name, '')) LIKE $${params.length} OR LOWER(COALESCE(e.company_name, '')) LIKE $${params.length} OR LOWER(COALESCE(e.title, '')) LIKE $${params.length})`);
+    }
+
+    const sources = [
+      `SELECT 'activity:' || a.id::text AS id, p.id AS project_id, p.name AS project_name,
+              c.name AS company_name, p.status AS project_status, p.project_manager_id,
+              CASE WHEN a.type IN ('meeting', 'appointment') THEN 'appointment'
+                   WHEN a.type IN ('task', 'activity', 'follow_up') THEN 'activity' ELSE a.type END AS type,
+              a.created_by AS author_user_id,
+              COALESCE(tm.display_name, NULLIF(u.full_name, ''), split_part(u.email, '@', 1), 'Sistema') AS author_label,
+              a.created_at, a.title, COALESCE(a.status, CASE WHEN a.completed_at IS NOT NULL THEN 'completed' ELSE 'pending' END) AS status,
+              'commercial_activity' AS source
+       FROM "${schema}".commercial_activities a
+       JOIN "${schema}".projects p ON p.id = a.project_id AND p.deleted_at IS NULL
+       LEFT JOIN "${schema}".companies c ON c.id = p.company_id AND c.deleted_at IS NULL
+       LEFT JOIN "${schema}".users u ON u.id = a.created_by
+       LEFT JOIN "${schema}".team_members tm ON tm.user_id = a.created_by AND tm.deleted_at IS NULL
+       WHERE a.deleted_at IS NULL`,
+      `SELECT 'comment:' || pc.id::text AS id, p.id AS project_id, p.name AS project_name,
+              c.name AS company_name, p.status AS project_status, p.project_manager_id,
+              'note' AS type, pc.created_by AS author_user_id,
+              COALESCE(tm.display_name, NULLIF(u.full_name, ''), split_part(u.email, '@', 1), 'Sistema') AS author_label,
+              pc.created_at, 'Nota progetto' AS title, 'recorded' AS status, 'project_comment' AS source
+       FROM "${schema}".project_comments pc
+       LEFT JOIN "${schema}".tasks linked_task ON linked_task.id = pc.task_id AND linked_task.deleted_at IS NULL
+       JOIN "${schema}".projects p ON p.id = COALESCE(pc.project_id, linked_task.project_id) AND p.deleted_at IS NULL
+       LEFT JOIN "${schema}".companies c ON c.id = p.company_id AND c.deleted_at IS NULL
+       LEFT JOIN "${schema}".users u ON u.id = pc.created_by
+       LEFT JOIN "${schema}".team_members tm ON tm.user_id = pc.created_by AND tm.deleted_at IS NULL
+       WHERE pc.deleted_at IS NULL`,
+      `SELECT 'task:' || t.id::text AS id, p.id AS project_id, p.name AS project_name,
+              c.name AS company_name, p.status AS project_status, p.project_manager_id,
+              'activity' AS type, t.created_by AS author_user_id,
+              COALESCE(tm.display_name, NULLIF(u.full_name, ''), split_part(u.email, '@', 1), 'Sistema') AS author_label,
+              t.created_at, t.title, t.status, 'project_task' AS source
+       FROM "${schema}".tasks t
+       JOIN "${schema}".projects p ON p.id = t.project_id AND p.deleted_at IS NULL
+       LEFT JOIN "${schema}".companies c ON c.id = p.company_id AND c.deleted_at IS NULL
+       LEFT JOIN "${schema}".users u ON u.id = t.created_by
+       LEFT JOIN "${schema}".team_members tm ON tm.user_id = t.created_by AND tm.deleted_at IS NULL
+       WHERE t.deleted_at IS NULL`,
+      `SELECT 'audit:' || a.id::text AS id, p.id AS project_id, p.name AS project_name,
+              c.name AS company_name, p.status AS project_status, p.project_manager_id,
+              'status_change' AS type, tm.user_id AS author_user_id,
+              COALESCE(tm.display_name, split_part(a.actor_email, '@', 1), 'Sistema') AS author_label,
+              a.created_at, CASE WHEN a.action = 'project_status_changed' THEN 'Fase progetto aggiornata' ELSE 'Progetto aggiornato' END AS title,
+              a.action AS status, 'audit_log' AS source
+       FROM "${schema}".audit_log a
+       JOIN "${schema}".projects p ON p.id::text = a.target AND p.deleted_at IS NULL
+       LEFT JOIN "${schema}".companies c ON c.id = p.company_id AND c.deleted_at IS NULL
+       LEFT JOIN "${schema}".team_members tm ON lower(tm.email) = lower(a.actor_email) AND tm.deleted_at IS NULL
+       WHERE a.action IN ('project_status_changed', 'project_updated')`,
+    ];
+    if (access.modules.documents?.can_view && await this.tableExists(schema, 'document_activity')) {
+      sources.push(
+        `SELECT 'document:' || da.id::text AS id, p.id AS project_id, p.name AS project_name,
+                c.name AS company_name, p.status AS project_status, p.project_manager_id,
+                'file' AS type, da.actor_user_id AS author_user_id,
+                COALESCE(tm.display_name, NULLIF(u.full_name, ''), split_part(u.email, '@', 1), 'Sistema') AS author_label,
+                da.created_at, COALESCE(d.title, d.original_filename, 'File progetto') AS title,
+                da.action AS status, 'document_activity' AS source
+         FROM "${schema}".document_activity da
+         JOIN "${schema}".projects p ON da.entity_type = 'project' AND p.id = da.entity_id AND p.deleted_at IS NULL
+         LEFT JOIN "${schema}".documents d ON d.id = da.document_id AND d.deleted_at IS NULL
+         LEFT JOIN "${schema}".companies c ON c.id = p.company_id AND c.deleted_at IS NULL
+         LEFT JOIN "${schema}".users u ON u.id = da.actor_user_id
+         LEFT JOIN "${schema}".team_members tm ON tm.user_id = da.actor_user_id AND tm.deleted_at IS NULL`,
+      );
+    }
+
+    params.push(Math.trunc(limit), Math.trunc(offset));
+    const rows = await this.dataSource.query(
+      `SELECT e.*, COUNT(*) OVER()::int AS total
+       FROM (${sources.join('\nUNION ALL\n')}) e
+       WHERE ${where.join(' AND ')}
+       ORDER BY e.created_at DESC, e.id DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params,
+    );
+    return {
+      items: rows.map((row: any) => ({
+        ...row,
+        project_status: canonicalizeProjectRow({ status: row.project_status }).status,
+        total: undefined,
+      })),
+      total: Number(rows[0]?.total || 0),
+      limit: Math.trunc(limit),
+      offset: Math.trunc(offset),
+    };
   }
 
   private async relatedAuditTargets(schema: string, target: TimelineTarget, access: any) {

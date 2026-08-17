@@ -38,6 +38,7 @@ import { categoryLabel, formatBytes, formatDateTime } from "@/components/tenant-
 import { contractsApi } from "@/lib/tenant-contracts-api";
 import { paperworkApi } from "@/lib/tenant-paperwork-api";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
+import { DoflowProjectsFilesView, DoflowProjectsTimelineView } from "./project-secondary-views";
 
 type Row = Record<string, any>;
 type ListResponse<T = Row> = { items: T[]; total?: number; limit?: number; offset?: number };
@@ -1107,6 +1108,10 @@ export function ProjectsTasksPage() {
 }
 
 export function ProjectsTimelinePage() {
+  return isDoflowProjectTenant() ? <DoflowProjectsTimelineView /> : <LegacyProjectsTimelinePage />;
+}
+
+function LegacyProjectsTimelinePage() {
   const [projects, setProjects] = useState<Row[]>([]);
   const [milestones, setMilestones] = useState<Array<Row & { project_name?: string }>>([]);
   const [loading, setLoading] = useState(true);
@@ -1158,6 +1163,10 @@ export function ProjectsMilestonesPage() {
 }
 
 export function ProjectsFilesPage() {
+  return isDoflowProjectTenant() ? <DoflowProjectsFilesView /> : <LegacyProjectsFilesPage />;
+}
+
+function LegacyProjectsFilesPage() {
   const [projects, setProjects] = useState<Row[]>([]);
   const [projectId, setProjectId] = useState("");
   const [files, setFiles] = useState<Row[]>([]);

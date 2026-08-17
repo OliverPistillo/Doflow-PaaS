@@ -154,6 +154,17 @@ export class TenantReportsService {
     return { dateFrom, dateTo, groupBy, comparePrevious: this.parseBool(query.compare_previous) };
   }
 
+  private getConsultantPeriod(query: Record<string, any> = {}): Period {
+    const now = new Date();
+    const defaultFrom = new Date(now.getTime() - 29 * 86400000);
+    const dateFrom = this.normalizeDate(query.date_from, this.toDateOnly(defaultFrom));
+    const dateTo = this.normalizeDate(query.date_to, this.toDateOnly(now));
+    if (dateFrom > dateTo) throw new BadRequestException('date_from deve essere precedente o uguale a date_to');
+    const days = Math.round((new Date(`${dateTo}T00:00:00.000Z`).getTime() - new Date(`${dateFrom}T00:00:00.000Z`).getTime()) / 86400000) + 1;
+    if (days > 366) throw new BadRequestException('Il periodo performance non può superare 366 giorni');
+    return { dateFrom, dateTo, groupBy: days <= 31 ? 'day' : 'week', comparePrevious: false };
+  }
+
   private previousPeriod(period: Period): { dateFrom: string; dateTo: string } {
     const from = new Date(`${period.dateFrom}T00:00:00.000Z`);
     const to = new Date(`${period.dateTo}T00:00:00.000Z`);
@@ -1198,6 +1209,195 @@ export class TenantReportsService {
     const report = { ...(await this.baseEnvelope(schema, user, period)), team: await this.teamReport(schema, user, period) };
     await this.logActivity(schema, user, 'report_viewed', 'team', { period });
     return report;
+  }
+
+  async consultantPerformance(query: Record<string, any> = {}) {
+    const user = this.assertCanRead();
+    const schema = this.getSchema();
+    if (!isDoflowTenant(schema)) throw new ForbiddenException('Performance consulenti disponibile soltanto per Doflow.');
+    const period = this.getConsultantPeriod(query);
+    const requestedUserId = query.user_id ? this.requireUuid(String(query.user_id), 'user_id') : null;
+    const currentUserId = this.userIdOrNull(user.id);
+    if (!this.isManager(user.role) && requestedUserId && requestedUserId !== currentUserId) {
+      throw new ForbiddenException('Puoi consultare soltanto le tue metriche.');
+    }
+    const userFilter = requestedUserId || (this.isManager(user.role) ? null : currentUserId);
+    const wonAliases = aliasesForCommercialStage('closed_won') || ['closed_won'];
+    const lostAliases = aliasesForCommercialStage('lost') || ['lost'];
+    const canViewFinance = this.canSeeFinance(user.role);
+    const params = [
+      period.dateFrom,
+      period.dateTo,
+      userFilter,
+      wonAliases,
+      lostAliases,
+      PROJECT_DELIVERED_STAGE_ALIASES,
+      canViewFinance,
+    ];
+
+    const rows = await this.dataSource.query(
+      `WITH consultants AS (
+         SELECT tm.user_id, tm.display_name, tm.operational_role, tm.status
+         FROM "${schema}".team_members tm
+         WHERE tm.deleted_at IS NULL
+           AND tm.status = 'active'
+           AND tm.user_id IS NOT NULL
+           AND ($3::uuid IS NULL OR tm.user_id = $3::uuid)
+       ), opportunity_metrics AS (
+         SELECT o.assigned_to AS user_id,
+                COUNT(*) FILTER (WHERE o.created_at::date BETWEEN $1::date AND $2::date)::int AS opportunities_assigned,
+                COUNT(*) FILTER (WHERE LOWER(COALESCE(o.stage, '')) = ANY($4::text[]) AND o.updated_at::date BETWEEN $1::date AND $2::date)::int AS won,
+                COUNT(*) FILTER (WHERE LOWER(COALESCE(o.stage, '')) = ANY($5::text[]) AND o.updated_at::date BETWEEN $1::date AND $2::date)::int AS lost,
+                COALESCE(SUM(o.value_estimate) FILTER (WHERE $7::boolean AND LOWER(COALESCE(o.stage, '')) = ANY($4::text[]) AND o.updated_at::date BETWEEN $1::date AND $2::date), 0)::numeric AS won_value
+         FROM "${schema}".opportunities o
+         WHERE o.deleted_at IS NULL AND o.assigned_to IS NOT NULL
+         GROUP BY o.assigned_to
+       ), activity_metrics AS (
+         SELECT COALESCE(a.assigned_to, a.created_by) AS user_id,
+                COUNT(*) FILTER (WHERE a.completed_at::date BETWEEN $1::date AND $2::date)::int AS activities_completed,
+                COUNT(*) FILTER (WHERE a.completed_at IS NULL AND a.due_at < now())::int AS follow_ups_overdue,
+                COUNT(*) FILTER (WHERE LOWER(COALESCE(a.type, '')) IN ('appointment', 'meeting') AND a.created_at::date BETWEEN $1::date AND $2::date)::int AS appointments,
+                COUNT(*) FILTER (WHERE LOWER(COALESCE(a.type, '')) = 'call' AND a.created_at::date BETWEEN $1::date AND $2::date)::int AS calls,
+                COUNT(*) FILTER (WHERE a.created_at::date BETWEEN $1::date AND $2::date)::int AS timeline_created,
+                COUNT(*) FILTER (WHERE a.completed_at::date BETWEEN $1::date AND $2::date)::int AS timeline_completed,
+                ROUND(AVG(EXTRACT(EPOCH FROM (a.completed_at - a.created_at)) / 3600.0) FILTER (WHERE a.completed_at IS NOT NULL AND a.completed_at::date BETWEEN $1::date AND $2::date), 2)::numeric AS average_activity_close_hours,
+                COUNT(*) FILTER (WHERE a.completed_at IS NULL)::int AS open_activities
+         FROM "${schema}".commercial_activities a
+         WHERE a.deleted_at IS NULL AND COALESCE(a.assigned_to, a.created_by) IS NOT NULL
+         GROUP BY COALESCE(a.assigned_to, a.created_by)
+       ), task_metrics AS (
+         SELECT t.assignee_id AS user_id,
+                COUNT(*) FILTER (WHERE t.created_at::date BETWEEN $1::date AND $2::date)::int AS tasks_assigned,
+                COUNT(*) FILTER (WHERE t.completed_at::date BETWEEN $1::date AND $2::date)::int AS tasks_completed,
+                COUNT(*) FILTER (WHERE t.due_at < now() AND LOWER(COALESCE(t.status, '')) <> 'done')::int AS tasks_overdue,
+                COUNT(*) FILTER (WHERE LOWER(COALESCE(t.status, '')) <> 'done')::int AS open_tasks,
+                COUNT(*) FILTER (WHERE t.created_at::date BETWEEN $1::date AND $2::date)::int AS timeline_created,
+                COUNT(*) FILTER (WHERE t.completed_at::date BETWEEN $1::date AND $2::date)::int AS timeline_completed
+         FROM "${schema}".tasks t
+         WHERE t.deleted_at IS NULL AND t.assignee_id IS NOT NULL
+         GROUP BY t.assignee_id
+       ), project_metrics AS (
+         SELECT p.project_manager_id AS user_id,
+                COUNT(*)::int AS projects_managed,
+                COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, '')) = ANY($6::text[]) AND p.delivered_at::date BETWEEN $1::date AND $2::date)::int AS projects_delivered,
+                COUNT(*) FILTER (WHERE p.due_date < CURRENT_DATE AND LOWER(COALESCE(p.status, '')) <> ALL($6::text[]))::int AS projects_late
+         FROM "${schema}".projects p
+         WHERE p.deleted_at IS NULL AND p.project_manager_id IS NOT NULL
+         GROUP BY p.project_manager_id
+       )
+       SELECT c.user_id, c.display_name, c.operational_role, c.status,
+              COALESCE(o.opportunities_assigned, 0)::int AS opportunities_assigned,
+              COALESCE(a.activities_completed, 0)::int AS activities_completed,
+              COALESCE(a.follow_ups_overdue, 0)::int AS follow_ups_overdue,
+              COALESCE(a.appointments, 0)::int AS appointments,
+              COALESCE(a.calls, 0)::int AS calls,
+              COALESCE(o.won, 0)::int AS won,
+              COALESCE(o.lost, 0)::int AS lost,
+              CASE WHEN $7::boolean THEN COALESCE(o.won_value, 0)::numeric ELSE NULL END AS won_value,
+              COALESCE(p.projects_managed, 0)::int AS projects_managed,
+              COALESCE(t.tasks_assigned, 0)::int AS tasks_assigned,
+              COALESCE(t.tasks_completed, 0)::int AS tasks_completed,
+              COALESCE(t.tasks_overdue, 0)::int AS tasks_overdue,
+              COALESCE(p.projects_delivered, 0)::int AS projects_delivered,
+              COALESCE(p.projects_late, 0)::int AS projects_late,
+              (COALESCE(a.timeline_created, 0) + COALESCE(t.timeline_created, 0))::int AS timeline_created,
+              (COALESCE(a.timeline_completed, 0) + COALESCE(t.timeline_completed, 0))::int AS timeline_completed,
+              a.average_activity_close_hours,
+              (COALESCE(a.open_activities, 0) + COALESCE(t.open_tasks, 0))::int AS open_workload
+       FROM consultants c
+       LEFT JOIN opportunity_metrics o ON o.user_id = c.user_id
+       LEFT JOIN activity_metrics a ON a.user_id = c.user_id
+       LEFT JOIN task_metrics t ON t.user_id = c.user_id
+       LEFT JOIN project_metrics p ON p.user_id = c.user_id
+       ORDER BY c.display_name ASC`,
+      params,
+    );
+
+    const numericKeys = [
+      'opportunities_assigned', 'activities_completed', 'follow_ups_overdue', 'appointments', 'calls',
+      'won', 'lost', 'projects_managed', 'tasks_assigned', 'tasks_completed', 'tasks_overdue',
+      'projects_delivered', 'projects_late', 'timeline_created', 'timeline_completed', 'open_workload',
+    ];
+    const items = rows.map((row: any) => {
+      const item: Record<string, any> = { ...row };
+      numericKeys.forEach((key) => { item[key] = Number(row[key] || 0); });
+      const outcomes = item.won + item.lost;
+      item.conversion_rate = outcomes ? Number(((item.won / outcomes) * 100).toFixed(2)) : 0;
+      item.task_completion_rate = item.tasks_assigned ? Number(((item.tasks_completed / item.tasks_assigned) * 100).toFixed(2)) : 0;
+      item.average_activity_close_hours = row.average_activity_close_hours === null ? null : Number(row.average_activity_close_hours);
+      if (canViewFinance) item.won_value = Number(row.won_value || 0);
+      else delete item.won_value;
+      return item;
+    });
+
+    const sum = (key: string) => items.reduce((total: number, item: any) => total + Number(item[key] || 0), 0);
+    const totalWon = sum('won');
+    const totalLost = sum('lost');
+    const details = requestedUserId ? await this.consultantPerformanceDetails(schema, requestedUserId, period, canViewFinance) : undefined;
+    return {
+      period: { dateFrom: period.dateFrom, dateTo: period.dateTo },
+      permissions: { canViewFinance },
+      criteria: {
+        consultants: 'active_team_members',
+        opportunityOutcomes: 'stage_updated_in_period',
+        projectDelivery: 'delivered_at_in_period',
+        overdue: 'currently_open_and_past_due',
+        economics: canViewFinance ? 'visible' : 'hidden_by_backend',
+      },
+      summary: {
+        consultants: items.length,
+        opportunitiesAssigned: sum('opportunities_assigned'),
+        activitiesCompleted: sum('activities_completed'),
+        tasksCompleted: sum('tasks_completed'),
+        projectsDelivered: sum('projects_delivered'),
+        openWorkload: sum('open_workload'),
+        conversionRate: totalWon + totalLost ? Number(((totalWon / (totalWon + totalLost)) * 100).toFixed(2)) : 0,
+        ...(canViewFinance ? { wonValue: sum('won_value') } : {}),
+      },
+      items,
+      ...(details ? { details } : {}),
+    };
+  }
+
+  private async consultantPerformanceDetails(schema: string, userId: string, period: Period, canViewFinance: boolean) {
+    const [activities, projects, opportunities] = await Promise.all([
+      this.dataSource.query(
+        `SELECT a.id, a.title, a.type, a.status, a.due_at, a.completed_at, a.created_at
+         FROM "${schema}".commercial_activities a
+         WHERE a.deleted_at IS NULL AND COALESCE(a.assigned_to, a.created_by) = $1::uuid
+           AND (a.created_at::date BETWEEN $2::date AND $3::date OR a.completed_at::date BETWEEN $2::date AND $3::date)
+         ORDER BY COALESCE(a.completed_at, a.created_at) DESC LIMIT 12`,
+        [userId, period.dateFrom, period.dateTo],
+      ),
+      this.dataSource.query(
+        `SELECT p.id, p.name, p.status, p.progress, p.due_date, c.name AS company_name
+         FROM "${schema}".projects p
+         LEFT JOIN "${schema}".companies c ON c.id = p.company_id AND c.deleted_at IS NULL
+         WHERE p.deleted_at IS NULL AND p.project_manager_id = $1::uuid
+         ORDER BY p.updated_at DESC LIMIT 12`,
+        [userId],
+      ),
+      this.dataSource.query(
+        `SELECT o.id, o.title, o.stage, o.expected_close_date,
+                CASE WHEN $2::boolean THEN o.value_estimate ELSE NULL END AS value_estimate,
+                c.name AS company_name
+         FROM "${schema}".opportunities o
+         LEFT JOIN "${schema}".companies c ON c.id = o.company_id AND c.deleted_at IS NULL
+         WHERE o.deleted_at IS NULL AND o.assigned_to = $1::uuid
+         ORDER BY o.updated_at DESC LIMIT 12`,
+        [userId, canViewFinance],
+      ),
+    ]);
+    return {
+      activities,
+      projects: projects.map((row: any) => canonicalizeProjectRow(row)),
+      opportunities: opportunities.map((row: any) => {
+        const normalized = normalizeCommercialStage(row.stage);
+        const item = { ...row, stage: normalized.mapped ? normalized.stage : row.stage };
+        if (!canViewFinance) delete item.value_estimate;
+        return item;
+      }),
+    };
   }
 
   async documents(query: Record<string, any> = {}) {

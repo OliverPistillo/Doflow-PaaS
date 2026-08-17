@@ -37,6 +37,11 @@ export class TenantReportsController {
     return this.service.team(query || {});
   }
 
+  @Get('consultant-performance')
+  consultantPerformance(@Query() query: Record<string, any>) {
+    return this.service.consultantPerformance(query || {});
+  }
+
   @Get('documents')
   documents(@Query() query: Record<string, any>) {
     return this.service.documents(query || {});
