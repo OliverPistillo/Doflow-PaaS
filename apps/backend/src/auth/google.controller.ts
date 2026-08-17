@@ -16,6 +16,7 @@ import * as jwt from 'jsonwebtoken';
 import { AuthService } from '../auth.service';
 import { Role } from '../roles';
 import { safeSchema } from '../common/schema.utils';
+import { AuthHandoffService } from './auth-handoff.service';
 
 type GooglePassportUser = {
   googleId: string;
@@ -40,6 +41,7 @@ export class GoogleAuthController {
   constructor(
     private readonly dataSource: DataSource,
     private readonly authService: AuthService,
+    private readonly authHandoff: AuthHandoffService,
   ) {}
 
   /** Step 1: redirect user to Google consent screen */
@@ -92,12 +94,12 @@ export class GoogleAuthController {
           picture: googleUser.picture,
         });
 
-        const params = new URLSearchParams({
-          google_token: token,
-          google_email: googleUser.email,
-          google_name: googleUser.fullName || '',
+        const handoff = await this.authHandoff.createGoogleSignup({
+          googleSignupToken: token,
+          email: googleUser.email,
+          fullName: googleUser.fullName,
         });
-        return res.redirect(`${appBase}/signup?${params.toString()}`);
+        return res.redirect(`${appBase}/register?handoff=${encodeURIComponent(handoff.handoff)}`);
       }
 
       const directoryUser = rows[0];
@@ -130,14 +132,36 @@ export class GoogleAuthController {
         { authStage, mfaRequired: !!loginUser.mfa_enabled },
       );
 
-      const params = new URLSearchParams({ accessToken: token });
-      if (authStage !== 'FULL') params.set('next', 'mfa');
-
-      return res.redirect(`${appBase}/login?${params.toString()}`);
+      const handoff = await this.authHandoff.createLogin({
+        token,
+        user: {
+          sub: loginUser.id,
+          tenantId: schema,
+          tenantSlug: slug,
+          role: loginUser.role,
+          authStage,
+        },
+        tenantTarget: slug,
+        rememberMe: true,
+      });
+      const targetBase = this.getTenantFrontendBase(appBase, slug);
+      const params = new URLSearchParams({ handoff: handoff.handoff, tenant: slug });
+      return res.redirect(`${targetBase}/login?${params.toString()}`);
     } catch (err: any) {
-      this.logger.error('Google OAuth callback error:', err?.stack || err?.message || err);
+      this.logger.error('Google OAuth callback non riuscito');
       return res.redirect(`${appBase}/login?error=google_callback_failed`);
     }
+  }
+
+  private getTenantFrontendBase(appBase: string, tenantSlug: string) {
+    if (!tenantSlug || tenantSlug === 'public' || tenantSlug === 'doflow') return appBase;
+    const parsed = new URL(appBase);
+    if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') return appBase;
+    const domain = String(process.env.TENANT_BASE_DOMAIN || 'doflow.it')
+      .replace(/^https?:\/\//, '')
+      .replace(/^app\./, '')
+      .replace(/\/.*$/, '');
+    return `${parsed.protocol}//${tenantSlug}.${domain}`;
   }
 
   private signGoogleSignupToken(payload: GoogleSignupPayload): string {

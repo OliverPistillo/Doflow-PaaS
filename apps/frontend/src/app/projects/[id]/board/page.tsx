@@ -9,6 +9,7 @@ import {
   DropResult,
 } from '@hello-pangea/dnd';
 import { useNotifications, RealtimeEvent } from '@/hooks/useNotifications';
+import { getAuthToken } from '@/lib/auth-storage';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
@@ -78,7 +79,7 @@ export default function ProjectBoardPage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setToken(window.localStorage.getItem('doflow_token'));
+      setToken(getAuthToken());
     }
   }, []);
 

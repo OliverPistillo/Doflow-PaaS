@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { clearAuthStorage, getAuthToken } from '@/lib/auth-storage';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 
@@ -20,8 +21,7 @@ type TasksResponse = { tasks: Task[] };
 const API_BASE = '/api';
 
 function getTokenFromStorage(): string | null {
-  if (typeof window === 'undefined') return null;
-  return window.localStorage.getItem('doflow_token');
+  return getAuthToken();
 }
 
 function safeText(e: unknown): string {
@@ -172,7 +172,7 @@ export default function ProjectTasksClient() {
 
   const handleLogout = React.useCallback(() => {
     if (typeof window === 'undefined') return;
-    window.localStorage.removeItem('doflow_token');
+    clearAuthStorage();
     router.push('/login');
   }, [router]);
 

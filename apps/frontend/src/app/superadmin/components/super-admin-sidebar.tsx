@@ -13,6 +13,7 @@ import {
   User, Settings, Palette, ChevronRight,
 } from "lucide-react";
 import { useTheme } from "next-themes";
+import { clearAuthStorage } from "@/lib/auth-storage";
 
 import {
   Sidebar,
@@ -178,7 +179,7 @@ export function SuperAdminSidebar() {
   }, []);
 
   const logout = React.useCallback(() => {
-    window.localStorage.removeItem("doflow_token");
+    clearAuthStorage();
     router.push("/login");
   }, [router]);
 

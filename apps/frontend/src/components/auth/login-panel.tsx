@@ -16,6 +16,7 @@ import {
   isInternalDoflowTenant,
   normalizeTenantSlug,
 } from "@/lib/tenant-url";
+import { storeAuthToken } from "@/lib/auth-storage";
 
 import {
   AlertDialog,
@@ -68,7 +69,11 @@ function normalizeRole(role?: string) {
 }
 
 function isMfaPending(payload?: any) {
-  return payload?.mfa_pending === true || payload?.authStage === "MFA_PENDING";
+  return (
+    payload?.mfa_pending === true ||
+    payload?.authStage === "MFA_PENDING" ||
+    payload?.authStage === "MFA_SETUP_NEEDED"
+  );
 }
 
 const loginSchema = z.object({
@@ -85,7 +90,7 @@ type LoginResponse = {
   token: string;
   error?: string;
   message?: string;
-  mfa?: { required?: boolean; pending?: boolean; redirect?: string };
+  mfa?: { required?: boolean; stage?: "FULL" | "MFA_PENDING" | "MFA_SETUP_NEEDED" };
   user?: {
     tenantSlug?: string;
     tenant_id?: string;
@@ -160,24 +165,48 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
   }, [passwordFocused, showPassword, onMascotShyChange]);
 
   React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tokenFromUrl = params.get("accessToken");
-    if (tokenFromUrl) {
-      window.localStorage.removeItem("doflow_token");
-      window.localStorage.setItem("doflow_token", tokenFromUrl);
-      const payload = parseJwtPayload(tokenFromUrl);
-      const tenantSlug = normalizeTenantSlug(payload?.tenantSlug || payload?.tenantId || payload?.tenant_id);
-      const next = (params.get("next") || "").toLowerCase();
-      const goMfa = next === "mfa" || isMfaPending(payload);
-      if (tenantSlug && tenantSlug !== "public") {
-        const tenantPath = isInternalDoflowTenant(tenantSlug) ? "" : `/${tenantSlug}`;
-        window.location.href = goMfa
-          ? `${tenantPath}/mfa`
-          : `${tenantPath}/dashboard`;
-      } else {
-        window.location.href = goMfa ? `/mfa` : `/dashboard`;
+    const exchange = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const handoff = params.get("handoff");
+      if (!handoff) {
+        if (params.get("error")) {
+          window.history.replaceState({}, "", window.location.pathname);
+          setGeneralError("Accesso con Google non riuscito. Riprova.");
+        }
+        return;
       }
-    }
+      const { tenantSub } = getHostContext();
+      const tenantTarget = normalizeTenantSlug(params.get("tenant") || tenantSub || "doflow");
+      window.history.replaceState({}, "", window.location.pathname);
+      try {
+        const result = await apiFetch<{
+          kind: "login";
+          token: string;
+          tenantTarget: string;
+          authStage: string;
+          next: "dashboard" | "mfa" | "onboarding" | "superadmin";
+          rememberMe: boolean;
+        }>("/auth/handoff/exchange", {
+          method: "POST",
+          auth: false,
+          body: JSON.stringify({ handoff, tenantTarget }),
+        });
+        if (result.kind !== "login" || !result.token) throw new Error();
+        storeAuthToken(result.token, result.rememberMe);
+        if (result.next === "mfa") {
+          window.location.replace(`/${result.tenantTarget}/mfa`);
+        } else if (result.next === "superadmin") {
+          window.location.replace("/superadmin");
+        } else if (result.next === "onboarding") {
+          window.location.replace("/onboarding");
+        } else {
+          window.location.replace("/dashboard");
+        }
+      } catch {
+        setGeneralError("Il collegamento di accesso è scaduto. Accedi di nuovo.");
+      }
+    };
+    void exchange();
   }, []);
 
   React.useEffect(() => {
@@ -214,8 +243,8 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
       let targetTenant = "public";
       if (data.user?.schema || data.user?.tenantSlug || data.user?.tenant_id) {
         targetTenant = (
-          data.user.schema ||
           data.user.tenantSlug ||
+          data.user.schema ||
           data.user.tenant_id ||
           "public"
         ).toLowerCase();
@@ -228,50 +257,56 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
         ).toLowerCase();
       }
       const mfaRequired = data?.mfa?.required === true || isMfaPending(payload);
+      const next = mfaRequired ? "mfa" : role === "SUPER_ADMIN" ? "superadmin" : "dashboard";
+
+      if (isAppHost && targetTenant !== "public" && !isInternalDoflowTenant(targetTenant)) {
+        const handoff = await apiFetch<{ handoff: string }>("/auth/handoff", {
+          method: "POST",
+          auth: false,
+          headers: { Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            tenantTarget: targetTenant,
+            rememberMe: values.rememberMe === true,
+            next,
+          }),
+        });
+        setTenantRedirectUrl(getTenantLoginUrl(targetTenant, handoff.handoff));
+        setTenantDialogMode("redirect");
+        setShowTenantRedirect(true);
+        return;
+      }
+
+      storeAuthToken(token, values.rememberMe === true);
       if (mfaRequired) {
-        window.localStorage.setItem("doflow_token", token);
         if (isAppHost) {
-          if (targetTenant !== "public" && /^[a-z0-9_]+$/i.test(targetTenant)) {
-            if (isInternalDoflowTenant(targetTenant)) {
-              router.push("/mfa");
-              return;
-            }
-            setTenantRedirectUrl(getTenantLoginUrl(targetTenant, token, "mfa"));
-            setTenantDialogMode("redirect");
-            setShowTenantRedirect(true);
-            return;
-          }
-          router.push(`/mfa`);
+          router.push(`/${targetTenant === "public" ? "public" : targetTenant}/mfa`);
           return;
         }
         router.push(tenantSub ? `/${tenantSub}/mfa` : `/mfa`);
         return;
       }
       if (role === "SUPER_ADMIN") {
-        window.localStorage.setItem("doflow_token", token);
         router.push("/superadmin");
         return;
       }
       if (isAppHost) {
         if (targetTenant !== "public" && /^[a-z0-9_]+$/i.test(targetTenant)) {
           if (isInternalDoflowTenant(targetTenant)) {
-            window.localStorage.setItem("doflow_token", token);
             router.push("/dashboard");
             return;
           }
-          setTenantRedirectUrl(getTenantLoginUrl(targetTenant, token));
-          setTenantDialogMode("redirect");
-          setShowTenantRedirect(true);
-          return;
         }
-        window.localStorage.setItem("doflow_token", token);
         router.push("/dashboard");
         return;
       }
-      window.localStorage.setItem("doflow_token", token);
-      router.push(tenantSub ? `/${tenantSub}/dashboard` : "/dashboard");
+      router.push("/dashboard");
     } catch (err: any) {
-      setGeneralError(err?.message || "Si è verificato un errore imprevisto.");
+      const message = String(err?.message || "");
+      setGeneralError(
+        message.includes("Traffic Control")
+          ? message
+          : "Credenziali non valide. Verifica email e password.",
+      );
     }
   };
 

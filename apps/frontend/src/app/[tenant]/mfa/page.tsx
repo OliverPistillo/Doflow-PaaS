@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { ShieldCheck, RefreshCw, QrCode, Lock, CheckCircle2, ArrowLeft, Copy, Check } from "lucide-react";
 
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { AuthShell } from "@/components/auth/auth-shell";
 import {
   InputOTP,
   InputOTPGroup,
@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
+import { getAuthToken, replaceAuthToken } from "@/lib/auth-storage";
 
 // Helper per decodificare il token JWT e leggere authStage
 function parseJwtPayload(token: string) {
@@ -38,6 +39,7 @@ function normalizeCode(v: string) {
 export default function TenantMfaPage() {
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const params = useParams<{ tenant: string }>();
   const tenantSlug = String(params?.tenant || "").toLowerCase();
 
@@ -64,24 +66,24 @@ export default function TenantMfaPage() {
   }, []);
 
   const initMfa = async () => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("doflow_token") : null;
+    const token = getAuthToken();
     
     if (!token) {
       // Nessun token -> Login
-      router.replace(tenantSlug ? `/${tenantSlug}/login` : "/login");
+      router.replace("/login");
       return;
     }
 
     const payload = parseJwtPayload(token);
     const stage = payload?.authStage;
 
-    if (stage === "FULL") {
+    if (stage === "FULL" && searchParams.get("setup") !== "1") {
       // Già autenticato -> Dashboard
-      router.replace(tenantSlug ? `/${tenantSlug}/dashboard` : "/dashboard");
+      router.replace("/dashboard");
       return;
     }
 
-    if (stage === "MFA_SETUP_NEEDED") {
+    if (stage === "MFA_SETUP_NEEDED" || (stage === "FULL" && searchParams.get("setup") === "1")) {
       setMode("SETUP");
       await fetchSetupData();
     } else {
@@ -157,7 +159,7 @@ export default function TenantMfaPage() {
 
       if (res.token) {
         // Successo! Salviamo il token FULL
-        localStorage.setItem("doflow_token", res.token);
+        replaceAuthToken(res.token);
         
         toast({
           title: "Accesso Effettuato",
@@ -168,11 +170,7 @@ export default function TenantMfaPage() {
         const p = parseJwtPayload(res.token);
         const targetSlug = p?.tenantSlug || tenantSlug;
         
-        if (targetSlug && targetSlug !== 'public') {
-            window.location.href = `/${targetSlug}/dashboard`;
-        } else {
-            window.location.href = "/dashboard";
-        }
+        window.location.href = targetSlug === 'public' ? "/superadmin" : "/dashboard";
       } else {
         throw new Error(res.error || "Errore sconosciuto");
       }
@@ -204,22 +202,21 @@ export default function TenantMfaPage() {
   }
 
   return (
-    <div className="min-h-screen doflow-app-frame flex items-center justify-center p-4 lg:p-6">
-      <Card className="w-full max-w-md df-glass-panel rounded-[32px] p-8 lg:p-10 overflow-hidden relative">
-        <div className="animate-fadeInUp space-y-6">
+    <AuthShell
+      mode="login"
+      title={mode === "SETUP" ? "Configura MFA" : "Verifica accesso"}
+      description={
+        mode === "SETUP"
+          ? "Scansiona il QR code con la tua app Authenticator."
+          : "Inserisci il codice a 6 cifre generato dalla tua app di autenticazione."
+      }
+    >
+      <div className="animate-fadeInUp space-y-6">
           {/* Header Icon */}
           <div className="flex flex-col items-center text-center space-y-4 mb-2">
             <div className="df-icon-bubble h-16 w-16">
               {mode === "SETUP" ? <QrCode className="h-8 w-8" /> : <ShieldCheck className="h-8 w-8" />}
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight">
-              {mode === "SETUP" ? "Configura MFA" : "Verifica Accesso"}
-            </h1>
-            <p className="text-sm text-muted-foreground px-2 leading-relaxed">
-              {mode === "SETUP"
-                ? "Per proteggere il tuo account, scansiona il QR code con la tua app Authenticator (Google/Microsoft)."
-                : "Inserisci il codice a 6 cifre generato dalla tua app di autenticazione."}
-            </p>
           </div>
 
           {/* QR Code Section (Solo SETUP) */}
@@ -308,14 +305,13 @@ export default function TenantMfaPage() {
             <Button
               variant="link"
               className="text-xs font-semibold text-muted-foreground hover:text-primary transition-colors flex items-center justify-center gap-1.5"
-              onClick={() => router.replace(tenantSlug ? `/${tenantSlug}/login` : "/login")}
+              onClick={() => router.replace("/login")}
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               Torna al login
             </Button>
           </div>
-        </div>
-      </Card>
-    </div>
+      </div>
+    </AuthShell>
   );
 }

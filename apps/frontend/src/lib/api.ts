@@ -1,5 +1,6 @@
 // apps/frontend/src/lib/api.ts
 import { getTenantHeader } from "./tenant-fetch";
+import { getAuthToken } from "./auth-storage";
 
 type ApiFetchOptions = RequestInit & { auth?: boolean };
 
@@ -75,7 +76,7 @@ export async function apiFetch<T = unknown>(
   }
 
   if (options.auth !== false && typeof window !== "undefined") {
-    const token = window.localStorage.getItem("doflow_token");
+    const token = getAuthToken();
     if (token) headers.Authorization = `Bearer ${token}`;
   }
 

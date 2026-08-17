@@ -1,5 +1,5 @@
 // apps/backend/src/auth/dto/signup-tenant.dto.ts
-import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength, Matches, ValidateIf } from 'class-validator';
+import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString, MinLength, Matches, ValidateIf } from 'class-validator';
 
 export class SignupTenantDto {
   // Account fields
@@ -46,9 +46,8 @@ export class SignupTenantDto {
   @IsOptional()
   planTier?: 'STARTER' | 'PRO' | 'ENTERPRISE';
 
-  @IsString()
-  @IsOptional()
-  acceptTerms?: string; // 'true'
+  @IsBoolean()
+  acceptTerms!: boolean;
 }
 
 export class CheckSlugDto {

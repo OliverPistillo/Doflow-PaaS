@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { getAuthToken } from '@/lib/auth-storage';
 
 export type HelloEvent = {
   type: 'hello';
@@ -33,7 +34,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
     // Safety check: esegui solo lato client e se abilitato
     if (!enabled || typeof window === 'undefined') return;
 
-    const token = window.localStorage.getItem('doflow_token');
+    const token = getAuthToken();
 
     // 🚫 Zero Trust: Senza token non tentiamo nemmeno la connessione
     if (!token) {

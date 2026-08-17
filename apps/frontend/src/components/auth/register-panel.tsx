@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -16,6 +15,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api";
+import { getTenantLoginUrl } from "@/lib/tenant-url";
 import {
   Eye,
   EyeOff,
@@ -31,18 +31,28 @@ import {
 const registerSchema = z
   .object({
     name: z.string().min(2, "Inserisci il tuo nome"),
-    company: z.string().optional(),
+    company: z.string().min(2, "Inserisci il nome dell'azienda"),
+    slug: z
+      .string()
+      .min(3, "Minimo 3 caratteri")
+      .max(30, "Massimo 30 caratteri")
+      .regex(/^[a-z0-9-]+$/, "Usa lettere minuscole, numeri e trattini"),
     email: z
       .string()
       .min(1, "L'email è obbligatoria")
       .email("Inserisci un'email valida"),
-    password: z.string().min(8, "Minimo 8 caratteri"),
-    confirmPassword: z.string().min(1, "Conferma la password"),
+    password: z.string().optional(),
+    confirmPassword: z.string().optional(),
+    googleSignupToken: z.string().optional(),
     acceptTerms: z.boolean().refine((v) => v === true, "Devi accettare i termini"),
   })
-  .refine((d) => d.password === d.confirmPassword, {
-    message: "Le password non coincidono",
-    path: ["confirmPassword"],
+  .superRefine((data, ctx) => {
+    if (!data.googleSignupToken && (data.password || "").length < 8) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Minimo 8 caratteri", path: ["password"] });
+    }
+    if (!data.googleSignupToken && data.password !== data.confirmPassword) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Le password non coincidono", path: ["confirmPassword"] });
+    }
   });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
@@ -76,27 +86,32 @@ function passwordStrength(password: string) {
 }
 
 export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPanelProps) {
-  const router = useRouter();
   const [showPwd, setShowPwd] = React.useState(false);
   const [showConfirm, setShowConfirm] = React.useState(false);
   const [passwordFocused, setPasswordFocused] = React.useState(false);
   const [generalError, setGeneralError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState(false);
+  const [slugStatus, setSlugStatus] = React.useState<"idle" | "checking" | "available" | "unavailable">("idle");
+  const [slugMessage, setSlugMessage] = React.useState("");
+  const [slugEdited, setSlugEdited] = React.useState(false);
 
   const {
     register,
     handleSubmit,
     control,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
       name: "",
       company: "",
+      slug: "",
       email: "",
       password: "",
       confirmPassword: "",
+      googleSignupToken: "",
       acceptTerms: false,
     },
   });
@@ -110,13 +125,72 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
   }, [passwordFocused, showPwd, showConfirm, onMascotShyChange]);
 
   React.useEffect(() => {
-    if (!success) return;
-    const t = setTimeout(() => {
-      if (onSwitchToLogin) onSwitchToLogin();
-      else router.push("/login");
-    }, 2200);
-    return () => clearTimeout(t);
-  }, [success, router, onSwitchToLogin]);
+    const exchangeGoogleHandoff = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const handoff = params.get("handoff");
+      if (!handoff) return;
+      window.history.replaceState({}, "", window.location.pathname);
+      try {
+        const result = await apiFetch<{
+          kind: "google_signup";
+          googleSignupToken: string;
+          email: string;
+          fullName?: string;
+        }>("/auth/handoff/exchange", {
+          method: "POST",
+          auth: false,
+          body: JSON.stringify({ handoff, tenantTarget: "public" }),
+        });
+        if (result.kind !== "google_signup") throw new Error();
+        setValue("googleSignupToken", result.googleSignupToken);
+        setValue("email", result.email);
+        if (result.fullName) setValue("name", result.fullName);
+      } catch {
+        setGeneralError("La sessione Google è scaduta. Ripeti la registrazione.");
+      }
+    };
+    void exchangeGoogleHandoff();
+  }, [setValue]);
+
+  const company = watch("company");
+  const slug = watch("slug");
+  const googleSignupToken = watch("googleSignupToken");
+  React.useEffect(() => {
+    if (slugEdited) return;
+    const generated = String(company || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 30);
+    setValue("slug", generated, { shouldValidate: generated.length >= 3 });
+  }, [company, setValue, slugEdited]);
+
+  React.useEffect(() => {
+    const normalized = String(slug || "").trim().toLowerCase();
+    if (!/^[a-z0-9-]{3,30}$/.test(normalized)) {
+      setSlugStatus("idle");
+      setSlugMessage("");
+      return;
+    }
+    setSlugStatus("checking");
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await apiFetch<{ available: boolean; reason?: string }>(
+          `/auth/check-slug?slug=${encodeURIComponent(normalized)}`,
+          { auth: false },
+        );
+        setSlugStatus(result.available ? "available" : "unavailable");
+        setSlugMessage(result.available ? "Indirizzo disponibile" : result.reason || "Indirizzo non disponibile");
+      } catch {
+        setSlugStatus("idle");
+        setSlugMessage("");
+      }
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [slug]);
 
   const pwd = watch("password") || "";
   const strength = passwordStrength(pwd);
@@ -124,17 +198,38 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
   const onSubmit = async (values: RegisterFormValues) => {
     setGeneralError(null);
     try {
-      await apiFetch("/auth/register", {
+      if (slugStatus !== "available") {
+        setGeneralError("Scegli un indirizzo aziendale disponibile.");
+        return;
+      }
+      const result = await apiFetch<{
+        token: string;
+        tenant: { slug: string };
+      }>("/auth/signup-tenant", {
         method: "POST",
         auth: false,
         body: JSON.stringify({
-          name: values.name,
-          company: values.company,
+          fullName: values.name,
+          companyName: values.company,
+          slug: values.slug.toLowerCase(),
           email: values.email,
-          password: values.password,
+          password: values.googleSignupToken ? undefined : values.password,
+          googleSignupToken: values.googleSignupToken || undefined,
+          acceptTerms: values.acceptTerms,
+        }),
+      });
+      const handoff = await apiFetch<{ handoff: string }>("/auth/handoff", {
+        method: "POST",
+        auth: false,
+        headers: { Authorization: `Bearer ${result.token}` },
+        body: JSON.stringify({
+          tenantTarget: result.tenant.slug,
+          rememberMe: true,
+          next: "onboarding",
         }),
       });
       setSuccess(true);
+      window.location.href = getTenantLoginUrl(result.tenant.slug, handoff.handoff);
     } catch (err: any) {
       setGeneralError(err?.message || "Errore durante la registrazione.");
     }
@@ -147,7 +242,7 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
           <Check size={24} aria-hidden="true" />
         </div>
         <p className="text-[16px] font-extrabold">Account creato con successo.</p>
-        <p className="mt-1 text-[13px] opacity-80">Ti portiamo al login tra un istante.</p>
+        <p className="mt-1 text-[13px] opacity-80">Stiamo aprendo il tuo spazio aziendale.</p>
       </div>
     );
   }
@@ -194,7 +289,7 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
 
         <div className="df-auth-field">
           <Label htmlFor="reg-company" className="df-auth-label">
-            Azienda <span className="font-normal opacity-60">opzionale</span>
+            Azienda
           </Label>
           <div className="df-auth-input-wrap">
             <input
@@ -208,9 +303,44 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
             />
             <Building2 className="df-auth-field-icon" aria-hidden="true" />
           </div>
+          {errors.company && <p role="alert" className="df-auth-help">{errors.company.message}</p>}
         </div>
 
         <div className="df-auth-field">
+          <Label htmlFor="reg-slug" className="df-auth-label">
+            Indirizzo aziendale
+          </Label>
+          <div className="df-auth-input-wrap">
+            <input
+              id="reg-slug"
+              type="text"
+              placeholder="nome-azienda"
+              autoComplete="off"
+              disabled={isSubmitting}
+              aria-invalid={!!errors.slug || slugStatus === "unavailable"}
+              className={cn("df-auth-input no-right", (errors.slug || slugStatus === "unavailable") && "err")}
+              {...register("slug", {
+                onChange: (event) => {
+                  event.target.value = event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
+                  setSlugEdited(true);
+                },
+              })}
+            />
+            <Building2 className="df-auth-field-icon" aria-hidden="true" />
+          </div>
+          <p className={cn(
+            "text-[11px]",
+            errors.slug || slugStatus === "unavailable"
+              ? "df-auth-help"
+              : slugStatus === "available"
+                ? "text-emerald-400"
+                : "text-muted-foreground",
+          )}>
+            {errors.slug?.message || slugMessage || "Sarà usato per il tuo spazio Doflow."}
+          </p>
+        </div>
+
+        {!googleSignupToken && <div className="df-auth-field">
           <Label htmlFor="reg-email" className="df-auth-label">
             Email
           </Label>
@@ -228,9 +358,9 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
             <Mail className="df-auth-field-icon" aria-hidden="true" />
           </div>
           {errors.email && <p role="alert" className="df-auth-help">{errors.email.message}</p>}
-        </div>
+        </div>}
 
-        <div className="df-auth-field">
+        {!googleSignupToken && <div className="df-auth-field">
           <Label htmlFor="reg-password" className="df-auth-label">
             Password
           </Label>
@@ -269,9 +399,9 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
             <i className="df-auth-strength-bar" style={{ width: `${strength.width}%`, background: strength.color }} />
           </div>
           {errors.password && <p role="alert" className="df-auth-help">{errors.password.message}</p>}
-        </div>
+        </div>}
 
-        <div className="df-auth-field">
+        {!googleSignupToken && <div className="df-auth-field">
           <Label htmlFor="reg-confirm" className="df-auth-label">
             Conferma password
           </Label>
@@ -307,7 +437,7 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
             </Tooltip>
           </div>
           {errors.confirmPassword && <p role="alert" className="df-auth-help">{errors.confirmPassword.message}</p>}
-        </div>
+        </div>}
 
         <div className="df-auth-check-row">
           <Controller
@@ -337,7 +467,7 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
           </div>
         )}
 
-        <button type="submit" disabled={isSubmitting} className="df-auth-submit">
+        <button type="submit" disabled={isSubmitting || slugStatus === "checking"} className="df-auth-submit">
           <span className="df-auth-button-content">
             {isSubmitting ? (
               <>

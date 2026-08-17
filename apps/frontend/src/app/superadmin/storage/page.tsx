@@ -9,6 +9,7 @@ import {
   RotateCcw, Pencil, ToggleLeft, ToggleRight, CalendarDays,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getAuthToken } from "@/lib/auth-storage";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -327,7 +328,7 @@ export default function StoragePage() {
     setDownloading(b.id);
     try {
       const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
-      const token = typeof window !== "undefined" ? localStorage.getItem("doflow_token") : null;
+      const token = getAuthToken();
       window.open(`${apiBase}/api/superadmin/storage/backups/${b.id}/download?token=${token}`, "_blank");
       toast({ title: "⬇️ Download avviato" });
     } catch (e: any) {

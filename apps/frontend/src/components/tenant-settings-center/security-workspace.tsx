@@ -57,7 +57,7 @@ export function SecurityWorkspace() {
           </div>
           <div className="grid gap-5 xl:grid-cols-2">
             <SettingsPanel title="Sicurezza account" description="Le azioni disponibili usano i flussi di autenticazione esistenti.">
-              <SecurityRow icon={LockKeyhole} title="Autenticazione a due fattori" description="Configurazione MFA supportata; lo stato corrente non è esposto al frontend." action={canUpdate("settings") && tenantSlug ? <Link href={`/${tenantSlug}/mfa`} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">Configura</Link> : null} />
+              <SecurityRow icon={LockKeyhole} title="Autenticazione a due fattori" description="Configurazione MFA supportata; lo stato corrente non è esposto al frontend." action={canUpdate("settings") && tenantSlug ? <Link href={`/${tenantSlug}/mfa?setup=1`} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">Configura</Link> : null} />
               <SecurityRow icon={UserCheck} title="Accesso con Google" description="OAuth Google è supportato in fase di autenticazione; il collegamento account non è esposto." />
               <SecurityRow icon={Laptop2} title="Sessioni aperte" description="Dispositivi, IP e revoca sessioni non sono disponibili." last />
             </SettingsPanel>

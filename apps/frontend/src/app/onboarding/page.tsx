@@ -10,6 +10,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { apiFetch } from "@/lib/api";
+import { getAuthToken } from "@/lib/auth-storage";
 import {
   Loader2, Check, ArrowRight, ArrowLeft, Sparkles, Lock, AlertCircle,
   ShoppingCart, Wallet, Briefcase, Users, Megaphone, Headphones, Building2,
@@ -78,7 +79,7 @@ export default function OnboardingPage() {
     (async () => {
       try {
         // Token check
-        const token = window.localStorage.getItem("doflow_token");
+        const token = getAuthToken();
         if (!token) { router.push("/login"); return; }
 
         const [planRes, modsRes] = await Promise.all([

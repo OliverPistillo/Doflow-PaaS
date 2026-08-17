@@ -96,6 +96,10 @@ export class SignupService {
       throw new BadRequestException('Email obbligatoria');
     }
 
+    if (dto.acceptTerms !== true) {
+      throw new BadRequestException('Devi accettare i termini di servizio');
+    }
+
     if (!googleSignup && !dto.password) {
       throw new BadRequestException('Password obbligatoria per la registrazione email/password');
     }
@@ -103,6 +107,9 @@ export class SignupService {
     // 1. Validation pre-flight
     const slugCheck = await this.checkSlugAvailability(dto.slug);
     if (!slugCheck.available) {
+      if (slugCheck.reason === 'Slug già in uso') {
+        throw new ConflictException('Slug già in uso');
+      }
       throw new BadRequestException(`Slug non valido: ${slugCheck.reason}`);
     }
 
@@ -203,7 +210,7 @@ export class SignupService {
         { authStage: 'FULL', mfaRequired: false },
       );
 
-      this.logger.log(`✅ Tenant signup: ${dto.companyName} (${dto.slug}) — owner: ${email} via ${authProvider}`);
+      this.logger.log(`Tenant signup completato via ${authProvider}`);
 
       return {
         tenant: {
@@ -225,7 +232,7 @@ export class SignupService {
       };
     } catch (err: any) {
       await queryRunner.rollbackTransaction();
-      this.logger.error('Errore signup tenant:', err);
+      this.logger.error('Errore signup tenant');
       if (err instanceof ConflictException || err instanceof BadRequestException) {
         throw err;
       }

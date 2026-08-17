@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { clearAuthStorage } from '@/lib/auth-storage';
 
 import { AppSidebar } from '@/components/app-sidebar';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
@@ -73,7 +74,7 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
   // ---- Logout
   const handleLogout = React.useCallback(() => {
     if (typeof window !== 'undefined') {
-      window.localStorage.removeItem('doflow_token');
+      clearAuthStorage();
       router.push('/login');
     }
   }, [router]);

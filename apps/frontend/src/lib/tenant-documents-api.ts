@@ -2,6 +2,7 @@
 
 import { apiFetch, getApiBaseUrl } from "@/lib/api";
 import { getTenantHeader } from "@/lib/tenant-fetch";
+import { getAuthToken } from "@/lib/auth-storage";
 
 export type DocumentFolder = {
   id: string;
@@ -207,7 +208,7 @@ export async function downloadDocumentBlob(document: Pick<TenantDocument, "id" |
     ...getTenantHeader(),
   };
   if (typeof window !== "undefined") {
-    const token = window.localStorage.getItem("doflow_token");
+    const token = getAuthToken();
     if (token) headers.Authorization = `Bearer ${token}`;
   }
 

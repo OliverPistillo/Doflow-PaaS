@@ -1,4 +1,11 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
@@ -6,7 +13,7 @@ import * as jwt from 'jsonwebtoken';
 import { authenticator } from '@otplib/preset-default';
 import { toDataURL } from 'qrcode';
 import { Role } from './roles';
-import { safeSchemaOrPublic } from './common/schema.utils';
+import { safeSchema } from './common/schema.utils';
 
 type JwtPayload = {
   sub: any;
@@ -18,11 +25,8 @@ type JwtPayload = {
   mfa_required?: boolean;
 };
 
-// safeSchema è importata da common/schema.utils — NON usare implementazioni locali.
-// safeSchemaOrPublic: fallback silenzioso a 'public' (solo per routing/middleware).
-// In AuthService usiamo sempre safeSchemaOrPublic perché il tenantId
-// può lecitamente essere 'public' per superadmin.
-const safeSchema = safeSchemaOrPublic;
+// safeSchema accetta esplicitamente "public" ma fallisce chiuso su identificatori
+// non validi: AuthService usa i tenant nelle query e non deve fare fallback silenziosi.
 
 @Injectable()
 export class AuthService {
@@ -142,13 +146,13 @@ export class AuthService {
 
     const user = rows[0];
     if (!user || !user.password_hash) {
-        this.logger.warn(`Login Fallito: Utente non trovato o password_hash mancante nello schema [${t}]`);
+        this.logger.warn('Login fallito: credenziali non valide');
         throw new UnauthorizedException('Credenziali non valide');
     }
 
     const ok = await bcrypt.compare(password, user.password_hash as string);
     if (!ok) {
-        this.logger.warn(`Login Fallito: Password errata per l'utente ${email} nello schema [${t}]`);
+        this.logger.warn('Login fallito: credenziali non valide');
         throw new UnauthorizedException('Credenziali non valide');
     }
 
@@ -230,6 +234,10 @@ export class AuthService {
   async generateMfaSetup(req: Request) {
     const user = (req as any).user;
     if (!user) throw new UnauthorizedException();
+    const stage = String(user.authStage || 'FULL').toUpperCase();
+    if (!['FULL', 'MFA_SETUP_NEEDED'].includes(stage)) {
+      throw new ForbiddenException('Stage autenticazione non consentito');
+    }
 
     const email = user.email;
     const serviceName = `Doflow (${user.tenantSlug || 'App'})`;
@@ -244,11 +252,15 @@ export class AuthService {
   async confirmMfaAndEnable(req: Request, tokenOtp: string, secret: string) {
     const userPayload = (req as any).user;
     if (!userPayload) throw new UnauthorizedException();
+    const stage = String(userPayload.authStage || 'FULL').toUpperCase();
+    if (!['FULL', 'MFA_SETUP_NEEDED'].includes(stage)) {
+      throw new ForbiddenException('Stage autenticazione non consentito');
+    }
 
     const isValid = authenticator.verify({ token: tokenOtp, secret });
     if (!isValid) throw new UnauthorizedException('Codice OTP non valido');
 
-    const conn = this.getConn(req);
+    const conn = this.dataSource;
     const t = safeSchema(userPayload.tenantId);
 
     await conn.query(
@@ -268,9 +280,17 @@ export class AuthService {
     return { status: 'ok', token };
   }
 
-  async verifyMfaLogin(userId: string, tokenOtp: string, req: Request) {
-    const conn = this.getConn(req);
-    const t = safeSchema(this.getTenantId(req));
+  async verifyMfaLogin(
+    userPayload: { sub: string; tenantId: string; tenantSlug?: string; authStage?: string },
+    tokenOtp: string,
+    _req: Request,
+  ) {
+    if (String(userPayload.authStage || '').toUpperCase() !== 'MFA_PENDING') {
+      throw new ForbiddenException('Stage autenticazione non consentito');
+    }
+    const userId = userPayload.sub;
+    const conn = this.dataSource;
+    const t = safeSchema(userPayload.tenantId);
 
     const rows = await conn.query(
       `SELECT mfa_secret, email, role, mfa_enabled FROM "${t}"."users" WHERE id = $1`,
@@ -308,33 +328,6 @@ export class AuthService {
       `select schema_name from public.tenants where is_active = true order by created_at asc`
     );
     return (rows || []).map((r: any) => safeSchema(r.schema_name)).filter((s: string) => s && s !== 'public');
-  }
-
-  async register(req: Request, email: string, password: string) {
-    const conn = this.getConn(req);
-    const tenantId = this.getTenantId(req);
-    let realSlug = tenantId;
-    if (tenantId !== 'public') {
-      const tenantRow = await conn.query(`select slug from public.tenants where schema_name = $1 OR id::text = $1 limit 1`, [tenantId]);
-      if (tenantRow[0]?.slug) realSlug = tenantRow[0].slug;
-    }
-    await this.assertTenantActive(conn, tenantId);
-    
-    const existing = await conn.query(`select id from "${tenantId}"."users" where lower(email) = lower($1) limit 1`, [email]);
-    if (existing.length > 0) throw new Error('User already exists');
-    
-    const countRes = await conn.query(`select count(*)::int as count from "${tenantId}"."users"`);
-    const isFirst = (countRes[0]?.count ?? 0) === 0;
-    const role: Role = isFirst ? 'admin' : 'user';
-    const passwordHash = await bcrypt.hash(password, 10);
-    
-    const rows = await conn.query(
-      `insert into "${tenantId}"."users" (email, password_hash, role) values ($1, $2, $3) returning id, email, created_at, role`,
-      [email, passwordHash, role],
-    );
-    const user = rows[0];
-    const token = this.signToken(user.id, user.email, tenantId, realSlug, user.role as Role);
-    return { user: { ...user, tenantId, tenantSlug: realSlug, role: user.role }, token };
   }
 
   private async resolveInviteTenant(req: Request, tenantRef?: string) {
@@ -376,7 +369,7 @@ export class AuthService {
     const realSlug = inviteTenant.tenantSlug || tenantId;
 
     if (tenantId === 'public') {
-      throw new Error('Tenant required to accept invite');
+      throw new BadRequestException('Tenant obbligatorio per accettare un invito');
     }
 
     await this.assertTenantActive(conn, tenantId);
@@ -385,11 +378,13 @@ export class AuthService {
       [token],
     );
     const invite = invites[0];
-    if (!invite) throw new Error('Invalid invite token');
-    if (invite.accepted_at) throw new Error('Invite already used');
-    if (invite.expires_at && new Date(invite.expires_at) < new Date()) throw new Error('Invite expired');
+    if (!invite) throw new BadRequestException('Invito non valido o scaduto');
+    if (invite.accepted_at) throw new ConflictException('Invito già utilizzato');
+    if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
+      throw new BadRequestException('Invito non valido o scaduto');
+    }
     const existingUsers = await conn.query(`select id from "${tenantId}"."users" where lower(email) = lower($1) limit 1`, [invite.email]);
-    if (existingUsers.length > 0) throw new Error('User already exists for this email');
+    if (existingUsers.length > 0) throw new ConflictException('Esiste già un account con questa email');
     const passwordHash = await bcrypt.hash(password, 10);
     const users = await conn.query(
       `insert into "${tenantId}"."users" (email, password_hash, role) values ($1, $2, $3) returning id, email, created_at, role`,

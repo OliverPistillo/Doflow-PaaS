@@ -16,6 +16,7 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getDoFlowUser, getInitials } from "@/lib/jwt";
+import { clearAuthStorage } from "@/lib/auth-storage";
 import { Shield, LogOut, User, Bell } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -155,7 +156,7 @@ function UserNav() {
     if (payload) setUser({ email: payload.email ?? "superadmin", initials: getInitials(payload.email) });
   }, []);
 
-  const logout = () => { window.localStorage.removeItem("doflow_token"); router.push("/login"); };
+  const logout = () => { clearAuthStorage(); router.push("/login"); };
 
   return (
     <DropdownMenu>

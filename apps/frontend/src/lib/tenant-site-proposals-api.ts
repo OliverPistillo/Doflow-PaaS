@@ -2,6 +2,7 @@
 
 import { apiFetch, getApiBaseUrl } from "@/lib/api";
 import { getTenantHeader } from "@/lib/tenant-fetch";
+import { getAuthToken } from "@/lib/auth-storage";
 
 export type JsonObject = Record<string, unknown>;
 export type ProposalStatus = "draft" | "ready" | "generated" | "error" | "archived";
@@ -87,7 +88,7 @@ function endpoint(path: string) { return `/tenant/commercial/site-proposals${pat
 function binaryHeaders() {
   const headers: Record<string, string> = { ...getTenantHeader() };
   if (typeof window !== "undefined") {
-    const token = window.localStorage.getItem("doflow_token");
+    const token = getAuthToken();
     if (token) headers.Authorization = `Bearer ${token}`;
   }
   return headers;

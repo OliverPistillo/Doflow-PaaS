@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { Request } from 'express';
 import { RedisService } from './redis/redis.service';
 
@@ -29,20 +29,21 @@ export class LoginGuardService {
 
   /**
    * Verifica se l'identità è bloccata per troppi tentativi falliti.
-   * Lancia UnauthorizedException se bloccata.
+   * Lancia HTTP 429 se bloccata.
    */
   async checkBeforeLogin(req: Request, email: string): Promise<void> {
     try {
       const blocked = await this.redisService.get(this.getBlockKey(req, email));
       if (blocked) {
         const ttl = await this.redisService.getClient().ttl(this.getBlockKey(req, email));
-        this.logger.warn(`[LoginGuard] Blocked: ${email} — ${ttl}s remaining`);
-        throw new UnauthorizedException(
+        this.logger.warn(`[LoginGuard] Identità bloccata — ${ttl}s remaining`);
+        throw new HttpException(
           `Troppi tentativi falliti. Riprova tra ${Math.ceil(ttl / 60)} minuti.`,
+          HttpStatus.TOO_MANY_REQUESTS,
         );
       }
     } catch (e) {
-      if (e instanceof UnauthorizedException) throw e;
+      if (e instanceof HttpException) throw e;
       this.logger.error('[LoginGuard] Redis unavailable in checkBeforeLogin', e);
       // fail-open: se Redis è giù non blocchiamo il login
     }
@@ -60,12 +61,12 @@ export class LoginGuardService {
       const fails = await client.incr(failKey);
       if (fails === 1) await client.expire(failKey, WINDOW_SEC);
 
-      this.logger.warn(`[LoginGuard] Attempt ${fails}/${MAX_FAILS} for ${email}`);
+      this.logger.warn(`[LoginGuard] Tentativo ${fails}/${MAX_FAILS}`);
 
       if (fails >= MAX_FAILS) {
         await client.set(blockKey, '1', 'EX', BLOCK_TTL_SEC);
         await client.del(failKey);
-        this.logger.warn(`[LoginGuard] BLOCKED: ${email} for ${BLOCK_TTL_SEC}s`);
+        this.logger.warn(`[LoginGuard] Identità bloccata per ${BLOCK_TTL_SEC}s`);
       }
     } catch (e) {
       this.logger.error('[LoginGuard] Redis unavailable in registerFailure', e);

@@ -1,9 +1,13 @@
 import {
+  BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Post,
   Req,
   Get,
+  HttpException,
+  HttpStatus,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
@@ -12,6 +16,7 @@ import { AuthService } from './auth.service';
 import { AuditService } from './audit.service';
 import { LoginGuardService } from './login-guard.service';
 import { JwtAuthGuard } from './auth/jwt-auth.guard'; // Assicurati che il percorso sia corretto
+import { AuthHandoffService } from './auth/auth-handoff.service';
 
 // --- DTOs ---
 type AuthBody = {
@@ -35,13 +40,30 @@ type MfaVerifyBody = {
   code: string;   // Solo codice per il login normale
 };
 
+type AuthStage = 'FULL' | 'MFA_PENDING' | 'MFA_SETUP_NEEDED';
+
+function isValidEmail(value: unknown) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly auditService: AuditService,
     private readonly loginGuard: LoginGuardService,
+    private readonly authHandoff: AuthHandoffService,
   ) {}
+
+  private assertAuthStage(req: Request, allowed: AuthStage[]) {
+    const user = (req as any).user;
+    const stage = String(user?.authStage || 'FULL').toUpperCase() as AuthStage;
+    if (!user?.sub) throw new UnauthorizedException('Sessione non valida');
+    if (!allowed.includes(stage)) {
+      throw new ForbiddenException('Stage autenticazione non consentito');
+    }
+    return user;
+  }
 
   // ==========================================
   //  MFA FLOW (NUOVI ENDPOINT)
@@ -54,6 +76,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('mfa/setup')
   async mfaSetup(@Req() req: Request) {
+    this.assertAuthStage(req, ['FULL', 'MFA_SETUP_NEEDED']);
     return this.authService.generateMfaSetup(req);
   }
 
@@ -64,8 +87,9 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('mfa/confirm')
   async mfaConfirm(@Body() body: MfaConfirmBody, @Req() req: Request) {
-    if (!body.code || !body.secret) {
-      return { error: 'Code and secret required' };
+    this.assertAuthStage(req, ['FULL', 'MFA_SETUP_NEEDED']);
+    if (!/^\d{6}$/.test(String(body.code || '')) || !body.secret) {
+      throw new BadRequestException('Codice e segreto MFA obbligatori');
     }
 
     try {
@@ -79,8 +103,8 @@ export class AuthController {
 
       return result;
     } catch (e) {
-      if (e instanceof Error) return { error: e.message };
-      return { error: 'MFA Confirmation failed' };
+      if (e instanceof HttpException) throw e;
+      throw new UnauthorizedException('Codice MFA non valido');
     }
   }
 
@@ -91,13 +115,13 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('mfa/verify')
   async mfaVerify(@Body() body: MfaVerifyBody, @Req() req: Request) {
-    if (!body.code) {
-      return { error: 'Code required' };
+    const user = this.assertAuthStage(req, ['MFA_PENDING']);
+    if (!/^\d{6}$/.test(String(body.code || ''))) {
+      throw new BadRequestException('Codice MFA non valido');
     }
 
     try {
-      const user = (req as any).user; // Qui abbiamo il token MFA_PENDING
-      const result = await this.authService.verifyMfaLogin(user.sub, body.code, req);
+      const result = await this.authService.verifyMfaLogin(user, body.code, req);
 
       await this.auditService.log(req, {
         action: 'auth_mfa_login_success',
@@ -113,9 +137,35 @@ export class AuthController {
         targetEmail: user?.email,
       });
 
-      if (e instanceof Error) return { error: e.message };
-      return { error: 'Invalid Code' };
+      if (e instanceof HttpException) throw e;
+      throw new UnauthorizedException('Codice MFA non valido');
     }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('handoff')
+  async createHandoff(
+    @Body() body: { tenantTarget?: string; rememberMe?: boolean; next?: 'dashboard' | 'mfa' | 'onboarding' | 'superadmin' },
+    @Req() req: Request,
+  ) {
+    const user = (req as any).user;
+    const authorization = String(req.headers.authorization || '');
+    const token = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (!token || !body.tenantTarget) {
+      throw new BadRequestException('Handoff incompleto');
+    }
+    return this.authHandoff.createLogin({
+      token,
+      user,
+      tenantTarget: body.tenantTarget,
+      rememberMe: body.rememberMe,
+      next: body.next,
+    });
+  }
+
+  @Post('handoff/exchange')
+  async exchangeHandoff(@Body() body: { handoff?: string; tenantTarget?: string }) {
+    return this.authHandoff.exchange(body.handoff, body.tenantTarget);
   }
 
   // ==========================================
@@ -124,8 +174,8 @@ export class AuthController {
 
   @Post('accept-invite')
   async acceptInvite(@Body() body: AcceptInviteBody, @Req() req: Request) {
-    if (!body.token || !body.password) {
-      return { error: 'token and password required' };
+    if (!body.token || typeof body.password !== 'string' || body.password.length < 8) {
+      throw new BadRequestException('Token e password obbligatori');
     }
 
     try {
@@ -148,39 +198,15 @@ export class AuthController {
         metadata: { token_present: Boolean(body.token), tenant: body.tenant || body.tenantSlug || null },
       });
 
-      if (e instanceof Error) return { error: e.message };
-      return { error: 'Unknown error' };
-    }
-  }
-
-  @Post('register')
-  async register(@Body() body: AuthBody, @Req() req: Request) {
-    if (!body.email || !body.password) {
-      return { error: 'email and password required' };
-    }
-
-    try {
-      const email = body.email.trim().toLowerCase();
-      const password = body.password;
-
-      const result = await this.authService.register(req, email, password);
-
-      await this.auditService.log(req, {
-        action: 'auth_register_success',
-        targetEmail: email,
-      });
-
-      return result;
-    } catch (e) {
-      if (e instanceof Error) return { error: e.message };
-      return { error: 'Unknown error' };
+      if (e instanceof HttpException) throw e;
+      throw new BadRequestException('Invito non valido o scaduto');
     }
   }
 
   @Post('login')
   async login(@Body() body: AuthBody, @Req() req: Request) {
-    if (!body.email || !body.password) {
-      return { error: 'email and password required' };
+    if (!isValidEmail(body.email) || typeof body.password !== 'string' || !body.password) {
+      throw new BadRequestException('Email e password obbligatorie');
     }
 
     const email = body.email.trim().toLowerCase();
@@ -211,18 +237,27 @@ export class AuthController {
         action: 'auth_login_failed',
         targetEmail: email,
         metadata: {
-          reason: e instanceof Error ? e.message : 'unknown',
+          reason:
+            e instanceof HttpException && e.getStatus() === HttpStatus.TOO_MANY_REQUESTS
+              ? 'rate_limited'
+              : e instanceof UnauthorizedException
+                ? 'invalid_credentials'
+                : 'login_failed',
         },
       });
 
-      // registra il fallimento per il rate limiting
-      await this.loginGuard.registerFailure(req, email);
+      if (!(e instanceof HttpException && e.getStatus() === HttpStatus.TOO_MANY_REQUESTS)) {
+        await this.loginGuard.registerFailure(req, email);
+      }
 
-      if (e instanceof Error) return { error: e.message };
-      return { error: 'Unknown error' };
+      if (e instanceof HttpException && e.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
+        throw e;
+      }
+      throw new UnauthorizedException('Credenziali non valide');
     }
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get('me')
   getMe(@Req() req: Request) {
     // ✅ compatibilità: alcune parti usano req.authUser, altre req.user
@@ -231,9 +266,10 @@ export class AuthController {
     if (!user) {
       throw new UnauthorizedException('Not authenticated');
     }
+    this.assertAuthStage(req, ['FULL']);
 
     const safeUser = {
-      id: user.id,
+      id: user.id ?? user.sub,
       email: user.email,
       role: user.role,
       tenantId: user.tenantId ?? user.tenant_id ?? 'public',

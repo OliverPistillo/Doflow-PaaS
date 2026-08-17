@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useNotifications } from '@/hooks/useNotifications';
+import { getAuthToken } from '@/lib/auth-storage';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
@@ -10,10 +11,7 @@ export default function NotificationsTestPage() {
   const [message, setMessage] = useState('Ping realtime da Doflow');
 
   const sendTenantPing = async () => {
-    const token =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem('doflow_token')
-        : null;
+    const token = getAuthToken();
 
     if (!token) {
       alert('Nessun token, effettua login prima.');
@@ -31,10 +29,7 @@ export default function NotificationsTestPage() {
   };
 
   const sendUserPing = async () => {
-    const token =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem('doflow_token')
-        : null;
+    const token = getAuthToken();
 
     if (!token) {
       alert('Nessun token, effettua login prima.');

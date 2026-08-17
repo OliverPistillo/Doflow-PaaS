@@ -8,6 +8,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { getAuthToken } from "@/lib/auth-storage";
 import {
   Download,
   Trash2,
@@ -409,7 +410,7 @@ export default function QuoteRequestsPage() {
     setDownloading(id);
     try {
       const baseUrl = getApiBaseUrl();
-      const token = window.localStorage.getItem("doflow_token");
+      const token = getAuthToken();
       const res = await fetch(baseUrl + "/superadmin/quote-requests/" + id + "/download", {
         headers: { Authorization: "Bearer " + token },
       });

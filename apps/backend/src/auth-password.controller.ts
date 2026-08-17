@@ -38,6 +38,59 @@ export class AuthPasswordController {
     private readonly mail: MailService,
   ) {}
 
+  private async resolveTenant(
+    req: Request,
+    options: { tenantRef?: string; email?: string } = {},
+  ): Promise<{ tenantId: string; tenantSlug: string; conn: DataSource } | null> {
+    const conn = getTenantConn(req);
+    const routedTenant = getTenantId(req);
+    if (routedTenant !== 'public') {
+      const rows = await conn.query(
+        `select slug, schema_name, is_active from public.tenants where schema_name = $1 limit 1`,
+        [routedTenant],
+      );
+      if (rows[0]?.is_active === false) return null;
+      return {
+        tenantId: routedTenant,
+        tenantSlug: String(rows[0]?.slug || routedTenant),
+        conn,
+      };
+    }
+
+    let tenantRef = String(options.tenantRef || '').trim().toLowerCase();
+    if (!tenantRef && options.email) {
+      const directory = await conn.query(
+        `select tenant_id, role from public.users where lower(email) = lower($1) limit 1`,
+        [options.email],
+      );
+      const entry = directory[0];
+      if (!entry) return { tenantId: 'public', tenantSlug: 'public', conn };
+      const role = String(entry.role || '').toLowerCase();
+      if (!entry.tenant_id || entry.tenant_id === 'public' || ['superadmin', 'super_admin'].includes(role)) {
+        return { tenantId: 'public', tenantSlug: 'public', conn };
+      }
+      tenantRef = String(entry.tenant_id).toLowerCase();
+    }
+
+    if (!tenantRef || tenantRef === 'public') {
+      return { tenantId: 'public', tenantSlug: 'public', conn };
+    }
+
+    const tenants = await conn.query(
+      `select slug, schema_name, is_active
+         from public.tenants
+        where id::text = $1 or slug = $1 or schema_name = $1
+        limit 1`,
+      [tenantRef],
+    );
+    if (!tenants[0] || tenants[0].is_active !== true) return null;
+    return {
+      tenantId: safeSchema(tenants[0].schema_name, 'AuthPasswordController.resolveTenant'),
+      tenantSlug: String(tenants[0].slug),
+      conn,
+    };
+  }
+
   @Post('forgot-password')
   async forgotPassword(
     @Req() req: Request,
@@ -45,12 +98,13 @@ export class AuthPasswordController {
     @Body() body: { email?: string },
   ) {
     const email = (body.email ?? '').trim().toLowerCase();
-    if (!email) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: 'email required' });
     }
 
-    const tenantId = getTenantId(req);
-    const conn = getTenantConn(req);
+    const resolved = await this.resolveTenant(req, { email });
+    if (!resolved) return res.json({ ok: true });
+    const { tenantId, tenantSlug, conn } = resolved;
 
     // verifica esistenza utente nel tenant
     const userRows = await conn.query(
@@ -93,11 +147,9 @@ export class AuthPasswordController {
 
     const resetLink = `${baseUrl}/reset-password?token=${encodeURIComponent(
       rawToken,
-    )}`;
+    )}&tenant=${encodeURIComponent(tenantSlug)}`;
 
-    this.logger.log(
-      `[DOFLOW][RESET-PASSWORD] email=${email} tenant=${tenantId} link=${resetLink}`,
-    );
+    this.logger.log('[DOFLOW][RESET-PASSWORD] Richiesta elaborata');
 
     await this.mail.sendPasswordResetEmail({
       to: email,
@@ -115,6 +167,7 @@ export class AuthPasswordController {
     body: {
       token?: string;
       password?: string;
+      tenant?: string;
     },
   ) {
     const token = (body.token ?? '').trim();
@@ -130,8 +183,11 @@ export class AuthPasswordController {
         .json({ error: 'password too short (min 8 chars)' });
     }
 
-    const tenantId = getTenantId(req);
-    const conn = getTenantConn(req);
+    const resolved = await this.resolveTenant(req, { tenantRef: body.tenant });
+    if (!resolved) {
+      return res.status(400).json({ error: 'invalid or expired token' });
+    }
+    const { tenantId, conn } = resolved;
 
     const tokenHash = hashToken(token);
 
@@ -167,6 +223,22 @@ export class AuthPasswordController {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
+    const claimed = await conn.query(
+      `
+      update "${tenantId}".password_reset_tokens
+      set used_at = $1
+      where id = $2
+        and used_at is null
+        and invalidated_at is null
+        and expires_at >= $1
+      returning id
+      `,
+      [now.toISOString(), row.id],
+    );
+    if (!claimed[0]) {
+      return res.status(400).json({ error: 'invalid or expired token' });
+    }
+
     await conn.query(
       `
       update "${tenantId}".users
@@ -174,15 +246,6 @@ export class AuthPasswordController {
       where lower(email) = $2
       `,
       [passwordHash, row.email.toLowerCase()],
-    );
-
-    await conn.query(
-      `
-      update "${tenantId}".password_reset_tokens
-      set used_at = $1
-      where id = $2
-      `,
-      [now.toISOString(), row.id],
     );
 
     return res.json({ ok: true });

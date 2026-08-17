@@ -1,0 +1,199 @@
+import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
+import path from 'node:path';
+
+const actualDir = path.resolve('docs', 'design-references', 'doflow-crm-projects', 'actual');
+
+function fakeJwt(payload: Record<string, unknown>) {
+  const encode = (value: Record<string, unknown>) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  return `${encode({ alg: 'none', typ: 'JWT' })}.${encode(payload)}.visual-signature`;
+}
+
+async function installAuthSandbox(page: Page, handler?: (route: Route, pathname: string) => Promise<boolean>) {
+  await page.addInitScript(() => {
+    if (window.name === '__doflow_auth_visual_initialized__') return;
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.name = '__doflow_auth_visual_initialized__';
+  });
+  await page.route('**/api/**', async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (handler && await handler(route, pathname)) return;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+  });
+}
+
+async function authScreenshot(page: Page, filename: string, extraMasks: Locator[] = []) {
+  await page.screenshot({
+    path: path.join(actualDir, filename),
+    animations: 'disabled',
+    fullPage: true,
+    mask: [page.locator('input'), ...extraMasks],
+    maskColor: '#E2E8F0',
+  });
+}
+
+test('auth desktop: login Doflow coerente e accessibile', async ({ page }) => {
+  await installAuthSandbox(page);
+  await page.setViewportSize({ width: 1675, height: 939 });
+  await page.goto('/login');
+  await expect(page.getByRole('heading', { name: 'Bentornato.' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Accedi al flusso' })).toBeVisible();
+  await expect(page.getByLabel('Ricordami')).toBeVisible();
+  await expect(page.locator('.df-auth-logo-img')).toBeVisible();
+  await authScreenshot(page, 'auth-login-desktop.png');
+});
+
+test('auth desktop: registrazione canonica senza piano o settore', async ({ page }) => {
+  await installAuthSandbox(page, async (route, pathname) => {
+    if (pathname === '/api/auth/check-slug') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: true }) });
+      return true;
+    }
+    return false;
+  });
+  await page.setViewportSize({ width: 1675, height: 939 });
+  await page.goto('/register');
+  await expect(page.getByRole('heading', { name: 'Crea il tuo account.' })).toBeVisible();
+  await expect(page.getByLabel('Azienda', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Indirizzo aziendale')).toBeVisible();
+  await page.getByLabel('Indirizzo aziendale').fill('studio-visual');
+  await expect(page.getByText('Indirizzo disponibile')).toBeVisible();
+  await expect(page.getByText(/piano/i)).toHaveCount(0);
+  await expect(page.getByText(/settore/i)).toHaveCount(0);
+  await authScreenshot(page, 'auth-register-desktop.png');
+});
+
+test('auth errore: credenziali invalide mostrano un messaggio generico', async ({ page }) => {
+  await installAuthSandbox(page, async (route, pathname) => {
+    if (pathname === '/api/auth/login' && route.request().method() === 'POST') {
+      await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ message: 'dettaglio interno da non mostrare' }) });
+      return true;
+    }
+    return false;
+  });
+  await page.goto('/login');
+  await page.getByLabel('Email').fill('visual@example.test');
+  await page.getByLabel('Password', { exact: true }).fill('password-errata');
+  await page.getByRole('button', { name: 'Accedi al flusso' }).click();
+  await expect(page.locator('.df-auth-error')).toContainText('Credenziali non valide');
+  await expect(page.locator('.df-auth-error')).not.toContainText('dettaglio interno');
+  await authScreenshot(page, 'auth-login-invalid.png');
+});
+
+test('auth MFA: setup esplicito con QR e OTP nel medesimo shell', async ({ page }) => {
+  const token = fakeJwt({ sub: 'visual-user', tenantId: 'doflow', tenantSlug: 'doflow', role: 'owner', authStage: 'MFA_SETUP_NEEDED' });
+  await installAuthSandbox(page, async (route, pathname) => {
+    if (pathname === '/api/auth/mfa/setup') {
+      const qr = `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><rect width="180" height="180" fill="white"/><rect x="30" y="30" width="120" height="120" fill="black"/></svg>').toString('base64')}`;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ secret: 'VISUAL-SECRET-NOT-REAL', qrCodeUrl: qr, otpauthUrl: 'otpauth://visual' }),
+      });
+      return true;
+    }
+    return false;
+  });
+  await page.addInitScript((value) => {
+    if (!window.sessionStorage.getItem('doflow_token')) {
+      window.sessionStorage.setItem('doflow_token', value);
+    }
+  }, token);
+  await page.goto('/doflow/mfa');
+  await expect(page.getByRole('heading', { name: 'Configura MFA' })).toBeVisible();
+  await expect(page.getByLabel('Codice di verifica a 6 cifre')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Attiva e Accedi/ })).toBeDisabled();
+  await authScreenshot(page, 'auth-mfa-setup.png', [page.getByAltText('QR Code'), page.locator('code')]);
+
+  const pendingToken = fakeJwt({ sub: 'visual-user', tenantId: 'doflow', tenantSlug: 'doflow', role: 'owner', authStage: 'MFA_PENDING' });
+  await page.evaluate((value) => window.sessionStorage.setItem('doflow_token', value), pendingToken);
+  await page.goto('/doflow/mfa');
+  await expect(page.getByRole('heading', { name: 'Verifica accesso' })).toBeVisible();
+  await expect(page.getByAltText('QR Code')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Verifica Codice' })).toBeDisabled();
+  await authScreenshot(page, 'auth-mfa-verify.png');
+});
+
+test('auth recovery: forgot, reset e invito condividono identità e rimuovono token dalla URL', async ({ page }) => {
+  await installAuthSandbox(page);
+  await page.goto('/forgot-password');
+  await expect(page.getByRole('heading', { name: 'Password dimenticata' })).toBeVisible();
+  await expect(page.locator('.df-auth-logo-img')).toBeVisible();
+
+  await page.goto('/reset-password?token=reset-secret-value');
+  await expect(page.getByRole('heading', { name: 'Reimposta password' })).toBeVisible();
+  await expect(page).toHaveURL(/\/reset-password$/);
+
+  await page.goto('/accept-invite?token=invite-secret-value&tenant=doflow');
+  await expect(page.getByRole('heading', { name: 'Attiva account' })).toBeVisible();
+  await expect(page).toHaveURL(/\/accept-invite$/);
+  await authScreenshot(page, 'auth-invite-consistency.png');
+});
+
+test('auth tablet: login resta utilizzabile a 1024x768', async ({ page }) => {
+  const token = fakeJwt({ sub: 'visual-user', tenantId: 'doflow', tenantSlug: 'doflow', role: 'owner', authStage: 'FULL' });
+  await installAuthSandbox(page, async (route, pathname) => {
+    if (pathname === '/api/auth/login' && route.request().method() === 'POST') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ token, user: { tenantSlug: 'doflow', role: 'owner' }, mfa: { required: false, stage: 'FULL' } }),
+      });
+      return true;
+    }
+    return false;
+  });
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto('/login');
+  await expect(page.getByRole('button', { name: 'Accedi al flusso' })).toBeInViewport();
+  await expect(page.getByLabel('Email')).toBeInViewport();
+  await authScreenshot(page, 'auth-login-tablet.png');
+  await page.getByLabel('Email').fill('visual@example.test');
+  await page.getByLabel('Password', { exact: true }).fill('password-safe');
+  await page.getByLabel('Ricordami').check();
+  await page.getByRole('button', { name: 'Accedi al flusso' }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  expect(await page.evaluate(() => window.localStorage.getItem('doflow_token'))).toBe(token);
+  expect(await page.evaluate(() => window.sessionStorage.getItem('doflow_token'))).toBeNull();
+});
+
+test('auth mobile: registrazione resta completa a 390x844', async ({ page }) => {
+  await installAuthSandbox(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/register');
+  await expect(page.getByRole('heading', { name: 'Crea il tuo account.' })).toBeVisible();
+  await expect(page.getByLabel('Email')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Crea account' })).toBeVisible();
+  await authScreenshot(page, 'auth-register-mobile.png');
+});
+
+test('auth handoff: nessun JWT in URL, exchange singolo e sessionStorage senza Ricordami', async ({ page }) => {
+  const token = fakeJwt({ sub: 'visual-user', tenantId: 'doflow', tenantSlug: 'doflow', role: 'owner', authStage: 'FULL' });
+  let exchanges = 0;
+  await installAuthSandbox(page, async (route, pathname) => {
+    if (pathname === '/api/auth/handoff/exchange') {
+      exchanges += 1;
+      const body = route.request().postDataJSON();
+      expect(body).toEqual({ handoff: 'opaque-handoff-code-12345678901234567890', tenantTarget: 'doflow' });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ kind: 'login', token, tenantTarget: 'doflow', authStage: 'FULL', next: 'dashboard', rememberMe: false }),
+      });
+      return true;
+    }
+    return false;
+  });
+  await page.goto('/login?handoff=opaque-handoff-code-12345678901234567890&tenant=doflow');
+  await expect(page).toHaveURL(/\/dashboard$/);
+  expect(exchanges).toBe(1);
+  const storage = await page.evaluate(() => ({
+    local: window.localStorage.getItem('doflow_token'),
+    session: window.sessionStorage.getItem('doflow_token'),
+    href: window.location.href,
+  }));
+  expect(storage.local).toBeNull();
+  expect(storage.session).toBe(token);
+  expect(storage.href).not.toContain('accessToken');
+  expect(storage.href).not.toContain(token);
+});

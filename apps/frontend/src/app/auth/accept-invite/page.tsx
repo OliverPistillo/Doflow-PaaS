@@ -15,12 +15,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { apiFetch } from "@/lib/api";
+import { storeAuthToken } from "@/lib/auth-storage";
+import { AuthShell } from "@/components/auth/auth-shell";
 
-function nextPathByRole(role: string) {
+function nextPathByRole(role: string, tenantId?: string) {
   const r = (role || '').toLowerCase();
-  if (r === 'superadmin' || r === 'owner') return '/superadmin/tenants';
-  if (r === 'admin' || r === 'manager') return '/admin/users';
-  return '/projects';
+  if ((r === 'superadmin' || r === 'super_admin') && tenantId === 'public') return '/superadmin';
+  return '/dashboard';
 }
 
 type AcceptInviteSuccess = {
@@ -48,6 +49,7 @@ export default function AcceptInvitePage() {
       const params = new URLSearchParams(window.location.search);
       setInviteToken(params.get('token'));
       setTenantSlug(params.get('tenant') || params.get('tenantSlug'));
+      window.history.replaceState({}, '', window.location.pathname);
       setInitializing(false);
     }
   }, []);
@@ -73,9 +75,9 @@ export default function AcceptInvitePage() {
         throw new Error('Risposta backend non valida (token/user mancanti).');
       }
 
-      localStorage.setItem('doflow_token', data.token);
+      storeAuthToken(data.token, false);
 
-      const target = nextPathByRole(data.user.role);
+      const target = nextPathByRole(data.user.role, data.user.tenantId);
       setSuccess(true);
       setTimeout(() => {
         router.push(target);
@@ -97,17 +99,14 @@ export default function AcceptInvitePage() {
 
   if (!inviteToken) {
     return (
-      <main className="min-h-screen doflow-app-frame flex items-center justify-center p-6">
-        <div className="max-w-md w-full df-glass-panel rounded-[32px] p-8 text-center space-y-6">
+      <AuthShell mode="login" title="Link non valido" description="Richiedi un nuovo invito all’amministratore del workspace.">
+        <div className="text-center space-y-6">
           <div className="mx-auto w-16 h-16 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center">
             <AlertCircle className="w-8 h-8" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight mb-2">Link non valido</h1>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Token mancante o scaduto. Richiedi un nuovo invito all’amministratore del workspace.
-            </p>
-          </div>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Token mancante o scaduto. Richiedi un nuovo invito all’amministratore del workspace.
+          </p>
           <Button asChild variant="outline" className="w-full">
             <Link href="/login" className="flex items-center gap-2">
               <ArrowLeft size={16} />
@@ -115,21 +114,17 @@ export default function AcceptInvitePage() {
             </Link>
           </Button>
         </div>
-      </main>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-screen doflow-app-frame flex items-center justify-center p-4 lg:p-6">
-      <div className="w-full max-w-md df-glass-panel rounded-[32px] p-8 lg:p-10 overflow-hidden relative">
-        <div className="space-y-6">
-          <div className="text-center space-y-2">
-            <h1 className="text-3xl font-extrabold tracking-tight">Attiva account</h1>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Imposta la tua password per accedere al workspace.
-            </p>
-          </div>
-
+    <AuthShell
+      mode="login"
+      title="Attiva account"
+      description="Imposta la tua password per accedere al workspace."
+    >
+      <div className="space-y-6">
           {success ? (
             <div className="flex flex-col items-center justify-center py-10 animate-fadeInUp" role="status">
               <div className="df-icon-bubble h-20 w-20 mb-6">
@@ -242,8 +237,7 @@ export default function AcceptInvitePage() {
               </div>
             </form>
           )}
-        </div>
       </div>
-    </div>
+    </AuthShell>
   );
 }

@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
+import { clearAuthStorage } from "@/lib/auth-storage";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -40,7 +41,7 @@ export function UserNav() {
   }, []);
 
   const logout = () => {
-    window.localStorage.removeItem("doflow_token");
+    clearAuthStorage();
     router.push("/login");
   };
 

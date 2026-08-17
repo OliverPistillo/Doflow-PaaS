@@ -1,4 +1,5 @@
 import { AuthController } from './auth.controller';
+import { BadRequestException } from '@nestjs/common';
 
 describe('AuthController audit redaction', () => {
   it('non registra il token invito grezzo in audit quando accept-invite fallisce', async () => {
@@ -8,15 +9,13 @@ describe('AuthController audit redaction', () => {
     const auditService = {
       log: jest.fn().mockResolvedValue(undefined),
     };
-    const controller = new AuthController(authService as any, auditService as any, {} as any);
+    const controller = new AuthController(authService as any, auditService as any, {} as any, {} as any);
     const rawToken = 'invite-token-sensitive-value';
 
-    const result = await controller.acceptInvite(
+    await expect(controller.acceptInvite(
       { token: rawToken, password: 'new-password', tenant: 'tenant_a' },
       { headers: {} } as any,
-    );
-
-    expect(result).toEqual({ error: 'invite invalid' });
+    )).rejects.toBeInstanceOf(BadRequestException);
     const serializedAuditCalls = JSON.stringify(auditService.log.mock.calls);
     expect(serializedAuditCalls).not.toContain(rawToken);
     expect(auditService.log).toHaveBeenCalledWith(
@@ -28,4 +27,3 @@ describe('AuthController audit redaction', () => {
     );
   });
 });
-

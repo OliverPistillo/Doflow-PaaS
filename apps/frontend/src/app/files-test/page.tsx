@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { clearAuthStorage, getAuthToken } from '@/lib/auth-storage';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
@@ -29,7 +30,7 @@ export default function FilesTestPage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setToken(window.localStorage.getItem('doflow_token'));
+      setToken(getAuthToken());
       setTenantHost(window.location.host);
     }
   }, []);
@@ -110,7 +111,7 @@ export default function FilesTestPage() {
 
   const handleLogout = () => {
     if (typeof window !== 'undefined') {
-      window.localStorage.removeItem('doflow_token');
+      clearAuthStorage();
       window.location.href = '/login';
     }
   };

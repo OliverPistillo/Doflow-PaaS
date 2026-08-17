@@ -14,6 +14,7 @@ import {
   User,
 } from "lucide-react";
 import { useTheme } from "next-themes";
+import { clearAuthStorage } from "@/lib/auth-storage";
 
 import {
   Sidebar,
@@ -387,7 +388,7 @@ export function TenantSidebar({
   }, [activeSectionId]);
 
   const logout = React.useCallback(() => {
-    window.localStorage.removeItem("doflow_token");
+    clearAuthStorage();
     router.push("/login");
   }, [router]);
 

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiFetch, getApiBaseUrl } from "@/lib/api";
+import { getAuthToken } from "@/lib/auth-storage";
 import { useConfirm } from "@/hooks/useConfirm";
 import { InvoiceCreateSheet } from "../dashboard/components/InvoiceCreateSheet";
 import { ClientRow, ClientGroup } from "./components/ClientRow";
@@ -65,7 +66,7 @@ function InvoicesContent() {
 
   const handleDownload = async (id: string, num: string) => {
     try {
-      const token = localStorage.getItem("doflow_token");
+      const token = getAuthToken();
       const url   = `${getApiBaseUrl()}/superadmin/finance/invoices/${id}/pdf`;
       const res   = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

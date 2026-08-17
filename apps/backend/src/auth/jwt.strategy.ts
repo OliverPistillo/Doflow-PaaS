@@ -35,13 +35,21 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException();
     }
 
+    const authStage = String(
+      payload.authStage || (payload.mfa_pending === true ? 'MFA_PENDING' : 'FULL'),
+    ).toUpperCase();
+    if (!['FULL', 'MFA_PENDING', 'MFA_SETUP_NEEDED'].includes(authStage)) {
+      throw new UnauthorizedException();
+    }
+
     return { 
         sub: payload.sub, 
         email: payload.email, 
         role: payload.role,
         tenantId: payload.tenantId,
         tenantSlug: payload.tenantSlug,
-        authStage: payload.authStage // ✅ FONDAMENTALE: Passa lo stato MFA
+        authStage,
+        mfa_required: payload.mfa_required === true,
     };
   }
 }

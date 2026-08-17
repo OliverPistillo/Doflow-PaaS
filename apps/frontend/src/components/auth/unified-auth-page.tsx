@@ -38,6 +38,7 @@ export function UnifiedAuthPage({ initialMode = "login" }: UnifiedAuthPageProps)
       description={COPY[mode].description}
       mascotShy={mascotShy}
       onModeChange={switchMode}
+      cardClassName={mode === "register" ? "df-auth-card-wide" : undefined}
     >
       {mode === "login" ? (
         <LoginPanel

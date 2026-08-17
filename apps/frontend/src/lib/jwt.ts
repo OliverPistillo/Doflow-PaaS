@@ -1,9 +1,10 @@
 /**
- * jwt.ts — Utility condivisa per decodificare il JWT DoFlow dal localStorage.
+ * jwt.ts — Utility condivisa per decodificare il JWT DoFlow dallo storage auth.
  * Nessuna dipendenza esterna — usa solo atob nativo.
  */
 
 export type PlanTier = "STARTER" | "PRO" | "ENTERPRISE";
+import { getAuthToken } from "./auth-storage";
 
 export interface DoFlowJwtPayload {
   sub?:        string;
@@ -44,7 +45,7 @@ export function parseJwt(token: string): DoFlowJwtPayload | null {
 /** Legge il token dal localStorage e lo decodifica. Restituisce null se assente o non valido. */
 export function getDoFlowUser(): DoFlowJwtPayload | null {
   if (typeof window === "undefined") return null;
-  const token = window.localStorage.getItem("doflow_token");
+  const token = getAuthToken();
   if (!token) return null;
   return parseJwt(token);
 }

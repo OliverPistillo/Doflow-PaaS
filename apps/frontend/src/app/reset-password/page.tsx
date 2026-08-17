@@ -15,11 +15,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { apiFetch } from "@/lib/api";
+import { AuthShell } from "@/components/auth/auth-shell";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
 
   const [token, setToken] = useState<string | null>(null);
+  const [tenant, setTenant] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
 
   const [password, setPassword] = useState('');
@@ -35,6 +37,8 @@ export default function ResetPasswordPage() {
     if (typeof window !== 'undefined') {
       const sp = new URLSearchParams(window.location.search);
       setToken(sp.get('token'));
+      setTenant(sp.get('tenant'));
+      window.history.replaceState({}, '', window.location.pathname);
       setInitializing(false);
     }
   }, []);
@@ -53,7 +57,7 @@ export default function ResetPasswordPage() {
       await apiFetch('/auth/reset-password', {
         method: 'POST',
         auth: false,
-        body: JSON.stringify({ token, password }),
+        body: JSON.stringify({ token, password, tenant }),
       });
 
       setDone(true);
@@ -77,17 +81,14 @@ export default function ResetPasswordPage() {
 
   if (!token) {
     return (
-      <main className="min-h-screen doflow-app-frame flex items-center justify-center p-6">
-        <div className="max-w-md w-full df-glass-panel rounded-[32px] p-8 text-center space-y-6">
+      <AuthShell mode="login" title="Link non valido" description="Richiedi un nuovo link per reimpostare la password.">
+        <div className="text-center space-y-6">
           <div className="mx-auto w-16 h-16 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center">
             <AlertCircle className="w-8 h-8" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight mb-2">Link non valido</h1>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Token mancante o scaduto. Richiedi nuovamente la reimpostazione della password.
-            </p>
-          </div>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Token mancante o scaduto. Richiedi nuovamente la reimpostazione della password.
+          </p>
           <Button asChild variant="outline" className="w-full">
             <Link href="/forgot-password" title="Torna alla pagina password dimenticata" className="flex items-center gap-2">
               <ArrowLeft size={16} />
@@ -95,21 +96,17 @@ export default function ResetPasswordPage() {
             </Link>
           </Button>
         </div>
-      </main>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="min-h-screen doflow-app-frame flex items-center justify-center p-4 lg:p-6">
-      <div className="w-full max-w-md df-glass-panel rounded-[32px] p-8 lg:p-10 overflow-hidden relative">
-        <div className="space-y-6">
-          <div className="text-center space-y-2">
-            <h1 className="text-3xl font-extrabold tracking-tight">Reimposta password</h1>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Scegli una nuova password sicura per il tuo account.
-            </p>
-          </div>
-
+    <AuthShell
+      mode="login"
+      title="Reimposta password"
+      description="Scegli una nuova password sicura per il tuo account."
+    >
+      <div className="space-y-6">
           {done ? (
             <div className="flex flex-col items-center justify-center py-10 animate-fadeInUp" role="status">
               <div className="df-icon-bubble h-20 w-20 mb-6">
@@ -222,8 +219,7 @@ export default function ResetPasswordPage() {
               </div>
             </form>
           )}
-        </div>
       </div>
-    </div>
+    </AuthShell>
   );
 }

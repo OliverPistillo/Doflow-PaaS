@@ -1,6 +1,6 @@
 // apps/backend/src/auth/auth.module.ts
 // Raggruppa tutto ciò che riguarda autenticazione, signup e OAuth.
-// Esporta AuthService, AuthMfaService, LoginGuardService, AuditService
+// Esporta AuthService, LoginGuardService, AuditService
 // così che altri moduli (es. TenantModule) possano iniettarli senza dipendere da AppModule.
 
 import { Module } from '@nestjs/common';
@@ -16,19 +16,18 @@ import { RedisModule } from '../redis/redis.module';
 // Controllers
 import { AuthController } from '../auth.controller';
 import { AuthPasswordController } from '../auth-password.controller';
-import { AuthMfaController } from '../auth-mfa.controller';
 import { SignupController } from './signup.controller';
 import { GoogleAuthController } from './google.controller';
 
 // Services & Strategies
 import { AuthService } from '../auth.service';
-import { AuthMfaService } from '../auth-mfa.service';
 import { LoginGuardService } from '../login-guard.service';
 import { AuditService } from '../audit.service';
 import { JwtStrategy } from './jwt.strategy';
 import { GoogleStrategy } from './google.strategy';
 import { SignupService } from './signup.service';
 import { PlatformModulesSeedService } from '../superadmin/platform-modules.seed';
+import { AuthHandoffService } from './auth-handoff.service';
 
 // Entities needed by SignupService
 import { Tenant } from '../superadmin/entities/tenant.entity';
@@ -62,14 +61,13 @@ import { TenantSubscription } from '../superadmin/entities/tenant-subscription.e
   controllers: [
     AuthController,
     AuthPasswordController,
-    AuthMfaController,
     SignupController,
     GoogleAuthController,
   ],
 
   providers: [
     AuthService,
-    AuthMfaService,
+    AuthHandoffService,
     LoginGuardService,
     AuditService,
     JwtStrategy,
@@ -80,7 +78,7 @@ import { TenantSubscription } from '../superadmin/entities/tenant-subscription.e
 
   exports: [
     AuthService,
-    AuthMfaService,
+    AuthHandoffService,
     LoginGuardService,
     AuditService,
     JwtModule,

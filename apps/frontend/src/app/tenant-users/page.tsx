@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getTenantHeader } from '@/lib/tenant-fetch';
+import { getAuthToken } from '@/lib/auth-storage';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.doflow.it';
 
@@ -18,8 +19,7 @@ export default function TenantUsersPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const getToken = () =>
-    typeof window !== 'undefined' ? window.localStorage.getItem('doflow_token') : null;
+  const getToken = () => getAuthToken();
 
   const loadUsers = async () => {
     setError(null);

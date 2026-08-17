@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api";
+import { AuthShell } from "@/components/auth/auth-shell";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -36,16 +37,12 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen doflow-app-frame flex items-center justify-center p-4 lg:p-6">
-      <div className="w-full max-w-md df-glass-panel rounded-[32px] p-8 lg:p-10 overflow-hidden relative">
-        <div className="space-y-6">
-          <div className="text-center space-y-2">
-            <h1 className="text-3xl font-extrabold tracking-tight">Password dimenticata</h1>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Ti invieremo un link per reimpostare la password.
-            </p>
-          </div>
-
+    <AuthShell
+      mode="login"
+      title="Password dimenticata"
+      description="Ti invieremo un link per reimpostare la password."
+    >
+      <div className="space-y-6">
           {done ? (
             <div className="flex flex-col items-center justify-center py-10 animate-fadeInUp" role="status">
               <div className="df-icon-bubble h-20 w-20 mb-6">
@@ -115,8 +112,7 @@ export default function ForgotPasswordPage() {
               </div>
             </form>
           )}
-        </div>
       </div>
-    </div>
+    </AuthShell>
   );
 }

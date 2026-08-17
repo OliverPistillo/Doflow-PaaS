@@ -49,11 +49,10 @@ export function getTenantAppUrl(tenantSlug: string | undefined | null): string {
 
 export function getTenantLoginUrl(
   tenantSlug: string,
-  accessToken: string,
-  next?: string,
+  handoff: string,
 ): string {
   const url = new URL("/login", getTenantAppUrl(tenantSlug));
-  url.searchParams.set("accessToken", accessToken);
-  if (next) url.searchParams.set("next", next);
+  url.searchParams.set("handoff", handoff);
+  url.searchParams.set("tenant", normalizeTenantSlug(tenantSlug));
   return url.toString();
 }

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { clearAuthStorage, getAuthToken } from '@/lib/auth-storage';
 import {
   Sidebar,
   SidebarContent,
@@ -50,8 +51,7 @@ function parseJwtPayload(token: string): JwtPayload | null {
 }
 
 function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return window.localStorage.getItem('doflow_token');
+  return getAuthToken();
 }
 
 function normalizeRole(r?: string): Role {
@@ -126,7 +126,7 @@ export function AppSidebar(props: AppSidebarProps) {
 
   function defaultLogout() {
     if (typeof window !== 'undefined') {
-      window.localStorage.removeItem('doflow_token');
+      clearAuthStorage();
     }
     router.push('/login');
   }
