@@ -12,8 +12,6 @@ import {
   Zap,
 } from "lucide-react";
 
-import FlowMascot from "./flow-mascot";
-
 type LoginExperienceProps = {
   mascotShy?: boolean;
   children: React.ReactNode;
@@ -81,6 +79,12 @@ function LoginCrmShowcase({ mascotShy = false }: { mascotShy?: boolean }) {
           d="M 0 520 C 150 510, 205 548, 310 490 S 470 410, 565 365 S 720 350, 800 340 S 930 276, 1040 242"
           filter="url(#df-login-pipeline-glow)"
         />
+        <path
+          className="df-login-pipeline-light"
+          d="M 0 520 C 150 510, 205 548, 310 490 S 470 410, 565 365 S 720 350, 800 340 S 930 276, 1040 242"
+          pathLength="1"
+          filter="url(#df-login-pipeline-glow)"
+        />
         {[
           [135, 514],
           [350, 468],
@@ -94,12 +98,20 @@ function LoginCrmShowcase({ mascotShy = false }: { mascotShy?: boolean }) {
         ))}
       </svg>
 
-      <div className="df-login-mascot">
+      <div className="df-login-mascot" data-shy={mascotShy || undefined}>
         <span className="df-login-mascot-shadow" />
-        <FlowMascot
-          size="100%"
-          shy={mascotShy}
-          aria-label="Flow, la mascotte di Doflow"
+        <Image
+          src="/mascotte_login.png"
+          alt=""
+          width={1286}
+          height={1223}
+          unoptimized
+          priority
+          sizes="(min-width: 1280px) 330px, (min-width: 768px) 230px, 1px"
+          className="df-login-mascot-image"
+          data-testid="login-official-mascot"
+          aria-hidden="true"
+          draggable={false}
         />
       </div>
 

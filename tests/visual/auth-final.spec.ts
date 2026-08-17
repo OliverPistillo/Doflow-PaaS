@@ -45,6 +45,8 @@ test('auth desktop: login Doflow coerente e accessibile', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Accedi', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continua con Google' })).toBeVisible();
   await expect(page.locator('.df-auth-logo-img')).toBeVisible();
+  await expect(page.getByTestId('login-official-mascot')).toBeVisible();
+  await expect(page.getByTestId('login-official-mascot')).toHaveAttribute('src', /mascotte_login/);
   for (const label of ['Lead', 'Contatto', 'Proposta', 'Cliente']) {
     await expect(page.getByText(label, { exact: true })).toBeVisible();
   }
@@ -52,7 +54,19 @@ test('auth desktop: login Doflow coerente e accessibile', async ({ page }) => {
     await expect(page.getByText(title, { exact: true })).toBeVisible();
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1672);
+  const cardBox = await page.locator('.df-login-card').boundingBox();
+  const leadBox = await page.locator('.df-login-step-lead').boundingBox();
+  expect(cardBox?.x).toBeGreaterThanOrEqual(100);
+  expect((leadBox?.x ?? 0) - ((cardBox?.x ?? 0) + (cardBox?.width ?? 0))).toBeLessThan(80);
+  await expect(page.locator('.df-login-pipeline-light')).toHaveCSS('animation-name', 'df-login-pipeline-flow');
+  await expect(page.locator('.df-login-step-lead')).toHaveCSS('animation-name', /df-login-step-float/);
+  expect(await page.locator('.df-login-step-lead').evaluate((element) => {
+    const style = window.getComputedStyle(element);
+    return style.backdropFilter || style.webkitBackdropFilter;
+  })).toContain('blur');
   await authScreenshot(page, 'auth-login-new-reference-desktop.png');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(page.locator('.df-login-pipeline-light')).toHaveCSS('animation-name', 'none');
 });
 
 test('auth desktop: registrazione canonica senza piano o settore', async ({ page }) => {
