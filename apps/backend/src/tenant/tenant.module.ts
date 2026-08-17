@@ -9,6 +9,8 @@ import { TenantCrmController } from './tenant-crm.controller';
 import { TenantCrmService } from './tenant-crm.service';
 import { TenantTimelineController } from './tenant-timeline.controller';
 import { TenantTimelineService } from './tenant-timeline.service';
+import { TenantRecordOperationsController } from './tenant-record-operations.controller';
+import { TenantRecordOperationsService } from './tenant-record-operations.service';
 import { TenantBriefingController } from './tenant-briefing.controller';
 import { TenantBriefingService } from './tenant-briefing.service';
 import { TenantQuotesController } from './tenant-quotes.controller';
@@ -90,6 +92,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantSelfServiceController,
     TenantCrmController,
     TenantTimelineController,
+    TenantRecordOperationsController,
     TenantBriefingController,
     TenantQuotesController,
     TenantProjectsController,
@@ -110,6 +113,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantDashboardService,
     TenantCrmService,
     TenantTimelineService,
+    TenantRecordOperationsService,
     TenantBriefingService,
     TenantQuotesService,
     TenantProjectsService,

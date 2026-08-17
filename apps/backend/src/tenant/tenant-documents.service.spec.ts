@@ -1,3 +1,4 @@
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { TenantDocumentsService } from './tenant-documents.service';
 
 jest.mock('./tenant-documents-schema', () => ({
@@ -72,5 +73,29 @@ describe('TenantDocumentsService folders visibility', () => {
     expect(sql).toContain('d.category');
     expect(sql).toContain('d.entity_type');
     expect(sql).toContain("d.visibility <> 'finance'");
+  });
+
+  it('richiede target Doflow completo in upload e rifiuta record inesistenti', async () => {
+    const { service } = makeService(owner);
+    const file = { originalname: 'file.pdf', mimetype: 'application/pdf', size: 10, buffer: Buffer.from('x') } as any;
+    await expect(service.uploadDocument(file, { entity_type: 'company' })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.documentsForEntity('company', folderId, {})).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('filtra i file del record con parametri search, categoria e stato', async () => {
+    const query = jest.fn(async (sql: string, _params?: unknown[]) => {
+      if (sql.includes('FROM "doflow".companies')) return [{ id: folderId }];
+      if (sql.includes('COUNT(*)::int AS total')) return [{ total: 1 }];
+      if (sql.includes('FROM "doflow".documents d')) return [{ id: folderId, title: 'Logo', status: 'active', category: 'project_asset', visibility: 'internal' }];
+      return [];
+    });
+    const service = new TenantDocumentsService({ query } as any, {} as any, { user: owner }) as any;
+    const result = await service.documentsForEntity('company', folderId, { search: 'logo', category: 'project_asset', status: 'active' });
+    expect(result.items).toHaveLength(1);
+    const documentCall = query.mock.calls.find(([sql]) => String(sql).includes('SELECT d.*, f.name'));
+    expect(documentCall?.[0]).toContain('document_links dl');
+    expect(documentCall?.[0]).toContain('lower(coalesce(d.title');
+    expect(documentCall?.[0]).toContain('d.category = $');
+    expect(documentCall?.[1]).toEqual(expect.arrayContaining(['company', folderId, 'active', '%logo%', 'project_asset']));
   });
 });

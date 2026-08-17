@@ -1,7 +1,14 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { TenantFinanceService } from './tenant-finance.service';
 
+jest.mock('./tenant-finance-schema', () => ({ ensureTenantFinanceTables: jest.fn().mockResolvedValue(undefined) }));
+
 const USER_ID = '11111111-1111-4111-8111-111111111111';
+const INVOICE_ID = '22222222-2222-4222-8222-222222222222';
+const PAYMENT_ID = '33333333-3333-4333-8333-333333333333';
+const COMPANY_ID = '44444444-4444-4444-8444-444444444444';
+const OTHER_COMPANY_ID = '55555555-5555-4555-8555-555555555555';
+const IDEMPOTENCY_ID = '66666666-6666-4666-8666-666666666666';
 
 describe('TenantFinanceService', () => {
   function createService(role = 'owner') {
@@ -38,5 +45,53 @@ describe('TenantFinanceService', () => {
     });
 
     expect(total).toBe(219.6);
+  });
+
+  it('rifiuta pagamenti Doflow con importo non positivo', async () => {
+    await expect(createService().createPayment({ amount: 0, invoice_id: INVOICE_ID })).rejects.toBeInstanceOf(BadRequestException);
+    await expect(createService().createPayment({ amount: -1, invoice_id: INVOICE_ID })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('restituisce il pagamento esistente per una chiave idempotente', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('idempotency_key = $1')) return [{ id: PAYMENT_ID }];
+      if (sql.includes('WHERE p.id = $1')) return [{ id: PAYMENT_ID, invoice_id: INVOICE_ID, amount: 100 }];
+      return [];
+    });
+    const service = new TenantFinanceService({ query, createQueryRunner: jest.fn() } as any, {
+      authUser: { id: USER_ID, email: 'owner@doflow.it', role: 'owner', tenantId: 'doflow' },
+    });
+    await expect(service.createPayment({ amount: 100, invoice_id: INVOICE_ID, idempotency_key: IDEMPOTENCY_ID }))
+      .resolves.toMatchObject({ id: PAYMENT_ID });
+    expect(query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO "doflow".payments'))).toBe(false);
+  });
+
+  it('risolve anche la race sulla chiave idempotente senza doppio audit', async () => {
+    let idempotencyReads = 0;
+    const unique = Object.assign(new Error('duplicate key'), { code: '23505' });
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('idempotency_key = $1')) return ++idempotencyReads === 1 ? [] : [{ id: PAYMENT_ID }];
+      if (sql.includes('FROM "doflow".invoices')) return [{ id: INVOICE_ID, company_id: COMPANY_ID, project_id: null }];
+      if (sql.includes('INSERT INTO "doflow".payments')) throw unique;
+      if (sql.includes('WHERE p.id = $1')) return [{ id: PAYMENT_ID, invoice_id: INVOICE_ID, amount: 100 }];
+      return [];
+    });
+    const service = new TenantFinanceService({ query, createQueryRunner: jest.fn() } as any, {
+      authUser: { id: USER_ID, email: 'owner@doflow.it', role: 'owner', tenantId: 'doflow' },
+    });
+    await expect(service.createPayment({ amount: 100, invoice_id: INVOICE_ID, idempotency_key: IDEMPOTENCY_ID }))
+      .resolves.toMatchObject({ id: PAYMENT_ID });
+    expect(query.mock.calls.filter(([sql]) => String(sql).includes('audit_log'))).toHaveLength(0);
+  });
+
+  it('valida la coerenza company della fattura nel tenant', async () => {
+    const query = jest.fn(async (sql: string) => sql.includes('FROM "doflow".invoices')
+      ? [{ id: INVOICE_ID, company_id: COMPANY_ID, project_id: null }]
+      : []);
+    const service = new TenantFinanceService({ query, createQueryRunner: jest.fn() } as any, {
+      authUser: { id: USER_ID, email: 'owner@doflow.it', role: 'owner', tenantId: 'doflow' },
+    });
+    await expect(service.createPayment({ amount: 100, invoice_id: INVOICE_ID, company_id: OTHER_COMPANY_ID }))
+      .rejects.toThrow('company_id non coerente');
   });
 });

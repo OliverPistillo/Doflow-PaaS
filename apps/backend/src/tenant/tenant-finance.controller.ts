@@ -1,11 +1,27 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Inject, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantFinanceService } from './tenant-finance.service';
+import { isDoflowTenant } from './tenant-context';
+import { TenantEffectivePermissionsService } from './tenant-effective-permissions.service';
 
 @Controller('tenant/finance')
 @UseGuards(JwtAuthGuard)
 export class TenantFinanceController {
-  constructor(private readonly service: TenantFinanceService) {}
+  constructor(
+    private readonly service: TenantFinanceService,
+    private readonly permissions: TenantEffectivePermissionsService,
+    @Inject(REQUEST) private readonly request: any,
+  ) {}
+
+  private async assertDoflowFinance(action: 'create' | 'update') {
+    const user = this.request.user || this.request.authUser;
+    if (!isDoflowTenant(user?.tenantId || user?.tenant_id || this.request.tenantId)) return;
+    const capability = (await this.permissions.getCurrentAccess()).modules.finance;
+    if (!(action === 'create' ? capability?.can_create : capability?.can_update)) {
+      throw new ForbiddenException('Permesso finance insufficiente.');
+    }
+  }
 
   @Get('summary')
   summary() {
@@ -73,7 +89,8 @@ export class TenantFinanceController {
   }
 
   @Post('invoices/:id/payments')
-  createInvoicePayment(@Param('id') id: string, @Body() body: Record<string, any>) {
+  async createInvoicePayment(@Param('id') id: string, @Body() body: Record<string, any>) {
+    await this.assertDoflowFinance('create');
     return this.service.createPayment(body || {}, id);
   }
 
@@ -83,7 +100,8 @@ export class TenantFinanceController {
   }
 
   @Post('payments')
-  createPayment(@Body() body: Record<string, any>) {
+  async createPayment(@Body() body: Record<string, any>) {
+    await this.assertDoflowFinance('create');
     return this.service.createPayment(body || {});
   }
 
@@ -123,7 +141,8 @@ export class TenantFinanceController {
   }
 
   @Patch('deadlines/:id/complete')
-  completeDeadline(@Param('id') id: string) {
+  async completeDeadline(@Param('id') id: string) {
+    await this.assertDoflowFinance('update');
     return this.service.completeDeadline(id);
   }
 
@@ -173,7 +192,8 @@ export class TenantFinanceController {
   }
 
   @Patch('renewals/:id/status')
-  updateRenewalStatus(@Param('id') id: string, @Body() body: { status?: string }) {
+  async updateRenewalStatus(@Param('id') id: string, @Body() body: { status?: string }) {
+    await this.assertDoflowFinance('update');
     return this.service.updateRenewalStatus(id, String(body.status || ''));
   }
 

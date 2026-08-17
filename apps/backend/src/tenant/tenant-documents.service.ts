@@ -6,6 +6,7 @@ import { FileStorageService } from '../file-storage.service';
 import { safeSchema } from '../common/schema.utils';
 import { hasRoleAtLeast } from '../roles';
 import { ensureTenantDocumentsTables, seedDoflowDocumentFolders } from './tenant-documents-schema';
+import { isDoflowTenant } from './tenant-context';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const VISIBILITIES = ['internal', 'finance', 'private'];
@@ -110,6 +111,17 @@ export class TenantDocumentsService {
       [schema, table],
     );
     return rows.length > 0;
+  }
+
+  private async assertDoflowRecordTarget(schema: string, entityType: string | null, entityId: string | null) {
+    if (!isDoflowTenant(schema) || !entityType || !entityId) return;
+    const table = entityType === 'company' ? 'companies' : entityType === 'opportunity' ? 'opportunities' : entityType === 'project' ? 'projects' : null;
+    if (!table) return;
+    const rows = await this.dataSource.query(
+      `SELECT id FROM "${schema}".${table} WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [entityId],
+    );
+    if (!rows[0]) throw new NotFoundException('Record collegato non trovato');
   }
 
   private normalizeVisibility(value: unknown): string {
@@ -234,6 +246,10 @@ export class TenantDocumentsService {
     if (!name) throw new BadRequestException('name obbligatorio');
     const entityType = this.normalizeEntityType(body.entity_type);
     const entityId = body.entity_id ? this.requireUuid(String(body.entity_id), 'entity_id') : null;
+    if (isDoflowTenant(schema) && Boolean(entityType) !== Boolean(entityId)) {
+      throw new BadRequestException('entity_type ed entity_id devono essere valorizzati insieme');
+    }
+    await this.assertDoflowRecordTarget(schema, entityType, entityId);
     const rows = await this.dataSource.query(
       `INSERT INTO "${schema}".document_folders (
          parent_id, name, slug, description, entity_type, entity_id, visibility, created_by, created_at, updated_at
@@ -375,6 +391,10 @@ export class TenantDocumentsService {
     const visibility = this.normalizeVisibility(body.visibility);
     const entityType = this.normalizeEntityType(body.entity_type);
     const entityId = body.entity_id ? this.requireUuid(String(body.entity_id), 'entity_id') : null;
+    if (isDoflowTenant(schema) && Boolean(entityType) !== Boolean(entityId)) {
+      throw new BadRequestException('entity_type ed entity_id devono essere valorizzati insieme');
+    }
+    await this.assertDoflowRecordTarget(schema, entityType, entityId);
     this.assertFinanceAllowed(user, { visibility, category, entity_type: entityType });
 
     const originalFilename = this.safeFilename(file.originalname);
@@ -578,6 +598,7 @@ export class TenantDocumentsService {
     const entityType = this.normalizeEntityType(body.entity_type);
     if (!entityType) throw new BadRequestException('entity_type obbligatorio');
     const entityId = this.requireUuid(String(body.entity_id || ''), 'entity_id');
+    await this.assertDoflowRecordTarget(schema, entityType, entityId);
     this.assertFinanceAllowed(user, { ...document, entity_type: entityType });
     const link = await this.createLinkInternal(schema, id, entityType, entityId, this.normalizeRelationType(body.relation_type), user);
     await this.mirrorProjectFileLink(schema, id, entityType, entityId, user);
@@ -608,6 +629,7 @@ export class TenantDocumentsService {
     const user = this.assertCanRead();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
+    await this.assertDoflowRecordTarget(schema, normalizedType, normalizedId);
     const limit = this.normalizeLimit(query.limit);
     const offset = this.normalizeOffset(query.offset);
     const status = query.status === undefined ? 'active' : String(query.status);
@@ -623,6 +645,15 @@ export class TenantDocumentsService {
     if (status !== '__all__' && status !== 'all') {
       params.push(this.normalizeStatus(status));
       where.push(`d.status = $${params.length}`);
+    }
+    const search = String(query.search || '').trim();
+    if (search) {
+      params.push(`%${search.toLowerCase()}%`);
+      where.push(`(lower(coalesce(d.title, '')) LIKE $${params.length} OR lower(coalesce(d.original_filename, '')) LIKE $${params.length} OR lower(coalesce(d.description, '')) LIKE $${params.length})`);
+    }
+    if (query.category && query.category !== 'all' && query.category !== '__all__') {
+      params.push(this.normalizeCategory(query.category));
+      where.push(`d.category = $${params.length}`);
     }
     const rows = await this.dataSource.query(
       `SELECT d.*, f.name AS folder_name, u.email AS uploaded_by_email

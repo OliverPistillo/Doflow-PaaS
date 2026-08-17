@@ -3,6 +3,7 @@ import { REQUEST } from '@nestjs/core';
 import { DataSource, QueryRunner } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
 import { ensureTenantFinanceTables } from './tenant-finance-schema';
+import { isDoflowTenant } from './tenant-context';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -522,17 +523,52 @@ export class TenantFinanceService {
     const user = this.assertFinanceAccess();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
+    const doflow = isDoflowTenant(schema);
     const cleaned = this.cleanPaymentBody({ ...body, invoice_id: invoiceId || body.invoice_id }, false);
+    if (doflow && body.idempotency_key) {
+      if (!UUID_RE.test(String(body.idempotency_key))) throw new BadRequestException('idempotency_key non valida');
+      cleaned.idempotency_key = String(body.idempotency_key);
+    }
+    if (doflow) {
+      if (Number(cleaned.amount) <= 0) throw new BadRequestException('amount deve essere maggiore di zero');
+      if (cleaned.idempotency_key) {
+        const existing = await this.dataSource.query(
+          `SELECT id FROM "${schema}".payments WHERE idempotency_key = $1 AND deleted_at IS NULL LIMIT 1`,
+          [cleaned.idempotency_key],
+        );
+        if (existing[0]?.id) return this.findPayment(existing[0].id);
+      }
+    }
     if (cleaned.invoice_id) {
       const invoice = await this.ensureInvoiceExists(schema, String(cleaned.invoice_id));
+      if (doflow) {
+        if (cleaned.company_id && cleaned.company_id !== invoice.company_id) {
+          throw new BadRequestException('company_id non coerente con la fattura');
+        }
+        if (cleaned.project_id && cleaned.project_id !== invoice.project_id) {
+          throw new BadRequestException('project_id non coerente con la fattura');
+        }
+      }
       cleaned.company_id = cleaned.company_id || invoice.company_id || null;
       cleaned.project_id = cleaned.project_id || invoice.project_id || null;
     }
-    const row = await this.insertRow(schema, 'payments', {
-      ...cleaned,
-      created_by: this.userIdOrNull(user.id),
-      updated_by: this.userIdOrNull(user.id),
-    });
+    let row: Record<string, any>;
+    try {
+      row = await this.insertRow(schema, 'payments', {
+        ...cleaned,
+        created_by: this.userIdOrNull(user.id),
+        updated_by: this.userIdOrNull(user.id),
+      });
+    } catch (error: any) {
+      if (doflow && cleaned.idempotency_key && String(error?.code || '') === '23505') {
+        const existing = await this.dataSource.query(
+          `SELECT id FROM "${schema}".payments WHERE idempotency_key = $1 AND deleted_at IS NULL LIMIT 1`,
+          [cleaned.idempotency_key],
+        );
+        if (existing[0]?.id) return this.findPayment(existing[0].id);
+      }
+      throw error;
+    }
     await this.afterPaymentMutation(schema, cleaned.invoice_id as string | null, cleaned.project_id as string | null, user);
     await this.audit(schema, user, 'finance_payment_created', row.id, cleaned);
     return this.findPayment(row.id);

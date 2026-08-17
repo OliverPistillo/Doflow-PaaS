@@ -2,20 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarPlus, FileText, Mail, MessageCircle, Phone } from "lucide-react";
+import { CalendarPlus, Mail, MessageCircle, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
-import { apiFetch } from "@/lib/api";
-import { contractsApi, type Contract } from "@/lib/tenant-contracts-api";
 import {
   commercialApi,
   type CommercialActivity,
   type CommercialCompany,
   type CommercialContact,
   type CommercialOpportunity,
-  type CommercialQuote,
 } from "@/lib/tenant-commercial-api";
-import { listDocumentsForEntity, type TenantDocument } from "@/lib/tenant-documents-api";
 import { teamApi, type TeamMember } from "@/lib/tenant-team-api";
 import type { CommercialClientRow } from "@/components/tenant-commercial/commercial-client-types";
 import { commercialDate, commercialMoney, pipelineStageLabel } from "@/components/tenant-commercial/commercial-utils";
@@ -28,9 +24,8 @@ import {
   type RecordPanelTab,
 } from "./unified-record-panel";
 import { RecordTimeline } from "./record-timeline";
-
-type ListResponse<T> = { items: T[]; total?: number };
-type Invoice = { id: string; invoice_number?: string | null; title?: string | null; status?: string | null; due_date?: string | null };
+import { RecordFiles } from "./record-files";
+import { RecordAdministration } from "./record-administration";
 
 const companyStatusLabels: Record<string, string> = {
   active_client: "Cliente attivo",
@@ -60,39 +55,6 @@ function contactName(contact?: CommercialContact | null, fallback?: string | nul
   return name || fallback || "Non collegato";
 }
 
-function DocumentsList({ documents, entityLabel }: { documents: TenantDocument[]; entityLabel: string }) {
-  if (!documents.length) {
-    return <RecordPanelEmptyState title="Nessun file collegato" description={`Collega i documenti reali a ${entityLabel} dall’archivio Documenti.`} action={<Button asChild variant="outline" size="sm"><Link href="/documents">Apri Documenti</Link></Button>} />;
-  }
-  return (
-    <div className="space-y-2">
-      {documents.map((document) => (
-        <Link key={document.id} href={`/documents/${document.id}`} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 transition-colors hover:border-violet-300 hover:bg-violet-50/30">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700"><FileText className="h-4 w-4" /></span>
-          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-900" data-record-sensitive>{document.title}</span><span className="block text-xs text-slate-500">{document.category} · {commercialDate(document.created_at)}</span></span>
-          <span className="text-xs font-medium text-violet-700">Apri</span>
-        </Link>
-      ))}
-    </div>
-  );
-}
-
-function AdministrationList({ quotes, contracts, invoices, canViewAdministration }: { quotes: CommercialQuote[]; contracts: Contract[]; invoices: Invoice[]; canViewAdministration: boolean }) {
-  if (!canViewAdministration) {
-    return <RecordPanelEmptyState title="Amministrazione non disponibile" description="Il tuo profilo non dispone dei permessi backend necessari per queste informazioni." />;
-  }
-  if (!quotes.length && !contracts.length && !invoices.length) {
-    return <RecordPanelEmptyState title="Nessun elemento amministrativo collegato" description="Preventivi, contratti e fatture compariranno qui solo quando saranno realmente associati." action={<Button asChild variant="outline" size="sm"><Link href="/quotes">Apri preventivi</Link></Button>} />;
-  }
-  return (
-    <div className="space-y-4">
-      {quotes.length ? <RecordPanelSection title="Preventivi"><div className="space-y-2">{quotes.map((quote) => <Link key={quote.id} href="/quotes" className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm"><span className="min-w-0 truncate font-medium text-slate-900" data-record-sensitive>{quote.title || quote.quote_number || "Preventivo"}</span><span className="shrink-0 text-xs text-slate-500">{quote.status}</span></Link>)}</div></RecordPanelSection> : null}
-      {contracts.length ? <RecordPanelSection title="Contratti"><div className="space-y-2">{contracts.map((contract) => <Link key={contract.id} href={`/contracts/${contract.id}`} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm"><span className="min-w-0 truncate font-medium text-slate-900" data-record-sensitive>{contract.title || contract.contract_number}</span><span className="shrink-0 text-xs text-slate-500">{contract.status}</span></Link>)}</div></RecordPanelSection> : null}
-      {invoices.length ? <RecordPanelSection title="Fatture"><div className="space-y-2">{invoices.map((invoice) => <Link key={invoice.id} href="/finance/invoices" className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm"><span className="min-w-0 truncate font-medium text-slate-900" data-record-sensitive>{invoice.title || invoice.invoice_number || "Fattura"}</span><span className="shrink-0 text-xs text-slate-500">{invoice.status || "—"}</span></Link>)}</div></RecordPanelSection> : null}
-    </div>
-  );
-}
-
 export function DoflowCommercialRecordPanel({
   kind,
   recordId,
@@ -117,11 +79,8 @@ export function DoflowCommercialRecordPanel({
   const [company, setCompany] = useState<CommercialCompany | null>(fallbackClient?.company || null);
   const [contact, setContact] = useState<CommercialContact | null>(fallbackClient?.contact || null);
   const [activities, setActivities] = useState<CommercialActivity[]>(fallbackClient?.lastActivity ? [fallbackClient.lastActivity] : []);
-  const [documents, setDocuments] = useState<TenantDocument[]>([]);
-  const [quotes, setQuotes] = useState<CommercialQuote[]>([]);
-  const [contracts, setContracts] = useState<Contract[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [timelineDraft, setTimelineDraft] = useState<{ key: number; channel: "email" | "whatsapp"; body: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -135,43 +94,29 @@ export function DoflowCommercialRecordPanel({
           const detail = await commercialApi.opportunity(recordId);
           if (cancelled) return;
           setOpportunity(detail);
-          const [activityResult, documentResult, quoteResult, contractResult, companyResult, memberResult] = await Promise.allSettled([
+          const [activityResult, companyResult, memberResult] = await Promise.allSettled([
             commercialApi.activities({ opportunity_id: recordId, limit: 100, sortBy: "updated_at" }),
-            canView("documents") ? listDocumentsForEntity("opportunity", recordId, { limit: 100 }) : Promise.resolve({ items: [] }),
-            canView("quotes") ? commercialApi.quotes({ opportunity_id: recordId, limit: 100 }) : Promise.resolve({ items: [] }),
-            canView("contracts") ? contractsApi.list({ opportunity_id: recordId, limit: 100 }) : Promise.resolve({ items: [] }),
             detail.company_id ? commercialApi.company(detail.company_id) : Promise.resolve(null),
             canView("team") ? teamApi.members({ limit: 100 }) : Promise.resolve({ items: [] }),
           ]);
           if (cancelled) return;
           if (activityResult.status === "fulfilled") setActivities(sortActivities(activityResult.value.items || []));
-          if (documentResult.status === "fulfilled") setDocuments(documentResult.value.items || []);
-          if (quoteResult.status === "fulfilled") setQuotes(quoteResult.value.items || []);
-          if (contractResult.status === "fulfilled") setContracts(contractResult.value.items || []);
           if (companyResult.status === "fulfilled") setCompany(companyResult.value);
           if (memberResult.status === "fulfilled") setMembers(memberResult.value.items || []);
         } else {
           const detail = await commercialApi.company(recordId);
           if (cancelled) return;
           setCompany(detail);
-          const [contactResult, opportunityResult, activityResult, documentResult, quoteResult, contractResult, invoiceResult, memberResult] = await Promise.allSettled([
+          const [contactResult, opportunityResult, activityResult, memberResult] = await Promise.allSettled([
             commercialApi.contacts({ company_id: recordId, limit: 100 }),
             commercialApi.opportunities({ company_id: recordId, limit: 100 }),
             commercialApi.activities({ company_id: recordId, limit: 100, sortBy: "updated_at" }),
-            canView("documents") ? listDocumentsForEntity("company", recordId, { limit: 100 }) : Promise.resolve({ items: [] }),
-            canView("quotes") ? commercialApi.quotes({ company_id: recordId, limit: 100 }) : Promise.resolve({ items: [] }),
-            canView("contracts") ? contractsApi.list({ company_id: recordId, limit: 100 }) : Promise.resolve({ items: [] }),
-            canView("finance") ? apiFetch<ListResponse<Invoice>>(`/tenant/finance/invoices?company_id=${encodeURIComponent(recordId)}&limit=100`) : Promise.resolve({ items: [] }),
             canView("team") ? teamApi.members({ limit: 100 }) : Promise.resolve({ items: [] }),
           ]);
           if (cancelled) return;
           if (contactResult.status === "fulfilled") setContact(contactResult.value.items.find((item) => item.is_primary) || contactResult.value.items[0] || null);
           if (opportunityResult.status === "fulfilled") setOpportunity(opportunityResult.value.items[0] || null);
           if (activityResult.status === "fulfilled") setActivities(sortActivities(activityResult.value.items || []));
-          if (documentResult.status === "fulfilled") setDocuments(documentResult.value.items || []);
-          if (quoteResult.status === "fulfilled") setQuotes(quoteResult.value.items || []);
-          if (contractResult.status === "fulfilled") setContracts(contractResult.value.items || []);
-          if (invoiceResult.status === "fulfilled") setInvoices(invoiceResult.value.items || []);
           if (memberResult.status === "fulfilled") setMembers(memberResult.value.items || []);
         }
       } catch (reason) {
@@ -224,10 +169,10 @@ export function DoflowCommercialRecordPanel({
 
   const tabs = useMemo<RecordPanelTab[]>(() => [
     { value: "overview", label: "Riepilogo", content: overview },
-    { value: "activity", label: "Attività e comunicazioni", content: <RecordTimeline recordKind={kind} recordId={recordId} moduleKey="crm" phone={phone} email={email} members={members} /> },
-    { value: "files", label: "File", content: <DocumentsList documents={documents} entityLabel={kind === "opportunity" ? "questa opportunità" : "questo cliente"} /> },
-    { value: "administration", label: "Amministrazione", content: <AdministrationList quotes={quotes} contracts={contracts} invoices={invoices} canViewAdministration={canView("quotes") || canView("contracts") || canView("finance")} /> },
-  ], [canView, contracts, documents, email, invoices, kind, members, overview, phone, quotes, recordId]);
+    { value: "activity", label: "Attività e comunicazioni", content: <RecordTimeline recordKind={kind} recordId={recordId} moduleKey="crm" phone={phone} email={email} members={members} draft={timelineDraft} /> },
+    { value: "files", label: "File", content: <RecordFiles recordKind={kind} recordId={recordId} onSolicit={(channel, body) => { setTimelineDraft({ key: Date.now(), channel, body }); onTabChange("activity"); }} /> },
+    { value: "administration", label: "Amministrazione", content: <RecordAdministration recordKind={kind} recordId={recordId} /> },
+  ], [email, kind, members, onTabChange, overview, phone, recordId, timelineDraft]);
 
   const actions: RecordPanelAction[] = [
     { label: "Chiama", icon: Phone, onSelect: () => onTabChange("activity") },

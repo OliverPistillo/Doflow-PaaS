@@ -136,6 +136,7 @@ export function RecordTimeline({
   phone,
   email,
   members,
+  draft,
 }: {
   recordKind: TimelineRecordKind;
   recordId: string;
@@ -143,6 +144,7 @@ export function RecordTimeline({
   phone?: string | null;
   email?: string | null;
   members: TeamMember[];
+  draft?: { key: number; channel: "email" | "whatsapp"; body: string } | null;
 }) {
   const { canCreate } = useTenantAccess();
   const { toast } = useToast();
@@ -179,6 +181,15 @@ export function RecordTimeline({
     setDestination(composer === "email" ? email || "" : phone || "");
     setExternalOpened(false);
   }, [composer, email, phone]);
+
+  useEffect(() => {
+    if (!draft) return;
+    setComposer(draft.channel);
+    setTitle("Richiesta materiale");
+    setBody(draft.body);
+    setDestination(draft.channel === "email" ? email || "" : phone || "");
+    setExternalOpened(false);
+  }, [draft, email, phone]);
 
   useEffect(() => {
     const controller = new AbortController();

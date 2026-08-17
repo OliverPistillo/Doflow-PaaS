@@ -153,6 +153,18 @@ describe('TenantTimelineService', () => {
     expect(sql).toContain('FROM "doflow".tasks t');
   });
 
+  it('include i pagamenti collegati via fattura nella timeline opportunità', async () => {
+    const query = jest.fn(async (sql: string, params?: unknown[]) => {
+      if (sql.includes('to_regclass') && String(params?.[0] || '').includes('payments')) return [{ name: 'doflow.payments' }];
+      if (sql.includes('to_regclass')) return [{ name: null }];
+      return [];
+    });
+    await harness({ query }).service.list({ record_kind: 'opportunity', record_id: OPPORTUNITY_ID });
+    const paymentSql = query.mock.calls.find(([sql]) => String(sql).includes('FROM "doflow".payments WHERE'))?.[0];
+    expect(paymentSql).toContain('FROM "doflow".invoices i');
+    expect(paymentSql).toContain('i.opportunity_id = $1');
+  });
+
   it('esclude eventi finance e relativi target senza capability finance', async () => {
     const readOnly = { can_view: false, can_create: false, can_update: false, can_delete: false, can_manage: false };
     const query = jest.fn(async (sql: string) => {
@@ -182,6 +194,27 @@ describe('TenantTimelineService', () => {
       type: 'status_change', status: 'closed_won', title: 'Fase commerciale aggiornata', source: 'audit_log',
     }));
     expect(result.items[0].metadata).toEqual({ previous_stage: 'quote', new_stage: 'closed_won' });
+  });
+
+  it('mappa materiali come attività singole e file con azione specifica', async () => {
+    const query = jest.fn(async (sql: string, params?: unknown[]) => {
+      if (sql.includes('to_regclass') && String(params?.[0] || '').includes('document_activity')) return [{ name: 'doflow.document_activity' }];
+      if (sql.includes('to_regclass')) return [{ name: null }];
+      if (sql.includes('audit_log a')) return [{
+        id: 'audit:material', action: 'material_requested', actor_email: 'operator@example.test',
+        created_at: '2026-08-17T11:00:00.000Z', metadata: { title: 'Logo vettoriale', status: 'requested' },
+      }];
+      if (sql.includes('document_activity a')) return [{
+        id: 'document:version', actor_user_id: USER_ID, author_label: 'Operatore',
+        created_at: '2026-08-17T10:00:00.000Z', action: 'version_created', metadata: {},
+      }];
+      return [];
+    });
+    const result = await harness({ query }).service.list({ record_kind: 'company', record_id: COMPANY_ID });
+    expect(result.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'activity', title: 'Materiale richiesto', source: 'audit_log' }),
+      expect.objectContaining({ type: 'file', title: 'Nuova versione file', source: 'document_activity' }),
+    ]));
   });
 
   it.each([

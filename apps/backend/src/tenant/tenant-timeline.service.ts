@@ -21,12 +21,17 @@ const AUDIT_ACTIONS = [
   'quote_rejected',
   'quotes_quotes_created',
   'quotes_quotes_updated',
+  'material_requested',
+  'material_received',
+  'material_waived',
   'finance_invoice_created',
   'finance_invoice_created_from_project',
   'finance_invoice_created_from_quote',
   'finance_invoice_updated',
   'finance_payment_created',
   'finance_payment_updated',
+  'finance_deadline_updated',
+  'finance_renewal_updated',
 ] as const;
 
 type RecordKind = typeof RECORD_KINDS[number];
@@ -370,12 +375,21 @@ export class TenantTimelineService {
       if (access.modules.finance?.can_view) {
         await collect('invoices', 'company_id = $1', [target.id]);
         await collect('payments', 'company_id = $1', [target.id]);
+        await collect('financial_deadlines', 'company_id = $1', [target.id]);
+        await collect('recurring_services', 'company_id = $1', [target.id]);
+        await collect('renewals', 'company_id = $1', [target.id]);
       }
     } else if (target.kind === 'opportunity') {
       await collect('projects', 'opportunity_id = $1', [target.id]);
       if (access.modules.quotes?.can_view) await collect('quotes', 'opportunity_id = $1', [target.id]);
       if (access.modules.contracts?.can_view) await collect('contracts', 'opportunity_id = $1', [target.id]);
-      if (access.modules.finance?.can_view) await collect('invoices', 'opportunity_id = $1', [target.id]);
+      if (access.modules.finance?.can_view) {
+        await collect('invoices', 'opportunity_id = $1', [target.id]);
+        await collect('payments', `EXISTS (SELECT 1 FROM "${schema}".invoices i WHERE i.id = invoice_id AND i.opportunity_id = $1 AND i.deleted_at IS NULL)`, [target.id]);
+        await collect('financial_deadlines', `EXISTS (SELECT 1 FROM "${schema}".invoices i WHERE i.id = invoice_id AND i.opportunity_id = $1 AND i.deleted_at IS NULL) OR EXISTS (SELECT 1 FROM "${schema}".quotes q WHERE q.id = quote_id AND q.opportunity_id = $1 AND q.deleted_at IS NULL)`, [target.id]);
+        await collect('recurring_services', `EXISTS (SELECT 1 FROM "${schema}".quotes q WHERE q.id = quote_id AND q.opportunity_id = $1 AND q.deleted_at IS NULL) OR EXISTS (SELECT 1 FROM "${schema}".projects p WHERE p.id = project_id AND p.opportunity_id = $1 AND p.deleted_at IS NULL)`, [target.id]);
+        await collect('renewals', `EXISTS (SELECT 1 FROM "${schema}".recurring_services rs WHERE rs.id = recurring_service_id AND rs.deleted_at IS NULL AND (EXISTS (SELECT 1 FROM "${schema}".quotes q WHERE q.id = rs.quote_id AND q.opportunity_id = $1 AND q.deleted_at IS NULL) OR EXISTS (SELECT 1 FROM "${schema}".projects p WHERE p.id = rs.project_id AND p.opportunity_id = $1 AND p.deleted_at IS NULL)))`, [target.id]);
+      }
     } else {
       if (target.opportunity_id) ids.add(target.opportunity_id);
       if (access.modules.quotes?.can_view && target.opportunity_id) await collect('quotes', 'opportunity_id = $1', [target.opportunity_id]);
@@ -383,12 +397,15 @@ export class TenantTimelineService {
       if (access.modules.finance?.can_view) {
         await collect('invoices', 'project_id = $1', [target.id]);
         await collect('payments', 'project_id = $1', [target.id]);
+        await collect('financial_deadlines', 'project_id = $1', [target.id]);
+        await collect('recurring_services', 'project_id = $1', [target.id]);
+        await collect('renewals', 'project_id = $1', [target.id]);
       }
     }
     return [...ids];
   }
 
-  private auditTitle(action: string) {
+  private auditTitle(action: string, metadata: Record<string, unknown> = {}) {
     const titles: Record<string, string> = {
       crm_opportunity_stage_changed: 'Fase commerciale aggiornata',
       project_status_changed: 'Stato progetto aggiornato',
@@ -397,12 +414,17 @@ export class TenantTimelineService {
       quote_rejected: 'Preventivo rifiutato',
       quotes_quotes_created: 'Preventivo creato',
       quotes_quotes_updated: 'Preventivo aggiornato',
+      material_requested: 'Materiale richiesto',
+      material_received: 'Materiale ricevuto',
+      material_waived: 'Materiale non necessario',
       finance_invoice_created: 'Fattura creata',
       finance_invoice_created_from_project: 'Fattura creata dal progetto',
       finance_invoice_created_from_quote: 'Fattura creata dal preventivo',
       finance_invoice_updated: 'Fattura aggiornata',
       finance_payment_created: 'Pagamento registrato',
       finance_payment_updated: 'Pagamento aggiornato',
+      finance_deadline_updated: metadata.status === 'completed' ? 'Scadenza completata' : 'Scadenza aggiornata',
+      finance_renewal_updated: metadata.status === 'paid' ? 'Rinnovo completato' : 'Rinnovo aggiornato',
     };
     return titles[action] || 'Aggiornamento di sistema';
   }
@@ -438,7 +460,7 @@ export class TenantTimelineService {
         company_id: target.company_id,
         opportunity_id: target.opportunity_id,
         project_id: target.project_id,
-        type: row.action === 'project_updated' ? 'activity' : 'status_change',
+        type: row.action === 'project_updated' || row.action.startsWith('material_') || row.action === 'finance_payment_created' || row.action === 'finance_payment_updated' || row.action === 'finance_deadline_updated' || row.action === 'finance_renewal_updated' ? 'activity' : 'status_change',
         channel: 'system',
         direction: null,
         author_user_id: null,
@@ -446,7 +468,7 @@ export class TenantTimelineService {
         created_at: row.created_at,
         status: next || 'recorded',
         outcome: next,
-        title: this.auditTitle(row.action),
+        title: this.auditTitle(row.action, metadata),
         body: null,
         metadata,
         source: 'audit_log',
@@ -479,6 +501,14 @@ export class TenantTimelineService {
        LIMIT $${params.length}`,
       params,
     );
+    const titles: Record<string, string> = {
+      uploaded: 'File caricato',
+      version_created: 'Nuova versione file',
+      archived: 'File archiviato',
+      restored: 'File ripristinato',
+      linked: 'File collegato',
+      unlinked: 'File scollegato',
+    };
     return rows.map((row: any) => this.normalizeEvent({
       id: row.id,
       contact_id: target.contact_id,
@@ -491,7 +521,7 @@ export class TenantTimelineService {
       author_label: row.author_label,
       created_at: row.created_at,
       status: row.action,
-      title: row.action === 'uploaded' ? 'File caricato' : 'File aggiornato',
+      title: titles[row.action] || 'File aggiornato',
       metadata: row.metadata,
       source: 'document_activity',
     }));

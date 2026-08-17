@@ -1,5 +1,6 @@
 import { DataSource, QueryRunner } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
+import { isDoflowTenant } from './tenant-context';
 import { ensureTenantProjectsTables } from './tenant-projects-schema';
 
 async function addColumns(ds: DataSource, schema: string, table: string, columns: string[]) {
@@ -411,6 +412,10 @@ async function createFinanceIndexes(ds: DataSource, s: string) {
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_payments_invoice" ON "${s}".payments(invoice_id) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_payments_project" ON "${s}".payments(project_id) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_payments_date" ON "${s}".payments(payment_date) WHERE deleted_at IS NULL`);
+  if (isDoflowTenant(s)) {
+    await ds.query(`ALTER TABLE "${s}".payments ADD COLUMN IF NOT EXISTS idempotency_key TEXT`);
+    await ds.query(`CREATE UNIQUE INDEX IF NOT EXISTS "uq_${s}_payments_idempotency" ON "${s}".payments(idempotency_key) WHERE idempotency_key IS NOT NULL AND deleted_at IS NULL`);
+  }
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_financial_deadlines_due" ON "${s}".financial_deadlines(due_date) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_financial_deadlines_status" ON "${s}".financial_deadlines(status) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_recurring_services_company" ON "${s}".recurring_services(company_id) WHERE deleted_at IS NULL`);

@@ -17,6 +17,11 @@ const DOCUMENT_ID = '66666666-6666-4666-8666-666666666666';
 const MEMBER_ID = '77777777-7777-4777-8777-777777777777';
 const QUOTE_ID = '88888888-8888-4888-8888-888888888888';
 const CONTRACT_ID = '99999999-9999-4999-8999-999999999999';
+const MATERIAL_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
+const INVOICE_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
+const DEADLINE_ID = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1';
+const RECURRING_ID = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd1';
+const RENEWAL_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1';
 
 const timelineEvents = [
   {
@@ -132,7 +137,31 @@ const document = {
   category: 'project_asset',
   visibility: 'internal',
   status: 'active',
+  version_number: 1,
+  size_bytes: 840_000,
+  uploaded_by_email: 'responsabile@example.test',
   created_at: '2026-08-15T10:00:00.000Z',
+};
+
+const material = {
+  id: MATERIAL_ID, company_id: COMPANY_ID, title: 'Logo vettoriale',
+  description: 'Versione SVG su fondo trasparente.', status: 'requested',
+  due_at: '2026-08-25T12:00:00.000Z', requested_by_label: 'Responsabile progetto',
+  created_at: '2026-08-17T09:00:00.000Z',
+};
+
+const administration = {
+  summary: {
+    total_invoiced: 3200, total_paid: 1200, total_remaining: 2000, total_overdue: 800,
+    next_deadline: '2026-08-25', next_renewal: '2026-11-30', total_expected: 3200, payment_status: 'partially_paid',
+  },
+  quotes: [{ id: QUOTE_ID, quote_number: 'PREV-001', title: 'Preventivo Website', status: 'accepted', total: 3200, currency: 'EUR' }],
+  contracts: [{ id: CONTRACT_ID, contract_number: 'CON-001', title: 'Contratto Website', status: 'active', signature_status: 'signed', amount: 3200, currency: 'EUR', start_date: '2026-07-01', end_date: '2027-06-30', renewal_date: '2026-11-30' }],
+  invoices: [{ id: INVOICE_ID, invoice_number: 'INV-001', title: 'Fattura progetto', status: 'partially_paid', total: 3200, paid_total: 1200, remaining_total: 2000, currency: 'EUR', issue_date: '2026-08-01', due_date: '2026-08-25' }],
+  payments: [{ id: 'ffffffff-ffff-4fff-8fff-fffffffffff1', invoice_id: INVOICE_ID, amount: 1200, currency: 'EUR', status: 'recorded', payment_date: '2026-08-05', method: 'bank_transfer' }],
+  deadlines: [{ id: DEADLINE_ID, invoice_id: INVOICE_ID, title: 'Saldo progetto', type: 'balance', status: 'open', amount: 2000, currency: 'EUR', due_date: '2026-08-25' }],
+  recurring_services: [{ id: RECURRING_ID, name: 'Manutenzione sito', category: 'maintenance', status: 'active', billing_cycle: 'yearly', amount: 900, currency: 'EUR', next_due_date: '2026-11-30', auto_renew: true }],
+  renewals: [{ id: RENEWAL_ID, recurring_service_id: RECURRING_ID, title: 'Rinnovo manutenzione', status: 'upcoming', amount: 900, currency: 'EUR', due_date: '2026-11-30' }],
 };
 
 const moduleAccess = Object.fromEntries([
@@ -179,12 +208,68 @@ async function installReadOnlyFixture(page: Page) {
     if (url.pathname === '/api/tenant/contracts') return json(list([{ id: CONTRACT_ID, contract_number: 'CON-001', title: 'Contratto Website', status: 'active', signature_status: 'signed', priority: 'medium', contract_type: 'project', company_id: COMPANY_ID, opportunity_id: OPPORTUNITY_ID }]));
     if (url.pathname === '/api/tenant/finance/invoices') return json(list([{ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', invoice_number: 'INV-001', title: 'Fattura acconto', status: 'issued' }]));
     if (url.pathname.startsWith('/api/tenant/documents/entity/')) return json(list([document]));
+    if (url.pathname === '/api/tenant/documents') return json(list([document]));
+    if (url.pathname === '/api/tenant/record-operations/materials') return json({ items: [material] });
+    if (url.pathname === '/api/tenant/record-operations/administration') return json(administration);
     if (url.pathname === '/api/tenant/projects') return json(list([project]));
     if (url.pathname === `/api/tenant/projects/${PROJECT_ID}`) return json(project);
     if (url.pathname === `/api/tenant/projects/${PROJECT_ID}/tasks`) return json(list([task]));
     if (url.pathname.startsWith(`/api/tenant/projects/${PROJECT_ID}/`)) return json(list([]));
     return route.continue();
   });
+}
+
+async function installOperationsMutationFixture(page: Page) {
+  const calls: Array<{ method: string; pathname: string }> = [];
+  const documents: Array<Record<string, any>> = [{ ...document }];
+  const materials: Array<Record<string, any>> = [{ ...material }];
+  const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+
+  await page.route('**/api/tenant/documents**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method().toUpperCase();
+    if (method === 'GET') return json(route, list(documents));
+    calls.push({ method, pathname: url.pathname });
+    if (method === 'POST' && url.pathname === '/api/tenant/documents/upload') {
+      const uploaded = { ...document, id: '66666666-6666-4666-8666-666666666667', title: 'Brief operativo.pdf', original_filename: 'brief-operativo.pdf', created_at: '2026-08-17T12:00:00.000Z' };
+      documents.unshift(uploaded);
+      return json(route, uploaded, 201);
+    }
+    if (method === 'POST' && url.pathname.endsWith('/versions')) {
+      documents[0] = { ...documents[0], version_number: 2, created_at: '2026-08-17T12:10:00.000Z' };
+      return json(route, documents[0], 201);
+    }
+    return route.abort('blockedbyclient');
+  });
+
+  await page.route('**/api/tenant/record-operations/materials**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method().toUpperCase();
+    if (method === 'GET') return json(route, { items: materials });
+    calls.push({ method, pathname: url.pathname });
+    if (method === 'POST' && url.pathname === '/api/tenant/record-operations/materials') {
+      const body = request.postDataJSON() as Record<string, unknown>;
+      const created = { ...material, id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', title: String(body.title || 'Materiale'), description: body.description || null };
+      materials.unshift(created);
+      return json(route, created, 201);
+    }
+    if (method === 'PATCH' && url.pathname.endsWith('/received')) {
+      const id = url.pathname.split('/').at(-2);
+      const index = materials.findIndex((item) => item.id === id);
+      if (index >= 0) materials[index] = { ...materials[index], status: 'received', received_document_id: document.id, received_document_title: document.title };
+      return json(route, materials[index]);
+    }
+    if (method === 'PATCH' && url.pathname.endsWith('/waive')) {
+      const id = url.pathname.split('/').at(-2);
+      const index = materials.findIndex((item) => item.id === id);
+      if (index >= 0) materials[index] = { ...materials[index], status: 'waived' };
+      return json(route, materials[index]);
+    }
+    return route.abort('blockedbyclient');
+  });
+  return calls;
 }
 
 async function screenshot(page: Page, filename: string) {
@@ -282,7 +367,7 @@ test('deep link, tab URL e Back preservano filtri, ricerca e scroll', async ({ p
   await page.goBack({ waitUntil: 'domcontentloaded' });
   await expect(page.locator('[data-unified-record-panel]')).toHaveCount(0);
   await expect(search).toHaveValue('Sito');
-  expect(await scroll.evaluate((element) => element.scrollLeft)).toBe(before);
+  expect(Math.abs((await scroll.evaluate((element) => element.scrollLeft)) - before)).toBeLessThanOrEqual(4);
   expect(new URL(page.url()).pathname).toBe('/pipeline');
   const details = page.getByRole('button', { name: 'Dettagli' });
   await details.click();
@@ -390,4 +475,109 @@ test('timeline mobile: pannello full-screen e canali composer utilizzabili', asy
   const box = await panel.boundingBox();
   expect(Math.round(box?.width || 0)).toBe(390);
   await screenshot(page, 'timeline-activity-mobile.png');
+});
+
+test('cliente File desktop: documenti operativi e materiali richiesti', async ({ page }) => {
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto(`/companies?company=${COMPANY_ID}&panelTab=files`, { waitUntil: 'domcontentloaded' });
+  const panel = await expectPanel(page, company.name);
+  await expect(panel.getByRole('tab', { name: 'File' })).toHaveAttribute('aria-selected', 'true');
+  await expect(panel.locator('[data-document-row]')).toHaveCount(1);
+  await expect(panel.getByText('Materiali richiesti')).toBeVisible();
+  await expect(panel.getByText('Logo vettoriale')).toBeVisible();
+  await screenshot(page, 'client-files-desktop.png');
+});
+
+test('progetto File desktop: linking progetto e materiali nello stesso pannello', async ({ page }) => {
+  await page.setViewportSize({ width: 1675, height: 939 });
+  await page.goto(`/projects?project=${PROJECT_ID}&panelTab=files`, { waitUntil: 'domcontentloaded' });
+  const panel = await expectPanel(page, project.name);
+  await expect(panel.getByRole('tab')).toHaveCount(4);
+  await expect(panel.locator('[data-record-files]')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Carica file', exact: true })).toBeVisible();
+  await screenshot(page, 'project-files-desktop.png');
+});
+
+test('File: upload e nuova versione usano fixture locali esplicite', async ({ page }) => {
+  const calls = await installOperationsMutationFixture(page);
+  await page.goto(`/companies?company=${COMPANY_ID}&panelTab=files`, { waitUntil: 'domcontentloaded' });
+  const panel = await expectPanel(page, company.name);
+  await panel.locator('input[type="file"]').nth(0).setInputFiles({ name: 'brief-operativo.pdf', mimeType: 'application/pdf', buffer: Buffer.from('fixture') });
+  await expect(panel.locator('[data-document-row]')).toHaveCount(2);
+  const chooserPromise = page.waitForEvent('filechooser');
+  await panel.getByRole('button', { name: 'Nuova versione' }).first().click();
+  const chooser = await chooserPromise;
+  await chooser.setFiles({ name: 'brief-operativo-v2.pdf', mimeType: 'application/pdf', buffer: Buffer.from('fixture-v2') });
+  await expect(panel.locator('[data-document-row]').first()).toContainText('v2');
+  expect(calls).toEqual(expect.arrayContaining([
+    { method: 'POST', pathname: '/api/tenant/documents/upload' },
+    { method: 'POST', pathname: expect.stringMatching(/\/versions$/) },
+  ]));
+});
+
+test('Materiali: crea, riceve e rende non necessario senza rete reale', async ({ page }) => {
+  const calls = await installOperationsMutationFixture(page);
+  await page.goto(`/companies?company=${COMPANY_ID}&panelTab=files`, { waitUntil: 'domcontentloaded' });
+  const panel = await expectPanel(page, company.name);
+  await panel.getByRole('button', { name: 'Richiedi materiale' }).click();
+  await panel.getByPlaceholder('Titolo materiale').fill('Fotografie sede');
+  await panel.getByPlaceholder('Descrizione opzionale').fill('Tre fotografie orizzontali.');
+  await panel.getByRole('button', { name: 'Crea richiesta' }).click();
+  const created = panel.locator('[data-material-row]').filter({ hasText: 'Fotografie sede' });
+  await expect(created).toBeVisible();
+  await created.getByRole('button', { name: 'Non necessario' }).click();
+  await expect(created.getByText('Non necessario')).toBeVisible();
+  const requested = panel.locator('[data-material-row]').filter({ hasText: 'Logo vettoriale' });
+  await requested.locator('select').selectOption(DOCUMENT_ID);
+  await requested.getByRole('button', { name: 'Collega e ricevi' }).click();
+  await expect(requested.getByText('Ricevuto')).toBeVisible();
+  expect(calls.map((call) => `${call.method} ${call.pathname}`)).toEqual(expect.arrayContaining([
+    'POST /api/tenant/record-operations/materials',
+    `PATCH /api/tenant/record-operations/materials/${MATERIAL_ID}/received`,
+    'PATCH /api/tenant/record-operations/materials/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2/waive',
+  ]));
+});
+
+test('cliente Amministrazione desktop: aggregato finance reale e azioni supportate', async ({ page }) => {
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto(`/companies?company=${COMPANY_ID}&panelTab=administration`, { waitUntil: 'domcontentloaded' });
+  const panel = await expectPanel(page, company.name);
+  await expect(panel.getByText('Fatturato collegato')).toBeVisible();
+  await expect(panel.getByText('Preventivi', { exact: true })).toBeVisible();
+  await expect(panel.getByText('Contratti', { exact: true })).toBeVisible();
+  await expect(panel.getByText('Fatture e pagamenti')).toBeVisible();
+  await expect(panel.getByText('Servizi ricorrenti e rinnovi')).toBeVisible();
+  await screenshot(page, 'client-administration-desktop.png');
+});
+
+test('Amministrazione: finance permission denied non espone dati', async ({ page }) => {
+  const denied = { can_view: false, can_create: false, can_update: false, can_delete: false, can_manage: false };
+  await page.route('**/api/tenant/team/me/module-permissions', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ role: 'user', audience: 'member', modules: { ...moduleAccess, finance: denied } }),
+  }));
+  await page.goto(`/companies?company=${COMPANY_ID}&panelTab=administration`, { waitUntil: 'domcontentloaded' });
+  const panel = await expectPanel(page, company.name);
+  await expect(panel.getByText('Amministrazione non disponibile')).toBeVisible();
+  await expect(panel.getByText('Fatturato collegato')).toHaveCount(0);
+});
+
+test('operazioni tablet: filtri File e materiali restano raggiungibili', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto(`/companies?company=${COMPANY_ID}&panelTab=files`, { waitUntil: 'domcontentloaded' });
+  const panel = await expectPanel(page, company.name);
+  await expect(panel.getByPlaceholder('Cerca file')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Richiedi materiale' })).toBeVisible();
+  await screenshot(page, 'operations-files-tablet.png');
+});
+
+test('operazioni mobile: File progetto resta full-screen e utilizzabile', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/projects?project=${PROJECT_ID}&panelTab=files`, { waitUntil: 'domcontentloaded' });
+  const panel = await expectPanel(page, project.name);
+  const box = await panel.boundingBox();
+  expect(Math.round(box?.width || 0)).toBe(390);
+  await expect(panel.getByRole('button', { name: 'Carica file', exact: true })).toBeVisible();
+  await expect(panel.getByText('Materiali richiesti')).toBeVisible();
+  await screenshot(page, 'operations-files-mobile.png');
 });

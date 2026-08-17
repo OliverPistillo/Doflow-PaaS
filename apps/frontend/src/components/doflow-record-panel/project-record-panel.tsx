@@ -1,14 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { CalendarPlus, CheckCircle2, FileText, Mail, MessageCircle, Phone } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { CalendarPlus, CheckCircle2, Mail, MessageCircle, Phone } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
 import { apiFetch } from "@/lib/api";
 import { commercialApi, type CommercialContact } from "@/lib/tenant-commercial-api";
-import { listDocumentsForEntity, type TenantDocument } from "@/lib/tenant-documents-api";
 import { teamApi, type TeamMember } from "@/lib/tenant-team-api";
 import {
   canonicalizeProjectItem,
@@ -25,6 +22,8 @@ import {
   type RecordPanelTab,
 } from "./unified-record-panel";
 import { RecordTimeline } from "./record-timeline";
+import { RecordFiles } from "./record-files";
+import { ProjectFinanceCard } from "./record-administration";
 
 type ProjectRecord = Record<string, any>;
 type ProjectTask = Record<string, any>;
@@ -83,23 +82,6 @@ function ProjectFlow({ project }: { project: ProjectRecord }) {
   );
 }
 
-function ProjectFiles({ projectId, documents }: { projectId: string; documents: TenantDocument[] }) {
-  if (!documents.length) {
-    return <RecordPanelEmptyState title="Nessun file collegato" description="Carica o collega un documento reale al progetto dall’archivio Documenti." action={<Button asChild variant="outline" size="sm"><Link href={`/documents/upload?entity_type=project&entity_id=${encodeURIComponent(projectId)}&category=project_asset`}>Carica documento</Link></Button>} />;
-  }
-  return (
-    <div className="space-y-2">
-      {documents.map((document) => (
-        <Link key={document.id} href={`/documents/${document.id}`} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 transition-colors hover:border-violet-300 hover:bg-violet-50/30">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700"><FileText className="h-4 w-4" /></span>
-          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-slate-900" data-record-sensitive>{document.title}</span><span className="block text-xs text-slate-500">{document.category} · {formatDate(document.created_at)}</span></span>
-          <span className="text-xs font-medium text-violet-700">Apri</span>
-        </Link>
-      ))}
-    </div>
-  );
-}
-
 export function DoflowProjectRecordPanel({
   recordId,
   fallbackProject,
@@ -116,9 +98,9 @@ export function DoflowProjectRecordPanel({
   const { canView } = useTenantAccess();
   const [project, setProject] = useState<ProjectRecord | null>(fallbackProject || null);
   const [tasks, setTasks] = useState<ProjectTask[]>([]);
-  const [documents, setDocuments] = useState<TenantDocument[]>([]);
   const [contact, setContact] = useState<CommercialContact | null>(null);
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [timelineDraft, setTimelineDraft] = useState<{ key: number; channel: "email" | "whatsapp"; body: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -131,15 +113,13 @@ export function DoflowProjectRecordPanel({
         const detail = canonicalizeProjectItem(await apiFetch<ProjectRecord>(`/tenant/projects/${recordId}`));
         if (cancelled) return;
         setProject(detail);
-        const [taskResult, documentResult, contactResult, memberResult] = await Promise.allSettled([
+        const [taskResult, contactResult, memberResult] = await Promise.allSettled([
           apiFetch<ListResponse<ProjectTask>>(`/tenant/projects/${recordId}/tasks?limit=100`),
-          canView("documents") ? listDocumentsForEntity("project", recordId, { limit: 100 }) : Promise.resolve({ items: [] }),
           canView("crm") && detail.contact_id ? commercialApi.contact(detail.contact_id) : Promise.resolve(null),
           canView("team") ? teamApi.members({ limit: 100 }) : Promise.resolve({ items: [] }),
         ]);
         if (cancelled) return;
         if (taskResult.status === "fulfilled") setTasks(taskResult.value.items || []);
-        if (documentResult.status === "fulfilled") setDocuments(documentResult.value.items || []);
         if (contactResult.status === "fulfilled") setContact(contactResult.value);
         if (memberResult.status === "fulfilled") setMembers(memberResult.value.items || []);
       } catch (reason) {
@@ -178,15 +158,16 @@ export function DoflowProjectRecordPanel({
         </dl>
       </RecordPanelSection>
       {contact ? <RecordPanelSection title="Referente cliente"><dl className="grid gap-4 sm:grid-cols-2"><RecordPanelField label="Nome" value={[contact.first_name, contact.last_name].filter(Boolean).join(" ")} sensitive /><RecordPanelField label="Email" value={contact.email || "—"} sensitive /><RecordPanelField label="Telefono" value={contact.phone || "—"} sensitive /></dl></RecordPanelSection> : null}
+      <ProjectFinanceCard projectId={recordId} />
     </div>
   );
 
   const tabs = useMemo<RecordPanelTab[]>(() => [
     { value: "overview", label: "Panoramica", content: overview },
     { value: "flow", label: "Flusso", content: project ? <ProjectFlow project={project} /> : null },
-    { value: "activity", label: "Attività e comunicazioni", content: <RecordTimeline recordKind="project" recordId={recordId} moduleKey="projects" phone={phone} email={email} members={members} /> },
-    { value: "files", label: "File", content: <ProjectFiles projectId={recordId} documents={documents} /> },
-  ], [documents, email, members, overview, phone, project, recordId]);
+    { value: "activity", label: "Attività e comunicazioni", content: <RecordTimeline recordKind="project" recordId={recordId} moduleKey="projects" phone={phone} email={email} members={members} draft={timelineDraft} /> },
+    { value: "files", label: "File", content: <RecordFiles recordKind="project" recordId={recordId} onSolicit={(channel, body) => { setTimelineDraft({ key: Date.now(), channel, body }); onTabChange("activity"); }} /> },
+  ], [email, members, onTabChange, overview, phone, project, recordId, timelineDraft]);
 
   const actions: RecordPanelAction[] = [
     { label: "Chiama", icon: Phone, onSelect: () => onTabChange("activity") },

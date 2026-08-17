@@ -2,7 +2,9 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
+  Inject,
   Param,
   Patch,
   Post,
@@ -13,15 +15,30 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantDocumentsService } from './tenant-documents.service';
+import { isDoflowTenant } from './tenant-context';
+import { TenantEffectivePermissionsService } from './tenant-effective-permissions.service';
 
 @Controller('tenant/documents')
 @UseGuards(JwtAuthGuard)
 export class TenantDocumentsController {
-  constructor(private readonly service: TenantDocumentsService) {}
+  constructor(
+    private readonly service: TenantDocumentsService,
+    private readonly permissions: TenantEffectivePermissionsService,
+    @Inject(REQUEST) private readonly request: any,
+  ) {}
+
+  private async assertDoflowAccess(action: 'view' | 'create' | 'update') {
+    const user = this.request.user || this.request.authUser;
+    if (!isDoflowTenant(user?.tenantId || user?.tenant_id || this.request.tenantId)) return;
+    const capability = (await this.permissions.getCurrentAccess()).modules.documents;
+    const allowed = action === 'view' ? capability?.can_view : action === 'create' ? capability?.can_create : capability?.can_update;
+    if (!allowed) throw new ForbiddenException('Permesso documenti insufficiente.');
+  }
 
   @Get('summary')
   summary() {
@@ -54,30 +71,34 @@ export class TenantDocumentsController {
   }
 
   @Get('entity/:entityType/:entityId')
-  documentsForEntity(
+  async documentsForEntity(
     @Param('entityType') entityType: string,
     @Param('entityId') entityId: string,
     @Query() query: Record<string, any>,
   ) {
+    await this.assertDoflowAccess('view');
     return this.service.documentsForEntity(entityType, entityId, query || {});
   }
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 25 * 1024 * 1024 } }))
-  upload(
+  async upload(
     @UploadedFile() file: Express.Multer.File | undefined,
     @Body() body: Record<string, any>,
   ) {
+    await this.assertDoflowAccess('create');
     return this.service.uploadDocument(file, body || {});
   }
 
   @Get()
-  list(@Query() query: Record<string, any>) {
+  async list(@Query() query: Record<string, any>) {
+    await this.assertDoflowAccess('view');
     return this.service.listDocuments(query || {});
   }
 
   @Get(':id/download')
   async download(@Param('id') id: string, @Res({ passthrough: true }) res: Response) {
+    await this.assertDoflowAccess('view');
     const result = await this.service.downloadDocument(id);
     res.set({
       'Content-Type': result.contentType || 'application/octet-stream',
@@ -89,11 +110,12 @@ export class TenantDocumentsController {
 
   @Post(':id/versions')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 25 * 1024 * 1024 } }))
-  createVersion(
+  async createVersion(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File | undefined,
     @Body() body: Record<string, any>,
   ) {
+    await this.assertDoflowAccess('update');
     return this.service.createVersion(id, file, body || {});
   }
 
@@ -103,7 +125,8 @@ export class TenantDocumentsController {
   }
 
   @Post(':id/links')
-  createLink(@Param('id') id: string, @Body() body: Record<string, any>) {
+  async createLink(@Param('id') id: string, @Body() body: Record<string, any>) {
+    await this.assertDoflowAccess('update');
     return this.service.createLink(id, body || {});
   }
 
@@ -113,22 +136,26 @@ export class TenantDocumentsController {
   }
 
   @Patch(':id/archive')
-  archive(@Param('id') id: string) {
+  async archive(@Param('id') id: string) {
+    await this.assertDoflowAccess('update');
     return this.service.setDocumentStatus(id, 'archived');
   }
 
   @Patch(':id/restore')
-  restore(@Param('id') id: string) {
+  async restore(@Param('id') id: string) {
+    await this.assertDoflowAccess('update');
     return this.service.setDocumentStatus(id, 'active');
   }
 
   @Get(':id')
-  getOne(@Param('id') id: string) {
+  async getOne(@Param('id') id: string) {
+    await this.assertDoflowAccess('view');
     return this.service.getDocument(id);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: Record<string, any>) {
+  async update(@Param('id') id: string, @Body() body: Record<string, any>) {
+    await this.assertDoflowAccess('update');
     return this.service.updateDocument(id, body || {});
   }
 
