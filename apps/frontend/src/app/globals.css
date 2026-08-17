@@ -1678,8 +1678,8 @@ body {
   top: 139px;
   left: clamp(132px, 10.8vw, 180px);
   width: 500px;
-  min-height: 650px;
-  padding: 48px 44px 31px;
+  min-height: 620px;
+  padding: 48px 44px 0;
   border: 1px solid #edf0f8;
   border-radius: 21px;
   background: rgba(255, 255, 255, .97);
@@ -1691,7 +1691,7 @@ body {
 .df-login-head h1 {
   color: #0c1738;
   font-size: clamp(44px, 3.15vw, 52px);
-  font-weight: 520;
+  font-weight: 430;
   line-height: 1;
   letter-spacing: -.035em;
 }
@@ -1833,6 +1833,11 @@ body {
   inset: 0 34px 0 630px;
   overflow: hidden;
 }
+.df-login-flow-stage {
+  position: absolute;
+  inset: 0;
+  transform: translateY(68px);
+}
 .df-login-pipeline {
   position: absolute;
   z-index: 0;
@@ -1878,9 +1883,9 @@ body {
 .df-login-mascot {
   position: absolute;
   z-index: 2;
-  top: 242px;
+  top: 162px;
   left: 42%;
-  width: clamp(245px, 15.5vw, 260px);
+  width: clamp(340px, 21.25vw, 355px);
   animation: df-login-mascot-float 7.6s ease-in-out infinite;
   will-change: transform;
 }
@@ -1889,25 +1894,25 @@ body {
   width: 100%;
   height: auto;
   object-fit: contain;
-  filter: drop-shadow(0 24px 28px rgba(37, 73, 190, .18));
+  filter: drop-shadow(0 28px 34px rgba(37, 73, 190, .17));
   transition: transform .35s ease, filter .35s ease;
   user-select: none;
 }
 .df-login-mascot[data-shy="true"] .df-login-mascot-image {
   transform: translateY(3px) scale(.99);
-  filter: drop-shadow(0 20px 25px rgba(37, 73, 190, .16));
+  filter: drop-shadow(0 24px 30px rgba(37, 73, 190, .15));
 }
 .df-login-mascot-shadow {
   position: absolute;
   z-index: -1;
   left: 50%;
   bottom: 4%;
-  width: 68%;
-  height: 34px;
+  width: 78%;
+  height: 38px;
   transform: translateX(-50%);
   border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(45, 108, 248, .35), transparent 70%);
-  filter: blur(10px);
+  background: radial-gradient(ellipse, rgba(45, 108, 248, .29), transparent 72%);
+  filter: blur(13px);
 }
 .df-login-step-card {
   position: absolute;
@@ -1962,58 +1967,58 @@ body {
 .df-login-step-lead { top: 45.5%; left: 5.75%; animation-delay: -1.1s, 0s; }
 .df-login-step-contact { top: 39%; left: 34.05%; animation-delay: -3.4s, 2.4s; }
 .df-login-step-proposal { top: 29%; left: 62.35%; animation-delay: -5.2s, 5.1s; }
-.df-login-step-client { top: 21%; left: 90.65%; animation-delay: -2.2s, 7.6s; }
+.df-login-step-client { top: 20%; left: 90.65%; animation-delay: -2.2s, 7.6s; }
 
 .df-login-benefits {
   position: absolute;
   z-index: 4;
   right: auto;
-  bottom: 8px;
+  bottom: 34px;
   left: calc(50vw - 630px);
-  width: 740px;
+  width: 880px;
   transform: translateX(-50%);
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 24px;
+  gap: 20px;
 }
 .df-login-benefit {
   min-width: 0;
-  min-height: 130px;
-  padding: 0 4px 0 10px;
+  min-height: 146px;
+  padding: 0 0 0 6px;
   border-left: 1px solid #e3e8f1;
 }
 .df-login-benefit:first-child {
-  padding-left: 4px;
+  padding-left: 0;
   border-left: 0;
 }
 .df-login-benefit-icon {
   display: inline-flex;
-  width: 42px;
-  height: 42px;
+  width: 50px;
+  height: 50px;
   align-items: center;
   justify-content: center;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   border-radius: 50%;
   color: #3b70f5;
   background: linear-gradient(145deg, #e8f7ff, #f1efff);
 }
+.df-login-benefit-icon svg { width: 25px; height: 25px; }
 .df-login-benefit:nth-child(2) .df-login-benefit-icon,
 .df-login-benefit:nth-child(4) .df-login-benefit-icon { color: #7657ed; }
 .df-login-benefit strong {
   display: block;
-  min-height: 35px;
+  min-height: 20px;
   color: #111a3a;
-  font-size: 14px;
-  font-weight: 800;
+  font-size: 16px;
+  font-weight: 680;
   line-height: 1.25;
 }
 .df-login-benefit p {
-  margin-top: 3px;
-  color: #687695;
-  font-size: 12px;
-  line-height: 1.35;
+  margin-top: 5px;
+  color: #52617f;
+  font-size: 14px;
+  line-height: 1.46;
 }
-.df-login-benefit p span { display: block; }
 
 @keyframes df-login-pipeline-flow {
   to { stroke-dashoffset: -1; }
@@ -2085,6 +2090,7 @@ body {
     min-height: 690px;
     margin-top: 28px;
   }
+  .df-login-flow-stage { transform: none; }
   .df-login-mascot { top: 26px; left: 8%; width: min(255px, 62vw); }
   .df-login-pipeline { top: 102px; left: -10%; width: 122%; height: 500px; }
   .df-login-step-card { width: 108px; min-height: 136px; padding: 15px; }

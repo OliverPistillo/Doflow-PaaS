@@ -27,22 +27,22 @@ const PIPELINE_STEPS = [
 const BENEFITS = [
   {
     title: "Gestisci i clienti",
-    lines: ["Tutte le informazioni", "che ti servono, in un", "unico posto."],
+    description: "Tutte le informazioni che ti servono, in un unico posto.",
     icon: UsersRound,
   },
   {
     title: "Segui il pipeline",
-    lines: ["Visualizza ogni", "opportunità e non", "lasciare nulla al caso."],
+    description: "Visualizza ogni opportunità e non lasciare nulla al caso.",
     icon: Funnel,
   },
   {
     title: "Organizza le attività",
-    lines: ["Pianifica, assegna e", "tieni tutto il team", "allineato."],
+    description: "Pianifica, assegna e tieni tutto il team allineato.",
     icon: CircleCheck,
   },
   {
     title: "Automatizza i processi",
-    lines: ["Risparmia tempo con", "automazioni intelligenti", "senza complessità."],
+    description: "Risparmia tempo con automazioni intelligenti senza complessità.",
     icon: Zap,
   },
 ];
@@ -50,92 +50,90 @@ const BENEFITS = [
 function LoginCrmShowcase({ mascotShy = false }: { mascotShy?: boolean }) {
   return (
     <section className="df-login-showcase" aria-hidden="true">
-      <svg
-        className="df-login-pipeline"
-        viewBox="0 0 1040 610"
-        preserveAspectRatio="none"
-        focusable="false"
-      >
-        <defs>
-          <linearGradient id="df-login-pipeline-gradient" x1="0" y1="1" x2="1" y2="0">
-            <stop offset="0" stopColor="#45c8ff" />
-            <stop offset="0.5" stopColor="#527cff" />
-            <stop offset="1" stopColor="#9b63ff" />
-          </linearGradient>
-          <filter id="df-login-pipeline-glow" x="-20%" y="-30%" width="140%" height="160%">
-            <feGaussianBlur stdDeviation="7" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-        <path
-          className="df-login-pipeline-base"
-          d="M 0 520 C 150 510, 205 548, 310 490 S 470 410, 565 365 S 720 350, 800 340 S 930 276, 1040 242"
-        />
-        <path
-          className="df-login-pipeline-accent"
-          d="M 0 520 C 150 510, 205 548, 310 490 S 470 410, 565 365 S 720 350, 800 340 S 930 276, 1040 242"
-          filter="url(#df-login-pipeline-glow)"
-        />
-        <path
-          className="df-login-pipeline-energy"
-          d="M 0 520 C 150 510, 205 548, 310 490 S 470 410, 565 365 S 720 350, 800 340 S 930 276, 1040 242"
-          pathLength="1"
-          filter="url(#df-login-pipeline-glow)"
-        />
-        <path
-          className="df-login-pipeline-light"
-          d="M 0 520 C 150 510, 205 548, 310 490 S 470 410, 565 365 S 720 350, 800 340 S 930 276, 1040 242"
-          pathLength="1"
-          filter="url(#df-login-pipeline-glow)"
-        />
-      </svg>
+      <div className="df-login-flow-stage" data-testid="login-flow-stage">
+        <svg
+          className="df-login-pipeline"
+          viewBox="0 0 1040 610"
+          preserveAspectRatio="none"
+          focusable="false"
+        >
+          <defs>
+            <linearGradient id="df-login-pipeline-gradient" x1="0" y1="1" x2="1" y2="0">
+              <stop offset="0" stopColor="#45c8ff" />
+              <stop offset="0.5" stopColor="#527cff" />
+              <stop offset="1" stopColor="#9b63ff" />
+            </linearGradient>
+            <filter id="df-login-pipeline-glow" x="-20%" y="-30%" width="140%" height="160%">
+              <feGaussianBlur stdDeviation="7" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          <path
+            className="df-login-pipeline-base"
+            d="M 0 520 C 150 510, 205 548, 310 490 S 470 410, 565 365 S 720 350, 800 340 S 930 276, 1040 242"
+          />
+          <path
+            className="df-login-pipeline-accent"
+            d="M 0 520 C 150 510, 205 548, 310 490 S 470 410, 565 365 S 720 350, 800 340 S 930 276, 1040 242"
+            filter="url(#df-login-pipeline-glow)"
+          />
+          <path
+            className="df-login-pipeline-energy"
+            d="M 0 520 C 150 510, 205 548, 310 490 S 470 410, 565 365 S 720 350, 800 340 S 930 276, 1040 242"
+            pathLength="1"
+            filter="url(#df-login-pipeline-glow)"
+          />
+          <path
+            className="df-login-pipeline-light"
+            d="M 0 520 C 150 510, 205 548, 310 490 S 470 410, 565 365 S 720 350, 800 340 S 930 276, 1040 242"
+            pathLength="1"
+            filter="url(#df-login-pipeline-glow)"
+          />
+        </svg>
 
-      <div className="df-login-mascot" data-shy={mascotShy || undefined}>
-        <span className="df-login-mascot-shadow" />
-        <Image
-          src="/mascotte_login.png"
-          alt=""
-          width={1286}
-          height={1223}
-          unoptimized
-          priority
-          sizes="(min-width: 1280px) 330px, (min-width: 768px) 230px, 1px"
-          className="df-login-mascot-image"
-          data-testid="login-official-mascot"
-          aria-hidden="true"
-          draggable={false}
-        />
-      </div>
+        <div className="df-login-mascot" data-shy={mascotShy || undefined}>
+          <span className="df-login-mascot-shadow" />
+          <Image
+            src="/mascotte_login.png"
+            alt=""
+            width={1286}
+            height={1223}
+            unoptimized
+            priority
+            sizes="(min-width: 1280px) 355px, (min-width: 768px) 255px, 1px"
+            className="df-login-mascot-image"
+            data-testid="login-official-mascot"
+            aria-hidden="true"
+            draggable={false}
+          />
+        </div>
 
-      <div className="df-login-step-list">
-        {PIPELINE_STEPS.map(({ label, icon: Icon, className }, index) => (
-          <article key={label} className={`df-login-step-card ${className}`}>
-            <span className="df-login-step-icon">
-              <Icon size={24} strokeWidth={1.9} />
-            </span>
-            <strong>{label}</strong>
-            <span className="df-login-step-line df-login-step-line-long" />
-            <span className="df-login-step-line" />
-            {index === 0 && <span className="df-login-step-line df-login-step-line-short" />}
-          </article>
-        ))}
+        <div className="df-login-step-list">
+          {PIPELINE_STEPS.map(({ label, icon: Icon, className }, index) => (
+            <article key={label} className={`df-login-step-card ${className}`}>
+              <span className="df-login-step-icon">
+                <Icon size={24} strokeWidth={1.9} />
+              </span>
+              <strong>{label}</strong>
+              <span className="df-login-step-line df-login-step-line-long" />
+              <span className="df-login-step-line" />
+              {index === 0 && <span className="df-login-step-line df-login-step-line-short" />}
+            </article>
+          ))}
+        </div>
       </div>
 
       <div className="df-login-benefits">
-        {BENEFITS.map(({ title, lines, icon: Icon }) => (
+        {BENEFITS.map(({ title, description, icon: Icon }) => (
           <article key={title} className="df-login-benefit">
             <span className="df-login-benefit-icon">
               <Icon size={24} strokeWidth={1.8} />
             </span>
             <strong>{title}</strong>
-            <p>
-              {lines.map((line) => (
-                <span key={line}>{line}</span>
-              ))}
-            </p>
+            <p>{description}</p>
           </article>
         ))}
       </div>

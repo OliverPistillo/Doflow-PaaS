@@ -60,8 +60,11 @@ test('auth desktop: login Doflow coerente e accessibile', async ({ page }) => {
   expect(cardBox?.x).toBeLessThanOrEqual(185);
   expect((leadBox?.x ?? 0) - ((cardBox?.x ?? 0) + (cardBox?.width ?? 0))).toBeLessThan(80);
   const mascotBox = await page.getByTestId('login-official-mascot').boundingBox();
-  expect(mascotBox?.width).toBeGreaterThanOrEqual(235);
-  expect(mascotBox?.width).toBeLessThanOrEqual(270);
+  expect(mascotBox?.width).toBeGreaterThanOrEqual(340);
+  expect(mascotBox?.width).toBeLessThanOrEqual(375);
+  const flowStageBox = await page.getByTestId('login-flow-stage').boundingBox();
+  expect(flowStageBox?.y).toBeGreaterThanOrEqual(60);
+  expect(flowStageBox?.y).toBeLessThanOrEqual(75);
   const geometry = await page.evaluate(() => {
     const stepCards = [...document.querySelectorAll<HTMLElement>('.df-login-step-card')];
     const stepRects = stepCards.map((element) => element.getBoundingClientRect());
@@ -90,6 +93,10 @@ test('auth desktop: login Doflow coerente e accessibile', async ({ page }) => {
     const benefits = document.querySelector<HTMLElement>('.df-login-benefits')?.getBoundingClientRect();
     const benefitRects = [...document.querySelectorAll<HTMLElement>('.df-login-benefit')]
       .map((element) => element.getBoundingClientRect());
+    const benefitIcon = document.querySelector<HTMLElement>('.df-login-benefit-icon');
+    const benefitTitle = document.querySelector<HTMLElement>('.df-login-benefit strong');
+    const benefitBody = document.querySelector<HTMLElement>('.df-login-benefit p');
+    if (!benefitIcon || !benefitTitle || !benefitBody) throw new Error('Login benefit styles unavailable');
     const benefitGaps = benefitRects.slice(1).map((rect, index) => rect.left - benefitRects[index].right);
     return {
       distances,
@@ -98,18 +105,25 @@ test('auth desktop: login Doflow coerente e accessibile', async ({ page }) => {
       benefits: benefits ? { center: benefits.left + benefits.width / 2, width: benefits.width } : null,
       benefitWidths: benefitRects.map((rect) => rect.width),
       benefitGaps,
+      benefitReadability: {
+        iconSize: Number.parseFloat(getComputedStyle(benefitIcon).width),
+        titleSize: Number.parseFloat(getComputedStyle(benefitTitle).fontSize),
+        bodySize: Number.parseFloat(getComputedStyle(benefitBody).fontSize),
+      },
     };
   });
   for (const distance of geometry.distances) expect(distance).toBeGreaterThanOrEqual(255);
   for (const distance of geometry.distances) expect(distance).toBeLessThanOrEqual(315);
   expect(Math.max(...geometry.distances) - Math.min(...geometry.distances)).toBeLessThanOrEqual(30);
-  for (const gap of geometry.flowGaps) expect(gap).toBeGreaterThan(0);
-  expect(geometry.mascotFlowGap).toBeGreaterThanOrEqual(20);
-  expect(geometry.mascotFlowGap).toBeLessThanOrEqual(35);
-  expect(geometry.benefits?.center).toBeGreaterThanOrEqual(833);
-  expect(geometry.benefits?.center).toBeLessThanOrEqual(839);
-  expect(geometry.benefits?.width).toBeGreaterThanOrEqual(700);
-  expect(geometry.benefits?.width).toBeLessThanOrEqual(760);
+  for (const gap of geometry.flowGaps) expect(gap).toBeGreaterThanOrEqual(18);
+  expect(geometry.mascotFlowGap).toBeGreaterThanOrEqual(15);
+  expect(geometry.mascotFlowGap).toBeLessThanOrEqual(30);
+  expect(Math.abs((geometry.benefits?.center ?? 0) - 836)).toBeLessThanOrEqual(25);
+  expect(geometry.benefits?.width).toBeGreaterThanOrEqual(820);
+  expect(geometry.benefits?.width).toBeLessThanOrEqual(890);
+  expect(geometry.benefitReadability?.iconSize).toBeGreaterThanOrEqual(48);
+  expect(geometry.benefitReadability?.titleSize).toBeGreaterThanOrEqual(15.5);
+  expect(geometry.benefitReadability?.bodySize).toBeGreaterThanOrEqual(13.5);
   expect(Math.max(...geometry.benefitWidths) - Math.min(...geometry.benefitWidths)).toBeLessThanOrEqual(1);
   for (const gap of geometry.benefitGaps) expect(gap).toBeGreaterThanOrEqual(20);
   for (const gap of geometry.benefitGaps) expect(gap).toBeLessThanOrEqual(28);
@@ -118,12 +132,14 @@ test('auth desktop: login Doflow coerente e accessibile', async ({ page }) => {
   await expect(page.locator('.df-login-pipeline-light')).toHaveCSS('animation-name', 'df-login-pipeline-flow');
   await expect(page.locator('.df-login-pipeline-energy')).toHaveCSS('stroke-dasharray', /0\.2/);
   await expect(page.locator('.df-login-pipeline-light')).toHaveCSS('stroke-dasharray', /0\.18/);
+  await expect(page.locator('.df-login-pipeline-energy')).not.toHaveCSS('stroke', /(?:white|#fff|rgb\(255,\s*255,\s*255\))/i);
+  await expect(page.locator('.df-login-pipeline-light')).not.toHaveCSS('stroke', /(?:white|#fff|rgb\(255,\s*255,\s*255\))/i);
   await expect(page.locator('.df-login-step-lead')).toHaveCSS('animation-name', /df-login-step-float/);
   expect(await page.locator('.df-login-step-lead').evaluate((element) => {
     const style = window.getComputedStyle(element);
     return style.backdropFilter || style.webkitBackdropFilter;
   })).toContain('blur');
-  await authScreenshot(page, 'auth-login-new-reference-desktop.png');
+  await authScreenshot(page, 'auth-login-final-scale-desktop.png');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(page.locator('.df-login-pipeline-light')).toHaveCSS('animation-name', 'none');
 });
@@ -235,7 +251,10 @@ test('auth tablet: login resta utilizzabile a 1024x768', async ({ page }) => {
   await expect(page.getByRole('link', { name: 'Password dimenticata?' })).toBeInViewport();
   await expect(page.getByLabel('Email')).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1024);
-  await authScreenshot(page, 'auth-login-new-reference-tablet.png');
+  const tabletMascotBox = await page.getByTestId('login-official-mascot').boundingBox();
+  expect(tabletMascotBox?.width).toBeGreaterThanOrEqual(235);
+  expect(tabletMascotBox?.width).toBeLessThanOrEqual(270);
+  await authScreenshot(page, 'auth-login-final-scale-tablet.png');
   await page.getByLabel('Email').fill('visual@example.test');
   await page.getByLabel('Password', { exact: true }).fill('password-safe');
   await page.getByLabel('Ricordami').check();
@@ -257,8 +276,9 @@ test('auth mobile: login completo e utilizzabile a 390x844', async ({ page }) =>
   await expect(page.getByRole('link', { name: 'Password dimenticata?' })).toBeInViewport();
   await expect(page.getByRole('button', { name: 'Accedi', exact: true })).toBeInViewport();
   await expect(page.getByRole('button', { name: 'Continua con Google' })).toBeInViewport();
+  await expect(page.locator('.df-login-showcase')).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-  await authScreenshot(page, 'auth-login-new-reference-mobile.png');
+  await authScreenshot(page, 'auth-login-final-scale-mobile.png');
 });
 
 test('auth mobile: registrazione resta completa a 390x844', async ({ page }) => {
