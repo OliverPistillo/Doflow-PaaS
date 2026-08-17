@@ -80,22 +80,17 @@ function LoginCrmShowcase({ mascotShy = false }: { mascotShy?: boolean }) {
           filter="url(#df-login-pipeline-glow)"
         />
         <path
+          className="df-login-pipeline-energy"
+          d="M 0 520 C 150 510, 205 548, 310 490 S 470 410, 565 365 S 720 350, 800 340 S 930 276, 1040 242"
+          pathLength="1"
+          filter="url(#df-login-pipeline-glow)"
+        />
+        <path
           className="df-login-pipeline-light"
           d="M 0 520 C 150 510, 205 548, 310 490 S 470 410, 565 365 S 720 350, 800 340 S 930 276, 1040 242"
           pathLength="1"
           filter="url(#df-login-pipeline-glow)"
         />
-        {[
-          [135, 514],
-          [350, 468],
-          [770, 338],
-          [960, 263],
-        ].map(([cx, cy]) => (
-          <g key={`${cx}-${cy}`}>
-            <circle cx={cx} cy={cy} r="18" fill="#ffffff" opacity="0.96" />
-            <circle cx={cx} cy={cy} r="12" fill="url(#df-login-pipeline-gradient)" />
-          </g>
-        ))}
       </svg>
 
       <div className="df-login-mascot" data-shy={mascotShy || undefined}>
