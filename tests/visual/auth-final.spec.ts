@@ -56,11 +56,68 @@ test('auth desktop: login Doflow coerente e accessibile', async ({ page }) => {
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1672);
   const cardBox = await page.locator('.df-login-card').boundingBox();
   const leadBox = await page.locator('.df-login-step-lead').boundingBox();
-  expect(cardBox?.x).toBeGreaterThanOrEqual(170);
+  expect(cardBox?.x).toBeGreaterThanOrEqual(155);
+  expect(cardBox?.x).toBeLessThanOrEqual(185);
   expect((leadBox?.x ?? 0) - ((cardBox?.x ?? 0) + (cardBox?.width ?? 0))).toBeLessThan(80);
+  const mascotBox = await page.getByTestId('login-official-mascot').boundingBox();
+  expect(mascotBox?.width).toBeGreaterThanOrEqual(235);
+  expect(mascotBox?.width).toBeLessThanOrEqual(270);
+  const geometry = await page.evaluate(() => {
+    const stepCards = [...document.querySelectorAll<HTMLElement>('.df-login-step-card')];
+    const stepRects = stepCards.map((element) => element.getBoundingClientRect());
+    const centers = stepRects.map((rect) => rect.left + rect.width / 2);
+    const distances = centers.slice(1).map((center, index) => center - centers[index]);
+    const path = document.querySelector<SVGPathElement>('.df-login-pipeline-accent');
+    const mascot = document.querySelector<HTMLElement>('.df-login-mascot-image');
+    if (!path || !mascot) throw new Error('Login hero geometry unavailable');
+    const matrix = path.getScreenCTM();
+    if (!matrix) throw new Error('Login flow transform unavailable');
+    const totalLength = path.getTotalLength();
+    const screenPointAtX = (targetX: number) => {
+      let closest = { x: 0, y: 0, distance: Number.POSITIVE_INFINITY };
+      for (let index = 0; index <= 400; index += 1) {
+        const point = path.getPointAtLength((totalLength * index) / 400);
+        const screenPoint = new DOMPoint(point.x, point.y).matrixTransform(matrix);
+        const distance = Math.abs(screenPoint.x - targetX);
+        if (distance < closest.distance) closest = { x: screenPoint.x, y: screenPoint.y, distance };
+      }
+      return closest;
+    };
+    const flowGaps = stepRects.map((rect) => screenPointAtX(rect.left + rect.width / 2).y - rect.bottom);
+    const mascotRect = mascot.getBoundingClientRect();
+    const mascotVisibleBottom = mascotRect.top + mascotRect.height * 0.82;
+    const mascotFlowGap = screenPointAtX(mascotRect.left + mascotRect.width / 2).y - mascotVisibleBottom;
+    const benefits = document.querySelector<HTMLElement>('.df-login-benefits')?.getBoundingClientRect();
+    const benefitRects = [...document.querySelectorAll<HTMLElement>('.df-login-benefit')]
+      .map((element) => element.getBoundingClientRect());
+    const benefitGaps = benefitRects.slice(1).map((rect, index) => rect.left - benefitRects[index].right);
+    return {
+      distances,
+      flowGaps,
+      mascotFlowGap,
+      benefits: benefits ? { center: benefits.left + benefits.width / 2, width: benefits.width } : null,
+      benefitWidths: benefitRects.map((rect) => rect.width),
+      benefitGaps,
+    };
+  });
+  for (const distance of geometry.distances) expect(distance).toBeGreaterThanOrEqual(255);
+  for (const distance of geometry.distances) expect(distance).toBeLessThanOrEqual(315);
+  expect(Math.max(...geometry.distances) - Math.min(...geometry.distances)).toBeLessThanOrEqual(30);
+  for (const gap of geometry.flowGaps) expect(gap).toBeGreaterThan(0);
+  expect(geometry.mascotFlowGap).toBeGreaterThanOrEqual(20);
+  expect(geometry.mascotFlowGap).toBeLessThanOrEqual(35);
+  expect(geometry.benefits?.center).toBeGreaterThanOrEqual(833);
+  expect(geometry.benefits?.center).toBeLessThanOrEqual(839);
+  expect(geometry.benefits?.width).toBeGreaterThanOrEqual(700);
+  expect(geometry.benefits?.width).toBeLessThanOrEqual(760);
+  expect(Math.max(...geometry.benefitWidths) - Math.min(...geometry.benefitWidths)).toBeLessThanOrEqual(1);
+  for (const gap of geometry.benefitGaps) expect(gap).toBeGreaterThanOrEqual(20);
+  for (const gap of geometry.benefitGaps) expect(gap).toBeLessThanOrEqual(28);
   await expect(page.locator('.df-login-pipeline circle')).toHaveCount(0);
   await expect(page.locator('.df-login-pipeline-energy')).toHaveCSS('animation-name', 'df-login-pipeline-flow');
   await expect(page.locator('.df-login-pipeline-light')).toHaveCSS('animation-name', 'df-login-pipeline-flow');
+  await expect(page.locator('.df-login-pipeline-energy')).toHaveCSS('stroke-dasharray', /0\.2/);
+  await expect(page.locator('.df-login-pipeline-light')).toHaveCSS('stroke-dasharray', /0\.18/);
   await expect(page.locator('.df-login-step-lead')).toHaveCSS('animation-name', /df-login-step-float/);
   expect(await page.locator('.df-login-step-lead').evaluate((element) => {
     const style = window.getComputedStyle(element);

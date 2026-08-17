@@ -58,9 +58,9 @@ function LoginCrmShowcase({ mascotShy = false }: { mascotShy?: boolean }) {
       >
         <defs>
           <linearGradient id="df-login-pipeline-gradient" x1="0" y1="1" x2="1" y2="0">
-            <stop offset="0" stopColor="#dce9ff" />
-            <stop offset="0.52" stopColor="#9ec3ff" />
-            <stop offset="1" stopColor="#b9adff" />
+            <stop offset="0" stopColor="#45c8ff" />
+            <stop offset="0.5" stopColor="#527cff" />
+            <stop offset="1" stopColor="#9b63ff" />
           </linearGradient>
           <filter id="df-login-pipeline-glow" x="-20%" y="-30%" width="140%" height="160%">
             <feGaussianBlur stdDeviation="7" result="blur" />
