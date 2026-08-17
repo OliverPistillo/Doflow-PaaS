@@ -115,6 +115,7 @@ export type RecordPanelAction = {
   label: string;
   icon: LucideIcon;
   href?: string;
+  onSelect?: () => void;
   external?: boolean;
   disabled?: boolean;
   disabledReason?: string;
@@ -196,7 +197,7 @@ export function UnifiedRecordPanel({
                 );
               }
               return (
-                <Button key={action.label} variant="outline" size="sm" className="h-9 shrink-0 rounded-lg border-slate-200 bg-white" disabled title={action.disabledReason}>
+                <Button key={action.label} variant="outline" size="sm" className="h-9 shrink-0 rounded-lg border-slate-200 bg-white" disabled={action.disabled || !action.onSelect} title={action.disabledReason} onClick={action.onSelect}>
                   {content}
                 </Button>
               );

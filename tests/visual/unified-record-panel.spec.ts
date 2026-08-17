@@ -18,6 +18,33 @@ const MEMBER_ID = '77777777-7777-4777-8777-777777777777';
 const QUOTE_ID = '88888888-8888-4888-8888-888888888888';
 const CONTRACT_ID = '99999999-9999-4999-8999-999999999999';
 
+const timelineEvents = [
+  {
+    id: 'activity:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab', company_id: COMPANY_ID, project_id: PROJECT_ID,
+    type: 'whatsapp', channel: 'whatsapp', direction: 'outbound', author_user_id: MEMBER_ID,
+    author_label: 'Responsabile progetto', created_at: '2026-08-17T10:24:00.000Z', status: 'manually_confirmed',
+    outcome: 'sent', title: 'Messaggio WhatsApp', body: 'Homepage pronta per la revisione.', metadata: { confirmation: 'manual' }, source: 'commercial_activity',
+  },
+  {
+    id: 'activity:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaac', company_id: COMPANY_ID, project_id: PROJECT_ID,
+    type: 'call', channel: 'phone', direction: 'outbound', author_user_id: MEMBER_ID,
+    author_label: 'Responsabile progetto', created_at: '2026-08-16T16:42:00.000Z', status: 'manually_confirmed',
+    outcome: 'answered', title: 'Chiamata in uscita', body: 'Confermata revisione venerdì.', metadata: { duration_minutes: 4 }, source: 'commercial_activity',
+  },
+  {
+    id: 'comment:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaad', company_id: COMPANY_ID, project_id: PROJECT_ID,
+    type: 'note', channel: 'internal', direction: null, author_user_id: MEMBER_ID,
+    author_label: 'Responsabile progetto', created_at: '2026-08-15T16:50:00.000Z', status: 'recorded',
+    outcome: null, title: 'Nota progetto', body: 'Il cliente preferisce la seconda proposta.', metadata: { visibility: 'internal' }, source: 'project_comment',
+  },
+  {
+    id: 'audit:42', company_id: COMPANY_ID, project_id: PROJECT_ID,
+    type: 'status_change', channel: 'system', direction: null, author_user_id: null,
+    author_label: 'Sistema', created_at: '2026-08-14T15:55:00.000Z', status: 'development',
+    outcome: 'development', title: 'Stato progetto aggiornato', body: null, metadata: {}, source: 'audit_log',
+  },
+];
+
 const company = {
   id: COMPANY_ID,
   name: 'Azienda Visuale',
@@ -142,6 +169,12 @@ async function installReadOnlyFixture(page: Page) {
     if (url.pathname === `/api/tenant/crm/contacts/${CONTACT_ID}`) return json(contact);
     if (url.pathname === '/api/tenant/crm/contacts') return json(list([contact]));
     if (url.pathname === '/api/tenant/crm/activities') return json(list([activity]));
+    if (url.pathname === '/api/tenant/timeline') {
+      const types = String(url.searchParams.get('types') || '').split(',').filter(Boolean);
+      const filtered = types.length ? timelineEvents.filter((event) => types.includes(event.type)) : timelineEvents;
+      if (url.searchParams.get('cursor')) return json({ items: filtered.slice(2), next_cursor: null, has_more: false });
+      return json({ items: filtered.slice(0, 2), next_cursor: filtered.length > 2 ? 'fixture-page-2' : null, has_more: filtered.length > 2 });
+    }
     if (url.pathname === '/api/tenant/quotes') return json(list([{ id: QUOTE_ID, quote_number: 'PREV-001', title: 'Preventivo Website', status: 'accepted', company_id: COMPANY_ID, opportunity_id: OPPORTUNITY_ID }]));
     if (url.pathname === '/api/tenant/contracts') return json(list([{ id: CONTRACT_ID, contract_number: 'CON-001', title: 'Contratto Website', status: 'active', signature_status: 'signed', priority: 'medium', contract_type: 'project', company_id: COMPANY_ID, opportunity_id: OPPORTUNITY_ID }]));
     if (url.pathname === '/api/tenant/finance/invoices') return json(list([{ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', invoice_number: 'INV-001', title: 'Fattura acconto', status: 'issued' }]));
@@ -288,4 +321,73 @@ test('contratto statico: pannello solo Doflow e route progetto legacy intatta', 
   const source = fs.readFileSync(path.resolve('apps/frontend/src/components/tenant-work/projects-workspace.tsx'), 'utf8');
   expect(source).toContain('doflow ? recordPanel.openRecord');
   expect(fs.readFileSync(path.resolve('apps/frontend/src/components/tenant-projects/projects-core.tsx'), 'utf8')).toContain('router.push(`/projects/${row.id}`)');
+});
+
+test('timeline cliente desktop: eventi reali aggregati e composer interno', async ({ page }) => {
+  await page.setViewportSize({ width: 1672, height: 941 });
+  await page.goto(`/companies?company=${COMPANY_ID}&panelTab=activity`, { waitUntil: 'domcontentloaded' });
+  const panel = await expectPanel(page, company.name);
+  await expect(panel.getByRole('tab', { name: 'Attività e comunicazioni' })).toHaveAttribute('aria-selected', 'true');
+  await expect(panel.locator('[data-timeline-event]')).toHaveCount(2);
+  await expect(panel.locator('[data-timeline-composer]')).toBeVisible();
+  await expect(panel.getByText('Nota interna', { exact: true }).first()).toBeVisible();
+  await screenshot(page, 'client-activity-communications-desktop.png');
+});
+
+test('timeline progetto desktop: task, comunicazioni e storico nello stesso pannello', async ({ page }) => {
+  await page.setViewportSize({ width: 1675, height: 939 });
+  await page.goto(`/projects?project=${PROJECT_ID}&panelTab=activity`, { waitUntil: 'domcontentloaded' });
+  const panel = await expectPanel(page, project.name);
+  await expect(panel.getByRole('tab', { name: 'Attività e comunicazioni' })).toHaveAttribute('aria-selected', 'true');
+  await expect(panel.getByText('Messaggio WhatsApp')).toBeVisible();
+  await expect(panel.getByText('Chiamata in uscita')).toBeVisible();
+  await screenshot(page, 'project-activities-desktop.png');
+});
+
+test('timeline: filtri rapidi e Carica altri usano GET incrementali', async ({ page }) => {
+  await page.goto(`/companies?company=${COMPANY_ID}&panelTab=activity`, { waitUntil: 'domcontentloaded' });
+  const panel = await expectPanel(page, company.name);
+  await expect(panel.locator('[data-timeline-event]')).toHaveCount(2);
+  await panel.getByRole('button', { name: 'Carica altri' }).click();
+  await expect(panel.locator('[data-timeline-event]')).toHaveCount(4);
+  await panel.getByLabel('Filtri rapidi timeline').getByRole('button', { name: 'WhatsApp', exact: true }).click();
+  await expect(panel.locator('[data-timeline-event]')).toHaveCount(1);
+  await panel.getByRole('button', { name: 'Filtri avanzati' }).click();
+  await expect(panel.locator('[data-advanced-timeline-filters]')).toBeVisible();
+});
+
+test('composer: WhatsApp ed email richiedono conferma manuale senza mutazioni nel gate', async ({ page }) => {
+  await page.goto(`/companies?company=${COMPANY_ID}&panelTab=activity`, { waitUntil: 'domcontentloaded' });
+  const panel = await expectPanel(page, company.name);
+  const composer = panel.locator('[data-timeline-composer]');
+  await composer.getByRole('button', { name: 'WhatsApp', exact: true }).click();
+  await composer.getByLabel('Numero').fill('+39 320 111 1111');
+  await composer.getByLabel('Descrizione / messaggio').fill('Messaggio composto nel pannello.');
+  await expect(composer.getByRole('button', { name: 'Segna come inviato' })).toBeDisabled();
+  await page.evaluate(() => { window.open = (() => null) as typeof window.open; });
+  await composer.getByRole('button', { name: 'Apri WhatsApp' }).click();
+  await expect(composer.getByText(/non registra un invio/i)).toBeVisible();
+  await expect(composer.getByRole('button', { name: 'Segna come inviato' })).toBeEnabled();
+  await composer.getByRole('button', { name: 'Email', exact: true }).click();
+  await expect(composer.getByRole('button', { name: 'Segna come inviato' })).toBeDisabled();
+});
+
+test('timeline tablet: filtri, eventi e composer restano raggiungibili', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto(`/companies?company=${COMPANY_ID}&panelTab=activity`, { waitUntil: 'domcontentloaded' });
+  const panel = await expectPanel(page, company.name);
+  await expect(panel.locator('[data-record-timeline]')).toBeVisible();
+  await expect(panel.locator('[data-timeline-composer]')).toBeVisible();
+  await screenshot(page, 'timeline-activity-tablet.png');
+});
+
+test('timeline mobile: pannello full-screen e canali composer utilizzabili', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/projects?project=${PROJECT_ID}&panelTab=activity`, { waitUntil: 'domcontentloaded' });
+  const panel = await expectPanel(page, project.name);
+  await expect(panel.locator('[data-record-timeline]')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Nota', exact: true })).toBeVisible();
+  const box = await panel.boundingBox();
+  expect(Math.round(box?.width || 0)).toBe(390);
+  await screenshot(page, 'timeline-activity-mobile.png');
 });

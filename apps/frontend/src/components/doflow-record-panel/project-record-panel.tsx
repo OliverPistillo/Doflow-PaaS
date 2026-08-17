@@ -9,6 +9,7 @@ import { useTenantAccess } from "@/contexts/TenantAccessContext";
 import { apiFetch } from "@/lib/api";
 import { commercialApi, type CommercialContact } from "@/lib/tenant-commercial-api";
 import { listDocumentsForEntity, type TenantDocument } from "@/lib/tenant-documents-api";
+import { teamApi, type TeamMember } from "@/lib/tenant-team-api";
 import {
   canonicalizeProjectItem,
   DOFLOW_PROJECT_STAGE_OPTIONS,
@@ -23,20 +24,11 @@ import {
   type RecordPanelAction,
   type RecordPanelTab,
 } from "./unified-record-panel";
+import { RecordTimeline } from "./record-timeline";
 
 type ProjectRecord = Record<string, any>;
 type ProjectTask = Record<string, any>;
 type ListResponse<T> = { items: T[]; total?: number };
-
-const taskStatusLabels: Record<string, string> = {
-  backlog: "Backlog",
-  ready: "Pronto",
-  in_progress: "In corso",
-  internal_review: "Review interna",
-  client_review: "Review cliente",
-  blocked: "Bloccato",
-  done: "Completato",
-};
 
 const priorityLabels: Record<string, string> = {
   low: "Bassa",
@@ -52,11 +44,6 @@ function formatDate(value?: string | null, includeTime = false) {
   return new Intl.DateTimeFormat("it-IT", includeTime
     ? { dateStyle: "medium", timeStyle: "short" }
     : { dateStyle: "medium" }).format(date);
-}
-
-function whatsappHref(phone?: string | null) {
-  const normalized = String(phone || "").replace(/[^0-9]/g, "");
-  return normalized ? `https://wa.me/${normalized}` : undefined;
 }
 
 function isTaskOpen(task: ProjectTask) {
@@ -96,25 +83,6 @@ function ProjectFlow({ project }: { project: ProjectRecord }) {
   );
 }
 
-function ProjectTasks({ tasks }: { tasks: ProjectTask[] }) {
-  if (!tasks.length) {
-    return <RecordPanelEmptyState title="Nessuna attività collegata" description="Le attività reali del progetto compariranno qui senza modificare stati task o milestone." action={<Button asChild variant="outline" size="sm"><Link href="/projects/tasks">Apri attività</Link></Button>} />;
-  }
-  return (
-    <div className="space-y-2">
-      {tasks.map((task) => (
-        <article key={task.id} className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0"><h3 className="truncate text-sm font-semibold text-slate-950" data-record-sensitive>{task.title}</h3><p className="mt-1 text-xs text-slate-500">{task.assignee_email ? <span data-record-sensitive>{task.assignee_email}</span> : "Non assegnata"}</p></div>
-            <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700">{taskStatusLabels[task.status] || task.status || "—"}</span>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500"><span>Scadenza {formatDate(task.due_at)}</span><span>Priorità {priorityLabels[task.priority] || task.priority || "—"}</span>{isTaskOverdue(task) ? <span className="font-semibold text-rose-600">Scaduta</span> : null}</div>
-        </article>
-      ))}
-    </div>
-  );
-}
-
 function ProjectFiles({ projectId, documents }: { projectId: string; documents: TenantDocument[] }) {
   if (!documents.length) {
     return <RecordPanelEmptyState title="Nessun file collegato" description="Carica o collega un documento reale al progetto dall’archivio Documenti." action={<Button asChild variant="outline" size="sm"><Link href={`/documents/upload?entity_type=project&entity_id=${encodeURIComponent(projectId)}&category=project_asset`}>Carica documento</Link></Button>} />;
@@ -150,6 +118,7 @@ export function DoflowProjectRecordPanel({
   const [tasks, setTasks] = useState<ProjectTask[]>([]);
   const [documents, setDocuments] = useState<TenantDocument[]>([]);
   const [contact, setContact] = useState<CommercialContact | null>(null);
+  const [members, setMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -162,15 +131,17 @@ export function DoflowProjectRecordPanel({
         const detail = canonicalizeProjectItem(await apiFetch<ProjectRecord>(`/tenant/projects/${recordId}`));
         if (cancelled) return;
         setProject(detail);
-        const [taskResult, documentResult, contactResult] = await Promise.allSettled([
+        const [taskResult, documentResult, contactResult, memberResult] = await Promise.allSettled([
           apiFetch<ListResponse<ProjectTask>>(`/tenant/projects/${recordId}/tasks?limit=100`),
           canView("documents") ? listDocumentsForEntity("project", recordId, { limit: 100 }) : Promise.resolve({ items: [] }),
           canView("crm") && detail.contact_id ? commercialApi.contact(detail.contact_id) : Promise.resolve(null),
+          canView("team") ? teamApi.members({ limit: 100 }) : Promise.resolve({ items: [] }),
         ]);
         if (cancelled) return;
         if (taskResult.status === "fulfilled") setTasks(taskResult.value.items || []);
         if (documentResult.status === "fulfilled") setDocuments(documentResult.value.items || []);
         if (contactResult.status === "fulfilled") setContact(contactResult.value);
+        if (memberResult.status === "fulfilled") setMembers(memberResult.value.items || []);
       } catch (reason) {
         if (!cancelled) setError(reason instanceof Error ? reason.message : "Progetto non disponibile.");
       } finally {
@@ -213,15 +184,15 @@ export function DoflowProjectRecordPanel({
   const tabs = useMemo<RecordPanelTab[]>(() => [
     { value: "overview", label: "Panoramica", content: overview },
     { value: "flow", label: "Flusso", content: project ? <ProjectFlow project={project} /> : null },
-    { value: "activity", label: "Attività", content: <ProjectTasks tasks={tasks} /> },
+    { value: "activity", label: "Attività e comunicazioni", content: <RecordTimeline recordKind="project" recordId={recordId} moduleKey="projects" phone={phone} email={email} members={members} /> },
     { value: "files", label: "File", content: <ProjectFiles projectId={recordId} documents={documents} /> },
-  ], [documents, overview, project, recordId, tasks]);
+  ], [documents, email, members, overview, phone, project, recordId]);
 
   const actions: RecordPanelAction[] = [
-    { label: "Chiama", icon: Phone, href: phone ? `tel:${phone}` : undefined, disabled: !phone, disabledReason: "Numero di telefono non disponibile" },
-    { label: "WhatsApp", icon: MessageCircle, href: whatsappHref(phone), external: true, disabled: !whatsappHref(phone), disabledReason: "Numero WhatsApp non disponibile" },
-    { label: "Email", icon: Mail, href: email ? `mailto:${email}` : undefined, disabled: !email, disabledReason: "Indirizzo email non disponibile" },
-    { label: "Nuova attività", icon: CalendarPlus, disabled: true, disabledReason: "La creazione di attività progetto resta disponibile nella scheda completa" },
+    { label: "Chiama", icon: Phone, onSelect: () => onTabChange("activity") },
+    { label: "WhatsApp", icon: MessageCircle, onSelect: () => onTabChange("activity") },
+    { label: "Email", icon: Mail, onSelect: () => onTabChange("activity") },
+    { label: "Nuova attività", icon: CalendarPlus, onSelect: () => onTabChange("activity") },
   ];
 
   return (

@@ -27,6 +27,7 @@ import {
   type RecordPanelAction,
   type RecordPanelTab,
 } from "./unified-record-panel";
+import { RecordTimeline } from "./record-timeline";
 
 type ListResponse<T> = { items: T[]; total?: number };
 type Invoice = { id: string; invoice_number?: string | null; title?: string | null; status?: string | null; due_date?: string | null };
@@ -38,20 +39,6 @@ const companyStatusLabels: Record<string, string> = {
   partner: "Partner",
   dormant: "Da ricontattare",
 };
-
-const activityTypeLabels: Record<string, string> = {
-  call: "Chiamata",
-  email: "Email",
-  meeting: "Riunione",
-  note: "Nota",
-  task: "Attività",
-  follow_up: "Follow-up",
-};
-
-function whatsappHref(phone?: string | null) {
-  const normalized = String(phone || "").replace(/[^0-9]/g, "");
-  return normalized ? `https://wa.me/${normalized}` : undefined;
-}
 
 function timestamp(value?: string | null) {
   const time = value ? new Date(value).getTime() : 0;
@@ -71,27 +58,6 @@ function memberName(members: TeamMember[], id?: string | null) {
 function contactName(contact?: CommercialContact | null, fallback?: string | null) {
   const name = contact ? [contact.first_name, contact.last_name].filter(Boolean).join(" ") : "";
   return name || fallback || "Non collegato";
-}
-
-function ActivityList({ activities }: { activities: CommercialActivity[] }) {
-  if (!activities.length) {
-    return <RecordPanelEmptyState title="Nessuna attività collegata" description="Registra la prossima attività dal flusso CRM per costruire uno storico reale." action={<Button asChild size="sm"><Link href="/activities?new=1">Nuova attività</Link></Button>} />;
-  }
-  return (
-    <div className="space-y-3">
-      {activities.map((activity) => (
-        <RecordPanelSection key={activity.id} title={activity.title} className="p-4">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-            <span>{activityTypeLabels[activity.type] || activity.type}</span>
-            <span aria-hidden="true">·</span>
-            <span>{commercialDate(activity.completed_at || activity.updated_at || activity.created_at, true)}</span>
-            <span className="ml-auto rounded-full bg-slate-100 px-2 py-1 font-medium text-slate-700">{activity.completed_at ? "Completata" : "Da fare"}</span>
-          </div>
-          {activity.description ? <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700" data-record-sensitive>{activity.description}</p> : null}
-        </RecordPanelSection>
-      ))}
-    </div>
-  );
 }
 
 function DocumentsList({ documents, entityLabel }: { documents: TenantDocument[]; entityLabel: string }) {
@@ -258,16 +224,16 @@ export function DoflowCommercialRecordPanel({
 
   const tabs = useMemo<RecordPanelTab[]>(() => [
     { value: "overview", label: "Riepilogo", content: overview },
-    { value: "activity", label: "Attività e comunicazioni", content: <ActivityList activities={activities} /> },
+    { value: "activity", label: "Attività e comunicazioni", content: <RecordTimeline recordKind={kind} recordId={recordId} moduleKey="crm" phone={phone} email={email} members={members} /> },
     { value: "files", label: "File", content: <DocumentsList documents={documents} entityLabel={kind === "opportunity" ? "questa opportunità" : "questo cliente"} /> },
     { value: "administration", label: "Amministrazione", content: <AdministrationList quotes={quotes} contracts={contracts} invoices={invoices} canViewAdministration={canView("quotes") || canView("contracts") || canView("finance")} /> },
-  ], [activities, canView, contracts, documents, invoices, kind, overview, quotes]);
+  ], [canView, contracts, documents, email, invoices, kind, members, overview, phone, quotes, recordId]);
 
   const actions: RecordPanelAction[] = [
-    { label: "Chiama", icon: Phone, href: phone ? `tel:${phone}` : undefined, disabled: !phone, disabledReason: "Numero di telefono non disponibile" },
-    { label: "WhatsApp", icon: MessageCircle, href: whatsappHref(phone), external: true, disabled: !whatsappHref(phone), disabledReason: "Numero WhatsApp non disponibile" },
-    { label: "Email", icon: Mail, href: email ? `mailto:${email}` : undefined, disabled: !email, disabledReason: "Indirizzo email non disponibile" },
-    { label: "Nuova attività", icon: CalendarPlus, href: "/activities?new=1" },
+    { label: "Chiama", icon: Phone, onSelect: () => onTabChange("activity") },
+    { label: "WhatsApp", icon: MessageCircle, onSelect: () => onTabChange("activity") },
+    { label: "Email", icon: Mail, onSelect: () => onTabChange("activity") },
+    { label: "Nuova attività", icon: CalendarPlus, onSelect: () => onTabChange("activity") },
   ];
 
   return (
