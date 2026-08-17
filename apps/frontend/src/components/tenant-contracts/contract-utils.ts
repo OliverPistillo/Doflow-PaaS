@@ -2,6 +2,7 @@
 
 import { getDoFlowUser } from "@/lib/jwt";
 import { cn } from "@/lib/utils";
+import { financeMoney } from "@/components/tenant-administration/administration-model";
 
 export type Option = { value: string; label: string };
 
@@ -131,9 +132,8 @@ export function formatDateTime(value?: string | null) {
   return new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
-export function money(value?: number | string | null, currency = "EUR") {
-  const amount = Number(value || 0);
-  return new Intl.NumberFormat("it-IT", { style: "currency", currency, maximumFractionDigits: 0 }).format(Number.isFinite(amount) ? amount : 0);
+export function money(value?: number | string | null, currency: unknown = "EUR") {
+  return financeMoney(value, currency);
 }
 
 export function toBody(form: Record<string, unknown>) {

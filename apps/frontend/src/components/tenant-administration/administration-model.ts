@@ -73,13 +73,30 @@ export function optionLabel(options: AdministrationOptions, value?: string | nul
   return options.find(([key]) => key === value)?.[1] || String(value || "Non definito").replace(/_/g, " ");
 }
 
-export function financeMoney(value?: number | string | null, currency = "EUR") {
+export function normalizeCurrencyCode(value: unknown): string {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  if (!normalized) return "EUR";
+  if (!/^[A-Z]{3}$/.test(normalized)) return "EUR";
+  try {
+    new Intl.NumberFormat("it-IT", { style: "currency", currency: normalized }).format(0);
+    return normalized;
+  } catch {
+    return "EUR";
+  }
+}
+
+export function financeMoney(value?: number | string | null, currency: unknown = "EUR", maximumFractionDigits = 0) {
   const amount = Number(value || 0);
-  return new Intl.NumberFormat("it-IT", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(Number.isFinite(amount) ? amount : 0);
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+  try {
+    return new Intl.NumberFormat("it-IT", {
+      style: "currency",
+      currency: normalizeCurrencyCode(currency),
+      maximumFractionDigits,
+    }).format(safeAmount);
+  } catch {
+    return `${Math.round(safeAmount)} €`;
+  }
 }
 
 export function administrationDate(value?: string | null, withYear = true) {

@@ -47,6 +47,19 @@ describe('TenantFinanceService', () => {
     expect(total).toBe(219.6);
   });
 
+  it.each([
+    ['cleanInvoiceBody', { title: 'Fattura' }],
+    ['cleanPaymentBody', { amount: 1200 }],
+    ['cleanDeadlineBody', { title: 'Scadenza', due_date: '2026-09-01' }],
+    ['cleanRecurringBody', { name: 'Servizio' }],
+    ['cleanRenewalBody', { title: 'Rinnovo', due_date: '2026-09-01' }],
+  ])('%s normalizza le currency valide e rifiuta quelle malformate', (method, body) => {
+    const service = createService() as any;
+    expect(service[method]({ ...body, currency: ' eur ' }, false).currency).toBe('EUR');
+    expect(service[method]({ ...body, currency: 'USD' }, false).currency).toBe('USD');
+    expect(() => service[method]({ ...body, currency: '1200€' }, false)).toThrow(BadRequestException);
+  });
+
   it('rifiuta pagamenti Doflow con importo non positivo', async () => {
     await expect(createService().createPayment({ amount: 0, invoice_id: INVOICE_ID })).rejects.toBeInstanceOf(BadRequestException);
     await expect(createService().createPayment({ amount: -1, invoice_id: INVOICE_ID })).rejects.toBeInstanceOf(BadRequestException);

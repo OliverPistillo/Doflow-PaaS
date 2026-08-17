@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
 import { useToast } from "@/hooks/use-toast";
+import { financeMoney } from "@/components/tenant-administration/administration-model";
 import {
   recordOperationsApi, type OperationsRecordKind, type RecordAdministration as AdministrationData,
 } from "@/lib/tenant-record-operations-api";
@@ -18,11 +19,6 @@ const paymentMethods = [
   ["bank_transfer", "Bonifico"], ["cash", "Contanti"], ["card", "Carta"],
   ["paypal", "PayPal"], ["stripe", "Stripe"], ["other", "Altro"],
 ];
-
-function money(value: unknown, currency = "EUR") {
-  const numeric = Number(value || 0);
-  return new Intl.NumberFormat("it-IT", { style: "currency", currency: currency || "EUR", maximumFractionDigits: 2 }).format(Number.isFinite(numeric) ? numeric : 0);
-}
 
 function date(value?: string | null) {
   if (!value) return "—";
@@ -55,9 +51,9 @@ export function ProjectFinanceCard({ projectId }: { projectId: string }) {
   return <RecordPanelSection title="Sintesi economica" description="Visibile soltanto a chi dispone della capability finance.">
     <dl className="grid gap-4 sm:grid-cols-2">
       <RecordPanelField label="Stato pagamenti" value={paymentStatusLabels[summary.payment_status] || summary.payment_status} />
-      <RecordPanelField label="Totale atteso" value={money(summary.total_expected)} sensitive />
-      <RecordPanelField label="Pagato" value={money(summary.total_paid)} sensitive />
-      <RecordPanelField label="Residuo" value={money(summary.total_remaining)} sensitive />
+      <RecordPanelField label="Totale atteso" value={financeMoney(summary.total_expected, undefined, 2)} sensitive />
+      <RecordPanelField label="Pagato" value={financeMoney(summary.total_paid, undefined, 2)} sensitive />
+      <RecordPanelField label="Residuo" value={financeMoney(summary.total_remaining, undefined, 2)} sensitive />
       <RecordPanelField label="Prossima scadenza" value={date(summary.next_deadline)} />
       <RecordPanelField label="Prossimo rinnovo" value={date(summary.next_renewal)} />
     </dl>
@@ -147,25 +143,25 @@ export function RecordAdministration({ recordKind, recordId }: { recordKind: Exc
   const openRenewals = data.renewals.filter((item) => ["upcoming", "reminded", "invoiced"].includes(String(item.status)));
   return <div className="space-y-5" data-record-administration>
     <div className="grid grid-cols-2 gap-3">
-      <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">Fatturato collegato</p><p className="mt-1 text-xl font-bold text-slate-950" data-record-sensitive>{money(summary.total_invoiced)}</p></div>
-      <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">Pagato</p><p className="mt-1 text-xl font-bold text-emerald-700" data-record-sensitive>{money(summary.total_paid)}</p></div>
-      <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">Residuo</p><p className="mt-1 text-xl font-bold text-amber-700" data-record-sensitive>{money(summary.total_remaining)}</p></div>
-      <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">Scaduto</p><p className="mt-1 text-xl font-bold text-rose-700" data-record-sensitive>{money(summary.total_overdue)}</p></div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">Fatturato collegato</p><p className="mt-1 text-xl font-bold text-slate-950" data-record-sensitive>{financeMoney(summary.total_invoiced, undefined, 2)}</p></div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">Pagato</p><p className="mt-1 text-xl font-bold text-emerald-700" data-record-sensitive>{financeMoney(summary.total_paid, undefined, 2)}</p></div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">Residuo</p><p className="mt-1 text-xl font-bold text-amber-700" data-record-sensitive>{financeMoney(summary.total_remaining, undefined, 2)}</p></div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">Scaduto</p><p className="mt-1 text-xl font-bold text-rose-700" data-record-sensitive>{financeMoney(summary.total_overdue, undefined, 2)}</p></div>
     </div>
 
     <RecordPanelSection title="Prossime date"><dl className="grid grid-cols-2 gap-4"><RecordPanelField label="Scadenza" value={date(summary.next_deadline)} /><RecordPanelField label="Rinnovo" value={date(summary.next_renewal)} /></dl></RecordPanelSection>
 
     <RecordPanelSection title="Preventivi" description="Creazione e apertura passano dal flow preventivi esistente.">
-      <div className="space-y-2">{data.quotes.map((quote) => <Link key={quote.id} href="/quotes" className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm"><span className="truncate font-medium" data-record-sensitive>{quote.title || quote.quote_number || "Preventivo"}</span><span className="flex items-center gap-2"><Badge variant="outline">{quote.status}</Badge><span data-record-sensitive>{money(quote.total, quote.currency)}</span></span></Link>)}{!data.quotes.length ? <p className="text-xs text-slate-500">Nessun preventivo collegato.</p> : null}</div>
+      <div className="space-y-2">{data.quotes.map((quote) => <Link key={quote.id} href="/quotes" className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm"><span className="truncate font-medium" data-record-sensitive>{quote.title || quote.quote_number || "Preventivo"}</span><span className="flex items-center gap-2"><Badge variant="outline">{quote.status}</Badge><span data-record-sensitive>{financeMoney(quote.total, quote.currency, 2)}</span></span></Link>)}{!data.quotes.length ? <p className="text-xs text-slate-500">Nessun preventivo collegato.</p> : null}</div>
       <Button asChild variant="outline" size="sm" className="mt-3"><Link href={`/quotes/new?${recordKind}=${encodeURIComponent(recordId)}`}>Crea preventivo</Link></Button>
     </RecordPanelSection>
 
     <RecordPanelSection title="Contratti">
-      <div className="space-y-2">{data.contracts.map((contract) => <Link key={contract.id} href={`/contracts/${contract.id}`} className="block rounded-lg bg-slate-50 px-3 py-2 text-sm"><span className="flex justify-between gap-2"><span className="truncate font-medium" data-record-sensitive>{contract.title || contract.contract_number}</span><Badge variant="outline">{contract.status}</Badge></span><span className="mt-1 block text-xs text-slate-500">Firma {contract.signature_status} · {date(contract.start_date)}–{date(contract.end_date)} · rinnovo {date(contract.renewal_date)} · <span data-record-sensitive>{money(contract.amount, contract.currency)}</span></span></Link>)}{!data.contracts.length ? <p className="text-xs text-slate-500">Nessun contratto collegato.</p> : null}</div>
+      <div className="space-y-2">{data.contracts.map((contract) => <Link key={contract.id} href={`/contracts/${contract.id}`} className="block rounded-lg bg-slate-50 px-3 py-2 text-sm"><span className="flex justify-between gap-2"><span className="truncate font-medium" data-record-sensitive>{contract.title || contract.contract_number}</span><Badge variant="outline">{contract.status}</Badge></span><span className="mt-1 block text-xs text-slate-500">Firma {contract.signature_status} · {date(contract.start_date)}–{date(contract.end_date)} · rinnovo {date(contract.renewal_date)} · <span data-record-sensitive>{financeMoney(contract.amount, contract.currency, 2)}</span></span></Link>)}{!data.contracts.length ? <p className="text-xs text-slate-500">Nessun contratto collegato.</p> : null}</div>
     </RecordPanelSection>
 
     <RecordPanelSection title="Fatture e pagamenti">
-      <div className="space-y-2">{data.invoices.map((invoice) => <div key={invoice.id} className="rounded-lg bg-slate-50 px-3 py-2 text-sm"><div className="flex justify-between gap-2"><span className="truncate font-medium" data-record-sensitive>{invoice.title || invoice.invoice_number || "Fattura"}</span><Badge variant="outline">{invoice.status}</Badge></div><p className="mt-1 text-xs text-slate-500"><span data-record-sensitive>{money(invoice.total, invoice.currency)}</span> · pagato <span data-record-sensitive>{money(invoice.paid_total, invoice.currency)}</span> · residuo <span data-record-sensitive>{money(invoice.remaining_total, invoice.currency)}</span> · scadenza {date(invoice.due_date)}</p></div>)}{!data.invoices.length ? <p className="text-xs text-slate-500">Nessuna fattura collegata.</p> : null}</div>
+      <div className="space-y-2">{data.invoices.map((invoice) => <div key={invoice.id} className="rounded-lg bg-slate-50 px-3 py-2 text-sm"><div className="flex justify-between gap-2"><span className="truncate font-medium" data-record-sensitive>{invoice.title || invoice.invoice_number || "Fattura"}</span><Badge variant="outline">{invoice.status}</Badge></div><p className="mt-1 text-xs text-slate-500"><span data-record-sensitive>{financeMoney(invoice.total, invoice.currency, 2)}</span> · pagato <span data-record-sensitive>{financeMoney(invoice.paid_total, invoice.currency, 2)}</span> · residuo <span data-record-sensitive>{financeMoney(invoice.remaining_total, invoice.currency, 2)}</span> · scadenza {date(invoice.due_date)}</p></div>)}{!data.invoices.length ? <p className="text-xs text-slate-500">Nessuna fattura collegata.</p> : null}</div>
       <div className="mt-3 flex flex-wrap gap-2">{canCreate("finance") && data.invoices.length ? <Button size="sm" onClick={openPayment}><CreditCard className="mr-2 h-4 w-4" />Registra pagamento</Button> : null}{canCreate("finance") ? <Button asChild variant="outline" size="sm"><Link href={`/finance/invoices/new?${recordKind}=${encodeURIComponent(recordId)}`}><ReceiptText className="mr-2 h-4 w-4" />Crea fattura</Link></Button> : null}</div>
       {paymentOpen ? <div className="mt-4 space-y-3 rounded-xl border border-violet-200 bg-violet-50/50 p-3" data-payment-form>
         <p className="text-sm font-semibold">Nuovo pagamento</p>
@@ -176,16 +172,16 @@ export function RecordAdministration({ recordKind, recordId }: { recordKind: Exc
         <Textarea value={paymentNote} onChange={(event) => setPaymentNote(event.target.value)} placeholder="Nota opzionale" rows={2} />
         <div className="flex gap-2"><Button onClick={() => void submitPayment()} disabled={!invoiceId || Number(paymentAmount) <= 0 || Boolean(busy)}>{busy === "payment" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}Registra</Button><Button variant="ghost" onClick={() => setPaymentOpen(false)} disabled={Boolean(busy)}>Annulla</Button></div>
       </div> : null}
-      {data.payments.length ? <div className="mt-4 border-t border-slate-100 pt-3"><p className="mb-2 text-xs font-semibold text-slate-600">Ultimi pagamenti</p>{data.payments.slice(0, 5).map((payment) => <p key={payment.id} className="flex justify-between py-1 text-xs text-slate-600"><span>{date(payment.payment_date)} · {payment.method || "metodo non indicato"}</span><span data-record-sensitive>{money(payment.amount, payment.currency)}</span></p>)}</div> : null}
+      {data.payments.length ? <div className="mt-4 border-t border-slate-100 pt-3"><p className="mb-2 text-xs font-semibold text-slate-600">Ultimi pagamenti</p>{data.payments.slice(0, 5).map((payment) => <p key={payment.id} className="flex justify-between py-1 text-xs text-slate-600"><span>{date(payment.payment_date)} · {payment.method || "metodo non indicato"}</span><span data-record-sensitive>{financeMoney(payment.amount, payment.currency, 2)}</span></p>)}</div> : null}
     </RecordPanelSection>
 
     <RecordPanelSection title="Scadenze">
-      <div className="space-y-2">{openDeadlines.map((deadline) => <div key={deadline.id} className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm"><CalendarCheck className="h-4 w-4 text-amber-600" /><span className="min-w-0 flex-1"><span className="block truncate font-medium" data-record-sensitive>{deadline.title}</span><span className="text-xs text-slate-500">{date(deadline.due_date)} · <span data-record-sensitive>{money(deadline.amount, deadline.currency)}</span></span></span><Badge variant="outline">{deadline.status}</Badge>{canUpdate("finance") ? <Button variant="ghost" size="sm" onClick={() => void completeDeadline(deadline.id)} disabled={Boolean(busy)}>Completa</Button> : null}</div>)}{!openDeadlines.length ? <p className="text-xs text-slate-500">Nessuna scadenza aperta.</p> : null}</div>
+      <div className="space-y-2">{openDeadlines.map((deadline) => <div key={deadline.id} className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm"><CalendarCheck className="h-4 w-4 text-amber-600" /><span className="min-w-0 flex-1"><span className="block truncate font-medium" data-record-sensitive>{deadline.title}</span><span className="text-xs text-slate-500">{date(deadline.due_date)} · <span data-record-sensitive>{financeMoney(deadline.amount, deadline.currency, 2)}</span></span></span><Badge variant="outline">{deadline.status}</Badge>{canUpdate("finance") ? <Button variant="ghost" size="sm" onClick={() => void completeDeadline(deadline.id)} disabled={Boolean(busy)}>Completa</Button> : null}</div>)}{!openDeadlines.length ? <p className="text-xs text-slate-500">Nessuna scadenza aperta.</p> : null}</div>
     </RecordPanelSection>
 
     <RecordPanelSection title="Servizi ricorrenti e rinnovi">
-      <div className="space-y-2">{data.recurring_services.map((service) => <div key={service.id} className="rounded-lg bg-slate-50 px-3 py-2 text-sm"><span className="flex justify-between"><span className="font-medium" data-record-sensitive>{service.name}</span><Badge variant="outline">{service.status}</Badge></span><span className="mt-1 block text-xs text-slate-500">{service.billing_cycle} · prossimo {date(service.next_due_date)} · rinnovo automatico {service.auto_renew ? "attivo" : "disattivo"} · <span data-record-sensitive>{money(service.amount, service.currency)}</span></span></div>)}</div>
-      {openRenewals.length ? <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">{openRenewals.map((renewal) => <div key={renewal.id} className="flex items-center gap-3 text-sm"><RotateCw className="h-4 w-4 text-violet-600" /><span className="min-w-0 flex-1"><span className="block truncate font-medium" data-record-sensitive>{renewal.title}</span><span className="text-xs text-slate-500">{date(renewal.due_date)} · <span data-record-sensitive>{money(renewal.amount, renewal.currency)}</span></span></span>{canUpdate("finance") ? <Button variant="ghost" size="sm" onClick={() => void completeRenewal(renewal.id)} disabled={Boolean(busy)}>Completa rinnovo</Button> : null}</div>)}</div> : null}
+      <div className="space-y-2">{data.recurring_services.map((service) => <div key={service.id} className="rounded-lg bg-slate-50 px-3 py-2 text-sm"><span className="flex justify-between"><span className="font-medium" data-record-sensitive>{service.name}</span><Badge variant="outline">{service.status}</Badge></span><span className="mt-1 block text-xs text-slate-500">{service.billing_cycle} · prossimo {date(service.next_due_date)} · rinnovo automatico {service.auto_renew ? "attivo" : "disattivo"} · <span data-record-sensitive>{financeMoney(service.amount, service.currency, 2)}</span></span></div>)}</div>
+      {openRenewals.length ? <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">{openRenewals.map((renewal) => <div key={renewal.id} className="flex items-center gap-3 text-sm"><RotateCw className="h-4 w-4 text-violet-600" /><span className="min-w-0 flex-1"><span className="block truncate font-medium" data-record-sensitive>{renewal.title}</span><span className="text-xs text-slate-500">{date(renewal.due_date)} · <span data-record-sensitive>{financeMoney(renewal.amount, renewal.currency, 2)}</span></span></span>{canUpdate("finance") ? <Button variant="ghost" size="sm" onClick={() => void completeRenewal(renewal.id)} disabled={Boolean(busy)}>Completa rinnovo</Button> : null}</div>)}</div> : null}
     </RecordPanelSection>
   </div>;
 }

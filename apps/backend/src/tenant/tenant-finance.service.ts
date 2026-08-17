@@ -4,6 +4,7 @@ import { DataSource, QueryRunner } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
 import { ensureTenantFinanceTables } from './tenant-finance-schema';
 import { isDoflowTenant } from './tenant-context';
+import { normalizeCurrencyCode } from './currency-code';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -348,7 +349,7 @@ export class TenantFinanceService {
         title: this.textOrNull(body.title) || quote.title || 'Fattura da preventivo',
         type: this.normalizeEnum(body.type, INVOICE_TYPES, 'standard', 'type fattura non valido'),
         status: 'draft',
-        currency: quote.currency || 'EUR',
+        currency: normalizeCurrencyCode(quote.currency ?? undefined),
         issue_date: body.issue_date || null,
         due_date: body.due_date || null,
         client_notes: body.client_notes ?? quote.client_notes ?? null,
@@ -409,7 +410,7 @@ export class TenantFinanceService {
         title: this.textOrNull(body.title) || project.name || project.quote_title || 'Fattura da progetto',
         type,
         status: 'draft',
-        currency: body.currency || project.quote_currency || 'EUR',
+        currency: normalizeCurrencyCode(body.currency !== undefined ? body.currency : project.quote_currency ?? undefined),
         issue_date: body.issue_date || null,
         due_date: body.due_date || null,
         client_notes: body.client_notes ?? project.client_notes ?? null,
@@ -807,7 +808,7 @@ export class TenantFinanceService {
     }
     if (!partial || 'type' in cleaned) cleaned.type = this.normalizeEnum(cleaned.type, INVOICE_TYPES, 'standard', 'type fattura non valido');
     if (!partial || 'status' in cleaned) cleaned.status = this.normalizeEnum(cleaned.status, INVOICE_STATUSES, 'draft', 'status fattura non valido');
-    if (!partial || 'currency' in cleaned) cleaned.currency = String(cleaned.currency || 'EUR').trim() || 'EUR';
+    if (!partial || 'currency' in cleaned) cleaned.currency = normalizeCurrencyCode(cleaned.currency);
     this.validateUuidFields(cleaned, ['company_id', 'contact_id', 'opportunity_id', 'briefing_id', 'quote_id', 'project_id', 'pdf_file_id']);
     return cleaned;
   }
@@ -830,7 +831,7 @@ export class TenantFinanceService {
   private cleanPaymentBody(body: Record<string, any>, partial: boolean) {
     const cleaned = this.pick(body, ['invoice_id', 'company_id', 'project_id', 'amount', 'currency', 'status', 'payment_date', 'method', 'reference', 'notes']);
     if (!partial || 'amount' in cleaned) cleaned.amount = this.toNumber(cleaned.amount, 'amount');
-    if (!partial || 'currency' in cleaned) cleaned.currency = String(cleaned.currency || 'EUR').trim() || 'EUR';
+    if (!partial || 'currency' in cleaned) cleaned.currency = normalizeCurrencyCode(cleaned.currency);
     if (!partial || 'status' in cleaned) cleaned.status = this.normalizeEnum(cleaned.status, PAYMENT_STATUSES, 'recorded', 'status pagamento non valido');
     if (cleaned.method) cleaned.method = this.normalizeEnum(cleaned.method, PAYMENT_METHODS, 'other', 'metodo pagamento non valido');
     this.validateUuidFields(cleaned, ['invoice_id', 'company_id', 'project_id']);
@@ -849,7 +850,7 @@ export class TenantFinanceService {
     }
     if (!partial || 'type' in cleaned) cleaned.type = this.normalizeEnum(cleaned.type, DEADLINE_TYPES, 'payment', 'type scadenza non valido');
     if (!partial || 'status' in cleaned) cleaned.status = this.normalizeEnum(cleaned.status, DEADLINE_STATUSES, 'open', 'status scadenza non valido');
-    if (!partial || 'currency' in cleaned) cleaned.currency = String(cleaned.currency || 'EUR').trim() || 'EUR';
+    if (!partial || 'currency' in cleaned) cleaned.currency = normalizeCurrencyCode(cleaned.currency);
     if ('amount' in cleaned) cleaned.amount = this.numberOrNull(cleaned.amount, 'amount');
     this.validateUuidFields(cleaned, ['company_id', 'project_id', 'quote_id', 'invoice_id']);
     return cleaned;
@@ -869,7 +870,7 @@ export class TenantFinanceService {
     if (!partial || 'status' in cleaned) cleaned.status = this.normalizeEnum(cleaned.status, RECURRING_STATUSES, 'active', 'status servizio non valido');
     if (!partial || 'billing_cycle' in cleaned) cleaned.billing_cycle = this.normalizeEnum(cleaned.billing_cycle, BILLING_CYCLES, 'yearly', 'billing_cycle non valido');
     if (!partial || 'amount' in cleaned) cleaned.amount = this.toNumber(cleaned.amount, 'amount', 0);
-    if (!partial || 'currency' in cleaned) cleaned.currency = String(cleaned.currency || 'EUR').trim() || 'EUR';
+    if (!partial || 'currency' in cleaned) cleaned.currency = normalizeCurrencyCode(cleaned.currency);
     if ('auto_renew' in cleaned) cleaned.auto_renew = Boolean(cleaned.auto_renew);
     this.validateUuidFields(cleaned, ['company_id', 'project_id', 'quote_id']);
     return cleaned;
@@ -890,7 +891,7 @@ export class TenantFinanceService {
     }
     if (!partial || 'status' in cleaned) cleaned.status = this.normalizeEnum(cleaned.status, RENEWAL_STATUSES, 'upcoming', 'status rinnovo non valido');
     if ('amount' in cleaned) cleaned.amount = this.numberOrNull(cleaned.amount, 'amount');
-    if (!partial || 'currency' in cleaned) cleaned.currency = String(cleaned.currency || 'EUR').trim() || 'EUR';
+    if (!partial || 'currency' in cleaned) cleaned.currency = normalizeCurrencyCode(cleaned.currency);
     this.validateUuidFields(cleaned, ['recurring_service_id', 'company_id', 'project_id', 'invoice_id']);
     return cleaned;
   }

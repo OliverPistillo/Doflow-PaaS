@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { ensureTenantCrmCoreTables } from './tenant-crm-schema';
 import { ensureTenantBriefingQuoteTables } from './tenant-briefing-quotes-schema';
 import { TenantQuotesService } from './tenant-quotes.service';
@@ -62,5 +63,16 @@ describe('TenantQuotesService accept commercial stage', () => {
     const opportunityUpdate = query.mock.calls.find(([sql]) => String(sql).includes('UPDATE "tenantlegacy".opportunities'));
     expect(opportunityUpdate?.[1]).toEqual(['accepted', '33333333-3333-4333-8333-333333333333', opportunityId]);
     expect(query.mock.calls.some(([, params]) => params?.[2] === 'crm_opportunity_stage_changed')).toBe(false);
+  });
+
+  it('normalizza la currency dei preventivi e rifiuta valori malformati', () => {
+    const service = makeService('doflow', jest.fn());
+    const config = {
+      table: 'quotes', required: [], writable: ['currency'], searchable: [], filters: [], sort: [], defaultSort: 'updated_at',
+    };
+
+    expect((service as any).cleanBody(config, { currency: ' eur ' }, false).currency).toBe('EUR');
+    expect((service as any).cleanBody(config, { currency: 'USD' }, false).currency).toBe('USD');
+    expect(() => (service as any).cleanBody(config, { currency: 'EURO' }, false)).toThrow(BadRequestException);
   });
 });

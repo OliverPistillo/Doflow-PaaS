@@ -9,6 +9,7 @@ import {
   STANDARD_CONTRACT_CHECKLIST,
   STANDARD_PAPERWORK_ITEMS,
 } from './tenant-contracts-schema';
+import { normalizeCurrencyCode } from './currency-code';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ADMIN_ROLES = new Set(['owner', 'admin', 'superadmin', 'super_admin']);
@@ -552,7 +553,7 @@ export class TenantContractsService {
           this.normalizeEnum(body.priority, PRIORITIES, 'medium', 'priority'),
           contractType,
           this.canViewFinance(user.role) ? this.normalizeAmount(body.amount) : null,
-          this.textOrNull(body.currency) || 'EUR',
+          normalizeCurrencyCode(body.currency),
           this.canViewFinance(user.role) ? this.textOrNull(body.payment_terms) : null,
           this.normalizeDate(body.start_date, 'start_date'),
           this.normalizeDate(body.end_date, 'end_date'),
@@ -592,7 +593,7 @@ export class TenantContractsService {
       if (body.payment_terms !== undefined) add('payment_terms', this.textOrNull(body.payment_terms));
       if (body.internal_notes !== undefined) add('internal_notes', this.textOrNull(body.internal_notes));
     }
-    if (body.currency !== undefined) add('currency', this.textOrNull(body.currency) || 'EUR');
+    if (body.currency !== undefined) add('currency', normalizeCurrencyCode(body.currency));
     for (const field of ['start_date', 'end_date', 'renewal_date', 'due_date']) {
       if (body[field] !== undefined) add(field, this.normalizeDate(body[field], field));
     }
@@ -703,7 +704,7 @@ export class TenantContractsService {
           quote.opportunity_id,
           contractType,
           this.canViewFinance(user.role) ? Number(quote.total || 0) : null,
-          quote.currency || 'EUR',
+          normalizeCurrencyCode(quote.currency ?? undefined),
           due.toISOString().slice(0, 10),
           'Creato da preventivo.',
           JSON.stringify({ source: 'quote', quote_id: quote.id }),

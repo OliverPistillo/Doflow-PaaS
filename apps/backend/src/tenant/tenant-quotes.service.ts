@@ -6,6 +6,7 @@ import { hasRoleAtLeast } from '../roles';
 import { isDoflowTenant, normalizeCommercialStage } from './commercial-stage-model';
 import { ensureTenantCrmCoreTables } from './tenant-crm-schema';
 import { ensureTenantBriefingQuoteTables } from './tenant-briefing-quotes-schema';
+import { normalizeCurrencyCode } from './currency-code';
 
 type QuoteResource = 'serviceTemplates' | 'quotes';
 
@@ -168,6 +169,9 @@ export class TenantQuotesService {
     }
     if (cleaned.status && !QUOTE_STATUSES.includes(String(cleaned.status))) throw new BadRequestException('Status preventivo non valido');
     if (cleaned.billing_type && !BILLING_TYPES.includes(String(cleaned.billing_type))) throw new BadRequestException('billing_type non valido');
+    if (config.table === 'quotes' && (!partial || 'currency' in body)) {
+      cleaned.currency = normalizeCurrencyCode(body.currency);
+    }
     for (const numeric of ['default_unit_price', 'default_quantity']) {
       if (cleaned[numeric] !== undefined && cleaned[numeric] !== null) cleaned[numeric] = this.toNumber(cleaned[numeric], numeric);
     }

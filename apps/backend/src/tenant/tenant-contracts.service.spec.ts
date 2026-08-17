@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { seedDoflowContractTemplates } from './tenant-contracts-schema';
 import { TenantContractsService } from './tenant-contracts.service';
 
@@ -98,5 +99,21 @@ describe('TenantContractsService', () => {
 
     expect(result).toEqual({ id: '33333333-3333-4333-8333-333333333333' });
     expect(manager.query.mock.calls.some(([sql]: [string]) => sql.includes('INSERT INTO "doflow".contracts'))).toBe(false);
+  });
+
+  it('rifiuta una currency malformata prima di inserire un contratto', async () => {
+    const manager = { query: jest.fn() };
+    const dataSource = {
+      query: jest.fn(),
+      transaction: jest.fn(async (callback: any) => callback(manager)),
+    };
+    const service = new TenantContractsService(dataSource as any, ownerRequest);
+    jest.spyOn(service as any, 'ensureSchema').mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'nextContractNumber').mockResolvedValue('CTR-2026-0001');
+    jest.spyOn(service as any, 'getTemplate').mockResolvedValue(null);
+
+    await expect(service.createContract({ title: 'Contratto', currency: '1200€' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(manager.query).not.toHaveBeenCalled();
   });
 });

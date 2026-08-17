@@ -2,6 +2,7 @@
 
 import { getDoFlowUser } from "@/lib/jwt";
 import type { ReportParams } from "@/lib/tenant-reports-api";
+import { financeMoney } from "@/components/tenant-administration/administration-model";
 
 export const REPORT_LABELS: Record<string, string> = {
   executive: "Direzione",
@@ -36,9 +37,8 @@ export function formatNumber(value?: unknown) {
   return new Intl.NumberFormat("it-IT").format(Number.isFinite(number) ? number : 0);
 }
 
-export function formatCurrency(value?: unknown, currency = "EUR") {
-  const number = Number(value || 0);
-  return new Intl.NumberFormat("it-IT", { style: "currency", currency }).format(Number.isFinite(number) ? number : 0);
+export function formatCurrency(value?: unknown, currency: unknown = "EUR") {
+  return financeMoney(value as number | string | null | undefined, currency, 2);
 }
 
 export function formatPercent(value?: unknown) {
@@ -109,4 +109,3 @@ export function badgeTone(value?: string | null) {
   if (["accepted", "approved", "paid", "completed", "active"].includes(key)) return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
   return "border-border bg-muted/40 text-muted-foreground";
 }
-
