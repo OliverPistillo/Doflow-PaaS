@@ -347,24 +347,7 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="df-auth-form">
-        <button
-          type="button"
-          className="df-auth-social"
-          aria-label="Accedi con Google"
-          data-testid="login-google-btn"
-          onClick={() => {
-            const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api";
-            const origin = apiBase.replace(/\/api\/?$/, "");
-            window.location.href = `${origin}/api/auth/google`;
-          }}
-        >
-          <GoogleIcon />
-          Continua con Google
-        </button>
-
-        <div className="df-auth-divider">oppure</div>
-
+      <div className="df-auth-form df-login-form">
         <form onSubmit={handleSubmit(onSubmit)} className="df-auth-form" noValidate>
           <div className="df-auth-field">
             <Label htmlFor="email" className="df-auth-label">
@@ -374,7 +357,7 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
               <input
                 id="email"
                 type="email"
-                placeholder="nome@azienda.it"
+                placeholder="Inserisci la tua email"
                 autoComplete="email"
                 disabled={isSubmitting}
                 aria-invalid={!!errors.email}
@@ -392,19 +375,14 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
           </div>
 
           <div className="df-auth-field">
-            <div className="df-auth-row">
-              <Label htmlFor="password" className="df-auth-label">
-                Password
-              </Label>
-              <Link href="/forgot-password" className="df-auth-link text-[12px]">
-                Password dimenticata?
-              </Link>
-            </div>
+            <Label htmlFor="password" className="df-auth-label">
+              Password
+            </Label>
             <div className="df-auth-input-wrap">
               <input
                 id="password"
                 type={showPassword ? "text" : "password"}
-                placeholder="Password"
+                placeholder="Inserisci la tua password"
                 autoComplete="current-password"
                 disabled={isSubmitting}
                 aria-invalid={!!errors.password}
@@ -438,7 +416,7 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
             )}
           </div>
 
-          <div className="df-auth-row">
+          <div className="df-auth-row df-login-options">
             <div className="df-auth-check-row">
               <Controller
                 name="rememberMe"
@@ -456,6 +434,9 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
                 Ricordami
               </Label>
             </div>
+            <Link href="/forgot-password" className="df-auth-link">
+              Password dimenticata?
+            </Link>
           </div>
 
           {generalError && (
@@ -473,20 +454,37 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
                   Accesso in corso...
                 </>
               ) : (
-                "Accedi al flusso"
+                "Accedi"
               )}
             </span>
           </button>
         </form>
 
+        <div className="df-auth-divider">oppure</div>
+
+        <button
+          type="button"
+          className="df-auth-social"
+          aria-label="Continua con Google"
+          data-testid="login-google-btn"
+          onClick={() => {
+            const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api";
+            const origin = apiBase.replace(/\/api\/?$/, "");
+            window.location.href = `${origin}/api/auth/google`;
+          }}
+        >
+          <GoogleIcon />
+          Continua con Google
+        </button>
+
         <div className="df-auth-foot">
           Non hai un account?{" "}
           {onSwitchToRegister ? (
             <button type="button" className="df-auth-inline-action" onClick={onSwitchToRegister}>
-              Creane uno
+              Registrati
             </button>
           ) : (
-            <Link href="/register">Creane uno</Link>
+            <Link href="/register">Registrati</Link>
           )}
         </div>
       </div>

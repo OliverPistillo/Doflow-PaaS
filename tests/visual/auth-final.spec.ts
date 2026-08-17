@@ -34,13 +34,25 @@ async function authScreenshot(page: Page, filename: string, extraMasks: Locator[
 
 test('auth desktop: login Doflow coerente e accessibile', async ({ page }) => {
   await installAuthSandbox(page);
-  await page.setViewportSize({ width: 1675, height: 939 });
+  await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto('/login');
-  await expect(page.getByRole('heading', { name: 'Bentornato.' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Accedi al flusso' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Bentornato', exact: true })).toBeVisible();
+  await expect(page.getByText('Accedi al tuo spazio di lavoro', { exact: true })).toBeVisible();
+  await expect(page.getByPlaceholder('Inserisci la tua email')).toBeVisible();
+  await expect(page.getByPlaceholder('Inserisci la tua password')).toBeVisible();
   await expect(page.getByLabel('Ricordami')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Password dimenticata?' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Accedi', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continua con Google' })).toBeVisible();
   await expect(page.locator('.df-auth-logo-img')).toBeVisible();
-  await authScreenshot(page, 'auth-login-desktop.png');
+  for (const label of ['Lead', 'Contatto', 'Proposta', 'Cliente']) {
+    await expect(page.getByText(label, { exact: true })).toBeVisible();
+  }
+  for (const title of ['Gestisci i clienti', 'Segui il pipeline', 'Organizza le attività', 'Automatizza i processi']) {
+    await expect(page.getByText(title, { exact: true })).toBeVisible();
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1672);
+  await authScreenshot(page, 'auth-login-new-reference-desktop.png');
 });
 
 test('auth desktop: registrazione canonica senza piano o settore', async ({ page }) => {
@@ -74,7 +86,7 @@ test('auth errore: credenziali invalide mostrano un messaggio generico', async (
   await page.goto('/login');
   await page.getByLabel('Email').fill('visual@example.test');
   await page.getByLabel('Password', { exact: true }).fill('password-errata');
-  await page.getByRole('button', { name: 'Accedi al flusso' }).click();
+  await page.getByRole('button', { name: 'Accedi', exact: true }).click();
   await expect(page.locator('.df-auth-error')).toContainText('Credenziali non valide');
   await expect(page.locator('.df-auth-error')).not.toContainText('dettaglio interno');
   await authScreenshot(page, 'auth-login-invalid.png');
@@ -145,16 +157,35 @@ test('auth tablet: login resta utilizzabile a 1024x768', async ({ page }) => {
   });
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto('/login');
-  await expect(page.getByRole('button', { name: 'Accedi al flusso' })).toBeInViewport();
+  await expect(page.getByRole('button', { name: 'Accedi', exact: true })).toBeInViewport();
+  await expect(page.getByRole('button', { name: 'Continua con Google' })).toBeInViewport();
+  await expect(page.getByRole('link', { name: 'Password dimenticata?' })).toBeInViewport();
   await expect(page.getByLabel('Email')).toBeInViewport();
-  await authScreenshot(page, 'auth-login-tablet.png');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1024);
+  await authScreenshot(page, 'auth-login-new-reference-tablet.png');
   await page.getByLabel('Email').fill('visual@example.test');
   await page.getByLabel('Password', { exact: true }).fill('password-safe');
   await page.getByLabel('Ricordami').check();
-  await page.getByRole('button', { name: 'Accedi al flusso' }).click();
+  await page.getByRole('button', { name: 'Accedi', exact: true }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
   expect(await page.evaluate(() => window.localStorage.getItem('doflow_token'))).toBe(token);
   expect(await page.evaluate(() => window.sessionStorage.getItem('doflow_token'))).toBeNull();
+});
+
+test('auth mobile: login completo e utilizzabile a 390x844', async ({ page }) => {
+  await installAuthSandbox(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/login');
+  await expect(page.locator('.df-auth-logo-img')).toBeInViewport();
+  await expect(page.getByRole('heading', { name: 'Bentornato', exact: true })).toBeInViewport();
+  await expect(page.getByLabel('Email')).toBeInViewport();
+  await expect(page.getByLabel('Password', { exact: true })).toBeInViewport();
+  await expect(page.getByLabel('Ricordami')).toBeInViewport();
+  await expect(page.getByRole('link', { name: 'Password dimenticata?' })).toBeInViewport();
+  await expect(page.getByRole('button', { name: 'Accedi', exact: true })).toBeInViewport();
+  await expect(page.getByRole('button', { name: 'Continua con Google' })).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await authScreenshot(page, 'auth-login-new-reference-mobile.png');
 });
 
 test('auth mobile: registrazione resta completa a 390x844', async ({ page }) => {

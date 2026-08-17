@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { AuthShell } from "@/components/auth/auth-shell";
+import { LoginExperience } from "@/components/auth/login-experience";
 import { LoginPanel } from "@/components/auth/login-panel";
 import { RegisterPanel } from "@/components/auth/register-panel";
 
@@ -11,46 +12,26 @@ type UnifiedAuthPageProps = {
   initialMode?: AuthMode;
 };
 
-const COPY = {
-  login: {
-    title: "Bentornato.",
-    description: "Accedi per riprendere da dove avevi lasciato.",
-  },
-  register: {
-    title: "Crea il tuo account.",
-    description: "Bastano pochi secondi per iniziare a far fluire i progetti.",
-  },
-} satisfies Record<AuthMode, { title: string; description: string }>;
-
 export function UnifiedAuthPage({ initialMode = "login" }: UnifiedAuthPageProps) {
-  const [mode, setMode] = React.useState<AuthMode>(initialMode);
   const [mascotShy, setMascotShy] = React.useState(false);
 
-  const switchMode = React.useCallback((nextMode: AuthMode) => {
-    setMascotShy(false);
-    setMode(nextMode);
-  }, []);
+  if (initialMode === "login") {
+    return (
+      <LoginExperience mascotShy={mascotShy}>
+        <LoginPanel onMascotShyChange={setMascotShy} />
+      </LoginExperience>
+    );
+  }
 
   return (
     <AuthShell
-      mode={mode}
-      title={COPY[mode].title}
-      description={COPY[mode].description}
+      mode="register"
+      title="Crea il tuo account."
+      description="Bastano pochi secondi per iniziare a far fluire i progetti."
       mascotShy={mascotShy}
-      onModeChange={switchMode}
-      cardClassName={mode === "register" ? "df-auth-card-wide" : undefined}
+      cardClassName="df-auth-card-wide"
     >
-      {mode === "login" ? (
-        <LoginPanel
-          onMascotShyChange={setMascotShy}
-          onSwitchToRegister={() => switchMode("register")}
-        />
-      ) : (
-        <RegisterPanel
-          onMascotShyChange={setMascotShy}
-          onSwitchToLogin={() => switchMode("login")}
-        />
-      )}
+      <RegisterPanel onMascotShyChange={setMascotShy} />
     </AuthShell>
   );
 }
