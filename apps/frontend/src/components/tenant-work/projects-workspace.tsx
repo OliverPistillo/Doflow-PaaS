@@ -67,7 +67,7 @@ export function ProjectsWorkspace() {
   const recordPanel = useUnifiedRecordPanelUrl({
     enabled: doflow,
     paramKey: "project",
-    tabs: ["overview", "flow", "activity", "files"],
+    tabs: ["overview", "activity", "files", "administration"],
     defaultTab: "overview",
   });
   const statusParam = searchParams.get("status");

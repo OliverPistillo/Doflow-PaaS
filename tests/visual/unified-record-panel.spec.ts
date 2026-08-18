@@ -110,6 +110,7 @@ const project = {
   company_name: company.name,
   contact_id: CONTACT_ID,
   contact_name: `${contact.first_name} ${contact.last_name}`,
+  opportunity_id: OPPORTUNITY_ID,
   type: 'website',
   status: 'development',
   priority: 'high',
@@ -130,6 +131,16 @@ const task = {
   due_at: '2026-08-20T00:00:00.000Z',
 };
 
+const blockedTask = {
+  id: '55555555-5555-4555-8555-555555555556',
+  project_id: PROJECT_ID,
+  title: 'Confermare i contenuti finali',
+  status: 'blocked',
+  priority: 'medium',
+  assignee_email: 'responsabile@example.test',
+  due_at: '2026-08-22T00:00:00.000Z',
+};
+
 const document = {
   id: DOCUMENT_ID,
   title: 'Materiali progetto',
@@ -142,6 +153,13 @@ const document = {
   uploaded_by_email: 'responsabile@example.test',
   created_at: '2026-08-15T10:00:00.000Z',
 };
+
+const fixtureDocuments = [
+  document,
+  { ...document, id: '66666666-6666-4666-8666-666666666667', title: 'Homepage v2', original_filename: 'homepage-v2.fig', category: 'deliverable', metadata: { origin: 'team', deliverable: true }, size_bytes: 1_240_000 },
+  { ...document, id: '66666666-6666-4666-8666-666666666668', title: 'Contratto firmato', original_filename: 'contratto-firmato.pdf', category: 'contract', metadata: { signature_status: 'signed' }, size_bytes: 420_000 },
+  { ...document, id: '66666666-6666-4666-8666-666666666669', title: 'Preventivo accettato', original_filename: 'preventivo.pdf', category: 'quote', size_bytes: 310_000 },
+];
 
 const material = {
   id: MATERIAL_ID, company_id: COMPANY_ID, title: 'Logo vettoriale',
@@ -156,7 +174,7 @@ const administration = {
     next_deadline: '2026-08-25', next_renewal: '2026-11-30', total_expected: 3200, payment_status: 'partially_paid',
   },
   quotes: [{ id: QUOTE_ID, quote_number: 'PREV-001', title: 'Preventivo Website', status: 'accepted', total: 3200, currency: 'EUR' }],
-  contracts: [{ id: CONTRACT_ID, contract_number: 'CON-001', title: 'Contratto Website', status: 'active', signature_status: 'signed', amount: 3200, currency: 'EUR', start_date: '2026-07-01', end_date: '2027-06-30', renewal_date: '2026-11-30' }],
+  contracts: [{ id: CONTRACT_ID, contract_number: 'CON-001', title: 'Contratto Website', status: 'active', signature_status: 'signed', signed_at: '2026-07-18', amount: 3200, currency: 'EUR', start_date: '2026-07-01', end_date: '2027-06-30', renewal_date: '2026-11-30' }],
   invoices: [{ id: INVOICE_ID, invoice_number: 'INV-001', title: 'Fattura progetto', status: 'partially_paid', total: 3200, paid_total: 1200, remaining_total: 2000, currency: 'EUR', issue_date: '2026-08-01', due_date: '2026-08-25' }],
   payments: [{ id: 'ffffffff-ffff-4fff-8fff-fffffffffff1', invoice_id: INVOICE_ID, amount: 1200, currency: 'EUR', status: 'recorded', payment_date: '2026-08-05', method: 'bank_transfer' }],
   deadlines: [{ id: DEADLINE_ID, invoice_id: INVOICE_ID, title: 'Saldo progetto', type: 'balance', status: 'open', amount: 2000, currency: 'EUR', due_date: '2026-08-25' }],
@@ -207,13 +225,13 @@ async function installReadOnlyFixture(page: Page) {
     if (url.pathname === '/api/tenant/quotes') return json(list([{ id: QUOTE_ID, quote_number: 'PREV-001', title: 'Preventivo Website', status: 'accepted', company_id: COMPANY_ID, opportunity_id: OPPORTUNITY_ID }]));
     if (url.pathname === '/api/tenant/contracts') return json(list([{ id: CONTRACT_ID, contract_number: 'CON-001', title: 'Contratto Website', status: 'active', signature_status: 'signed', priority: 'medium', contract_type: 'project', company_id: COMPANY_ID, opportunity_id: OPPORTUNITY_ID }]));
     if (url.pathname === '/api/tenant/finance/invoices') return json(list([{ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', invoice_number: 'INV-001', title: 'Fattura acconto', status: 'issued' }]));
-    if (url.pathname.startsWith('/api/tenant/documents/entity/')) return json(list([document]));
-    if (url.pathname === '/api/tenant/documents') return json(list([document]));
+    if (url.pathname.startsWith('/api/tenant/documents/entity/')) return json(list(fixtureDocuments));
+    if (url.pathname === '/api/tenant/documents') return json(list(fixtureDocuments));
     if (url.pathname === '/api/tenant/record-operations/materials') return json({ items: [material] });
     if (url.pathname === '/api/tenant/record-operations/administration') return json(administration);
     if (url.pathname === '/api/tenant/projects') return json(list([project]));
     if (url.pathname === `/api/tenant/projects/${PROJECT_ID}`) return json(project);
-    if (url.pathname === `/api/tenant/projects/${PROJECT_ID}/tasks`) return json(list([task]));
+    if (url.pathname === `/api/tenant/projects/${PROJECT_ID}/tasks`) return json(list([task, blockedTask]));
     if (url.pathname.startsWith(`/api/tenant/projects/${PROJECT_ID}/`)) return json(list([]));
     return route.continue();
   });
@@ -272,6 +290,17 @@ async function installOperationsMutationFixture(page: Page) {
   return calls;
 }
 
+async function installFinanceMutationFixture(page: Page) {
+  const calls: Array<{ method: string; pathname: string }> = [];
+  await page.route('**/api/tenant/finance/invoices/*/payments', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    calls.push({ method: request.method().toUpperCase(), pathname: url.pathname });
+    return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ id: 'ffffffff-ffff-4fff-8fff-fffffffffff2', status: 'recorded' }) });
+  });
+  return calls;
+}
+
 async function screenshot(page: Page, filename: string) {
   const masks: Locator[] = [
     page.locator('[data-record-sensitive]'),
@@ -302,12 +331,17 @@ test.afterEach(async ({ page }) => {
 test('opportunità desktop: shell condivisa, azioni e riepilogo reale', async ({ page }) => {
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto(`/pipeline?opportunity=${OPPORTUNITY_ID}`, { waitUntil: 'domcontentloaded' });
-  const panel = await expectPanel(page, opportunity.title);
+  const panel = await expectPanel(page, company.name);
   expect(await panel.evaluate((element) => element.contains(document.activeElement))).toBe(true);
   await expect(panel.getByRole('tab', { name: 'Riepilogo' })).toHaveAttribute('aria-selected', 'true');
-  for (const action of ['Chiama', 'WhatsApp', 'Email', 'Nuova attività', 'Altro']) await expect(panel.getByRole('button', { name: action }).or(panel.getByRole('link', { name: action }))).toBeVisible();
+  for (const action of ['Apri progetto', 'Chiama', 'WhatsApp', 'Email', 'Attività']) await expect(panel.getByRole('button', { name: action, exact: true }).or(panel.getByRole('link', { name: action, exact: true }))).toBeVisible();
+  const box = await panel.boundingBox();
+  expect(Math.round(box?.width || 0)).toBe(540);
   expect(new URL(page.url()).pathname).toBe('/pipeline');
   await screenshot(page, 'unified-opportunity-overview-desktop.png');
+  await panel.getByRole('button', { name: 'Attività', exact: true }).click();
+  await expect(panel.getByRole('tab', { name: 'Attività' })).toHaveAttribute('aria-selected', 'true');
+  await expect(panel.getByLabel('Canale composer')).toHaveValue('activity');
 });
 
 test('cliente desktop: riga apre il pannello senza restringere la tabella', async ({ page }) => {
@@ -317,7 +351,7 @@ test('cliente desktop: riga apre il pannello senza restringere la tabella', asyn
   await page.locator('tbody tr').first().click();
   const panel = await expectPanel(page, company.name);
   await expect(page.locator('tbody tr')).toHaveCount(1);
-  await expect(panel.getByText('Dettagli cliente')).toBeVisible();
+  await expect(panel.getByRole('tab', { name: 'Riepilogo' })).toHaveAttribute('aria-selected', 'true');
   expect(new URL(page.url()).pathname).toBe('/companies');
   expect(new URL(page.url()).searchParams.get('status')).toBe('active_client');
   await screenshot(page, 'unified-client-overview-desktop.png');
@@ -336,11 +370,13 @@ test('progetto desktop: pannello operativo e route completa preservata', async (
   await page.setViewportSize({ width: 1675, height: 939 });
   await page.goto('/projects', { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: `Apri ${project.name}` }).click();
-  const panel = await expectPanel(page, project.name);
-  await expect(panel.getByRole('tab', { name: 'Panoramica' })).toHaveAttribute('aria-selected', 'true');
+  const panel = await expectPanel(page, company.name);
+  await expect(panel.getByRole('tab', { name: 'Riepilogo' })).toHaveAttribute('aria-selected', 'true');
+  await expect(panel.getByText('Avanzamento')).toBeVisible();
   expect(new URL(page.url()).pathname).toBe('/projects');
   expect(fs.existsSync(path.resolve('apps/frontend/src/app/(tenant)/projects/[id]/page.tsx'))).toBe(true);
   await screenshot(page, 'unified-project-overview-desktop.png');
+  await screenshot(page, 'record-panel-v2-overview-desktop.png');
 });
 
 test('deep link, tab URL e Back preservano filtri, ricerca e scroll', async ({ page }) => {
@@ -352,12 +388,12 @@ test('deep link, tab URL e Back preservano filtri, ricerca e scroll', async ({ p
   await scroll.evaluate((element) => { element.scrollLeft = 180; });
   const before = await scroll.evaluate((element) => element.scrollLeft);
   await page.getByRole('button', { name: 'Dettagli' }).click();
-  await expectPanel(page, opportunity.title);
+  await expectPanel(page, company.name);
   expect(new URL(page.url()).searchParams.get('campaign')).toBe('visual');
   await page.getByRole('tab', { name: 'File' }).click();
   await expect.poll(() => new URL(page.url()).searchParams.get('panelTab')).toBe('files');
   await page.reload({ waitUntil: 'domcontentloaded' });
-  const panel = await expectPanel(page, opportunity.title);
+  const panel = await expectPanel(page, company.name);
   await expect(panel.getByRole('tab', { name: 'File' })).toHaveAttribute('aria-selected', 'true');
 
   await page.goto('/pipeline?campaign=visual', { waitUntil: 'domcontentloaded' });
@@ -371,7 +407,7 @@ test('deep link, tab URL e Back preservano filtri, ricerca e scroll', async ({ p
   expect(new URL(page.url()).pathname).toBe('/pipeline');
   const details = page.getByRole('button', { name: 'Dettagli' });
   await details.click();
-  await expectPanel(page, opportunity.title);
+  await expectPanel(page, company.name);
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-unified-record-panel]')).toHaveCount(0);
   await expect(details).toBeFocused();
@@ -381,7 +417,7 @@ test('tablet: pannello adattivo, tab e contenuto restano raggiungibili', async (
   await page.setViewportSize({ width: 1024, height: 768 });
   await page.goto(`/companies?company=${COMPANY_ID}&panelTab=activity`, { waitUntil: 'domcontentloaded' });
   const panel = await expectPanel(page, company.name);
-  await expect(panel.getByRole('tab', { name: 'Attività e comunicazioni' })).toHaveAttribute('aria-selected', 'true');
+  await expect(panel.getByRole('tab', { name: 'Attività' })).toHaveAttribute('aria-selected', 'true');
   const box = await panel.boundingBox();
   expect(box?.width).toBeLessThan(1024);
   await screenshot(page, 'unified-record-panel-tablet.png');
@@ -390,12 +426,13 @@ test('tablet: pannello adattivo, tab e contenuto restano raggiungibili', async (
 test('mobile: pannello full-screen con tutte le funzioni essenziali', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/projects?project=${PROJECT_ID}&panelTab=flow`, { waitUntil: 'domcontentloaded' });
-  const panel = await expectPanel(page, project.name);
-  await expect(panel.getByRole('tab', { name: 'Flusso' })).toHaveAttribute('aria-selected', 'true');
-  await expect(panel.getByText('Fase corrente')).toBeVisible();
+  const panel = await expectPanel(page, company.name);
+  await expect(panel.getByRole('tab', { name: 'Riepilogo' })).toHaveAttribute('aria-selected', 'true');
+  await expect(panel.getByText('Avanzamento')).toBeVisible();
   const box = await panel.boundingBox();
   expect(Math.round(box?.width || 0)).toBe(390);
   await screenshot(page, 'unified-record-panel-mobile.png');
+  await screenshot(page, 'record-panel-v2-mobile.png');
 });
 
 test('contratto statico: pannello solo Doflow e route progetto legacy intatta', () => {
@@ -412,21 +449,24 @@ test('timeline cliente desktop: eventi reali aggregati e composer interno', asyn
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto(`/companies?company=${COMPANY_ID}&panelTab=activity`, { waitUntil: 'domcontentloaded' });
   const panel = await expectPanel(page, company.name);
-  await expect(panel.getByRole('tab', { name: 'Attività e comunicazioni' })).toHaveAttribute('aria-selected', 'true');
+  await expect(panel.getByRole('tab', { name: 'Attività' })).toHaveAttribute('aria-selected', 'true');
   await expect(panel.locator('[data-timeline-event]')).toHaveCount(2);
   await expect(panel.locator('[data-timeline-composer]')).toBeVisible();
-  await expect(panel.getByText('Nota interna', { exact: true }).first()).toBeVisible();
+  await expect(panel.getByLabel('Canale composer')).toBeVisible();
   await screenshot(page, 'client-activity-communications-desktop.png');
 });
 
 test('timeline progetto desktop: task, comunicazioni e storico nello stesso pannello', async ({ page }) => {
   await page.setViewportSize({ width: 1675, height: 939 });
   await page.goto(`/projects?project=${PROJECT_ID}&panelTab=activity`, { waitUntil: 'domcontentloaded' });
-  const panel = await expectPanel(page, project.name);
-  await expect(panel.getByRole('tab', { name: 'Attività e comunicazioni' })).toHaveAttribute('aria-selected', 'true');
+  const panel = await expectPanel(page, company.name);
+  await expect(panel.getByRole('tab', { name: 'Attività' })).toHaveAttribute('aria-selected', 'true');
   await expect(panel.getByText('Messaggio WhatsApp')).toBeVisible();
   await expect(panel.getByText('Chiamata in uscita')).toBeVisible();
+  await panel.getByRole('button', { name: 'Carica altri' }).click();
+  await expect(panel.locator('[data-timeline-event]')).toHaveCount(4);
   await screenshot(page, 'project-activities-desktop.png');
+  await screenshot(page, 'record-panel-v2-activity-desktop.png');
 });
 
 test('timeline: filtri rapidi e Carica altri usano GET incrementali', async ({ page }) => {
@@ -437,7 +477,7 @@ test('timeline: filtri rapidi e Carica altri usano GET incrementali', async ({ p
   await expect(panel.locator('[data-timeline-event]')).toHaveCount(4);
   await panel.getByLabel('Filtri rapidi timeline').getByRole('button', { name: 'WhatsApp', exact: true }).click();
   await expect(panel.locator('[data-timeline-event]')).toHaveCount(1);
-  await panel.getByRole('button', { name: 'Filtri avanzati' }).click();
+  await panel.getByRole('button', { name: 'Filtri' }).click();
   await expect(panel.locator('[data-advanced-timeline-filters]')).toBeVisible();
 });
 
@@ -445,16 +485,15 @@ test('composer: WhatsApp ed email richiedono conferma manuale senza mutazioni ne
   await page.goto(`/companies?company=${COMPANY_ID}&panelTab=activity`, { waitUntil: 'domcontentloaded' });
   const panel = await expectPanel(page, company.name);
   const composer = panel.locator('[data-timeline-composer]');
-  await composer.getByRole('button', { name: 'WhatsApp', exact: true }).click();
+  await composer.getByLabel('Canale composer').selectOption('whatsapp');
   await composer.getByLabel('Numero').fill('+39 320 111 1111');
-  await composer.getByLabel('Descrizione / messaggio').fill('Messaggio composto nel pannello.');
-  await expect(composer.getByRole('button', { name: 'Segna come inviato' })).toBeDisabled();
+  await composer.getByPlaceholder('Scrivi un messaggio o aggiungi una nota…').fill('Messaggio composto nel pannello.');
   await page.evaluate(() => { window.open = (() => null) as typeof window.open; });
-  await composer.getByRole('button', { name: 'Apri WhatsApp' }).click();
-  await expect(composer.getByText(/non registra un invio/i)).toBeVisible();
-  await expect(composer.getByRole('button', { name: 'Segna come inviato' })).toBeEnabled();
-  await composer.getByRole('button', { name: 'Email', exact: true }).click();
-  await expect(composer.getByRole('button', { name: 'Segna come inviato' })).toBeDisabled();
+  await composer.getByRole('button', { name: 'Invia' }).click();
+  await expect(composer.getByText(/nessun invio è registrato/i)).toBeVisible();
+  await expect(composer.getByRole('button', { name: 'Conferma' })).toBeEnabled();
+  await composer.getByLabel('Canale composer').selectOption('email');
+  await expect(composer.getByRole('button', { name: 'Invia' })).toBeEnabled();
 });
 
 test('timeline tablet: filtri, eventi e composer restano raggiungibili', async ({ page }) => {
@@ -469,9 +508,9 @@ test('timeline tablet: filtri, eventi e composer restano raggiungibili', async (
 test('timeline mobile: pannello full-screen e canali composer utilizzabili', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/projects?project=${PROJECT_ID}&panelTab=activity`, { waitUntil: 'domcontentloaded' });
-  const panel = await expectPanel(page, project.name);
+  const panel = await expectPanel(page, company.name);
   await expect(panel.locator('[data-record-timeline]')).toBeVisible();
-  await expect(panel.getByRole('button', { name: 'Nota', exact: true })).toBeVisible();
+  await expect(panel.getByLabel('Canale composer')).toBeVisible();
   const box = await panel.boundingBox();
   expect(Math.round(box?.width || 0)).toBe(390);
   await screenshot(page, 'timeline-activity-mobile.png');
@@ -482,8 +521,8 @@ test('cliente File desktop: documenti operativi e materiali richiesti', async ({
   await page.goto(`/companies?company=${COMPANY_ID}&panelTab=files`, { waitUntil: 'domcontentloaded' });
   const panel = await expectPanel(page, company.name);
   await expect(panel.getByRole('tab', { name: 'File' })).toHaveAttribute('aria-selected', 'true');
-  await expect(panel.locator('[data-document-row]')).toHaveCount(1);
-  await expect(panel.getByText('Materiali richiesti')).toBeVisible();
+  await expect(panel.locator('[data-document-row]')).toHaveCount(4);
+  await expect(panel.getByText('Materiali cliente')).toBeVisible();
   await expect(panel.getByText('Logo vettoriale')).toBeVisible();
   await screenshot(page, 'client-files-desktop.png');
 });
@@ -491,11 +530,12 @@ test('cliente File desktop: documenti operativi e materiali richiesti', async ({
 test('progetto File desktop: linking progetto e materiali nello stesso pannello', async ({ page }) => {
   await page.setViewportSize({ width: 1675, height: 939 });
   await page.goto(`/projects?project=${PROJECT_ID}&panelTab=files`, { waitUntil: 'domcontentloaded' });
-  const panel = await expectPanel(page, project.name);
+  const panel = await expectPanel(page, company.name);
   await expect(panel.getByRole('tab')).toHaveCount(4);
   await expect(panel.locator('[data-record-files]')).toBeVisible();
-  await expect(panel.getByRole('button', { name: 'Carica file', exact: true })).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Carica file', exact: true }).first()).toBeVisible();
   await screenshot(page, 'project-files-desktop.png');
+  await screenshot(page, 'record-panel-v2-files-desktop.png');
 });
 
 test('File: upload e nuova versione usano fixture locali esplicite', async ({ page }) => {
@@ -505,7 +545,8 @@ test('File: upload e nuova versione usano fixture locali esplicite', async ({ pa
   await panel.locator('input[type="file"]').nth(0).setInputFiles({ name: 'brief-operativo.pdf', mimeType: 'application/pdf', buffer: Buffer.from('fixture') });
   await expect(panel.locator('[data-document-row]')).toHaveCount(2);
   const chooserPromise = page.waitForEvent('filechooser');
-  await panel.getByRole('button', { name: 'Nuova versione' }).first().click();
+  await panel.getByRole('button', { name: 'Altre azioni file' }).first().click();
+  await page.getByRole('menuitem', { name: 'Nuova versione' }).click();
   const chooser = await chooserPromise;
   await chooser.setFiles({ name: 'brief-operativo-v2.pdf', mimeType: 'application/pdf', buffer: Buffer.from('fixture-v2') });
   await expect(panel.locator('[data-document-row]').first()).toContainText('v2');
@@ -519,17 +560,19 @@ test('Materiali: crea, riceve e rende non necessario senza rete reale', async ({
   const calls = await installOperationsMutationFixture(page);
   await page.goto(`/companies?company=${COMPANY_ID}&panelTab=files`, { waitUntil: 'domcontentloaded' });
   const panel = await expectPanel(page, company.name);
-  await panel.getByRole('button', { name: 'Richiedi materiale' }).click();
+  await panel.getByRole('button', { name: 'Richiedi materiali' }).click();
   await panel.getByPlaceholder('Titolo materiale').fill('Fotografie sede');
   await panel.getByPlaceholder('Descrizione opzionale').fill('Tre fotografie orizzontali.');
   await panel.getByRole('button', { name: 'Crea richiesta' }).click();
   const created = panel.locator('[data-material-row]').filter({ hasText: 'Fotografie sede' });
   await expect(created).toBeVisible();
+  await created.getByRole('button', { name: 'Altre azioni materiale' }).click();
   await created.getByRole('button', { name: 'Non necessario' }).click();
   await expect(created.getByText('Non necessario')).toBeVisible();
   const requested = panel.locator('[data-material-row]').filter({ hasText: 'Logo vettoriale' });
+  await requested.getByRole('button', { name: 'Altre azioni materiale' }).click();
   await requested.locator('select').selectOption(DOCUMENT_ID);
-  await requested.getByRole('button', { name: 'Collega e ricevi' }).click();
+  await requested.getByRole('button', { name: 'Collega' }).click();
   await expect(requested.getByText('Ricevuto')).toBeVisible();
   expect(calls.map((call) => `${call.method} ${call.pathname}`)).toEqual(expect.arrayContaining([
     'POST /api/tenant/record-operations/materials',
@@ -542,12 +585,12 @@ test('cliente Amministrazione desktop: aggregato finance reale e azioni supporta
   await page.setViewportSize({ width: 1672, height: 941 });
   await page.goto(`/companies?company=${COMPANY_ID}&panelTab=administration`, { waitUntil: 'domcontentloaded' });
   const panel = await expectPanel(page, company.name);
-  await expect(panel.getByText('Fatturato collegato')).toBeVisible();
-  await expect(panel.getByText('Preventivi', { exact: true })).toBeVisible();
-  await expect(panel.getByText('Contratti', { exact: true })).toBeVisible();
-  await expect(panel.getByText('Fatture e pagamenti')).toBeVisible();
+  await expect(panel.getByText('Valore progetto')).toBeVisible();
+  await expect(panel.getByText('Stato pagamenti')).toBeVisible();
+  await expect(panel.getByText('Fatture', { exact: true })).toBeVisible();
   await expect(panel.getByText('Servizi ricorrenti e rinnovi')).toBeVisible();
   await screenshot(page, 'client-administration-desktop.png');
+  await screenshot(page, 'record-panel-v2-administration-desktop.png');
 });
 
 test('Amministrazione: finance permission denied non espone dati', async ({ page }) => {
@@ -559,7 +602,20 @@ test('Amministrazione: finance permission denied non espone dati', async ({ page
   await page.goto(`/companies?company=${COMPANY_ID}&panelTab=administration`, { waitUntil: 'domcontentloaded' });
   const panel = await expectPanel(page, company.name);
   await expect(panel.getByText('Amministrazione non disponibile')).toBeVisible();
-  await expect(panel.getByText('Fatturato collegato')).toHaveCount(0);
+  await expect(panel.getByText('Valore progetto')).toHaveCount(0);
+});
+
+test('Amministrazione: registra pagamento e crea fattura usano i flussi canonici', async ({ page }) => {
+  const calls = await installFinanceMutationFixture(page);
+  await page.goto(`/companies?company=${COMPANY_ID}&panelTab=administration`, { waitUntil: 'domcontentloaded' });
+  const panel = await expectPanel(page, company.name);
+  await panel.getByRole('button', { name: 'Registra pagamento' }).click();
+  const form = panel.locator('[data-payment-form]');
+  await expect(form).toBeVisible();
+  await form.getByRole('button', { name: 'Registra', exact: true }).click();
+  await expect.poll(() => calls.length).toBe(1);
+  expect(calls[0]).toEqual({ method: 'POST', pathname: `/api/tenant/finance/invoices/${INVOICE_ID}/payments` });
+  await expect(panel.getByRole('link', { name: 'Crea fattura' })).toHaveAttribute('href', `/finance/invoices/new?company=${COMPANY_ID}`);
 });
 
 test('operazioni tablet: filtri File e materiali restano raggiungibili', async ({ page }) => {
@@ -567,17 +623,17 @@ test('operazioni tablet: filtri File e materiali restano raggiungibili', async (
   await page.goto(`/companies?company=${COMPANY_ID}&panelTab=files`, { waitUntil: 'domcontentloaded' });
   const panel = await expectPanel(page, company.name);
   await expect(panel.getByPlaceholder('Cerca file')).toBeVisible();
-  await expect(panel.getByRole('button', { name: 'Richiedi materiale' })).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Richiedi materiali' })).toBeVisible();
   await screenshot(page, 'operations-files-tablet.png');
 });
 
 test('operazioni mobile: File progetto resta full-screen e utilizzabile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/projects?project=${PROJECT_ID}&panelTab=files`, { waitUntil: 'domcontentloaded' });
-  const panel = await expectPanel(page, project.name);
+  const panel = await expectPanel(page, company.name);
   const box = await panel.boundingBox();
   expect(Math.round(box?.width || 0)).toBe(390);
-  await expect(panel.getByRole('button', { name: 'Carica file', exact: true })).toBeVisible();
-  await expect(panel.getByText('Materiali richiesti')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Carica file', exact: true }).first()).toBeVisible();
+  await expect(panel.getByText('Materiali cliente')).toBeVisible();
   await screenshot(page, 'operations-files-mobile.png');
 });

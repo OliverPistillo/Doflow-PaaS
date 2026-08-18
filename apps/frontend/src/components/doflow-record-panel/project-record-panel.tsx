@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { CalendarPlus, CheckCircle2, Mail, MessageCircle, Phone } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CalendarPlus, ExternalLink, Mail, MessageCircle, Phone, Plus, Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
 import { apiFetch } from "@/lib/api";
 import { commercialApi, type CommercialContact } from "@/lib/tenant-commercial-api";
@@ -13,73 +14,41 @@ import {
   normalizeProjectStage,
   projectStageLabel,
 } from "@/lib/project-stage-model";
-import {
-  RecordPanelEmptyState,
-  RecordPanelField,
-  RecordPanelSection,
-  UnifiedRecordPanel,
-  type RecordPanelAction,
-  type RecordPanelTab,
-} from "./unified-record-panel";
-import { RecordTimeline } from "./record-timeline";
-import { RecordFiles } from "./record-files";
-import { ProjectFinanceCard } from "./record-administration";
+import { UnifiedRecordPanel, type RecordPanelAction, type RecordPanelTab } from "./unified-record-panel";
+import { RecordOverview, type RecordPanelOverviewModel } from "./record-overview";
+import { RecordTimeline, type ComposerKind, type RecordTimelineHandle } from "./record-timeline";
+import { RecordFiles, type RecordFilesHandle } from "./record-files";
+import { RecordAdministration, type RecordAdministrationHandle } from "./record-administration";
 
 type ProjectRecord = Record<string, any>;
 type ProjectTask = Record<string, any>;
 type ListResponse<T> = { items: T[]; total?: number };
 
-const priorityLabels: Record<string, string> = {
-  low: "Bassa",
-  medium: "Media",
-  high: "Alta",
-  urgent: "Urgente",
-};
-
-function formatDate(value?: string | null, includeTime = false) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("it-IT", includeTime
-    ? { dateStyle: "medium", timeStyle: "short" }
-    : { dateStyle: "medium" }).format(date);
-}
-
 function isTaskOpen(task: ProjectTask) {
   return task.status !== "done";
 }
 
-function isTaskOverdue(task: ProjectTask) {
-  return isTaskOpen(task) && task.due_at && new Date(task.due_at).getTime() < Date.now();
+function nextStage(project?: ProjectRecord | null) {
+  if (!project) return null;
+  const normalized = normalizeProjectStage(project.status);
+  if (!normalized.mapped || normalized.stage === "paused") return null;
+  const stages = DOFLOW_PROJECT_STAGE_OPTIONS.filter((item) => item.value !== "paused");
+  const index = stages.findIndex((item) => item.value === normalized.stage);
+  return index >= 0 ? stages[index + 1]?.label || null : null;
 }
 
-function ProjectFlow({ project }: { project: ProjectRecord }) {
-  const normalized = normalizeProjectStage(project.status);
-  const current = normalized.mapped ? normalized.stage : null;
-  const positiveStages = DOFLOW_PROJECT_STAGE_OPTIONS.filter((stage) => stage.value !== "paused");
-  const currentPositiveIndex = positiveStages.findIndex((stage) => stage.value === current);
-  return (
-    <div className="space-y-4">
-      <RecordPanelSection title="Flusso di lavoro" description="La fase deriva esclusivamente da projects.status; le milestone restano indipendenti.">
-        <ol className="space-y-1">
-          {DOFLOW_PROJECT_STAGE_OPTIONS.map((stage, index) => {
-            const isCurrent = stage.value === current;
-            const completed = stage.value !== "paused" && current !== "paused" && currentPositiveIndex > index;
-            return (
-              <li key={stage.value} className={`flex items-center gap-3 rounded-xl border px-3 py-3 ${isCurrent ? "border-violet-300 bg-violet-50" : "border-transparent"}`} aria-current={isCurrent ? "step" : undefined}>
-                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${isCurrent ? "border-violet-600 bg-violet-600 text-white" : completed ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-300 bg-white text-slate-500"}`}>
-                  {completed ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
-                </span>
-                <span className={`text-sm font-medium ${isCurrent ? "text-violet-800" : "text-slate-700"}`}>{stage.label}</span>
-                {isCurrent ? <span className="ml-auto rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-violet-700">Fase corrente</span> : null}
-              </li>
-            );
-          })}
-        </ol>
-      </RecordPanelSection>
-      {!normalized.mapped ? <RecordPanelEmptyState title="Fase da verificare" description="Il valore corrente non è mappato e non viene trasformato automaticamente." /> : null}
-    </div>
-  );
+function isProjectPaused(project?: ProjectRecord | null) {
+  const normalized = normalizeProjectStage(project?.status);
+  return normalized.mapped && normalized.stage === "paused";
+}
+
+function taskTime(task: ProjectTask) {
+  const value = task.due_at ? new Date(task.due_at).getTime() : Number.POSITIVE_INFINITY;
+  return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY;
+}
+
+function primaryFooter(className = "") {
+  return `h-10 rounded-lg bg-gradient-to-r from-blue-600 to-violet-600 text-xs font-semibold text-white shadow-sm hover:from-blue-700 hover:to-violet-700 ${className}`;
 }
 
 export function DoflowProjectRecordPanel({
@@ -95,14 +64,17 @@ export function DoflowProjectRecordPanel({
   onTabChange: (tab: string) => void;
   onClose: () => void;
 }) {
-  const { canView } = useTenantAccess();
+  const { canView, canCreate } = useTenantAccess();
   const [project, setProject] = useState<ProjectRecord | null>(fallbackProject || null);
   const [tasks, setTasks] = useState<ProjectTask[]>([]);
   const [contact, setContact] = useState<CommercialContact | null>(null);
   const [members, setMembers] = useState<TeamMember[]>([]);
-  const [timelineDraft, setTimelineDraft] = useState<{ key: number; channel: "email" | "whatsapp"; body: string } | null>(null);
+  const [timelineDraft, setTimelineDraft] = useState<{ key: number; kind: ComposerKind; body?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const timelineRef = useRef<RecordTimelineHandle>(null);
+  const filesRef = useRef<RecordFilesHandle>(null);
+  const administrationRef = useRef<RecordAdministrationHandle>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,63 +107,81 @@ export function DoflowProjectRecordPanel({
   const phone = contact?.phone;
   const email = contact?.email;
   const openTasks = tasks.filter(isTaskOpen);
-  const overdueTasks = tasks.filter(isTaskOverdue);
+  const blockedTasks = openTasks.filter((task) => task.status === "blocked");
+  const nextTask = [...openTasks].sort((a, b) => taskTime(a) - taskTime(b))[0] || null;
   const status = projectStageLabel(project?.status, true);
-  const progress = Number(project?.progress || 0);
-  const overview = (
-    <div className="space-y-4">
-      <RecordPanelSection title="Percorso progetto">
-        <div className="flex items-center justify-between gap-4"><span className="text-sm font-semibold text-violet-700">{status}</span><span className="text-sm font-bold text-slate-950">{progress}%</span></div>
-        <Progress value={progress} className="mt-3 h-2" />
-      </RecordPanelSection>
-      <RecordPanelSection title="Panoramica">
-        <dl className="grid gap-4 sm:grid-cols-2">
-          <RecordPanelField label="Fase" value={status} />
-          <RecordPanelField label="Avanzamento" value={`${progress}%`} />
-          <RecordPanelField label="Priorità" value={priorityLabels[project?.priority] || project?.priority || "—"} />
-          <RecordPanelField label="Project manager" value={project?.project_manager_email || "Non assegnato"} sensitive />
-          <RecordPanelField label="Scadenza" value={formatDate(project?.due_date)} />
-          <RecordPanelField label="Cliente" value={project?.company_name || "Non collegato"} sensitive />
-          <RecordPanelField label="Attività aperte" value={openTasks.length} />
-          <RecordPanelField label="Attività scadute" value={overdueTasks.length} />
-          <RecordPanelField label="Ultimo aggiornamento" value={formatDate(project?.updated_at, true)} />
-        </dl>
-      </RecordPanelSection>
-      {contact ? <RecordPanelSection title="Referente cliente"><dl className="grid gap-4 sm:grid-cols-2"><RecordPanelField label="Nome" value={[contact.first_name, contact.last_name].filter(Boolean).join(" ")} sensitive /><RecordPanelField label="Email" value={contact.email || "—"} sensitive /><RecordPanelField label="Telefono" value={contact.phone || "—"} sensitive /></dl></RecordPanelSection> : null}
-      <ProjectFinanceCard projectId={recordId} />
-    </div>
-  );
+  const progress = Math.max(0, Math.min(100, Number(project?.progress || 0)));
+  const contactDisplayName = contact ? [contact.first_name, contact.last_name].filter(Boolean).join(" ") : project?.contact_name || null;
 
-  const tabs = useMemo<RecordPanelTab[]>(() => [
-    { value: "overview", label: "Panoramica", content: overview },
-    { value: "flow", label: "Flusso", content: project ? <ProjectFlow project={project} /> : null },
-    { value: "activity", label: "Attività e comunicazioni", content: <RecordTimeline recordKind="project" recordId={recordId} moduleKey="projects" phone={phone} email={email} members={members} draft={timelineDraft} /> },
-    { value: "files", label: "File", content: <RecordFiles recordKind="project" recordId={recordId} onSolicit={(channel, body) => { setTimelineDraft({ key: Date.now(), channel, body }); onTabChange("activity"); }} /> },
-  ], [email, members, onTabChange, overview, phone, project, recordId, timelineDraft]);
+  const overviewModel = useMemo<RecordPanelOverviewModel>(() => ({
+    recordKind: "project",
+    recordId,
+    nextAction: nextTask ? { title: nextTask.title, dueAt: nextTask.due_at } : null,
+    contact: { name: contactDisplayName, email, phone },
+    project: project ? {
+      id: recordId,
+      statusLabel: status,
+      progress,
+      nextStageLabel: nextStage(project),
+      paused: isProjectPaused(project),
+    } : null,
+    activitySummary: { open: openTasks.length, blocked: blockedTasks.length },
+  }), [blockedTasks.length, contactDisplayName, email, nextTask, openTasks.length, phone, progress, project, recordId, status]);
+
+  const compose = (composer: ComposerKind, body?: string) => {
+    setTimelineDraft({ key: Date.now(), kind: composer, body });
+    onTabChange("activity");
+    window.setTimeout(() => timelineRef.current?.compose(composer), 0);
+  };
 
   const actions: RecordPanelAction[] = [
-    { label: "Chiama", icon: Phone, onSelect: () => onTabChange("activity") },
-    { label: "WhatsApp", icon: MessageCircle, onSelect: () => onTabChange("activity") },
-    { label: "Email", icon: Mail, onSelect: () => onTabChange("activity") },
-    { label: "Nuova attività", icon: CalendarPlus, onSelect: () => onTabChange("activity") },
+    { label: "Apri progetto", icon: ExternalLink, href: `/projects/${encodeURIComponent(recordId)}`, primary: true },
+    { label: "Chiama", icon: Phone, onSelect: () => compose("call"), disabled: !phone, disabledReason: "Numero non disponibile" },
+    { label: "WhatsApp", icon: MessageCircle, onSelect: () => compose("whatsapp"), disabled: !phone, disabledReason: "Numero non disponibile" },
+    { label: "Email", icon: Mail, onSelect: () => compose("email"), disabled: !email, disabledReason: "Email non disponibile" },
+    { label: "Attività", icon: CalendarPlus, onSelect: () => compose("activity") },
   ];
 
-  return (
-    <UnifiedRecordPanel
-      open
-      onClose={onClose}
-      eyebrow="Progetto"
-      title={project?.name || "Dettaglio progetto"}
-      subtitle={project?.company_name || "Cliente non collegato"}
-      status={status}
-      owner={project?.project_manager_email || "Non assegnato"}
-      actions={actions}
-      moreActions={[{ label: "Apri scheda completa", href: `/projects/${encodeURIComponent(recordId)}` }]}
-      tabs={tabs}
-      activeTab={activeTab}
-      onTabChange={onTabChange}
-      loading={loading}
-      error={error}
-    />
-  );
+  const tabs: RecordPanelTab[] = [
+    {
+      value: "overview",
+      label: "Riepilogo",
+      content: <RecordOverview model={overviewModel} onOpenActivity={() => compose("activity")} />,
+      footer: <div className="grid grid-cols-2 gap-2"><Button variant="outline" className="h-10 rounded-lg border-[#dedfe6] text-xs" onClick={() => compose("note")}><MessageCircle className="mr-2 h-4 w-4" />Aggiungi nota</Button><Button className={primaryFooter()} onClick={() => compose("activity")}><Plus className="mr-2 h-4 w-4" />Nuova attività</Button></div>,
+    },
+    {
+      value: "activity",
+      label: "Attività",
+      content: <RecordTimeline ref={timelineRef} recordKind="project" recordId={recordId} moduleKey="projects" phone={phone} email={email} members={members} draft={timelineDraft} />,
+      footer: canCreate("projects") ? <Button className={primaryFooter("w-full")} onClick={() => timelineRef.current?.compose("activity")}><Plus className="mr-2 h-4 w-4" />Nuova attività</Button> : null,
+    },
+    {
+      value: "files",
+      label: "File",
+      content: <RecordFiles ref={filesRef} recordKind="project" recordId={recordId} onSolicit={(channel, body) => compose(channel, body)} />,
+      footer: canCreate("documents") ? <Button className={primaryFooter("w-full")} onClick={() => filesRef.current?.openUpload()}><Upload className="mr-2 h-4 w-4" />Carica file</Button> : null,
+    },
+    {
+      value: "administration",
+      label: "Amministrazione",
+      content: <RecordAdministration ref={administrationRef} recordKind="project" recordId={recordId} />,
+      footer: canCreate("finance") ? <div className="grid grid-cols-2 gap-2"><Button variant="outline" className="h-10 rounded-lg border-violet-300 text-xs text-violet-700" onClick={() => administrationRef.current?.openPayment()}>Registra pagamento</Button><Button asChild className={primaryFooter()}><Link href={`/finance/invoices/new?project=${encodeURIComponent(recordId)}`}><Plus className="mr-2 h-4 w-4" />Crea fattura</Link></Button></div> : null,
+    },
+  ];
+
+  return <UnifiedRecordPanel
+    open
+    onClose={onClose}
+    eyebrow="Cliente e progetto"
+    title={project?.company_name || project?.name || "Dettaglio progetto"}
+    subtitle={project?.name || "Progetto"}
+    status={status}
+    progress={progress}
+    actions={actions}
+    tabs={tabs}
+    activeTab={activeTab}
+    onTabChange={onTabChange}
+    loading={loading}
+    error={error}
+  />;
 }

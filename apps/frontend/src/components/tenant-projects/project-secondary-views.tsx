@@ -98,7 +98,7 @@ function ProjectButton({ id, name, onOpen }: { id: string; name: string; onOpen:
 
 export function DoflowProjectsTimelineView() {
   const { projects, members } = useSecondaryContext();
-  const panel = useUnifiedRecordPanelUrl({ enabled: true, paramKey: "project", tabs: ["overview", "flow", "activity", "files"], defaultTab: "overview" });
+  const panel = useUnifiedRecordPanelUrl({ enabled: true, paramKey: "project", tabs: ["overview", "activity", "files", "administration"], defaultTab: "overview" });
   const [search, setSearch] = useState(() => queryValue("search", ""));
   const [project, setProject] = useState(() => queryValue("project_id"));
   const [stage, setStage] = useState(() => queryValue("stage"));
@@ -152,7 +152,7 @@ export function DoflowProjectsTimelineView() {
 export function DoflowProjectsTasksView() {
   const { canUpdate } = useTenantAccess();
   const { projects, members } = useSecondaryContext();
-  const panel = useUnifiedRecordPanelUrl({ enabled: true, paramKey: "project", tabs: ["overview", "flow", "activity", "files"], defaultTab: "overview" });
+  const panel = useUnifiedRecordPanelUrl({ enabled: true, paramKey: "project", tabs: ["overview", "activity", "files", "administration"], defaultTab: "overview" });
   const role = String(getDoFlowUser()?.role || "").toLowerCase();
   const canAssign = ["owner", "admin", "manager", "superadmin", "super_admin"].includes(role);
   const [search, setSearch] = useState(() => queryValue("search", ""));
@@ -213,7 +213,7 @@ export function DoflowProjectsTasksView() {
 
 export function DoflowProjectsFilesView() {
   const { projects, members } = useSecondaryContext();
-  const panel = useUnifiedRecordPanelUrl({ enabled: true, paramKey: "project", tabs: ["overview", "flow", "activity", "files"], defaultTab: "overview" });
+  const panel = useUnifiedRecordPanelUrl({ enabled: true, paramKey: "project", tabs: ["overview", "activity", "files", "administration"], defaultTab: "overview" });
   const [search, setSearch] = useState(() => queryValue("search", ""));
   const [project, setProject] = useState(() => queryValue("project_id"));
   const [category, setCategory] = useState(() => queryValue("category"));

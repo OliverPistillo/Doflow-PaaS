@@ -163,15 +163,15 @@ test('acceptance CRM Projects: pipeline, cliente, progetto, viste globali e perf
   expect(new URL(page.url()).pathname).toBe('/pipeline');
   await page.goto(`/companies?acceptance=crm-projects&company=${COMPANY_ID}&panelTab=activity`, { waitUntil: 'domcontentloaded' });
   let panel = page.locator('[data-unified-record-panel]');
-  await expect(panel.getByRole('tab', { name: 'Attività e comunicazioni' })).toHaveAttribute('aria-selected', 'true');
+  await expect(panel.getByRole('tab', { name: 'Attività' })).toHaveAttribute('aria-selected', 'true');
   await panel.getByRole('tab', { name: 'File' }).click();
   await expect(panel.getByText('Materiali progetto')).toBeVisible();
   await panel.getByRole('tab', { name: 'Amministrazione' }).click();
-  await expect(panel.getByText('Fatturato collegato')).toBeVisible();
+  await expect(panel.getByText('Valore progetto')).toBeVisible();
   await page.goto(`/projects?acceptance=crm-projects&project=${PROJECT_ID}&panelTab=flow`, { waitUntil: 'domcontentloaded' });
   panel = page.locator('[data-unified-record-panel]');
-  await expect(panel.getByRole('tab', { name: 'Flusso' })).toHaveAttribute('aria-selected', 'true');
-  await panel.getByRole('tab', { name: 'Attività e comunicazioni' }).click();
+  await expect(panel.getByRole('tab', { name: 'Riepilogo' })).toHaveAttribute('aria-selected', 'true');
+  await panel.getByRole('tab', { name: 'Attività' }).click();
   await panel.getByRole('tab', { name: 'File' }).click();
   for (const route of ['/projects/timeline', '/projects/tasks', '/projects/files', '/reports/team']) {
     await page.goto(route, { waitUntil: 'domcontentloaded' });
