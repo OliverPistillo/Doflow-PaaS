@@ -393,9 +393,10 @@ test("Context E has a standalone command and no global-result read dependency", 
 });
 
 test("final orchestration checkpoints gates before spawn and enforces hard baselines and safe cleanup", async () => {
-  const [orchestratorSource, specSource] = await Promise.all([
+  const [orchestratorSource, specSource, visualSpecSource] = await Promise.all([
     readFile(path.join(root, "scripts/commercial-core-isolated-stack.mjs"), "utf8"),
     readFile(path.join(root, "tests/acceptance/final-global-isolated.spec.ts"), "utf8"),
+    readFile(path.join(root, "tests/acceptance/final-global-visual.spec.ts"), "utf8"),
   ]);
   const executeGateSource = orchestratorSource.slice(
     orchestratorSource.indexOf("const executePlaywrightGate"),
@@ -429,6 +430,12 @@ test("final orchestration checkpoints gates before spawn and enforces hard basel
   assert.match(orchestratorSource, /workspace-readiness-runtime\.test\.mjs/);
   assert.match(orchestratorSource, /playwright\.workspace-readiness\.config\.ts/);
   assert.match(orchestratorSource, /workspaceReadinessRuntime/);
+  assert.match(orchestratorSource, /DOFLOW_FINAL_VISUAL_OUTPUT_DIR: path\.join\(runDirectory, "visual-actual"\)/);
+  assert.match(visualSpecSource, /process\.env\.DOFLOW_FINAL_VISUAL_OUTPUT_DIR/);
+  assert.match(
+    visualSpecSource,
+    /docs', 'design-references', 'doflow-crm-projects', 'actual', 'final-rc'/,
+  );
   assert.match(specSource, /privacy-safe browser API response timings from Context A/);
   assert.match(specSource, /unexpected5xxCount/);
   assert.match(orchestratorSource, /maxBuffer: options\.maxBuffer \?\? 64 \* 1024 \* 1024/);

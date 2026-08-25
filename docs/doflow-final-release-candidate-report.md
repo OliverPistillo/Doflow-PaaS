@@ -329,3 +329,31 @@ il Context globale verifica lo stesso marker per il project manager. La coppia
 globale mirata, eseguita dopo tutti i propri prerequisiti, passa 1/1 in 34,0 s.
 La coppia finale viene quindi riavviata da zero sulla working tree aggiornata e
 congelata.
+
+## Addendum produzione — rollback 5B.2 e hotfix standalone Next 16.3.2
+
+Il push della RC `12dc85d575cccdfb87bd9175cc129e8083fd4499` ha attivato
+l'autodeploy Coolify. Il backend nuovo ha acquisito l'advisory lock, applicato
+le 11 migrazioni compilate 171 e 175–184, verificato max 184 e zero pending e
+avviato NestJS. Il database conserva questo schema additivo.
+
+Il frontend Next 16.3.1 ha invece terminato prima di aprire la porta 3000:
+l'output standalone Turbopack/pnpm conteneva il ramo CJS di `@swc/helpers`
+0.5.23, ma ometteva `esm/_interop_require_default.js`, richiesto a runtime.
+Frontend e backend sono stati rollbackati alle immagini applicative
+`961c7d0d1886742f9330fad81100a2634596cc02`; non è stato eseguito alcun
+cutover dati, mapper, seed o reconciliation e non è stato effettuato un restore
+del database.
+
+La correzione minima aggiorna `next` ed `eslint-config-next` da 16.3.1 a
+16.3.2, release contenente la correzione upstream vercel/next.js #97372. Non
+sono stati aggiunti fallback, copie manuali di helper, modifiche UI o schema.
+Il gate `pnpm acceptance:frontend-production-image` costruisce l'esatto
+Dockerfile, richiede package/CJS/ESM completi, avvia `server.js`, verifica porta
+3000, route e asset, stop/start, tre restart, dieci probe, cinque minuti di
+stabilità e teardown. Il run locale è `FRONTEND PRODUCTION IMAGE ACCEPTANCE GO`.
+
+Il data cutover resta fail-closed: dopo il deploy hotfix sono consentiti
+soltanto `status` e `dry-run`; `apply` richiede un nuovo backup PostgreSQL e un
+nuovo snapshot MinIO verificati, copiati off-server e identificati da un nuovo
+backup-ref.

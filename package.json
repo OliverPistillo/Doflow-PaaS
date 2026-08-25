@@ -60,6 +60,7 @@
     "acceptance:nest11": "node scripts/commercial-core-isolated-stack.mjs run-nest11",
     "acceptance:migration-pre179": "node scripts/pre179-migration-rehearsal.mjs",
     "acceptance:production-startup": "node scripts/production-startup-acceptance.mjs",
+    "acceptance:frontend-production-image": "node scripts/frontend-production-image-acceptance.mjs",
     "audit:browser-auth": "node scripts/browser-auth-authority-audit.mjs",
     "audit:release-candidate": "node scripts/final-release-audit.mjs",
     "audit:security:final": "node scripts/final-security-audit.mjs"

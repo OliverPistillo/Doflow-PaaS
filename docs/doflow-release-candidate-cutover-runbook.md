@@ -423,3 +423,42 @@ rollback applicativo verso deployment precedenti è disponibile.
 La password PostgreSQL osservata accidentalmente durante il preflight non deve
 essere riportata o ruotata durante il cutover. La rotazione coordinata resta un
 task di sicurezza post-cutover.
+
+## Hotfix frontend standalone dopo il rollback 5B.2
+
+Il primo autodeploy della RC ha applicato correttamente lo schema fino alla 184,
+ma l'immagine frontend Next 16.3.1 è uscita prima della porta 3000 per l'assenza
+di `@swc/helpers/esm/_interop_require_default.js` nell'output standalone
+Turbopack/pnpm. Entrambe le applicazioni sono state riportate alle immagini
+`961c7d0d1886742f9330fad81100a2634596cc02`; lo schema 184 è rimasto applicato
+e il cutover dati non è iniziato.
+
+L'hotfix usa versioni esatte `next@16.3.2` ed
+`eslint-config-next@16.3.2`, senza fallback o copie manuali. Prima del push è
+obbligatorio:
+
+```text
+pnpm acceptance:frontend-production-image
+pnpm acceptance:final
+```
+
+Il primo comando costruisce `apps/frontend/Dockerfile` dal root context,
+verifica package/CJS/ESM di `@swc/helpers`, comando `server.js`, porta 3000,
+route, asset, stop/start, tre restart, dieci probe, cinque minuti senza restart
+loop e teardown selettivo.
+
+Dopo l'autodeploy hotfix verificare che backend e frontend usino lo stesso SHA,
+che il migration runner riporti max 184/zero pending/no-op, che frontend resti
+running e che il CORS estraneo sia un rifiuto controllato senza `500`. Solo a
+quel punto eseguire nel container backend:
+
+```sh
+node apps/backend/dist/scripts/doflow-production-cutover.js status
+node apps/backend/dist/scripts/doflow-production-cutover.js dry-run --tenant=doflow
+```
+
+Fermarsi dopo il dry-run. Il backup-ref 09:20 resta prova di rollback totale
+pre-schema, ma non autorizza automaticamente `apply`: servono un nuovo dump
+PostgreSQL, un nuovo snapshot MinIO, copie off-server e checksum coincidenti.
+Nessun mapper, seed o `verify` post-apply va eseguito prima della nuova conferma
+esplicita.

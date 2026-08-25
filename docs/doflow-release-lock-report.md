@@ -279,3 +279,28 @@ Il push deve restare fail-closed fino alla staged review e all'ultimo fetch.
 Non è stato eseguito SQL manuale e `DB_SYNC=true` resta vietato. La credenziale
 PostgreSQL accidentalmente esposta durante il preflight non è riportata; la
 rotazione è un task post-cutover separato.
+
+## Hotfix production frontend — stato dopo il rollback
+
+Il commit RC `12dc85d575cccdfb87bd9175cc129e8083fd4499` è stato pubblicato
+su `origin/main`. L'autodeploy backend ha applicato le migrazioni compilate fino
+alla 184, ha verificato zero pending e ha superato health e CORS. L'immagine
+frontend Next 16.3.1 ha invece raggiunto il limite di dieci restart con
+`MODULE_NOT_FOUND` su `@swc/helpers/esm/_interop_require_default.js`.
+
+Il cutover è stato fermato prima di `status`, `dry-run`, `apply`, mapper, seed o
+reconciliation. Frontend e backend sono stati rollbackati alla precedente
+immagine applicativa `961c7d0d1886742f9330fad81100a2634596cc02`; il database
+mantiene lo schema additivo max 184 e non è stato ripristinato.
+
+L'hotfix selettivo aggiorna esclusivamente Next ed ESLint config alla 16.3.2,
+aggiunge il gate permanente dell'esatta immagine frontend e documenta il
+blocco. Il gate locale verifica in modo fail-closed l'helper ESM, avvia
+`server.js`, esegue stop/start e tre restart, osserva il container per cinque
+minuti, completa dieci probe e rimuove soltanto le risorse dedicate. Il run è
+verde senza fallback `outputFileTracingIncludes` o copie manuali.
+
+Dopo il futuro autodeploy hotfix, la ripresa è limitata a `status` e `dry-run`.
+`apply` resta trattenuto finché non esistono un nuovo backup PostgreSQL, un
+nuovo snapshot MinIO, copie off-server, checksum coincidenti e un nuovo
+backup-ref esplicitamente confermato.

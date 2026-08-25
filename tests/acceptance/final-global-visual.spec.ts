@@ -8,7 +8,15 @@ const root = path.resolve(__dirname, '../..');
 const credentialPath = path.join(root, '.visual-auth', 'acceptance-credentials.json');
 const runtimeConfigPath = path.join(root, '.visual-runtime', 'commercial-core-stack.json');
 const resultPath = path.join(root, '.visual-runtime', 'final-global-visual-result.json');
-const actualDir = path.join(root, 'docs', 'design-references', 'doflow-crm-projects', 'actual', 'final-rc');
+const configuredActualDir = process.env.DOFLOW_FINAL_VISUAL_OUTPUT_DIR?.trim();
+const actualDir = configuredActualDir
+  ? path.resolve(root, configuredActualDir)
+  : path.join(root, 'docs', 'design-references', 'doflow-crm-projects', 'actual', 'final-rc');
+const relativeActualDir = path.relative(root, actualDir);
+if (relativeActualDir.startsWith('..') || path.isAbsolute(relativeActualDir)) {
+  throw new Error('DOFLOW_FINAL_VISUAL_OUTPUT_DIR must stay inside the repository workspace.');
+}
+const reportedActualDir = relativeActualDir.split(path.sep).join('/');
 const backendRequire = createRequire(path.join(root, 'apps/backend/package.json'));
 const { Client: PgClient } = backendRequire('pg');
 
@@ -446,7 +454,7 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
       consoleWarnings: 0,
       unexpected5xx: 0,
       privacy: 'synthetic-only; password and OTP inputs masked',
-      outputDirectory: 'docs/design-references/doflow-crm-projects/actual/final-rc',
+      outputDirectory: reportedActualDir,
     };
     await writeFile(resultPath, JSON.stringify(result, null, 2));
   } finally {

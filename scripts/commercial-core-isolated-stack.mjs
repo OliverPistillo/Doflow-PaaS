@@ -1472,7 +1472,12 @@ async function runFinalAcceptanceLocked(runId) {
       probes: health,
     });
   };
-  const executePlaywrightGate = async (playwrightConfig, stage, evidenceContract = null) => {
+  const executePlaywrightGate = async (
+    playwrightConfig,
+    stage,
+    evidenceContract = null,
+    extraEnv = {},
+  ) => {
     if (evidenceContract?.path) await rm(evidenceContract.path, { force: true });
     await recordProgress(stage, "running", { config: playwrightConfig });
     const gateStartedAtMs = Date.now();
@@ -1480,6 +1485,7 @@ async function runFinalAcceptanceLocked(runId) {
     try {
       result = runPlaywrightConfig(playwrightConfig, {
         DOFLOW_ACCEPTANCE_RUN_ID: runId,
+        ...extraEnv,
       });
     } catch (error) {
       result = {
@@ -1714,7 +1720,14 @@ async function runFinalAcceptanceLocked(runId) {
     await atomicWriteJson(path.join(runtimeDir, "final-global-acceptance-result.json"), globalResult);
 
     if (!blockingResult) {
-      const visualGate = await executePlaywrightGate("playwright.final-visual.config.ts", "visual");
+      const visualGate = await executePlaywrightGate(
+        "playwright.final-visual.config.ts",
+        "visual",
+        null,
+        {
+          DOFLOW_FINAL_VISUAL_OUTPUT_DIR: path.join(runDirectory, "visual-actual"),
+        },
+      );
       await probeHealth();
       visualResult = await readJsonIfPresent(path.join(runtimeDir, "final-global-visual-result.json"), null);
       if (!visualGate.passed) blockingResult = visualGate;
