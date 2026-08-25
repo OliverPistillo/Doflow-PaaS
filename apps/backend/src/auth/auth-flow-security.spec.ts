@@ -307,6 +307,136 @@ describe('AuthMiddleware partial-session gate', () => {
     expect(webSessions.assertCsrf).toHaveBeenCalledTimes(2);
     expect(next).toHaveBeenCalledTimes(2);
   });
+
+  it.each([
+    '/api/auth/login',
+    '/api/auth/forgot-password',
+    '/api/auth/reset-password',
+    '/api/auth/accept-invite',
+    '/api/auth/handoff/exchange',
+    '/api/auth/signup-tenant',
+  ])('ignora una sessione stale nel bootstrap POST %s mantenendo il controllo Origin', async (originalUrl) => {
+    const webSessions = {
+      isBrowserRequest: jest.fn().mockReturnValue(true),
+      assertBrowserOrigin: jest.fn(),
+      resolve: jest.fn().mockRejectedValue(new Error('la sessione stale non deve essere risolta')),
+      assertCsrf: jest.fn(),
+    };
+    const middleware = new AuthMiddleware(webSessions as any);
+    const next = jest.fn();
+
+    await middleware.use(
+      {
+        headers: {
+          origin: 'https://app.doflow.it',
+          cookie: '__Host-doflow_session=synthetic-existing-session; doflow_csrf=stale',
+          'x-csrf-token': 'stale',
+        },
+        method: 'POST',
+        originalUrl: `${originalUrl}?source=browser`,
+      } as any,
+      {} as any,
+      next,
+    );
+
+    expect(webSessions.assertBrowserOrigin).toHaveBeenCalledTimes(1);
+    expect(webSessions.resolve).not.toHaveBeenCalled();
+    expect(webSessions.assertCsrf).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('rifiuta Origin estranea e browser bearer anche sui bootstrap anonimi', async () => {
+    const forbiddenOrigin = new ForbiddenException('Origin browser non consentita');
+    const webSessions = {
+      isBrowserRequest: jest.fn().mockReturnValue(true),
+      assertBrowserOrigin: jest.fn(() => { throw forbiddenOrigin; }),
+      resolve: jest.fn(),
+    };
+    const middleware = new AuthMiddleware(webSessions as any);
+
+    await expect(middleware.use(
+      { headers: { origin: 'https://evil.invalid' }, method: 'POST', originalUrl: '/api/auth/login' } as any,
+      {} as any,
+      jest.fn(),
+    )).rejects.toBe(forbiddenOrigin);
+
+    const response = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+    const next = jest.fn();
+    await middleware.use(
+      {
+        headers: { origin: 'https://app.doflow.it', authorization: 'Bearer forbidden-browser-token' },
+        method: 'POST',
+        originalUrl: '/api/auth/login',
+      } as any,
+      response as any,
+      next,
+    );
+    expect(response.status).toHaveBeenCalledWith(400);
+    expect(response.json).toHaveBeenCalledWith({ error: 'BROWSER_BEARER_FORBIDDEN' });
+    expect(next).not.toHaveBeenCalled();
+    expect(webSessions.resolve).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    '/api/auth/logout',
+    '/api/auth/mfa/confirm',
+    '/api/auth/mfa/verify',
+    '/api/auth/handoff',
+    '/api/tenant/doflow/identity/preferences',
+  ])('mantiene CSRF obbligatorio sulla mutation session-authenticated %s', async (originalUrl) => {
+    const missingCsrf = new UnauthorizedException('Token CSRF non valido');
+    const session = {
+      user: {
+        sub: 'u1', id: 'u1', email: 'safe@example.test', role: 'owner',
+        tenantId: 'doflow', tenantSlug: 'doflow', authStage: 'FULL',
+      },
+      csrfToken: 'expected',
+    };
+    const webSessions = {
+      isBrowserRequest: jest.fn().mockReturnValue(true),
+      assertBrowserOrigin: jest.fn(),
+      resolve: jest.fn().mockResolvedValue(session),
+      assertCsrf: jest.fn(() => { throw missingCsrf; }),
+    };
+    const middleware = new AuthMiddleware(webSessions as any);
+
+    await expect(middleware.use(
+      { headers: { origin: 'https://app.doflow.it' }, method: 'POST', originalUrl } as any,
+      {} as any,
+      jest.fn(),
+    )).rejects.toBe(missingCsrf);
+    expect(webSessions.resolve).toHaveBeenCalledTimes(1);
+    expect(webSessions.assertCsrf).toHaveBeenCalledWith(expect.anything(), session);
+  });
+
+  it('lascia passare una mutation protetta con Origin e CSRF validi', async () => {
+    const session = {
+      user: {
+        sub: 'u1', id: 'u1', email: 'safe@example.test', role: 'owner',
+        tenantId: 'doflow', tenantSlug: 'doflow', authStage: 'FULL',
+      },
+      csrfToken: 'expected',
+    };
+    const webSessions = {
+      isBrowserRequest: jest.fn().mockReturnValue(true),
+      assertBrowserOrigin: jest.fn(),
+      resolve: jest.fn().mockResolvedValue(session),
+      assertCsrf: jest.fn(),
+    };
+    const next = jest.fn();
+    await new AuthMiddleware(webSessions as any).use(
+      {
+        headers: { origin: 'https://app.doflow.it', 'x-csrf-token': 'expected' },
+        method: 'POST',
+        originalUrl: '/api/auth/logout',
+      } as any,
+      {} as any,
+      next,
+    );
+    expect(webSessions.assertBrowserOrigin).toHaveBeenCalledTimes(1);
+    expect(webSessions.assertCsrf).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('Public signup contract', () => {

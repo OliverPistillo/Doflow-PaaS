@@ -39,10 +39,27 @@ non esisterà un handoff opaco, single-use e auditato.
 | produzione | `__Host-doflow_session`, HttpOnly, Secure, host-only, SameSite=Lax, Path=/ | `doflow_csrf`, Secure, SameSite=Lax; dominio configurabile |
 
 Senza remember-me il cookie è di sessione; con remember-me il `Max-Age` è
-coerente con il TTL Redis. Ogni mutazione cookie-authenticated richiede il
-double-submit legato alla sessione e un origin in `CORS_ORIGINS`. WebSocket usa
-la stessa sessione nel handshake, valida l'origin, richiede stage `FULL` e
-rivalida periodicamente revoca/scadenza.
+coerente con il TTL Redis. Ogni mutazione browser richiede sempre un origin in
+`CORS_ORIGINS`. Le mutation session-authenticated richiedono inoltre il
+double-submit legato alla sessione. WebSocket usa la stessa sessione nel
+handshake, valida l'origin, richiede stage `FULL` e rivalida periodicamente
+revoca/scadenza.
+
+Le sole mutation auth che ignorano una sessione cookie eventualmente stale
+sono allowlisted per metodo e path esatto:
+
+- bootstrap anonimo: `POST /auth/login`, `/auth/forgot-password` e
+  `/auth/signup-tenant`;
+- bootstrap con token funzionale: `POST /auth/reset-password`,
+  `/auth/accept-invite` e `/auth/handoff/exchange`;
+- OAuth bootstrap: `GET /auth/google` e `/auth/google/callback`, che sono metodi
+  safe e non usano la vecchia sessione come autorità applicativa.
+
+L'allowlist non comprende prefissi o wildcard. `POST /auth/logout`,
+`/auth/mfa/confirm`, `/auth/mfa/verify`, `/auth/handoff` e tutte le altre
+mutation protette continuano a risolvere la sessione e a richiedere CSRF.
+Il reset password, dopo la validazione del token funzionale, revoca tutte le
+sessioni dell'utente; non esiste un endpoint browser separato di revoca globale.
 
 ## Topologia produzione
 

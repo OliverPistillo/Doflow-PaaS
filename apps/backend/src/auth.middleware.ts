@@ -17,6 +17,34 @@ const MFA_ALLOWED_PATH_PREFIXES = [
   '/api/health',
 ] as const;
 
+/**
+ * Mutation che iniziano o completano un flusso auth senza usare una sessione
+ * browser preesistente come autorità. L'allowlist è intenzionalmente esatta:
+ * Origin validation e divieto di browser bearer restano applicati prima di
+ * questo controllo.
+ */
+const SESSION_INDEPENDENT_AUTH_BOOTSTRAPS = new Set([
+  'POST /auth/login',
+  'POST /auth/forgot-password',
+  'POST /auth/reset-password',
+  'POST /auth/accept-invite',
+  'POST /auth/handoff/exchange',
+  'POST /auth/signup-tenant',
+]);
+
+function normalizedRequestPath(req: Request) {
+  const raw = String((req as any).originalUrl ?? req.url ?? '/');
+  const pathname = raw.split(/[?#]/, 1)[0].toLowerCase();
+  const withoutApi = pathname === '/api'
+    ? '/'
+    : pathname.startsWith('/api/')
+      ? pathname.slice(4)
+      : pathname;
+  return withoutApi.length > 1 && withoutApi.endsWith('/')
+    ? withoutApi.slice(0, -1)
+    : withoutApi;
+}
+
 @Injectable()
 export class AuthMiddleware implements NestMiddleware {
   constructor(private readonly webSessions: WebSessionService) {}
@@ -26,6 +54,8 @@ export class AuthMiddleware implements NestMiddleware {
     const isWebRequest = this.webSessions.isBrowserRequest(req);
     const method = String(req.method || 'GET').toUpperCase();
     const isUnsafe = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+    const path = normalizedRequestPath(req);
+    const isSessionIndependentBootstrap = SESSION_INDEPENDENT_AUTH_BOOTSTRAPS.has(`${method} ${path}`);
 
     if (isWebRequest && authHeader) {
       return res.status(400).json({ error: 'BROWSER_BEARER_FORBIDDEN' });
@@ -78,7 +108,7 @@ export class AuthMiddleware implements NestMiddleware {
         // Token invalido o scaduto: non impostiamo req.user.
         // Gli endpoint protetti gestiranno l'assenza del payload.
       }
-    } else {
+    } else if (!isSessionIndependentBootstrap) {
       const session = await this.webSessions.resolve(req);
       if (session) {
         const authUser = session.user;
@@ -86,10 +116,10 @@ export class AuthMiddleware implements NestMiddleware {
         (req as any).authUser = authUser;
         (req as any).webSession = session;
 
-        const path = String((req as any).originalUrl ?? req.url ?? '').toLowerCase();
         // Qualsiasi mutation eseguita mentre esiste una sessione cookie richiede
-        // il double-submit CSRF, incluse logout, MFA e le route /auth/*.
-        // I bootstrap anonimi non hanno ancora una sessione e non passano qui.
+        // il double-submit CSRF, incluse logout, MFA e le route auth protette.
+        // I bootstrap esplicitamente allowlisted ignorano invece del tutto una
+        // sessione precedente e non entrano in questo ramo.
         if (isUnsafe) this.webSessions.assertCsrf(req, session);
 
         const stage = String(authUser.authStage || 'FULL').toUpperCase();

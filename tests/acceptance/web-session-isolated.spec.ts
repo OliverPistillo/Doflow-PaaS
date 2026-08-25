@@ -83,6 +83,17 @@ function observeBrowserAuth(context: BrowserContext, violations: string[]) {
   });
 }
 
+async function replaceReadableCsrf(context: BrowserContext, value?: string) {
+  await context.clearCookies({ name: 'doflow_csrf' });
+  if (!value) return;
+  await context.addCookies([{
+    name: 'doflow_csrf',
+    value,
+    url: 'http://localhost:3100',
+    sameSite: 'Lax',
+  }]);
+}
+
 async function login(
   context: BrowserContext,
   email: string,
@@ -194,6 +205,108 @@ test('browser web auth usa esclusivamente sessioni opache HttpOnly nei Context A
 
   try {
     await redis.connect();
+
+    const bootstrapContext = await browser.newContext();
+    contexts.push(bootstrapContext);
+    observeBrowserAuth(bootstrapContext, violations);
+    const bootstrapPage = await bootstrapContext.newPage();
+    await bootstrapPage.goto('/login');
+
+    const initialTenantLogin = await appFetch(bootstrapPage, '/auth/login', {
+      method: 'POST',
+      body: { email: credentials.email, password: credentials.password, rememberMe: false },
+    });
+    expect(initialTenantLogin.ok).toBe(true);
+    const initialTenantSession = (await bootstrapContext.cookies())
+      .find((cookie) => cookie.name === 'doflow_session')?.value;
+    expect(initialTenantSession).toBeTruthy();
+
+    await replaceReadableCsrf(bootstrapContext);
+    expect((await appFetch(bootstrapPage, '/auth/logout', { method: 'POST' })).status).toBe(401);
+    expect((await appFetch(bootstrapPage, '/auth/mfa/verify', {
+      method: 'POST',
+      body: { code: '000000' },
+    })).status).toBe(401);
+    expect((await appFetch(bootstrapPage, '/auth/handoff', {
+      method: 'POST',
+      body: { tenantTarget: 'doflow' },
+    })).status).toBe(401);
+
+    const missingCsrfTenantLogin = await appFetch(bootstrapPage, '/auth/login', {
+      method: 'POST',
+      body: { email: credentials.email, password: credentials.password, rememberMe: false },
+    });
+    expect(missingCsrfTenantLogin.ok).toBe(true);
+    expect((await bootstrapContext.cookies()).find((cookie) => cookie.name === 'doflow_session')?.value)
+      .not.toBe(initialTenantSession);
+
+    const staleCsrf = 'synthetic-stale-browser-csrf';
+    await replaceReadableCsrf(bootstrapContext, staleCsrf);
+    const staleCsrfTenantLogin = await appFetch(bootstrapPage, '/auth/login', {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': staleCsrf },
+      body: { email: credentials.email, password: credentials.password, rememberMe: false },
+    });
+    expect(staleCsrfTenantLogin.ok).toBe(true);
+
+    await replaceReadableCsrf(bootstrapContext, staleCsrf);
+    expect((await appFetch(bootstrapPage, '/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': staleCsrf },
+      body: { email: 'missing.user@acceptance.invalid' },
+    })).ok).toBe(true);
+    expect((await appFetch(bootstrapPage, '/auth/reset-password', {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': staleCsrf },
+      body: {
+        token: 'synthetic-invalid-functional-token',
+        password: 'synthetic-password-not-applied',
+        tenant: 'doflow',
+      },
+    })).status).toBe(400);
+    expect((await appFetch(bootstrapPage, '/auth/accept-invite', {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': staleCsrf },
+      body: {
+        token: 'synthetic-invalid-invite-token',
+        password: 'synthetic-password-not-applied',
+        tenant: 'doflow',
+      },
+    })).status).toBe(400);
+
+    const foreignOriginLogin = await bootstrapContext.request.post(
+      'http://localhost:3401/api/auth/login',
+      {
+        headers: { Origin: 'https://evil.invalid', 'X-Doflow-Web': '1' },
+        data: { email: credentials.email, password: credentials.password },
+      },
+    );
+    expect(foreignOriginLogin.status()).toBe(403);
+    const bearerBootstrap = await bootstrapContext.request.post(
+      'http://localhost:3401/api/auth/login',
+      {
+        headers: {
+          Origin: 'http://localhost:3100',
+          'X-Doflow-Web': '1',
+          Authorization: 'Bearer browser-forbidden-synthetic-value',
+        },
+        data: { email: credentials.email, password: credentials.password },
+      },
+    );
+    expect(bearerBootstrap.status()).toBe(400);
+
+    await replaceReadableCsrf(bootstrapContext, staleCsrf);
+    const staleSessionSuperadminLogin = await appFetch(bootstrapPage, '/auth/login', {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': staleCsrf },
+      body: {
+        email: 'platform.superadmin@acceptance.invalid',
+        password: credentials.password,
+        rememberMe: false,
+      },
+    });
+    expect(staleSessionSuperadminLogin.ok).toBe(true);
+    expect((await appFetch(bootstrapPage, '/auth/session-stage')).json.tenantSlug).toBe('public');
 
     const headerlessBrowser = await browser.newContext();
     contexts.push(headerlessBrowser);
