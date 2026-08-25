@@ -17,7 +17,17 @@ export function KnowledgeAssetCollectionsPage() {
   const [editingId, setEditingId] = useState("");
 
   const load = async () => setItems(itemsOf(await knowledgeApi.listAssetCollections()));
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const submit = async () => {
     try {

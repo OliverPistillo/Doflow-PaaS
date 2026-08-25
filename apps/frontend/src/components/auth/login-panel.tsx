@@ -10,13 +10,12 @@ import * as z from "zod";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getApiBaseUrl } from "@/lib/api";
 import {
   getTenantLoginUrl,
   isInternalDoflowTenant,
   normalizeTenantSlug,
 } from "@/lib/tenant-url";
-import { storeAuthToken } from "@/lib/auth-storage";
 
 import {
   AlertDialog,
@@ -37,25 +36,6 @@ import { Eye, EyeOff, Loader2, AlertCircle, Mail, Lock } from "lucide-react";
 
 const MAIN_DB_NAME = "public";
 
-type JwtPayload = {
-  email?: string;
-  role?: string;
-  tenantId?: string;
-  tenant_id?: string;
-  tenantSlug?: string;
-  authStage?: string;
-  mfa_pending?: boolean;
-};
-
-function parseJwtPayload(token: string): JwtPayload | null {
-  try {
-    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    return JSON.parse(atob(base64)) as JwtPayload;
-  } catch {
-    return null;
-  }
-}
-
 function normalizeRole(role?: string) {
   const r = String(role ?? "")
     .toUpperCase()
@@ -68,12 +48,8 @@ function normalizeRole(role?: string) {
   return "USER";
 }
 
-function isMfaPending(payload?: any) {
-  return (
-    payload?.mfa_pending === true ||
-    payload?.authStage === "MFA_PENDING" ||
-    payload?.authStage === "MFA_SETUP_NEEDED"
-  );
+function isMfaPending(stage?: string) {
+  return stage === "MFA_PENDING" || stage === "MFA_SETUP_NEEDED";
 }
 
 const loginSchema = z.object({
@@ -87,7 +63,6 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 type LoginResponse = {
-  token: string;
   error?: string;
   message?: string;
   mfa?: { required?: boolean; stage?: "FULL" | "MFA_PENDING" | "MFA_SETUP_NEEDED" };
@@ -96,6 +71,7 @@ type LoginResponse = {
     tenant_id?: string;
     schema?: string;
     role?: string;
+    authStage?: string;
   };
 };
 
@@ -181,18 +157,15 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
       try {
         const result = await apiFetch<{
           kind: "login";
-          token: string;
           tenantTarget: string;
           authStage: string;
           next: "dashboard" | "mfa" | "onboarding" | "superadmin";
           rememberMe: boolean;
         }>("/auth/handoff/exchange", {
           method: "POST",
-          auth: false,
           body: JSON.stringify({ handoff, tenantTarget }),
         });
-        if (result.kind !== "login" || !result.token) throw new Error();
-        storeAuthToken(result.token, result.rememberMe);
+        if (result.kind !== "login") throw new Error();
         if (result.next === "mfa") {
           window.location.replace(`/${result.tenantTarget}/mfa`);
         } else if (result.next === "superadmin") {
@@ -226,20 +199,18 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
       if (isAppHost) headers["x-doflow-tenant-id"] = MAIN_DB_NAME;
       const data = await apiFetch<LoginResponse>("/auth/login", {
         method: "POST",
-        auth: false,
         headers,
         body: JSON.stringify({
           email: values.email,
           password: values.password,
+          rememberMe: values.rememberMe === true,
           realm,
           tenantSlug: tenantSub ?? undefined,
         }),
       });
       if (data?.error) throw new Error(data.error || data.message);
-      if (!data?.token) throw new Error("Token di accesso mancante");
-      const token = data.token;
-      const payload = parseJwtPayload(token);
-      const role = normalizeRole(payload?.role);
+      if (!data.user) throw new Error("Sessione di accesso mancante");
+      const role = normalizeRole(data.user.role);
       let targetTenant = "public";
       if (data.user?.schema || data.user?.tenantSlug || data.user?.tenant_id) {
         targetTenant = (
@@ -248,22 +219,14 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
           data.user.tenant_id ||
           "public"
         ).toLowerCase();
-      } else if (payload?.tenantSlug || payload?.tenantId || payload?.tenant_id) {
-        targetTenant = (
-          payload.tenantSlug ||
-          payload.tenantId ||
-          payload.tenant_id ||
-          "public"
-        ).toLowerCase();
       }
-      const mfaRequired = data?.mfa?.required === true || isMfaPending(payload);
+      const authStage = data.mfa?.stage || data.user.authStage;
+      const mfaRequired = data?.mfa?.required === true || isMfaPending(authStage);
       const next = mfaRequired ? "mfa" : role === "SUPER_ADMIN" ? "superadmin" : "dashboard";
 
       if (isAppHost && targetTenant !== "public" && !isInternalDoflowTenant(targetTenant)) {
         const handoff = await apiFetch<{ handoff: string }>("/auth/handoff", {
           method: "POST",
-          auth: false,
-          headers: { Authorization: `Bearer ${token}` },
           body: JSON.stringify({
             tenantTarget: targetTenant,
             rememberMe: values.rememberMe === true,
@@ -276,7 +239,6 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
         return;
       }
 
-      storeAuthToken(token, values.rememberMe === true);
       if (mfaRequired) {
         if (isAppHost) {
           router.push(`/${targetTenant === "public" ? "public" : targetTenant}/mfa`);
@@ -300,8 +262,8 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
         return;
       }
       router.push("/dashboard");
-    } catch (err: any) {
-      const message = String(err?.message || "");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "";
       setGeneralError(
         message.includes("Traffic Control")
           ? message
@@ -468,9 +430,7 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
           aria-label="Continua con Google"
           data-testid="login-google-btn"
           onClick={() => {
-            const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api";
-            const origin = apiBase.replace(/\/api\/?$/, "");
-            window.location.href = `${origin}/api/auth/google`;
+            window.open(`${getApiBaseUrl()}/auth/google`, "_self");
           }}
         >
           <GoogleIcon />

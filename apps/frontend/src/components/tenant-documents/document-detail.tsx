@@ -105,7 +105,15 @@ export function DocumentDetailPage({ documentId }: { documentId: string }) {
   }, [documentId, toast]);
 
   useEffect(() => {
-    void load();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [load]);
 
   const categories = canViewFinance ? DOCUMENT_CATEGORIES : DOCUMENT_CATEGORIES.filter((item) => !["finance", "invoice", "receipt"].includes(item));

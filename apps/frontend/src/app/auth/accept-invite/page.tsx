@@ -15,7 +15,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { apiFetch } from "@/lib/api";
-import { storeAuthToken } from "@/lib/auth-storage";
 import { AuthShell } from "@/components/auth/auth-shell";
 
 function nextPathByRole(role: string, tenantId?: string) {
@@ -25,8 +24,7 @@ function nextPathByRole(role: string, tenantId?: string) {
 }
 
 type AcceptInviteSuccess = {
-  token: string;
-  user: { id: number | string; email: string; role: string; tenantId?: string };
+  user: { id: number | string; email: string; role: string; tenantId?: string; tenantSlug?: string };
 };
 
 export default function AcceptInvitePage() {
@@ -45,13 +43,25 @@ export default function AcceptInvitePage() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    const timer = window.setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
-      setInviteToken(params.get('token'));
-      setTenantSlug(params.get('tenant') || params.get('tenantSlug'));
-      window.history.replaceState({}, '', window.location.pathname);
+      const historyState = (window.history.state || {}) as Record<string, unknown>;
+      const urlToken = params.get('token');
+      const urlTenant = params.get('tenant') || params.get('tenantSlug');
+      const nextToken = urlToken || (typeof historyState.doflowInviteToken === 'string' ? historyState.doflowInviteToken : null);
+      const nextTenant = urlTenant || (typeof historyState.doflowInviteTenant === 'string' ? historyState.doflowInviteTenant : null);
+      setInviteToken(nextToken);
+      setTenantSlug(nextTenant);
+      if (urlToken || urlTenant) {
+        window.history.replaceState(
+          { ...historyState, doflowInviteToken: nextToken, doflowInviteTenant: nextTenant },
+          '',
+          window.location.pathname,
+        );
+      }
       setInitializing(false);
-    }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -67,19 +77,20 @@ export default function AcceptInvitePage() {
     try {
       const data = await apiFetch<AcceptInviteSuccess>('/auth/accept-invite', {
         method: 'POST',
-        auth: false,
         body: JSON.stringify({ token: inviteToken, password, tenant: tenantSlug }),
       });
 
-      if (!data.token || !data.user) {
-        throw new Error('Risposta backend non valida (token/user mancanti).');
+      if (!data.user) {
+        throw new Error('Risposta backend non valida.');
       }
-
-      storeAuthToken(data.token, false);
 
       const target = nextPathByRole(data.user.role, data.user.tenantId);
       setSuccess(true);
       setTimeout(() => {
+        const cleanState = { ...((window.history.state || {}) as Record<string, unknown>) };
+        delete cleanState.doflowInviteToken;
+        delete cleanState.doflowInviteTenant;
+        window.history.replaceState(cleanState, '', window.location.pathname);
         router.push(target);
       }, 2000);
     } catch (e) {
@@ -131,7 +142,7 @@ export default function AcceptInvitePage() {
                 <CheckCircle2 className="h-10 w-10" aria-hidden="true" />
               </div>
               <p className="text-xl font-bold tracking-tight">Password impostata!</p>
-              <p className="text-sm text-muted-foreground mt-2">Ti stiamo portando all'interno...</p>
+              <p className="text-sm text-muted-foreground mt-2">Ti stiamo portando all&apos;interno...</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">

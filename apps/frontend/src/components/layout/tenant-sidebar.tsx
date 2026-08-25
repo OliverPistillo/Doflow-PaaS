@@ -14,7 +14,7 @@ import {
   User,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { clearAuthStorage } from "@/lib/auth-storage";
+import { apiFetch } from "@/lib/api";
 
 import {
   Sidebar,
@@ -52,7 +52,7 @@ import {
   normalizeNavigationRole,
   type TenantNavigationRole,
 } from "@/config/tenant-navigation";
-import { getDoFlowUser, getInitials } from "@/lib/jwt";
+import { clearDoFlowUser, getDoFlowUser, getInitials } from "@/lib/jwt";
 import { usePlan } from "@/contexts/PlanContext";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
 import { SIDEBAR_GROUPS, PLAN_META, type PlanTier, planIncludes } from "@/lib/plans";
@@ -80,15 +80,16 @@ function useTenantUser() {
   } | null>(null);
 
   React.useEffect(() => {
-    const payload = getDoFlowUser();
-    if (!payload) return;
-
-    setUser({
-      email: payload.email ?? "utente",
-      role: payload.role ?? "user",
-      initials: getInitials(payload.email),
-      tenantSlug: payload.tenantSlug,
-      tenantId: payload.tenantId,
+    queueMicrotask(() => {
+      const payload = getDoFlowUser();
+      if (!payload) return;
+      setUser({
+        email: payload.email ?? "utente",
+        role: payload.role ?? "user",
+        initials: getInitials(payload.email),
+        tenantSlug: payload.tenantSlug,
+        tenantId: payload.tenantId,
+      });
     });
   }, []);
 
@@ -384,11 +385,11 @@ export function TenantSidebar({
   const [openSectionId, setOpenSectionId] = React.useState<string | null>(activeSectionId);
 
   React.useEffect(() => {
-    setOpenSectionId(activeSectionId);
+    queueMicrotask(() => setOpenSectionId(activeSectionId));
   }, [activeSectionId]);
 
-  const logout = React.useCallback(() => {
-    clearAuthStorage();
+  const logout = React.useCallback(async () => {
+    try { await apiFetch("/auth/logout", { method: "POST" }); } finally { clearDoFlowUser(); }
     router.push("/login");
   }, [router]);
 

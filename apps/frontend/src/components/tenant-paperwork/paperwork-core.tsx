@@ -1,25 +1,30 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect,useState,type ReactNode,useEffectEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Download, FileText, Loader2, Plus, RefreshCw, Search } from "lucide-react";
+import { Download,Loader2,Plus,RefreshCw,Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/components/ui/card";
+import { Dialog,DialogContent,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from "@/components/ui/select";
+import { Tabs,TabsContent,TabsList,TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { listDocumentsForEntity, type TenantDocument } from "@/lib/tenant-documents-api";
-import { paperworkApi, type PaperworkActivity, type PaperworkDossier, type PaperworkItem } from "@/lib/tenant-paperwork-api";
+import { listDocumentsForEntity,type TenantDocument } from "@/lib/tenant-documents-api";
+import { paperworkApi,type PaperworkActivity,type PaperworkDossier,type PaperworkItem,type PaperworkSummary } from "@/lib/tenant-paperwork-api";
 import { downloadJson } from "@/components/tenant-contracts/contract-utils";
-import { DOSSIER_STATUSES, DOSSIER_TYPES, ITEM_STATUSES, PAPERWORK_CATEGORIES, PRIORITIES, badgeClass, canManageAdminWorkflow, formatDate, formatDateTime, labelFor, toBody } from "./paperwork-utils";
+import { DOSSIER_STATUSES,DOSSIER_TYPES,ITEM_STATUSES,PAPERWORK_CATEGORIES,PRIORITIES,badgeClass,formatDate,formatDateTime,labelFor,toBody } from "./paperwork-utils";
 
 type Option = { value: string; label: string };
+type FieldValue = string | number | boolean | null | undefined;
+type FormState = Record<string, FieldValue> & {
+  category?: string; description?: string; dossier_type?: string; due_date?: string; linked_document_id?: string;
+  priority?: string; status?: string; title?: string;
+};
 
 function Loading() {
   return <div className="flex justify-center py-16 text-muted-foreground"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Caricamento...</div>;
@@ -41,7 +46,7 @@ function SelectField({ value, options, placeholder, onChange }: { value?: string
   return <Select value={value || "__none__"} onValueChange={(next) => onChange(next === "__none__" ? "" : next)}><SelectTrigger><SelectValue placeholder={placeholder} /></SelectTrigger><SelectContent><SelectItem value="__none__">{placeholder}</SelectItem>{options.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>;
 }
 
-export function PaperworkSummaryCards({ summary }: { summary?: any }) {
+export function PaperworkSummaryCards({ summary }: { summary?: PaperworkSummary | null }) {
   const cards = [
     ["Dossier aperti", summary?.openDossiers || 0],
     ["Bloccati", summary?.blockedDossiers || 0],
@@ -53,7 +58,7 @@ export function PaperworkSummaryCards({ summary }: { summary?: any }) {
 }
 
 export function PaperworkPage() {
-  const [summary, setSummary] = useState<any>(null);
+  const [summary, setSummary] = useState<PaperworkSummary | null>(null);
   const [rows, setRows] = useState<PaperworkDossier[]>([]);
   const [loading, setLoading] = useState(true);
   const load = async () => {
@@ -63,7 +68,17 @@ export function PaperworkPage() {
     setRows(listData.items || []);
     setLoading(false);
   };
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   return <div className="flex-1 space-y-5 p-4 md:p-6"><Header title="Scartoffie" description="Dossier amministrativi, item documentali e attività operative interne."><Button asChild><Link href="/paperwork/new"><Plus className="mr-2 h-4 w-4" /> Nuovo dossier</Link></Button><Button asChild variant="outline"><Link href="/contracts">Contratti</Link></Button></Header><PaperworkSummaryCards summary={summary} />{loading ? <Loading /> : <DossiersList rows={rows} />}</div>;
 }
 
@@ -78,7 +93,18 @@ export function DossiersPage() {
     catch (err) { setError(err instanceof Error ? err.message : "Errore caricamento dossier"); }
     finally { setLoading(false); }
   };
-  useEffect(() => { void load(); }, []);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   return <div className="flex-1 space-y-5 p-4 md:p-6"><Header title="Dossier amministrativi" description="Lista scartoffie e workflow documentali."><Button asChild><Link href="/paperwork/dossiers/new"><Plus className="mr-2 h-4 w-4" /> Nuovo dossier</Link></Button></Header><ErrorBox error={error} /><Card><CardContent className="grid gap-3 p-4 md:grid-cols-5"><div className="relative md:col-span-2"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Cerca dossier..." value={filters.search} onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))} /></div><SelectField value={filters.status} options={DOSSIER_STATUSES} placeholder="Status" onChange={(v) => setFilters((p) => ({ ...p, status: v }))} /><SelectField value={filters.dossier_type} options={DOSSIER_TYPES} placeholder="Tipo" onChange={(v) => setFilters((p) => ({ ...p, dossier_type: v }))} /><Button variant="outline" onClick={load}><RefreshCw className="mr-2 h-4 w-4" /> Filtra</Button></CardContent></Card>{loading ? <Loading /> : <DossiersList rows={rows} />}</div>;
 }
 
@@ -91,7 +117,7 @@ export function DossierFormPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<Record<string, any>>({ title: "", dossier_type: "generic", status: "open", priority: "medium" });
+  const [form, setForm] = useState<FormState>({ title: "", dossier_type: "generic", status: "open", priority: "medium" });
   const submit = async () => {
     setSaving(true);
     try { const created = await paperworkApi.create(toBody(form)); toast({ title: "Dossier creato" }); router.push(`/paperwork/dossiers/${created.id}`); }
@@ -101,13 +127,12 @@ export function DossierFormPage() {
   return <div className="flex-1 space-y-5 p-4 md:p-6"><Header title="Nuovo dossier" description="Crea un dossier amministrativo interno."><Button asChild variant="outline"><Link href="/paperwork/dossiers">Torna</Link></Button></Header><DossierForm form={form} setForm={setForm} /><Button onClick={submit} disabled={saving || !form.title}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />} Crea dossier</Button></div>;
 }
 
-export function DossierForm({ form, setForm }: { form: Record<string, any>; setForm: (fn: any) => void }) {
-  const set = (key: string, value: unknown) => setForm((p: any) => ({ ...p, [key]: value }));
-  return <Card><CardContent className="grid gap-4 p-4 md:grid-cols-2"><div className="grid gap-2 md:col-span-2"><Label>Titolo</Label><Input value={form.title || ""} onChange={(e) => set("title", e.target.value)} /></div><div className="grid gap-2 md:col-span-2"><Label>Descrizione</Label><Textarea value={form.description || ""} onChange={(e) => set("description", e.target.value)} /></div><div className="grid gap-2"><Label>Tipo</Label><SelectField value={form.dossier_type} options={DOSSIER_TYPES} placeholder="Tipo" onChange={(v) => set("dossier_type", v)} /></div><div className="grid gap-2"><Label>Status</Label><SelectField value={form.status} options={DOSSIER_STATUSES} placeholder="Status" onChange={(v) => set("status", v)} /></div><div className="grid gap-2"><Label>Priorita</Label><SelectField value={form.priority} options={PRIORITIES} placeholder="Priorita" onChange={(v) => set("priority", v)} /></div><div className="grid gap-2"><Label>Due date</Label><Input type="date" value={form.due_date || ""} onChange={(e) => set("due_date", e.target.value)} /></div>{["company_id", "contact_id", "quote_id", "project_id", "contract_id"].map((field) => <div key={field} className="grid gap-2"><Label>{field}</Label><Input value={form[field] || ""} onChange={(e) => set(field, e.target.value)} placeholder="UUID opzionale" /></div>)}</CardContent></Card>;
+export function DossierForm({ form, setForm }: { form: FormState; setForm: (updater: (previous: FormState) => FormState) => void }) {
+  const set = (key: string, value: FieldValue) => setForm((previous) => ({ ...previous, [key]: value }));
+  return <Card><CardContent className="grid gap-4 p-4 md:grid-cols-2"><div className="grid gap-2 md:col-span-2"><Label>Titolo</Label><Input value={form.title || ""} onChange={(e) => set("title", e.target.value)} /></div><div className="grid gap-2 md:col-span-2"><Label>Descrizione</Label><Textarea value={form.description || ""} onChange={(e) => set("description", e.target.value)} /></div><div className="grid gap-2"><Label>Tipo</Label><SelectField value={form.dossier_type} options={DOSSIER_TYPES} placeholder="Tipo" onChange={(v) => set("dossier_type", v)} /></div><div className="grid gap-2"><Label>Status</Label><SelectField value={form.status} options={DOSSIER_STATUSES} placeholder="Status" onChange={(v) => set("status", v)} /></div><div className="grid gap-2"><Label>Priorita</Label><SelectField value={form.priority} options={PRIORITIES} placeholder="Priorita" onChange={(v) => set("priority", v)} /></div><div className="grid gap-2"><Label>Due date</Label><Input type="date" value={form.due_date || ""} onChange={(e) => set("due_date", e.target.value)} /></div>{["company_id", "contact_id", "quote_id", "project_id", "contract_id"].map((field) => <div key={field} className="grid gap-2"><Label>{field}</Label><Input value={String(form[field] ?? "")} onChange={(e) => set(field, e.target.value)} placeholder="UUID opzionale" /></div>)}</CardContent></Card>;
 }
 
 export function DossierDetailPage({ dossierId }: { dossierId: string }) {
-  const { toast } = useToast();
   const [dossier, setDossier] = useState<PaperworkDossier | null>(null);
   const [items, setItems] = useState<PaperworkItem[]>([]);
   const [activity, setActivity] = useState<PaperworkActivity[]>([]);
@@ -127,7 +152,18 @@ export function DossierDetailPage({ dossierId }: { dossierId: string }) {
     } catch (err) { setError(err instanceof Error ? err.message : "Errore caricamento dossier"); }
     finally { setLoading(false); }
   };
-  useEffect(() => { void load(); }, [dossierId]);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dossierId]);
   const exportJson = async () => { const data = await paperworkApi.export(dossierId); downloadJson(`paperwork-${dossierId}.json`, data); };
   if (loading) return <div className="flex-1 p-4 md:p-6"><Loading /></div>;
   if (error || !dossier) return <div className="flex-1 p-4 md:p-6"><ErrorBox error={error || "Dossier non trovato"} /></div>;
@@ -151,9 +187,9 @@ export function DossierItems({ dossierId, rows, onReload }: { dossierId: string;
   return <Card><CardHeader className="flex flex-row items-center justify-between"><div><CardTitle>Items paperwork</CardTitle><CardDescription>Documenti e passaggi amministrativi richiesti.</CardDescription></div><Button onClick={() => setOpen(true)}><Plus className="mr-2 h-4 w-4" /> Nuovo</Button></CardHeader><CardContent className="space-y-3">{rows.length === 0 ? <Empty>Nessun item paperwork.</Empty> : rows.map((row) => <div key={row.id} className="flex flex-col gap-3 rounded-lg border p-3 md:flex-row md:items-center md:justify-between"><div><p className="font-semibold">{row.title}</p><p className="text-sm text-muted-foreground">{labelFor(row.category, PAPERWORK_CATEGORIES)} · scadenza {formatDate(row.due_date)} {row.linked_document_id ? `· doc ${row.linked_document_id}` : ""}</p></div><div className="flex flex-wrap items-center gap-2"><StateBadge value={row.status} options={ITEM_STATUSES} /><Button size="sm" variant="outline" onClick={async () => { await paperworkApi.completeItem(dossierId, row.id); onReload(); }}>Completa</Button><Button size="sm" variant="outline" onClick={async () => { await paperworkApi.approveItem(dossierId, row.id); onReload(); }}>Approva</Button><Button size="sm" variant="outline" onClick={async () => { await paperworkApi.rejectItem(dossierId, row.id); onReload(); }}>Rifiuta</Button></div></div>)}<ItemDialog open={open} setOpen={setOpen} onSave={async (body) => { await paperworkApi.createItem(dossierId, body); onReload(); }} /></CardContent></Card>;
 }
 
-function ItemDialog({ open, setOpen, onSave }: { open: boolean; setOpen: (v: boolean) => void; onSave: (body: Record<string, any>) => Promise<void> }) {
+function ItemDialog({ open, setOpen, onSave }: { open: boolean; setOpen: (v: boolean) => void; onSave: (body: Record<string, unknown>) => Promise<void> }) {
   const { toast } = useToast();
-  const [form, setForm] = useState<Record<string, any>>({ category: "document", status: "missing" });
+  const [form, setForm] = useState<FormState>({ category: "document", status: "missing" });
   const save = async () => { try { await onSave(toBody(form)); setOpen(false); setForm({ category: "document", status: "missing" }); toast({ title: "Item creato" }); } catch (err) { toast({ title: "Item non creato", description: err instanceof Error ? err.message : "Errore", variant: "destructive" }); } };
   return <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>Nuovo item</DialogTitle></DialogHeader><div className="grid gap-3"><InputField label="title" value={form.title || ""} onChange={(v) => setForm((p) => ({ ...p, title: v }))} /><TextField label="description" value={form.description || ""} onChange={(v) => setForm((p) => ({ ...p, description: v }))} /><SelectField value={form.category} options={PAPERWORK_CATEGORIES} placeholder="Categoria" onChange={(v) => setForm((p) => ({ ...p, category: v }))} /><SelectField value={form.status} options={ITEM_STATUSES} placeholder="Status" onChange={(v) => setForm((p) => ({ ...p, status: v }))} /><InputField label="due_date" value={form.due_date || ""} type="date" onChange={(v) => setForm((p) => ({ ...p, due_date: v }))} /><InputField label="linked_document_id" value={form.linked_document_id || ""} onChange={(v) => setForm((p) => ({ ...p, linked_document_id: v }))} /><Button onClick={save}>Salva</Button></div></DialogContent></Dialog>;
 }

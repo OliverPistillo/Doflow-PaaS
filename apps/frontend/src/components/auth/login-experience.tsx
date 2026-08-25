@@ -1,171 +1,64 @@
-"use client";
+"use client"
 
-import Image from "next/image";
-import Link from "next/link";
-import {
-  CircleCheck,
-  FileText,
-  Funnel,
-  Trophy,
-  UserRound,
-  UsersRound,
-  Zap,
-} from "lucide-react";
+import Image from "next/image"
+import Link from "next/link"
+import { CircleCheck, FolderKanban, LockKeyhole, ShieldCheck, UsersRound } from "lucide-react"
+
+import { ThemeToggle } from "@/components/theme-toggle"
 
 type LoginExperienceProps = {
-  mascotShy?: boolean;
-  children: React.ReactNode;
-};
-
-const PIPELINE_STEPS = [
-  { label: "Lead", icon: UserRound, className: "df-login-step-lead" },
-  { label: "Contatto", icon: UsersRound, className: "df-login-step-contact" },
-  { label: "Proposta", icon: FileText, className: "df-login-step-proposal" },
-  { label: "Cliente", icon: Trophy, className: "df-login-step-client" },
-];
-
-const BENEFITS = [
-  {
-    title: "Gestisci i clienti",
-    description: "Tutte le informazioni che ti servono, in un unico posto.",
-    icon: UsersRound,
-  },
-  {
-    title: "Segui il pipeline",
-    description: "Visualizza ogni opportunità e non lasciare nulla al caso.",
-    icon: Funnel,
-  },
-  {
-    title: "Organizza le attività",
-    description: "Pianifica, assegna e tieni tutto il team allineato.",
-    icon: CircleCheck,
-  },
-  {
-    title: "Automatizza i processi",
-    description: "Risparmia tempo con automazioni intelligenti senza complessità.",
-    icon: Zap,
-  },
-];
-
-function LoginCrmShowcase({ mascotShy = false }: { mascotShy?: boolean }) {
-  return (
-    <section className="df-login-showcase" aria-hidden="true">
-      <div className="df-login-flow-stage" data-testid="login-flow-stage">
-        <svg
-          className="df-login-pipeline"
-          viewBox="0 0 1040 610"
-          preserveAspectRatio="none"
-          focusable="false"
-        >
-          <defs>
-            <linearGradient id="df-login-pipeline-gradient" x1="0" y1="1" x2="1" y2="0">
-              <stop offset="0" stopColor="#45c8ff" />
-              <stop offset="0.5" stopColor="#527cff" />
-              <stop offset="1" stopColor="#9b63ff" />
-            </linearGradient>
-            <filter id="df-login-pipeline-glow" x="-20%" y="-30%" width="140%" height="160%">
-              <feGaussianBlur stdDeviation="7" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-          <path
-            className="df-login-pipeline-base"
-            d="M 0 520 C 150 510, 205 548, 310 490 S 470 410, 565 365 S 720 350, 800 340 S 930 276, 1040 242"
-          />
-          <path
-            className="df-login-pipeline-accent"
-            d="M 0 520 C 150 510, 205 548, 310 490 S 470 410, 565 365 S 720 350, 800 340 S 930 276, 1040 242"
-            filter="url(#df-login-pipeline-glow)"
-          />
-          <path
-            className="df-login-pipeline-energy"
-            d="M 0 520 C 150 510, 205 548, 310 490 S 470 410, 565 365 S 720 350, 800 340 S 930 276, 1040 242"
-            pathLength="1"
-            filter="url(#df-login-pipeline-glow)"
-          />
-          <path
-            className="df-login-pipeline-light"
-            d="M 0 520 C 150 510, 205 548, 310 490 S 470 410, 565 365 S 720 350, 800 340 S 930 276, 1040 242"
-            pathLength="1"
-            filter="url(#df-login-pipeline-glow)"
-          />
-        </svg>
-
-        <div className="df-login-mascot" data-shy={mascotShy || undefined}>
-          <span className="df-login-mascot-shadow" />
-          <Image
-            src="/mascotte_login.png"
-            alt=""
-            width={1286}
-            height={1223}
-            unoptimized
-            priority
-            sizes="(min-width: 1280px) 355px, (min-width: 768px) 255px, 1px"
-            className="df-login-mascot-image"
-            data-testid="login-official-mascot"
-            aria-hidden="true"
-            draggable={false}
-          />
-        </div>
-
-        <div className="df-login-step-list">
-          {PIPELINE_STEPS.map(({ label, icon: Icon, className }, index) => (
-            <article key={label} className={`df-login-step-card ${className}`}>
-              <span className="df-login-step-icon">
-                <Icon size={24} strokeWidth={1.9} />
-              </span>
-              <strong>{label}</strong>
-              <span className="df-login-step-line df-login-step-line-long" />
-              <span className="df-login-step-line" />
-              {index === 0 && <span className="df-login-step-line df-login-step-line-short" />}
-            </article>
-          ))}
-        </div>
-      </div>
-
-      <div className="df-login-benefits">
-        {BENEFITS.map(({ title, description, icon: Icon }) => (
-          <article key={title} className="df-login-benefit">
-            <span className="df-login-benefit-icon">
-              <Icon size={24} strokeWidth={1.8} />
-            </span>
-            <strong>{title}</strong>
-            <p>{description}</p>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
+  mascotShy?: boolean
+  children: React.ReactNode
 }
 
-export function LoginExperience({ mascotShy = false, children }: LoginExperienceProps) {
+const FLOW = [
+  { label: "Lead e clienti", icon: UsersRound },
+  { label: "Progetti e attività", icon: FolderKanban },
+  { label: "Controllo e consegna", icon: CircleCheck },
+]
+
+export function LoginExperience({ children }: LoginExperienceProps) {
   return (
-    <main className="df-login-page">
-      <div className="df-login-ambient" aria-hidden="true" />
+    <main className="relative grid min-h-dvh bg-background lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+      <div className="absolute right-4 top-4 z-20 lg:right-6 lg:top-6">
+        <ThemeToggle />
+      </div>
 
-      <Link href="/" className="df-login-logo" aria-label="Vai alla home Doflow">
-        <Image
-          src="/doflow_logo.svg"
-          alt="Doflow"
-          width={178}
-          height={89}
-          priority
-          className="df-auth-logo-img"
-        />
-      </Link>
-
-      <section className="df-login-card" aria-labelledby="df-login-title">
-        <header className="df-login-head">
-          <h1 id="df-login-title">Bentornato</h1>
-          <p>Accedi al tuo spazio di lavoro</p>
-        </header>
-        {children}
+      <section className="flex items-center justify-center px-5 py-10 sm:px-10 lg:px-14">
+        <div className="w-full max-w-md">
+          <Link href="/" aria-label="Vai alla home Doflow" className="inline-flex">
+            <Image src="/logo_doflow_nero.png" alt="Doflow" width={142} height={32} priority className="mb-10 h-auto w-36 dark:hidden" />
+            <Image src="/logo_doflow_bianco.png" alt="Doflow" width={142} height={32} priority className="mb-10 hidden h-auto w-36 dark:block" />
+          </Link>
+          <header className="mb-7">
+            <h1 className="text-3xl font-semibold tracking-tight">Accedi a Doflow</h1>
+            <p className="mt-2 text-sm text-muted-foreground">Workspace operativo per commerciale, produzione e amministrazione.</p>
+          </header>
+          {children}
+          <div className="mt-6 flex items-start gap-3 rounded-xl border bg-muted/30 p-4 text-xs text-muted-foreground">
+            <ShieldCheck className="mt-0.5 size-4 shrink-0 text-primary" />
+            <p>Sessione protetta, autenticazione a più fattori e autorizzazioni verificate dal server.</p>
+          </div>
+        </div>
       </section>
 
-      <LoginCrmShowcase mascotShy={mascotShy} />
+      <section className="relative hidden overflow-hidden bg-[linear-gradient(145deg,#14204a_0%,#3030a8_48%,#7557df_100%)] p-10 text-white lg:flex lg:flex-col lg:justify-between xl:p-14">
+        <div className="absolute inset-0 opacity-30 [background-image:radial-gradient(circle_at_20%_20%,white_0,transparent_25%),radial-gradient(circle_at_80%_70%,#8bdcff_0,transparent_30%)]" />
+        <div className="relative flex items-center gap-2 text-sm font-medium"><LockKeyhole className="size-4" />Doflow Workspace</div>
+        <div className="relative max-w-xl">
+          <p className="text-4xl font-semibold leading-tight xl:text-5xl">Dal primo contatto alla consegna, tutto nello stesso flusso.</p>
+          <p className="mt-4 max-w-lg text-base text-white/75">Dati commerciali, attività, progetti e amministrazione con autorizzazioni coerenti.</p>
+          <div className="mt-10 grid gap-3 sm:grid-cols-3">
+            {FLOW.map(({ label, icon: Icon }) => (
+              <div key={label} className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
+                <Icon className="mb-5 size-5 text-white/85" />
+                <p className="text-sm font-medium">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <p className="relative text-xs text-white/60">Doflow · ambiente operativo protetto</p>
+      </section>
     </main>
-  );
+  )
 }

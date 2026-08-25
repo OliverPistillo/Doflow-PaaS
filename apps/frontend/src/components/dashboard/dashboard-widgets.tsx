@@ -16,7 +16,7 @@ import {
   FileText, Package, AlertTriangle, Trophy, Target, GitFork,
 } from "lucide-react";
 import {
-  Area, AreaChart, Bar, BarChart, Line, LineChart,
+  Area, AreaChart, Bar, BarChart,
   Pie, PieChart, Cell, ResponsiveContainer,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
@@ -38,13 +38,16 @@ function KpiCard({ title, value, delta, up, icon: Icon, sub }: KpiProps) {
     <Card className="h-full bg-gradient-to-t from-card to-primary/5 shadow-xs overflow-hidden">
       <CardHeader className="pb-2 flex flex-row items-start justify-between space-y-0">
         <CardDescription className="text-xs font-medium uppercase tracking-wide">{title}</CardDescription>
-        <Badge variant="outline" className={cn(
-          "text-[10px] px-1.5 py-0.5 flex items-center gap-1",
-          up ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" : "text-rose-600 border-rose-200 bg-rose-50 dark:bg-rose-950/30",
-        )}>
-          {up ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
-          {delta}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <Badge variant="outline" className={cn(
+            "text-[10px] px-1.5 py-0.5 flex items-center gap-1",
+            up ? "text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30" : "text-rose-600 border-rose-200 bg-rose-50 dark:bg-rose-950/30",
+          )}>
+            {up ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
+            {delta}
+          </Badge>
+        </div>
       </CardHeader>
       <CardContent className="pt-1 pb-4">
         <div className="text-2xl font-bold tracking-tight tabular-nums">{value}</div>
@@ -70,7 +73,7 @@ export function W_KpiQuoteValue() {
   return <KpiCard title="Valore Preventivi" value="€ 0" delta="0%" up={false} icon={FileText} sub="ultimi 30 giorni" />;
 }
 
-const ordersTrendData: any[] = [];
+const ordersTrendData: Array<{ g: string; v: number }> = [];
 
 export function W_ChartOrdersTrend() {
   return (
@@ -101,7 +104,7 @@ export function W_ChartOrdersTrend() {
 }
 
 export function W_ListRecentQuotes() {
-const quotes: any[] = [];
+const quotes: Array<{ client: string; value: string; cls: string; status: string }> = [];
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="pb-2">
@@ -146,7 +149,7 @@ export function W_KpiLowStock() {
   return <KpiCard title="Prodotti Sotto Scorta" value="0" delta="0" up={false} icon={Package} sub="vs. settimana scorsa" />;
 }
 
-const incomeExpData: any[] = [];
+const incomeExpData: Array<{ m: string; in: number; out: number }> = [];
 
 export function W_ChartIncomeVsExpenses() {
   return (
@@ -161,7 +164,7 @@ export function W_ChartIncomeVsExpenses() {
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
             <XAxis dataKey="m" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
             <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `€${(v/1000).toFixed(0)}k`} />
-            <Tooltip contentStyle={{ borderRadius: "8px", fontSize: 12, border: "1px solid hsl(var(--border))" }} formatter={(v: number) => [`€${v.toLocaleString("it-IT")}`, ""]} />
+            <Tooltip contentStyle={{ borderRadius: "8px", fontSize: 12, border: "1px solid hsl(var(--border))" }} formatter={(v) => [`€${Number(v ?? 0).toLocaleString("it-IT")}`, ""]} />
             <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
             <Bar dataKey="in"  name="Entrate" fill="#4f46e5" radius={[4, 4, 0, 0]} maxBarSize={40} />
             <Bar dataKey="out" name="Uscite"  fill="hsl(var(--muted-foreground) / 0.3)" radius={[4, 4, 0, 0]} maxBarSize={40} />
@@ -173,7 +176,7 @@ export function W_ChartIncomeVsExpenses() {
 }
 
 export function W_ListUnpaidInvoices() {
-  const invoices: any[] = [];
+  const invoices: Array<{ client: string; days: string; red: boolean; amount: string }> = [];
   return (
     <Card className="h-full flex flex-col">
       <CardHeader className="pb-2">
@@ -206,7 +209,7 @@ export function W_ListUnpaidInvoices() {
 
 // ─── ENTERPRISE WIDGETS ───────────────────────────────────────────────────────
 
-const marketData: any[] = [];
+const marketData: Array<{ name: string; value: number; color: string }> = [];
 
 export function W_ChartMarketShare() {
   return (
@@ -229,7 +232,7 @@ export function W_ChartMarketShare() {
                 <Cell key={i} fill={entry.color} stroke="none" />
               ))}
             </Pie>
-            <Tooltip contentStyle={{ borderRadius: "8px", fontSize: 12, border: "1px solid hsl(var(--border))" }} formatter={(v: number) => [`${v}%`, ""]} />
+            <Tooltip contentStyle={{ borderRadius: "8px", fontSize: 12, border: "1px solid hsl(var(--border))" }} formatter={(v) => [`${Number(v ?? 0)}%`, ""]} />
             <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
           </PieChart>
         </ResponsiveContainer>
@@ -238,7 +241,7 @@ export function W_ChartMarketShare() {
   );
 }
 
-const heatmapData: any[] = [];
+const heatmapData: Array<{ r: string; Gen: number; Feb: number; Mar: number; Apr: number }> = [];
 
 export function W_ChartSalesHeatmap() {
   return (
@@ -267,7 +270,7 @@ export function W_ChartSalesHeatmap() {
 }
 
 export function W_LeaderboardSellers() {
-  const sellers: any[] = [];
+  const sellers: Array<{ name: string; deals: number; revenue: string; pct: number }> = [];
   const medals = ["🥇", "🥈", "🥉", "4°"];
   return (
     <Card className="h-full flex flex-col">
@@ -320,7 +323,7 @@ export function W_KpiLeadConversionRate() {
   );
 }
 
-const funnelData: any[] = [];
+const funnelData: Array<{ stage: string; count: number; fill: string }> = [];
 
 export function W_ChartLeadFunnel() {
   return (
@@ -348,7 +351,7 @@ export function W_ChartLeadFunnel() {
             />
             <Tooltip
               contentStyle={{ borderRadius: "8px", fontSize: 12, border: "1px solid hsl(var(--border))" }}
-              formatter={(v: number) => [`${v} lead`, ""]}
+              formatter={(v) => [`${Number(v ?? 0)} lead`, ""]}
             />
             <Bar dataKey="count" name="Lead" radius={[0, 4, 4, 0]} maxBarSize={22}>
               {funnelData.map((entry, i) => (
@@ -362,7 +365,13 @@ export function W_ChartLeadFunnel() {
   );
 }
 
-const TOP_DEALS: any[] = [];
+const TOP_DEALS: Array<{
+  name: string;
+  contact: string;
+  stage: string;
+  stageColor: string;
+  value: string;
+}> = [];
 
 export function W_ListTopDeals() {
   return (

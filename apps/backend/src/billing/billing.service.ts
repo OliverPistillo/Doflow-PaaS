@@ -4,10 +4,16 @@ import { Repository } from 'typeorm';
 import Stripe from 'stripe';
 import { Tenant } from '../superadmin/entities/tenant.entity';
 
+function buildStripe(apiKey: string) {
+  return new Stripe(apiKey);
+}
+
+type StripeClient = ReturnType<typeof buildStripe>;
+
 @Injectable()
 export class BillingService {
   private readonly logger = new Logger(BillingService.name);
-  private readonly stripe: any;
+  private readonly stripe: StripeClient | null;
 
   constructor(
     @InjectRepository(Tenant)
@@ -17,7 +23,14 @@ export class BillingService {
     if (!apiKey && process.env.NODE_ENV !== 'test') {
       this.logger.warn('STRIPE_SECRET_KEY is not defined!');
     }
-    this.stripe = new Stripe(apiKey) as any;
+    this.stripe = apiKey ? buildStripe(apiKey) : null;
+  }
+
+  private stripeClient(): StripeClient {
+    if (!this.stripe) {
+      throw new BadRequestException('Stripe is not configured.');
+    }
+    return this.stripe;
   }
 
   async createCheckoutSession(tenantId: string, planTier: string): Promise<{ url: string }> {
@@ -50,7 +63,7 @@ export class BillingService {
     }
 
     try {
-      const session = await this.stripe.checkout.sessions.create({
+      const session = await this.stripeClient().checkout.sessions.create({
         payment_method_types: ['card'],
         line_items: [
           {
@@ -92,7 +105,7 @@ export class BillingService {
     let event: any;
 
     try {
-      event = this.stripe.webhooks.constructEvent(body, signature, webhookSecret);
+      event = this.stripeClient().webhooks.constructEvent(body, signature, webhookSecret);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(`Webhook signature verification failed.`, msg);

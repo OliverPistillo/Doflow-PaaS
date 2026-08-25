@@ -1,24 +1,22 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState,useMemo,useRef,useEffect } from "react";
 import {
-  Receipt, Plus, Search, Download, Send, Eye, Copy, Printer,
-  CheckCircle2, Clock, AlertTriangle, XCircle, FileText, Edit2,
-  TrendingUp, DollarSign, ExternalLink, MoreHorizontal,
+  Receipt,Plus,Search,Download,Send,Eye,Copy,Printer,
+  CheckCircle2,Clock,AlertTriangle,XCircle,Edit2,MoreHorizontal
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter,
+  Sheet,SheetContent,SheetHeader,SheetTitle,SheetFooter,
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuSeparator,DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
@@ -27,7 +25,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-import { PageShell, PageHeader, TableLoadingState, ErrorState } from "@/components/ui/page-shell";
+import { PageShell,PageHeader } from "@/components/ui/page-shell";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type InvoiceStatus = "bozza" | "inviata" | "pagata" | "parz_pagata" | "scaduta" | "annullata";

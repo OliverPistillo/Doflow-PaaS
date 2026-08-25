@@ -239,7 +239,7 @@ export class TenantSiteProposalsService {
     }
     const sqlWhere = where.join(' AND ');
     const count = await this.one(`SELECT count(*)::int total FROM "${schema}".site_proposals WHERE ${sqlWhere}`, params);
-    const rows = await this.ds().query(`SELECT id, display_name, status, archived_from_status, template_slug, template_version, company_id, current_version, image_mode, last_generated_at, preparation_status, preparation_error, preparation_queued_at, preparation_started_at, preparation_completed_at, latest_preparation_job_id, progress_percent, progress_stage, progress_message, progress_updated_at, preparation_heartbeat_at, personalization_status, email_subject, email_body, commercial_analysis, site_config, EXISTS(SELECT 1 FROM "${schema}".site_proposal_generations g WHERE g.proposal_id=site_proposals.id AND g.status='completed' AND g.proposal_version=site_proposals.current_version) generation_complete, updated_at, deleted_at FROM "${schema}".site_proposals WHERE ${sqlWhere} ORDER BY ${sortBy} ${sortOrder} NULLS LAST LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, limit, offset]);
+    const rows = await this.ds().query(`SELECT id, display_name, status, archived_from_status, template_slug, template_version, company_id, project_id, current_version, image_mode, last_generated_at, preparation_status, preparation_error, preparation_queued_at, preparation_started_at, preparation_completed_at, latest_preparation_job_id, progress_percent, progress_stage, progress_message, progress_updated_at, preparation_heartbeat_at, personalization_status, email_subject, email_body, commercial_analysis, site_config, EXISTS(SELECT 1 FROM "${schema}".site_proposal_generations g WHERE g.proposal_id=site_proposals.id AND g.status='completed' AND g.proposal_version=site_proposals.current_version) generation_complete, updated_at, deleted_at FROM "${schema}".site_proposals WHERE ${sqlWhere} ORDER BY ${sortBy} ${sortOrder} NULLS LAST LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, limit, offset]);
     const items = await Promise.all(rows.map(async (row: any) => {
       const readiness = evaluateProposalReadiness({ emailSubject: row.email_subject, emailBody: row.email_body, commercialAnalysis: row.commercial_analysis, siteConfigValid: await this.siteConfigValid(row), generationComplete: row.generation_complete === true, requireGeneration: ['ready','fallback'].includes(row.preparation_status) });
       const { email_subject: _subject, email_body: _body, commercial_analysis: _analysis, site_config: _config, generation_complete: _generation, ...item } = row;
@@ -382,7 +382,7 @@ export class TenantSiteProposalsService {
     this.assertUuid(id);
     assertNoPrototypePollution(body);
     await this.ensure();
-    const allowed = new Set(['displayName', 'status', 'siteConfig', 'commercialAnalysis', 'emailSubject', 'emailBody', 'companyId', 'contactId', 'leadId', 'opportunityId', 'imageMode', 'applyThemeImages', 'resetThemeImageSlot']);
+    const allowed = new Set(['displayName', 'status', 'siteConfig', 'commercialAnalysis', 'emailSubject', 'emailBody', 'companyId', 'contactId', 'leadId', 'opportunityId', 'projectId', 'imageMode', 'applyThemeImages', 'resetThemeImageSlot']);
     for (const key of Object.keys(body)) if (!allowed.has(key)) throw new BadRequestException(`Campo non consentito: ${key}`);
     const current = (await this.get(id)).proposal;
     if (body.status && (!PROPOSAL_STATUSES.includes(body.status) || !allowedStatusTransition(current.status, body.status))) throw new BadRequestException('Status non valido');
@@ -413,6 +413,11 @@ export class TenantSiteProposalsService {
       validateSiteConfig(siteConfig, registration);
     }
     for (const key of ['companyId', 'contactId', 'leadId', 'opportunityId']) if (body[key]) await this.assertCrmRecord(key, body[key]);
+    if (body.projectId) {
+      this.assertUuid(String(body.projectId));
+      const project = await this.one(`SELECT id FROM "${this.schema()}".projects WHERE id = $1 AND deleted_at IS NULL`, [body.projectId]);
+      if (!project) throw new BadRequestException('Progetto Delivery non valido');
+    }
     const nextVersion = Number(current.current_version) + 1;
     const next = {
       site_config: siteConfig,
@@ -422,7 +427,7 @@ export class TenantSiteProposalsService {
     };
     const sets: string[] = [];
     const params: unknown[] = [];
-    const map: Record<string, string> = { displayName: 'display_name', status: 'status', companyId: 'company_id', contactId: 'contact_id', leadId: 'lead_id', opportunityId: 'opportunity_id' };
+    const map: Record<string, string> = { displayName: 'display_name', status: 'status', companyId: 'company_id', contactId: 'contact_id', leadId: 'lead_id', opportunityId: 'opportunity_id', projectId: 'project_id' };
     for (const [input, column] of Object.entries(map)) if (input in body) { params.push(body[input] || null); sets.push(`${column} = $${params.length}`); }
     params.push(imageMode);
     sets.push(`image_mode = $${params.length}`);
@@ -755,7 +760,9 @@ export class TenantSiteProposalsService {
     const user = this.request.user || this.request.authUser;
     if (!user) throw new ForbiddenException('Utente non valido');
     const role = String(user.role || 'user').toLowerCase().trim();
-    if (!hasRoleAtLeast(role, 'manager')) throw new ForbiddenException(write ? 'Manager o superiore richiesto.' : 'Manager o superiore richiesto.');
+    if (this.request.doflowBuilderAuthorized !== true && !hasRoleAtLeast(role, 'manager')) {
+      throw new ForbiddenException(write ? 'Capability Builder richiesta.' : 'Capability Builder richiesta.');
+    }
     this.schema();
     return { id: String(user.sub || user.id || user.userId || ''), email: user.email, role };
   }

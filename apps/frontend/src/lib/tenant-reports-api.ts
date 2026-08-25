@@ -70,23 +70,125 @@ export type ReportSummary = {
   currentMonthOverdueTasks?: number;
 };
 
-export type ExecutiveReport = Record<string, any> & {
-  permissions?: ReportPermissions;
-  sales?: Record<string, any>;
-  projects?: Record<string, any>;
-  finance?: Record<string, any> | null;
-  team?: Record<string, any>;
-  documents?: Record<string, any>;
-  operations?: Record<string, any>;
-  customers?: Record<string, any>;
-  targets?: KpiTarget[];
-  risks?: Record<string, any>[];
+export type ReportMetricMap = Record<string, unknown>;
+export type ReportRow = Record<string, unknown>;
+
+export type SalesReportSection = {
+  openLeads?: unknown;
+  newLeadsInPeriod?: unknown;
+  activeOpportunities?: unknown;
+  pipelineValue?: unknown;
+  acceptedQuotes?: unknown;
+  quoteAcceptanceRate?: unknown;
+  followUpsDue?: unknown;
+  leadCountByStatus?: ReportMetricMap;
+  leadCountBySource?: ReportMetricMap;
+  opportunitiesByStage?: ReportMetricMap;
+  pipelineValueByStage?: ReportMetricMap;
+  quoteCountByStatus?: ReportMetricMap;
+  quoteValueByStatus?: ReportMetricMap;
+  topOpportunities?: ReportRow[];
+  stagnantOpportunities?: ReportRow[];
+  commercialActivities?: ReportMetricMap;
 };
 
-export type SalesReport = Record<string, any>;
-export type ProjectsReport = Record<string, any>;
-export type FinanceReport = Record<string, any>;
-export type TeamReport = Record<string, any>;
+export type ProjectsReportSection = {
+  activeProjects?: unknown;
+  completedProjects?: unknown;
+  lateProjects?: unknown;
+  blockedProjects?: unknown;
+  overdueTasks?: unknown;
+  dueSoonTasks?: unknown;
+  upcomingMilestones?: unknown;
+  projectDeliveryRate?: unknown;
+  projectsByStatus?: Record<string, number>;
+  tasksByStatus?: ReportMetricMap;
+  milestonesByStatus?: ReportMetricMap;
+  projectRisks?: ReportRow[];
+  workloadByProject?: ReportRow[];
+};
+
+export type FinanceReportSection = {
+  issuedInvoices?: unknown;
+  issuedInvoiceValue?: unknown;
+  paidInvoices?: unknown;
+  paidInvoiceValue?: unknown;
+  overdueInvoices?: unknown;
+  receivables?: unknown;
+  paymentsInPeriod?: unknown;
+  estimatedMargin?: unknown;
+  invoicesByStatus?: ReportMetricMap;
+  paymentsByMonth?: ReportRow[];
+  projectFinancialStatus?: ReportMetricMap;
+  topUnpaidInvoices?: ReportRow[];
+};
+
+export type TeamReportSection = {
+  overloadedMembers?: unknown;
+  estimatedInternalCost?: unknown;
+  membersByStatus?: ReportMetricMap;
+  availabilityDistribution?: ReportMetricMap;
+  workloadDistribution?: ReportMetricMap;
+  loggedHoursByActivityType?: ReportMetricMap;
+  timeEntriesByStatus?: ReportMetricMap;
+  loggedHoursByMember?: ReportRow[];
+  capacityVsLoggedHours?: ReportRow[];
+};
+
+export type DocumentsReportSection = {
+  totalDocuments?: unknown;
+  documentsUploadedInPeriod?: unknown;
+  archivedDocuments?: unknown;
+  financeDocuments?: unknown;
+  storageUsedBytes?: unknown;
+  documentsByCategory?: ReportMetricMap;
+  documentsByVisibility?: ReportMetricMap;
+  documentsByEntityType?: ReportMetricMap;
+  recentUploads?: ReportRow[];
+};
+
+export type OperationsReportSection = {
+  unreadNotifications?: unknown;
+  urgentNotifications?: unknown;
+  incompleteBriefings?: unknown;
+  missingMaterials?: unknown;
+  overdueTasks?: unknown;
+  blockedProjects?: unknown;
+  staleQuotes?: unknown;
+  notificationsByType?: ReportMetricMap;
+  notificationRulesStatus?: ReportMetricMap;
+  openRisks?: ReportRow[];
+};
+
+export type CustomersReportSection = {
+  activeCustomers?: unknown;
+  prospects?: unknown;
+  dormantCustomers?: unknown;
+  customersWithActiveProjects?: unknown;
+  customersWithRecurringServices?: unknown;
+  customersWithUpcomingRenewals?: unknown;
+  customersWithUnpaidInvoices?: unknown;
+  companiesByStatus?: ReportMetricMap;
+  upsellCandidates?: ReportRow[];
+};
+
+export type ExecutiveReport = {
+  permissions?: ReportPermissions;
+  sales?: SalesReportSection;
+  projects?: ProjectsReportSection;
+  finance?: FinanceReportSection | null;
+  team?: TeamReportSection;
+  documents?: DocumentsReportSection;
+  operations?: OperationsReportSection;
+  customers?: CustomersReportSection;
+  targets?: KpiTarget[];
+  risks?: ReportRow[];
+};
+
+export type SalesReport = SalesReportSection & { sales?: SalesReportSection };
+export type ProjectsReport = ProjectsReportSection & { projects?: ProjectsReportSection };
+export type FinanceReport = FinanceReportSection & { finance?: FinanceReportSection };
+export type TeamReport = TeamReportSection & { team?: TeamReportSection };
 export type ConsultantPerformanceItem = {
   user_id: string;
   display_name: string;
@@ -118,12 +220,16 @@ export type ConsultantPerformanceReport = {
   criteria: Record<string, string>;
   summary: Record<string, number>;
   items: ConsultantPerformanceItem[];
-  details?: { activities: Record<string, any>[]; projects: Record<string, any>[]; opportunities: Record<string, any>[] };
+  details?: {
+    activities: Array<{ id: string; title?: string | null; type?: string | null; completed_at?: string | null; created_at?: string | null }>;
+    projects: Array<{ id: string; name?: string | null; company_name?: string | null; status?: string | null }>;
+    opportunities: Array<{ id: string; title?: string | null; company_name?: string | null; stage?: string | null }>;
+  };
 };
-export type DocumentsReport = Record<string, any>;
-export type OperationsReport = Record<string, any>;
-export type CustomersReport = Record<string, any>;
-export type CompareReport = Record<string, any>;
+export type DocumentsReport = DocumentsReportSection & { documents?: DocumentsReportSection };
+export type OperationsReport = OperationsReportSection & { operations?: OperationsReportSection };
+export type CustomersReport = CustomersReportSection & { customers?: CustomersReportSection };
+export type CompareReport = Record<string, unknown>;
 
 export type ListResponse<T> = { items: T[]; total?: number; limit?: number; offset?: number };
 export type ReportKey = "executive" | "sales" | "projects" | "finance" | "team" | "documents" | "operations" | "customers";

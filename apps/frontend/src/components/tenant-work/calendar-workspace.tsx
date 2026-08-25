@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   CalendarDays,
@@ -145,21 +145,21 @@ export function CalendarWorkspace() {
     };
   }, [cursor, teamFilter, view]);
 
-  const projectIdForEvent = (event: CalendarEvent) => {
+  const projectIdForEvent = useCallback((event: CalendarEvent) => {
     if (event.source_entity_type === "project") return event.source_entity_id || undefined;
     if (event.source_entity_type === "task") return tasks.find((task) => task.id === event.source_entity_id)?.project_id;
     if (event.source_entity_type === "milestone") return milestones.find((milestone) => milestone.id === event.source_entity_id)?.project_id;
     return undefined;
-  };
+  }, [milestones, tasks]);
 
   const visibleEvents = useMemo(() => projectFilter === "all"
     ? events
-    : events.filter((event) => projectIdForEvent(event) === projectFilter), [events, milestones, projectFilter, tasks]);
+    : events.filter((event) => projectIdForEvent(event) === projectFilter), [events, projectFilter, projectIdForEvent]);
   const visibleDeadlines = useMemo(() => deadlines
     .filter((event) => projectFilter === "all" || projectIdForEvent(event) === projectFilter)
     .filter((event) => teamFilter === "all" || event.assigned_to_user_id === teamFilter)
     .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
-    .slice(0, 8), [deadlines, milestones, projectFilter, tasks, teamFilter]);
+    .slice(0, 8), [deadlines, projectFilter, projectIdForEvent, teamFilter]);
 
   const relatedLabel = (event: CalendarEvent) => {
     const project = projects.find((item) => item.id === projectIdForEvent(event));

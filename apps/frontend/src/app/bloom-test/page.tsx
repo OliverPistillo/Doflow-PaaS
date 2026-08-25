@@ -20,7 +20,7 @@ export default function BloomTestPage() {
       const res = await fetch(url);
       const json = await res.json();
       setResult(JSON.stringify(json, null, 2));
-    } catch (e) {
+    } catch {
       setResult('Errore chiamata API');
     } finally {
       setLoading(false);

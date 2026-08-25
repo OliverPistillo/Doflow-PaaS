@@ -31,7 +31,17 @@ export function KnowledgeTagsPage() {
     }
   };
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const submit = async () => {
     try {

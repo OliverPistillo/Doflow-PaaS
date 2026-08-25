@@ -35,6 +35,7 @@ import {
   seedDoflowContractTemplates,
 } from '../tenant/tenant-contracts-schema';
 import { seedTenantAutomationTemplatesAndRules } from '../tenant/tenant-automations-schema';
+import { ensureDoflowAutomationPerformanceTables } from '../tenant/tenant-automation-performance-schema';
 import { seedTenantPlanningViews } from '../tenant/tenant-calendar-schema';
 import { seedTenantKnowledgeBase } from '../tenant/tenant-knowledge-schema';
 import { ensureTenantCredentialsTables } from '../tenant/tenant-credentials-schema';
@@ -45,8 +46,22 @@ const TENANT_NAME = 'doflow';
 const PLAN_TIER = 'ENTERPRISE';
 const CEO_EMAILS = ['oliver@doflow.it', 'daniele@doflow.it'];
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: false });
-dotenv.config({ path: path.resolve(process.cwd(), '..', '..', '.env'), override: false });
+export type DoflowSeedOptions = {
+  ceoPolicy?: 'ensure' | 'require-existing-preserve';
+  updateRedis?: boolean;
+};
+
+export type DoflowSeedResult = {
+  tenant: 'doflow';
+  ceoPolicy: 'ensure' | 'require-existing-preserve';
+  ceoAccountsPresent: number;
+  redisUpdated: boolean;
+};
+
+function loadSeedEnvironment() {
+  dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: false });
+  dotenv.config({ path: path.resolve(process.cwd(), '..', '..', '.env'), override: false });
+}
 
 type ErrorLike = Error & {
   code?: string;
@@ -311,6 +326,7 @@ async function ensureTenantTables(ds: DataSource, schema: string) {
   await ensureTenantContractsTables(ds, s);
   await seedDoflowContractTemplates(ds, s);
   await seedTenantAutomationTemplatesAndRules(ds, s);
+  await ensureDoflowAutomationPerformanceTables(ds, s);
   await seedTenantPlanningViews(ds, s);
   await seedTenantKnowledgeBase(ds, s);
   await ensureTenantCredentialsTables(ds, s);
@@ -343,48 +359,123 @@ async function ensureTenantRecord(ds: DataSource): Promise<{ id: string }> {
   return { id: rows[0].id };
 }
 
-async function ensureCeoUsers(ds: DataSource, tenantId: string, password: string) {
+async function ensureCeoUsers(ds: DataSource, tenantId: string) {
   const schema = safeSchema(TENANT_SCHEMA, 'seed-doflow-tenant.ensureCeoUsers');
-  const passwordHash = await bcrypt.hash(password, 12);
+  let fallbackPasswordHash: string | null = null;
+
+  const missingAccountPasswordHash = async () => {
+    if (!fallbackPasswordHash) fallbackPasswordHash = await bcrypt.hash(getInitialPassword(), 12);
+    return fallbackPasswordHash;
+  };
 
   for (const email of CEO_EMAILS) {
-    const tenantRows = await ds.query(
-      `
-      INSERT INTO "${schema}".users (
-        email, password_hash, role, auth_provider, is_active, created_at, updated_at
-      )
-      VALUES ($1, $2, 'owner', 'password', true, now(), now())
-      ON CONFLICT (email) DO UPDATE
-        SET password_hash = EXCLUDED.password_hash,
-            role = 'owner',
-            auth_provider = 'password',
-            is_active = true,
-            updated_at = now()
-      RETURNING id, email, role
-      `,
-      [email, passwordHash],
-    );
+    const [tenantRows, publicRows] = await Promise.all([
+      ds.query(
+        `SELECT id, email, password_hash, role, full_name, auth_provider, google_id,
+                avatar_url, email_verified_at, mfa_enabled, mfa_secret, is_active
+           FROM "${schema}".users WHERE lower(email) = lower($1) LIMIT 1`,
+        [email],
+      ),
+      ds.query(
+        `SELECT id, email, password_hash, role, full_name, auth_provider, google_id,
+                avatar_url, email_verified_at, mfa_enabled, mfa_secret, is_active
+           FROM public.users WHERE lower(email) = lower($1) LIMIT 1`,
+        [email],
+      ),
+    ]);
 
-    await ds.query(
-      `
-      INSERT INTO public.users (
-        id, email, password_hash, role, tenant_id, auth_provider,
-        is_active, created_at, updated_at
-      )
-      VALUES ($1, $2, $3, 'owner', $4, 'password', true, now(), now())
-      ON CONFLICT (email) DO UPDATE
-        SET password_hash = EXCLUDED.password_hash,
-            role = 'owner',
-            tenant_id = EXCLUDED.tenant_id,
-            auth_provider = 'password',
-            is_active = true,
-            updated_at = now()
-      `,
-      [tenantRows[0].id, email, passwordHash, tenantId],
-    );
+    let tenantUser = tenantRows[0];
+    const publicUser = publicRows[0];
+    if (!tenantUser) {
+      const source = publicUser || {};
+      const passwordHash = source.password_hash ?? await missingAccountPasswordHash();
+      const inserted = await ds.query(
+        `INSERT INTO "${schema}".users (
+           id, email, password_hash, role, full_name, auth_provider, google_id,
+           avatar_url, email_verified_at, mfa_enabled, mfa_secret, is_active,
+           created_at, updated_at
+         ) VALUES (
+           COALESCE($1::uuid, uuid_generate_v4()), $2, $3, 'owner', $4,
+           COALESCE($5, 'password'), $6, $7, $8, COALESCE($9, false), $10,
+           true, now(), now()
+         ) RETURNING id, email, password_hash, role, full_name, auth_provider,
+                     google_id, avatar_url, email_verified_at, mfa_enabled,
+                     mfa_secret, is_active`,
+        [
+          source.id || null,
+          email,
+          passwordHash,
+          source.full_name || null,
+          source.auth_provider || null,
+          source.google_id || null,
+          source.avatar_url || null,
+          source.email_verified_at || null,
+          source.mfa_enabled ?? false,
+          source.mfa_secret || null,
+        ],
+      );
+      tenantUser = inserted[0];
+    } else {
+      const updated = await ds.query(
+        `UPDATE "${schema}".users
+            SET role = 'owner', is_active = true, updated_at = now()
+          WHERE id = $1
+          RETURNING id, email, password_hash, role, full_name, auth_provider,
+                    google_id, avatar_url, email_verified_at, mfa_enabled,
+                    mfa_secret, is_active`,
+        [tenantUser.id],
+      );
+      tenantUser = updated[0];
+    }
 
-    console.log(`[seed:doflow] CEO ensured: ${email} (role owner)`);
+    if (!publicUser) {
+      await ds.query(
+        `INSERT INTO public.users (
+           id, email, password_hash, role, tenant_id, full_name, auth_provider,
+           google_id, avatar_url, email_verified_at, mfa_enabled, mfa_secret,
+           is_active, created_at, updated_at
+         ) VALUES ($1, $2, $3, 'owner', $4, $5, $6, $7, $8, $9, $10, $11, true, now(), now())`,
+        [
+          tenantUser.id,
+          email,
+          tenantUser.password_hash,
+          tenantId,
+          tenantUser.full_name || null,
+          tenantUser.auth_provider || 'password',
+          tenantUser.google_id || null,
+          tenantUser.avatar_url || null,
+          tenantUser.email_verified_at || null,
+          tenantUser.mfa_enabled ?? false,
+          tenantUser.mfa_secret || null,
+        ],
+      );
+    } else {
+      await ds.query(
+        `UPDATE public.users
+            SET role = 'owner', tenant_id = $1, is_active = true, updated_at = now()
+          WHERE id = $2`,
+        [tenantId, publicUser.id],
+      );
+    }
+
+    console.log('[seed:doflow] Existing owner identity preserved and synchronized.');
   }
+}
+
+async function requireExistingCeoUsers(ds: DataSource, tenantId: string) {
+  const rows = await ds.query(
+    `SELECT lower(t.email) AS email
+       FROM "doflow".users t
+       JOIN public.users p ON p.id = t.id AND p.tenant_id = $1
+      WHERE lower(t.email) = ANY($2::text[])
+        AND lower(p.email) = lower(t.email)
+      ORDER BY lower(t.email)`,
+    [tenantId, CEO_EMAILS],
+  );
+  if (rows.length !== CEO_EMAILS.length) {
+    throw new Error('Both existing Doflow owner identities and public mirrors are required; the production cutover seed never creates them.');
+  }
+  return rows.length;
 }
 
 async function ensureEnterpriseModules(ds: DataSource, tenantId: string) {
@@ -447,7 +538,7 @@ async function updateTenantWhitelistCache() {
   const host = process.env.REDIS_HOST;
   if (!host) {
     console.warn('[seed:doflow] REDIS_HOST not set; restart the backend or hydrate tenant cache to expose the new tenant immediately.');
-    return;
+    return false;
   }
 
   const redis = new Redis({
@@ -462,16 +553,53 @@ async function updateTenantWhitelistCache() {
     await redis.sadd('df:sys:tenant_whitelist', TENANT_SLUG);
     await redis.del(`tenant:slug:${TENANT_SLUG}`);
     console.log('[seed:doflow] Redis tenant whitelist updated.');
+    return true;
   } catch (err) {
     console.warn('[seed:doflow] Could not update Redis tenant whitelist. Restarting the backend will refresh it.');
+    return false;
   } finally {
     redis.disconnect();
   }
 }
 
+export async function runDoflowTenantSeed(
+  ds: DataSource,
+  options: DoflowSeedOptions = {},
+): Promise<DoflowSeedResult> {
+  const ceoPolicy = options.ceoPolicy || 'ensure';
+  console.log('[seed:doflow] Ensuring tenant record...');
+  const tenant = await ensureTenantRecord(ds);
+
+  console.log('[seed:doflow] Ensuring tenant schema/tables...');
+  await ensureTenantTables(ds, TENANT_SCHEMA);
+  await seedDoflowBriefingQuoteTemplates(ds, TENANT_SCHEMA);
+  await seedDoflowDocumentFolders(ds, TENANT_SCHEMA);
+
+  console.log('[seed:doflow] Ensuring CEO users...');
+  const ceoAccountsPresent = ceoPolicy === 'require-existing-preserve'
+    ? await requireExistingCeoUsers(ds, tenant.id)
+    : (await ensureCeoUsers(ds, tenant.id), CEO_EMAILS.length);
+
+  console.log('[seed:doflow] Ensuring team members and skills...');
+  await seedTenantTeamSkills(ds, TENANT_SCHEMA);
+  await syncTenantUsersToTeamMembers(ds, TENANT_SCHEMA);
+
+  console.log('[seed:doflow] Ensuring report KPI targets...');
+  await seedTenantKpiTargets(ds, TENANT_SCHEMA);
+  await seedTenantKnowledgeBase(ds, TENANT_SCHEMA);
+  await seedDoflowContractTemplates(ds, TENANT_SCHEMA);
+
+  await ensureEnterpriseModules(ds, tenant.id);
+  await markOnboardingComplete(ds, tenant.id);
+  const redisUpdated = options.updateRedis === false ? false : await updateTenantWhitelistCache();
+
+  console.log('[seed:doflow] Done.');
+  return { tenant: 'doflow', ceoPolicy, ceoAccountsPresent, redisUpdated };
+}
+
 async function main() {
+  loadSeedEnvironment();
   logStartupDiagnostics();
-  const password = getInitialPassword();
   const ds = new DataSource({
     type: 'postgres',
     url: requireDatabaseUrl(),
@@ -481,37 +609,15 @@ async function main() {
 
   await ds.initialize();
   try {
-    console.log('[seed:doflow] Ensuring tenant record...');
-    const tenant = await ensureTenantRecord(ds);
-
-    console.log('[seed:doflow] Ensuring tenant schema/tables...');
-    await ensureTenantTables(ds, TENANT_SCHEMA);
-    await seedDoflowBriefingQuoteTemplates(ds, TENANT_SCHEMA);
-    await seedDoflowDocumentFolders(ds, TENANT_SCHEMA);
-
-    console.log('[seed:doflow] Ensuring CEO users...');
-    await ensureCeoUsers(ds, tenant.id, password);
-
-    console.log('[seed:doflow] Ensuring team members and skills...');
-    await seedTenantTeamSkills(ds, TENANT_SCHEMA);
-    await syncTenantUsersToTeamMembers(ds, TENANT_SCHEMA);
-
-    console.log('[seed:doflow] Ensuring report KPI targets...');
-    await seedTenantKpiTargets(ds, TENANT_SCHEMA);
-    await seedTenantKnowledgeBase(ds, TENANT_SCHEMA);
-    await seedDoflowContractTemplates(ds, TENANT_SCHEMA);
-
-    await ensureEnterpriseModules(ds, tenant.id);
-    await markOnboardingComplete(ds, tenant.id);
-    await updateTenantWhitelistCache();
-
-    console.log('[seed:doflow] Done.');
+    await runDoflowTenantSeed(ds);
   } finally {
     await ds.destroy();
   }
 }
 
-main().catch((err) => {
-  logErrorDetails(err);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  void main().catch((err) => {
+    logErrorDetails(err);
+    process.exitCode = 1;
+  });
+}

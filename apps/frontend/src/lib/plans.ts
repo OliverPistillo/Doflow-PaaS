@@ -2,15 +2,14 @@
 
 import type { LucideIcon } from "lucide-react";
 import {
-  BarChart3, Package, ShoppingCart, FileText, Users, Settings,
-  LayoutDashboard, CreditCard, Truck, Layers, Shield, CheckSquare,
-  KanbanSquare, Building2, Contact, GitFork, Receipt, Wallet,
-  Calendar, Clock, Mail, BookTemplate, Megaphone, FormInput,
-  Warehouse, PackageSearch, Factory, ClipboardList,
-  FolderOpen, PenLine, UsersRound, UserCog, Activity,
-  Banknote, TrendingUp, BarChart2, Building, FileSpreadsheet,
-  Zap, Plug, Bell, ShieldCheck, Download, Timer,
-  Crown, Rocket, LifeBuoy, Compass,
+  BarChart3,Package,ShoppingCart,FileText,Users,Settings,
+  LayoutDashboard,CreditCard,Truck,Layers,CheckSquare,
+  KanbanSquare,Building2,Contact,GitFork,Receipt,Calendar,Mail,BookTemplate,Megaphone,FormInput,
+  Warehouse,Factory,ClipboardList,
+  FolderOpen,PenLine,UsersRound,UserCog,Activity,
+  Banknote,Building,FileSpreadsheet,
+  Zap,Plug,Bell,ShieldCheck,Download,Timer,
+  Crown,Rocket,LifeBuoy,Compass
 } from "lucide-react";
 
 export type PlanTier = "STARTER" | "PRO" | "ENTERPRISE";

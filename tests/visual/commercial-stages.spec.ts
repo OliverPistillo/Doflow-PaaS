@@ -34,19 +34,19 @@ async function installReadOnlyFirewall(page: Page) {
 }
 
 async function assertDoflowSession(page: Page) {
-  const identity = await page.evaluate(() => {
-    const token = window.localStorage.getItem('doflow_token');
-    if (!token) return null;
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-      return {
-        tenant: String(payload.tenantSlug || payload.tenantId || '').toLowerCase(),
-        role: String(payload.role || '').toLowerCase(),
-        authStage: String(payload.authStage || '').toUpperCase(),
-      };
-    } catch {
-      return null;
-    }
+  const identity = await page.evaluate(async () => {
+    const response = await fetch('/api/auth/me', {
+      credentials: 'include',
+      headers: { 'x-doflow-web': '1' },
+    });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    const user = payload?.user || {};
+    return {
+      tenant: String(user.tenantSlug || user.tenantId || '').toLowerCase(),
+      role: String(user.role || '').toLowerCase(),
+      authStage: String(user.authStage || '').toUpperCase(),
+    };
   });
   expect(identity?.tenant).toBe('doflow');
   expect(['owner', 'admin', 'manager', 'superadmin', 'super_admin']).toContain(identity?.role);
@@ -55,11 +55,13 @@ async function assertDoflowSession(page: Page) {
 
 async function opportunityTotal(page: Page) {
   return page.evaluate(async () => {
-    const token = window.localStorage.getItem('doflow_token');
-    if (!token) throw new Error('Sessione visuale assente');
     const response = await fetch('/api/tenant/crm/opportunities?limit=100&offset=0', {
       method: 'GET',
-      headers: { Authorization: `Bearer ${token}`, 'x-doflow-tenant-id': 'doflow' },
+      credentials: 'include',
+      headers: {
+        'x-doflow-web': '1',
+        'x-doflow-tenant-id': 'doflow',
+      },
     });
     if (!response.ok) throw new Error(`Censimento opportunità fallito (${response.status})`);
     const payload = await response.json();

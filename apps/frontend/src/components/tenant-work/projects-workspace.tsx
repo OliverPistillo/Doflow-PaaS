@@ -111,8 +111,16 @@ export function ProjectsWorkspace() {
   }, [canView, doflow]);
 
   useEffect(() => {
-    setStatus(normalizeProjectStageQuery(statusParam, doflow));
-    setPage(1);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setStatus(normalizeProjectStageQuery(statusParam, doflow));
+        setPage(1);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [doflow, statusParam]);
 
   useEffect(() => {
@@ -149,32 +157,35 @@ export function ProjectsWorkspace() {
 
   useEffect(() => {
     let active = true;
-    if (!selectedId) {
-      setSelectedProject(null);
-      setMilestones([]);
-      setTasks([]);
-      setFiles([]);
-      setDocumentCount(0);
-      return;
-    }
-    setDetailLoading(true);
-    Promise.allSettled([
-      apiFetch<WorkProject>(`/tenant/projects/${selectedId}`),
-      apiFetch<WorkListResponse<WorkMilestone>>(`/tenant/projects/${selectedId}/milestones`),
-      apiFetch<WorkListResponse<WorkTask>>(`/tenant/projects/${selectedId}/tasks?limit=100`),
-      apiFetch<WorkListResponse<ProjectFile>>(`/tenant/projects/${selectedId}/files`),
-      canView("documents")
-        ? listDocumentsForEntity("project", selectedId, { limit: 100 })
-        : Promise.resolve({ items: [], total: 0 }),
-    ] as const).then((results) => {
+    queueMicrotask(() => {
       if (!active) return;
-      const selected = results[0].status === "fulfilled" ? results[0].value : items.find((item) => item.id === selectedId) || null;
-      setSelectedProject(selected && doflow ? canonicalizeProjectItem(selected) : selected);
-      setMilestones(results[1].status === "fulfilled" ? results[1].value.items || [] : []);
-      setTasks(results[2].status === "fulfilled" ? results[2].value.items || [] : []);
-      setFiles(results[3].status === "fulfilled" ? results[3].value.items || [] : []);
-      setDocumentCount(results[4].status === "fulfilled" ? Number(results[4].value.total ?? results[4].value.items?.length ?? 0) : 0);
-      setDetailLoading(false);
+      if (!selectedId) {
+        setSelectedProject(null);
+        setMilestones([]);
+        setTasks([]);
+        setFiles([]);
+        setDocumentCount(0);
+        return;
+      }
+      setDetailLoading(true);
+      Promise.allSettled([
+        apiFetch<WorkProject>(`/tenant/projects/${selectedId}`),
+        apiFetch<WorkListResponse<WorkMilestone>>(`/tenant/projects/${selectedId}/milestones`),
+        apiFetch<WorkListResponse<WorkTask>>(`/tenant/projects/${selectedId}/tasks?limit=100`),
+        apiFetch<WorkListResponse<ProjectFile>>(`/tenant/projects/${selectedId}/files`),
+        canView("documents")
+          ? listDocumentsForEntity("project", selectedId, { limit: 100 })
+          : Promise.resolve({ items: [], total: 0 }),
+      ] as const).then((results) => {
+        if (!active) return;
+        const selected = results[0].status === "fulfilled" ? results[0].value : items.find((item) => item.id === selectedId) || null;
+        setSelectedProject(selected && doflow ? canonicalizeProjectItem(selected) : selected);
+        setMilestones(results[1].status === "fulfilled" ? results[1].value.items || [] : []);
+        setTasks(results[2].status === "fulfilled" ? results[2].value.items || [] : []);
+        setFiles(results[3].status === "fulfilled" ? results[3].value.items || [] : []);
+        setDocumentCount(results[4].status === "fulfilled" ? Number(results[4].value.total ?? results[4].value.items?.length ?? 0) : 0);
+        setDetailLoading(false);
+      });
     });
     return () => {
       active = false;

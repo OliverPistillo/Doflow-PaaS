@@ -2,22 +2,21 @@
 "use client";
 
 // ─── Tutti gli import in cima — obbligatorio per ES modules ──────────────────
-import React, { useEffect, useState, useCallback, useRef } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React,{ useEffect,useState,useCallback,useRef } from "react";
+import { useSearchParams,useRouter,usePathname } from "next/navigation";
+import { Tabs,TabsList,TabsTrigger,TabsContent } from "@/components/ui/tabs";
+import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import {
-  Loader2, RefreshCw, LayoutDashboard, Cpu, Server, Radio, ShieldAlert,
-  CheckCircle2, XCircle, AlertTriangle,
+  Loader2,RefreshCw,LayoutDashboard,Cpu,Server,Radio,ShieldAlert,
+  CheckCircle2,XCircle,AlertTriangle,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { TabOverview }  from "./components/tab-overview";
-import { TabApiUsage }  from "./components/tab-api-usage";
-import { TabAudit }     from "./components/tab-audit";
+import { TabOverview } from "./components/tab-overview";
+import { TabApiUsage } from "./components/tab-api-usage";
+import { TabAudit } from "./components/tab-audit";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -224,9 +223,15 @@ export function SystemMonitorClient() {
   }, [toast]);
 
   useEffect(() => {
-    fetchSystem();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) fetchSystem();
+    });
     refreshTimer.current = setInterval(() => fetchSystem(true), REFRESH_MS);
-    return () => { if (refreshTimer.current) clearInterval(refreshTimer.current); };
+    return () => {
+      cancelled = true;
+      if (refreshTimer.current) clearInterval(refreshTimer.current);
+    };
   }, [fetchSystem]);
 
   const handleTabChange = (value: string) => {

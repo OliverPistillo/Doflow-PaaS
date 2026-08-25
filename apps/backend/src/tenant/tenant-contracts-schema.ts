@@ -1,4 +1,5 @@
 import { DataSource } from 'typeorm';
+import { provisionSchemaOnce } from '../common/schema-provisioning-once';
 import { safeSchema } from '../common/schema.utils';
 
 export type ContractTemplateSeed = {
@@ -82,7 +83,7 @@ async function addColumns(ds: DataSource, schema: string, table: string, columns
   }
 }
 
-export async function ensureTenantContractsTables(ds: DataSource, schema: string) {
+async function provisionTenantContractsTables(ds: DataSource, schema: string) {
   const s = safeSchema(schema, 'ensureTenantContractsTables');
   await ds.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
 
@@ -407,6 +408,16 @@ export async function ensureTenantContractsTables(ds: DataSource, schema: string
     `CREATE INDEX IF NOT EXISTS "idx_${s}_paperwork_activity_created" ON "${s}".paperwork_activity(created_at DESC)`,
   ];
   for (const statement of indexStatements) await ds.query(statement);
+}
+
+export function ensureTenantContractsTables(
+  ds: DataSource,
+  schema: string,
+): Promise<void> {
+  const safe = safeSchema(schema, 'ensureTenantContractsTables');
+  return provisionSchemaOnce(ds, `tenant-contracts:${safe}`, () =>
+    provisionTenantContractsTables(ds, safe),
+  );
 }
 
 export async function seedDoflowContractTemplates(ds: DataSource, schema: string) {

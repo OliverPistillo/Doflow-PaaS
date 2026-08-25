@@ -1,18 +1,19 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Activity, Search, Filter, Download, Users, FileText, ShoppingCart,
-  CheckSquare, Mail, DollarSign, Package, UserPlus, Pencil, Trash2, Eye,
-  ChevronDown, X } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState,useMemo } from "react";
+import {
+  Activity,Search,Download,Users,FileText,ShoppingCart,
+  CheckSquare,Mail,DollarSign,Package,UserPlus,Pencil,Eye,X
+} from "lucide-react";
+import { Card,CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Avatar,AvatarFallback } from "@/components/ui/avatar";
+import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-import { PageShell, PageHeader, TableLoadingState, ErrorState } from "@/components/ui/page-shell";
+import { PageShell,PageHeader } from "@/components/ui/page-shell";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ActionType =
@@ -191,7 +192,7 @@ export default function Page() {
             {/* Events list */}
             <Card className="overflow-hidden">
               <div className="divide-y divide-border/50">
-                {events.map((ev, idx) => {
+                {events.map((ev) => {
                   const cfg = ACTION_CONFIG[ev.type];
                   const Icon = cfg.icon;
                   return (

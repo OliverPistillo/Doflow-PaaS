@@ -50,6 +50,19 @@ export const AUTOMATION_TRIGGER_TYPES = [
   'document_missing_for_entity',
   'daily_digest',
   'executive_risk_detected',
+  'follow_up_lead',
+  'appointment',
+  'activity_due',
+  'unsigned_contract',
+  'expiring_quote',
+  'unpaid_installment',
+  'renewal',
+  'missing_materials',
+  'qa',
+  'approval',
+  'delivery',
+  'inactive_customer',
+  'blocked_project',
 ] as const;
 
 export const AUTOMATION_CONDITION_TYPES = [
@@ -81,11 +94,12 @@ export const AUTOMATION_ACTION_TYPES = [
   'create_report_snapshot',
   'mark_rule_run',
   'noop',
+  'invoke_adapter',
 ] as const;
 
 export const AUTOMATION_RUN_MODES = ['manual', 'scheduled', 'event', 'hybrid'] as const;
 export const AUTOMATION_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
-export const AUTOMATION_RUN_STATUSES = ['running', 'success', 'partial_success', 'failed', 'skipped'] as const;
+export const AUTOMATION_RUN_STATUSES = ['queued', 'running', 'success', 'partial_success', 'failed', 'skipped', 'dead_letter', 'cancelled'] as const;
 export const AUTOMATION_ACTION_STATUSES = ['success', 'failed', 'skipped'] as const;
 export const AUTOMATION_SCHEDULE_FREQUENCIES = ['hourly', 'daily', 'weekly'] as const;
 

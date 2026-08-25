@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Download, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ export function KnowledgeArticlesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -30,9 +30,19 @@ export function KnowledgeArticlesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [canViewFinance, filters]);
 
-  useEffect(() => { void load(); }, [filters]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const action = async (type: "publish" | "archive" | "delete" | "export", item: KnowledgeArticle) => {
     try {

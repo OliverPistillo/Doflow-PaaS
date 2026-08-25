@@ -36,7 +36,7 @@ describe('TenantProjectsService', () => {
     const cleaned = (service as any).cleanProjectBody({ name: 'Progetto manuale' }, false, 'doflow');
 
     expect(cleaned.name).toBe('Progetto manuale');
-    expect(cleaned.status).toBe('to_start');
+    expect(cleaned.status).toBe('not_started');
     expect(cleaned.priority).toBe('medium');
     expect(cleaned.progress).toBe(0);
   });
@@ -54,7 +54,7 @@ describe('TenantProjectsService', () => {
     const result = await service.listProjects({ limit: 100 });
 
     expect(result.items).toEqual([
-      expect.objectContaining({ id: PROJECT_ID, status: 'review' }),
+      expect.objectContaining({ id: PROJECT_ID, status: 'client_review' }),
       expect.objectContaining({ id: QUOTE_ID, status: 'unexpected', project_status_unmapped: true }),
     ]);
     expect(result.total).toBe(2);
@@ -65,17 +65,17 @@ describe('TenantProjectsService', () => {
     (service as any).ensureSchema = jest.fn();
     dataSource.query.mockResolvedValueOnce([{ total: 0 }]).mockResolvedValueOnce([]);
 
-    await service.listProjects({ status: 'review' });
+    await service.listProjects({ status: 'ready_publish' });
 
     const [countSql, params] = dataSource.query.mock.calls[0];
     expect(countSql).toContain("LOWER(COALESCE(p.status, '')) = ANY($1::text[])");
-    expect(params[0]).toEqual(['internal_review', 'client_review', 'corrections', 'seo_performance', 'qa', 'review']);
+    expect(params[0]).toEqual(['ready_publish', 'publishing']);
   });
 
   it('persists known aliases canonically and writes one specific status audit', async () => {
     const { service, dataSource } = createService();
     (service as any).ensureSchema = jest.fn();
-    jest.spyOn(service, 'getProject').mockResolvedValue({ id: PROJECT_ID, status: 'review' } as any);
+    jest.spyOn(service, 'getProject').mockResolvedValue({ id: PROJECT_ID, status: 'qa_internal' } as any);
     dataSource.query.mockImplementation(async (sql: string) => {
       if (sql.includes('SELECT status FROM "doflow".projects')) return [{ status: 'client_review' }];
       if (sql.includes('UPDATE "doflow".projects')) return [{ id: PROJECT_ID }];
@@ -85,7 +85,7 @@ describe('TenantProjectsService', () => {
     await service.updateProjectStatus(PROJECT_ID, 'qa');
 
     const update = dataSource.query.mock.calls.find(([sql]) => String(sql).includes('UPDATE "doflow".projects'));
-    expect(update?.[1]?.[0]).toBe('review');
+    expect(update?.[1]?.[0]).toBe('qa_internal');
     const audits = dataSource.query.mock.calls.filter(([sql]) => String(sql).includes('audit_log'));
     expect(audits).toHaveLength(1);
     expect(audits[0][1]).toEqual(expect.arrayContaining([
@@ -98,7 +98,7 @@ describe('TenantProjectsService', () => {
   it('rejects unknown Doflow writes and prevents generic current_phase updates', () => {
     const { service } = createService();
     expect(() => (service as any).cleanProjectBody({ status: 'unexpected' }, true, 'doflow')).toThrow('Status progetto non valido');
-    expect((service as any).cleanProjectBody({ current_phase: 'legacy note' }, true, 'doflow')).toEqual({});
+    expect((service as any).cleanProjectBody({ current_phase: 'legacy note', progress: 80 }, true, 'doflow')).toEqual({});
   });
 
   it('preserves legacy status and current_phase behavior for other tenants', () => {
@@ -137,6 +137,6 @@ describe('TenantProjectsService', () => {
 
     const projectInsert = runner.query.mock.calls.find(([sql]) => String(sql).includes('INSERT INTO "doflow".projects'));
     expect(projectInsert).toBeTruthy();
-    expect(projectInsert?.[1]).toEqual(expect.arrayContaining(['to_start', 'medium', 0]));
+    expect(projectInsert?.[1]).toEqual(expect.arrayContaining(['not_started', 'medium', 0]));
   });
 });

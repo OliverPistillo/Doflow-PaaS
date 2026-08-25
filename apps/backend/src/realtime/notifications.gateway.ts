@@ -1,46 +1,30 @@
 import {
-  WebSocketGateway,
-  WebSocketServer,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  WebSocketGateway,
+  WebSocketServer,
 } from '@nestjs/websockets';
-import { Server } from 'ws';
 import { Logger } from '@nestjs/common';
 import { IncomingMessage } from 'http';
+import WebSocket, { Server } from 'ws';
+import { WebSessionService } from '../auth/web-session.service';
 import { NotificationsService } from './notifications.service';
 
 interface ClientMeta {
   userId: string;
   tenantId: string;
-  email?: string;
+  request: IncomingMessage;
+  heartbeat: ReturnType<typeof setInterval>;
 }
 
 type WsClient = WebSocket & { __meta?: ClientMeta };
 
-// Helper per costruire l’URL della richiesta
-function buildUrl(req: IncomingMessage): URL {
-  const base = 'http://localhost';
-  const path = req.url ?? '/';
-  return new URL(path, base);
+function normalizedOrigin(value: string) {
+  try { return new URL(value).origin.toLowerCase(); } catch { return ''; }
 }
 
-// 🔥 Decoder “stupido” del JWT: NON verifica la firma, serve solo per test
-function decodeJwt(token: string): any {
-  const parts = token.split('.');
-  if (parts.length < 2) {
-    throw new Error('Malformed token');
-  }
-  const payload = parts[1];
-  const json = Buffer.from(payload, 'base64url').toString('utf8');
-  return JSON.parse(json);
-}
-
-@WebSocketGateway({
-  path: process.env.WS_PATH ?? '/ws',
-})
-export class NotificationsGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
+@WebSocketGateway({ path: process.env.WS_PATH ?? '/ws' })
+export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(NotificationsGateway.name);
 
   @WebSocketServer()
@@ -48,105 +32,91 @@ export class NotificationsGateway
 
   private readonly clients = new Map<WsClient, ClientMeta>();
 
-  constructor(private readonly notifications: NotificationsService) {
-    // Quando Redis Pub/Sub riceve un evento, lo inoltriamo ai client interessati
-    this.notifications.registerHandler((channel, payload) => {
-      this.broadcastFromChannel(channel, payload);
-    });
+  constructor(
+    private readonly notifications: NotificationsService,
+    private readonly webSessions: WebSessionService,
+  ) {
+    void this.notifications.registerHandler((channel, payload) => this.broadcastFromChannel(channel, payload))
+      .catch(() => this.logger.error('Realtime Redis subscriber unavailable'));
+  }
+
+  private originAllowed(req: IncomingMessage) {
+    const origin = normalizedOrigin(String(req.headers.origin || ''));
+    const configured = String(process.env.CORS_ORIGINS || 'https://app.doflow.it')
+      .split(',').map((item) => normalizedOrigin(item.trim())).filter(Boolean);
+    if (process.env.NODE_ENV !== 'production') configured.push('http://localhost:3100');
+    return Boolean(origin && new Set(configured).has(origin));
   }
 
   async handleConnection(client: WsClient, ...args: any[]) {
     const req = args[0] as IncomingMessage | undefined;
-    if (!req) {
-      client.close(4000, 'Missing request');
+    if (!req || !this.originAllowed(req)) {
+      client.close(4003, 'Origin not allowed');
       return;
     }
-
     try {
-      const url = buildUrl(req);
-      const token = url.searchParams.get('token');
-
-      if (!token) {
-        client.close(4001, 'Missing token');
+      const session = await this.webSessions.resolve(req as any);
+      if (!session || session.user.authStage !== 'FULL') {
+        client.close(4001, 'Session required');
         return;
       }
-
-      // ⚠️ DEV-ONLY: decodifica senza verificare la firma
-      const decoded: any = decodeJwt(token);
-
-      const meta: ClientMeta = {
-        userId: String(decoded.sub),
-        tenantId:
-          (decoded.tenantId ??
-            decoded.tenant_id ??
-            decoded.tenant ??
-            'public') as string,
-        email: decoded.email as string | undefined,
-      };
-
+      const userId = String(session.user.id || session.user.sub || '');
+      const tenantId = String(session.user.tenantSlug || '').toLowerCase();
+      if (!userId || !tenantId || tenantId === 'public') {
+        client.close(4002, 'Invalid session');
+        return;
+      }
+      const heartbeat = setInterval(() => { void this.revalidate(client); }, 25_000);
+      heartbeat.unref?.();
+      const meta: ClientMeta = { userId, tenantId, request: req, heartbeat };
       client.__meta = meta;
       this.clients.set(client, meta);
-
-      // eslint-disable-next-line no-console
-      this.logger.log('[WS] client connected (NO VERIFY JWT)', meta);
-
-      const hello = {
-        type: 'hello' as const,
-        payload: {
-          tenantId: meta.tenantId,
-          userId: meta.userId,
-        },
-      };
-      client.send(JSON.stringify(hello));
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      this.logger.error('[WS] connection error (decode)', e);
-      client.close(4002, 'Invalid token');
+      this.safeSend(client, { type: 'hello', payload: { tenantId, userId } });
+    } catch {
+      client.close(4002, 'Invalid session');
     }
   }
 
   handleDisconnect(client: WsClient) {
+    const meta = this.clients.get(client);
+    if (meta) clearInterval(meta.heartbeat);
     this.clients.delete(client);
   }
 
-  private broadcastFromChannel(channel: string, payload: unknown) {
-    if (channel.startsWith('tenant:')) {
-      const parts = channel.split(':');
-      const tenantId = parts[1];
-
-      for (const [client, meta] of this.clients.entries()) {
-        if (meta.tenantId === tenantId) {
-          this.safeSend(client, {
-            type: 'tenant_notification' as const,
-            channel,
-            payload,
-          });
-        }
+  private async revalidate(client: WsClient) {
+    const meta = this.clients.get(client);
+    if (!meta) return;
+    try {
+      const session = await this.webSessions.resolve(meta.request as any);
+      const valid = session?.user.authStage === 'FULL'
+        && String(session.user.id || session.user.sub) === meta.userId
+        && String(session.user.tenantSlug).toLowerCase() === meta.tenantId;
+      if (!valid) {
+        client.close(4001, 'Session revoked');
+        this.handleDisconnect(client);
+        return;
       }
-    } else if (channel.startsWith('user:')) {
-      const parts = channel.split(':');
-      const userId = parts[1];
+      this.safeSend(client, { type: 'heartbeat', timestamp: new Date().toISOString() });
+    } catch {
+      client.close(1011, 'Session validation unavailable');
+      this.handleDisconnect(client);
+    }
+  }
 
-      for (const [client, meta] of this.clients.entries()) {
-        if (meta.userId === userId) {
-          this.safeSend(client, {
-            type: 'user_notification' as const,
-            channel,
-            payload,
-          });
-        }
+  private broadcastFromChannel(channel: string, payload: unknown) {
+    const [scope, id] = channel.split(':');
+    for (const [client, meta] of this.clients.entries()) {
+      if ((scope === 'tenant' && meta.tenantId === id) || (scope === 'user' && meta.userId === id)) {
+        this.safeSend(client, { type: scope === 'tenant' ? 'tenant_notification' : 'user_notification', channel, payload });
       }
     }
   }
 
   private safeSend(client: WsClient, data: unknown) {
     try {
-      const wsAny = client as any;
-      if (wsAny.readyState === wsAny.OPEN) {
-        wsAny.send(JSON.stringify(data));
-      }
+      if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify(data));
     } catch {
-      // ignora errori singoli di invio
+      this.handleDisconnect(client);
     }
   }
 }

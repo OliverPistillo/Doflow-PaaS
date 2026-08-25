@@ -1,6 +1,7 @@
-import { BadRequestException, ForbiddenException, Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Inject, NotFoundException, Optional } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
-import { DataSource } from 'typeorm';
+import { randomUUID } from 'crypto';
+import { DataSource, EntityManager } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
 import { ensureLeadIntakeSubmissionsTable } from '../public-lead-intake/public-lead-intake-schema';
 import { isPublicLeadIntakeTenantEnabled } from '../public-lead-intake/public-lead-intake-tenants';
@@ -14,6 +15,7 @@ import {
   normalizeCommercialStage,
 } from './commercial-stage-model';
 import { ensureTenantCrmCoreTables } from './tenant-crm-schema';
+import { TenantCommercialAccessService, type CommercialActor } from './tenant-commercial-access.service';
 
 type ResourceKey = 'companies' | 'contacts' | 'leads' | 'opportunities' | 'activities';
 
@@ -31,6 +33,7 @@ type ResourceConfig = {
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+type Queryable = Pick<EntityManager, 'query'>;
 
 const RESOURCES: Record<ResourceKey, ResourceConfig> = {
   companies: {
@@ -40,6 +43,7 @@ const RESOURCES: Record<ResourceKey, ResourceConfig> = {
       'name', 'legal_name', 'vat_number', 'fiscal_code', 'website', 'email', 'phone',
       'industry', 'size', 'status', 'source', 'address', 'city', 'province', 'country',
       'notes', 'owner_user_id',
+      'logo_url',
     ],
     searchable: ['name', 'legal_name', 'vat_number', 'email', 'phone', 'city'],
     filters: ['status', 'owner_user_id'],
@@ -105,7 +109,8 @@ const RESOURCES: Record<ResourceKey, ResourceConfig> = {
     required: ['type', 'title'],
     writable: [
       'company_id', 'contact_id', 'lead_id', 'opportunity_id', 'type', 'title',
-      'description', 'due_at', 'completed_at', 'assigned_to',
+      'description', 'due_at', 'completed_at', 'assigned_to', 'status', 'priority',
+      'kanban_order', 'metadata',
     ],
     searchable: ['title', 'description', 'type'],
     filters: ['type', 'company_id', 'contact_id', 'lead_id', 'opportunity_id', 'assigned_to'],
@@ -141,6 +146,7 @@ export class TenantCrmService {
   constructor(
     private readonly dataSource: DataSource,
     @Inject(REQUEST) private readonly request: any,
+    @Optional() private readonly commercialAccess?: TenantCommercialAccessService,
   ) {}
 
   private getUser() {
@@ -161,7 +167,7 @@ export class TenantCrmService {
     return schema;
   }
 
-  private assertCrmAccess(write = false) {
+  private legacyCrmAccess(write = false) {
     const user = this.getUser();
     if (!hasRoleAtLeast(user.role, 'manager')) {
       throw new ForbiddenException(write ? 'Manager o superiore richiesto per modificare il CRM.' : 'Manager o superiore richiesto per leggere il CRM.');
@@ -169,10 +175,145 @@ export class TenantCrmService {
     return user;
   }
 
+  private async assertCrmAccess(resource: ResourceKey, write = false, record?: Record<string, any>) {
+    if (!this.commercialAccess) return this.legacyCrmAccess(write);
+    const actor = await this.commercialAccess.current();
+    if (!isDoflowTenant(actor.schema)) return actor;
+    const has = (capability: string) => this.commercialAccess!.has(actor, capability);
+    if (resource === 'companies' || resource === 'contacts') {
+      this.commercialAccess.require(actor, write ? 'canEditCustomers' : 'canViewCustomers');
+      return actor;
+    }
+    if (resource === 'activities') {
+      this.commercialAccess.require(actor, write ? 'canEditAssignedLead' : 'canViewActivities', ...(write ? ['canEditCustomers'] : []));
+      return actor;
+    }
+    if (!write) {
+      this.commercialAccess.require(actor, 'canViewAllLeads', 'canViewAssignedLeads');
+      if (record && !has('canViewAllLeads') && String(record.assigned_to || '') !== actor.id) {
+        throw new ForbiddenException('Lead non assegnato');
+      }
+      return actor;
+    }
+    if (!record) {
+      this.commercialAccess.require(actor, 'canCreateLeads');
+      return actor;
+    }
+    if (!has('canAssignLeads') && !(has('canEditAssignedLead') && String(record.assigned_to || '') === actor.id)) {
+      throw new ForbiddenException('Lead non assegnato o non modificabile');
+    }
+    return actor;
+  }
+
+  private scopedWhere(resource: ResourceKey, schema: string, where: string, actor: any) {
+    if (!isDoflowTenant(schema) || !actor?.capabilities || actor.capabilities.has('*') || actor.capabilities.has('canViewAllLeads')) return where;
+    if (resource === 'opportunities') return `${where} AND t.assigned_to = $${'__ACTOR_PARAM__'}`;
+    if (resource === 'leads') return `${where} AND commercial_opportunity.assigned_to = $${'__ACTOR_PARAM__'}`;
+    return where;
+  }
+
   private async ensureSchema(schema: string) {
     await ensureTenantCrmCoreTables(this.dataSource, schema);
     if (isPublicLeadIntakeTenantEnabled(schema)) {
       await ensureLeadIntakeSubmissionsTable(this.dataSource, schema);
+    }
+  }
+
+  private sameDatabaseValue(left: unknown, right: unknown) {
+    if (left == null && right == null) return true;
+    if (left instanceof Date) return left.toISOString() === String(right);
+    if (right instanceof Date) return right.toISOString() === String(left);
+    if (typeof left === 'object' || typeof right === 'object') {
+      try {
+        return JSON.stringify(left) === JSON.stringify(right);
+      } catch {
+        return false;
+      }
+    }
+    return String(left) === String(right);
+  }
+
+  private actorId(user: { id?: string }) {
+    return UUID_RE.test(String(user.id || '')) ? String(user.id) : null;
+  }
+
+  private async recordMutation(
+    manager: Queryable,
+    schema: string,
+    user: { id?: string; email?: string; role: string },
+    action: string,
+    entityType: string,
+    entityId: string,
+    beforeState: unknown,
+    afterState: unknown,
+    metadata: Record<string, unknown>,
+  ) {
+    if (!isDoflowTenant(schema)) return;
+    const operationId = randomUUID();
+    const correlationId = randomUUID();
+    const actorId = this.actorId(user);
+    const auditMetadata = {
+      operation_id: operationId,
+      correlation_id: correlationId,
+      entity_type: entityType,
+      before: beforeState,
+      after: afterState,
+      ...metadata,
+    };
+    await manager.query(
+      `INSERT INTO "${schema}".commercial_history
+         (operation_id, correlation_id, entity_type, entity_id, event_type,
+          actor_user_id, before_state, after_state, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb)`,
+      [
+        operationId,
+        correlationId,
+        entityType,
+        entityId,
+        action,
+        actorId,
+        beforeState == null ? null : JSON.stringify(beforeState),
+        afterState == null ? null : JSON.stringify(afterState),
+        JSON.stringify(metadata),
+      ],
+    );
+    await manager.query(
+      `INSERT INTO "${schema}".audit_log
+         (actor_email, actor_role, action, target, metadata, created_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, now())`,
+      [user.email || null, user.role, action, entityId, JSON.stringify(auditMetadata)],
+    );
+    await manager.query(
+      `INSERT INTO "${schema}".commercial_outbox
+         (operation_id, correlation_id, topic, aggregate_type, aggregate_id, payload)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
+      [
+        operationId,
+        correlationId,
+        action,
+        entityType,
+        entityId,
+        JSON.stringify({ entity_id: entityId, ...metadata }),
+      ],
+    );
+  }
+
+  private async auditLegacy(
+    schema: string,
+    user: { email?: string; role: string },
+    action: string,
+    target: string,
+    metadata: Record<string, unknown>,
+  ) {
+    try {
+      await this.dataSource.query(
+        `INSERT INTO "${schema}".audit_log
+           (actor_email, actor_role, action, target, metadata, created_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, now())`,
+        [user.email || null, user.role, action, target, JSON.stringify(metadata)],
+      );
+    } catch {
+      // Compatibilità tenant legacy: l'assenza della tabella audit non annulla la mutazione.
     }
   }
 
@@ -244,12 +385,22 @@ export class TenantCrmService {
     if (config.table === 'leads' && isDoflowTenant(schema)) {
       baseJoins += `
         LEFT JOIN LATERAL (
-          SELECT o.stage
+          SELECT o.stage, o.assigned_to
           FROM "${schema}".opportunities o
           WHERE o.lead_id = t.id AND o.deleted_at IS NULL
           ORDER BY o.updated_at DESC, o.created_at DESC
           LIMIT 1
         ) commercial_opportunity ON true`;
+    }
+    if (config.table === 'opportunities' && isDoflowTenant(schema)) {
+      baseJoins += `
+        LEFT JOIN LATERAL (
+          SELECT ca.*
+          FROM "${schema}".commercial_attributions ca
+          WHERE ca.opportunity_id = t.id
+          ORDER BY ca.occurred_at DESC, ca.created_at DESC
+          LIMIT 1
+        ) commercial_attribution ON true`;
     }
     if (!config.intakeLink || !isPublicLeadIntakeTenantEnabled(schema)) return baseJoins;
 
@@ -273,7 +424,11 @@ export class TenantCrmService {
     const commercialStageSelect = config.table === 'leads' && isDoflowTenant(schema)
       ? ', commercial_opportunity.stage AS opportunity_stage'
       : '';
-    const baseSelect = `t.*${config.selectExtra || ''}${commercialStageSelect}`;
+    const attributionSelect = config.table === 'opportunities' && isDoflowTenant(schema)
+      ? `, commercial_attribution.campaign_id AS campaign_id,
+           to_jsonb(commercial_attribution) AS commercial_attribution`
+      : '';
+    const baseSelect = `t.*${config.selectExtra || ''}${commercialStageSelect}${attributionSelect}`;
     if (!config.intakeLink) return baseSelect;
 
     const intakeSelect = isPublicLeadIntakeTenantEnabled(schema)
@@ -295,6 +450,11 @@ export class TenantCrmService {
 
   private cleanBody(resource: ResourceKey, config: ResourceConfig, schema: string, body: Record<string, any>, partial: boolean) {
     const cleaned: Record<string, unknown> = {};
+
+    if (!partial && isDoflowTenant(schema) && body.id !== undefined) {
+      if (!UUID_RE.test(String(body.id))) throw new BadRequestException('id non valido');
+      cleaned.id = String(body.id);
+    }
 
     for (const field of config.writable) {
       if (!(field in body)) continue;
@@ -324,6 +484,25 @@ export class TenantCrmService {
       cleaned.probability = Math.trunc(p);
     }
 
+    if (resource === 'activities') {
+      if ('status' in cleaned && !['todo', 'in_progress', 'waiting_client', 'completed', 'cancelled'].includes(String(cleaned.status))) {
+        throw new BadRequestException('Stato attività non valido');
+      }
+      if ('priority' in cleaned && !['low', 'medium', 'high', 'urgent'].includes(String(cleaned.priority))) {
+        throw new BadRequestException('Priorità attività non valida');
+      }
+      if ('kanban_order' in cleaned) {
+        const order = Number(cleaned.kanban_order);
+        if (!Number.isSafeInteger(order) || order < 0) throw new BadRequestException('Ordine attività non valido');
+        cleaned.kanban_order = order;
+      }
+      if ('status' in cleaned) {
+        cleaned.completed_at = cleaned.status === 'completed'
+          ? cleaned.completed_at || new Date().toISOString()
+          : null;
+      }
+    }
+
     if (resource === 'opportunities' && isDoflowTenant(schema)) {
       if ('stage' in cleaned) {
         const normalized = normalizeCommercialStage(cleaned.stage);
@@ -337,25 +516,31 @@ export class TenantCrmService {
     return cleaned;
   }
 
-  private normalizeReadRow(resource: ResourceKey, schema: string, row: Record<string, any>) {
+  private normalizeReadRow(resource: ResourceKey, schema: string, row: Record<string, any>, actor?: CommercialActor) {
     if (!isDoflowTenant(schema)) return row;
 
+    const capabilities = actor?.capabilities;
+    const canViewValues = !capabilities || capabilities.has('*') || capabilities.has('canViewCommercialValues');
+    const visibleRow = canViewValues
+      ? row
+      : { ...row, budget_estimate: null, value_estimate: null };
+
     if (resource === 'opportunities') {
-      const normalized = normalizeCommercialStage(row.stage);
-      if (!normalized.mapped) return { ...row, commercial_stage_unmapped: true };
-      return { ...row, stage: normalized.stage };
+      const normalized = normalizeCommercialStage(visibleRow.stage);
+      if (!normalized.mapped) return { ...visibleRow, commercial_stage_unmapped: true };
+      return { ...visibleRow, stage: normalized.stage };
     }
 
     if (resource === 'leads') {
-      const sourceStage = row.opportunity_stage ?? row.status;
+      const sourceStage = visibleRow.opportunity_stage ?? visibleRow.status;
       const normalized = normalizeCommercialStage(sourceStage);
       if (!normalized.mapped) {
-        return { ...row, commercial_stage: sourceStage, commercial_stage_unmapped: true };
+        return { ...visibleRow, commercial_stage: sourceStage, commercial_stage_unmapped: true };
       }
-      return { ...row, commercial_stage: normalized.stage };
+      return { ...visibleRow, commercial_stage: normalized.stage };
     }
 
-    return row;
+    return visibleRow;
   }
 
   private userIdOrNull(userId: string): string | null {
@@ -363,14 +548,21 @@ export class TenantCrmService {
   }
 
   async list(resource: ResourceKey, query: Record<string, any>) {
-    this.assertCrmAccess(false);
+    const actor = await this.assertCrmAccess(resource, false);
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const config = this.getConfig(resource);
     const limit = this.normalizeLimit(query.limit);
     const offset = this.normalizeOffset(query.offset);
     const { column, direction } = this.normalizeSort(config, query.sortBy, query.sortOrder);
-    const { where, params } = this.buildWhere(resource, config, schema, query);
+    const built = this.buildWhere(resource, config, schema, query);
+    let { where } = built;
+    const params = [...built.params];
+    const scoped = this.scopedWhere(resource, schema, where, actor);
+    if (scoped.includes('__ACTOR_PARAM__')) {
+      params.push(actor.id);
+      where = scoped.replace('__ACTOR_PARAM__', String(params.length));
+    } else where = scoped;
 
     const countRows = await this.dataSource.query(
       `SELECT COUNT(*)::int AS total FROM "${schema}".${config.table} t ${this.joins(config, schema)} WHERE ${where}`,
@@ -388,7 +580,7 @@ export class TenantCrmService {
     );
 
     return {
-      items: rows.map((row: Record<string, any>) => this.normalizeReadRow(resource, schema, row)),
+      items: rows.map((row: Record<string, any>) => this.normalizeReadRow(resource, schema, row, actor as CommercialActor)),
       total: Number(countRows[0]?.total || 0),
       limit,
       offset,
@@ -396,7 +588,7 @@ export class TenantCrmService {
   }
 
   async findOne(resource: ResourceKey, id: string) {
-    this.assertCrmAccess(false);
+    const actor = await this.assertCrmAccess(resource, false);
     if (!UUID_RE.test(id)) throw new BadRequestException('ID non valido');
     const schema = this.getSchema();
     await this.ensureSchema(schema);
@@ -410,11 +602,12 @@ export class TenantCrmService {
       [id],
     );
     if (!rows[0]) throw new NotFoundException('Record CRM non trovato');
-    return this.normalizeReadRow(resource, schema, rows[0]);
+    await this.assertCrmAccess(resource, false, rows[0]);
+    return this.normalizeReadRow(resource, schema, rows[0], actor as CommercialActor);
   }
 
   async create(resource: ResourceKey, body: Record<string, any>) {
-    const user = this.assertCrmAccess(true);
+    const user = await this.assertCrmAccess(resource, true);
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const config = this.getConfig(resource);
@@ -425,87 +618,148 @@ export class TenantCrmService {
     const values = [...Object.values(cleaned), userId, userId];
     const placeholders = columns.map((_, index) => `$${index + 1}`).join(', ');
 
-    const rows = await this.dataSource.query(
-      `INSERT INTO "${schema}".${config.table} (${columns.join(', ')})
-       VALUES (${placeholders})
-       RETURNING id`,
-      values,
-    );
-    await this.audit(schema, user, `crm_${resource}_created`, rows[0].id, cleaned);
-    return this.findOne(resource, rows[0].id);
+    const id = await this.dataSource.transaction(async (manager) => {
+      const rows = await manager.query(
+        `INSERT INTO "${schema}".${config.table} (${columns.join(', ')})
+         VALUES (${placeholders})
+         RETURNING *`,
+        values,
+      );
+      await this.recordMutation(
+        manager,
+        schema,
+        user,
+        `crm_${resource}_created`,
+        resource,
+        rows[0].id,
+        null,
+        rows[0],
+        { changes: cleaned },
+      );
+      return rows[0].id as string;
+    });
+    if (!isDoflowTenant(schema)) {
+      await this.auditLegacy(schema, user, `crm_${resource}_created`, id, cleaned);
+    }
+    return this.findOne(resource, id);
   }
 
   async update(resource: ResourceKey, id: string, body: Record<string, any>) {
-    const user = this.assertCrmAccess(true);
     if (!UUID_RE.test(id)) throw new BadRequestException('ID non valido');
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const config = this.getConfig(resource);
     const cleaned = this.cleanBody(resource, config, schema, body, true);
-    const userId = this.userIdOrNull(user.id);
-    const entries = Object.entries(cleaned);
-
-    if (entries.length === 0) return this.findOne(resource, id);
-
-    const sets = entries.map(([field], index) => `${field} = $${index + 1}`);
-    const params = entries.map(([, value]) => value);
-    params.push(userId, id);
-
-    let previousStageRaw: string | null = null;
-    if (resource === 'opportunities' && isDoflowTenant(schema) && 'stage' in cleaned) {
-      const previousRows = await this.dataSource.query(
-        `SELECT stage FROM "${schema}".opportunities WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+    const expectedVersion = isDoflowTenant(schema) ? Number(body.version) : null;
+    if (isDoflowTenant(schema) && (!Number.isInteger(expectedVersion) || Number(expectedVersion) < 1)) {
+      throw new BadRequestException('version obbligatoria');
+    }
+    const legacyAudit = await this.dataSource.transaction(async (manager) => {
+      const currentRows = await manager.query(
+        `SELECT * FROM "${schema}".${config.table}
+         WHERE id = $1 AND deleted_at IS NULL
+         LIMIT 1 FOR UPDATE`,
         [id],
       );
-      previousStageRaw = previousRows[0]?.stage == null ? null : String(previousRows[0].stage);
-    }
+      const current = currentRows[0];
+      if (!current) throw new NotFoundException('Record CRM non trovato');
+      const user = await this.assertCrmAccess(resource, true, current);
+      if (isDoflowTenant(schema) && body.assigned_to !== undefined && body.assigned_to !== current.assigned_to && this.commercialAccess) {
+        this.commercialAccess.require(user as CommercialActor, 'canAssignLeads');
+      }
+      if (isDoflowTenant(schema) && Number(current.version) !== expectedVersion) {
+        throw new ConflictException('Conflitto di versione');
+      }
 
-    const rows = await this.dataSource.query(
-      `UPDATE "${schema}".${config.table}
-       SET ${sets.join(', ')}, updated_by = $${params.length - 1}, updated_at = now()
-       WHERE id = $${params.length} AND deleted_at IS NULL
-       RETURNING id`,
-      params,
-    );
-    if (!rows[0]) throw new NotFoundException('Record CRM non trovato');
-    if (resource === 'opportunities' && isDoflowTenant(schema) && 'stage' in cleaned) {
-      const previous = normalizeCommercialStage(previousStageRaw);
-      const metadata: Record<string, unknown> = {
-        previous_stage: previous.mapped ? previous.stage : previous.raw || null,
-        new_stage: cleaned.stage,
-        changes: cleaned,
-      };
-      if (!previous.mapped || previous.isLegacy) metadata.previous_stage_raw = previous.raw || null;
-      await this.audit(schema, user, 'crm_opportunity_stage_changed', id, metadata);
-    } else {
-      await this.audit(schema, user, `crm_${resource}_updated`, id, cleaned);
+      const entries = Object.entries(cleaned).filter(
+        ([field, value]) => !this.sameDatabaseValue(current[field], value),
+      );
+      if (entries.length === 0) return null;
+
+      const userId = this.userIdOrNull(user.id);
+      const sets = entries.map(([field], index) => `${field} = $${index + 1}`);
+      const params = entries.map(([, value]) => value);
+      params.push(userId, id);
+      if (isDoflowTenant(schema)) params.push(expectedVersion);
+      const rows = await manager.query(
+        `UPDATE "${schema}".${config.table}
+         SET ${sets.join(', ')}, updated_by = $${entries.length + 1},
+             ${isDoflowTenant(schema) ? 'version = version + 1,' : ''} updated_at = now()
+         WHERE id = $${entries.length + 2} AND deleted_at IS NULL
+           ${isDoflowTenant(schema) ? `AND version = $${entries.length + 3}` : ''}
+         RETURNING *`,
+        params,
+      );
+      if (!rows[0]) throw new ConflictException('Conflitto di versione');
+      const changes = Object.fromEntries(entries);
+      const isStageChange = resource === 'opportunities' && 'stage' in changes;
+      const action = isStageChange ? 'crm_opportunity_stage_changed' : `crm_${resource}_updated`;
+      const metadata: Record<string, unknown> = { changes };
+      if (isStageChange) {
+        const previous = normalizeCommercialStage(current.stage);
+        metadata.previous_stage = previous.mapped ? previous.stage : previous.raw || null;
+        metadata.new_stage = changes.stage;
+        if (!previous.mapped || previous.isLegacy) metadata.previous_stage_raw = previous.raw || null;
+      }
+      await this.recordMutation(manager, schema, user, action, resource, id, current, rows[0], metadata);
+      return { user, action, metadata };
+    });
+    if (!isDoflowTenant(schema) && legacyAudit) {
+      await this.auditLegacy(schema, legacyAudit.user, legacyAudit.action, id, legacyAudit.metadata);
     }
     return this.findOne(resource, id);
   }
 
   async remove(resource: ResourceKey, id: string) {
-    const user = this.assertCrmAccess(true);
     if (!UUID_RE.test(id)) throw new BadRequestException('ID non valido');
     const schema = this.getSchema();
     await this.ensureSchema(schema);
+    if (isDoflowTenant(schema)) {
+      throw new BadRequestException('Usare l’endpoint Commercial Core versionato per archiviare');
+    }
     const config = this.getConfig(resource);
-    const userId = this.userIdOrNull(user.id);
-    const rows = await this.dataSource.query(
-      `UPDATE "${schema}".${config.table}
-       SET deleted_at = now(), updated_by = $1, updated_at = now()
-       WHERE id = $2 AND deleted_at IS NULL
-       RETURNING id`,
-      [userId, id],
-    );
-    if (!rows[0]) throw new NotFoundException('Record CRM non trovato');
-    await this.audit(schema, user, `crm_${resource}_deleted`, id, {});
+    const archivedBy = await this.dataSource.transaction(async (manager) => {
+      const currentRows = await manager.query(
+        `SELECT * FROM "${schema}".${config.table}
+         WHERE id = $1 AND deleted_at IS NULL
+         FOR UPDATE`,
+        [id],
+      );
+      const current = currentRows[0];
+      if (!current) throw new NotFoundException('Record CRM non trovato');
+      const user = await this.assertCrmAccess(resource, true, current);
+      if (isDoflowTenant(schema) && this.commercialAccess) this.commercialAccess.require(user as CommercialActor, 'canManageArchive');
+      const userId = this.userIdOrNull(user.id);
+      const rows = await manager.query(
+        `UPDATE "${schema}".${config.table}
+         SET deleted_at = now(), archived_by = $1, updated_by = $1,
+             ${isDoflowTenant(schema) ? 'version = version + 1,' : ''} updated_at = now()
+         WHERE id = $2 AND deleted_at IS NULL
+         RETURNING *`,
+        [userId, id],
+      );
+      if (!rows[0]) throw new NotFoundException('Record CRM non trovato');
+      await this.recordMutation(
+        manager,
+        schema,
+        user,
+        `crm_${resource}_archived`,
+        resource,
+        id,
+        current,
+        rows[0],
+        {},
+      );
+      return user;
+    });
+    await this.auditLegacy(schema, archivedBy, `crm_${resource}_deleted`, id, {});
     return { success: true };
   }
 
   async updateOpportunityStage(id: string, stage: string) {
     const schema = this.getSchema();
     if (isDoflowTenant(schema)) {
-      if (!normalizeCommercialStage(stage).mapped) throw new BadRequestException('Stage non valido');
+      throw new BadRequestException('Usare la transizione Commercial Core versionata');
     } else if (!PIPELINE_STAGES.includes(stage)) {
       throw new BadRequestException('Stage non valido');
     }
@@ -513,14 +767,24 @@ export class TenantCrmService {
   }
 
   async completeActivity(id: string) {
+    if (isDoflowTenant(this.getSchema())) {
+      throw new BadRequestException('Usare l’aggiornamento Commercial Core versionato');
+    }
     return this.update('activities', id, { completed_at: new Date().toISOString() });
   }
 
   async pipeline(query: Record<string, any>) {
-    this.assertCrmAccess(false);
+    const actor = await this.assertCrmAccess('opportunities', false);
     const schema = this.getSchema();
     await this.ensureSchema(schema);
-    const { where, params } = this.buildWhere('opportunities', RESOURCES.opportunities, schema, query);
+    const built = this.buildWhere('opportunities', RESOURCES.opportunities, schema, query);
+    let { where } = built;
+    const params = [...built.params];
+    const scoped = this.scopedWhere('opportunities', schema, where, actor);
+    if (scoped.includes('__ACTOR_PARAM__')) {
+      params.push(actor.id);
+      where = scoped.replace('__ACTOR_PARAM__', String(params.length));
+    } else where = scoped;
     const rows = await this.dataSource.query(
       `SELECT ${this.select(RESOURCES.opportunities, schema)}
        FROM "${schema}".opportunities t
@@ -575,17 +839,6 @@ export class TenantCrmService {
     };
   }
 
-  private async audit(schema: string, user: { email?: string; role: string }, action: string, target: string, metadata: Record<string, unknown>) {
-    try {
-      await this.dataSource.query(
-        `INSERT INTO "${schema}".audit_log (actor_email, actor_role, action, target, metadata, created_at)
-         VALUES ($1, $2, $3, $4, $5::jsonb, now())`,
-        [user.email || null, user.role, action, target, JSON.stringify(metadata || {})],
-      );
-    } catch {
-      // Audit non bloccante: alcuni tenant legacy possono avere audit_log non aggiornato.
-    }
-  }
 }
 
 function stageLabel(stage: string): string {

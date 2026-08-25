@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { Loader2, ArrowLeft, Plus, Trash2, FileCheck2, AlertTriangle, UserPlus, Sparkles, Bookmark } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api";
+import { getErrorMessage } from "@/lib/error-message";
 import Link from "next/link";
 
 // ─── Tipi ─────────────────────────────────────────────────────────────────────
@@ -30,6 +31,11 @@ type FormValues = {
 type Tenant        = { id: string; name: string };
 type InvoiceClient = { id: string; clientName: string; clientVat?: string; clientFiscalCode?: string; clientSdi?: string; clientPec?: string; clientAddress?: string; clientCity?: string; clientZip?: string; invoiceCount: number };
 type SavedService  = { id: string; description: string; unitPrice: number; quantity: number };
+
+const CLIENT_TEXT_FIELDS = [
+  "tenantId", "clientName", "clientAddress", "clientCity", "clientZip",
+  "clientVat", "clientFiscalCode", "clientSdi", "clientPec",
+] as const satisfies readonly (keyof FormValues)[];
 
 // ─── Dialog salva cliente ──────────────────────────────────────────────────────
 
@@ -93,14 +99,14 @@ export default function NewInvoicePage() {
   const [clientMode, setClientMode]       = useState<"tenant" | "saved" | "nuovo">("nuovo");
   const [autofilled, setAutofilled]       = useState(false);
   const [showSaveDialog, setShowSaveDialog]       = useState(false);
-  const [pendingData, setPendingData]             = useState<any>(null);
+  const [pendingData, setPendingData]             = useState<FormValues | null>(null);
   const [showSaveServiceDialog, setShowSaveServiceDialog] = useState(false);
   const [pendingServiceIdx, setPendingServiceIdx]         = useState<number | null>(null);
 
   const today     = new Date().toISOString().split("T")[0];
   const nextMonth = (() => { const d = new Date(); d.setMonth(d.getMonth() + 1); return d.toISOString().split("T")[0]; })();
 
-  const { register, control, handleSubmit, watch, setValue, getValues } = useForm<FormValues>({
+  const { register, control, handleSubmit, setValue, getValues } = useForm<FormValues>({
     defaultValues: {
       tenantId: "", clientName: "", clientAddress: "", clientCity: "", clientZip: "",
       clientVat: "", clientFiscalCode: "", clientSdi: "", clientPec: "",
@@ -112,11 +118,10 @@ export default function NewInvoicePage() {
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "lineItems" });
-  const watchLineItems = watch("lineItems");
-  const watchTaxRate   = watch("taxRate");
-  const watchTaxRegime = watch("taxRegime");
-  const watchInpsRate  = watch("inpsRate");
-  const watchRitenuta  = watch("ritenutaRate");
+  const [watchLineItems, watchTaxRate, watchTaxRegime, watchInpsRate, watchRitenuta, watchStatus] = useWatch({
+    control,
+    name: ["lineItems", "taxRate", "taxRegime", "inpsRate", "ritenutaRate", "status"],
+  });
   const isForfettario  = watchTaxRegime === "forfettario";
 
   const safeItems   = Array.isArray(watchLineItems) ? watchLineItems : [];
@@ -145,7 +150,7 @@ export default function NewInvoicePage() {
   const handleClientSelect = useCallback((value: string) => {
     if (value === "__nuovo__") {
       setClientMode("nuovo");
-      ["tenantId","clientName","clientAddress","clientCity","clientZip","clientVat","clientFiscalCode","clientSdi","clientPec"].forEach(f => setValue(f as any, ""));
+      CLIENT_TEXT_FIELDS.forEach((field) => setValue(field, ""));
       return;
     }
     const tenant = tenants.find(t => t.id === value);
@@ -194,7 +199,7 @@ export default function NewInvoicePage() {
       });
       if (clientMode === "nuovo" && data.clientName?.trim()) { setPendingData(data); setShowSaveDialog(true); }
       else router.push("/superadmin/finance/invoices");
-    } catch (e: any) { alert(`Errore: ${e?.message || "Errore sconosciuto"}`); }
+    } catch (e) { alert(`Errore: ${getErrorMessage(e) || "Errore sconosciuto"}`); }
     finally { setSubmitting(false); }
   };
 
@@ -320,7 +325,7 @@ export default function NewInvoicePage() {
               {/* Stato */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-muted-foreground uppercase">Stato</label>
-                <Select onValueChange={(v: "paid"|"pending"|"overdue") => setValue("status", v)} value={watch("status")}>
+                <Select onValueChange={(v: "paid"|"pending"|"overdue") => setValue("status", v)} value={watchStatus}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="paid">Pagata</SelectItem>

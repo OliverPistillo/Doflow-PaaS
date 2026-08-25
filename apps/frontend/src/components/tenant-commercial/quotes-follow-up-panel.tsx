@@ -1,6 +1,9 @@
+"use client";
+
 import { AlertTriangle, Clock3, Send } from "lucide-react";
 import type { CommercialQuote } from "@/lib/tenant-commercial-api";
 import { Button } from "@/components/ui/button";
+import { useCurrentDate } from "@/hooks/use-current-date";
 import { commercialDate } from "./commercial-utils";
 import { CommercialEmptyState } from "./commercial-ui";
 
@@ -11,6 +14,7 @@ export function QuotesFollowUpPanel({
   items: CommercialQuote[];
   onOpen: (item: CommercialQuote) => void;
 }) {
+  const currentDate = useCurrentDate();
   const dueItems = items
     .filter((item) => ["sent", "viewed", "expired"].includes(item.status))
     .sort((a, b) => new Date(a.valid_until || "2999-12-31").getTime() - new Date(b.valid_until || "2999-12-31").getTime())
@@ -24,7 +28,7 @@ export function QuotesFollowUpPanel({
       ) : (
         <div className="mt-4 divide-y divide-slate-100">
           {dueItems.map((item) => {
-            const overdue = item.status === "expired" || Boolean(item.valid_until && new Date(item.valid_until).getTime() < Date.now());
+            const overdue = item.status === "expired" || Boolean(item.valid_until && new Date(item.valid_until).getTime() < currentDate.getTime());
             const Icon = overdue ? AlertTriangle : item.status === "sent" ? Send : Clock3;
             return (
               <div key={item.id} className="py-4 first:pt-0">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,7 +43,7 @@ export function KnowledgeArticleDetailPage({ articleId }: { articleId: string })
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -78,9 +78,19 @@ export function KnowledgeArticleDetailPage({ articleId }: { articleId: string })
     } finally {
       setLoading(false);
     }
-  };
+  }, [articleId]);
 
-  useEffect(() => { void load(); }, [articleId]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const update = async () => {
     try {

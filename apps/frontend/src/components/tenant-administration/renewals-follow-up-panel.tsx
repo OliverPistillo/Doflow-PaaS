@@ -21,7 +21,7 @@ export function RenewalsFollowUpPanel({
   companies: AdministrationRow[];
 }) {
   const actionable = rows
-    .filter((row) => !["paid", "cancelled"].includes(row.status))
+    .filter((row) => !["paid", "cancelled"].includes(String(row.status || "")))
     .sort((a, b) => String(a.due_date || "").localeCompare(String(b.due_date || "")))
     .slice(0, 5);
   const monthly = rows.reduce<Record<string, number>>((result, row) => {

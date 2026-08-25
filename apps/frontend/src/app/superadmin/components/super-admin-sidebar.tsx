@@ -13,7 +13,8 @@ import {
   User, Settings, Palette, ChevronRight,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { clearAuthStorage } from "@/lib/auth-storage";
+import { apiFetch } from "@/lib/api";
+import { clearDoFlowUser } from "@/lib/jwt";
 
 import {
   Sidebar,
@@ -165,21 +166,23 @@ export function SuperAdminSidebar() {
   } | null>(null);
 
   React.useEffect(() => {
-    setMounted(true);
-    const savedColorTheme = localStorage.getItem("doflow_color_theme") || "default";
-    setColorTheme(savedColorTheme);
-    const payload = getDoFlowUser();
-    if (payload) {
-      setUser({
-        email:    payload.email ?? "superadmin",
-        role:     payload.role  ?? "SUPER_ADMIN",
-        initials: getInitials(payload.email),
-      });
-    }
+    queueMicrotask(() => {
+      setMounted(true);
+      const savedColorTheme = localStorage.getItem("doflow_color_theme") || "default";
+      setColorTheme(savedColorTheme);
+      const payload = getDoFlowUser();
+      if (payload) {
+        setUser({
+          email: payload.email ?? "superadmin",
+          role: payload.role ?? "SUPER_ADMIN",
+          initials: getInitials(payload.email),
+        });
+      }
+    });
   }, []);
 
-  const logout = React.useCallback(() => {
-    clearAuthStorage();
+  const logout = React.useCallback(async () => {
+    try { await apiFetch("/auth/logout", { method: "POST" }); } finally { clearDoFlowUser(); }
     router.push("/login");
   }, [router]);
 
@@ -207,7 +210,6 @@ export function SuperAdminSidebar() {
                 src={logoSrc}
                 alt="DoFlow"
                 fill
-                priority
                 className={`transition-all duration-300 ${
                   isOpen
                     ? "object-contain object-left"

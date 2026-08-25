@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { CommercialOpportunity } from "@/lib/tenant-commercial-api";
 import { compactIntakeGoal, intakeAttributionLabel, intakeText, parseIntakeFormData } from "@/lib/public-lead-intake";
 import { cn } from "@/lib/utils";
+import { useCurrentDate } from "@/hooks/use-current-date";
 import { DOFLOW_COMMERCIAL_STAGE_OPTIONS, LEGACY_COMMERCIAL_STAGE_OPTIONS } from "@/lib/commercial-stage-model";
 import { commercialDate, commercialMoney } from "./commercial-utils";
 
@@ -27,8 +28,9 @@ export function PipelineDealCard({
   doflow: boolean;
   disabled?: boolean;
 }) {
+  const currentDate = useCurrentDate();
   const stageOptions = doflow ? DOFLOW_COMMERCIAL_STAGE_OPTIONS : LEGACY_COMMERCIAL_STAGE_OPTIONS;
-  const followUpDue = item.next_action_at && new Date(item.next_action_at).getTime() <= Date.now();
+  const followUpDue = item.next_action_at && new Date(item.next_action_at).getTime() <= currentDate.getTime();
   const cardRef = useRef<HTMLElement | null>(null);
   const intake = parseIntakeFormData(item.intake_form_data);
   const projectType = intake.projectType || intakeText(item.service_type) || item.title;

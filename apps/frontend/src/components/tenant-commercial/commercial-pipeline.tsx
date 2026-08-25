@@ -75,11 +75,25 @@ export function CommercialPipelinePage() {
   };
 
   useEffect(() => {
-    void load();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    setStageFilter(normalizeCommercialStageQuery(stageParam, doflow));
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setStageFilter(normalizeCommercialStageQuery(stageParam, doflow));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [doflow, stageParam]);
 
   const groups = useMemo(() => groupPipeline(pipeline, doflow), [doflow, pipeline]);
@@ -106,8 +120,16 @@ export function CommercialPipelinePage() {
     if (autoOpenedOpportunityRef.current === highlightedOpportunityId) return;
     const opportunity = allItems.find((item) => item.id === highlightedOpportunityId);
     if (!opportunity) return;
-    autoOpenedOpportunityRef.current = highlightedOpportunityId;
-    setSelectedOpportunity(opportunity);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        autoOpenedOpportunityRef.current = highlightedOpportunityId;
+        setSelectedOpportunity(opportunity);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [allItems, highlightedOpportunityId]);
 
   const move = async (id: string, stage: string) => {

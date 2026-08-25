@@ -175,6 +175,11 @@ describe('TenantTimelineService', () => {
     const audit = query.mock.calls.find(([sql]) => String(sql).includes('audit_log a')) as any[] | undefined;
     expect(audit).toBeDefined();
     expect(audit![1][1].some((action: string) => action.startsWith('finance_'))).toBe(false);
+    expect(audit![1][1]).toEqual(expect.arrayContaining([
+      'commercial_lead_created',
+      'commercial_activity_reordered',
+      'commercial_attribution_changed',
+    ]));
     expect(query.mock.calls.some(([sql]) => String(sql).includes('FROM "doflow".invoices'))).toBe(false);
   });
 
@@ -280,9 +285,9 @@ describe('TenantTimelineService', () => {
       return [];
     });
     const { service } = harness({ query });
-    const result = await service.listProjects({ project_id: PROJECT_ID, operator_id: USER_ID, stage: 'review', types: 'activity', date_from: '2026-08-01', date_to: '2026-08-31' });
+    const result = await service.listProjects({ project_id: PROJECT_ID, operator_id: USER_ID, stage: 'client_review', types: 'activity', date_from: '2026-08-01', date_to: '2026-08-31' });
     expect(result.total).toBe(1);
-    expect(result.items[0]).toEqual(expect.objectContaining({ project_status: 'review', author_label: 'Operatore' }));
+    expect(result.items[0]).toEqual(expect.objectContaining({ project_status: 'client_review', author_label: 'Operatore' }));
     const aggregate = query.mock.calls.find(([sql]) => String(sql).includes('COUNT(*) OVER()'));
     expect(aggregate).toBeDefined();
     expect(aggregate?.[1]).toEqual(expect.arrayContaining([PROJECT_ID, USER_ID, ['activity']]));

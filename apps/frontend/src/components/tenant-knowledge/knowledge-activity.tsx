@@ -13,8 +13,17 @@ export function KnowledgeActivityPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-    knowledgeApi.getKnowledgeActivity(filters).then((data) => setItems(itemsOf(data))).finally(() => setLoading(false));
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setLoading(true);
+      knowledgeApi.getKnowledgeActivity(filters)
+        .then((data) => { if (active) setItems(itemsOf(data)); })
+        .finally(() => { if (active) setLoading(false); });
+    });
+    return () => {
+      active = false;
+    };
   }, [filters]);
 
   return (

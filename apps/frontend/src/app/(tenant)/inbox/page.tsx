@@ -1,16 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState,useMemo } from "react";
 import {
-  Inbox, Search, Star, Paperclip, Tag, Edit2, Reply, ReplyAll,
-  Forward, Archive, Trash2, MoreHorizontal, RefreshCw, Circle,
-  CircleDot, ChevronLeft, Send, X, MessageSquare,
+  Inbox,Search,Star,Paperclip,Edit2,Reply,Archive,Trash2,RefreshCw,ChevronLeft,Send,X,MessageSquare
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar,AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";

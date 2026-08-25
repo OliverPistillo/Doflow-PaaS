@@ -15,6 +15,13 @@ Queste istruzioni si applicano all’intera repository. Le regole più specifich
 - Il Client Portal è stato rimosso intenzionalmente. Non reintrodurre route `/client/*`, `/client-portal/*`, token dedicati o funzionalità equivalenti.
 - Il redesign del login è fuori ambito in questa fase. Non modificare `/login`, `AuthShell`, `UnifiedAuthPage`, mascotte o branding pre-auth salvo richiesta esplicita successiva.
 
+### Reconciliation autorevole del replacement
+
+- La precedente acceptance Doflow basata su un pannello condiviso a quattro tab è una decisione storica **SUPERATA** per il replacement corrente del tenant `doflow`.
+- Oliver ha richiesto la sostituzione completa dell’app precedente con il gestionale sviluppato da Daniele. Per UI, UX, navigazione e struttura del dettaglio progetto prevale quindi la reference read-only `doflow-gestionale-reference` al commit `e6c3ef5920773afc14b3caff88cfe4027400c54b`.
+- Il file canonico è `src/features/commercial/components/commercial-project-detail-page.tsx` nella reference. Le sette tab, nell’ordine, sono: `overview` (Panoramica), `activities` (Attività), `phases` (Fasi), `production` (Produzione e QA), `documents` (Documenti), `payments` (Pagamenti), `timeline` (Timeline).
+- Non ridurre il dettaglio progetto a quattro tab e non reintrodurre il vecchio pannello Doflow. I PNG storici restano utili per shell, token e gerarchia visuale, ma non definiscono più la struttura corrente del dettaglio progetto.
+
 ### Fonti visuali
 
 - Prima di modificare una schermata coperta dai mockup, aprire il riferimento corrispondente in:
@@ -161,15 +168,16 @@ Per la Fase 1 navigation shell, dichiarare `VISUAL BLOCKED` quando il gate non p
 
 ### Pannello laterale e navigazione
 
-- Lead, cliente e progetto devono usare lo stesso contenitore di pannello, con adapter specifici per il tipo di record.
-- Apertura e chiusura del pannello non devono perdere filtri, ricerca, paginazione o scroll dell'elenco.
-- Lo stato del pannello deve essere serializzabile nell'URL per consentire deep link e navigazione browser.
+- I pannelli laterali ancora presenti devono usare contenitori coerenti e adapter specifici per il tipo di record; il dettaglio progetto canonico del replacement è invece la route full-page definita dalla reference Daniele.
+- Apertura e chiusura del pannello non devono perdere filtri, ricerca, paginazione o scroll dell’elenco.
+- Lo stato del pannello deve essere serializzabile nell’URL per consentire deep link e navigazione browser.
 - Non usare route da Client Portal per implementare il deep link.
-- Le quattro tab sono:
+- Decisione storica **SUPERATA** — le quattro tab del vecchio pannello Doflow erano:
   1. Riepilogo;
   2. Attività e comunicazioni;
   3. File;
   4. Amministrazione.
+- Questa lista resta documentata per conservare la storia, ma non è un criterio di acceptance del replacement e non deve essere applicata al dettaglio progetto a sette tab.
 
 ### Cronologia
 

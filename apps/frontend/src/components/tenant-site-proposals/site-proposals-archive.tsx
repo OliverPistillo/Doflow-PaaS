@@ -12,16 +12,17 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CommercialEmptyState, CommercialPageHeader, CommercialSectionCard } from "@/components/tenant-commercial/commercial-ui";
-import { useTenantAccess } from "@/contexts/TenantAccessContext";
+import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider";
 import { deleteSiteProposal, deleteSiteProposals, listSiteProposals, listTemplates, restoreSiteProposal, restoreSiteProposals, type SiteProposal, type SiteProposalTemplate } from "@/lib/tenant-site-proposals-api";
 import { formatDate, getErrorMessage, hasPermanentProposalDeleteRole, proposalStatusLabel } from "./site-proposal-utils";
 
 const PAGE_SIZE = 25;
 
 export function SiteProposalsArchive() {
-  const { canDelete } = useTenantAccess();
-  const canRestore = canDelete("crm");
-  const canPermanentlyDelete = canDelete("crm") && hasPermanentProposalDeleteRole();
+  const { currentUser, hasCapability } = useDoflowIdentity();
+  const canUseBuilder = hasCapability("canUseBuilder");
+  const canRestore = canUseBuilder;
+  const canPermanentlyDelete = canUseBuilder && hasPermanentProposalDeleteRole(currentUser.roles);
   const [items, setItems] = useState<SiteProposal[]>([]);
   const [templates, setTemplates] = useState<SiteProposalTemplate[]>([]);
   const [total, setTotal] = useState(0);
@@ -61,7 +62,7 @@ export function SiteProposalsArchive() {
     finally { if (request === requestRef.current) setLoading(false); }
   }, [debouncedSearch, offset, template]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
 
   const toggle = (id: string, checked: boolean) => setSelectedIds((current) => {
     const next = new Set(current);

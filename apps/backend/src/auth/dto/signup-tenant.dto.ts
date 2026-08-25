@@ -7,7 +7,7 @@ export class SignupTenantDto {
   @IsNotEmpty()
   email!: string;
 
-  @ValidateIf((o: SignupTenantDto) => !o.googleSignupToken)
+  @ValidateIf((o: SignupTenantDto) => !o.googleSignupGrant)
   @IsString()
   @MinLength(8, { message: 'La password deve avere almeno 8 caratteri' })
   password?: string;
@@ -18,7 +18,7 @@ export class SignupTenantDto {
    */
   @IsString()
   @IsOptional()
-  googleSignupToken?: string;
+  googleSignupGrant?: string;
 
   @IsString()
   @IsOptional()

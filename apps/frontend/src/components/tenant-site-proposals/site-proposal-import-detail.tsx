@@ -23,7 +23,7 @@ import {
   CommercialPageHeader,
   CommercialSectionCard,
 } from "@/components/tenant-commercial/commercial-ui";
-import { useTenantAccess } from "@/contexts/TenantAccessContext";
+import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider";
 import {
   confirmImport,
   prepareImportBatch,
@@ -113,7 +113,8 @@ function PreviewRowDetails({ row }: { row: SiteProposalImportRow }) {
 }
 
 export function SiteProposalImportDetail({ id }: { id: string }) {
-  const { canCreate, canManage } = useTenantAccess();
+  const { hasCapability } = useDoflowIdentity();
+  const canUseBuilder = hasCapability("canUseBuilder");
   const [batch, setBatch] = useState<SiteProposalImportBatch | null>(null);
   const [proposals, setProposals] = useState<SiteProposal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,7 +139,7 @@ export function SiteProposalImportDetail({ id }: { id: string }) {
     }
   }, [id]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
   const hasRunning = proposals.some((proposal) => (proposal.preparationStatus || proposal.preparation_status) === "running");
   const hasQueued = proposals.some((proposal) => ["pending", "queued"].includes(proposal.preparationStatus || proposal.preparation_status || ""));
   const hasActive = hasRunning || hasQueued;
@@ -199,9 +200,9 @@ export function SiteProposalImportDetail({ id }: { id: string }) {
       <div className="flex flex-wrap items-center gap-3">
         <Badge>{importStatusLabel[batch.status] || batch.status}</Badge>
         <span className="text-sm text-slate-500">{batch.row_count} righe · {batch.valid_count} valide · {batch.invalid_count} non valide</span>
-        {noValidRows && canCreate("crm") ? <Button asChild variant="outline"><Link href="/commercial/site-proposals/new">Nuovo import</Link></Button> : null}
-        {batch.status === "preview" && canCreate("crm") && !noValidRows ? <Button disabled={busy} onClick={() => setConfirmOpen(true)}><CheckCircle2 className="mr-2 h-4 w-4" />Conferma importazione</Button> : null}
-        {["confirmed", "generated", "partial"].includes(batch.status) && canManage("crm") && hasRecoveryCandidates ? <Button disabled={busy} variant="outline" onClick={() => void prepare()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Riprova accodamento</Button> : null}
+        {noValidRows && canUseBuilder ? <Button asChild variant="outline"><Link href="/commercial/site-proposals/new">Nuovo import</Link></Button> : null}
+        {batch.status === "preview" && canUseBuilder && !noValidRows ? <Button disabled={busy} onClick={() => setConfirmOpen(true)}><CheckCircle2 className="mr-2 h-4 w-4" />Conferma importazione</Button> : null}
+        {["confirmed", "generated", "partial"].includes(batch.status) && canUseBuilder && hasRecoveryCandidates ? <Button disabled={busy} variant="outline" onClick={() => void prepare()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Riprova accodamento</Button> : null}
       </div>
       {noValidRows ? <div role="alert" className="flex flex-wrap items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><CircleAlert className="h-4 w-4" />{EMPTY_IMPORT_MESSAGE}</div> : null}
       {error ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}

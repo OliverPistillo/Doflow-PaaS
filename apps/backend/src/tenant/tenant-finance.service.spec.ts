@@ -107,4 +107,67 @@ describe('TenantFinanceService', () => {
     await expect(service.createPayment({ amount: 100, invoice_id: INVOICE_ID, company_id: OTHER_COMPANY_ID }))
       .rejects.toThrow('company_id non coerente');
   });
+
+  it('blocca server-side un rimborso superiore al residuo rimborsabile', async () => {
+    const runner = {
+      connect: jest.fn(), startTransaction: jest.fn(), commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(), release: jest.fn(), isTransactionActive: true,
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FOR UPDATE')) {
+          return [{ id: PAYMENT_ID, amount: 100, status: 'confirmed', payment_type: 'payment' }];
+        }
+        if (sql.includes('AS refunded')) return [{ refunded: 70 }];
+        return [];
+      }),
+    };
+    const dataSource = {
+      query: jest.fn().mockResolvedValue([]),
+      createQueryRunner: jest.fn().mockReturnValue(runner),
+    };
+    const service = new TenantFinanceService(dataSource as any, {
+      authUser: { id: USER_ID, email: 'owner@doflow.it', role: 'owner', tenantId: 'doflow' },
+    });
+    await expect(service.createPayment({
+      amount: 31,
+      payment_type: 'refund',
+      original_payment_id: PAYMENT_ID,
+      refund_reason: 'Rettifica concordata',
+    })).rejects.toThrow('residuo rimborsabile');
+    expect(runner.rollbackTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('registra un rimborso valido nella stessa transazione del lock', async () => {
+    const refundId = '77777777-7777-4777-8777-777777777777';
+    const runner = {
+      connect: jest.fn(), startTransaction: jest.fn(), commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(), release: jest.fn(), isTransactionActive: true,
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FOR UPDATE')) {
+          return [{ id: PAYMENT_ID, amount: 100, status: 'confirmed', payment_type: 'payment' }];
+        }
+        if (sql.includes('AS refunded')) return [{ refunded: 20 }];
+        if (sql.includes('INSERT INTO "doflow".payments')) return [{ id: refundId }];
+        return [];
+      }),
+    };
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('WHERE p.id = $1')) {
+        return [{ id: refundId, amount: 30, payment_type: 'refund', original_payment_id: PAYMENT_ID }];
+      }
+      return [];
+    });
+    const service = new TenantFinanceService({
+      query,
+      createQueryRunner: jest.fn().mockReturnValue(runner),
+    } as any, {
+      authUser: { id: USER_ID, email: 'owner@doflow.it', role: 'owner', tenantId: 'doflow' },
+    });
+    await expect(service.createPayment({
+      amount: 30,
+      payment_type: 'refund',
+      original_payment_id: PAYMENT_ID,
+      refund_reason: 'Rettifica concordata',
+    })).resolves.toMatchObject({ id: refundId, payment_type: 'refund' });
+    expect(runner.commitTransaction).toHaveBeenCalledTimes(1);
+  });
 });

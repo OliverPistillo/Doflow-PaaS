@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { reportsApi, type KpiTarget, type ReportKey, type ReportParams, type ReportSummary } from "@/lib/tenant-reports-api";
+import { reportsApi, type KpiTarget, type ReportKey, type ReportParams, type ReportRow, type ReportSummary } from "@/lib/tenant-reports-api";
 import { getDoFlowUser } from "@/lib/jwt";
 import { isInternalDoflowTenant } from "@/lib/tenant-url";
 import { ReportFilters, useReportParams } from "./report-filters";
@@ -25,11 +25,14 @@ export function ReportsOverviewPage() {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    reportsApi.summary()
-      .then((data) => { if (active) setSummary(data); })
-      .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Errore caricamento report"); })
-      .finally(() => { if (active) setLoading(false); });
+    queueMicrotask(() => {
+      if (!active) return;
+      setLoading(true);
+      reportsApi.summary()
+        .then((data) => { if (active) setSummary(data); })
+        .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Errore caricamento report"); })
+        .finally(() => { if (active) setLoading(false); });
+    });
     return () => { active = false; };
   }, []);
 
@@ -87,7 +90,7 @@ export function ReportsOverviewPage() {
   );
 }
 
-export function ReportPage({
+export function ReportPage<TData>({
   reportKey,
   title,
   description,
@@ -98,27 +101,30 @@ export function ReportPage({
   reportKey: ReportKey;
   title: string;
   description: string;
-  load: (params: ReportParams) => Promise<any>;
-  render: (data: any, canFinance: boolean) => ReactNode;
+  load: (params: ReportParams) => Promise<TData>;
+  render: (data: TData, canFinance: boolean) => ReactNode;
   financeOnly?: boolean;
 }) {
   const params = useReportParams();
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<TData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const role = data?.user?.role || getDoFlowUser()?.role;
+  const role = getDoFlowUser()?.role;
   const canFinance = canViewFinance(role);
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError(null);
-    load(params)
-      .then((result) => { if (active) setData(result); })
-      .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Errore caricamento report"); })
-      .finally(() => { if (active) setLoading(false); });
+    queueMicrotask(() => {
+      if (!active) return;
+      setLoading(true);
+      setError(null);
+      load(params)
+        .then((result) => { if (active) setData(result); })
+        .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Errore caricamento report"); })
+        .finally(() => { if (active) setLoading(false); });
+    });
     return () => { active = false; };
-  }, [JSON.stringify(params), load]);
+  }, [load, params]);
 
   if (financeOnly && !canFinance && !loading) {
     return (
@@ -199,7 +205,7 @@ export function KeyValueList({ data, canFinance = true, valueKind }: { data?: Re
   );
 }
 
-export function SimpleTable({ rows, columns, empty = "Nessun dato disponibile." }: { rows?: any[]; columns: Array<{ key: string; label: string; finance?: boolean; format?: (value: any, row: any) => ReactNode }>; empty?: string }) {
+export function SimpleTable({ rows, columns, empty = "Nessun dato disponibile." }: { rows?: ReportRow[]; columns: Array<{ key: string; label: string; finance?: boolean; format?: (value: unknown, row: ReportRow) => ReactNode }>; empty?: string }) {
   const list = Array.isArray(rows) ? rows : [];
   if (list.length === 0) return <p className="text-sm text-muted-foreground">{empty}</p>;
   return (
@@ -208,7 +214,7 @@ export function SimpleTable({ rows, columns, empty = "Nessun dato disponibile." 
         <thead><tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">{columns.map((col) => <th key={col.key} className="px-3 py-2">{col.label}</th>)}</tr></thead>
         <tbody>
           {list.map((row, index) => (
-            <tr key={row.id || index} className="border-b last:border-0">
+            <tr key={String(row.id ?? index)} className="border-b last:border-0">
               {columns.map((col) => <td key={col.key} className="px-3 py-2">{col.format ? col.format(row[col.key], row) : String(row[col.key] ?? "-")}</td>)}
             </tr>
           ))}

@@ -28,3 +28,8 @@
 **/.DS_Store
 docker-data
 coverage
+
+# local acceptance evidence and read-only replacement reference
+.visual-auth
+.visual-runtime
+doflow-gestionale-reference

@@ -1,17 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Search, ShieldCheck, UserCheck, UserPlus, UserRoundX, UsersRound } from "lucide-react";
+import { useEffect,useMemo,useState,useEffectEvent } from "react";
+import { Search,ShieldCheck,UserPlus,UserRoundX,UsersRound } from "lucide-react";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
-import { teamApi, type TeamMember, type TeamOptions } from "@/lib/tenant-team-api";
+import { teamApi,type TeamMember,type TeamOptions } from "@/lib/tenant-team-api";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SettingsError, SettingsKpi, SettingsLoading, SettingsPageHeader } from "./settings-center-ui";
+import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from "@/components/ui/select";
+import { SettingsError,SettingsKpi,SettingsLoading,SettingsPageHeader } from "./settings-center-ui";
 import { SettingsNavigation } from "./settings-navigation";
-import { normalizeRole, roleLabel, settingsApi, type PermissionState } from "./settings-center-model";
+import { normalizeRole,roleLabel,settingsApi,type PermissionState } from "./settings-center-model";
 import { UsersTable } from "./users-table";
 import { UserPermissionsPanel } from "./user-permissions-panel";
 
@@ -51,22 +51,36 @@ export function UsersPermissionsWorkspace() {
     }
   };
 
-  useEffect(() => { void load(); }, [teamAllowed]);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [teamAllowed]);
 
   const selected = members.find((member) => member.id === selectedId) || null;
   useEffect(() => {
     let active = true;
-    if (!selected || !manageAllowed) { setPermissions([]); return; }
-    teamApi.permissions(selected.id).then((data) => {
-      if (active) setPermissions((data.items || []).map((item) => ({
-        module_key: item.module_key,
-        can_view: item.can_view,
-        can_create: item.can_create,
-        can_update: item.can_update,
-        can_delete: item.can_delete,
-        can_manage: item.can_manage,
-      })));
-    }).catch((reason) => active && setError(reason instanceof Error ? reason.message : "Permessi non disponibili.")).finally(() => undefined);
+    queueMicrotask(() => {
+      if (!active) return;
+      if (!selected || !manageAllowed) { setPermissions([]); return; }
+      teamApi.permissions(selected.id).then((data) => {
+        if (active) setPermissions((data.items || []).map((item) => ({
+          module_key: item.module_key,
+          can_view: item.can_view,
+          can_create: item.can_create,
+          can_update: item.can_update,
+          can_delete: item.can_delete,
+          can_manage: item.can_manage,
+        })));
+      }).catch((reason) => active && setError(reason instanceof Error ? reason.message : "Permessi non disponibili.")).finally(() => undefined);
+    });
     return () => { active = false; };
   }, [manageAllowed, selected]);
 
@@ -80,7 +94,17 @@ export function UsersPermissionsWorkspace() {
   const owners = members.filter((member) => normalizeRole(member.tenant_role) === "owner").length;
   const lastOwner = Boolean(selected && normalizeRole(selected.tenant_role) === "owner" && owners <= 1);
 
-  useEffect(() => { setPage(1); }, [search, role, status]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setPage(1);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [search, role, status]);
 
   const saveMemberAccess = async (nextRole: string, nextPermissions: PermissionState[]) => {
     if (!selected || !manageAllowed) return;

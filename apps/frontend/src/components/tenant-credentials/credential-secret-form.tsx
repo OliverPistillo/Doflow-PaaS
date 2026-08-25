@@ -34,7 +34,13 @@ export function CredentialSecretForm({
   const [visible, setVisible] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    setForm({ ...EMPTY_SECRET, ...value });
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setForm({ ...EMPTY_SECRET, ...value });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [value]);
 
   const set = (key: keyof CredentialSecretPayload, next: unknown) => {
@@ -134,4 +140,3 @@ export function CredentialSecretForm({
     </div>
   );
 }
-

@@ -35,8 +35,11 @@ export function TeamMemberForm({
   const [form, setForm] = useState<FormState>({});
 
   useEffect(() => {
-    setForm({
-      email: member?.email || "",
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setForm({
+        email: member?.email || "",
       display_name: member?.display_name || "",
       first_name: member?.first_name || "",
       last_name: member?.last_name || "",
@@ -57,8 +60,12 @@ export function TeamMemberForm({
       end_date: member?.end_date ? String(member.end_date).slice(0, 10) : "",
       notes: member?.notes || "",
       private_notes: canCosts ? member?.private_notes || "" : undefined,
-      send_invite: member ? undefined : true,
+        send_invite: member ? undefined : true,
+      });
     });
+    return () => {
+      cancelled = true;
+    };
   }, [member, canCosts]);
 
   const set = (key: keyof FormState, value: unknown) => setForm((prev) => ({ ...prev, [key]: value }));

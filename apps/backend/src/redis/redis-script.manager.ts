@@ -7,6 +7,7 @@ import * as path from 'path';
 export class RedisScriptManager implements OnModuleInit {
   private readonly logger = new Logger(RedisScriptManager.name);
   private scripts: Map<string, string> = new Map(); // Name -> SHA1
+  private scriptSources: Map<string, string> = new Map();
 
   constructor(private readonly redisService: RedisService) {}
 
@@ -38,6 +39,7 @@ export class RedisScriptManager implements OnModuleInit {
         // Carica lo script in Redis e ottieni lo SHA
         const sha = await client.script('LOAD', scriptContent) as string;
         this.scripts.set(scriptName, sha);
+        this.scriptSources.set(scriptName, scriptContent);
         this.logger.log(`✅ Script caricato: ${scriptName} => ${sha.substring(0, 7)}...`);
       } catch (err) {
         this.logger.error(`❌ Errore caricamento script ${scriptName}:`, err);
@@ -56,8 +58,21 @@ export class RedisScriptManager implements OnModuleInit {
     }
 
     const client = this.redisService.getClient();
-    // evalsha args: SHA, numKeys, key1, key2, arg1, arg2...
-    return await client.evalsha(sha, keys.length, ...keys, ...args.map(String));
+    const execute = (currentSha: string) =>
+      client.evalsha(currentSha, keys.length, ...keys, ...args.map(String));
+    try {
+      // evalsha args: SHA, numKeys, key1, key2, arg1, arg2...
+      return await execute(sha);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes('NOSCRIPT')) throw error;
+      const source = this.scriptSources.get(scriptName);
+      if (!source) throw error;
+      const reloadedSha = await client.script('LOAD', source) as string;
+      this.scripts.set(scriptName, reloadedSha);
+      this.logger.warn(`Script Redis ricaricato dopo restart: ${scriptName}`);
+      return await execute(reloadedSha);
+    }
   }
 
   getScriptSha(name: string): string | undefined {

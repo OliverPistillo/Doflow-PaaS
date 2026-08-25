@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Copy, Plus, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ export function TeamOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -34,8 +34,18 @@ export function TeamOverviewPage() {
     } finally {
       setLoading(false);
     }
-  };
-  useEffect(() => { void load(); }, []);
+  }, []);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   return (
     <div className="flex-1 space-y-5 p-4 md:p-6">
@@ -95,7 +105,7 @@ export function TeamMembersPage() {
   const [createdResult, setCreatedResult] = useState<CreateTeamMemberResult | null>(null);
 
   const params = useMemo(() => ({ search, status, operational_role: operationalRole, availability_status: availability, limit: 100 }), [search, status, operationalRole, availability]);
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -112,8 +122,8 @@ export function TeamMembersPage() {
     } finally {
       setLoading(false);
     }
-  };
-  useEffect(() => { const t = window.setTimeout(() => void load(), 250); return () => window.clearTimeout(t); }, [params]);
+  }, [params]);
+  useEffect(() => { const t = window.setTimeout(() => void load(), 250); return () => window.clearTimeout(t); }, [load]);
 
   const create = async (body: CreateTeamMemberInput | Partial<TeamMember>) => {
     try {

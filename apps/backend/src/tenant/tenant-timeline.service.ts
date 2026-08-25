@@ -17,12 +17,41 @@ const CALL_OUTCOMES = ['answered', 'busy', 'no_answer', 'other', 'rescheduled', 
 const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
 const AUDIT_ACTIONS = [
   'crm_opportunity_stage_changed',
+  'commercial_opportunity_stage_changed',
+  'commercial_lead_created',
+  'commercial_opportunity_converted',
+  'commercial_attribution_changed',
+  'commercial_duplicate_merged',
+  'commercial_pipeline_reordered',
+  'commercial_activity_reordered',
+  'commercial_activity_archived',
+  'commercial_activity_restored',
+  'commercial_primary_contact_changed',
+  'commercial_company_archived',
+  'commercial_company_restored',
+  'commercial_opportunity_archived',
+  'commercial_opportunity_restored',
+  'commercial_contact_archived',
+  'commercial_contact_restored',
+  'commercial_communication_updated',
+  'crm_companies_created',
+  'crm_companies_updated',
+  'crm_contacts_created',
+  'crm_contacts_updated',
+  'crm_opportunities_created',
+  'crm_opportunities_updated',
+  'crm_activities_updated',
   'project_status_changed',
   'project_updated',
   'quote_accepted',
   'quote_rejected',
   'quotes_quotes_created',
   'quotes_quotes_updated',
+  'quote_version_created',
+  'commerce_sale_created',
+  'commerce_sale_updated',
+  'commerce_order_created',
+  'commerce_order_updated',
   'material_requested',
   'material_received',
   'material_waived',
@@ -253,7 +282,7 @@ export class TenantTimelineService {
 
   private async loadActivities(schema: string, target: TimelineTarget, options: any) {
     const params: unknown[] = [target.id];
-    const where = ['a.deleted_at IS NULL', this.targetSql(target, 'a', 'p')];
+    const where = ["a.deleted_at IS NULL", "COALESCE((a.metadata->>'timeline_event')::boolean, true) = true", this.targetSql(target, 'a', 'p')];
     const normalizedType = `CASE WHEN a.type IN ('meeting', 'appointment') THEN 'appointment'
                                  WHEN a.type IN ('task', 'activity', 'follow_up') THEN 'activity'
                                  ELSE a.type END`;
@@ -499,10 +528,13 @@ export class TenantTimelineService {
       rows.forEach((row: any) => { if (row.id) ids.add(String(row.id)); });
     };
     if (target.kind === 'company') {
+      await collect('commercial_activities', 'company_id = $1', [target.id]);
       await collect('projects', 'company_id = $1', [target.id]);
       await collect('opportunities', 'company_id = $1', [target.id]);
       if (access.modules.quotes?.can_view) await collect('quotes', 'company_id = $1', [target.id]);
       if (access.modules.contracts?.can_view) await collect('contracts', 'company_id = $1', [target.id]);
+      await collect('sales', 'company_id = $1', [target.id]);
+      await collect('orders', 'company_id = $1', [target.id]);
       if (access.modules.finance?.can_view) {
         await collect('invoices', 'company_id = $1', [target.id]);
         await collect('payments', 'company_id = $1', [target.id]);
@@ -511,9 +543,12 @@ export class TenantTimelineService {
         await collect('renewals', 'company_id = $1', [target.id]);
       }
     } else if (target.kind === 'opportunity') {
+      await collect('commercial_activities', 'opportunity_id = $1', [target.id]);
       await collect('projects', 'opportunity_id = $1', [target.id]);
       if (access.modules.quotes?.can_view) await collect('quotes', 'opportunity_id = $1', [target.id]);
       if (access.modules.contracts?.can_view) await collect('contracts', 'opportunity_id = $1', [target.id]);
+      await collect('sales', 'lead_id = $1', [target.id]);
+      await collect('orders', `EXISTS (SELECT 1 FROM "${schema}".sales s WHERE s.id = sale_id AND s.lead_id = $1 AND s.deleted_at IS NULL)`, [target.id]);
       if (access.modules.finance?.can_view) {
         await collect('invoices', 'opportunity_id = $1', [target.id]);
         await collect('payments', `EXISTS (SELECT 1 FROM "${schema}".invoices i WHERE i.id = invoice_id AND i.opportunity_id = $1 AND i.deleted_at IS NULL)`, [target.id]);
@@ -525,6 +560,8 @@ export class TenantTimelineService {
       if (target.opportunity_id) ids.add(target.opportunity_id);
       if (access.modules.quotes?.can_view && target.opportunity_id) await collect('quotes', 'opportunity_id = $1', [target.opportunity_id]);
       if (access.modules.contracts?.can_view) await collect('contracts', 'project_id = $1', [target.id]);
+      await collect('sales', 'project_id = $1', [target.id]);
+      await collect('orders', 'project_id = $1', [target.id]);
       if (access.modules.finance?.can_view) {
         await collect('invoices', 'project_id = $1', [target.id]);
         await collect('payments', 'project_id = $1', [target.id]);
@@ -539,12 +576,29 @@ export class TenantTimelineService {
   private auditTitle(action: string, metadata: Record<string, unknown> = {}) {
     const titles: Record<string, string> = {
       crm_opportunity_stage_changed: 'Fase commerciale aggiornata',
+      commercial_lead_created: 'Lead creato',
+      commercial_opportunity_stage_changed: 'Fase commerciale aggiornata',
+      commercial_opportunity_converted: 'Lead convertito in cliente',
+      commercial_attribution_changed: 'Attribution commerciale aggiornata',
+      commercial_duplicate_merged: 'Record duplicati fusi',
+      commercial_pipeline_reordered: 'Pipeline riordinata',
+      commercial_activity_reordered: 'Attività commerciale spostata',
+      commercial_activity_archived: 'Attività commerciale archiviata',
+      commercial_activity_restored: 'Attività commerciale ripristinata',
+      commercial_primary_contact_changed: 'Contatto principale aggiornato',
+      commercial_communication_updated: 'Comunicazione aggiornata',
+      crm_activities_updated: 'Attività commerciale aggiornata',
       project_status_changed: 'Stato progetto aggiornato',
       project_updated: 'Progetto aggiornato',
       quote_accepted: 'Preventivo accettato',
       quote_rejected: 'Preventivo rifiutato',
       quotes_quotes_created: 'Preventivo creato',
       quotes_quotes_updated: 'Preventivo aggiornato',
+      quote_version_created: 'Nuova versione preventivo creata',
+      commerce_sale_created: 'Vendita registrata',
+      commerce_sale_updated: 'Vendita aggiornata',
+      commerce_order_created: 'Ordine creato',
+      commerce_order_updated: 'Ordine aggiornato',
       material_requested: 'Materiale richiesto',
       material_received: 'Materiale ricevuto',
       material_waived: 'Materiale non necessario',
@@ -605,6 +659,50 @@ export class TenantTimelineService {
         source: 'audit_log',
       });
     });
+  }
+
+  private async loadRecordComments(schema: string, target: TimelineTarget, options: any) {
+    if (!(await this.tableExists(schema, 'record_comments'))) return [];
+    const params: unknown[] = [target.id];
+    const related = target.kind === 'company'
+      ? `(rc.record_type = 'customer' AND rc.record_id = $1::uuid)
+         OR (rc.record_type = 'lead' AND EXISTS (SELECT 1 FROM "${schema}".opportunities o WHERE o.id = rc.record_id AND o.company_id = $1::uuid AND o.deleted_at IS NULL))
+         OR (rc.record_type = 'project' AND EXISTS (SELECT 1 FROM "${schema}".projects p WHERE p.id = rc.record_id AND p.company_id = $1::uuid AND p.deleted_at IS NULL))`
+      : target.kind === 'opportunity'
+        ? `(rc.record_type = 'lead' AND rc.record_id = $1::uuid)
+           OR (rc.record_type = 'project' AND EXISTS (SELECT 1 FROM "${schema}".projects p WHERE p.id = rc.record_id AND p.opportunity_id = $1::uuid AND p.deleted_at IS NULL))`
+        : `(rc.record_type = 'project' AND rc.record_id = $1::uuid)`;
+    const where = [`rc.deleted_at IS NULL`, `(${related})`];
+    this.addTimeConditions(where, params, 'rc', options.dateFrom, options.dateTo, options.cursor);
+    params.push(options.sourceLimit);
+    const rows = await this.dataSource.query(
+      `SELECT rc.*, tm.display_name AS author_name
+       FROM "${schema}".record_comments rc
+       LEFT JOIN "${schema}".team_members tm ON tm.user_id = rc.author_id AND tm.deleted_at IS NULL
+       WHERE ${where.join(' AND ')}
+       ORDER BY rc.created_at DESC, rc.id DESC
+       LIMIT $${params.length}`,
+      params,
+    );
+    return rows.map((row: any) => this.normalizeEvent({
+      id: `record-comment:${row.id}`,
+      contact_id: target.contact_id,
+      company_id: target.company_id,
+      opportunity_id: target.opportunity_id,
+      project_id: target.project_id,
+      type: 'note',
+      channel: 'internal',
+      direction: null,
+      author_user_id: row.author_id,
+      author_label: row.author_name || 'Utente',
+      created_at: row.created_at,
+      status: row.resolved_at ? 'resolved' : 'recorded',
+      outcome: row.resolved_at ? 'resolved' : null,
+      title: row.parent_comment_id ? 'Risposta interna' : 'Commento interno',
+      body: row.body,
+      metadata: { comment_id: row.id, record_type: row.record_type, record_id: row.record_id },
+      source: 'record_comments',
+    }));
   }
 
   private async loadDocumentActivity(schema: string, target: TimelineTarget, options: any, access: any) {
@@ -716,15 +814,16 @@ export class TenantTimelineService {
     const options = { cursor, dateFrom, dateTo, operatorId, operatorEmail, types, outcome, sourceLimit: Math.min(204, (limit + 1) * 4) };
     const wants = (...eventTypes: string[]) => !types.length || eventTypes.some((type) => types.includes(type));
 
-    const [activities, comments, tasks, audits, documents, contracts] = await Promise.all([
+    const [activities, comments, recordComments, tasks, audits, documents, contracts] = await Promise.all([
       wants('activity', 'appointment', 'call', 'email', 'note', 'whatsapp') ? this.loadActivities(schema, target, options) : Promise.resolve([]),
       wants('note') ? this.loadProjectComments(schema, target, options) : Promise.resolve([]),
+      wants('note') ? this.loadRecordComments(schema, target, options) : Promise.resolve([]),
       wants('activity') ? this.loadProjectTasks(schema, target, options) : Promise.resolve([]),
       wants('activity', 'status_change') ? this.loadAudit(schema, target, options, access) : Promise.resolve([]),
       wants('file') ? this.loadDocumentActivity(schema, target, options, access) : Promise.resolve([]),
       wants('activity', 'status_change') ? this.loadContractActivity(schema, target, options, access) : Promise.resolve([]),
     ]);
-    let events = [...activities, ...comments, ...tasks, ...audits, ...documents, ...contracts]
+    let events = [...activities, ...comments, ...recordComments, ...tasks, ...audits, ...documents, ...contracts]
       .filter((event) => !types.length || types.includes(event.type))
       .filter((event) => !outcome || event.outcome === outcome || event.status === outcome)
       .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id));

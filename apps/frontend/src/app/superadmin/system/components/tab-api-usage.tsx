@@ -5,17 +5,16 @@
 
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useEffect,useState,useCallback } from "react";
+import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,TableBody,TableCell,TableHead,TableHeader,TableRow,
 } from "@/components/ui/table";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart,Bar,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer,
 } from "recharts";
-import { Loader2, RefreshCw, Radio } from "lucide-react";
+import { Loader2,RefreshCw,Radio } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
 interface ApiUsageStats {
@@ -25,20 +24,13 @@ interface ApiUsageStats {
   topTenants:       { tenantId: string; tenantName?: string; count: number }[];
   requestsByType:   { type: string; count: number }[];
   errorRate:        number;
-  recentErrors:     any[];
+  recentErrors:     unknown[];
   requestsTimeline: { hour: string; count: number }[];
   rateLimitHits:    number;
 }
 
 const fmtNumber = (n: unknown) =>
   new Intl.NumberFormat("it-IT").format(Number(n) || 0);
-
-function ErrorRateBadge({ rate }: { rate: number }) {
-  const r = Number(rate) || 0;
-  if (r < 1) return <Badge className="bg-emerald-100 text-emerald-700 border-0">{r.toFixed(2)}%</Badge>;
-  if (r < 5) return <Badge className="bg-amber-100 text-amber-700 border-0">{r.toFixed(2)}%</Badge>;
-  return <Badge variant="destructive">{r.toFixed(2)}%</Badge>;
-}
 
 export function TabApiUsage() {
   const [data, setData]       = useState<ApiUsageStats | null>(null);
@@ -56,7 +48,17 @@ export function TabApiUsage() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   if (loading && !data) {
     return (

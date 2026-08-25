@@ -9,7 +9,7 @@ import {
   DropResult,
 } from '@hello-pangea/dnd';
 import { useNotifications, RealtimeEvent } from '@/hooks/useNotifications';
-import { getAuthToken } from '@/lib/auth-storage';
+import { apiFetch } from '@/lib/api';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
@@ -70,18 +70,11 @@ export default function ProjectBoardPage() {
   const params = useParams();
   const projectId = params?.id as string | undefined;
 
-  const [token, setToken] = useState<string | null>(null);
   const [columns, setColumns] = useState<ColumnsState>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [realtimeInfo, setRealtimeInfo] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setToken(getAuthToken());
-    }
-  }, []);
 
   const initColumnsEmpty = useCallback((): ColumnsState => {
     const base: ColumnsState = {};
@@ -92,22 +85,11 @@ export default function ProjectBoardPage() {
   }, []);
 
   const loadTasks = useCallback(async () => {
-    if (!token || !projectId) return;
+    if (!projectId) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(buildTasksUrl(projectId), {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      });
-
-      const text = await res.text();
-      if (!res.ok) {
-        setError(text || 'Errore caricamento tasks');
-        return;
-      }
-
-      const data = JSON.parse(text) as { tasks: RawTask[] } | RawTask[];
+      const data = await apiFetch<{ tasks: RawTask[] } | RawTask[]>(buildTasksUrl(projectId));
       const rawTasks = Array.isArray(data) ? data : data.tasks;
 
       const cols = initColumnsEmpty();
@@ -122,12 +104,12 @@ export default function ProjectBoardPage() {
     } finally {
       setLoading(false);
     }
-  }, [token, projectId, initColumnsEmpty]);
+  }, [projectId, initColumnsEmpty]);
 
   useEffect(() => {
-    if (!token || !projectId) return;
-    void loadTasks();
-  }, [token, projectId, loadTasks]);
+    if (!projectId) return;
+    queueMicrotask(() => void loadTasks());
+  }, [projectId, loadTasks]);
 
   // --- Realtime: su evento => ricarichiamo dal backend ---
 
@@ -206,23 +188,14 @@ export default function ProjectBoardPage() {
       return next;
     });
 
-    if (!token || !projectId) return;
+    if (!projectId) return;
 
     setSaving(true);
     try {
-      const res = await fetch(buildUpdateTaskUrl(projectId, draggableId), {
+      await apiFetch(buildUpdateTaskUrl(projectId, draggableId), {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
         body: JSON.stringify({ status: toColumnId }),
       });
-
-      if (!res.ok) {
-        const text = await res.text();
-        console.error('Errore update task:', text);
-      }
     } catch (e) {
       console.error('Errore rete update task', e);
     } finally {

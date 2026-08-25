@@ -1,20 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams,useRouter } from "next/navigation";
 import {
-  ArrowLeft, Building2, Mail, Phone, MapPin, Globe, Tag,
-  Calendar, DollarSign, FileText, CheckSquare, MessageSquare,
-  Pencil, Plus, ChevronRight, TrendingUp, Clock, Send,
-  PhoneCall, StickyNote, Briefcase, Star, MoreHorizontal,
+  ArrowLeft,Building2,Mail,Phone,MapPin,Tag,
+  Calendar,DollarSign,FileText,CheckSquare,Pencil,Plus,ChevronRight,TrendingUp,Clock,PhoneCall,StickyNote,Briefcase
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Progress } from "@/components/ui/progress";
+import { Avatar,AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs,TabsContent,TabsList,TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 // ─── Demo data ────────────────────────────────────────────────────────────────
@@ -313,7 +309,7 @@ export default function Page() {
                   ))}
                 </div>
                 <Button variant="outline" size="sm" className="w-full text-xs">
-                  Vai all'azienda <ChevronRight className="h-3 w-3 ml-1" />
+                  Vai all&apos;azienda <ChevronRight className="h-3 w-3 ml-1" />
                 </Button>
               </CardContent>
             </Card>

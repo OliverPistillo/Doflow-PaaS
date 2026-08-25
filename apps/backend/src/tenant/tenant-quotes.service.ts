@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { DataSource, QueryRunner } from 'typeorm';
+import { randomUUID } from 'node:crypto';
 import { safeSchema } from '../common/schema.utils';
 import { hasRoleAtLeast } from '../roles';
 import { isDoflowTenant, normalizeCommercialStage } from './commercial-stage-model';
@@ -24,7 +25,7 @@ type ResourceConfig = {
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const QUOTE_STATUSES = ['draft', 'sent', 'viewed', 'accepted', 'rejected', 'expired'];
+const QUOTE_STATUSES = ['draft', 'sent', 'viewed', 'accepted', 'rejected', 'expired', 'replaced'];
 const BILLING_TYPES = ['one_time', 'monthly', 'yearly'];
 
 const RESOURCES: Record<QuoteResource, ResourceConfig> = {
@@ -46,7 +47,7 @@ const RESOURCES: Record<QuoteResource, ResourceConfig> = {
     writable: [
       'company_id', 'contact_id', 'opportunity_id', 'briefing_id', 'quote_number',
       'title', 'status', 'currency', 'valid_until', 'client_notes', 'internal_notes',
-      'terms', 'accepted_by_contact_id',
+      'terms', 'accepted_by_contact_id', 'document_discount', 'tax_rate',
     ],
     searchable: ['quote_number', 'title', 'currency', 'client_notes', 'internal_notes', 'terms'],
     filters: ['status', 'company_id', 'contact_id', 'opportunity_id', 'briefing_id'],
@@ -172,9 +173,11 @@ export class TenantQuotesService {
     if (config.table === 'quotes' && (!partial || 'currency' in body)) {
       cleaned.currency = normalizeCurrencyCode(body.currency);
     }
-    for (const numeric of ['default_unit_price', 'default_quantity']) {
+    for (const numeric of ['default_unit_price', 'default_quantity', 'document_discount', 'tax_rate']) {
       if (cleaned[numeric] !== undefined && cleaned[numeric] !== null) cleaned[numeric] = this.toNumber(cleaned[numeric], numeric);
     }
+    if (Number(cleaned.document_discount || 0) < 0) throw new BadRequestException('document_discount non valido');
+    if (Number(cleaned.tax_rate || 0) < 0 || Number(cleaned.tax_rate || 0) > 100) throw new BadRequestException('tax_rate non valido');
     return cleaned;
   }
 
@@ -241,6 +244,21 @@ export class TenantQuotesService {
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
       [...params, limit, offset],
     );
+    if (resource === 'quotes' && rows.length > 0) {
+      const quoteIds = rows.map((row: Record<string, unknown>) => String(row.id));
+      const items = await this.dataSource.query(
+        `SELECT * FROM "${schema}".quote_items
+         WHERE quote_id = ANY($1::uuid[]) AND deleted_at IS NULL
+         ORDER BY quote_id, sort_order ASC, created_at ASC`,
+        [quoteIds],
+      );
+      const grouped = new Map<string, Record<string, unknown>[]>();
+      for (const item of items) {
+        const key = String(item.quote_id);
+        grouped.set(key, [...(grouped.get(key) || []), item]);
+      }
+      for (const row of rows) row.items = grouped.get(String(row.id)) || [];
+    }
     return { items: rows, total: Number(countRows[0]?.total || 0), limit, offset };
   }
 
@@ -274,7 +292,7 @@ export class TenantQuotesService {
     const userId = this.userIdOrNull(user.id);
 
     if (resource === 'quotes') {
-      return this.createQuote(schema, user, cleaned, userId);
+      return this.createQuote(schema, user, cleaned, userId, body);
     }
 
     const columns = [...Object.keys(cleaned), 'created_by', 'updated_by'];
@@ -290,15 +308,22 @@ export class TenantQuotesService {
     return this.findOne(resource, rows[0].id);
   }
 
-  private async createQuote(schema: string, user: { email?: string; role: string }, cleaned: Record<string, unknown>, userId: string | null) {
+  private async createQuote(
+    schema: string,
+    user: { email?: string; role: string },
+    cleaned: Record<string, unknown>,
+    userId: string | null,
+    body: Record<string, any>,
+  ) {
     const runner = this.dataSource.createQueryRunner();
     await runner.connect();
     await runner.startTransaction();
     try {
       const values = { ...cleaned };
       if (!values.quote_number) values.quote_number = await this.nextQuoteNumber(runner, schema);
-      const columns = [...Object.keys(values), 'created_by', 'updated_by'];
-      const params = [...Object.values(values), userId, userId];
+      const requestedId = isDoflowTenant(schema) && UUID_RE.test(String(body.id || '')) ? String(body.id) : null;
+      const columns = [...(requestedId ? ['id'] : []), ...Object.keys(values), 'created_by', 'updated_by'];
+      const params = [...(requestedId ? [requestedId] : []), ...Object.values(values), userId, userId];
       const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
       const rows = await runner.query(
         `INSERT INTO "${schema}".quotes (${columns.join(', ')})
@@ -306,9 +331,34 @@ export class TenantQuotesService {
          RETURNING id`,
         params,
       );
+      const quoteId = String(rows[0].id);
+      const rawItems = Array.isArray(body.items) ? body.items : Array.isArray(body.lines) ? body.lines : [];
+      for (let index = 0; index < rawItems.length; index += 1) {
+        const source = rawItems[index] || {};
+        const item = this.cleanItemBody({
+          service_template_id: source.service_template_id ?? source.serviceId,
+          name: source.name ?? source.description,
+          description: source.description,
+          quantity: source.quantity,
+          unit_price: source.unit_price ?? source.unitPrice,
+          discount: source.discount,
+          tax_rate: source.tax_rate ?? source.taxRate ?? values.tax_rate,
+          billing_type: source.billing_type ?? 'one_time',
+          sort_order: source.sort_order ?? index,
+        }, false);
+        item.total = this.itemTotal(item);
+        const requestedItemId = isDoflowTenant(schema) && UUID_RE.test(String(source.id || '')) ? String(source.id) : null;
+        const itemColumns = [...(requestedItemId ? ['id'] : []), 'quote_id', ...Object.keys(item)];
+        const itemValues = [...(requestedItemId ? [requestedItemId] : []), quoteId, ...Object.values(item)];
+        await runner.query(
+          `INSERT INTO "${schema}".quote_items (${itemColumns.join(', ')}) VALUES (${itemColumns.map((_, itemIndex) => `$${itemIndex + 1}`).join(', ')})`,
+          itemValues,
+        );
+      }
+      await this.recalculateQuoteTotals(schema, quoteId, runner);
       await runner.commitTransaction();
-      await this.audit(schema, user, 'quotes_quotes_created', rows[0].id, values);
-      return this.findOne('quotes', rows[0].id);
+      await this.audit(schema, user, 'quotes_quotes_created', quoteId, { ...values, item_count: rawItems.length });
+      return this.findOne('quotes', quoteId);
     } catch (err) {
       await runner.rollbackTransaction();
       throw err;
@@ -339,6 +389,23 @@ export class TenantQuotesService {
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const config = RESOURCES[resource];
+    if (resource === 'quotes' && isDoflowTenant(schema)) {
+      const currentRows = await this.dataSource.query(
+        `SELECT status FROM "${schema}".quotes WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+        [id],
+      );
+      if (!currentRows[0]) throw new NotFoundException('Preventivo non trovato');
+      const protectedFields = new Set([
+        'company_id', 'contact_id', 'opportunity_id', 'briefing_id', 'quote_number',
+        'title', 'currency', 'valid_until', 'terms', 'document_discount', 'tax_rate',
+      ]);
+      if (
+        String(currentRows[0].status) !== 'draft' &&
+        Object.keys(body).some((field) => protectedFields.has(field))
+      ) {
+        throw new BadRequestException('Crea una nuova versione per modificare un preventivo non in bozza');
+      }
+    }
     const cleaned = this.cleanBody(config, body, true);
     const entries = Object.entries(cleaned);
     if (entries.length === 0) return this.findOne(resource, id);
@@ -385,7 +452,7 @@ export class TenantQuotesService {
     if (!UUID_RE.test(quoteId)) throw new BadRequestException('ID preventivo non valido');
     const schema = this.getSchema();
     await this.ensureSchema(schema);
-    await this.ensureQuoteExists(schema, quoteId);
+    await this.ensureQuoteDraft(schema, quoteId);
     const cleaned = this.cleanItemBody(body, false);
     cleaned.total = this.itemTotal(cleaned);
     const columns = ['quote_id', ...Object.keys(cleaned)];
@@ -407,7 +474,7 @@ export class TenantQuotesService {
     if (!UUID_RE.test(quoteId) || !UUID_RE.test(itemId)) throw new BadRequestException('ID non valido');
     const schema = this.getSchema();
     await this.ensureSchema(schema);
-    await this.ensureQuoteExists(schema, quoteId);
+    await this.ensureQuoteDraft(schema, quoteId);
     const currentRows = await this.dataSource.query(
       `SELECT * FROM "${schema}".quote_items WHERE id = $1 AND quote_id = $2 AND deleted_at IS NULL LIMIT 1`,
       [itemId, quoteId],
@@ -436,6 +503,7 @@ export class TenantQuotesService {
     if (!UUID_RE.test(quoteId) || !UUID_RE.test(itemId)) throw new BadRequestException('ID non valido');
     const schema = this.getSchema();
     await this.ensureSchema(schema);
+    await this.ensureQuoteDraft(schema, quoteId);
     const rows = await this.dataSource.query(
       `UPDATE "${schema}".quote_items
        SET deleted_at = now(), updated_at = now()
@@ -449,6 +517,63 @@ export class TenantQuotesService {
     return this.findOne('quotes', quoteId);
   }
 
+  async replaceItems(quoteId: string, items: Record<string, any>[]) {
+    const user = this.assertAccess(true);
+    if (!UUID_RE.test(quoteId)) throw new BadRequestException('ID preventivo non valido');
+    if (!items.length) throw new BadRequestException('Il preventivo deve contenere almeno una riga');
+    const schema = this.getSchema();
+    await this.ensureSchema(schema);
+    const runner = this.dataSource.createQueryRunner();
+    await runner.connect();
+    await runner.startTransaction();
+    try {
+      const quoteRows = await runner.query(
+        `SELECT status FROM "${schema}".quotes WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+        [quoteId],
+      );
+      if (!quoteRows[0]) throw new NotFoundException('Preventivo non trovato');
+      if (isDoflowTenant(schema) && String(quoteRows[0].status) !== 'draft') {
+        throw new BadRequestException('Le righe di una versione non in bozza sono immutabili');
+      }
+      await runner.query(
+        `UPDATE "${schema}".quote_items SET deleted_at = now(), updated_at = now()
+         WHERE quote_id = $1 AND deleted_at IS NULL`,
+        [quoteId],
+      );
+      for (let index = 0; index < items.length; index += 1) {
+        const source = items[index] || {};
+        const cleaned = this.cleanItemBody({
+          service_template_id: source.service_template_id ?? source.serviceId,
+          name: source.name ?? source.description,
+          description: source.description,
+          quantity: source.quantity,
+          unit_price: source.unit_price ?? source.unitPrice,
+          discount: source.discount,
+          tax_rate: source.tax_rate ?? source.taxRate,
+          billing_type: source.billing_type ?? 'one_time',
+          sort_order: source.sort_order ?? index,
+        }, false);
+        cleaned.total = this.itemTotal(cleaned);
+        const requestedId = isDoflowTenant(schema) && UUID_RE.test(String(source.id || '')) ? String(source.id) : null;
+        const columns = [...(requestedId ? ['id'] : []), 'quote_id', ...Object.keys(cleaned)];
+        const values = [...(requestedId ? [requestedId] : []), quoteId, ...Object.values(cleaned)];
+        await runner.query(
+          `INSERT INTO "${schema}".quote_items (${columns.join(', ')}) VALUES (${columns.map((_, itemIndex) => `$${itemIndex + 1}`).join(', ')})`,
+          values,
+        );
+      }
+      await this.recalculateQuoteTotals(schema, quoteId, runner);
+      await runner.commitTransaction();
+      await this.audit(schema, user, 'quote_items_replaced', quoteId, { item_count: items.length });
+      return this.findOne('quotes', quoteId);
+    } catch (error) {
+      await runner.rollbackTransaction();
+      throw error;
+    } finally {
+      await runner.release();
+    }
+  }
+
   async recalculate(id: string) {
     this.assertAccess(true);
     if (!UUID_RE.test(id)) throw new BadRequestException('ID preventivo non valido');
@@ -457,6 +582,70 @@ export class TenantQuotesService {
     await this.ensureQuoteExists(schema, id);
     await this.recalculateQuoteTotals(schema, id);
     return this.findOne('quotes', id);
+  }
+
+  async createVersion(id: string, body: { id?: string } = {}) {
+    const user = this.assertAccess(true);
+    if (!UUID_RE.test(id)) throw new BadRequestException('ID preventivo non valido');
+    const schema = this.getSchema();
+    await this.ensureSchema(schema);
+    const runner = this.dataSource.createQueryRunner();
+    await runner.connect();
+    await runner.startTransaction();
+    try {
+      const currentRows = await runner.query(
+        `SELECT * FROM "${schema}".quotes WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+        [id],
+      );
+      const current = currentRows[0];
+      if (!current) throw new NotFoundException('Preventivo non trovato');
+      if (current.replaced_by_id) {
+        await runner.commitTransaction();
+        return this.findOne('quotes', String(current.replaced_by_id));
+      }
+      const nextId = isDoflowTenant(schema) && UUID_RE.test(String(body.id || ''))
+        ? String(body.id)
+        : randomUUID();
+      const rootId = current.parent_quote_id || current.id;
+      const nextVersion = Number(current.version || 1) + 1;
+      await runner.query(
+        `INSERT INTO "${schema}".quotes
+          (id, company_id, contact_id, opportunity_id, briefing_id, quote_number,
+           title, status, currency, subtotal, discount_total, tax_total, total,
+           document_discount, tax_rate, valid_until, client_notes, internal_notes,
+           terms, version, parent_quote_id, created_by, updated_by, created_at, updated_at)
+         SELECT $1, company_id, contact_id, opportunity_id, briefing_id, quote_number,
+           title, 'draft', currency, subtotal, discount_total, tax_total, total,
+           document_discount, tax_rate, valid_until, client_notes, internal_notes,
+           terms, $2, $3, $4, $4, now(), now()
+         FROM "${schema}".quotes WHERE id = $5`,
+        [nextId, nextVersion, rootId, this.userIdOrNull(user.id), id],
+      );
+      await runner.query(
+        `INSERT INTO "${schema}".quote_items
+          (quote_id, service_template_id, name, description, quantity, unit_price,
+           discount, tax_rate, total, billing_type, sort_order, created_at, updated_at)
+         SELECT $1, service_template_id, name, description, quantity, unit_price,
+           discount, tax_rate, total, billing_type, sort_order, now(), now()
+         FROM "${schema}".quote_items
+         WHERE quote_id = $2 AND deleted_at IS NULL`,
+        [nextId, id],
+      );
+      await runner.query(
+        `UPDATE "${schema}".quotes
+         SET status = 'replaced', replaced_by_id = $1, updated_by = $2, updated_at = now()
+         WHERE id = $3`,
+        [nextId, this.userIdOrNull(user.id), id],
+      );
+      await runner.commitTransaction();
+      await this.audit(schema, user, 'quote_version_created', nextId, { previous_quote_id: id, version: nextVersion });
+      return this.findOne('quotes', nextId);
+    } catch (error) {
+      await runner.rollbackTransaction();
+      throw error;
+    } finally {
+      await runner.release();
+    }
   }
 
   async accept(id: string, body: Record<string, any>) {
@@ -549,19 +738,40 @@ export class TenantQuotesService {
     if (!rows[0]) throw new NotFoundException('Preventivo non trovato');
   }
 
-  private async recalculateQuoteTotals(schema: string, quoteId: string) {
+  private async ensureQuoteDraft(schema: string, quoteId: string) {
     const rows = await this.dataSource.query(
+      `SELECT id, status FROM "${schema}".quotes WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [quoteId],
+    );
+    if (!rows[0]) throw new NotFoundException('Preventivo non trovato');
+    if (isDoflowTenant(schema) && String(rows[0].status) !== 'draft') {
+      throw new BadRequestException('Le righe di una versione non in bozza sono immutabili');
+    }
+  }
+
+  private async recalculateQuoteTotals(schema: string, quoteId: string, runner?: QueryRunner) {
+    const query = runner ? runner.query.bind(runner) : this.dataSource.query.bind(this.dataSource);
+    const rows = await query(
       `SELECT
          COALESCE(SUM(quantity * unit_price), 0)::numeric AS subtotal,
-         COALESCE(SUM(discount), 0)::numeric AS discount_total,
-         COALESCE(SUM((quantity * unit_price - discount) * tax_rate / 100), 0)::numeric AS tax_total,
-         COALESCE(SUM(total), 0)::numeric AS total
+         COALESCE(SUM(discount), 0)::numeric AS line_discount
        FROM "${schema}".quote_items
        WHERE quote_id = $1 AND deleted_at IS NULL`,
       [quoteId],
     );
     const totals = rows[0] || {};
-    await this.dataSource.query(
+    const quoteRows = await query(
+      `SELECT document_discount, tax_rate FROM "${schema}".quotes WHERE id = $1 AND deleted_at IS NULL`,
+      [quoteId],
+    );
+    const subtotal = Number(totals.subtotal || 0);
+    const lineDiscount = Number(totals.line_discount || 0);
+    const documentDiscount = Number(quoteRows[0]?.document_discount || 0);
+    const taxRate = Number(quoteRows[0]?.tax_rate || 0);
+    const taxable = Math.max(0, subtotal - lineDiscount - documentDiscount);
+    const taxTotal = Number((taxable * taxRate / 100).toFixed(2));
+    const total = Number((taxable + taxTotal).toFixed(2));
+    await query(
       `UPDATE "${schema}".quotes
        SET subtotal = $1,
            discount_total = $2,
@@ -570,10 +780,10 @@ export class TenantQuotesService {
            updated_at = now()
        WHERE id = $5 AND deleted_at IS NULL`,
       [
-        Number(totals.subtotal || 0),
-        Number(totals.discount_total || 0),
-        Number(totals.tax_total || 0),
-        Number(totals.total || 0),
+        subtotal,
+        lineDiscount + documentDiscount,
+        taxTotal,
+        total,
         quoteId,
       ],
     );

@@ -4,7 +4,7 @@ import { DataSource } from 'typeorm';
 import { RedisService } from '../redis/redis.service';
 import { WebSocket } from 'ws';
 import { FileStorageService } from '../file-storage.service';
-import * as jwt from 'jsonwebtoken';
+import { createHealthProbeSignature } from './health-probe-signature';
 
 export type HealthStatus = 'ok' | 'warn' | 'down';
 export type Check = { status: HealthStatus; latency_ms?: number; message?: string };
@@ -16,27 +16,16 @@ export function statusFromChecks(checks: Record<string, Check>): HealthStatus {
   return 'ok';
 }
 
-export function createHealthProbeToken(secret: string): string {
-  if (!secret) throw new Error('JWT_SECRET is not configured');
-
-  return jwt.sign(
-    {
-      sub: 'health-probe',
-      tenantId: 'public',
-      role: 'superadmin',
-      authStage: 'FULL',
-    },
-    secret,
-    { algorithm: 'HS256', expiresIn: 45 },
-  );
-}
-
-export async function wsProbe(url: string, timeoutMs = 800): Promise<{ ok: boolean; latency_ms: number; message?: string }> {
+export async function wsProbe(
+  url: string,
+  timeoutMs = 800,
+  headers: Record<string, string> = {},
+): Promise<{ ok: boolean; latency_ms: number; message?: string }> {
   const t0 = Date.now();
   const nonce = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
   return await new Promise((resolve) => {
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(url, { headers });
     let done = false;
 
     const finish = (ok: boolean, message?: string) => {
@@ -168,9 +157,12 @@ export class HealthService {
 
         const port = Number(process.env.PORT ?? 4000);
         const wsPath = process.env.WS_PATH ?? '/ws';
-        const token = createHealthProbeToken(jwtSecret);
-        const url = `ws://127.0.0.1:${port}${wsPath}?token=${encodeURIComponent(token)}`;
-        const res = await wsProbe(url, 800);
+        const token = createHealthProbeSignature(jwtSecret);
+        const url = `ws://127.0.0.1:${port}${wsPath}`;
+        const res = await wsProbe(url, 800, {
+          Origin: process.env.FRONTEND_URL || 'http://localhost:3100',
+          'X-Doflow-Health-Probe': token,
+        });
         checks.ws = wsCheckFromProbe(res);
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'ws error';

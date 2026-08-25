@@ -2,7 +2,6 @@
 
 import { apiFetch, getApiBaseUrl } from "@/lib/api";
 import { getTenantHeader } from "@/lib/tenant-fetch";
-import { getAuthToken } from "@/lib/auth-storage";
 
 export type DocumentFolder = {
   id: string;
@@ -143,8 +142,11 @@ export function deleteDocumentFolder(id: string) {
   return apiFetch<{ success: boolean }>(`/tenant/documents/folders/${id}`, { method: "DELETE" });
 }
 
-export function listDocuments(params?: DocumentFilters) {
-  return apiFetch<ListResponse<TenantDocument>>(`/tenant/documents${queryString(params)}`);
+export function listDocuments(params?: DocumentFilters, signal?: AbortSignal) {
+  return apiFetch<ListResponse<TenantDocument>>(
+    `/tenant/documents${queryString(params)}`,
+    { signal },
+  );
 }
 
 export function listDocumentsForEntity(entityType: string, entityId: string, params?: DocumentFilters) {
@@ -206,15 +208,13 @@ export function uploadDocumentVersion(id: string, formData: FormData) {
 export async function downloadDocumentBlob(document: Pick<TenantDocument, "id" | "original_filename">) {
   const headers: Record<string, string> = {
     ...getTenantHeader(),
+    "X-Doflow-Web": "1",
   };
-  if (typeof window !== "undefined") {
-    const token = getAuthToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
-  }
 
   const res = await fetch(`${getApiBaseUrl()}/tenant/documents/${document.id}/download`, {
     headers,
     cache: "no-store",
+    credentials: "include",
   });
 
   if (!res.ok) {

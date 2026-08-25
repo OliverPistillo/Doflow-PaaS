@@ -1,4 +1,5 @@
 import { DataSource, QueryRunner } from 'typeorm';
+import { provisionSchemaOnce } from '../common/schema-provisioning-once';
 import { safeSchema } from '../common/schema.utils';
 import { isDoflowTenant } from './tenant-context';
 import { ensureTenantProjectsTables } from './tenant-projects-schema';
@@ -9,7 +10,7 @@ async function addColumns(ds: DataSource, schema: string, table: string, columns
   }
 }
 
-export async function ensureTenantFinanceTables(ds: DataSource, schema: string) {
+async function provisionTenantFinanceTables(ds: DataSource, schema: string) {
   const s = safeSchema(schema, 'ensureTenantFinanceTables');
 
   await ensureTenantProjectsTables(ds, s);
@@ -24,6 +25,7 @@ export async function ensureTenantFinanceTables(ds: DataSource, schema: string) 
       briefing_id UUID REFERENCES "${s}".briefings(id) ON DELETE SET NULL,
       quote_id UUID REFERENCES "${s}".quotes(id) ON DELETE SET NULL,
       project_id UUID REFERENCES "${s}".projects(id) ON DELETE SET NULL,
+      order_id UUID,
       invoice_number TEXT,
       title TEXT NOT NULL,
       type TEXT NOT NULL DEFAULT 'standard',
@@ -57,6 +59,7 @@ export async function ensureTenantFinanceTables(ds: DataSource, schema: string) 
     'briefing_id UUID',
     'quote_id UUID',
     'project_id UUID',
+    'order_id UUID',
     'invoice_number TEXT',
     'title TEXT',
     "type TEXT NOT NULL DEFAULT 'standard'",
@@ -123,9 +126,14 @@ export async function ensureTenantFinanceTables(ds: DataSource, schema: string) 
       invoice_id UUID REFERENCES "${s}".invoices(id) ON DELETE SET NULL,
       company_id UUID REFERENCES "${s}".companies(id) ON DELETE SET NULL,
       project_id UUID REFERENCES "${s}".projects(id) ON DELETE SET NULL,
+      order_id UUID,
       amount NUMERIC NOT NULL,
       currency TEXT NOT NULL DEFAULT 'EUR',
       status TEXT NOT NULL DEFAULT 'recorded',
+      payment_type TEXT NOT NULL DEFAULT 'payment',
+      original_payment_id UUID,
+      idempotency_key TEXT,
+      refund_reason TEXT,
       payment_date DATE,
       method TEXT,
       reference TEXT,
@@ -141,9 +149,14 @@ export async function ensureTenantFinanceTables(ds: DataSource, schema: string) 
     'invoice_id UUID',
     'company_id UUID',
     'project_id UUID',
+    'order_id UUID',
     'amount NUMERIC',
     "currency TEXT NOT NULL DEFAULT 'EUR'",
     "status TEXT NOT NULL DEFAULT 'recorded'",
+    "payment_type TEXT NOT NULL DEFAULT 'payment'",
+    'original_payment_id UUID',
+    'idempotency_key TEXT',
+    'refund_reason TEXT',
     'payment_date DATE',
     'method TEXT',
     'reference TEXT',
@@ -337,6 +350,16 @@ export async function ensureTenantFinanceTables(ds: DataSource, schema: string) 
   await createFinanceIndexes(ds, s);
 }
 
+export function ensureTenantFinanceTables(
+  ds: DataSource,
+  schema: string,
+): Promise<void> {
+  const safe = safeSchema(schema, 'ensureTenantFinanceTables');
+  return provisionSchemaOnce(ds, `tenant-finance:${safe}`, () =>
+    provisionTenantFinanceTables(ds, safe),
+  );
+}
+
 export async function ensureProjectFinancialStatusFromQuote(
   runner: QueryRunner,
   schema: string,
@@ -386,9 +409,12 @@ async function backfillFinanceDefaults(ds: DataSource, schema: string) {
   await ds.query(`ALTER TABLE "${schema}".invoices ALTER COLUMN currency SET NOT NULL`);
 
   await ds.query(`UPDATE "${schema}".payments SET status = 'recorded' WHERE status IS NULL OR status = ''`);
+  await ds.query(`UPDATE "${schema}".payments SET payment_type = 'payment' WHERE payment_type IS NULL OR payment_type = ''`);
   await ds.query(`UPDATE "${schema}".payments SET currency = 'EUR' WHERE currency IS NULL OR currency = ''`);
   await ds.query(`ALTER TABLE "${schema}".payments ALTER COLUMN status SET DEFAULT 'recorded'`);
   await ds.query(`ALTER TABLE "${schema}".payments ALTER COLUMN status SET NOT NULL`);
+  await ds.query(`ALTER TABLE "${schema}".payments ALTER COLUMN payment_type SET DEFAULT 'payment'`);
+  await ds.query(`ALTER TABLE "${schema}".payments ALTER COLUMN payment_type SET NOT NULL`);
   await ds.query(`ALTER TABLE "${schema}".payments ALTER COLUMN currency SET DEFAULT 'EUR'`);
   await ds.query(`ALTER TABLE "${schema}".payments ALTER COLUMN currency SET NOT NULL`);
 
@@ -415,6 +441,9 @@ async function createFinanceIndexes(ds: DataSource, s: string) {
   if (isDoflowTenant(s)) {
     await ds.query(`ALTER TABLE "${s}".payments ADD COLUMN IF NOT EXISTS idempotency_key TEXT`);
     await ds.query(`CREATE UNIQUE INDEX IF NOT EXISTS "uq_${s}_payments_idempotency" ON "${s}".payments(idempotency_key) WHERE idempotency_key IS NOT NULL AND deleted_at IS NULL`);
+    await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_payments_original" ON "${s}".payments(original_payment_id) WHERE original_payment_id IS NOT NULL AND deleted_at IS NULL`);
+    await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_payments_order" ON "${s}".payments(order_id) WHERE order_id IS NOT NULL AND deleted_at IS NULL`);
+    await ds.query(`CREATE UNIQUE INDEX IF NOT EXISTS "uq_${s}_payments_order_reference" ON "${s}".payments(order_id, lower(reference)) WHERE order_id IS NOT NULL AND reference IS NOT NULL AND deleted_at IS NULL`);
   }
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_financial_deadlines_due" ON "${s}".financial_deadlines(due_date) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_financial_deadlines_status" ON "${s}".financial_deadlines(status) WHERE deleted_at IS NULL`);

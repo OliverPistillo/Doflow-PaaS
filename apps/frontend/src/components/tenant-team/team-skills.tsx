@@ -35,7 +35,17 @@ export function TeamSkillsPage() {
       setLoading(false);
     }
   };
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const startEdit = (skill?: TeamSkill) => {
     setEditing(skill || null);

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Play, RefreshCw, Search, Workflow } from "lucide-react";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import { AutomationNotificationsPanel, AutomationProblemsPanel } from "./automat
 const PAGE_SIZE = 10;
 
 export function AutomationMonitoringWorkspace() {
+  const router = useRouter();
   const { canView, canUpdate } = useTenantAccess();
   const [summary, setSummary] = useState<AutomationSummary | null>(null); const [runs, setRuns] = useState<AutomationRun[]>([]); const [rules, setRules] = useState<AutomationRule[]>([]); const [notifications, setNotifications] = useState<TenantNotification[]>([]);
   const [tab, setTab] = useState<"all" | "success" | "failed">("all"); const [search, setSearch] = useState(""); const [days, setDays] = useState(1); const [importantOnly, setImportantOnly] = useState(false); const [page, setPage] = useState(1);
@@ -28,7 +30,18 @@ export function AutomationMonitoringWorkspace() {
       setSummary(summaryData); setRuns(runData.items); setRules(ruleData.items); setNotifications(notificationData.items || []); setTruncated(runData.truncated);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Aggiornamento del monitoraggio non riuscito."); } finally { setLoading(false); setRefreshing(false); }
   };
-  useEffect(() => { void load(); }, [canView]);
+  const loadEffect = useEffectEvent(load);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [canView]);
 
   const periodRuns = useMemo(() => runs.filter((run) => inPeriod(run.started_at, days)), [runs, days]);
   const successCount = periodRuns.filter((run) => ["success", "partial_success"].includes(run.status)).length; const errorCount = periodRuns.filter((run) => run.status === "failed").length;
@@ -38,7 +51,7 @@ export function AutomationMonitoringWorkspace() {
   }), [periodRuns, tab, search]);
   const pages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE)); const pageRows = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const todayRows = runs.filter((run) => isToday(run.started_at)); const durations = todayRows.map((run) => Number(run.duration_ms)).filter((value) => Number.isFinite(value) && value > 0); const averageDuration = !truncated && durations.length ? durations.reduce((sum, value) => sum + value, 0) / durations.length : null;
-  const retry = async (run: AutomationRun) => { if (!run.rule_id || !canUpdate("automations")) return; setRefreshing(true); setError(null); try { const result = await automationsApi.runRule(run.rule_id); const runId = (result as AutomationRun)?.id; if (runId) window.location.assign(`/automations/runs/${runId}`); else await load(true); } catch (reason) { setError(reason instanceof Error ? reason.message : "Nuova esecuzione non riuscita."); } finally { setRefreshing(false); } };
+  const retry = async (run: AutomationRun) => { if (!run.rule_id || !canUpdate("automations")) return; setRefreshing(true); setError(null); try { const result = await automationsApi.runRule(run.rule_id); const runId = (result as AutomationRun)?.id; if (runId) router.push(`/automations/runs/${runId}`); else await load(true); } catch (reason) { setError(reason instanceof Error ? reason.message : "Nuova esecuzione non riuscita."); } finally { setRefreshing(false); } };
   const todayTotal = (summary?.successfulRunsToday || 0) + (summary?.failedRunsToday || 0);
 
   return <main className="space-y-5 px-4 py-6 sm:px-6 lg:px-8">

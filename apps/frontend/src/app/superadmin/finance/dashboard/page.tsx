@@ -187,7 +187,8 @@ export default function FinanceDashboardPage() {
   };
 
   useEffect(() => {
-    fetchData();
+    const timer = window.setTimeout(() => void fetchData(), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   // --- LOGICA DRILL DOWN ---
@@ -378,7 +379,7 @@ export default function FinanceDashboardPage() {
                       />
                       <Tooltip 
                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                        formatter={(value: number) => [formatCurrency(value), "Ricavi"]}
+                        formatter={(value) => [formatCurrency(Number(value ?? 0)), "Ricavi"]}
                       />
                       <Line 
                         type="monotone" 
@@ -403,7 +404,7 @@ export default function FinanceDashboardPage() {
         <CardHeader className="border-b border-border bg-muted/30">
           <div className="flex justify-between items-center">
              <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
-               Top Clienti per Volume d'Affari
+               Top Clienti per Volume d&apos;Affari
              </CardTitle>
              <button className="text-[10px] font-black text-blue-600 hover:underline">VEDI TUTTI</button>
           </div>
@@ -425,7 +426,7 @@ export default function FinanceDashboardPage() {
                       <Tooltip 
                         cursor={{fill: '#f8fafc'}}
                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                        formatter={(value: number) => [formatCurrency(value), "Fatturato"]}
+                        formatter={(value) => [formatCurrency(Number(value ?? 0)), "Fatturato"]}
                       />
                       <Bar 
                         dataKey="value" 

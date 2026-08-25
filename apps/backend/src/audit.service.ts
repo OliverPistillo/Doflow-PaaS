@@ -34,10 +34,13 @@ export class AuditService {
       action: string;
       targetEmail?: string;
       metadata?: AuditMetadata;
+      tenantSchema?: string;
     },
   ) {
     const conn = this.getConn(req);
-    const schema = this.getTenantSchema(req);
+    const schema = params.tenantSchema
+      ? safeSchema(params.tenantSchema, 'AuditService.log')
+      : this.getTenantSchema(req);
 
     const authUser = (req as any).authUser as
       | { email?: string; role?: string }

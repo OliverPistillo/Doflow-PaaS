@@ -1,10 +1,11 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DataSource } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
 import { ensureTenantNotificationsTables, seedTenantNotificationRules } from './tenant-notifications-schema';
 import { isDoflowTenant } from './tenant-context';
 import { PROJECT_ACTIVE_STAGE_ALIASES, PROJECT_PAUSED_STAGE_ALIASES } from './project-stage-model';
+import { NotificationsService } from '../realtime/notifications.service';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -56,7 +57,10 @@ type RuleRunResult = { ruleKey: string; status: 'success' | 'failed' | 'skipped'
 export class TenantNotificationsService {
   private readonly logger = new Logger(TenantNotificationsService.name);
 
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    @Optional() private readonly realtime?: NotificationsService,
+  ) {}
 
   private getUser(req: RequestLike): AuthUser {
     const user = req.user || req.authUser;
@@ -123,6 +127,10 @@ export class TenantNotificationsService {
     return value.map((v) => String(v).trim()).filter(Boolean);
   }
 
+  private returnedRows(result: any): any[] {
+    return Array.isArray(result?.[0]) ? result[0] : result;
+  }
+
   private async ensureSchema(schema: string) {
     await ensureTenantNotificationsTables(this.dataSource, schema);
   }
@@ -144,7 +152,6 @@ export class TenantNotificationsService {
   }
 
   private visibilityWhere(user: AuthUser, startParam: number) {
-    if (this.isAdmin(user.role)) return { sql: 'TRUE', params: [] as unknown[] };
     if (!this.canRead(user.role)) return { sql: 'FALSE', params: [] as unknown[] };
 
     const userId = this.userIdOrNull(user.id);
@@ -156,13 +163,27 @@ export class TenantNotificationsService {
       parts.push(`recipient_user_id = $${startParam}`);
       params.push(userId);
     }
-    if (this.isManagerOrAbove(user.role)) {
+    if (user.role) {
       parts.push(`LOWER(COALESCE(recipient_role, '')) = LOWER($${roleParam})`);
       params.push(user.role);
     }
 
     const sql = parts.length > 0 ? `(${parts.join(' OR ')})` : 'FALSE';
+    if (this.isAdmin(user.role)) return { sql, params };
     return { sql: `${sql} AND type <> ALL($${startParam + params.length}::text[])`, params: [...params, Array.from(FINANCE_TYPES)] };
+  }
+
+  private async publishState(req: RequestLike, event: string, notificationId?: string) {
+    if (!this.realtime) return;
+    const user = this.getUser(req);
+    if (!this.userIdOrNull(user.id)) return;
+    const summary = await this.summary(req);
+    await this.realtime.notifyUser(user.id, {
+      type: event,
+      eventId: `${event}:${notificationId || 'all'}:${Date.now()}`,
+      notificationId: notificationId || null,
+      unreadNotifications: summary.unreadNotifications,
+    });
   }
 
   async createNotification(schema: string, input: NotificationInput): Promise<{ created: boolean; notification?: any }> {
@@ -337,17 +358,18 @@ export class TenantNotificationsService {
     const schema = this.getSchema(req);
     const user = this.getUser(req);
     await this.ensureSchema(schema);
-    const visibility = this.visibilityWhere(user, 2);
+    const visibility = this.visibilityWhere(user, 3);
     const readAt = status === 'read' ? 'now()' : 'NULL';
     const archivedAt = status === 'archived' ? 'now()' : 'NULL';
-    const rows = await this.dataSource.query(
+    const rows = this.returnedRows(await this.dataSource.query(
       `UPDATE "${schema}".notifications
        SET status = $1, read_at = ${readAt}, archived_at = ${archivedAt}, updated_at = now()
        WHERE id = $2 AND deleted_at IS NULL AND ${visibility.sql}
        RETURNING *`,
       [status, id, ...visibility.params],
-    );
+    ));
     if (!rows[0]) throw new NotFoundException('Notifica non trovata');
+    await this.publishState(req, `notification.${status}`, id);
     return rows[0];
   }
 
@@ -356,13 +378,14 @@ export class TenantNotificationsService {
     const user = this.getUser(req);
     await this.ensureSchema(schema);
     const visibility = this.visibilityWhere(user, 1);
-    const rows = await this.dataSource.query(
+    const rows = this.returnedRows(await this.dataSource.query(
       `UPDATE "${schema}".notifications
        SET status = 'read', read_at = COALESCE(read_at, now()), updated_at = now()
        WHERE deleted_at IS NULL AND status = 'unread' AND ${visibility.sql}
        RETURNING id`,
       visibility.params,
-    );
+    ));
+    await this.publishState(req, 'notification.mark_all_read');
     return { updated: rows.length };
   }
 
@@ -372,13 +395,14 @@ export class TenantNotificationsService {
     const user = this.getUser(req);
     await this.ensureSchema(schema);
     const visibility = this.visibilityWhere(user, 2);
-    const rows = await this.dataSource.query(
+    const rows = this.returnedRows(await this.dataSource.query(
       `UPDATE "${schema}".notifications SET deleted_at = now(), updated_at = now()
        WHERE id = $1 AND deleted_at IS NULL AND ${visibility.sql}
        RETURNING id`,
       [id, ...visibility.params],
-    );
+    ));
     if (!rows[0]) throw new NotFoundException('Notifica non trovata');
+    await this.publishState(req, 'notification.deleted', id);
     return { success: true };
   }
 
@@ -422,6 +446,7 @@ export class TenantNotificationsService {
        RETURNING *`,
       [userId, mutedTypes, mutedPriorities, dailyDigestEnabled, digestTime],
     );
+    await this.publishState(req, 'notification.preferences_updated');
     return rows[0];
   }
 

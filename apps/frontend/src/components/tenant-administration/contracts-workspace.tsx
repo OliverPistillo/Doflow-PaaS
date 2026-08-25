@@ -44,8 +44,12 @@ export function ContractsWorkspace() {
   useEffect(() => {
     let active = true;
     if (!canView("contracts")) {
-      setLoading(false);
-      return;
+      queueMicrotask(() => {
+        if (active) setLoading(false);
+      });
+      return () => {
+        active = false;
+      };
     }
     const timer = window.setTimeout(async () => {
       setLoading(true);

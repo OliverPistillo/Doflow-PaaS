@@ -12,8 +12,11 @@ export function CredentialAudit({ credentialId }: { credentialId: string }) {
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    credentialsApi.audit(credentialId).then((data) => { if (active) setRows(data.items || []); }).catch((err) => { if (active) setError(normalizeError(err)); }).finally(() => { if (active) setLoading(false); });
+    queueMicrotask(() => {
+      if (!active) return;
+      setLoading(true);
+      credentialsApi.audit(credentialId).then((data) => { if (active) setRows(data.items || []); }).catch((err) => { if (active) setError(normalizeError(err)); }).finally(() => { if (active) setLoading(false); });
+    });
     return () => { active = false; };
   }, [credentialId]);
   if (loading) return <CredentialsLoading />;
@@ -33,4 +36,3 @@ export function CredentialAudit({ credentialId }: { credentialId: string }) {
     </div>
   );
 }
-

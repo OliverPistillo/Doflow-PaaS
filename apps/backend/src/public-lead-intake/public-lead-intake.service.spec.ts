@@ -332,6 +332,10 @@ describe('PublicLeadIntakeService CRM transaction', () => {
       expect.stringContaining('INSERT INTO "doflow".leads'),
       expect.stringContaining('INSERT INTO "doflow".opportunities'),
       expect.stringContaining('INSERT INTO "doflow".commercial_activities'),
+      expect.stringContaining('INSERT INTO "doflow".commercial_attributions'),
+      expect.stringContaining('INSERT INTO "doflow".commercial_history'),
+      expect.stringContaining('INSERT INTO "doflow".audit_log'),
+      expect.stringContaining('INSERT INTO "doflow".commercial_outbox'),
       expect.stringContaining('INSERT INTO "doflow".lead_intake_submissions'),
     ]));
     const opportunityCall = runner.query.mock.calls.find(([sql]) => String(sql).includes('INSERT INTO "doflow".opportunities'));

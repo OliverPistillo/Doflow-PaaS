@@ -69,7 +69,15 @@ export function NotificationPreferencesPage() {
   }, []);
 
   useEffect(() => {
-    void load();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [load]);
 
   const togglePriority = (priority: string) => {

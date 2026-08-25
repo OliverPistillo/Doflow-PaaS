@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState,useEffectEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Download, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,6 +12,7 @@ import { TEMPLATE_STATUS_LABELS, VISIBILITY_LABELS, downloadJson, formatDateTime
 import { Empty, FiltersBar, Header, Loading, SelectFilter, StatusBadge, type Query, itemsOf, normalizeError, useKnowledgeOptions, useKnowledgeRole } from "./knowledge-shared";
 
 export function KnowledgeTemplatesPage() {
+  const router = useRouter();
   const options = useKnowledgeOptions();
   const { canViewFinance } = useKnowledgeRole();
   const { toast } = useToast();
@@ -25,7 +27,18 @@ export function KnowledgeTemplatesPage() {
     setLoading(false);
   };
 
-  useEffect(() => { void load(); }, [filters]);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [filters]);
 
   const action = async (type: "activate" | "archive" | "duplicate" | "export" | "delete", item: OperationalTemplate) => {
     try {
@@ -33,7 +46,7 @@ export function KnowledgeTemplatesPage() {
       if (type === "archive") await knowledgeApi.archiveOperationalTemplate(item.id);
       if (type === "duplicate") {
         const copy = await knowledgeApi.duplicateOperationalTemplate(item.id);
-        location.href = `/knowledge/templates/${copy.id}`;
+        router.push(`/knowledge/templates/${copy.id}`);
         return;
       }
       if (type === "export") downloadJson(`knowledge-template-${item.id}.json`, await knowledgeApi.exportOperationalTemplate(item.id));

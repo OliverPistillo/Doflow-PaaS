@@ -63,11 +63,15 @@ export class NotificationsService {
    */
   async notifyUser(userId: string, message: any) {
     try {
-      const channel = `user:${userId}`;
-      const payload = JSON.stringify(message);
-      await this.publisherClient.publish(channel, payload);
+      await this.notifyUserOrThrow(userId, message);
     } catch (e) {
       this.logger.error(`Failed to notify user ${userId}`, e);
     }
+  }
+
+  async notifyUserOrThrow(userId: string, message: any) {
+    const channel = `user:${userId}`;
+    const payload = JSON.stringify(message);
+    await this.publisherClient.publish(channel, payload);
   }
 }

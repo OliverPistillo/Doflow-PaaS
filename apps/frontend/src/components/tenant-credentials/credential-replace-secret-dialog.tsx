@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -21,9 +21,6 @@ export function CredentialReplaceSecretDialog({ credential, open, onOpenChange, 
     setReason("");
     setError(null);
   };
-  useEffect(() => { if (!open) clear(); }, [open]);
-  useEffect(() => () => clear(), []);
-
   const submit = async () => {
     if (!credential) return;
     const payload = cleanSecretPayload(secret);
@@ -76,4 +73,3 @@ export function CredentialReplaceSecretDialog({ credential, open, onOpenChange, 
     </Dialog>
   );
 }
-

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Edit2, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,7 +41,7 @@ export function TeamAvailabilityPage({ memberId }: { memberId?: string }) {
     notes: "",
   });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -62,8 +62,18 @@ export function TeamAvailabilityPage({ memberId }: { memberId?: string }) {
     } finally {
       setLoading(false);
     }
-  };
-  useEffect(() => { void load(); }, [memberId, memberFilter, typeFilter, statusFilter, dateFrom, dateTo]);
+  }, [dateFrom, dateTo, memberFilter, memberId, statusFilter, typeFilter]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const save = async () => {
     try {

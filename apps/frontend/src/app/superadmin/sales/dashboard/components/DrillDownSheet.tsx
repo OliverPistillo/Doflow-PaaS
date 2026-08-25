@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -38,7 +38,7 @@ export function DrillDownSheet({ cardType, onClose, globalFilters }: DrillDownSh
     }
   };
 
-  const fetchDeals = async () => {
+  const fetchDeals = useCallback(async () => {
     if (!cardType) return;
     setLoading(true);
     try {
@@ -86,15 +86,22 @@ export function DrillDownSheet({ cardType, onClose, globalFilters }: DrillDownSh
     } finally {
       setLoading(false);
     }
-  };
+  }, [cardType, globalFilters]);
 
   // Trigger fetch quando cambia il tipo di card o i filtri globali
   useEffect(() => {
-    if (cardType) {
-      setView("LIST");
-      fetchDeals();
-    }
-  }, [cardType, globalFilters]);
+    if (!cardType) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setView("LIST");
+        void fetchDeals();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [cardType, fetchDeals]);
 
   const isOpen = !!cardType;
 

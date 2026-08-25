@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CheckCircle2,
   ChevronLeft,
@@ -107,10 +107,6 @@ export function QuotesTable({
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const visible = filtered.slice((page - 1) * pageSize, page * pageSize);
 
-  useEffect(() => {
-    setPage(1);
-  }, [search, status]);
-
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white">
       <div className="flex flex-col gap-3 border-b border-slate-200 px-4 pt-3 md:flex-row md:items-end md:justify-between">
@@ -119,7 +115,7 @@ export function QuotesTable({
             <button
               key={tab.value}
               type="button"
-              onClick={() => onStatus(tab.value)}
+              onClick={() => { setPage(1); onStatus(tab.value); }}
               className={cn(
                 "relative shrink-0 px-3 py-3 text-sm font-medium text-slate-600",
                 status === tab.value && "text-indigo-600 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-indigo-600",
@@ -132,7 +128,7 @@ export function QuotesTable({
         </div>
         <div className="relative mb-3 w-full md:w-72">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input value={search} onChange={(event) => onSearch(event.target.value)} className="h-10 rounded-xl border-slate-200 pl-10" placeholder="Cerca preventivo o cliente..." />
+          <Input value={search} onChange={(event) => { setPage(1); onSearch(event.target.value); }} className="h-10 rounded-xl border-slate-200 pl-10" placeholder="Cerca preventivo o cliente..." />
         </div>
       </div>
 

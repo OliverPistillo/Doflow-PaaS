@@ -1,7 +1,5 @@
 // apps/frontend/src/lib/tenant-fetch.ts
 
-import { getDoFlowUser } from "@/lib/jwt";
-
 /**
  * Reserved path segments: non sono tenant slug.
  */
@@ -90,10 +88,6 @@ function getTenantIdForRequestServer(): string | null {
 function getTenantIdForRequestClient(): string | null {
   if (typeof window === 'undefined') return null;
 
-  const user = getDoFlowUser();
-  if (user?.tenantSlug && user.tenantSlug !== "public") return user.tenantSlug;
-  if (user?.tenantId && user.tenantId !== "public") return user.tenantId;
-
   const hostTenant = getTenantFromHostString(window.location.host);
   const pathname = window.location.pathname;
 
@@ -134,9 +128,15 @@ export function getTenantHeader(): Record<string, string> {
  */
 export const tenantFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const tenantHeaders = getTenantHeader();
+  const method = String(init?.method || "GET").toUpperCase();
+  const csrf = typeof document === "undefined"
+    ? null
+    : document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith("doflow_csrf="))?.slice("doflow_csrf=".length);
 
   const mergedHeaders = {
     "Content-Type": "application/json",
+    ...(typeof window !== "undefined" ? { "X-Doflow-Web": "1" } : {}),
+    ...(!["GET", "HEAD", "OPTIONS"].includes(method) && csrf ? { "X-CSRF-Token": decodeURIComponent(csrf) } : {}),
     ...tenantHeaders,
     ...init?.headers,
   };
@@ -144,5 +144,6 @@ export const tenantFetch = async (input: RequestInfo | URL, init?: RequestInit) 
   return fetch(input, {
     ...init,
     headers: mergedHeaders,
+    credentials: "include",
   });
 };

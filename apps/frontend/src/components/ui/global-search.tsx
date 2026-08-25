@@ -19,9 +19,8 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import {
-  LayoutDashboard, Users, FileText, ShoppingCart, Building2,
-  Settings, BarChart3, CalendarDays, Receipt, ListTodo,
-  Package, Wallet, Shield, Activity, Search,
+  LayoutDashboard,Users,FileText,Building2,
+  Settings,BarChart3,CalendarDays,Receipt,ListTodo,Wallet,Shield,Activity,Search
 } from "lucide-react";
 import { usePlatform } from "@/hooks/use-platform";
 import { useOptionalTenantAccess } from "@/contexts/TenantAccessContext";

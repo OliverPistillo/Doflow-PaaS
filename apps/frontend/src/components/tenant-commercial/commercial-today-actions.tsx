@@ -1,7 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { CalendarClock, Mail, MessageCircle, Phone, type LucideIcon } from "lucide-react";
 import type { CommercialActivity } from "@/lib/tenant-commercial-api";
 import { cn } from "@/lib/utils";
+import { useCurrentDate } from "@/hooks/use-current-date";
 import { commercialDate } from "./commercial-utils";
 import { CommercialEmptyState, CommercialSectionCard } from "./commercial-ui";
 
@@ -13,6 +16,7 @@ const actionIcons: Record<string, LucideIcon> = {
 };
 
 export function CommercialTodayActions({ items }: { items: CommercialActivity[] }) {
+  const currentDate = useCurrentDate();
   return (
     <CommercialSectionCard title="Azioni di oggi">
       {items.length === 0 ? (
@@ -21,7 +25,7 @@ export function CommercialTodayActions({ items }: { items: CommercialActivity[] 
         <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200/80">
           {items.slice(0, 5).map((item) => {
             const Icon = actionIcons[item.type] || CalendarClock;
-            const overdue = item.due_at ? new Date(item.due_at).getTime() < Date.now() : false;
+            const overdue = item.due_at ? new Date(item.due_at).getTime() < currentDate.getTime() : false;
             return (
               <div key={item.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-3">
                 <Icon className="h-4 w-4 text-slate-600" />

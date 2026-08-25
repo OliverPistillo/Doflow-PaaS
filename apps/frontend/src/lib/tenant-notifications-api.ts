@@ -22,6 +22,9 @@ export type TenantNotification = {
   read_at?: string | null;
   archived_at?: string | null;
   created_by?: string | null;
+  comment_id?: string | null;
+  operation_id?: string | null;
+  correlation_id?: string | null;
   created_at: string;
   updated_at?: string | null;
   deleted_at?: string | null;

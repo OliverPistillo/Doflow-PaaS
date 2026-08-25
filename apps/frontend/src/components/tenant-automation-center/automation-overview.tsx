@@ -14,10 +14,14 @@ export function AutomationOverview() {
   const [days, setDays] = useState(7);
   const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null); const [truncated, setTruncated] = useState(false);
   useEffect(() => {
-    let active = true; if (!canView("automations")) { setLoading(false); return; }
-    Promise.all([automationsApi.summary(), loadRules(), loadRuns(), automationsApi.activity({ limit: 20 })]).then(([summaryData, ruleData, runData, activityData]) => {
-      if (!active) return; setSummary(summaryData); setRules(ruleData.items); setRuns(runData.items); setActivities(activityData.items || []); setTruncated(runData.truncated || ruleData.truncated);
-    }).catch((reason) => active && setError(reason instanceof Error ? reason.message : "Caricamento delle automazioni non riuscito.")).finally(() => active && setLoading(false));
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      if (!canView("automations")) { setLoading(false); return; }
+      Promise.all([automationsApi.summary(), loadRules(), loadRuns(), automationsApi.activity({ limit: 20 })]).then(([summaryData, ruleData, runData, activityData]) => {
+        if (!active) return; setSummary(summaryData); setRules(ruleData.items); setRuns(runData.items); setActivities(activityData.items || []); setTruncated(runData.truncated || ruleData.truncated);
+      }).catch((reason) => active && setError(reason instanceof Error ? reason.message : "Caricamento delle automazioni non riuscito.")).finally(() => active && setLoading(false));
+    });
     return () => { active = false; };
   }, [canView]);
   const todayTerminal = (summary?.successfulRunsToday || 0) + (summary?.failedRunsToday || 0);

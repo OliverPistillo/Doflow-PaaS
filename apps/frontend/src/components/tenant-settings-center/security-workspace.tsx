@@ -25,20 +25,23 @@ export function SecurityWorkspace() {
 
   useEffect(() => {
     let active = true;
-    if (!canView("settings")) { setLoading(false); return; }
-    const credentialRequests = credentialsAllowed
-      ? Promise.all([credentialsApi.dashboard(), credentialsApi.list({ limit: 5 }), credentialsApi.expiring({ limit: 5 }), credentialsApi.rotationDue({ limit: 5 })])
-      : Promise.resolve([null, { items: [] as CredentialItem[] }, { items: [] as CredentialItem[] }, { items: [] as CredentialItem[] }] as const);
-    const auditRequest = auditAllowed ? settingsApi.audit() : Promise.resolve({ entries: [] as TenantAuditEntry[] });
-    Promise.all([credentialRequests, auditRequest]).then(([[dashboardData, credentialData, expiringData, rotationData], auditData]) => {
+    queueMicrotask(() => {
       if (!active) return;
-      setDashboard(dashboardData);
-      setCredentials(credentialData.items || []);
-      setAttentionCredentials(Array.from(new Map([...(expiringData.items || []), ...(rotationData.items || [])].map((item) => [item.id, item])).values()).slice(0, 5));
-      setAudit(auditData.entries || []);
-    }).catch((reason) => {
-      if (active) setError(reason instanceof Error ? reason.message : "Impossibile caricare i dati di sicurezza.");
-    }).finally(() => active && setLoading(false));
+      if (!canView("settings")) { setLoading(false); return; }
+      const credentialRequests = credentialsAllowed
+        ? Promise.all([credentialsApi.dashboard(), credentialsApi.list({ limit: 5 }), credentialsApi.expiring({ limit: 5 }), credentialsApi.rotationDue({ limit: 5 })])
+        : Promise.resolve([null, { items: [] as CredentialItem[] }, { items: [] as CredentialItem[] }, { items: [] as CredentialItem[] }] as const);
+      const auditRequest = auditAllowed ? settingsApi.audit() : Promise.resolve({ entries: [] as TenantAuditEntry[] });
+      Promise.all([credentialRequests, auditRequest]).then(([[dashboardData, credentialData, expiringData, rotationData], auditData]) => {
+        if (!active) return;
+        setDashboard(dashboardData);
+        setCredentials(credentialData.items || []);
+        setAttentionCredentials(Array.from(new Map([...(expiringData.items || []), ...(rotationData.items || [])].map((item) => [item.id, item])).values()).slice(0, 5));
+        setAudit(auditData.entries || []);
+      }).catch((reason) => {
+        if (active) setError(reason instanceof Error ? reason.message : "Impossibile caricare i dati di sicurezza.");
+      }).finally(() => active && setLoading(false));
+    });
     return () => { active = false; };
   }, [auditAllowed, canView, credentialsAllowed]);
 

@@ -31,7 +31,17 @@ export function WorkloadWorkspace() {
       setMembers(memberData.items || []); setWorkload(workloadData.items || []); setEntries(timeData.items || []); setAvailability(availabilityData.items || []);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Caricamento dei carichi non riuscito."); } finally { setLoading(false); }
   }, [canView, from, to]);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const projectOptions = useMemo(() => canView("projects") ? Array.from(new Map(entries.filter((entry) => entry.project_id).map((entry) => [entry.project_id!, entry.project_name || "Progetto"])).entries()) : [], [entries, canView]);
   const filteredMembers = useMemo(() => members.filter((member) => memberFilter === "all" || member.id === memberFilter), [members, memberFilter]);

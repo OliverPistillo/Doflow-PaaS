@@ -6,7 +6,7 @@
    IMPORTS
 ====================================================== */
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect,useMemo,useState,useEffectEvent } from "react";
 import {
   Users,
   Search,
@@ -40,7 +40,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs,TabsList,TabsTrigger } from "@/components/ui/tabs";
 import {
   LineChart,
   Line,
@@ -150,7 +150,7 @@ function RoleBadge({ role }: { role: string }) {
 function fmtDate(v: string) {
   try {
     return new Date(v).toLocaleString();
-  } catch (e: unknown) {
+  } catch {
     return v;
   }
 }
@@ -257,9 +257,17 @@ export default function SuperadminUsersPage() {
     }
   };
 
-  useEffect(() => {
-    loadTenants();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const loadTenantsEffect = useEffectEvent(loadTenants);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        loadTenantsEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /* ======================================================
@@ -346,10 +354,19 @@ export default function SuperadminUsersPage() {
     }
   };
 
-  useEffect(() => {
-    loadUsers();
-    loadKpi();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const loadKpiEffect = useEffectEvent(loadKpi);
+  const loadUsersEffect = useEffectEvent(loadUsers);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        loadUsersEffect();
+        loadKpiEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [page, activeTab, targetTenantId, role, isActive]);
 
   /* ======================================================
@@ -424,7 +441,7 @@ export default function SuperadminUsersPage() {
         title: "Aggiornato",
         description: `MFA ${!currentVal ? "abilitato" : "disabilitato"} per ${u.email}`,
       });
-    } catch (e: unknown) {
+    } catch {
       // toast gestito in patchUser
     }
   };
@@ -737,30 +754,12 @@ export default function SuperadminUsersPage() {
 
               const activeRate = total > 0 ? Math.round((active / total) * 100) : 0;
 
-              const Box = ({
-                label,
-                value,
-                hint,
-              }: {
-                label: string;
-                value: string;
-                hint?: string;
-              }) => (
-                <div className="rounded-2xl border border-border bg-muted/40/40 p-4">
-                  <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
-                    {label}
-                  </div>
-                  <div className="text-2xl font-black text-foreground mt-2">{value}</div>
-                  {hint ? <div className="text-xs text-muted-foreground mt-2">{hint}</div> : null}
-                </div>
-              );
-
               return (
                 <>
-                  <Box label="Totale utenti" value={String(total)} />
-                  <Box label="Attivi" value={String(active)} hint={`Active rate: ${activeRate}%`} />
-                  <Box label="Sospesi" value={String(suspended)} />
-                  <Box label="Nuovi (window)" value={String(newUsers)} hint="Creati nel periodo selezionato" />
+                  <KpiBox label="Totale utenti" value={String(total)} />
+                  <KpiBox label="Attivi" value={String(active)} hint={`Active rate: ${activeRate}%`} />
+                  <KpiBox label="Sospesi" value={String(suspended)} />
+                  <KpiBox label="Nuovi (window)" value={String(newUsers)} hint="Creati nel periodo selezionato" />
                 </>
               );
             })()}
@@ -989,7 +988,7 @@ export default function SuperadminUsersPage() {
           <DialogHeader>
             <DialogTitle>Elimina Utente</DialogTitle>
             <DialogDescription>
-              Sei sicuro di voler eliminare l'utente{" "}
+              Sei sicuro di voler eliminare l&apos;utente{" "}
               <span className="font-semibold">{deleteUser?.email}</span>?
               Questa azione non può essere annullata.
             </DialogDescription>
@@ -1221,6 +1220,16 @@ export default function SuperadminUsersPage() {
           </DialogContent>
         </Dialog>
       )}
+    </div>
+  );
+}
+
+function KpiBox({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-muted/40/40 p-4">
+      <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{label}</div>
+      <div className="text-2xl font-black text-foreground mt-2">{value}</div>
+      {hint ? <div className="text-xs text-muted-foreground mt-2">{hint}</div> : null}
     </div>
   );
 }

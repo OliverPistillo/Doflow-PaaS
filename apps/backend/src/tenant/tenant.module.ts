@@ -7,6 +7,9 @@ import { TenantDashboardService } from './tenant-dashboard.service';
 import { TenantSelfServiceController } from './tenant-selfservice.controller';
 import { TenantCrmController } from './tenant-crm.controller';
 import { TenantCrmService } from './tenant-crm.service';
+import { TenantCommercialCoreController } from './tenant-commercial-core.controller';
+import { TenantCommercialCoreService } from './tenant-commercial-core.service';
+import { TenantCommercialAccessService } from './tenant-commercial-access.service';
 import { TenantTimelineController } from './tenant-timeline.controller';
 import { TenantTimelineService } from './tenant-timeline.service';
 import { TenantRecordOperationsController } from './tenant-record-operations.controller';
@@ -17,6 +20,8 @@ import { TenantQuotesController } from './tenant-quotes.controller';
 import { TenantQuotesService } from './tenant-quotes.service';
 import { TenantProjectsController } from './tenant-projects.controller';
 import { TenantProjectsService } from './tenant-projects.service';
+import { TenantDeliveryCoreController } from './tenant-delivery-core.controller';
+import { TenantDeliveryCoreService } from './tenant-delivery-core.service';
 import { TenantFinanceController } from './tenant-finance.controller';
 import { TenantFinanceService } from './tenant-finance.service';
 import { TenantNotificationsController } from './tenant-notifications.controller';
@@ -66,6 +71,23 @@ import { TenantSiteProposalsPreparationWorker } from './tenant-site-proposals-pr
 import { TenantSiteProposalsThemeStorageCleanupService } from './tenant-site-proposals-theme-storage-cleanup.service';
 import { TenantSiteProposalsLogoGeneratorService } from './tenant-site-proposals-logo-generator.service';
 import { TenantSiteProposalsPreparationProgressService } from './tenant-site-proposals-preparation-progress.service';
+import { TenantDoflowWorkspaceController } from './tenant-doflow-workspace.controller';
+import { TenantDoflowWorkspaceService } from './tenant-doflow-workspace.service';
+import { TenantDoflowCommerceController } from './tenant-doflow-commerce.controller';
+import { TenantDoflowCommerceService } from './tenant-doflow-commerce.service';
+import { TenantDoflowCollaborationController } from './tenant-doflow-collaboration.controller';
+import { TenantDoflowCollaborationService } from './tenant-doflow-collaboration.service';
+import { DOFLOW_COLLABORATION_OUTBOX_QUEUE } from './tenant-doflow-collaboration.service';
+import { TenantDoflowCollaborationOutboxProcessor } from './tenant-doflow-collaboration-outbox.processor';
+import { TenantDoflowDocumentRevenueController } from './tenant-doflow-document-revenue.controller';
+import { TenantDoflowDocumentRevenueService } from './tenant-doflow-document-revenue.service';
+import { DOFLOW_AUTOMATION_PERFORMANCE_QUEUE } from './tenant-automation-performance.constants';
+import { TenantAutomationEngineService } from './tenant-automation-engine.service';
+import { TenantAutomationPerformanceProcessor } from './tenant-automation-performance.processor';
+import { TenantAutomationPerformanceDispatcher } from './tenant-automation-performance.dispatcher';
+import { TenantDoflowPerformanceRuntimeService } from './tenant-doflow-performance-runtime.service';
+import { TenantDoflowPerformanceController } from './tenant-doflow-performance.controller';
+import { TenantDoflowPerformanceService } from './tenant-doflow-performance.service';
 
 import { Tenant } from '../superadmin/entities/tenant.entity';
 import { TenantSubscription } from '../superadmin/entities/tenant-subscription.entity';
@@ -77,6 +99,8 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
 @Module({
   imports: [
     BullModule.registerQueue({ name: SITE_PROPOSAL_PREPARATION_QUEUE }),
+    BullModule.registerQueue({ name: DOFLOW_COLLABORATION_OUTBOX_QUEUE }),
+    BullModule.registerQueue({ name: DOFLOW_AUTOMATION_PERFORMANCE_QUEUE }),
     TypeOrmModule.forFeature([
       Tenant,
       TenantSubscription,
@@ -91,11 +115,13 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantDashboardController,
     TenantSelfServiceController,
     TenantCrmController,
+    TenantCommercialCoreController,
     TenantTimelineController,
     TenantRecordOperationsController,
     TenantBriefingController,
     TenantQuotesController,
     TenantProjectsController,
+    TenantDeliveryCoreController,
     TenantFinanceController,
     TenantNotificationsController,
     TenantDocumentsController,
@@ -108,15 +134,23 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantKnowledgeController,
     TenantCredentialsController,
     TenantSiteProposalsController,
+    TenantDoflowWorkspaceController,
+    TenantDoflowCommerceController,
+    TenantDoflowCollaborationController,
+    TenantDoflowDocumentRevenueController,
+    TenantDoflowPerformanceController,
   ],
   providers: [
     TenantDashboardService,
     TenantCrmService,
+    TenantCommercialCoreService,
+    TenantCommercialAccessService,
     TenantTimelineService,
     TenantRecordOperationsService,
     TenantBriefingService,
     TenantQuotesService,
     TenantProjectsService,
+    TenantDeliveryCoreService,
     TenantFinanceService,
     TenantNotificationsService,
     TenantDocumentsService,
@@ -153,6 +187,16 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantSiteProposalsThemeStorageCleanupService,
       TenantSiteProposalsLogoGeneratorService,
       TenantSiteProposalsPreparationProgressService,
+      TenantDoflowWorkspaceService,
+      TenantDoflowCommerceService,
+      TenantDoflowCollaborationService,
+      TenantDoflowCollaborationOutboxProcessor,
+      TenantDoflowDocumentRevenueService,
+      TenantAutomationEngineService,
+      TenantAutomationPerformanceProcessor,
+      TenantAutomationPerformanceDispatcher,
+      TenantDoflowPerformanceRuntimeService,
+      TenantDoflowPerformanceService,
   ],
 })
 export class TenantModule {}

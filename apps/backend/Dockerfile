@@ -38,4 +38,4 @@ COPY --from=builder /app/apps/backend/public ./apps/backend/public
 COPY --from=builder /app/apps/backend/package.json ./apps/backend/package.json
 
 EXPOSE 4000
-CMD ["node", "apps/backend/dist/main.js"]
+CMD ["node", "apps/backend/dist/scripts/production-backend-entrypoint.js"]

@@ -6,7 +6,6 @@ import React, { useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getApiBaseUrl } from "@/lib/api";
-import { getAuthToken } from "@/lib/auth-storage";
 
 interface ExportButtonProps {
   entity: "leads" | "tickets" | "invoices" | "tenants" | "deals";
@@ -20,10 +19,10 @@ export function ExportButton({ entity, label, size = "sm" }: ExportButtonProps) 
   const handleExport = async () => {
     setLoading(true);
     try {
-      const token = getAuthToken();
       const baseUrl = getApiBaseUrl();
       const res = await fetch(`${baseUrl}/superadmin/export/${entity}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { "X-Doflow-Web": "1" },
+        credentials: "include",
       });
       if (!res.ok) throw new Error("Export fallito");
 

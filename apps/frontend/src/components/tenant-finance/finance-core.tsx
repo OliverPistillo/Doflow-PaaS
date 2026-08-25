@@ -1,28 +1,46 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect,useState,type ComponentType,type ReactNode,useEffectEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  AlertTriangle, Banknote, CalendarClock, CheckCircle2, Clock, Edit3,
-  FileClock, FileText, Loader2, Plus, Receipt, RefreshCw, Search, Trash2,
+  AlertTriangle,Banknote,CalendarClock,CheckCircle2,Clock,Edit3,
+  FileClock,FileText,Loader2,Plus,Receipt,RefreshCw,Search,Trash2,
   Wallet,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/components/ui/card";
+import { Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
-import { money, shortDate } from "@/components/tenant-crm/crm-core";
+import { money,shortDate } from "@/components/tenant-crm/crm-core";
 import { useToast } from "@/hooks/use-toast";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
 
-type Row = Record<string, any>;
+type Row = Record<string, unknown> & {
+  id?: string; amount?: string | number; auto_renew?: boolean; balance_due_date?: string; billing_cycle?: string;
+  balance_paid?: string | number; balance_required?: string | number;
+  category?: string; client_notes?: string; company_id?: string; company_name?: string; contact_id?: string;
+  deposit_due_date?: string; deposit_paid?: string | number; deposit_required?: string | number; description?: string;
+  discount?: string | number; due_date?: string; end_date?: string;
+  first_name?: string; internal_notes?: string; invoice_id?: string; invoice_number?: string; invoice_title?: string;
+  issue_date?: string; items?: Row[]; last_name?: string; method?: string; name?: string; next_due_date?: string;
+  notes?: string; paid_total?: string | number; payment_date?: string; payment_method?: string; payment_status?: string;
+  project_id?: string; project_name?: string; quantity?: string | number; quote_id?: string; quote_number?: string;
+  recurring_service_id?: string; reference?: string; remaining_total?: string | number; sort_order?: string | number;
+  start_date?: string; status?: string; tax_rate?: string | number; title?: string; total?: string | number;
+  total_expected?: string | number; total_paid?: string | number;
+  type?: string; unit_price?: string | number;
+  invoices_total_count?: number; invoices_draft_count?: number; invoices_issued_count?: number;
+  invoices_paid_count?: number; invoices_overdue_count?: number; total_invoiced?: string | number;
+  total_outstanding?: string | number; payments_this_month?: string | number; deadlines_open?: number;
+  deadlines_overdue?: number; renewals_upcoming_30d?: number; recurring_active_count?: number;
+};
 type ListResponse<T = Row> = { items: T[]; total?: number; limit?: number; offset?: number };
 type Option = { value: string; label: string };
 
@@ -127,7 +145,7 @@ function labelFor(value: string | undefined, options: Option[]) {
   return options.find((option) => option.value === value)?.label || value || "-";
 }
 
-function toBody(form: Record<string, any>) {
+function toBody(form: Row) {
   return Object.fromEntries(Object.entries(form).filter(([, value]) => value !== "" && value !== undefined));
 }
 
@@ -208,7 +226,7 @@ function RelationSelect({
       <SelectContent>
         <SelectItem value="__none__">{placeholder}</SelectItem>
         {rows.map((row) => (
-          <SelectItem key={row.id} value={row.id}>
+          <SelectItem key={row.id} value={row.id ?? ""}>
             {row.invoice_number || row.quote_number || row.name || row.title || [row.first_name, row.last_name].filter(Boolean).join(" ") || row.id}
           </SelectItem>
         ))}
@@ -248,8 +266,17 @@ function useFinanceRelations() {
     });
   };
 
-  useEffect(() => {
-    if (canViewFinance()) void load();
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        if (canViewFinance()) void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return { relations, reloadRelations: load };
@@ -267,7 +294,7 @@ function FinanceHeader({ title, description, children }: { title: string; descri
   );
 }
 
-function SummaryCard({ label, value, icon: Icon, tone }: { label: string; value: ReactNode; icon: any; tone?: "danger" | "success" | "warning" }) {
+function SummaryCard({ label, value, icon: Icon, tone }: { label: string; value: ReactNode; icon: ComponentType<{ className?: string }>; tone?: "danger" | "success" | "warning" }) {
   return (
     <Card>
       <CardContent className="flex items-center gap-3 p-4">
@@ -302,7 +329,15 @@ export function FinanceDashboardPage() {
   };
 
   useEffect(() => {
-    if (canViewFinance()) void load();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        if (canViewFinance()) void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (!canViewFinance()) return <AccessDenied />;
@@ -329,7 +364,7 @@ export function FinanceDashboardPage() {
             <SummaryCard label="Scadute" value={summary.invoices_overdue_count || 0} icon={AlertTriangle} tone={(summary.invoices_overdue_count || 0) > 0 ? "danger" : undefined} />
             <SummaryCard label="Totale fatturato" value={money(summary.total_invoiced || 0)} icon={Wallet} />
             <SummaryCard label="Totale incassato" value={money(summary.total_paid || 0)} icon={Banknote} tone="success" />
-            <SummaryCard label="Da incassare" value={money(summary.total_outstanding || 0)} icon={Clock} tone={(summary.total_outstanding || 0) > 0 ? "warning" : undefined} />
+            <SummaryCard label="Da incassare" value={money(summary.total_outstanding || 0)} icon={Clock} tone={Number(summary.total_outstanding || 0) > 0 ? "warning" : undefined} />
             <SummaryCard label="Incassi mese" value={money(summary.payments_this_month || 0)} icon={Banknote} />
             <SummaryCard label="Scadenze aperte" value={summary.deadlines_open || 0} icon={CalendarClock} />
             <SummaryCard label="Scadenze scadute" value={summary.deadlines_overdue || 0} icon={AlertTriangle} tone={(summary.deadlines_overdue || 0) > 0 ? "danger" : undefined} />
@@ -942,11 +977,19 @@ export function FinanceProjectsPage() {
   };
 
   useEffect(() => {
-    if (canViewFinance()) void load();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        if (canViewFinance()) void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const open = (project: Row) => {
-    const status = statuses[project.id] || {};
+    const status = project.id ? statuses[project.id] || {} : {};
     setEditing(project);
     setForm({
       deposit_required: status.deposit_required || 0,
@@ -982,7 +1025,7 @@ export function FinanceProjectsPage() {
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full min-w-[1050px] text-sm">
             <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground"><tr><th className="px-4 py-3">Progetto</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Atteso</th><th className="px-4 py-3">Incassato</th><th className="px-4 py-3">Acconto</th><th className="px-4 py-3">Saldo</th><th className="px-4 py-3">Scadenze</th><th className="px-4 py-3 text-right">Azioni</th></tr></thead>
-            <tbody>{projects.map((project) => { const status = statuses[project.id] || {}; return <tr key={project.id} className="border-t"><td className="px-4 py-3"><Link href={`/projects/${project.id}`} className="font-semibold text-primary hover:underline">{project.name}</Link><p className="text-xs text-muted-foreground">{project.company_name || "-"}</p></td><td className="px-4 py-3"><StateBadge value={status.payment_status} options={PROJECT_PAYMENT_STATUSES} /></td><td className="px-4 py-3">{money(status.total_expected || 0)}</td><td className="px-4 py-3">{money(status.total_paid || 0)}</td><td className="px-4 py-3">{money(status.deposit_paid || 0)} / {money(status.deposit_required || 0)}</td><td className="px-4 py-3">{money(status.balance_paid || 0)} / {money(status.balance_required || 0)}</td><td className="px-4 py-3">{shortDate(status.deposit_due_date)} · {shortDate(status.balance_due_date)}</td><td className="px-4 py-3"><div className="flex justify-end gap-2"><Button size="sm" variant="outline" onClick={() => recalc(project)}><RefreshCw className="h-4 w-4" /></Button><Button size="sm" variant="outline" onClick={() => open(project)}><Edit3 className="h-4 w-4" /></Button></div></td></tr>; })}</tbody>
+            <tbody>{projects.map((project) => { const status = project.id ? statuses[project.id] || {} : {}; return <tr key={project.id} className="border-t"><td className="px-4 py-3"><Link href={`/projects/${project.id}`} className="font-semibold text-primary hover:underline">{project.name}</Link><p className="text-xs text-muted-foreground">{project.company_name || "-"}</p></td><td className="px-4 py-3"><StateBadge value={status.payment_status} options={PROJECT_PAYMENT_STATUSES} /></td><td className="px-4 py-3">{money(status.total_expected || 0)}</td><td className="px-4 py-3">{money(status.total_paid || 0)}</td><td className="px-4 py-3">{money(status.deposit_paid || 0)} / {money(status.deposit_required || 0)}</td><td className="px-4 py-3">{money(status.balance_paid || 0)} / {money(status.balance_required || 0)}</td><td className="px-4 py-3">{shortDate(status.deposit_due_date)} · {shortDate(status.balance_due_date)}</td><td className="px-4 py-3"><div className="flex justify-end gap-2"><Button size="sm" variant="outline" onClick={() => recalc(project)}><RefreshCw className="h-4 w-4" /></Button><Button size="sm" variant="outline" onClick={() => open(project)}><Edit3 className="h-4 w-4" /></Button></div></td></tr>; })}</tbody>
           </table>
         </div>
       )}
@@ -991,7 +1034,7 @@ export function FinanceProjectsPage() {
           <DialogHeader><DialogTitle>Stato pagamento progetto</DialogTitle><DialogDescription>{editing?.name}</DialogDescription></DialogHeader>
           <div className="grid gap-3 md:grid-cols-2">
             <div className="grid gap-2"><Label>Status</Label><SelectField value={form.payment_status} options={PROJECT_PAYMENT_STATUSES} placeholder="Status" onChange={(v) => setForm((p) => ({ ...p, payment_status: v }))} /></div>
-            {["deposit_required", "deposit_paid", "balance_required", "balance_paid", "total_expected", "total_paid"].map((field) => <div key={field} className="grid gap-2"><Label>{field}</Label><Input type="number" value={form[field] ?? ""} onChange={(e) => setForm((p) => ({ ...p, [field]: e.target.value }))} /></div>)}
+            {["deposit_required", "deposit_paid", "balance_required", "balance_paid", "total_expected", "total_paid"].map((field) => <div key={field} className="grid gap-2"><Label>{field}</Label><Input type="number" value={String(form[field] ?? "")} onChange={(e) => setForm((p) => ({ ...p, [field]: e.target.value }))} /></div>)}
             <div className="grid gap-2"><Label>Scadenza acconto</Label><Input type="date" value={form.deposit_due_date || ""} onChange={(e) => setForm((p) => ({ ...p, deposit_due_date: e.target.value }))} /></div>
             <div className="grid gap-2"><Label>Scadenza saldo</Label><Input type="date" value={form.balance_due_date || ""} onChange={(e) => setForm((p) => ({ ...p, balance_due_date: e.target.value }))} /></div>
             <div className="grid gap-2 md:col-span-2"><Label>Note interne</Label><Textarea value={form.internal_notes || ""} onChange={(e) => setForm((p) => ({ ...p, internal_notes: e.target.value }))} /></div>

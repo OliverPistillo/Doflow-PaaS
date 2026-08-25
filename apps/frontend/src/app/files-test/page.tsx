@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { clearAuthStorage, getAuthToken } from '@/lib/auth-storage';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api';
+import { useRouter } from 'next/navigation';
+import { apiFetch } from '@/lib/api';
+import { clearDoFlowUser } from '@/lib/jwt';
 
 type FileRow = {
   id: number;
@@ -20,57 +20,32 @@ type ListResponse = {
 };
 
 export default function FilesTestPage() {
-  const [token, setToken] = useState<string | null>(null);
-  const [tenantHost, setTenantHost] = useState('');
+  const router = useRouter();
+  const tenantHost = typeof window === 'undefined' ? '' : window.location.host;
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [files, setFiles] = useState<FileRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setToken(getAuthToken());
-      setTenantHost(window.location.host);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!token) return;
-    void loadFiles();
-  }, [token]);
-
   const loadFiles = async () => {
-    if (!token) {
-      setError('Token mancante, effettua il login.');
-      return;
-    }
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/files`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      });
-      const text = await res.text();
-      if (!res.ok) {
-        setError(text);
-        return;
-      }
-      const data = JSON.parse(text) as ListResponse;
+      const data = await apiFetch<ListResponse>('/files');
       setFiles(data.files);
-    } catch (e) {
+    } catch {
       setError('Errore caricamento files');
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    queueMicrotask(() => void loadFiles());
+  }, []);
+
   const handleUpload = async () => {
-    if (!token) {
-      setError('Token mancante, effettua il login.');
-      return;
-    }
     if (!selectedFile) {
       setError('Seleziona un file.');
       return;
@@ -83,18 +58,11 @@ export default function FilesTestPage() {
       const form = new FormData();
       form.append('file', selectedFile);
 
-      const res = await fetch(`${API_BASE}/files/upload`, {
+      const data = await apiFetch<{ error?: string; file: FileRow }>('/files/upload', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
         body: form,
       });
-
-      const text = await res.text();
-      const data = JSON.parse(text);
-
-      if (!res.ok || data.error) {
+      if (data.error) {
         setError(data.error ?? 'Errore upload');
         return;
       }
@@ -102,17 +70,17 @@ export default function FilesTestPage() {
       setInfo(`File caricato: ${data.file.original_name}`);
       setSelectedFile(null);
       await loadFiles();
-    } catch (e) {
+    } catch {
       setError('Errore upload file');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (typeof window !== 'undefined') {
-      clearAuthStorage();
-      window.location.href = '/login';
+      try { await apiFetch('/auth/logout', { method: 'POST' }); } finally { clearDoFlowUser(); }
+      router.push('/login');
     }
   };
 

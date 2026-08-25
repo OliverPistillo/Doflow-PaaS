@@ -28,20 +28,23 @@ export function TenantAccessProvider({ children }: { children: React.ReactNode }
 
   React.useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    getCurrentTenantAccess()
-      .then((data) => {
-        if (!cancelled) {
-          setAccess(data);
-          setError(null);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Permessi non disponibili");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setLoading(true);
+      getCurrentTenantAccess()
+        .then((data) => {
+          if (!cancelled) {
+            setAccess(data);
+            setError(null);
+          }
+        })
+        .catch((err) => {
+          if (!cancelled) setError(err instanceof Error ? err.message : "Permessi non disponibili");
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    });
     return () => { cancelled = true; };
   }, []);
 

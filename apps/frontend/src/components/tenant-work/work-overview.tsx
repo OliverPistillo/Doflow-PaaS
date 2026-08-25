@@ -18,6 +18,7 @@ import { isInternalDoflowTenant } from "@/lib/tenant-url";
 import { calendarApi, type CalendarEvent } from "@/lib/tenant-calendar-api";
 import { teamApi, type TeamMember, type TeamWorkloadItem } from "@/lib/tenant-team-api";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
+import { useCurrentDate } from "@/hooks/use-current-date";
 import {
   addLocalDays,
   dateValue,
@@ -120,8 +121,8 @@ export function WorkOverview() {
     };
   }, [canView, doflow]);
 
-  const now = new Date();
-  const activeProjects = projects.filter((project) => projectIsActive(project, doflow));
+  const now = useCurrentDate();
+  const activeProjects = useMemo(() => projects.filter((project) => projectIsActive(project, doflow)), [doflow, projects]);
   const weekEnd = endOfWeek(now);
   const weekDeliveries = deadlines.filter((event) => {
     const date = dateValue(event.start_at);

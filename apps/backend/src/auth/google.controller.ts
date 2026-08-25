@@ -1,20 +1,17 @@
 // apps/backend/src/auth/google.controller.ts
 // Google OAuth flow:
 //   GET  /auth/google           → redirect to Google consent
-//   GET  /auth/google/callback  → verify, login existing users or mint signed signup token
+//   GET  /auth/google/callback  → verify and create a short-lived opaque handoff
 //
 // Behavior:
-//   - Existing user: resolves the real tenant-schema user, issues JWT, redirects to frontend /login
-//   - New user: redirects to /signup with a short-lived signed googleSignupToken
+//   - Existing user: resolves the real tenant-schema user and redirects with a single-use handoff
+//   - New user: redirects to /signup with a single-use opaque handoff
 //   - Public endpoint (no auth required), excluded from tenancy middleware
 
 import { Controller, Get, Req, Res, UseGuards, Logger } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Request, Response } from 'express';
 import { DataSource } from 'typeorm';
-import * as jwt from 'jsonwebtoken';
-import { AuthService } from '../auth.service';
-import { Role } from '../roles';
 import { safeSchema } from '../common/schema.utils';
 import { AuthHandoffService } from './auth-handoff.service';
 
@@ -26,21 +23,12 @@ type GooglePassportUser = {
   emailVerified?: boolean;
 };
 
-type GoogleSignupPayload = {
-  purpose: 'google_signup';
-  googleId: string;
-  email: string;
-  fullName?: string;
-  picture?: string;
-};
-
 @Controller('auth/google')
 export class GoogleAuthController {
   private readonly logger = new Logger(GoogleAuthController.name);
 
   constructor(
     private readonly dataSource: DataSource,
-    private readonly authService: AuthService,
     private readonly authHandoff: AuthHandoffService,
   ) {}
 
@@ -86,18 +74,13 @@ export class GoogleAuthController {
       );
 
       if (rows.length === 0) {
-        const token = this.signGoogleSignupToken({
-          purpose: 'google_signup',
+        const handoff = await this.authHandoff.createGoogleSignup({
           googleId: googleUser.googleId,
           email: googleUser.email,
           fullName: googleUser.fullName,
           picture: googleUser.picture,
-        });
-
-        const handoff = await this.authHandoff.createGoogleSignup({
-          googleSignupToken: token,
-          email: googleUser.email,
-          fullName: googleUser.fullName,
+          sourceHost: req.hostname,
+          correlationId: String(req.headers['x-correlation-id'] || ''),
         });
         return res.redirect(`${appBase}/register?handoff=${encodeURIComponent(handoff.handoff)}`);
       }
@@ -123,19 +106,10 @@ export class GoogleAuthController {
         ? (loginUser.mfa_secret ? 'MFA_PENDING' : 'MFA_SETUP_NEEDED')
         : 'FULL';
 
-      const token = this.authService.signTokenPublic(
-        loginUser.id,
-        loginUser.email,
-        schema,
-        slug,
-        loginUser.role as Role,
-        { authStage, mfaRequired: !!loginUser.mfa_enabled },
-      );
-
       const handoff = await this.authHandoff.createLogin({
-        token,
         user: {
           sub: loginUser.id,
+          email: loginUser.email,
           tenantId: schema,
           tenantSlug: slug,
           role: loginUser.role,
@@ -143,6 +117,8 @@ export class GoogleAuthController {
         },
         tenantTarget: slug,
         rememberMe: true,
+        sourceHost: req.hostname,
+        correlationId: String(req.headers['x-correlation-id'] || ''),
       });
       const targetBase = this.getTenantFrontendBase(appBase, slug);
       const params = new URLSearchParams({ handoff: handoff.handoff, tenant: slug });
@@ -162,12 +138,6 @@ export class GoogleAuthController {
       .replace(/^app\./, '')
       .replace(/\/.*$/, '');
     return `${parsed.protocol}//${tenantSlug}.${domain}`;
-  }
-
-  private signGoogleSignupToken(payload: GoogleSignupPayload): string {
-    const secret = process.env.JWT_SECRET;
-    if (!secret) throw new Error('JWT_SECRET not set');
-    return jwt.sign(payload, secret, { expiresIn: '15m' });
   }
 
   private async rememberGoogleIdentity(publicUserId: string, googleUser: GooglePassportUser) {

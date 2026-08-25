@@ -3,7 +3,6 @@
 import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { clearAuthStorage } from '@/lib/auth-storage';
 
 import { AppSidebar } from '@/components/app-sidebar';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
@@ -67,17 +66,9 @@ function crumbsFromPath(pathname: string | null) {
   return acc;
 }
 
-export function DashboardLayout({ children, role, userEmail }: DashboardLayoutProps) {
+export function DashboardLayout({ children, role }: DashboardLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
-
-  // ---- Logout
-  const handleLogout = React.useCallback(() => {
-    if (typeof window !== 'undefined') {
-      clearAuthStorage();
-      router.push('/login');
-    }
-  }, [router]);
 
   // ---- Breadcrumbs
   const crumbs = React.useMemo(() => crumbsFromPath(pathname), [pathname]);
@@ -109,7 +100,8 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
   }, [role]);
 
   React.useEffect(() => {
-    void loadTenants();
+    const timer = window.setTimeout(() => void loadTenants(), 0);
+    return () => window.clearTimeout(timer);
   }, [loadTenants]);
 
   const filteredTenants = React.useMemo(() => {
@@ -121,7 +113,7 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
   }, [tenants, tenantQuery]);
 
   function openTenant(slug: string) {
-    window.location.assign(`${getTenantAppUrl(slug)}/admin/users`);
+    window.open(`${getTenantAppUrl(slug)}/admin/users`, '_self');
   }
 
   function tenantHostLabel(slug: string) {
@@ -134,7 +126,7 @@ export function DashboardLayout({ children, role, userEmail }: DashboardLayoutPr
 
   return (
     <SidebarProvider defaultOpen>
-      <AppSidebar role={role} userEmail={userEmail} onLogout={handleLogout} />
+      <AppSidebar />
 
       <SidebarInset>
         {/* Header sticky shadcn-style */}

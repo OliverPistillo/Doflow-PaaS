@@ -1,18 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect,useState,useEffectEvent } from "react";
 import Link from "next/link";
-import { Copy, Loader2, Plus, Save, Send, Trash2 } from "lucide-react";
+import { Copy,Loader2,Plus,Save,Send,Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/components/ui/card";
+import { Dialog,DialogContent,DialogHeader,DialogTitle } from "@/components/ui/dialog";
+import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from "@/components/ui/select";
+import { Tabs,TabsContent,TabsList,TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { listDocumentsForEntity, type TenantDocument } from "@/lib/tenant-documents-api";
-import { teamApi, type TeamActivity, type TeamInviteResult, type TeamMember, type TeamModulePermission, type TeamOptions, type TeamSkill, type TeamWorkloadItem } from "@/lib/tenant-team-api";
-import { DocumentUploadLink, DocumentsMiniList } from "./team-member-documents";
+import { listDocumentsForEntity,type TenantDocument } from "@/lib/tenant-documents-api";
+import { teamApi,type TeamActivity,type TeamInviteResult,type TeamMember,type TeamModulePermission,type TeamOptions,type TeamSkill,type TeamWorkloadItem } from "@/lib/tenant-team-api";
+import { DocumentUploadLink,DocumentsMiniList } from "./team-member-documents";
 import { TeamAvailabilityPage } from "./team-availability";
 import { TeamMemberForm } from "./team-member-form";
 import { TeamTimeEntriesPage } from "./team-time-entries";
@@ -31,7 +31,7 @@ import {
   label,
   roleBadgeClass,
 } from "./team-utils";
-import { Empty, ErrorBox, Loading } from "./team-workload";
+import { Empty,ErrorBox } from "./team-workload";
 
 export function TeamMemberDetailPage({ memberId }: { memberId: string }) {
   const { toast } = useToast();
@@ -74,7 +74,18 @@ export function TeamMemberDetailPage({ memberId }: { memberId: string }) {
       setLoading(false);
     }
   };
-  useEffect(() => { void load(); }, [memberId]);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [memberId]);
 
   const saveMember = async (body: Partial<TeamMember>) => {
     await teamApi.updateMember(memberId, body);

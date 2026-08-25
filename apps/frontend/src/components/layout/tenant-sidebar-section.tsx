@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ChevronRight, Sparkles } from "lucide-react";
+import { ChevronRight,Sparkles } from "lucide-react";
 
 import {
   SidebarMenu,
@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/collapsible";
 import { PlanBadge } from "@/components/ui/locked-feature";
 import type { PlanTier } from "@/lib/plans";
-import { PLAN_META, planIncludes } from "@/lib/plans";
+import { PLAN_META,planIncludes } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 import type {
   TenantNavigationItem,
@@ -154,14 +154,12 @@ function TenantSidebarLeaf({
   item,
   activeHref,
   activePlan,
-  pathname,
   onNavigate,
   isDoflowTenant,
 }: {
   item: TenantNavigationItem;
   activeHref?: string;
   activePlan: PlanTier;
-  pathname: string;
   onNavigate: () => void;
   isDoflowTenant: boolean;
 }) {
@@ -345,7 +343,6 @@ export function TenantSidebarSection({
                 item={child}
                 activeHref={activeChildHref}
                 activePlan={activePlan}
-                pathname={pathname}
                 onNavigate={onNavigate}
                 isDoflowTenant={isDoflowTenant}
               />

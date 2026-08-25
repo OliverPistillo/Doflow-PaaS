@@ -1,9 +1,11 @@
-// Percorso: apps/frontend/src/app/superadmin/finance/invoices/components/InvoiceRow.tsx
+"use client";
+
 import React from "react";
 import { Edit2, Trash2, FileText, FileCheck2, Download, Mail, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { apiFetch } from "@/lib/api";
+import { useCurrentDate } from "@/hooks/use-current-date";
 
 export type Invoice = {
   id: string;
@@ -22,15 +24,15 @@ export type Invoice = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function isExpired(dueDate: string): boolean {
+function isExpired(dueDate: string, currentDate: Date): boolean {
   if (!dueDate) return false;
-  return new Date(dueDate) < new Date(new Date().toDateString());
+  return new Date(dueDate) < new Date(currentDate.toDateString());
 }
 
-function computeStatus(inv: Invoice): Invoice["status"] {
+function computeStatus(inv: Invoice, currentDate: Date): Invoice["status"] {
   if (inv.docType === "preventivo") {
     if (inv.status === "approved") return "approved";
-    if (isExpired(inv.dueDate))    return "overdue";
+    if (isExpired(inv.dueDate, currentDate)) return "overdue";
     return "pending";
   }
   return inv.status;
@@ -62,8 +64,9 @@ interface InvoiceRowProps {
 }
 
 export function InvoiceRow({ invoice, onEdit, onDelete, onDownload, onSend, onRefresh }: InvoiceRowProps) {
+  const currentDate = useCurrentDate();
   const isPreventivo = invoice.docType === "preventivo";
-  const status       = computeStatus(invoice);
+  const status       = computeStatus(invoice, currentDate);
 
   const statusMap  = isPreventivo ? PREVENTIVO_STATUS : FATTURA_STATUS;
   const statusInfo = statusMap[status] ?? { label: status, cls: "bg-muted text-muted-foreground border-border" };
@@ -113,7 +116,7 @@ export function InvoiceRow({ invoice, onEdit, onDelete, onDownload, onSend, onRe
             {dueDateLabel}: {new Date(invoice.dueDate).toLocaleDateString("it-IT")}
             {/* Avviso scadenza imminente per preventivi */}
             {isPreventivo && status === "pending" && (() => {
-              const days = Math.ceil((new Date(invoice.dueDate).getTime() - Date.now()) / 86400000);
+              const days = Math.ceil((new Date(invoice.dueDate).getTime() - currentDate.getTime()) / 86400000);
               return days <= 7 && days > 0
                 ? <span className="ml-1 text-amber-600 font-semibold">({days}gg rimasti)</span>
                 : null;

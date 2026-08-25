@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Activity, BriefcaseBusiness, CheckCircle2, Clock3, Target, UsersRound } from "lucide-react";
+import { useEffect,useMemo,useState } from "react";
+import { Activity,CheckCircle2,Clock3,Target,UsersRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { reportsApi, type ConsultantPerformanceItem, type ConsultantPerformanceReport } from "@/lib/tenant-reports-api";
+import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from "@/components/ui/select";
+import { Sheet,SheetContent,SheetDescription,SheetHeader,SheetTitle } from "@/components/ui/sheet";
+import { reportsApi,type ConsultantPerformanceItem,type ConsultantPerformanceReport } from "@/lib/tenant-reports-api";
 import { projectStageLabel } from "@/lib/project-stage-model";
-import { formatCurrency, formatNumber } from "./report-utils";
+import { formatCurrency,formatNumber } from "./report-utils";
 
 type Preset = "7" | "30" | "90" | "month" | "custom";
 type SortKey = "display_name" | "opportunities_assigned" | "activities_completed" | "conversion_rate" | "tasks_completed" | "projects_delivered" | "open_workload";
@@ -49,11 +48,16 @@ export function ConsultantPerformancePage() {
   const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
-    let active = true; setLoading(true); setError(null);
-    reportsApi.consultantPerformance({ date_from: dateFrom, date_to: dateTo })
-      .then((result) => { if (active) setData(result); })
-      .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "Performance non disponibile."); })
-      .finally(() => { if (active) setLoading(false); });
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setLoading(true);
+      setError(null);
+      reportsApi.consultantPerformance({ date_from: dateFrom, date_to: dateTo })
+        .then((result) => { if (active) setData(result); })
+        .catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "Performance non disponibile."); })
+        .finally(() => { if (active) setLoading(false); });
+    });
     return () => { active = false; };
   }, [dateFrom, dateTo]);
 

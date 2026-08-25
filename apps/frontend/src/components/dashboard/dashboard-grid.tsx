@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import RGL from "react-grid-layout";
+import React, { useCallback } from "react";
+import { useContainerWidth } from "react-grid-layout";
+import GridLayout, { type Layout } from "react-grid-layout/legacy";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import { COMPONENT_MAP } from "./dashboard-widgets";
@@ -13,16 +14,6 @@ import { WIDGET_DEFINITIONS, type WidgetId } from "@/lib/plans";
 export const GRID_COLS       = 12;
 export const GRID_ROW_HEIGHT = 80;
 export const GRID_MARGIN: [number, number] = [16, 16];
-
-// Cast as any per bypassare tipi difettosi di RGL v2
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const GridLayout = ((RGL as any).default ?? RGL) as any;
-
-type RGLLayout = {
-  i: string; x: number; y: number; w: number; h: number;
-  minW?: number; maxW?: number; minH?: number; maxH?: number;
-  static?: boolean;
-};
 
 // ─── Tipi ─────────────────────────────────────────────────────────────────────
 
@@ -40,13 +31,10 @@ export type WidgetItem = {
   static?:   boolean;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface DashboardGridProps {
   layout:         WidgetItem[];
   isEditing:      boolean;
-  /** @ts-ignore */
   onLayoutChange: (layout: WidgetItem[]) => void;
-  /** @ts-ignore */
   renderWidget?:  (moduleKey: string) => React.ReactNode;
 }
 
@@ -71,25 +59,15 @@ function enrichWithConstraints(items: WidgetItem[]): WidgetItem[] {
 export function DashboardGrid({
   layout, isEditing, onLayoutChange, renderWidget,
 }: DashboardGridProps) {
-  const [mounted, setMounted]           = useState(false);
-  const [containerWidth, setContainerWidth] = useState(0);
-  const containerRef                    = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setMounted(true);
-    const measure = () => {
-      if (containerRef.current) setContainerWidth(containerRef.current.offsetWidth);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    if (containerRef.current) ro.observe(containerRef.current);
-    return () => ro.disconnect();
-  }, []);
+  const { width: containerWidth, containerRef, mounted } = useContainerWidth({
+    initialWidth: 0,
+    measureBeforeMount: true,
+  });
 
   // ⚠️  Propaga al parent SOLO durante edit — RGL chiama onLayoutChange
   // anche al mount e durante i resize di finestra.
   const handleRGLChange = useCallback(
-    (currentLayout: readonly any[]) => {
+    (currentLayout: Layout) => {
       if (!mounted || !isEditing) return;
       const enriched = enrichWithConstraints(layout);
       const newLayout: WidgetItem[] = currentLayout.map((l) => {
@@ -118,7 +96,7 @@ export function DashboardGrid({
 
   const enrichedLayout = enrichWithConstraints(layout);
 
-  const rglLayout: RGLLayout[] = enrichedLayout.map((item) => ({
+  const rglLayout: Layout = enrichedLayout.map((item) => ({
     i: item.i, x: item.x, y: item.y, w: item.w, h: item.h,
     minW: item.minW, maxW: item.maxW,
     minH: item.minH, maxH: item.maxH,

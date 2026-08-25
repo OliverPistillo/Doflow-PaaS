@@ -108,7 +108,7 @@ export default function Page() {
             </div>
             <h3 className="text-base font-semibold mb-1">Nessuna automazione attiva</h3>
             <p className="text-sm text-muted-foreground max-w-sm">
-              Le automazioni vengono configurate dall'amministratore della piattaforma. Contatta il supporto per attivarne di nuove.
+              Le automazioni vengono configurate dall&apos;amministratore della piattaforma. Contatta il supporto per attivarne di nuove.
             </p>
           </CardContent>
         </Card>

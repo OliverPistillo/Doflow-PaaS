@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards, Delete, Param, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Delete, Param, Patch, NotImplementedException } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -38,12 +38,9 @@ export class TenantsController {
   }
 
   @Post(':id/impersonate')
-  async impersonate(@Param('id') id: string) {
-      // Mock Implementation per la v3.5
-      // Qui in futuro genereremo un JWT "impersonation token"
-      return {
-          token: "mock_impersonation_token",
-          redirectUrl: "https://app.doflow.it"
-      };
+  impersonate() {
+    throw new NotImplementedException(
+      'Impersonation non disponibile finché non usa un handoff opaco e auditato.',
+    );
   }
 }

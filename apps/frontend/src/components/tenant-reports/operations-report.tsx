@@ -35,9 +35,9 @@ export function OperationsReportPage() {
             <Section title="Rischi aperti">
               <SimpleTable rows={operations.openRisks || []} empty="Nessun rischio rilevato." columns={[
                 { key: "type", label: "Tipo" },
-                { key: "name", label: "Nome", format: (value, row) => value || row.title || row.id },
-                { key: "status", label: "Stato", format: (value, row) => doflow && row.type === "project_blocked" ? projectStageLabel(value, true) : value || "-" },
-                { key: "due_date", label: "Scadenza", format: (value, row) => value || row.due_at || "-" },
+                { key: "name", label: "Nome", format: (value, row) => String(value || row.title || row.id || "-") },
+                { key: "status", label: "Stato", format: (value, row) => doflow && row.type === "project_blocked" ? projectStageLabel(value, true) : String(value || "-") },
+                { key: "due_date", label: "Scadenza", format: (value, row) => String(value || row.due_at || "-") },
               ]} />
             </Section>
           </div>

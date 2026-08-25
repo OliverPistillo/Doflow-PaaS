@@ -41,6 +41,12 @@ export function getTenantAppUrl(tenantSlug: string | undefined | null): string {
     return getPrimaryAppUrl();
   }
 
+  // Lo stack acceptance serve tutti i tenant sulla stessa origin locale: il
+  // tenant autorevole resta nella sessione opaca, non nel sottodominio.
+  if (typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname)) {
+    return window.location.origin;
+  }
+
   const baseDomain = cleanDomain(
     process.env.NEXT_PUBLIC_BASE_DOMAIN || process.env.TENANT_BASE_DOMAIN,
   );

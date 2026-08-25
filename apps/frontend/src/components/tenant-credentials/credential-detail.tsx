@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect,useState,useEffectEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Archive, Download, KeyRound, RefreshCw, RotateCcw } from "lucide-react";
+import { Archive,Download,KeyRound,RefreshCw,RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/components/ui/card";
+import { Tabs,TabsContent,TabsList,TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { credentialsApi } from "@/lib/tenant-credentials-api";
-import type { CredentialItem, CredentialsOptions } from "@/lib/tenant-credentials-types";
+import type { CredentialItem,CredentialsOptions } from "@/lib/tenant-credentials-types";
 import { CredentialAudit } from "./credential-audit";
 import { CredentialForm } from "./credential-form";
 import { CredentialLinks } from "./credential-links";
@@ -19,12 +19,12 @@ import { CredentialReplaceSecretDialog } from "./credential-replace-secret-dialo
 import { CredentialRevealDialog } from "./credential-reveal-dialog";
 import { CredentialRotateDialog } from "./credential-rotate-dialog";
 import { CredentialRotations } from "./credential-rotations";
-import { CredentialsError, CredentialsHeader, CredentialsLoading } from "./credentials-shared";
-import { assertMetadataOnlyExport, canManageCredentials, downloadJson, label, KIND_LABELS, ENVIRONMENT_LABELS, STATUS_LABELS, normalizeError } from "./credentials-utils";
+import { CredentialsError,CredentialsHeader,CredentialsLoading } from "./credentials-shared";
+import { assertMetadataOnlyExport,canManageCredentials,downloadJson,label,KIND_LABELS,ENVIRONMENT_LABELS,STATUS_LABELS,normalizeError } from "./credentials-utils";
 
 export function CredentialNewPage() {
-  const router = useRouter();
   const { toast } = useToast();
+  const router = useRouter();
   const [options, setOptions] = useState<CredentialsOptions | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -58,7 +58,6 @@ export function CredentialNewPage() {
 
 export function CredentialDetailPage({ credentialId }: { credentialId: string }) {
   const { toast } = useToast();
-  const router = useRouter();
   const [credential, setCredential] = useState<CredentialItem | null>(null);
   const [options, setOptions] = useState<CredentialsOptions | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,7 +85,18 @@ export function CredentialDetailPage({ credentialId }: { credentialId: string })
     }
   };
 
-  useEffect(() => { void load(); }, [credentialId]);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [credentialId]);
 
   const update = async (body: Parameters<typeof credentialsApi.create>[0]) => {
     setSaving(true);

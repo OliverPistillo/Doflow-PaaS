@@ -99,10 +99,17 @@ export function TabAudit() {
     }
   }, [page, search, actionFilter]);
 
-  useEffect(() => { load(); }, [load]);
-
-  // Reset page on filter change
-  useEffect(() => { setPage(1); }, [search, actionFilter]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
@@ -116,14 +123,14 @@ export function TabAudit() {
           <Input
             placeholder="Cerca per utente, entità, azione…"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="pl-9 h-9 text-sm"
           />
         </div>
 
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
-          <Select value={actionFilter} onValueChange={setActionFilter}>
+          <Select value={actionFilter} onValueChange={(value) => { setActionFilter(value); setPage(1); }}>
             <SelectTrigger className="h-9 w-40 text-sm">
               <SelectValue placeholder="Tutte le azioni" />
             </SelectTrigger>

@@ -1,4 +1,5 @@
 import { DataSource } from 'typeorm';
+import { provisionSchemaOnce } from '../common/schema-provisioning-once';
 import { safeSchema } from '../common/schema.utils';
 import { BASE_AUTOMATION_TEMPLATES } from './tenant-automations.types';
 
@@ -8,7 +9,7 @@ async function addColumns(ds: DataSource, schema: string, table: string, columns
   }
 }
 
-export async function ensureTenantAutomationsTables(ds: DataSource, schema: string) {
+async function provisionTenantAutomationsTables(ds: DataSource, schema: string) {
   const s = safeSchema(schema, 'ensureTenantAutomationsTables');
 
   await ds.query(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`);
@@ -102,6 +103,11 @@ export async function ensureTenantAutomationsTables(ds: DataSource, schema: stri
     'created_at TIMESTAMPTZ DEFAULT now()',
     'updated_at TIMESTAMPTZ DEFAULT now()',
     'deleted_at TIMESTAMPTZ',
+    "lifecycle_status TEXT NOT NULL DEFAULT 'draft'",
+    'optimistic_version INTEGER NOT NULL DEFAULT 1',
+    'current_version INTEGER NOT NULL DEFAULT 1',
+    'current_version_id UUID',
+    'archived_at TIMESTAMPTZ',
   ]);
 
   await ds.query(`
@@ -143,6 +149,19 @@ export async function ensureTenantAutomationsTables(ds: DataSource, schema: stri
       created_at TIMESTAMPTZ DEFAULT now()
     )
   `);
+  await addColumns(ds, s, 'automation_runs', [
+    'execution_key TEXT',
+    'operation_id UUID',
+    'correlation_id UUID',
+    'rule_version_id UUID',
+    'attempt INTEGER NOT NULL DEFAULT 1',
+    'retry_of UUID',
+    'root_run_id UUID',
+    'queue_job_id TEXT',
+    'worker_id TEXT',
+    'dead_lettered_at TIMESTAMPTZ',
+    'cancelled_at TIMESTAMPTZ',
+  ]);
 
   await ds.query(`
     CREATE TABLE IF NOT EXISTS "${s}".automation_dedupe (
@@ -205,6 +224,16 @@ export async function ensureTenantAutomationsTables(ds: DataSource, schema: stri
     `CREATE INDEX IF NOT EXISTS "idx_${s}_automation_activity_created" ON "${s}".automation_activity(created_at DESC)`,
   ];
   for (const sql of indexes) await ds.query(sql);
+}
+
+export function ensureTenantAutomationsTables(
+  ds: DataSource,
+  schema: string,
+): Promise<void> {
+  const safe = safeSchema(schema, 'ensureTenantAutomationsTables');
+  return provisionSchemaOnce(ds, `tenant-automations:${safe}`, () =>
+    provisionTenantAutomationsTables(ds, safe),
+  );
 }
 
 export async function seedTenantAutomationTemplatesAndRules(ds: DataSource, schema: string, createdBy?: string | null) {

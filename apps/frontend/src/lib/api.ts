@@ -1,8 +1,22 @@
 // apps/frontend/src/lib/api.ts
 import { getTenantHeader } from "./tenant-fetch";
-import { getAuthToken } from "./auth-storage";
 
-type ApiFetchOptions = RequestInit & { auth?: boolean };
+type ApiFetchOptions = RequestInit;
+
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const prefix = `${name}=`;
+  const value = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith(prefix));
+  if (!value) return null;
+  try { return decodeURIComponent(value.slice(prefix.length)); } catch { return value.slice(prefix.length); }
+}
 
 function getEnvBase(): string | null {
   const envBase = process.env.NEXT_PUBLIC_API_URL;
@@ -71,13 +85,16 @@ export async function apiFetch<T = unknown>(
     ...(options.headers as Record<string, string> | undefined),
   };
 
+  if (typeof window !== "undefined") headers["X-Doflow-Web"] = "1";
+
   if (!headers["Content-Type"] && !(options.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }
 
-  if (options.auth !== false && typeof window !== "undefined") {
-    const token = getAuthToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
+  const method = String(options.method || "GET").toUpperCase();
+  if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
+    const csrf = getCookie("doflow_csrf");
+    if (csrf) headers["X-CSRF-Token"] = csrf;
   }
 
   const url = buildApiUrl(pathNoApi);
@@ -86,6 +103,7 @@ export async function apiFetch<T = unknown>(
     ...options,
     headers,
     cache: "no-store",
+    credentials: "include",
   });
 
   // --- v3.5 TRAFFIC CONTROL AWARENESS ---
@@ -99,7 +117,7 @@ export async function apiFetch<T = unknown>(
   // Gestione Specifica 429 (Too Many Requests)
   if (res.status === 429) {
     const retryAfter = res.headers.get('Retry-After') || '60';
-    throw new Error(`Traffic Control: Troppe richieste. Riprova tra ${retryAfter} secondi.`);
+    throw new ApiError(`Traffic Control: Troppe richieste. Riprova tra ${retryAfter} secondi.`, 429);
   }
   // -------------------------------------
 
@@ -114,7 +132,7 @@ export async function apiFetch<T = unknown>(
 
   if (!res.ok) {
     const msg = json?.error ?? json?.message ?? text ?? `HTTP ${res.status}`;
-    throw new Error(String(msg));
+    throw new ApiError(String(msg), res.status);
   }
 
   if (json && typeof json === "object" && json.error) {

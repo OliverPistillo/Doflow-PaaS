@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect,useMemo,useState } from "react";
 import Link from "next/link";
-import { BriefcaseBusiness, Gauge, Search, Sparkles, UserRound, UsersRound, X } from "lucide-react";
+import { BriefcaseBusiness,Search,Sparkles,UserRound,UsersRound,X } from "lucide-react";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { teamApi, type TeamMember, type TeamWorkloadItem } from "@/lib/tenant-team-api";
-import { availabilityMeta, numberOf, roleLabel } from "./resources-model";
-import { InitialsAvatar, ResourcesEmpty, ResourcesError, ResourcesKpi, ResourcesLoading, ResourcesPageHeader, SoftBadge } from "./resources-ui";
+import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from "@/components/ui/select";
+import { teamApi,type TeamMember,type TeamWorkloadItem } from "@/lib/tenant-team-api";
+import { availabilityMeta,numberOf,roleLabel } from "./resources-model";
+import { InitialsAvatar,ResourcesEmpty,ResourcesError,ResourcesKpi,ResourcesLoading,ResourcesPageHeader,SoftBadge } from "./resources-ui";
 
 function TeamProfilePanel({ member, workload, onClose }: { member: TeamMember | null; workload?: TeamWorkloadItem; onClose: () => void }) {
   if (!member) return <aside className="rounded-2xl border border-slate-200/80 bg-white p-5"><ResourcesEmpty className="min-h-64">Seleziona una persona per vedere il profilo operativo.</ResourcesEmpty></aside>;
@@ -37,10 +37,14 @@ export function TeamWorkspace() {
   const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let active = true; if (!canView("team")) { setLoading(false); return; }
-    Promise.all([teamApi.members({ limit: 100 }), teamApi.workload({ limit: 100 })]).then(([memberData, workloadData]) => {
-      if (!active) return; setMembers(memberData.items || []); setWorkload(workloadData.items || []); setSelectedId(memberData.items?.[0]?.id || null);
-    }).catch((reason) => active && setError(reason instanceof Error ? reason.message : "Caricamento del team non riuscito.")).finally(() => active && setLoading(false));
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      if (!canView("team")) { setLoading(false); return; }
+      Promise.all([teamApi.members({ limit: 100 }), teamApi.workload({ limit: 100 })]).then(([memberData, workloadData]) => {
+        if (!active) return; setMembers(memberData.items || []); setWorkload(workloadData.items || []); setSelectedId(memberData.items?.[0]?.id || null);
+      }).catch((reason) => active && setError(reason instanceof Error ? reason.message : "Caricamento del team non riuscito.")).finally(() => active && setLoading(false));
+    });
     return () => { active = false; };
   }, [canView]);
 

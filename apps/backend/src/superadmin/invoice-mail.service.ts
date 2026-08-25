@@ -1,11 +1,11 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import { MailerService } from '@nestjs-modules/mailer';
+import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class InvoiceMailService {
   private readonly logger = new Logger(InvoiceMailService.name);
 
-  constructor(private readonly mailerService: MailerService) {}
+  constructor(private readonly mailerService: MailService) {}
 
   async sendInvoiceEmail(
     toEmail: string,
@@ -24,7 +24,7 @@ export class InvoiceMailService {
       : `Fattura_${invoiceNumber}.pdf`;
 
     try {
-      await this.mailerService.sendMail({
+      const sent = await this.mailerService.sendMail({
         to: toEmail,
         subject: `${docLabel} – DoFlow`,
         text: `Gentile ${clientName},\n\nIn allegato trovi il documento: ${docLabel}.\n\nCordiali saluti,\nIl team di DoFlow`,
@@ -45,7 +45,9 @@ export class InvoiceMailService {
             contentType: 'application/pdf',
           },
         ],
+        purpose: 'Invoice attachment',
       });
+      if (!sent) throw new Error('Trasporto email non disponibile');
 
       this.logger.log(`✅ Email "${docLabel}" inviata a ${toEmail}`);
       return { success: true };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +18,7 @@ export function KnowledgeAssetDetailPage({ assetId }: { assetId: string }) {
   const [tags, setTags] = useState<KnowledgeTag[]>([]);
   const [form, setForm] = useState<Record<string, string>>({});
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const [assetValue, tagsValue] = await Promise.all([
       knowledgeApi.getKnowledgeAsset(assetId),
       knowledgeApi.listKnowledgeTags().catch(() => ({ items: [] as KnowledgeTag[] })),
@@ -39,9 +39,19 @@ export function KnowledgeAssetDetailPage({ assetId }: { assetId: string }) {
       version: assetValue.version || "",
       metadata: jsonText(assetValue.metadata),
     });
-  };
+  }, [assetId]);
 
-  useEffect(() => { void load(); }, [assetId]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const update = async () => {
     try {

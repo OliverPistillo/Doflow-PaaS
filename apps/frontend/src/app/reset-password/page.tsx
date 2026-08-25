@@ -34,13 +34,25 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    const timer = window.setTimeout(() => {
       const sp = new URLSearchParams(window.location.search);
-      setToken(sp.get('token'));
-      setTenant(sp.get('tenant'));
-      window.history.replaceState({}, '', window.location.pathname);
+      const historyState = (window.history.state || {}) as Record<string, unknown>;
+      const urlToken = sp.get('token');
+      const urlTenant = sp.get('tenant');
+      const nextToken = urlToken || (typeof historyState.doflowResetToken === 'string' ? historyState.doflowResetToken : null);
+      const nextTenant = urlTenant || (typeof historyState.doflowResetTenant === 'string' ? historyState.doflowResetTenant : null);
+      setToken(nextToken);
+      setTenant(nextTenant);
+      if (urlToken || urlTenant) {
+        window.history.replaceState(
+          { ...historyState, doflowResetToken: nextToken, doflowResetTenant: nextTenant },
+          '',
+          window.location.pathname,
+        );
+      }
       setInitializing(false);
-    }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const onSubmit = async (e: FormEvent) => {
@@ -56,12 +68,15 @@ export default function ResetPasswordPage() {
     try {
       await apiFetch('/auth/reset-password', {
         method: 'POST',
-        auth: false,
         body: JSON.stringify({ token, password, tenant }),
       });
 
       setDone(true);
       setTimeout(() => {
+        const cleanState = { ...((window.history.state || {}) as Record<string, unknown>) };
+        delete cleanState.doflowResetToken;
+        delete cleanState.doflowResetTenant;
+        window.history.replaceState(cleanState, '', window.location.pathname);
         router.push('/login');
       }, 2000);
     } catch (e) {

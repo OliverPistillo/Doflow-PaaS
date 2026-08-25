@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { TelemetryService } from './telemetry.service';
 
 @Catch()
@@ -22,10 +23,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
   constructor(private readonly telemetryService: TelemetryService) {}
 
-  catch(exception: any, host: ArgumentsHost) {
+  catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
-    const response = ctx.getResponse();
-    const request = ctx.getRequest();
+    const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request & { tenantId?: string }>();
+    const error = exception instanceof Error ? exception : new Error(String(exception));
 
     const status =
       exception instanceof HttpException
@@ -33,7 +35,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
     const tenantId = request.tenantId || 'global';
-    const message = exception.message || 'Internal server error';
+    const message = error.message || 'Internal server error';
     const path = request.url;
 
     // --- FILTRO RUMORE (v3.5 Fix / v3.6 Update) ---
@@ -42,8 +44,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     // Tuttavia, percorsi specifici nel IGNORED_PATHS vengono silenziati del tutto (nessun log su console).
     const isIgnored = status === 404 && this.IGNORED_PATHS.some(p => path.includes(p));
 
-    // Tutti i 404 NON sono veri SYSTEM_ERROR, quindi skippiamo telemetryService.logRequest per loro
-    const isSystemError = status !== 404;
+    // I rifiuti 4xx sono risultati applicativi attesi (capability, CSRF,
+    // conflitti, validazione) e non devono attivare il broadcast realtime
+    // della Control Tower. Trattarli come SYSTEM_ERROR creerebbe un feedback
+    // loop quando un client reagisce alle notifiche ricaricando la stessa API.
+    const isSystemError = status >= 500;
 
     if (isSystemError) {
       // 1. SHADOW LOGGING: Mandiamo l'errore alla Control Tower
@@ -55,13 +60,18 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         metadata: {
           status,
           message,
-          stack: process.env.NODE_ENV === 'development' ? exception.stack : undefined,
+          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
         },
       });
     }
 
     if (!isIgnored) {
       this.logger.error(`[${status}] ${request.method} ${path} - ${message}`);
+    }
+
+    if (response.headersSent) {
+      this.logger.warn(`[${status}] Response headers already sent for ${request.method} ${path}`);
+      return;
     }
 
     // 2. RESPONSE: Risposta pulita per l'utente (Zero Trust)

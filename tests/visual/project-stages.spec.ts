@@ -57,15 +57,15 @@ async function installReadOnlyFixture(page: Page) {
 }
 
 async function assertDoflowSession(page: Page) {
-  const tenant = await page.evaluate(() => {
-    const token = window.localStorage.getItem('doflow_token');
-    if (!token) return null;
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-      return String(payload.tenantSlug || payload.tenantId || payload.tenant_id || '').toLowerCase();
-    } catch {
-      return null;
-    }
+  const tenant = await page.evaluate(async () => {
+    const response = await fetch('/api/auth/me', {
+      credentials: 'include',
+      headers: { 'x-doflow-web': '1' },
+    });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    const user = payload?.user || {};
+    return String(user.tenantSlug || user.tenantId || user.tenant_id || '').toLowerCase();
   });
   expect(tenant).toBe('doflow');
 }

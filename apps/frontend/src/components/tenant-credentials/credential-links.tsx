@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState,useEffectEvent } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,18 @@ export function CredentialLinks({ credentialId }: { credentialId: string }) {
       setLoading(false);
     }
   };
-  useEffect(() => { void load(); }, [credentialId]);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [credentialId]);
 
   const create = async () => {
     if (!isUuid(form.entity_id)) {
@@ -74,7 +85,7 @@ export function CredentialLinks({ credentialId }: { credentialId: string }) {
           </Select>
           <Button onClick={create}>Collega</Button>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">Quando un selettore affidabile non esiste, usa un UUID reale dell'entità interna.</p>
+        <p className="mt-2 text-xs text-muted-foreground">Quando un selettore affidabile non esiste, usa un UUID reale dell&apos;entità interna.</p>
       </div>
       {rows.length ? rows.map((row) => (
         <div key={row.id} className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">

@@ -1,22 +1,19 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState,useMemo } from "react";
 import {
-  FormInput, Plus, Search, Eye, Copy, Trash2, Edit2, BarChart2,
-  ToggleLeft, Link2, ExternalLink, CheckSquare, AlignLeft, Hash,
-  Mail, Calendar, Star, List, ChevronDown, ChevronRight, ArrowUpRight,
-  MousePointerClick, Users, Clock, TrendingUp,
+  FormInput,Plus,Search,Eye,Copy,Edit2,ToggleLeft,ExternalLink,CheckSquare,AlignLeft,Hash,
+  Mail,Calendar,Star,List,MousePointerClick,TrendingUp
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card,CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog,DialogContent,DialogHeader,DialogTitle,DialogFooter,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs,TabsContent,TabsList,TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────

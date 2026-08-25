@@ -1,10 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getTenantHeader } from '@/lib/tenant-fetch';
-import { getAuthToken } from '@/lib/auth-storage';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.doflow.it';
+import { apiFetch } from '@/lib/api';
 
 type User = {
   id: number;
@@ -19,34 +16,11 @@ export default function TenantUsersPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const getToken = () => getAuthToken();
-
   const loadUsers = async () => {
     setError(null);
 
-    const token = getToken();
-    if (!token) {
-      setError('Non autenticato: fai login prima.');
-      setUsers([]);
-      return;
-    }
-
     try {
-      // Nota: usiamo fetch nativa qui, ma potresti usare tenantFetch importata se vuoi risparmiare codice
-      const res = await fetch(`${API_BASE}/api/tenant/users`, {
-        cache: 'no-store',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          ...getTenantHeader(), // Ora questa chiamata è sicura
-        },
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || 'Errore caricamento utenti');
-      }
-
-      const data = await res.json();
+      const data = await apiFetch<{ users?: User[] }>('/tenant/users');
       setUsers(data.users ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Errore sconosciuto');
@@ -54,7 +28,7 @@ export default function TenantUsersPage() {
   };
 
   useEffect(() => {
-    void loadUsers();
+    queueMicrotask(() => void loadUsers());
   }, []);
 
   const handleCreate = async () => {
@@ -62,28 +36,11 @@ export default function TenantUsersPage() {
     setLoading(true);
     setError(null);
 
-    const token = getToken();
-    if (!token) {
-      setError('Non autenticato: fai login prima.');
-      setLoading(false);
-      return;
-    }
-
     try {
-      const res = await fetch(`${API_BASE}/api/tenant/users`, {
+      await apiFetch('/tenant/users', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          ...getTenantHeader(),
-        },
         body: JSON.stringify({ email }),
       });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || 'Errore creazione utente');
-      }
 
       setEmail('');
       await loadUsers();

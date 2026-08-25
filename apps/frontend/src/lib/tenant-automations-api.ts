@@ -56,6 +56,12 @@ export type AutomationRule = {
   last_error_message?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  lifecycle_status?: string;
+  optimistic_version?: number;
+  current_version?: number;
+  current_version_id?: string | null;
+  archived_at?: string | null;
+  change_reason?: string;
 };
 
 export type AutomationRun = {
@@ -77,6 +83,14 @@ export type AutomationRun = {
   input_payload?: unknown;
   result_payload?: unknown;
   actor_user_id?: string | null;
+  execution_key?: string | null;
+  operation_id?: string | null;
+  correlation_id?: string | null;
+  rule_version_id?: string | null;
+  attempt?: number;
+  retry_of?: string | null;
+  queue_job_id?: string | null;
+  dead_lettered_at?: string | null;
 };
 
 export type AutomationActionLog = {
@@ -147,23 +161,33 @@ export const automationsApi = {
   templates: (params?: AutomationParams) => apiFetch<ListResponse<AutomationTemplate>>(`/tenant/automations/templates${qs(params)}`),
   seedTemplates: () => apiFetch<{ success: boolean; templatesSeeded?: boolean; rulesSeeded?: boolean }>("/tenant/automations/templates/seed-base", { method: "POST", body: JSON.stringify({}) }),
   template: (templateId: string) => apiFetch<AutomationTemplate>(`/tenant/automations/templates/${templateId}`),
-  rules: (params?: AutomationParams) => apiFetch<ListResponse<AutomationRule>>(`/tenant/automations/rules${qs(params)}`),
+  rules: (params?: AutomationParams, signal?: AbortSignal) =>
+    apiFetch<ListResponse<AutomationRule>>(
+      `/tenant/automations/rules${qs(params)}`,
+      { signal },
+    ),
   createRule: (body: CreateAutomationRuleInput) => apiFetch<AutomationRule>("/tenant/automations/rules", { method: "POST", body: JSON.stringify(body) }),
   rule: (ruleId: string) => apiFetch<AutomationRule>(`/tenant/automations/rules/${ruleId}`),
   updateRule: (ruleId: string, body: UpdateAutomationRuleInput) => apiFetch<AutomationRule>(`/tenant/automations/rules/${ruleId}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteRule: (ruleId: string) => apiFetch<{ success: boolean }>(`/tenant/automations/rules/${ruleId}`, { method: "DELETE" }),
   enableRule: (ruleId: string) => apiFetch<AutomationRule>(`/tenant/automations/rules/${ruleId}/enable`, { method: "PATCH", body: JSON.stringify({}) }),
   disableRule: (ruleId: string) => apiFetch<AutomationRule>(`/tenant/automations/rules/${ruleId}/disable`, { method: "PATCH", body: JSON.stringify({}) }),
-  runRule: (ruleId: string, body: Record<string, unknown> = {}) => apiFetch<AutomationRun | Record<string, unknown>>(`/tenant/automations/rules/${ruleId}/run`, { method: "POST", body: JSON.stringify(body) }),
+  runRule: (ruleId: string, body: Record<string, unknown> = {}, idempotencyKey?: string) => apiFetch<AutomationRun | Record<string, unknown>>(`/tenant/automations/rules/${ruleId}/run`, { method: "POST", headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined, body: JSON.stringify(body) }),
+  retryRun: (runId: string, idempotencyKey?: string) => apiFetch<AutomationRun>(`/tenant/automations/runs/${runId}/retry`, { method: "POST", headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined, body: JSON.stringify({}) }),
   ruleRuns: (ruleId: string, params?: AutomationParams) => apiFetch<ListResponse<AutomationRun>>(`/tenant/automations/rules/${ruleId}/runs${qs(params)}`),
   exportRule: (ruleId: string) => apiFetch<Record<string, unknown>>(`/tenant/automations/rules/${ruleId}/export`),
   runDue: () => apiFetch<Record<string, unknown>>("/tenant/automations/run-due", { method: "POST", body: JSON.stringify({}) }),
   runTrigger: (triggerType: string, body: Record<string, unknown> = {}) => apiFetch<Record<string, unknown>>(`/tenant/automations/run-trigger/${triggerType}`, { method: "POST", body: JSON.stringify(body) }),
-  runs: (params?: AutomationParams) => apiFetch<ListResponse<AutomationRun>>(`/tenant/automations/runs${qs(params)}`),
+  runs: (params?: AutomationParams, signal?: AbortSignal) =>
+    apiFetch<ListResponse<AutomationRun>>(
+      `/tenant/automations/runs${qs(params)}`,
+      { signal },
+    ),
   run: (runId: string) => apiFetch<AutomationRun>(`/tenant/automations/runs/${runId}`),
   runActions: (runId: string) => apiFetch<ListResponse<AutomationActionLog>>(`/tenant/automations/runs/${runId}/actions`),
   exportRun: (runId: string) => apiFetch<Record<string, unknown>>(`/tenant/automations/runs/${runId}/export`),
   activity: (params?: AutomationParams) => apiFetch<ListResponse<AutomationActivity>>(`/tenant/automations/activity${qs(params)}`),
   dedupe: (params?: AutomationParams) => apiFetch<ListResponse<AutomationDedupeEntry>>(`/tenant/automations/dedupe${qs(params)}`),
   deleteDedupe: (dedupeId: string) => apiFetch<{ success: boolean }>(`/tenant/automations/dedupe/${dedupeId}`, { method: "DELETE" }),
+  health: () => apiFetch<Record<string, number | string>>("/tenant/automations/health"),
 };

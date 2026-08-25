@@ -2,14 +2,12 @@
 
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React,{ useEffect,useState,useCallback } from "react";
 import {
-  Loader2, RefreshCw, Search, Plus, MoreHorizontal,
-  Ticket, Clock, CheckCircle2, AlertTriangle, XCircle,
-  MessageSquare, Send, Shield, Timer, BarChart3,
-  Pencil, Trash2, ChevronDown,
+  Loader2,RefreshCw,Search,Plus,MoreHorizontal,
+  Ticket,Clock,CheckCircle2,MessageSquare,Send,Shield,Timer,Trash2
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card,CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -17,21 +15,23 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogDescription, DialogFooter,
+  Dialog,DialogContent,DialogHeader,DialogTitle,
+  DialogDescription,DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,SelectContent,SelectItem,SelectTrigger,SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
-  DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel,
+  DropdownMenu,DropdownMenuTrigger,DropdownMenuContent,
+  DropdownMenuItem,DropdownMenuSeparator,DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
+  Sheet,SheetContent,SheetHeader,SheetTitle,SheetDescription,
 } from "@/components/ui/sheet";
 import { apiFetch } from "@/lib/api";
+import { getErrorMessage } from "@/lib/error-message";
 import { useToast } from "@/hooks/use-toast";
+import { useCurrentDate } from "@/hooks/use-current-date";
 import { ExportButton } from "@/components/ui/export-button";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -119,6 +119,7 @@ function KpiCard({ title, value, sub, icon: Icon, color }: {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function TicketsPage() {
+  const currentDate = useCurrentDate();
   const { toast } = useToast();
   const [tickets, setTickets] = useState<TicketRow[]>([]);
   const [stats, setStats] = useState<TicketStats | null>(null);
@@ -150,14 +151,24 @@ export default function TicketsPage() {
       ]);
       setTickets(Array.isArray(t) ? t : []);
       setStats(s);
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setLoading(false);
     }
   }, [toast, filterStatus, filterPriority, search]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const handleCreate = async () => {
     setSaving(true);
@@ -167,8 +178,8 @@ export default function TicketsPage() {
       setFormData({ subject: "", description: "", category: "GENERAL", priority: "MEDIUM", tenantId: "", tenantName: "", reporterEmail: "" });
       await load();
       toast({ title: "Ticket creato" });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -182,8 +193,8 @@ export default function TicketsPage() {
         const updated = await apiFetch<TicketRow>(`/superadmin/tickets/${id}`);
         setDetailSheet(updated);
       }
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     }
   };
 
@@ -199,8 +210,8 @@ export default function TicketsPage() {
       const updated = await apiFetch<TicketRow>(`/superadmin/tickets/${detailSheet.id}`);
       setDetailSheet(updated);
       await load();
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -212,14 +223,14 @@ export default function TicketsPage() {
       setDetailSheet(null);
       await load();
       toast({ title: "Ticket eliminato" });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     }
   };
 
   const getSlaStatus = (ticket: TicketRow) => {
     if (!ticket.slaHours || ticket.status === "RESOLVED" || ticket.status === "CLOSED") return null;
-    const hoursOpen = (Date.now() - new Date(ticket.createdAt).getTime()) / (1000 * 60 * 60);
+    const hoursOpen = (currentDate.getTime() - new Date(ticket.createdAt).getTime()) / (1000 * 60 * 60);
     const pct = Math.min((hoursOpen / ticket.slaHours) * 100, 100);
     return { hoursOpen: Math.round(hoursOpen * 10) / 10, pct, breached: hoursOpen > ticket.slaHours };
   };

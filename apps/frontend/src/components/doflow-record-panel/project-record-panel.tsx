@@ -19,9 +19,13 @@ import { RecordOverview, type RecordPanelOverviewModel } from "./record-overview
 import { RecordTimeline, type ComposerKind, type RecordTimelineHandle } from "./record-timeline";
 import { RecordFiles, type RecordFilesHandle } from "./record-files";
 import { RecordAdministration, type RecordAdministrationHandle } from "./record-administration";
+import type { WorkProject, WorkTask } from "@/components/tenant-work/work-model";
 
-type ProjectRecord = Record<string, any>;
-type ProjectTask = Record<string, any>;
+type ProjectRecord = WorkProject & {
+  contact_id?: string | null;
+  contact_name?: string | null;
+};
+type ProjectTask = WorkTask;
 type ListResponse<T> = { items: T[]; total?: number };
 
 function isTaskOpen(task: ProjectTask) {
@@ -31,15 +35,15 @@ function isTaskOpen(task: ProjectTask) {
 function nextStage(project?: ProjectRecord | null) {
   if (!project) return null;
   const normalized = normalizeProjectStage(project.status);
-  if (!normalized.mapped || normalized.stage === "paused") return null;
-  const stages = DOFLOW_PROJECT_STAGE_OPTIONS.filter((item) => item.value !== "paused");
+  if (!normalized.mapped || normalized.stage === "suspended") return null;
+  const stages = DOFLOW_PROJECT_STAGE_OPTIONS.filter((item) => item.value !== "suspended");
   const index = stages.findIndex((item) => item.value === normalized.stage);
   return index >= 0 ? stages[index + 1]?.label || null : null;
 }
 
 function isProjectPaused(project?: ProjectRecord | null) {
   const normalized = normalizeProjectStage(project?.status);
-  return normalized.mapped && normalized.stage === "paused";
+  return normalized.mapped && normalized.stage === "suspended";
 }
 
 function taskTime(task: ProjectTask) {
@@ -78,8 +82,6 @@ export function DoflowProjectRecordPanel({
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
     const load = async () => {
       try {
         const detail = canonicalizeProjectItem(await apiFetch<ProjectRecord>(`/tenant/projects/${recordId}`));
@@ -100,7 +102,12 @@ export function DoflowProjectRecordPanel({
         if (!cancelled) setLoading(false);
       }
     };
-    void load();
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setLoading(true);
+      setError(null);
+      void load();
+    });
     return () => { cancelled = true; };
   }, [canView, recordId]);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -22,7 +22,7 @@ export function CredentialPermissions({ credentialId }: { credentialId: string }
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ user_id: "", can_view_metadata: true, can_reveal_secret: false, can_edit: false, can_manage_permissions: false });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -37,9 +37,19 @@ export function CredentialPermissions({ credentialId }: { credentialId: string }
     } finally {
       setLoading(false);
     }
-  };
+  }, [credentialId]);
 
-  useEffect(() => { void load(); }, [credentialId]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const create = async () => {
     if (!isUuid(form.user_id)) {
@@ -128,4 +138,3 @@ export function CredentialPermissions({ credentialId }: { credentialId: string }
 function Toggle({ labelText, checked, onChange }: { labelText: string; checked: boolean; onChange: (value: boolean) => void }) {
   return <Label className="flex items-center gap-2 text-sm"><Checkbox checked={checked} onCheckedChange={(value) => onChange(Boolean(value))} /> {labelText}</Label>;
 }
-

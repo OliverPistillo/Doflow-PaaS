@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
@@ -43,14 +43,14 @@ const registerSchema = z
       .email("Inserisci un'email valida"),
     password: z.string().optional(),
     confirmPassword: z.string().optional(),
-    googleSignupToken: z.string().optional(),
+    googleSignupGrant: z.string().optional(),
     acceptTerms: z.boolean().refine((v) => v === true, "Devi accettare i termini"),
   })
   .superRefine((data, ctx) => {
-    if (!data.googleSignupToken && (data.password || "").length < 8) {
+    if (!data.googleSignupGrant && (data.password || "").length < 8) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Minimo 8 caratteri", path: ["password"] });
     }
-    if (!data.googleSignupToken && data.password !== data.confirmPassword) {
+    if (!data.googleSignupGrant && data.password !== data.confirmPassword) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Le password non coincidono", path: ["confirmPassword"] });
     }
   });
@@ -99,7 +99,6 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
     register,
     handleSubmit,
     control,
-    watch,
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormValues>({
@@ -111,7 +110,7 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
       email: "",
       password: "",
       confirmPassword: "",
-      googleSignupToken: "",
+      googleSignupGrant: "",
       acceptTerms: false,
     },
   });
@@ -133,16 +132,15 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
       try {
         const result = await apiFetch<{
           kind: "google_signup";
-          googleSignupToken: string;
+          signupGrant: string;
           email: string;
           fullName?: string;
         }>("/auth/handoff/exchange", {
           method: "POST",
-          auth: false,
           body: JSON.stringify({ handoff, tenantTarget: "public" }),
         });
         if (result.kind !== "google_signup") throw new Error();
-        setValue("googleSignupToken", result.googleSignupToken);
+        setValue("googleSignupGrant", result.signupGrant);
         setValue("email", result.email);
         if (result.fullName) setValue("name", result.fullName);
       } catch {
@@ -152,9 +150,10 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
     void exchangeGoogleHandoff();
   }, [setValue]);
 
-  const company = watch("company");
-  const slug = watch("slug");
-  const googleSignupToken = watch("googleSignupToken");
+  const company = useWatch({ control, name: "company" });
+  const slug = useWatch({ control, name: "slug" });
+  const googleSignupGrant = useWatch({ control, name: "googleSignupGrant" });
+  const password = useWatch({ control, name: "password" });
   React.useEffect(() => {
     if (slugEdited) return;
     const generated = String(company || "")
@@ -171,16 +170,18 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
   React.useEffect(() => {
     const normalized = String(slug || "").trim().toLowerCase();
     if (!/^[a-z0-9-]{3,30}$/.test(normalized)) {
-      setSlugStatus("idle");
-      setSlugMessage("");
+      queueMicrotask(() => {
+        setSlugStatus("idle");
+        setSlugMessage("");
+      });
       return;
     }
-    setSlugStatus("checking");
+    queueMicrotask(() => setSlugStatus("checking"));
     const timer = window.setTimeout(async () => {
       try {
         const result = await apiFetch<{ available: boolean; reason?: string }>(
           `/auth/check-slug?slug=${encodeURIComponent(normalized)}`,
-          { auth: false },
+          {},
         );
         setSlugStatus(result.available ? "available" : "unavailable");
         setSlugMessage(result.available ? "Indirizzo disponibile" : result.reason || "Indirizzo non disponibile");
@@ -192,7 +193,7 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
     return () => window.clearTimeout(timer);
   }, [slug]);
 
-  const pwd = watch("password") || "";
+  const pwd = password || "";
   const strength = passwordStrength(pwd);
 
   const onSubmit = async (values: RegisterFormValues) => {
@@ -203,25 +204,21 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
         return;
       }
       const result = await apiFetch<{
-        token: string;
         tenant: { slug: string };
       }>("/auth/signup-tenant", {
         method: "POST",
-        auth: false,
         body: JSON.stringify({
           fullName: values.name,
           companyName: values.company,
           slug: values.slug.toLowerCase(),
           email: values.email,
-          password: values.googleSignupToken ? undefined : values.password,
-          googleSignupToken: values.googleSignupToken || undefined,
+          password: values.googleSignupGrant ? undefined : values.password,
+          googleSignupGrant: values.googleSignupGrant || undefined,
           acceptTerms: values.acceptTerms,
         }),
       });
       const handoff = await apiFetch<{ handoff: string }>("/auth/handoff", {
         method: "POST",
-        auth: false,
-        headers: { Authorization: `Bearer ${result.token}` },
         body: JSON.stringify({
           tenantTarget: result.tenant.slug,
           rememberMe: true,
@@ -229,9 +226,9 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
         }),
       });
       setSuccess(true);
-      window.location.href = getTenantLoginUrl(result.tenant.slug, handoff.handoff);
-    } catch (err: any) {
-      setGeneralError(err?.message || "Errore durante la registrazione.");
+      window.location.assign(getTenantLoginUrl(result.tenant.slug, handoff.handoff));
+    } catch (err: unknown) {
+      setGeneralError(err instanceof Error ? err.message : "Errore durante la registrazione.");
     }
   };
 
@@ -256,7 +253,7 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
         onClick={() => {
           const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api";
           const origin = apiBase.replace(/\/api\/?$/, "");
-          window.location.href = `${origin}/api/auth/google`;
+          window.open(`${origin}/api/auth/google`, "_self", "noopener");
         }}
       >
         <GoogleIcon />
@@ -340,7 +337,7 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
           </p>
         </div>
 
-        {!googleSignupToken && <div className="df-auth-field">
+        {!googleSignupGrant && <div className="df-auth-field">
           <Label htmlFor="reg-email" className="df-auth-label">
             Email
           </Label>
@@ -360,7 +357,7 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
           {errors.email && <p role="alert" className="df-auth-help">{errors.email.message}</p>}
         </div>}
 
-        {!googleSignupToken && <div className="df-auth-field">
+        {!googleSignupGrant && <div className="df-auth-field">
           <Label htmlFor="reg-password" className="df-auth-label">
             Password
           </Label>
@@ -401,7 +398,7 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
           {errors.password && <p role="alert" className="df-auth-help">{errors.password.message}</p>}
         </div>}
 
-        {!googleSignupToken && <div className="df-auth-field">
+        {!googleSignupGrant && <div className="df-auth-field">
           <Label htmlFor="reg-confirm" className="df-auth-label">
             Conferma password
           </Label>

@@ -36,7 +36,7 @@ export function ContractDetailPanel({
 }) {
   if (!contract) return <aside className="rounded-2xl border border-slate-200/80 bg-white p-5"><h2 className="text-[17px] font-semibold text-slate-950">Dettaglio contratto</h2><AdministrationEmpty className="mt-4">Seleziona un contratto per consultarne stato e documentazione.</AdministrationEmpty></aside>;
   const signed = signers.filter((signer) => signer.status === "signed").length;
-  const completed = checklist.filter((item) => ["approved", "not_applicable"].includes(item.status)).length;
+  const completed = checklist.filter((item) => ["approved", "not_applicable"].includes(String(item.status || ""))).length;
   return (
     <aside className="rounded-2xl border border-slate-200/80 bg-white p-5">
       <div className="flex items-start justify-between gap-3">

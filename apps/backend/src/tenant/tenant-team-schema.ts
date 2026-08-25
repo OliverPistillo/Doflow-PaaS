@@ -205,6 +205,7 @@ export async function ensureTenantTeamTables(ds: DataSource, schema: string) {
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_time_entries_date" ON "${s}".time_entries(entry_date) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_time_entries_status" ON "${s}".time_entries(status) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_time_entries_activity" ON "${s}".time_entries(activity_type) WHERE deleted_at IS NULL`);
+  await ds.query(`CREATE UNIQUE INDEX IF NOT EXISTS "uq_${s}_time_entries_active_timer" ON "${s}".time_entries(user_id) WHERE deleted_at IS NULL AND started_at IS NOT NULL AND ended_at IS NULL AND metadata->>'timer' = 'true'`);
 
   await ds.query(`
     CREATE TABLE IF NOT EXISTS "${s}".team_activity (

@@ -14,20 +14,43 @@ type HandoffNext = 'dashboard' | 'mfa' | 'onboarding' | 'superadmin';
 
 type LoginHandoffRecord = {
   kind: 'login';
-  token: string;
+  webUser: {
+    sub: string;
+    id: string;
+    email: string;
+    role: string;
+    tenantId: string;
+    tenantSlug: string;
+    authStage: AuthStage;
+    mfa_required?: boolean;
+  };
   subject: string;
   tenantTarget: string;
   authStage: AuthStage;
   next: HandoffNext;
   rememberMe: boolean;
+  sourceHost: string;
+  destinationHost: string;
+  correlationId: string;
 };
 
 type GoogleSignupHandoffRecord = {
   kind: 'google_signup';
-  googleSignupToken: string;
   tenantTarget: 'public';
+  googleId: string;
   email: string;
   fullName?: string;
+  picture?: string;
+  sourceHost: string;
+  destinationHost: string;
+  correlationId: string;
+};
+
+export type GoogleSignupGrant = {
+  googleId: string;
+  email: string;
+  fullName?: string;
+  picture?: string;
 };
 
 type HandoffRecord = LoginHandoffRecord | GoogleSignupHandoffRecord;
@@ -40,9 +63,32 @@ function normalizeTenant(value: unknown): string {
   return tenant;
 }
 
+function normalizeHost(value: unknown): string {
+  const raw = String(value ?? '').split(',')[0].trim().toLowerCase();
+  try {
+    const host = new URL(raw.includes('://') ? raw : `http://${raw}`).hostname;
+    if (host && /^[a-z0-9.-]+$/.test(host)) return host;
+  } catch { /* rejected below */ }
+  throw new BadRequestException('Host handoff non valido');
+}
+
+function destinationHost(tenantTarget: string): string {
+  const appBase = new URL(process.env.APP_BASE_URL || 'http://localhost:3000');
+  if (['localhost', '127.0.0.1'].includes(appBase.hostname)) return appBase.hostname;
+  if (tenantTarget === 'public' || tenantTarget === 'doflow') return appBase.hostname;
+  const domain = String(process.env.TENANT_BASE_DOMAIN || 'doflow.it')
+    .replace(/^https?:\/\//, '').replace(/^app\./, '').replace(/\/.*$/, '');
+  return normalizeHost(`${tenantTarget}.${domain}`);
+}
+
 function handoffKey(code: string): string {
   const digest = createHash('sha256').update(code).digest('hex');
   return `df:auth:handoff:${digest}`;
+}
+
+function googleSignupGrantKey(code: string): string {
+  const digest = createHash('sha256').update(code).digest('hex');
+  return `df:auth:google-signup:${digest}`;
 }
 
 @Injectable()
@@ -50,14 +96,13 @@ export class AuthHandoffService {
   constructor(private readonly redis: RedisService) {}
 
   async createLogin(input: {
-    token: string;
     user: Record<string, unknown>;
     tenantTarget: string;
     rememberMe?: boolean;
     next?: HandoffNext;
+    sourceHost?: string;
+    correlationId?: string;
   }) {
-    if (!input.token) throw new UnauthorizedException('Sessione non valida');
-
     const tenantTarget = normalizeTenant(input.tenantTarget);
     const tenantId = normalizeTenant(input.user.tenantId);
     const tenantSlug = normalizeTenant(input.user.tenantSlug ?? input.user.tenantId);
@@ -83,36 +128,57 @@ export class AuthHandoffService {
     const subject = String(input.user.sub ?? input.user.id ?? '').trim();
     if (!subject) throw new UnauthorizedException('Sessione non valida');
 
+    const webUser = {
+      sub: subject,
+      id: subject,
+      email: String(input.user.email ?? ''),
+      role: String(input.user.role ?? ''),
+      tenantId,
+      tenantSlug,
+      authStage,
+      mfa_required: input.user.mfa_required === true || input.user.mfaRequired === true,
+    };
+
     return this.store({
       kind: 'login',
-      token: input.token,
+      webUser,
       subject,
       tenantTarget,
       authStage,
       next,
       rememberMe: input.rememberMe === true,
+      sourceHost: normalizeHost(input.sourceHost || new URL(process.env.APP_BASE_URL || 'http://localhost:3000').hostname),
+      destinationHost: destinationHost(tenantTarget),
+      correlationId: String(input.correlationId || randomBytes(16).toString('hex')).slice(0, 128),
     });
   }
 
   async createGoogleSignup(input: {
-    googleSignupToken: string;
+    googleId: string;
     email: string;
     fullName?: string;
+    picture?: string;
+    sourceHost?: string;
+    correlationId?: string;
   }) {
-    if (!input.googleSignupToken || !input.email) {
+    if (!input.googleId || !input.email) {
       throw new BadRequestException('Google signup handoff non valido');
     }
 
     return this.store({
       kind: 'google_signup',
-      googleSignupToken: input.googleSignupToken,
       tenantTarget: 'public',
+      googleId: input.googleId,
       email: input.email,
       fullName: input.fullName,
+      picture: input.picture,
+      sourceHost: normalizeHost(input.sourceHost || new URL(process.env.APP_BASE_URL || 'http://localhost:3000').hostname),
+      destinationHost: destinationHost('public'),
+      correlationId: String(input.correlationId || randomBytes(16).toString('hex')).slice(0, 128),
     });
   }
 
-  async exchange(codeInput: unknown, tenantInput: unknown) {
+  async exchange(codeInput: unknown, tenantInput: unknown, destinationHostInput: unknown) {
     const code = String(codeInput ?? '').trim();
     if (!/^[A-Za-z0-9_-]{32,128}$/.test(code)) {
       throw new BadRequestException('Codice handoff non valido');
@@ -135,11 +201,26 @@ export class AuthHandoffService {
     if (record.tenantTarget !== tenantTarget) {
       throw new UnauthorizedException('Handoff non valido per questo tenant');
     }
+    if (record.destinationHost !== normalizeHost(destinationHostInput)) {
+      throw new UnauthorizedException('Handoff non valido per questo host');
+    }
 
     if (record.kind === 'google_signup') {
+      const signupGrant = randomBytes(32).toString('base64url');
+      const grant: GoogleSignupGrant = {
+        googleId: record.googleId,
+        email: record.email,
+        fullName: record.fullName,
+        picture: record.picture,
+      };
+      await this.redis.set(
+        googleSignupGrantKey(signupGrant),
+        JSON.stringify(grant),
+        AUTH_HANDOFF_TTL_SECONDS,
+      );
       return {
         kind: record.kind,
-        googleSignupToken: record.googleSignupToken,
+        signupGrant,
         email: record.email,
         fullName: record.fullName,
       };
@@ -147,12 +228,33 @@ export class AuthHandoffService {
 
     return {
       kind: record.kind,
-      token: record.token,
       tenantTarget: record.tenantTarget,
       authStage: record.authStage,
       next: record.next,
       rememberMe: record.rememberMe,
+      webUser: record.webUser,
     };
+  }
+
+  async consumeGoogleSignupGrant(input: unknown): Promise<GoogleSignupGrant | null> {
+    const grant = String(input ?? '').trim();
+    if (!grant) return null;
+    if (!/^[A-Za-z0-9_-]{32,128}$/.test(grant)) {
+      throw new BadRequestException('Sessione Google non valida o scaduta.');
+    }
+    const key = googleSignupGrantKey(grant);
+    const result = await this.redis.getClient().multi().get(key).del(key).exec();
+    const raw = result?.[0]?.[1];
+    if (typeof raw !== 'string') {
+      throw new BadRequestException('Sessione Google non valida o scaduta.');
+    }
+    try {
+      const parsed = JSON.parse(raw) as GoogleSignupGrant;
+      if (!parsed.googleId || !parsed.email) throw new Error('invalid grant');
+      return { ...parsed, email: parsed.email.toLowerCase() };
+    } catch {
+      throw new BadRequestException('Sessione Google non valida o scaduta.');
+    }
   }
 
   private async store(record: HandoffRecord) {

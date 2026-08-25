@@ -5,11 +5,10 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   Loader2, RefreshCw, HardDrive, Database, Download, Trash2, Play,
   Clock, CheckCircle2, XCircle, AlertTriangle, Archive, Server,
-  MoreHorizontal, FolderArchive, ShieldCheck, CalendarClock, Plus,
+  MoreHorizontal, ShieldCheck, CalendarClock, Plus,
   RotateCcw, Pencil, ToggleLeft, ToggleRight, CalendarDays,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getAuthToken } from "@/lib/auth-storage";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -31,7 +30,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, getApiBaseUrl } from "@/lib/api";
+import { getTenantHeader } from "@/lib/tenant-fetch";
 import { useToast } from "@/hooks/use-toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -81,6 +81,10 @@ const DEFAULT_FORM: ScheduleForm = {
   retentionDays: "30", isActive: true,
 };
 
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Errore sconosciuto";
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtSize(mb: number): string {
@@ -96,7 +100,7 @@ function getUsageColor(pct: number) {
 }
 
 function getStatusBadge(status: string) {
-  const map: Record<string, JSX.Element> = {
+  const map: Record<string, React.ReactElement> = {
     COMPLETED: <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 border-emerald-500/20 gap-1"><CheckCircle2 className="h-3 w-3" />Completato</Badge>,
     RUNNING:   <Badge variant="outline" className="text-[10px] bg-blue-500/10 text-blue-600 border-blue-500/20 gap-1"><Loader2 className="h-3 w-3 animate-spin" />In corso</Badge>,
     PENDING:   <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/20 gap-1"><Clock className="h-3 w-3" />In coda</Badge>,
@@ -153,23 +157,23 @@ function ScheduleDialog({ open, onClose, onSave, tenants, editing }: {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (editing) {
-      setForm({
-        tenantId: editing.tenantId ?? "GLOBAL",
-        frequency: editing.frequency,
-        backupType: editing.backupType,
-        hour: String(editing.hour),
-        dayOfWeek: String(editing.dayOfWeek ?? 1),
-        dayOfMonth: String(editing.dayOfMonth ?? 1),
-        retentionDays: String(editing.retentionDays),
-        isActive: editing.isActive,
-      });
-    } else {
-      setForm(DEFAULT_FORM);
-    }
+    const timer = window.setTimeout(() => {
+      setForm(editing ? {
+          tenantId: editing.tenantId ?? "GLOBAL",
+          frequency: editing.frequency,
+          backupType: editing.backupType,
+          hour: String(editing.hour),
+          dayOfWeek: String(editing.dayOfWeek ?? 1),
+          dayOfMonth: String(editing.dayOfMonth ?? 1),
+          retentionDays: String(editing.retentionDays),
+          isActive: editing.isActive,
+        } : DEFAULT_FORM);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [editing, open]);
 
-  const set = (k: keyof ScheduleForm, v: any) => setForm(f => ({ ...f, [k]: v }));
+  const set = <K extends keyof ScheduleForm>(key: K, value: ScheduleForm[K]) =>
+    setForm((current) => ({ ...current, [key]: value }));
 
   const handleSave = async () => {
     setSaving(true);
@@ -295,12 +299,15 @@ export default function StoragePage() {
     try {
       const res = await apiFetch<StorageOverview>("/superadmin/storage/overview");
       setData(res);
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Errore", description: errorMessage(error), variant: "destructive" });
     } finally { setLoading(false); }
   }, [toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   useEffect(() => {
     if (!data) return;
@@ -313,13 +320,13 @@ export default function StoragePage() {
   const triggerBackup = async () => {
     setTriggering(true);
     try {
-      const body: any = { type: backupType };
+      const body: { type: string; tenantId?: string } = { type: backupType };
       if (backupTenant !== "ALL") body.tenantId = backupTenant;
       await apiFetch("/superadmin/storage/backups/trigger", { method: "POST", body: JSON.stringify(body) });
       toast({ title: "✅ Backup avviato", description: "Esecuzione in background, la lista si aggiornerà." });
       setTimeout(() => load(), 1500);
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Errore", description: errorMessage(error), variant: "destructive" });
     } finally { setTriggering(false); }
   };
 
@@ -327,12 +334,21 @@ export default function StoragePage() {
     if (!b.storagePath) return;
     setDownloading(b.id);
     try {
-      const apiBase = process.env.NEXT_PUBLIC_API_URL || "";
-      const token = getAuthToken();
-      window.open(`${apiBase}/api/superadmin/storage/backups/${b.id}/download?token=${token}`, "_blank");
+      const headers: Record<string, string> = { ...getTenantHeader(), "X-Doflow-Web": "1" };
+      const response = await fetch(
+        `${getApiBaseUrl()}/superadmin/storage/backups/${encodeURIComponent(b.id)}/download`,
+        { credentials: "include", headers },
+      );
+      if (!response.ok) throw new Error(`Download non disponibile (HTTP ${response.status})`);
+      const blobUrl = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement("a");
+      anchor.href = blobUrl;
+      anchor.download = `backup-${b.id}.dump`;
+      anchor.click();
+      URL.revokeObjectURL(blobUrl);
       toast({ title: "⬇️ Download avviato" });
-    } catch (e: any) {
-      toast({ title: "Errore download", description: e.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Errore download", description: errorMessage(error), variant: "destructive" });
     } finally { setDownloading(null); }
   };
 
@@ -346,8 +362,8 @@ export default function StoragePage() {
         description: "Il database verrà ripristinato in background. Controlla i log del server.",
       });
       setRestoreTarget(null);
-    } catch (e: any) {
-      toast({ title: "Errore ripristino", description: e.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Errore ripristino", description: errorMessage(error), variant: "destructive" });
     } finally { setRestoring(null); }
   };
 
@@ -359,12 +375,12 @@ export default function StoragePage() {
       toast({ title: "🗑️ Backup eliminato" });
       setDeleteTarget(null);
       await load();
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Errore", description: errorMessage(error), variant: "destructive" });
     } finally { setDeleting(false); }
   };
 
-  const saveSchedule = async (form: any) => {
+  const saveSchedule = async (form: ScheduleForm) => {
     const payload = {
       tenantId: form.tenantId === "GLOBAL" ? null : form.tenantId,
       frequency: form.frequency,
@@ -396,8 +412,8 @@ export default function StoragePage() {
       toast({ title: "🗑️ Schedule eliminato" });
       setDeletingSchedule(null);
       await load();
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Errore", description: errorMessage(error), variant: "destructive" });
     }
   };
 

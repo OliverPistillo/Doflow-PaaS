@@ -31,8 +31,11 @@ export function CredentialForm({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setForm({
-      title: credential?.title || "",
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setForm({
+        title: credential?.title || "",
       kind: credential?.kind || "other",
       provider: credential?.provider || "",
       account_label: credential?.account_label || "",
@@ -47,9 +50,13 @@ export function CredentialForm({
       rotation_due_at: toDateInput(credential?.rotation_due_at),
       auto_renew: Boolean(credential?.auto_renew),
       description: credential?.description || "",
-      metadata_text: JSON.stringify(credential?.metadata || {}, null, 2),
+        metadata_text: JSON.stringify(credential?.metadata || {}, null, 2),
+      });
+      setSecret({});
     });
-    setSecret({});
+    return () => {
+      cancelled = true;
+    };
   }, [credential]);
 
   const set = (key: keyof FormState, value: unknown) => setForm((prev) => ({ ...prev, [key]: value }));
@@ -153,4 +160,3 @@ function SelectBox({ labelText, value, values, labels, onChange }: { labelText: 
     </div>
   );
 }
-

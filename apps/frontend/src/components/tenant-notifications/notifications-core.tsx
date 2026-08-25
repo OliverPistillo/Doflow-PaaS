@@ -89,7 +89,15 @@ export function NotificationsPage() {
   }, [loadNotifications, loadSummary]);
 
   useEffect(() => {
-    void reload();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void reload();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [reload]);
 
   const runAction = async (action: () => Promise<unknown>, success: string) => {

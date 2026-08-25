@@ -1,16 +1,14 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Mail, Plus, Search, Send, Copy, Trash2, Edit2, Eye,
-  BarChart2, Star, Tag, ChevronRight, Code, Braces, Variable } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useState,useMemo } from "react";
+import { Mail,Plus,Search,Send,Copy,Edit2,Eye,Code,Variable } from "lucide-react";
+import { Card,CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from "@/components/ui/select";
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter, SheetClose,
+  Sheet,SheetContent,SheetHeader,SheetTitle,SheetFooter
 } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";

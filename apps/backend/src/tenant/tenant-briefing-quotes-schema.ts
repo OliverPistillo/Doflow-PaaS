@@ -1,7 +1,8 @@
 import { DataSource } from 'typeorm';
+import { provisionSchemaOnce } from '../common/schema-provisioning-once';
 import { safeSchema } from '../common/schema.utils';
 
-export async function ensureTenantBriefingQuoteTables(ds: DataSource, schema: string) {
+async function provisionTenantBriefingQuoteTables(ds: DataSource, schema: string) {
   const s = safeSchema(schema, 'ensureTenantBriefingQuoteTables');
 
   await ds.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
@@ -138,6 +139,16 @@ export async function ensureTenantBriefingQuoteTables(ds: DataSource, schema: st
     )
   `);
 
+  // Le versioni sono righe autonome: gli importi e le righe della versione
+  // precedente restano quindi immutabili e verificabili anche dopo una revisione.
+  await ds.query(`ALTER TABLE "${s}".quotes ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1`);
+  await ds.query(`ALTER TABLE "${s}".quotes ADD COLUMN IF NOT EXISTS parent_quote_id UUID REFERENCES "${s}".quotes(id) ON DELETE SET NULL`);
+  await ds.query(`ALTER TABLE "${s}".quotes ADD COLUMN IF NOT EXISTS replaced_by_id UUID REFERENCES "${s}".quotes(id) ON DELETE SET NULL`);
+  await ds.query(`ALTER TABLE "${s}".quotes ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ`);
+  await ds.query(`ALTER TABLE "${s}".quotes ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMPTZ`);
+  await ds.query(`ALTER TABLE "${s}".quotes ADD COLUMN IF NOT EXISTS document_discount NUMERIC NOT NULL DEFAULT 0`);
+  await ds.query(`ALTER TABLE "${s}".quotes ADD COLUMN IF NOT EXISTS tax_rate NUMERIC NOT NULL DEFAULT 0`);
+
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_briefing_templates_active" ON "${s}".briefing_templates(is_active) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_briefings_company" ON "${s}".briefings(company_id) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_briefings_opportunity" ON "${s}".briefings(opportunity_id) WHERE deleted_at IS NULL`);
@@ -152,7 +163,19 @@ export async function ensureTenantBriefingQuoteTables(ds: DataSource, schema: st
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_quotes_briefing" ON "${s}".quotes(briefing_id) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_quotes_status" ON "${s}".quotes(status) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_quotes_valid_until" ON "${s}".quotes(valid_until) WHERE deleted_at IS NULL`);
+  await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_quotes_parent_version" ON "${s}".quotes(parent_quote_id, version) WHERE deleted_at IS NULL`);
+  await ds.query(`CREATE UNIQUE INDEX IF NOT EXISTS "uq_${s}_quotes_number_version" ON "${s}".quotes(lower(quote_number), version) WHERE deleted_at IS NULL AND quote_number IS NOT NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_quote_items_quote" ON "${s}".quote_items(quote_id) WHERE deleted_at IS NULL`);
+}
+
+export function ensureTenantBriefingQuoteTables(
+  ds: DataSource,
+  schema: string,
+): Promise<void> {
+  const safe = safeSchema(schema, 'ensureTenantBriefingQuoteTables');
+  return provisionSchemaOnce(ds, `tenant-briefing-quotes:${safe}`, () =>
+    provisionTenantBriefingQuoteTables(ds, safe),
+  );
 }
 
 export async function seedDoflowBriefingQuoteTemplates(ds: DataSource, schema: string) {

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Optional,
   Post,
   Req,
   Res,
@@ -12,6 +13,9 @@ import { randomBytes, createHash } from 'crypto';
 import * as bcrypt from 'bcryptjs'; // namespace import — sicuro con qualsiasi bundler/tsconfig
 import { MailService } from './mail/mail.service';
 import { safeSchema } from './common/schema.utils';
+import { WebSessionService } from './auth/web-session.service';
+import { RedisService } from './redis/redis.service';
+import { AuditService } from './audit.service';
 
 function getTenantId(req: Request): string {
   const tenantId = (req as any).tenantId as string | undefined;
@@ -36,7 +40,77 @@ export class AuthPasswordController {
 
   constructor(
     private readonly mail: MailService,
+    @Optional() private readonly webSessions?: WebSessionService,
+    @Optional() private readonly redis?: RedisService,
+    @Optional() private readonly audit?: AuditService,
   ) {}
+
+  private requestIp(req: Request): string {
+    const forwarded = req.headers['x-forwarded-for'];
+    const firstForwarded = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+    return firstForwarded?.split(',')[0]?.trim() || req.ip || 'unknown';
+  }
+
+  private async consumeRateLimit(
+    req: Request,
+    scope: 'forgot' | 'reset',
+    discriminator: string,
+    limit: number,
+    windowSeconds: number,
+  ): Promise<number | null> {
+    if (!this.redis) return null;
+    const digest = createHash('sha256')
+      .update(`${this.requestIp(req)}|${discriminator.toLowerCase()}`)
+      .digest('hex');
+    const key = `df:auth:${scope}:${digest}`;
+
+    try {
+      const client = this.redis.getClient();
+      const attempts = await client.incr(key);
+      if (attempts === 1) await client.expire(key, windowSeconds);
+      if (attempts <= limit) return null;
+      const ttl = await client.ttl(key);
+      return ttl > 0 ? ttl : windowSeconds;
+    } catch (error) {
+      this.logger.error('Password recovery rate limiter unavailable', error);
+      return null;
+    }
+  }
+
+  private async clearRateLimit(
+    req: Request,
+    scope: 'forgot' | 'reset',
+    discriminator: string,
+  ) {
+    if (!this.redis) return;
+    const digest = createHash('sha256')
+      .update(`${this.requestIp(req)}|${discriminator.toLowerCase()}`)
+      .digest('hex');
+    try {
+      await this.redis.del(`df:auth:${scope}:${digest}`);
+    } catch (error) {
+      this.logger.error('Unable to clear password recovery rate limit', error);
+    }
+  }
+
+  private async auditSafe(
+    req: Request,
+    action: string,
+    tenantSchema: string,
+    options: { targetEmail?: string; metadata?: Record<string, unknown> } = {},
+  ) {
+    if (!this.audit) return;
+    try {
+      await this.audit.log(req, {
+        action,
+        tenantSchema,
+        targetEmail: options.targetEmail,
+        metadata: options.metadata,
+      });
+    } catch (error) {
+      this.logger.error(`Unable to write audit event ${action}`, error);
+    }
+  }
 
   private async resolveTenant(
     req: Request,
@@ -65,8 +139,7 @@ export class AuthPasswordController {
       );
       const entry = directory[0];
       if (!entry) return { tenantId: 'public', tenantSlug: 'public', conn };
-      const role = String(entry.role || '').toLowerCase();
-      if (!entry.tenant_id || entry.tenant_id === 'public' || ['superadmin', 'super_admin'].includes(role)) {
+      if (!entry.tenant_id || entry.tenant_id === 'public') {
         return { tenantId: 'public', tenantSlug: 'public', conn };
       }
       tenantRef = String(entry.tenant_id).toLowerCase();
@@ -102,6 +175,12 @@ export class AuthPasswordController {
       return res.status(400).json({ error: 'email required' });
     }
 
+    const retryAfter = await this.consumeRateLimit(req, 'forgot', email, 5, 15 * 60);
+    if (retryAfter) {
+      res.setHeader('Retry-After', String(retryAfter));
+      return res.status(429).json({ error: 'too many requests' });
+    }
+
     const resolved = await this.resolveTenant(req, { email });
     if (!resolved) return res.json({ ok: true });
     const { tenantId, tenantSlug, conn } = resolved;
@@ -114,6 +193,9 @@ export class AuthPasswordController {
 
     if (userRows.length === 0) {
       // rispondi comunque 200 per non leakare utenti
+      await this.auditSafe(req, 'auth.password_reset.requested', tenantId, {
+        metadata: { accountMatched: false },
+      });
       return res.json({ ok: true });
     }
 
@@ -122,14 +204,29 @@ export class AuthPasswordController {
     const now = new Date();
     const expires = new Date(now.getTime() + 15 * 60 * 1000); // 15 minuti
 
-    await conn.query(
-      `
-      insert into "${tenantId}".password_reset_tokens
-      (token_hash, email, created_at, expires_at)
-      values ($1, $2, $3, $4)
-      `,
-      [tokenHash, email, now.toISOString(), expires.toISOString()],
-    );
+    const runner = conn.createQueryRunner();
+    await runner.connect();
+    await runner.startTransaction();
+    try {
+      await runner.query(
+        `update "${tenantId}".password_reset_tokens
+            set invalidated_at = $1
+          where lower(email) = $2 and used_at is null and invalidated_at is null`,
+        [now.toISOString(), email],
+      );
+      await runner.query(
+        `insert into "${tenantId}".password_reset_tokens
+          (token_hash, email, created_at, expires_at)
+         values ($1, $2, $3, $4)`,
+        [tokenHash, email, now.toISOString(), expires.toISOString()],
+      );
+      await runner.commitTransaction();
+    } catch (error) {
+      if (runner.isTransactionActive) await runner.rollbackTransaction();
+      throw error;
+    } finally {
+      await runner.release();
+    }
 
     const host =
       (req.headers['x-forwarded-host'] as string) ??
@@ -156,6 +253,11 @@ export class AuthPasswordController {
       resetLink,
     });
 
+    await this.auditSafe(req, 'auth.password_reset.requested', tenantId, {
+      targetEmail: email,
+      metadata: { accountMatched: true, expiresInMinutes: 15 },
+    });
+
     return res.json({ ok: true });
   }
 
@@ -177,6 +279,19 @@ export class AuthPasswordController {
       return res.status(400).json({ error: 'token and password required' });
     }
 
+    const resetDiscriminator = token ? hashToken(token) : 'missing';
+    const retryAfter = await this.consumeRateLimit(
+      req,
+      'reset',
+      resetDiscriminator,
+      8,
+      15 * 60,
+    );
+    if (retryAfter) {
+      res.setHeader('Retry-After', String(retryAfter));
+      return res.status(429).json({ error: 'too many requests' });
+    }
+
     if (password.length < 8) {
       return res
         .status(400)
@@ -187,66 +302,92 @@ export class AuthPasswordController {
     if (!resolved) {
       return res.status(400).json({ error: 'invalid or expired token' });
     }
-    const { tenantId, conn } = resolved;
+    const { tenantId, tenantSlug, conn } = resolved;
 
     const tokenHash = hashToken(token);
-
-    const rows = await conn.query(
-      `
-      select id, email, created_at, expires_at, used_at, invalidated_at
-      from "${tenantId}".password_reset_tokens
-      where token_hash = $1
-      order by id desc
-      limit 1
-      `,
-      [tokenHash],
-    );
-
-    if (rows.length === 0) {
-      return res.status(400).json({ error: 'invalid or expired token' });
-    }
-
-    const row = rows[0] as {
-      id: number;
-      email: string;
-      expires_at: string;
-      used_at: string | null;
-      invalidated_at: string | null;
-    };
-
-    const now = new Date();
-    const exp = new Date(row.expires_at);
-
-    if (row.used_at || row.invalidated_at || now > exp) {
-      return res.status(400).json({ error: 'invalid or expired token' });
-    }
-
     const passwordHash = await bcrypt.hash(password, 10);
+    const runner = conn.createQueryRunner();
+    let userId = '';
+    let userEmail = '';
+    await runner.connect();
+    await runner.startTransaction();
+    try {
+      const rows = await runner.query(
+        `select id, email, expires_at, used_at, invalidated_at
+           from "${tenantId}".password_reset_tokens
+          where token_hash = $1
+          order by id desc
+          limit 1
+          for update`,
+        [tokenHash],
+      );
+      const row = rows[0] as {
+        id: number;
+        email: string;
+        expires_at: string;
+        used_at: string | null;
+        invalidated_at: string | null;
+      } | undefined;
+      const now = new Date();
+      if (!row || row.used_at || row.invalidated_at || now > new Date(row.expires_at)) {
+        await runner.rollbackTransaction();
+        await this.auditSafe(req, 'auth.password_reset.failed', tenantId, {
+          metadata: { reason: 'invalid_or_expired' },
+        });
+        return res.status(400).json({ error: 'invalid or expired token' });
+      }
 
-    const claimed = await conn.query(
-      `
-      update "${tenantId}".password_reset_tokens
-      set used_at = $1
-      where id = $2
-        and used_at is null
-        and invalidated_at is null
-        and expires_at >= $1
-      returning id
-      `,
-      [now.toISOString(), row.id],
-    );
-    if (!claimed[0]) {
-      return res.status(400).json({ error: 'invalid or expired token' });
+      const claimed = await runner.query(
+        `update "${tenantId}".password_reset_tokens
+            set used_at = $1
+          where id = $2 and used_at is null and invalidated_at is null and expires_at >= $1
+          returning id`,
+        [now.toISOString(), row.id],
+      );
+      if (!claimed[0]) {
+        await runner.rollbackTransaction();
+        await this.auditSafe(req, 'auth.password_reset.failed', tenantId, {
+          metadata: { reason: 'already_claimed' },
+        });
+        return res.status(400).json({ error: 'invalid or expired token' });
+      }
+
+      const users = await runner.query(
+        `update "${tenantId}".users
+            set password_hash = $1
+          where lower(email) = $2
+          returning id`,
+        [passwordHash, row.email.toLowerCase()],
+      );
+      if (!users[0]?.id) throw new Error('Reset target user not found');
+      userId = String(users[0].id);
+      userEmail = row.email.toLowerCase();
+
+      await runner.query(
+        `update "${tenantId}".password_reset_tokens
+            set invalidated_at = $1
+          where lower(email) = $2 and used_at is null and invalidated_at is null`,
+        [now.toISOString(), row.email.toLowerCase()],
+      );
+      await runner.commitTransaction();
+    } catch (error) {
+      if (runner.isTransactionActive) await runner.rollbackTransaction();
+      throw error;
+    } finally {
+      await runner.release();
     }
 
-    await conn.query(
-      `
-      update "${tenantId}".users
-      set password_hash = $1
-      where lower(email) = $2
-      `,
-      [passwordHash, row.email.toLowerCase()],
-    );
+    if (userId && this.webSessions) {
+      await this.webSessions.revokeUserSessions(tenantSlug, userId);
+      await this.webSessions.revoke(req);
+      this.webSessions.clear(res);
+    }
+
+    await this.clearRateLimit(req, 'reset', resetDiscriminator);
+    await this.auditSafe(req, 'auth.password_reset.completed', tenantId, {
+      targetEmail: userEmail,
+      metadata: { sessionsRevoked: Boolean(userId && this.webSessions) },
+    });
 
     return res.json({ ok: true });
   }

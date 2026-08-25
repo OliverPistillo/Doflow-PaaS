@@ -21,10 +21,8 @@ import {
   Puzzle,
   Settings,
   CalendarDays,
-  Truck,
-  Globe,
-  Sparkles,
-  type LucideIcon,
+  Truck,Sparkles,
+  type LucideIcon
 } from "lucide-react";
 
 // ─── Primitive types ──────────────────────────────────────────────────────────

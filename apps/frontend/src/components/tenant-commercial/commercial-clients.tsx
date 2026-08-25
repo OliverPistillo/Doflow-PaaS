@@ -105,7 +105,15 @@ export function CommercialClients() {
   };
 
   useEffect(() => {
-    void load();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const rows = useMemo<CommercialClientRow[]>(() => companies.map((company) => {

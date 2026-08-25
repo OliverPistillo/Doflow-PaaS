@@ -48,8 +48,16 @@ export function UserPermissionsPanel({
   const [role, setRole] = useState("user");
 
   useEffect(() => {
-    setDraft(permissions);
-    setRole(normalizeRole(member?.tenant_role));
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setDraft(permissions);
+        setRole(normalizeRole(member?.tenant_role));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [member, permissions]);
 
   const actor = normalizeRole(actorRole);

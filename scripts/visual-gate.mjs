@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { createHmac } from 'node:crypto';
 import { access, chmod, cp, lstat, mkdir, readFile, readdir, readlink, rm, stat, symlink, unlink } from 'node:fs/promises';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
@@ -9,9 +10,13 @@ const isWindows = process.platform === 'win32';
 const packageRunner = isWindows ? (process.env.ComSpec || 'cmd.exe') : 'corepack';
 const frontendPort = 3100;
 const frontendUrl = `http://localhost:${frontendPort}`;
-const backendUrl = 'https://api.doflow.it';
+const isolated = process.argv.includes('--isolated') || process.env.DOFLOW_VISUAL_ISOLATED === '1';
+const backendUrl = isolated
+  ? (process.env.DOFLOW_VISUAL_BACKEND_URL || 'http://localhost:3401')
+  : 'https://api.doflow.it';
 const authDir = path.join(root, '.visual-auth');
 const storageStatePath = path.join(authDir, 'storage-state.json');
+const acceptanceCredentialPath = path.join(authDir, 'acceptance-credentials.json');
 const visualRuntimeDir = path.join(root, '.visual-runtime');
 const standaloneDir = path.join(root, 'apps', 'frontend', '.next', 'standalone');
 const staticDir = path.join(root, 'apps', 'frontend', '.next', 'static');
@@ -122,16 +127,38 @@ async function prepareVisualRuntime(frontendEnv) {
   }
 
   await mkdir(path.join(visualRuntimeDir, 'apps', 'frontend', '.next'), { recursive: true });
-  // Next emits absolute workspace dependency links on Windows. Rewrite them
-  // inside the standalone tree before either Next or this runner cleans it.
-  await isolateStandaloneDependencyLinks(standaloneDir);
-  await cp(standaloneDir, visualRuntimeDir, { recursive: true });
+  await hydrateTracedDependencies(standaloneDir);
+  // Keep relative pnpm links relative while copying. Without verbatimSymlinks,
+  // fs.cp materializes Windows links against the build directory and the
+  // supposedly isolated runtime still resolves modules from .next/standalone.
+  await cp(standaloneDir, visualRuntimeDir, { recursive: true, verbatimSymlinks: true });
+  await isolateStandaloneDependencyLinks(visualRuntimeDir);
   await cp(staticDir, path.join(visualRuntimeDir, 'apps', 'frontend', '.next', 'static'), {
     recursive: true,
   });
   await cp(publicDir, path.join(visualRuntimeDir, 'apps', 'frontend', 'public'), {
     recursive: true,
   });
+}
+
+async function hydrateTracedDependencies(targetStandaloneDir) {
+  // Next 16's Windows file trace may retain only the CJS half of @swc/helpers,
+  // although the standalone server imports its ESM helpers at runtime.
+  const packageStore = path.join(targetStandaloneDir, 'node_modules', '.pnpm');
+  const entries = await readdir(packageStore);
+  let hydrated = 0;
+  for (const entry of entries.filter((name) => name.startsWith('@swc+helpers@'))) {
+    const source = path.join(root, 'node_modules', '.pnpm', entry, 'node_modules', '@swc', 'helpers');
+    const destination = path.join(packageStore, entry, 'node_modules', '@swc', 'helpers');
+    try {
+      await access(source);
+      await cp(source, destination, { recursive: true, force: true });
+      hydrated += 1;
+    } catch {
+      throw new VisualBlockedError('dipendenza standalone @swc/helpers incompleta');
+    }
+  }
+  if (hydrated > 0) log(`Output standalone completato: ${hydrated} pacchetto @swc/helpers idratato.`);
 }
 
 async function isolateStandaloneDependencyLinks(sourceDir) {
@@ -146,6 +173,10 @@ async function isolateStandaloneDependencyLinks(sourceDir) {
       if (sourceStats.isSymbolicLink()) {
         const rawTarget = await readlink(sourcePath);
         const absoluteTarget = path.resolve(path.dirname(sourcePath), rawTarget);
+        const targetRelativeToRuntime = path.relative(sourceDir, absoluteTarget);
+        if (!targetRelativeToRuntime.startsWith('..') && !path.isAbsolute(targetRelativeToRuntime)) {
+          continue;
+        }
         const targetRelativeToModules = path.relative(workspaceModulesDir, absoluteTarget);
         if (targetRelativeToModules.startsWith('..') || path.isAbsolute(targetRelativeToModules)) {
           throw new VisualBlockedError('link standalone esterno al workspace node_modules');
@@ -189,38 +220,28 @@ async function waitFor(url, label, frontendProcess, timeoutMs = 180_000) {
   throw new VisualBlockedError(`${label} non disponibile${lastStatus ? ` (HTTP ${lastStatus})` : ''}`);
 }
 
-function parseJwt(token) {
-  try {
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
-    return payload && typeof payload === 'object' ? payload : null;
-  } catch {
-    return null;
-  }
-}
-
-function validateToken(token) {
-  const payload = parseJwt(token);
-  if (!payload) return null;
-
-  const tenant = String(payload.tenantSlug || payload.tenantId || payload.tenant_id || '').toLowerCase();
-  const role = String(payload.role || '').toLowerCase();
-  const authStage = String(payload.authStage || '').toUpperCase();
-  const pending = payload.mfa_pending === true || ['MFA_PENDING', 'MFA_SETUP_NEEDED'].includes(authStage);
+function validateIdentity(payload) {
+  const user = payload?.user || payload;
+  const tenant = String(user?.tenantSlug || user?.tenantId || user?.tenant_id || '').toLowerCase();
+  const role = String(user?.role || '').toLowerCase();
+  const authStage = String(user?.authStage || '').toUpperCase();
+  const pending = user?.mfa_pending === true || ['MFA_PENDING', 'MFA_SETUP_NEEDED'].includes(authStage);
   const complete = !pending && (authStage === 'FULL' || authStage === '');
-  const expiresAt = typeof payload.exp === 'number' ? payload.exp * 1000 : null;
-  const fresh = expiresAt === null || expiresAt > Date.now() + 60_000;
 
-  if (tenant !== 'doflow' || !authorizedRoles.has(role) || !complete || !fresh) return null;
-  return { tenant, role, authStage: authStage || 'FULL', expiresAt };
+  if (tenant !== 'doflow' || !authorizedRoles.has(role) || !complete) return null;
+  return { tenant, role, authStage: authStage || 'FULL' };
 }
 
 async function readStoredSession() {
   try {
     const state = JSON.parse(await readFile(storageStatePath, 'utf8'));
-    const originState = state.origins?.find((entry) => entry.origin === frontendUrl);
-    const token = originState?.localStorage?.find((entry) => entry.name === 'doflow_token')?.value;
-    const identity = typeof token === 'string' ? validateToken(token) : null;
-    return identity ? { token, identity } : null;
+    const nowSeconds = Date.now() / 1000;
+    const sessionCookie = state.cookies?.find((entry) =>
+      ['doflow_session', '__Host-doflow_session'].includes(entry.name) &&
+      String(entry.domain || '').replace(/^\./, '') === 'localhost' &&
+      (entry.expires === -1 || Number(entry.expires) > nowSeconds + 60),
+    );
+    return sessionCookie ? { kind: 'cookie', identity: null } : null;
   } catch {
     return null;
   }
@@ -299,10 +320,14 @@ async function captureManualAuthentication(chromium) {
     while (Date.now() < deadline && !authenticated) {
       for (const candidate of context.pages().reverse()) {
         try {
-          const token = await candidate.evaluate(() => window.localStorage.getItem('doflow_token'));
-          const identity = typeof token === 'string' ? validateToken(token) : null;
-          if (identity) {
-            authenticated = identity;
+          const payload = await candidate.evaluate(async () => {
+            const response = await fetch('/api/auth/me', { credentials: 'include' });
+            if (!response.ok) return null;
+            return response.json();
+          });
+          const cookieIdentity = validateIdentity(payload);
+          if (cookieIdentity) {
+            authenticated = cookieIdentity;
             break;
           }
         } catch {
@@ -325,6 +350,7 @@ async function captureManualAuthentication(chromium) {
 
     const saved = await readStoredSession();
     if (!saved) throw new VisualBlockedError('sessione autenticata non salvabile in modo valido');
+    saved.identity = authenticated;
     log(`Autenticazione verificata in memoria: tenant ${saved.identity.tenant}, ruolo autorizzato, stage ${saved.identity.authStage}.`);
     log('Storage state temporaneo salvato in .visual-auth/ (ignorato da Git e mai stampato).');
     return saved;
@@ -334,13 +360,118 @@ async function captureManualAuthentication(chromium) {
   }
 }
 
+function decodeBase32(value) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const normalized = String(value || '').toUpperCase().replace(/=+$/g, '');
+  let bits = '';
+  for (const character of normalized) {
+    const index = alphabet.indexOf(character);
+    if (index < 0) throw new VisualBlockedError('secret MFA isolated non valido');
+    bits += index.toString(2).padStart(5, '0');
+  }
+  const bytes = [];
+  for (let offset = 0; offset + 8 <= bits.length; offset += 8) {
+    bytes.push(Number.parseInt(bits.slice(offset, offset + 8), 2));
+  }
+  return Buffer.from(bytes);
+}
+
+function currentTotp(secret) {
+  const counter = Math.floor(Date.now() / 30_000);
+  const buffer = Buffer.alloc(8);
+  buffer.writeBigUInt64BE(BigInt(counter));
+  const digest = createHmac('sha1', decodeBase32(secret)).update(buffer).digest();
+  const offset = digest[digest.length - 1] & 0x0f;
+  const binary = (
+    ((digest[offset] & 0x7f) << 24)
+    | ((digest[offset + 1] & 0xff) << 16)
+    | ((digest[offset + 2] & 0xff) << 8)
+    | (digest[offset + 3] & 0xff)
+  );
+  return String(binary % 1_000_000).padStart(6, '0');
+}
+
+async function captureIsolatedAuthentication(chromium) {
+  let credentials;
+  try {
+    credentials = JSON.parse(await readFile(acceptanceCredentialPath, 'utf8'));
+  } catch {
+    throw new VisualBlockedError('credenziali acceptance isolate non disponibili');
+  }
+  if (!credentials?.email || !credentials?.password || !credentials?.mfaSecret) {
+    throw new VisualBlockedError('credenziali acceptance isolate incomplete');
+  }
+
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({
+    baseURL: frontendUrl,
+    colorScheme: 'light',
+    locale: 'it-IT',
+    timezoneId: 'Europe/Rome',
+  });
+  const blocked = [];
+  await context.route('**/api/**', async (route) => {
+    const request = route.request();
+    const decision = apiDecision(request, true);
+    if (decision.allowed) return route.continue();
+    blocked.push({
+      method: request.method().toUpperCase(),
+      pathname: new URL(request.url()).pathname,
+      reason: decision.reason,
+    });
+    await route.abort('blockedbyclient');
+  });
+
+  try {
+    const page = await context.newPage();
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    await page.getByLabel('Email').fill(credentials.email);
+    await page.getByLabel('Password', { exact: true }).fill(credentials.password);
+    await page.getByRole('button', { name: 'Accedi', exact: true }).click();
+    await page.waitForURL(/\/doflow\/mfa$/);
+    await page.getByLabel('Codice di verifica a 6 cifre').fill(currentTotp(credentials.mfaSecret));
+    await page.getByRole('button', { name: 'Verifica Codice' }).click();
+    await page.waitForURL(/\/dashboard$/);
+
+    const payload = await page.evaluate(async () => {
+      const response = await fetch('/api/auth/me', { credentials: 'include' });
+      return response.ok ? response.json() : null;
+    });
+    const identity = validateIdentity(payload);
+    if (!identity) throw new VisualBlockedError('autenticazione acceptance isolata non valida');
+    if (blocked.length > 0) throw new VisualNoGoError('richieste inattese bloccate durante auth isolata');
+
+    await mkdir(authDir, { recursive: true });
+    await context.storageState({ path: storageStatePath });
+    try { await chmod(storageStatePath, 0o600); } catch { /* Windows ACL inherited. */ }
+    log('Autenticazione isolata completata tramite login reale, MFA TOTP e cookie HttpOnly.');
+    return { kind: 'cookie', identity };
+  } finally {
+    await context.close();
+    await browser.close();
+  }
+}
+
 async function verifyRemoteSession(session) {
+  let state;
+  try {
+    state = JSON.parse(await readFile(storageStatePath, 'utf8'));
+  } catch {
+    throw new VisualBlockedError('sessione autenticata locale non leggibile');
+  }
+  const cookieHeader = (state.cookies || [])
+    .filter((cookie) => String(cookie.domain || '').replace(/^\./, '') === 'localhost')
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .join('; ');
+  if (!cookieHeader) throw new VisualBlockedError('authentication required');
+
   let response;
   try {
     response = await fetch(`${frontendUrl}/api/auth/me`, {
       method: 'GET',
       headers: {
-        Authorization: `Bearer ${session.token}`,
+        Cookie: cookieHeader,
+        'x-doflow-web': '1',
         'x-doflow-tenant-id': 'doflow',
       },
       signal: AbortSignal.timeout(15_000),
@@ -362,10 +493,8 @@ async function verifyRemoteSession(session) {
   } catch {
     throw new VisualBlockedError('risposta auth non valida dal backend remoto');
   }
-  const tenant = String(body?.user?.tenantId || body?.user?.tenantSlug || '').toLowerCase();
-  const role = String(body?.user?.role || '').toLowerCase();
-  const stage = String(body?.user?.authStage || session.identity.authStage || '').toUpperCase();
-  if (tenant !== 'doflow' || !authorizedRoles.has(role) || !['FULL', ''].includes(stage)) {
+  const identity = validateIdentity(body);
+  if (!identity) {
     throw new VisualBlockedError('authentication required');
   }
   log('Sessione server verificata tramite /api/auth/me: tenant doflow, ruolo autorizzato, autenticazione completa.');
@@ -394,8 +523,8 @@ async function main() {
     return;
   }
 
-  let session = headed ? null : await readStoredSession();
-  if (!headed && !session) {
+  let session = headed || isolated ? null : await readStoredSession();
+  if (!headed && !isolated && !session) {
     throw new VisualBlockedError('authentication required');
   }
 
@@ -423,7 +552,8 @@ async function main() {
     await waitFor(`${frontendUrl}/login`, 'frontend locale', frontendProcess);
     await waitFor(`${frontendUrl}/api/health/system`, 'proxy Next/backend remoto', frontendProcess);
 
-    if (headed) session = await captureManualAuthentication(chromium);
+    if (isolated) session = await captureIsolatedAuthentication(chromium);
+    else if (headed) session = await captureManualAuthentication(chromium);
     await verifyRemoteSession(session);
     log(`Esecuzione suite Playwright ${headed ? 'headed' : 'headless'} con firewall read-only...`);
     await runVisualTests(session, headed);

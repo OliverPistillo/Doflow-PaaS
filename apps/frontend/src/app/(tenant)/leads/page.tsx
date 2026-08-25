@@ -13,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { DOFLOW_COMMERCIAL_STAGE_OPTIONS } from "@/lib/commercial-stage-model";
 import { getDoFlowUser } from "@/lib/jwt";
-import { intakeAttributionLabel, intakeText, parseIntakeFormData } from "@/lib/public-lead-intake";
+import { intakeAttributionLabel,intakeText,parseIntakeFormData } from "@/lib/public-lead-intake";
 import { isInternalDoflowTenant } from "@/lib/tenant-url";
 
 const QUALITY_OPTIONS = [
@@ -94,7 +94,7 @@ function sourceSummary(value: unknown, row: CrmRow) {
   );
 }
 
-function compactText(value: unknown, _row?: CrmRow) {
+function compactText(value: unknown) {
   const text = intakeText(value) || "-";
   return <span className="line-clamp-2 max-w-[220px] text-sm">{text}</span>;
 }

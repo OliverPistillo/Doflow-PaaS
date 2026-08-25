@@ -1,6 +1,7 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import * as jwt from 'jsonwebtoken';
+import { WebSessionService } from './auth/web-session.service';
 
 /**
  * Path consentiti quando il JWT è in stato MFA parziale.
@@ -18,10 +19,20 @@ const MFA_ALLOWED_PATH_PREFIXES = [
 
 @Injectable()
 export class AuthMiddleware implements NestMiddleware {
-  use(req: Request, res: Response, next: NextFunction) {
-    const authHeader = req.headers['authorization'];
+  constructor(private readonly webSessions: WebSessionService) {}
 
-    if (authHeader?.startsWith('Bearer ')) {
+  async use(req: Request, res: Response, next: NextFunction) {
+    const authHeader = req.headers['authorization'];
+    const isWebRequest = this.webSessions.isBrowserRequest(req);
+    const method = String(req.method || 'GET').toUpperCase();
+    const isUnsafe = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+
+    if (isWebRequest && authHeader) {
+      return res.status(400).json({ error: 'BROWSER_BEARER_FORBIDDEN' });
+    }
+    if (isWebRequest && isUnsafe) this.webSessions.assertBrowserOrigin(req);
+
+    if (!isWebRequest && authHeader?.startsWith('Bearer ')) {
       const token = authHeader.slice(7);
 
       try {
@@ -66,6 +77,25 @@ export class AuthMiddleware implements NestMiddleware {
       } catch {
         // Token invalido o scaduto: non impostiamo req.user.
         // Gli endpoint protetti gestiranno l'assenza del payload.
+      }
+    } else {
+      const session = await this.webSessions.resolve(req);
+      if (session) {
+        const authUser = session.user;
+        (req as any).user = authUser;
+        (req as any).authUser = authUser;
+        (req as any).webSession = session;
+
+        const path = String((req as any).originalUrl ?? req.url ?? '').toLowerCase();
+        // Qualsiasi mutation eseguita mentre esiste una sessione cookie richiede
+        // il double-submit CSRF, incluse logout, MFA e le route /auth/*.
+        // I bootstrap anonimi non hanno ancora una sessione e non passano qui.
+        if (isUnsafe) this.webSessions.assertCsrf(req, session);
+
+        const stage = String(authUser.authStage || 'FULL').toUpperCase();
+        if (MFA_PARTIAL_STAGES.has(stage) && !MFA_ALLOWED_PATH_PREFIXES.some((prefix) => path.startsWith(prefix))) {
+          return res.status(403).json({ error: 'MFA_REQUIRED', stage, message: 'Complete MFA authentication to access this resource.' });
+        }
       }
     }
 

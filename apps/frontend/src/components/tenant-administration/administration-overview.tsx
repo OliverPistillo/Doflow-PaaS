@@ -47,8 +47,12 @@ export function AdministrationOverview() {
   useEffect(() => {
     let active = true;
     if (!canView("finance")) {
-      setLoading(false);
-      return;
+      queueMicrotask(() => {
+        if (active) setLoading(false);
+      });
+      return () => {
+        active = false;
+      };
     }
     const { from, to } = monthRange();
     const request = async () => {

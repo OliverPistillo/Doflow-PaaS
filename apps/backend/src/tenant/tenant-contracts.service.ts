@@ -10,6 +10,7 @@ import {
   STANDARD_PAPERWORK_ITEMS,
 } from './tenant-contracts-schema';
 import { normalizeCurrencyCode } from './currency-code';
+import { isDoflowTenant } from './tenant-context';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ADMIN_ROLES = new Set(['owner', 'admin', 'superadmin', 'super_admin']);
@@ -526,17 +527,20 @@ export class TenantContractsService {
       const template = await this.getTemplate(manager, schema, this.textOrNull(body.template_id), contractType);
       const rows = await manager.query(
         `INSERT INTO "${schema}".contracts (
-           contract_number, title, description, template_id, company_id, contact_id, quote_id, project_id, opportunity_id,
+           id, contract_number, title, description, template_id, company_id, contact_id, quote_id, project_id, opportunity_id,
            owner_user_id, assigned_to_user_id, status, signature_status, priority, contract_type, amount, currency,
            payment_terms, start_date, end_date, renewal_date, due_date, internal_notes, public_notes, metadata,
            created_by, updated_by, created_at, updated_at
          ) VALUES (
-           $1, $2, $3, $4, $5, $6, $7, $8, $9,
-           $10, $11, $12, $13, $14, $15, $16, $17,
-           $18, $19, $20, $21, $22, $23, $24, $25::jsonb,
-           $26, $26, now(), now()
+           COALESCE($1::uuid, uuid_generate_v4()), $2, $3, $4, $5, $6, $7, $8, $9, $10,
+           $11, $12, $13, $14, $15, $16, $17, $18,
+           $19, $20, $21, $22, $23, $24, $25, $26::jsonb,
+           $27, $27, now(), now()
          ) RETURNING id`,
         [
+          isDoflowTenant(schema) && body.id
+            ? this.requireUuid(body.id, 'id')
+            : null,
           contractNumber,
           this.textOrNull(body.title) || 'Nuovo contratto',
           this.textOrNull(body.description),

@@ -2,7 +2,14 @@
 
 "use client";
 
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   Eye,
   KeyRound,
@@ -143,9 +150,11 @@ export default function TenantsPage() {
   const { ConfirmDialog, confirm } = useConfirm();
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // --- FIX HYDRATION ---
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  const mounted = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
 
   // Keyboard shortcut for search
   useEffect(() => {
@@ -176,13 +185,6 @@ export default function TenantsPage() {
   const [newTenant, setNewTenant] = useState({ name: "", slug: "", email: "", plan: "STARTER" });
   const [isCreating, setIsCreating] = useState(false);
 
-  // Auto-generate slug
-  useEffect(() => {
-    if (newTenant.name) {
-      setNewTenant(prev => ({ ...prev, slug: generateSlug(prev.name) }));
-    }
-  }, [newTenant.name]);
-
   const filteredTenants = useMemo(() => {
     let res = tenants;
 
@@ -202,7 +204,7 @@ export default function TenantsPage() {
     return res;
   }, [tenants, search, statusFilter]);
 
-  const loadTenants = async () => {
+  const loadTenants = useCallback(async () => {
     setFetchState({ status: "loading" });
     try {
       // FIX: Rimosso /v2/ per uniformità
@@ -230,11 +232,12 @@ export default function TenantsPage() {
         variant: "destructive",
       });
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
-    loadTenants();
-  }, []);
+    const timer = window.setTimeout(() => void loadTenants(), 0);
+    return () => window.clearTimeout(timer);
+  }, [loadTenants]);
 
   // --- AZIONI ---
 
@@ -333,7 +336,7 @@ export default function TenantsPage() {
     if (!adminEmail) return;
 
     try {
-      const data = await apiFetch<{ token: string; redirectUrl: string }>(
+      await apiFetch(
         `/superadmin/tenants/${tenantId}/impersonate`,
         {
           method: "POST",
@@ -341,10 +344,9 @@ export default function TenantsPage() {
         },
       );
 
-      window.open(`${data.redirectUrl}?token=${data.token}`, "_blank");
       toast({
-        title: "Sessione avviata",
-        description: `Accesso fantasma su ${data.redirectUrl}`,
+        title: "Impersonation non disponibile",
+        description: "Il flusso sarà riattivato soltanto con handoff opaco e auditato.",
       });
     } catch (e: unknown) {
       toast({
@@ -751,7 +753,13 @@ export default function TenantsPage() {
               <Input
                 id="name"
                 value={newTenant.name}
-                onChange={(e) => setNewTenant({ ...newTenant, name: e.target.value })}
+                onChange={(e) =>
+                  setNewTenant({
+                    ...newTenant,
+                    name: e.target.value,
+                    slug: generateSlug(e.target.value),
+                  })
+                }
                 placeholder="Es. Acme Corp"
               />
             </div>

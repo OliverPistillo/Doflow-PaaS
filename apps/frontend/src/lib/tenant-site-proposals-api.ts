@@ -2,7 +2,6 @@
 
 import { apiFetch, getApiBaseUrl } from "@/lib/api";
 import { getTenantHeader } from "@/lib/tenant-fetch";
-import { getAuthToken } from "@/lib/auth-storage";
 
 export type JsonObject = Record<string, unknown>;
 export type ProposalStatus = "draft" | "ready" | "generated" | "error" | "archived";
@@ -40,7 +39,7 @@ export type SiteProposalImportBatch = {
 export type CommercialAnalysis = JsonObject & { mode?: string; status?: string; strengths?: JsonObject[]; improvementAreas?: JsonObject[]; benefits?: string[]; desktopExperience?: string[]; mobileFirstExperience?: string[]; rationale?: string[]; evidence?: JsonObject[]; requiresManualReview?: boolean };
 export type SiteProposal = PreparationProgress & {
   id: string; import_batch_id?: string | null; source_row_index?: number | null; template_slug: string; template_version: string; status: ProposalStatus; display_name: string;
-  company_id?: string | null; contact_id?: string | null; lead_id?: string | null; opportunity_id?: string | null; current_version: number; last_generated_at?: string | null; updated_at?: string | null; created_at?: string | null;
+  company_id?: string | null; contact_id?: string | null; lead_id?: string | null; opportunity_id?: string | null; project_id?: string | null; current_version: number; last_generated_at?: string | null; updated_at?: string | null; created_at?: string | null;
   archived_from_status?: ProposalStatus | null; deleted_at?: string | null;
   personalization_status?: PersonalizationStatus | null; latest_personalization_id?: string | null; last_personalized_at?: string | null;
   preparation_status?: PreparationStatus | null; preparation_error?: string | null; preparation_queued_at?: string | null; preparation_started_at?: string | null; preparation_completed_at?: string | null; latest_preparation_job_id?: string | null;
@@ -54,7 +53,7 @@ export type SiteProposalGeneration = { id: string; proposal_id: string; proposal
 export type SiteProposalActivity = { id: string; action: string; metadata?: JsonObject; actor_user_id?: string | null; actor_email?: string | null; created_at?: string | null };
 export type PaginatedResponse<T> = { items: T[]; total: number; limit: number; offset: number };
 export type SiteProposalListQuery = { scope?: "active" | "archived"; search?: string; status?: ProposalStatus; templateSlug?: string; companyId?: string; importBatchId?: string; limit?: number; offset?: number; sortBy?: "updated_at" | "created_at" | "display_name" | "status"; sortOrder?: "asc" | "desc" };
-export type SiteProposalUpdate = { displayName?: string; status?: ProposalStatus; siteConfig?: SiteConfig; commercialAnalysis?: CommercialAnalysis; emailSubject?: string; emailBody?: string; companyId?: string | null; contactId?: string | null; leadId?: string | null; opportunityId?: string | null; imageMode?: ThemeImageMode; applyThemeImages?: boolean; resetThemeImageSlot?: "hero" | "consultation" | "feature" };
+export type SiteProposalUpdate = { displayName?: string; status?: ProposalStatus; siteConfig?: SiteConfig; commercialAnalysis?: CommercialAnalysis; emailSubject?: string; emailBody?: string; companyId?: string | null; contactId?: string | null; leadId?: string | null; opportunityId?: string | null; projectId?: string | null; imageMode?: ThemeImageMode; applyThemeImages?: boolean; resetThemeImageSlot?: "hero" | "consultation" | "feature" };
 
 export type SiteProposalBulkResult = { requested: number; affected: number; items: Array<{ id: string; status: ProposalStatus; deleted_at?: string | null }> };
 export type SiteProposalBulkDeleteResult = { requested: number; deleted: number; deletedIds: string[]; failed: Array<{ id: string; message: string }> };
@@ -86,12 +85,7 @@ function queryString(query: Record<string, string | number | undefined | null>, 
 function endpoint(path: string) { return `/tenant/commercial/site-proposals${path}`; }
 
 function binaryHeaders() {
-  const headers: Record<string, string> = { ...getTenantHeader() };
-  if (typeof window !== "undefined") {
-    const token = getAuthToken();
-    if (token) headers.Authorization = `Bearer ${token}`;
-  }
-  return headers;
+  return { ...getTenantHeader(), "X-Doflow-Web": "1" };
 }
 
 function safeFilename(value: string | null, fallback: string) {
@@ -101,7 +95,7 @@ function safeFilename(value: string | null, fallback: string) {
 }
 
 async function binaryRequest(path: string, fallbackName: string) {
-  const response = await fetch(`${getApiBaseUrl()}${path}`, { headers: binaryHeaders(), cache: "no-store" });
+  const response = await fetch(`${getApiBaseUrl()}${path}`, { headers: binaryHeaders(), cache: "no-store", credentials: "include" });
   if (!response.ok) throw new Error(await response.text().catch(() => "") || `Download fallito (${response.status})`);
   return { blob: await response.blob(), filename: safeFilename(response.headers.get("Content-Disposition"), fallbackName) };
 }
@@ -139,7 +133,7 @@ export async function generateSiteProposal(id: string) {
 export function listSiteProposalGenerations(id: string) { return apiFetch<SiteProposalGeneration[]>(endpoint(`/${encodeURIComponent(id)}/generations`)); }
 export function listSiteProposalActivity(id: string, query: { limit?: number; offset?: number } = {}) { return apiFetch<PaginatedResponse<SiteProposalActivity>>(endpoint(`/${encodeURIComponent(id)}/activity${queryString(query, ACTIVITY_KEYS)}`)); }
 export async function fetchSiteProposalPreview(id: string, generationId?: string): Promise<{ status: "completed"; html: string } | ({ status: "preparing"; retryAfterSeconds: number } & PreparationProgress)> {
-  const response = await fetch(`${getApiBaseUrl()}${endpoint(`/${encodeURIComponent(id)}/preview${generationId ? `?generationId=${encodeURIComponent(generationId)}` : ""}`)}`, { headers: binaryHeaders(), cache: "no-store" });
+  const response = await fetch(`${getApiBaseUrl()}${endpoint(`/${encodeURIComponent(id)}/preview${generationId ? `?generationId=${encodeURIComponent(generationId)}` : ""}`)}`, { headers: binaryHeaders(), cache: "no-store", credentials: "include" });
   if (response.status === 202) return response.json();
   if (!response.ok) throw new Error(await response.text().catch(() => "") || `Anteprima non disponibile (${response.status})`);
   return { status: "completed", html: await response.text() };

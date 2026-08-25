@@ -70,20 +70,20 @@ function visibleSidebar(page: Page) {
 }
 
 async function assertDoflowSession(page: Page) {
-  const identity = await page.evaluate(() => {
-    const token = window.localStorage.getItem('doflow_token');
-    if (!token) return null;
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-      return {
-        tenant: String(payload.tenantSlug || payload.tenantId || payload.tenant_id || '').toLowerCase(),
-        role: String(payload.role || '').toLowerCase(),
-        authStage: String(payload.authStage || '').toUpperCase(),
-        mfaPending: payload.mfa_pending === true,
-      };
-    } catch {
-      return null;
-    }
+  const identity = await page.evaluate(async () => {
+    const response = await fetch('/api/auth/me', {
+      credentials: 'include',
+      headers: { 'x-doflow-web': '1' },
+    });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    const user = payload?.user || {};
+    return {
+      tenant: String(user.tenantSlug || user.tenantId || user.tenant_id || '').toLowerCase(),
+      role: String(user.role || '').toLowerCase(),
+      authStage: String(user.authStage || '').toUpperCase(),
+      mfaPending: user.mfa_pending === true,
+    };
   });
   expect(identity?.tenant).toBe('doflow');
   expect(authorizedRoles).toContain(identity?.role);

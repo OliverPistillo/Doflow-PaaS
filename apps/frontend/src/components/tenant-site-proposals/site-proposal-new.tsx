@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { CommercialPageHeader, CommercialSectionCard } from "@/components/tenant-commercial/commercial-ui";
-import { useTenantAccess } from "@/contexts/TenantAccessContext";
+import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider";
 import { createSiteProposal, fetchProposalThemePreview, listProposalThemes, previewImport, type ProposalTheme } from "@/lib/tenant-site-proposals-api";
 import { downloadCsvTemplate, getErrorMessage } from "./site-proposal-utils";
 import { recommendProposalTheme } from "./site-proposal-theme-recommendation";
@@ -26,7 +26,8 @@ const sourceFields = [
 
 export function SiteProposalNew() {
   const router = useRouter();
-  const { canCreate } = useTenantAccess();
+  const { hasCapability } = useDoflowIdentity();
+  const canUseBuilder = hasCapability("canUseBuilder");
   const [templates, setTemplates] = useState<ProposalTheme[]>([]);
   const [templateKey, setTemplateKey] = useState("");
   const [previewHtml, setPreviewHtml] = useState("");
@@ -139,7 +140,7 @@ export function SiteProposalNew() {
             </div>
             {file ? <p className="mt-4 text-sm text-slate-700"><FileUp className="mr-2 inline h-4 w-4" />{file.name} · {(file.size / 1024).toFixed(1)} KiB</p> : null}
             {fileError ? <p className="mt-3 text-sm text-rose-600" role="alert">{fileError}</p> : null}
-            <div className="mt-5 flex justify-end"><Button disabled={!canCreate("crm") || busy || !file || !selected} onClick={() => void submitCsv()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Analizza CSV</Button></div>
+            <div className="mt-5 flex justify-end"><Button disabled={!canUseBuilder || busy || !file || !selected} onClick={() => void submitCsv()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Analizza CSV</Button></div>
           </CommercialSectionCard>
         </TabsContent>
         <TabsContent value="manual" className="mt-5">
@@ -147,7 +148,7 @@ export function SiteProposalNew() {
             <div className="grid gap-4 md:grid-cols-2">
               {sourceFields.map(([key, label, required]) => <div key={key} className={["services", "overview", "target_audience", "primary_goal", "tone_of_voice", "notes"].includes(key) ? "md:col-span-2" : ""}><Label htmlFor={key}>{label}{required ? " *" : ""}</Label>{["services", "overview", "target_audience", "primary_goal", "tone_of_voice", "notes"].includes(key) ? <Textarea id={key} className="mt-1 min-h-24" value={manual[key] || ""} onChange={(event) => setManual((current) => ({ ...current, [key]: event.target.value }))} placeholder={key === "services" ? "Un servizio per riga oppure separati da punto e virgola" : undefined} /> : <Input id={key} className="mt-1 h-11" value={manual[key] || ""} onChange={(event) => setManual((current) => ({ ...current, [key]: event.target.value }))} />}</div>)}
             </div>
-            <div className="mt-5 flex justify-end"><Button disabled={!canCreate("crm") || busy || !selected} onClick={() => void submitManual()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Crea e prepara</Button></div>
+            <div className="mt-5 flex justify-end"><Button disabled={!canUseBuilder || busy || !selected} onClick={() => void submitManual()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Crea e prepara</Button></div>
           </CommercialSectionCard>
         </TabsContent>
       </Tabs>

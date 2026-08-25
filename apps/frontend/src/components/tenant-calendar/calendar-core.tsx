@@ -1,29 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect,useMemo,useState,type ReactNode,useEffectEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  AlertTriangle,
-  CalendarDays,
-  Check,
-  Clock,
-  Download,
+  Check,Download,
   Link2,
   Loader2,
   Plus,
   RefreshCw,
   Search,
-  Trash2,
-  Users,
-  X,
+  Trash2,X
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -209,7 +203,18 @@ export function CalendarOverviewPage() {
     }
   };
 
-  useEffect(() => { void load(); }, []);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const previewDerived = async () => {
     setRunning(true);
@@ -338,7 +343,18 @@ export function CalendarEventsListPage() {
       setLoading(false);
     }
   };
-  useEffect(() => { void load(); }, []);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const action = async (kind: "complete" | "cancel" | "delete" | "export", event: CalendarEvent) => {
     try {
@@ -407,7 +423,7 @@ export function CalendarEventFormPage({ eventId }: { eventId?: string }) {
   const router = useRouter();
   const { toast } = useToast();
   const options = useCalendarOptions();
-  const [form, setForm] = useState<Record<string, any>>(defaultEventForm);
+  const [form, setForm] = useState(defaultEventForm);
   const [loading, setLoading] = useState(Boolean(eventId));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -419,10 +435,21 @@ export function CalendarEventFormPage({ eventId }: { eventId?: string }) {
     calendarApi.getCalendarEvent(eventId).then((event) => {
       if (!active) return;
       setForm({
-        ...defaultEventForm,
-        ...event,
+        title: event.title || "",
+        description: event.description || "",
+        event_type: event.event_type || "internal",
+        status: event.status || "scheduled",
+        priority: event.priority || "medium",
         start_at: toDateTimeInput(event.start_at),
         end_at: toDateTimeInput(event.end_at),
+        all_day: Boolean(event.all_day),
+        timezone: event.timezone || "Europe/Rome",
+        location: event.location || "",
+        meeting_url: event.meeting_url || "",
+        color: event.color || "",
+        visibility: event.visibility || "team",
+        transparency: event.transparency || "busy",
+        assigned_to_user_id: event.assigned_to_user_id || "",
         reminders_config: compactJson(event.reminders_config || {}),
         metadata: compactJson(event.metadata || {}),
       });
@@ -510,6 +537,7 @@ function Info({ label: text, value, wide = false }: { label: string; value?: Rea
 }
 
 export function CalendarEventDetailPage({ eventId }: { eventId: string }) {
+  const router = useRouter();
   const { toast } = useToast();
   const [event, setEvent] = useState<CalendarEvent | null>(null);
   const [loading, setLoading] = useState(true);
@@ -527,7 +555,18 @@ export function CalendarEventDetailPage({ eventId }: { eventId: string }) {
       setLoading(false);
     }
   };
-  useEffect(() => { void load(); }, [eventId]);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId]);
   const doAction = async (kind: "complete" | "cancel" | "delete" | "export") => {
     if (!event) return;
     try {
@@ -535,7 +574,7 @@ export function CalendarEventDetailPage({ eventId }: { eventId: string }) {
       if (kind === "cancel") setEvent(await calendarApi.cancelCalendarEvent(event.id));
       if (kind === "delete") await calendarApi.deleteCalendarEvent(event.id);
       if (kind === "export") downloadJson(`calendar-event-${event.id}.json`, await calendarApi.exportCalendarEvent(event.id));
-      if (kind === "delete") window.location.href = "/calendar/events";
+      if (kind === "delete") router.push("/calendar/events");
     } catch (err) {
       toast({ title: "Azione non riuscita", description: err instanceof Error ? err.message : "Errore", variant: "destructive" });
     }
@@ -592,7 +631,18 @@ export function CalendarAttendees({ eventId }: { eventId: string }) {
   const load = async () => {
     try { setRows((await calendarApi.listEventAttendees(eventId)).items || []); } catch (err) { setError(err instanceof Error ? err.message : "Errore partecipanti"); }
   };
-  useEffect(() => { void load(); }, [eventId]);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId]);
   const create = async () => {
     try {
       await calendarApi.createEventAttendee(eventId, { ...form, user_id: form.user_id || null, contact_id: form.contact_id || null });
@@ -617,7 +667,18 @@ export function CalendarReminders({ eventId }: { eventId: string }) {
   const [form, setForm] = useState({ remind_at: "", method: "in_app" });
   const canManage = canManageCalendar();
   const load = async () => { setRows((await calendarApi.listEventReminders(eventId).catch(() => ({ items: [] }))).items || []); };
-  useEffect(() => { void load(); }, [eventId]);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId]);
   const create = async () => {
     try {
       await calendarApi.createEventReminder(eventId, { remind_at: fromDateTimeInput(form.remind_at), method: form.method });
@@ -643,7 +704,18 @@ export function CalendarLinks({ eventId }: { eventId: string }) {
   const load = async () => {
     try { setRows((await calendarApi.listEventLinks(eventId)).items || []); setError(null); } catch (err) { setError(err instanceof Error ? err.message : "Errore collegamenti"); }
   };
-  useEffect(() => { void load(); }, [eventId]);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId]);
   const create = async () => {
     try {
       await calendarApi.createEventLink(eventId, { entity_type: form.entity_type, entity_id: form.entity_id, relation_type: form.relation_type, metadata: parseJsonTextarea(form.metadata, {}) });
@@ -672,14 +744,25 @@ function PlanningListPage({ kind, title, description }: { kind: "agenda" | "week
     try {
       const params = kind === "agenda" ? { date } : kind === "week" ? { week_start: date } : {};
       const data = kind === "agenda" ? await calendarApi.getCalendarAgenda(params) : kind === "week" ? await calendarApi.getCalendarWeek(params) : kind === "timeline" ? await calendarApi.getCalendarTimeline({ limit: 200 }) : await calendarApi.getCalendarDeadlines({ limit: 200 });
-      setItems(visibleEvents((data as any).items || [], canFinance));
+      setItems(visibleEvents(data.items || [], canFinance));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore caricamento pianificazione");
     } finally {
       setLoading(false);
     }
   };
-  useEffect(() => { void load(); }, []);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const grouped = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
     for (const item of items) {
@@ -724,7 +807,17 @@ export function CalendarViewsPage() {
   const [form, setForm] = useState({ name: "", description: "", view_type: "calendar", filters: "{}", layout_config: "{}", is_default: false, is_shared: true });
   const [loading, setLoading] = useState(true);
   const load = async () => { setRows((await calendarApi.listPlanningViews().catch(() => ({ items: [] }))).items || []); setLoading(false); };
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const create = async () => {
     try {
       await calendarApi.createPlanningView({ ...form, filters: parseJsonTextarea(form.filters, {}), layout_config: parseJsonTextarea(form.layout_config, {}) });

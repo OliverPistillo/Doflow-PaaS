@@ -2,32 +2,31 @@
 
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React,{ useEffect,useState,useCallback } from "react";
 import {
-  Loader2, RefreshCw, Search, Plus, Bell, BellOff,
-  CheckCircle2, AlertTriangle, XCircle, Info, Megaphone,
-  MoreHorizontal, Trash2, CheckCheck, Eye, Send,
-  Filter, Mail, Globe,
+  Loader2,RefreshCw,Search,Plus,Bell,BellOff,
+  CheckCircle2,AlertTriangle,XCircle,Info,Megaphone,
+  MoreHorizontal,Trash2,CheckCheck,Eye,Send
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card,CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogDescription, DialogFooter,
+  Dialog,DialogContent,DialogHeader,DialogTitle,
+  DialogDescription,DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,SelectContent,SelectItem,SelectTrigger,SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
-  DropdownMenuItem, DropdownMenuSeparator,
+  DropdownMenu,DropdownMenuTrigger,DropdownMenuContent,
+  DropdownMenuItem
 } from "@/components/ui/dropdown-menu";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiFetch } from "@/lib/api";
+import { getErrorMessage } from "@/lib/error-message";
 import { useToast } from "@/hooks/use-toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -116,21 +115,31 @@ export default function NotificationsPage() {
       ]);
       setNotifs(Array.isArray(n) ? n : []);
       setStats(s);
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setLoading(false);
     }
   }, [toast, filterType, filterRead, search]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const handleMarkRead = async (id: string) => {
     try {
       await apiFetch(`/superadmin/notifications/${id}/read`, { method: "PATCH" });
       await load();
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     }
   };
 
@@ -139,8 +148,8 @@ export default function NotificationsPage() {
       await apiFetch("/superadmin/notifications/read-all", { method: "PATCH" });
       await load();
       toast({ title: "Tutte segnate come lette" });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     }
   };
 
@@ -148,8 +157,8 @@ export default function NotificationsPage() {
     try {
       await apiFetch(`/superadmin/notifications/${id}`, { method: "DELETE" });
       await load();
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     }
   };
 
@@ -161,8 +170,8 @@ export default function NotificationsPage() {
       setFormData({ title: "", message: "", type: "INFO", channel: "PLATFORM", targetTenantId: "" });
       await load();
       toast({ title: "Notifica inviata" });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -179,8 +188,8 @@ export default function NotificationsPage() {
       setFormData({ title: "", message: "", type: "INFO", channel: "PLATFORM", targetTenantId: "" });
       await load();
       toast({ title: "Broadcast inviato a tutti i tenant" });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setSaving(false);
     }

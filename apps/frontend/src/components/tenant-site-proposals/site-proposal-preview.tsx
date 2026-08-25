@@ -30,7 +30,7 @@ function PreviewFrame({ html, viewport }: { html: string; viewport: Viewport }) 
 }
 
 export function SiteProposalPreview({ id, generationId, comparison = false, onGenerate }: { id: string; generationId?: string; comparison?: boolean; onGenerate?: () => void }) {
-  const [html, setHtml] = useState<string | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState<string | null>(null); const [progress, setProgress] = useState<PreparationProgress | null>(null); const [viewport, setViewport] = useState<Viewport>("mobile"); const [compare, setCompare] = useState(comparison); const timerRef = useRef<number | null>(null);
+  const [html, setHtml] = useState<string | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState<string | null>(null); const [progress, setProgress] = useState<PreparationProgress | null>(null); const [viewport, setViewport] = useState<Viewport>("mobile"); const [compare, setCompare] = useState(comparison); const timerRef = useRef<number | null>(null); const pollRef = useRef<() => void>(() => undefined);
   const load = useCallback(async () => {
     if (timerRef.current) window.clearTimeout(timerRef.current);
     setLoading(true); setError(null);
@@ -39,11 +39,11 @@ export function SiteProposalPreview({ id, generationId, comparison = false, onGe
       if (result.status === "completed") { setHtml(result.html); setProgress(null); return; }
       setProgress(result); setHtml(null);
       const delay = document.visibilityState === "hidden" ? 6000 : Math.max(1500, Math.min(2000, result.retryAfterSeconds * 1000));
-      timerRef.current = window.setTimeout(() => void load(), delay);
+      timerRef.current = window.setTimeout(() => pollRef.current(), delay);
     } catch (value) { setError(getErrorMessage(value)); }
     finally { setLoading(false); }
   }, [generationId, id]);
-  useEffect(() => { void load(); return () => { if (timerRef.current) window.clearTimeout(timerRef.current); }; }, [load]);
+  useEffect(() => { pollRef.current = () => void load(); queueMicrotask(pollRef.current); return () => { if (timerRef.current) window.clearTimeout(timerRef.current); }; }, [load]);
   if (progress) return <CommercialSectionCard title="Anteprima"><SiteProposalProgress value={progress} /><p className="mt-3 text-sm text-slate-500">L’anteprima si aprirà automaticamente quando HTML e ZIP saranno pronti.</p></CommercialSectionCard>;
   if (loading && !html) return <CommercialSectionCard title="Anteprima"><div className="flex min-h-48 items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Caricamento anteprima…</div></CommercialSectionCard>;
   if (!html) return <CommercialSectionCard title="Anteprima"><CommercialEmptyState><div><p>{error || "Non esiste ancora una generazione disponibile."}</p>{onGenerate ? <Button className="mt-3" onClick={onGenerate}><RefreshCw className="mr-2 h-4 w-4" />Prepara proposta</Button> : <Button className="mt-3" onClick={() => void load()}><RefreshCw className="mr-2 h-4 w-4" />Riprova</Button>}</div></CommercialEmptyState></CommercialSectionCard>;

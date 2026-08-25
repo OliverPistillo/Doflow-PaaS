@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { clearAuthStorage, getAuthToken } from '@/lib/auth-storage';
+import { apiFetch } from '@/lib/api';
+import { clearDoFlowUser } from '@/lib/jwt';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 
@@ -18,30 +19,10 @@ type Task = {
 
 type TasksResponse = { tasks: Task[] };
 
-const API_BASE = '/api';
-
-function getTokenFromStorage(): string | null {
-  return getAuthToken();
-}
-
 function safeText(e: unknown): string {
   if (e instanceof Error) return e.message;
   if (typeof e === 'string') return e;
   return 'Errore inatteso';
-}
-
-async function readErrorMessage(res: Response): Promise<string> {
-  try {
-    const ct = res.headers.get('content-type') || '';
-    if (ct.includes('application/json')) {
-      const j = (await res.json()) as any;
-      return j?.error || j?.message || JSON.stringify(j);
-    }
-    const t = await res.text();
-    return t || `HTTP ${res.status}`;
-  } catch {
-    return `HTTP ${res.status}`;
-  }
 }
 
 export default function ProjectTasksClient() {
@@ -49,8 +30,7 @@ export default function ProjectTasksClient() {
   const params = useParams();
   const projectId = (params?.id as string | undefined) ?? undefined;
 
-  const [tenantHost, setTenantHost] = React.useState<string>('');
-  const [token, setToken] = React.useState<string | null>(null);
+  const tenantHost = typeof window === 'undefined' ? '' : window.location.host;
 
   const [tasks, setTasks] = React.useState<Task[]>([]);
   const [loading, setLoading] = React.useState<boolean>(false);
@@ -61,71 +41,38 @@ export default function ProjectTasksClient() {
   const [assignee, setAssignee] = React.useState<string>('');
   const [dueDate, setDueDate] = React.useState<string>('');
 
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    setTenantHost(window.location.host);
-    setToken(getTokenFromStorage());
-  }, []);
-
   const loadTasks = React.useCallback(
     async (signal?: AbortSignal) => {
       if (!projectId) {
         setError('Project ID mancante.');
         return;
       }
-      const t = token ?? getTokenFromStorage();
-      if (!t) {
-        setError('Token mancante. Effettua il login.');
-        return;
-      }
-
       setLoading(true);
       setError(null);
 
       try {
-        const res = await fetch(`${API_BASE}/projects/${projectId}/tasks`, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${t}` },
-          cache: 'no-store',
-          signal,
-        });
-
-        if (!res.ok) {
-          const msg = await readErrorMessage(res);
-          setError(msg);
-          setTasks([]);
-          return;
-        }
-
-        const data = (await res.json()) as TasksResponse;
+        const data = await apiFetch<TasksResponse>(`/projects/${projectId}/tasks`, { signal });
         setTasks(Array.isArray(data?.tasks) ? data.tasks : []);
       } catch (e) {
-        if ((e as any)?.name === 'AbortError') return;
+        if (e instanceof DOMException && e.name === 'AbortError') return;
         setError('Errore nel caricamento task: ' + safeText(e));
       } finally {
         setLoading(false);
       }
     },
-    [projectId, token]
+    [projectId]
   );
 
   React.useEffect(() => {
     if (!projectId) return;
-    if (!token) return;
-
     const ac = new AbortController();
-    void loadTasks(ac.signal);
+    queueMicrotask(() => void loadTasks(ac.signal));
     return () => ac.abort();
-  }, [projectId, token, loadTasks]);
+  }, [projectId, loadTasks]);
 
   const handleCreateTask = React.useCallback(async () => {
     if (!projectId) {
       setError('Project ID mancante.');
-      return;
-    }
-    const t = token ?? getTokenFromStorage();
-    if (!t) {
-      setError('Token mancante. Effettua il login.');
       return;
     }
     if (!title.trim()) {
@@ -137,12 +84,8 @@ export default function ProjectTasksClient() {
     setError(null);
 
     try {
-      const res = await fetch(`${API_BASE}/projects/${projectId}/tasks`, {
+      await apiFetch(`/projects/${projectId}/tasks`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${t}`,
-        },
         body: JSON.stringify({
           title: title.trim(),
           description: description.trim() || null,
@@ -150,12 +93,6 @@ export default function ProjectTasksClient() {
           due_date: dueDate || null,
         }),
       });
-
-      if (!res.ok) {
-        const msg = await readErrorMessage(res);
-        setError(msg);
-        return;
-      }
 
       setTitle('');
       setDescription('');
@@ -168,11 +105,11 @@ export default function ProjectTasksClient() {
     } finally {
       setLoading(false);
     }
-  }, [projectId, token, title, description, assignee, dueDate, loadTasks]);
+  }, [projectId, title, description, assignee, dueDate, loadTasks]);
 
-  const handleLogout = React.useCallback(() => {
+  const handleLogout = React.useCallback(async () => {
     if (typeof window === 'undefined') return;
-    clearAuthStorage();
+    try { await apiFetch('/auth/logout', { method: 'POST' }); } finally { clearDoFlowUser(); }
     router.push('/login');
   }, [router]);
 
@@ -224,8 +161,6 @@ export default function ProjectTasksClient() {
           </div>
         </header>
 
-        {!token ? <p className="text-xs text-red-400">Nessun token trovato: vai su /login.</p> : null}
-
         {error ? (
           <div className="text-sm text-red-400 border border-red-500/40 rounded px-3 py-2">{error}</div>
         ) : null}
@@ -265,7 +200,7 @@ export default function ProjectTasksClient() {
 
               <button
                 onClick={handleCreateTask}
-                disabled={loading || !token}
+                disabled={loading}
                 className="px-4 py-2 rounded bg-black text-white disabled:opacity-50"
               >
                 {loading ? 'Creazione…' : 'Crea task'}

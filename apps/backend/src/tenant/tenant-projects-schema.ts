@@ -1,4 +1,5 @@
 import { DataSource, QueryRunner } from 'typeorm';
+import { provisionSchemaOnce } from '../common/schema-provisioning-once';
 import { safeSchema } from '../common/schema.utils';
 import { ensureTenantCrmCoreTables } from './tenant-crm-schema';
 import { ensureTenantBriefingQuoteTables } from './tenant-briefing-quotes-schema';
@@ -48,8 +49,9 @@ async function addColumns(ds: DataSource, schema: string, table: string, columns
   }
 }
 
-export async function ensureTenantProjectsTables(ds: DataSource, schema: string) {
+async function provisionTenantProjectsTables(ds: DataSource, schema: string) {
   const s = safeSchema(schema, 'ensureTenantProjectsTables');
+  const defaultProjectStatus = s === 'doflow' ? 'not_started' : 'to_start';
 
   await ensureTenantCrmCoreTables(ds, s);
   await ensureTenantBriefingQuoteTables(ds, s);
@@ -110,10 +112,10 @@ export async function ensureTenantProjectsTables(ds: DataSource, schema: string)
     'updated_at TIMESTAMPTZ DEFAULT now()',
     'deleted_at TIMESTAMPTZ',
   ]);
-  await ds.query(`UPDATE "${s}".projects SET status = 'to_start' WHERE status IS NULL`);
+  await ds.query(`UPDATE "${s}".projects SET status = $1 WHERE status IS NULL`, [defaultProjectStatus]);
   await ds.query(`UPDATE "${s}".projects SET priority = 'medium' WHERE priority IS NULL`);
   await ds.query(`UPDATE "${s}".projects SET progress = 0 WHERE progress IS NULL`);
-  await ds.query(`ALTER TABLE "${s}".projects ALTER COLUMN status SET DEFAULT 'to_start'`);
+  await ds.query(`ALTER TABLE "${s}".projects ALTER COLUMN status SET DEFAULT '${defaultProjectStatus}'`);
   await ds.query(`ALTER TABLE "${s}".projects ALTER COLUMN priority SET DEFAULT 'medium'`);
   await ds.query(`ALTER TABLE "${s}".projects ALTER COLUMN progress SET DEFAULT 0`);
   await ds.query(`ALTER TABLE "${s}".projects ALTER COLUMN status SET NOT NULL`);
@@ -322,6 +324,16 @@ export async function ensureTenantProjectsTables(ds: DataSource, schema: string)
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_project_file_links_project" ON "${s}".project_file_links(project_id) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_project_file_links_task" ON "${s}".project_file_links(task_id) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_project_file_links_file" ON "${s}".project_file_links(file_id) WHERE deleted_at IS NULL`);
+}
+
+export function ensureTenantProjectsTables(
+  ds: DataSource,
+  schema: string,
+): Promise<void> {
+  const safe = safeSchema(schema, 'ensureTenantProjectsTables');
+  return provisionSchemaOnce(ds, `tenant-projects:${safe}`, () =>
+    provisionTenantProjectsTables(ds, safe),
+  );
 }
 
 export async function createStandardProjectPlan(

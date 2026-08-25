@@ -5,6 +5,7 @@ import { safeSchema } from '../common/schema.utils';
 import { ensureTenantFinanceTables } from './tenant-finance-schema';
 import { isDoflowTenant } from './tenant-context';
 import { normalizeCurrencyCode } from './currency-code';
+import { ensureDoflowCommerceTables } from './tenant-doflow-commerce-schema';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -13,6 +14,7 @@ const INVOICE_TYPES = ['standard', 'deposit', 'balance', 'recurring', 'renewal',
 const INVOICE_STATUSES = ['draft', 'issued', 'sent', 'paid', 'partially_paid', 'overdue', 'cancelled', 'void'];
 const PAYMENT_STATUSES = ['pending', 'recorded', 'confirmed', 'failed', 'refunded', 'cancelled'];
 const PAYMENT_METHODS = ['bank_transfer', 'cash', 'card', 'paypal', 'stripe', 'other'];
+const PAYMENT_TYPES = ['payment', 'refund'];
 const DEADLINE_TYPES = ['deposit', 'balance', 'invoice_due', 'renewal', 'recurring_fee', 'other', 'payment'];
 const DEADLINE_STATUSES = ['open', 'completed', 'overdue', 'cancelled'];
 const RECURRING_STATUSES = ['active', 'paused', 'cancelled', 'expired'];
@@ -139,7 +141,7 @@ export class TenantFinanceService {
       payments: {
         table: 'payments',
         searchable: ['reference', 'notes', 'method'],
-        filters: ['status', 'company_id', 'project_id', 'invoice_id'],
+        filters: ['status', 'company_id', 'project_id', 'invoice_id', 'order_id', 'payment_type'],
         sort: ['created_at', 'updated_at', 'payment_date', 'amount'],
         defaultSort: 'payment_date',
         dateColumn: 'payment_date',
@@ -555,11 +557,59 @@ export class TenantFinanceService {
     }
     let row: Record<string, any>;
     try {
-      row = await this.insertRow(schema, 'payments', {
-        ...cleaned,
-        created_by: this.userIdOrNull(user.id),
-        updated_by: this.userIdOrNull(user.id),
-      });
+      if (doflow && cleaned.payment_type === 'refund') {
+        const runner = this.dataSource.createQueryRunner();
+        await runner.connect();
+        await runner.startTransaction();
+        try {
+          const originalRows = await runner.query(
+            `SELECT * FROM "${schema}".payments
+             WHERE id = $1 AND deleted_at IS NULL
+             FOR UPDATE`,
+            [cleaned.original_payment_id],
+          );
+          const original = originalRows[0];
+          if (!original || String(original.payment_type || 'payment') !== 'payment' || original.status !== 'confirmed') {
+            throw new BadRequestException('Il pagamento originale deve esistere ed essere confermato');
+          }
+          for (const field of ['invoice_id', 'company_id', 'project_id', 'order_id'] as const) {
+            if (cleaned[field] && original[field] && cleaned[field] !== original[field]) {
+              throw new BadRequestException(`${field} non coerente con il pagamento originale`);
+            }
+            cleaned[field] = original[field] || null;
+          }
+          if (!cleaned.refund_reason) throw new BadRequestException('refund_reason obbligatorio');
+          const totals = await runner.query(
+            `SELECT COALESCE(SUM(amount), 0)::numeric AS refunded
+             FROM "${schema}".payments
+             WHERE original_payment_id = $1
+               AND payment_type = 'refund'
+               AND status NOT IN ('failed', 'cancelled')
+               AND deleted_at IS NULL`,
+            [original.id],
+          );
+          if (Number(totals[0]?.refunded || 0) + Number(cleaned.amount) > Number(original.amount)) {
+            throw new BadRequestException('Importo rimborso superiore al residuo rimborsabile');
+          }
+          row = await this.insertRowWithRunner(runner, schema, 'payments', {
+            ...cleaned,
+            created_by: this.userIdOrNull(user.id),
+            updated_by: this.userIdOrNull(user.id),
+          });
+          await runner.commitTransaction();
+        } catch (error) {
+          if (runner.isTransactionActive) await runner.rollbackTransaction();
+          throw error;
+        } finally {
+          await runner.release();
+        }
+      } else {
+        row = await this.insertRow(schema, 'payments', {
+          ...cleaned,
+          created_by: this.userIdOrNull(user.id),
+          updated_by: this.userIdOrNull(user.id),
+        });
+      }
     } catch (error: any) {
       if (doflow && cleaned.idempotency_key && String(error?.code || '') === '23505') {
         const existing = await this.dataSource.query(
@@ -570,7 +620,13 @@ export class TenantFinanceService {
       }
       throw error;
     }
-    await this.afterPaymentMutation(schema, cleaned.invoice_id as string | null, cleaned.project_id as string | null, user);
+    await this.afterPaymentMutation(
+      schema,
+      cleaned.invoice_id as string | null,
+      cleaned.project_id as string | null,
+      user,
+      cleaned.order_id as string | null,
+    );
     await this.audit(schema, user, 'finance_payment_created', row.id, cleaned);
     return this.findPayment(row.id);
   }
@@ -580,14 +636,95 @@ export class TenantFinanceService {
     this.requireUuid(id, 'ID pagamento');
     const schema = this.getSchema();
     await this.ensureSchema(schema);
+    const doflow = isDoflowTenant(schema);
     const before = await this.findPayment(id);
     const cleaned = this.cleanPaymentBody(body, true);
-    await this.updateRow(schema, 'payments', id, cleaned, this.userIdOrNull(user.id));
+    if (doflow) {
+      const beforeType = String(before.payment_type || 'payment');
+      if (cleaned.payment_type && cleaned.payment_type !== beforeType) {
+        throw new BadRequestException('payment_type non modificabile');
+      }
+      if (cleaned.original_payment_id && cleaned.original_payment_id !== before.original_payment_id) {
+        throw new BadRequestException('original_payment_id non modificabile');
+      }
+      delete cleaned.payment_type;
+      delete cleaned.original_payment_id;
+
+      const runner = this.dataSource.createQueryRunner();
+      await runner.connect();
+      await runner.startTransaction();
+      try {
+        if (beforeType === 'refund') {
+          const originals = await runner.query(
+            `SELECT * FROM "${schema}".payments WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
+            [before.original_payment_id],
+          );
+          const original = originals[0];
+          if (!original || original.status !== 'confirmed') {
+            throw new BadRequestException('Pagamento originale non più rimborsabile');
+          }
+          const nextReason = this.textOrNull(cleaned.refund_reason ?? before.refund_reason);
+          if (!nextReason) throw new BadRequestException('refund_reason obbligatorio');
+          cleaned.refund_reason = nextReason;
+          const nextAmount = Number(cleaned.amount ?? before.amount);
+          const nextStatus = String(cleaned.status ?? before.status);
+          const totals = await runner.query(
+            `SELECT COALESCE(SUM(amount), 0)::numeric AS refunded
+             FROM "${schema}".payments
+             WHERE original_payment_id = $1 AND payment_type = 'refund'
+               AND id <> $2 AND status NOT IN ('failed', 'cancelled') AND deleted_at IS NULL`,
+            [original.id, id],
+          );
+          const reservesAmount = !['failed', 'cancelled'].includes(nextStatus);
+          if (Number(totals[0]?.refunded || 0) + (reservesAmount ? nextAmount : 0) > Number(original.amount)) {
+            throw new BadRequestException('Importo rimborso superiore al residuo rimborsabile');
+          }
+          for (const field of ['invoice_id', 'company_id', 'project_id', 'order_id'] as const) {
+            const nextValue = cleaned[field] ?? before[field];
+            if ((nextValue || null) !== (original[field] || null)) {
+              throw new BadRequestException(`${field} non modificabile per un rimborso`);
+            }
+          }
+        } else {
+          const refundRows = await runner.query(
+            `SELECT COALESCE(SUM(amount), 0)::numeric AS refunded
+             FROM "${schema}".payments
+             WHERE original_payment_id = $1 AND payment_type = 'refund'
+               AND status NOT IN ('failed', 'cancelled') AND deleted_at IS NULL`,
+            [id],
+          );
+          const refunded = Number(refundRows[0]?.refunded || 0);
+          if (refunded > 0) {
+            if (String(cleaned.status ?? before.status) !== 'confirmed') {
+              throw new BadRequestException('Un pagamento con rimborsi deve restare confermato');
+            }
+            if (Number(cleaned.amount ?? before.amount) < refunded) {
+              throw new BadRequestException('Importo inferiore ai rimborsi già registrati');
+            }
+            for (const field of ['invoice_id', 'company_id', 'project_id', 'order_id'] as const) {
+              if (field in cleaned && (cleaned[field] || null) !== (before[field] || null)) {
+                throw new BadRequestException(`${field} non modificabile dopo un rimborso`);
+              }
+            }
+          }
+        }
+        await this.updateRowWithRunner(runner, schema, 'payments', id, cleaned, this.userIdOrNull(user.id));
+        await runner.commitTransaction();
+      } catch (error) {
+        if (runner.isTransactionActive) await runner.rollbackTransaction();
+        throw error;
+      } finally {
+        await runner.release();
+      }
+    } else {
+      await this.updateRow(schema, 'payments', id, cleaned, this.userIdOrNull(user.id));
+    }
     await this.afterPaymentMutation(
       schema,
       (before.invoice_id || cleaned.invoice_id || null) as string | null,
       (before.project_id || cleaned.project_id || null) as string | null,
       user,
+      (before.order_id || cleaned.order_id || null) as string | null,
     );
     await this.audit(schema, user, 'finance_payment_updated', id, cleaned);
     return this.findPayment(id);
@@ -598,15 +735,33 @@ export class TenantFinanceService {
     this.requireUuid(id, 'ID pagamento');
     const schema = this.getSchema();
     await this.ensureSchema(schema);
+    if (isDoflowTenant(schema)) {
+      const dependentRefunds = await this.dataSource.query(
+        `SELECT id FROM "${schema}".payments
+         WHERE original_payment_id = $1 AND payment_type = 'refund'
+           AND status NOT IN ('failed', 'cancelled') AND deleted_at IS NULL
+         LIMIT 1`,
+        [id],
+      );
+      if (dependentRefunds[0]) {
+        throw new BadRequestException('Pagamento non archiviabile: esistono rimborsi collegati');
+      }
+    }
     const rows = await this.dataSource.query(
       `UPDATE "${schema}".payments
        SET deleted_at = now(), updated_by = $1, updated_at = now()
        WHERE id = $2 AND deleted_at IS NULL
-       RETURNING id, invoice_id, project_id`,
+       RETURNING id, invoice_id, project_id, order_id`,
       [this.userIdOrNull(user.id), id],
     );
     if (!rows[0]) throw new NotFoundException('Pagamento non trovato');
-    await this.afterPaymentMutation(schema, rows[0].invoice_id || null, rows[0].project_id || null, user);
+    await this.afterPaymentMutation(
+      schema,
+      rows[0].invoice_id || null,
+      rows[0].project_id || null,
+      user,
+      rows[0].order_id || null,
+    );
     await this.audit(schema, user, 'finance_payment_deleted', id, {});
     return { success: true };
   }
@@ -772,10 +927,10 @@ export class TenantFinanceService {
        WHERE deleted_at IS NULL`,
     );
     const payments = await this.dataSource.query(
-      `SELECT COALESCE(SUM(amount), 0)::numeric AS payments_this_month
+      `SELECT COALESCE(SUM(CASE WHEN payment_type = 'refund' THEN -amount ELSE amount END), 0)::numeric AS payments_this_month
        FROM "${schema}".payments
        WHERE deleted_at IS NULL
-         AND status IN ('recorded', 'confirmed')
+         AND status = 'confirmed'
          AND date_trunc('month', COALESCE(payment_date, created_at::date)::timestamp) = date_trunc('month', current_date::timestamp)`,
     );
     const misc = await this.dataSource.query(
@@ -797,10 +952,12 @@ export class TenantFinanceService {
 
   private cleanInvoiceBody(body: Record<string, any>, partial: boolean) {
     const cleaned = this.pick(body, [
-      'company_id', 'contact_id', 'opportunity_id', 'briefing_id', 'quote_id', 'project_id',
+      'id', 'company_id', 'contact_id', 'opportunity_id', 'briefing_id', 'quote_id', 'project_id',
       'invoice_number', 'title', 'type', 'status', 'currency', 'issue_date', 'due_date',
       'paid_at', 'payment_method', 'external_reference', 'pdf_file_id', 'client_notes', 'internal_notes',
     ]);
+    if (partial) delete cleaned.id;
+    else if ('id' in cleaned) cleaned.id = this.requireUuid(String(cleaned.id), 'id');
     if (!partial || 'title' in cleaned) {
       const title = this.textOrNull(cleaned.title);
       if (!title) throw new BadRequestException('title obbligatorio');
@@ -829,12 +986,24 @@ export class TenantFinanceService {
   }
 
   private cleanPaymentBody(body: Record<string, any>, partial: boolean) {
-    const cleaned = this.pick(body, ['invoice_id', 'company_id', 'project_id', 'amount', 'currency', 'status', 'payment_date', 'method', 'reference', 'notes']);
+    const cleaned = this.pick(body, ['id', 'invoice_id', 'company_id', 'project_id', 'order_id', 'amount', 'currency', 'status', 'payment_type', 'original_payment_id', 'refund_reason', 'payment_date', 'method', 'reference', 'notes']);
+    if (partial) delete cleaned.id;
+    else if ('id' in cleaned) cleaned.id = this.requireUuid(String(cleaned.id), 'id');
     if (!partial || 'amount' in cleaned) cleaned.amount = this.toNumber(cleaned.amount, 'amount');
     if (!partial || 'currency' in cleaned) cleaned.currency = normalizeCurrencyCode(cleaned.currency);
     if (!partial || 'status' in cleaned) cleaned.status = this.normalizeEnum(cleaned.status, PAYMENT_STATUSES, 'recorded', 'status pagamento non valido');
+    if (!partial || 'payment_type' in cleaned) cleaned.payment_type = this.normalizeEnum(cleaned.payment_type, PAYMENT_TYPES, 'payment', 'tipo pagamento non valido');
     if (cleaned.method) cleaned.method = this.normalizeEnum(cleaned.method, PAYMENT_METHODS, 'other', 'metodo pagamento non valido');
-    this.validateUuidFields(cleaned, ['invoice_id', 'company_id', 'project_id']);
+    if ('refund_reason' in cleaned) cleaned.refund_reason = this.textOrNull(cleaned.refund_reason);
+    this.validateUuidFields(cleaned, ['invoice_id', 'company_id', 'project_id', 'order_id', 'original_payment_id']);
+    if (!partial && cleaned.payment_type === 'refund') {
+      if (!cleaned.original_payment_id) throw new BadRequestException('original_payment_id obbligatorio');
+      if (!cleaned.refund_reason) throw new BadRequestException('refund_reason obbligatorio');
+    }
+    if (!partial && cleaned.payment_type === 'payment') {
+      cleaned.original_payment_id = null;
+      cleaned.refund_reason = null;
+    }
     return cleaned;
   }
 
@@ -972,11 +1141,11 @@ export class TenantFinanceService {
       [invoiceId],
     );
     const paymentRows = await runner.query(
-      `SELECT COALESCE(SUM(amount), 0)::numeric AS paid_total
+      `SELECT COALESCE(SUM(CASE WHEN payment_type = 'refund' THEN -amount ELSE amount END), 0)::numeric AS paid_total
        FROM "${schema}".payments
        WHERE invoice_id = $1
          AND deleted_at IS NULL
-         AND status IN ('recorded', 'confirmed')`,
+          AND status = 'confirmed'`,
       [invoiceId],
     );
     const subtotal = Number(totalsRows[0]?.subtotal || 0);
@@ -1013,7 +1182,13 @@ export class TenantFinanceService {
     );
   }
 
-  private async afterPaymentMutation(schema: string, invoiceId: string | null, projectId: string | null, user: AuthUser) {
+  private async afterPaymentMutation(
+    schema: string,
+    invoiceId: string | null,
+    projectId: string | null,
+    user: AuthUser,
+    orderId: string | null = null,
+  ) {
     if (invoiceId) {
       const runner = this.dataSource.createQueryRunner();
       await runner.connect();
@@ -1032,6 +1207,43 @@ export class TenantFinanceService {
       projectId = projectId || invoice.project_id || null;
     }
     if (projectId) await this.recalculateProjectFinancialStatusInternal(schema, projectId, user);
+    if (isDoflowTenant(schema) && orderId) {
+      await ensureDoflowCommerceTables(this.dataSource, schema);
+      const rows = await this.dataSource.query(
+        `SELECT o.total, o.administrative_status,
+                COALESCE(SUM(CASE WHEN p.payment_type = 'refund' THEN -p.amount ELSE p.amount END)
+                  FILTER (WHERE p.status = 'confirmed' AND p.deleted_at IS NULL), 0)::numeric AS net_paid,
+                COALESCE(SUM(p.amount)
+                  FILTER (WHERE p.payment_type = 'refund' AND p.status = 'confirmed' AND p.deleted_at IS NULL), 0)::numeric AS refunded
+           FROM "${schema}".orders o
+           LEFT JOIN "${schema}".payments p ON p.order_id = o.id
+          WHERE o.id = $1 AND o.deleted_at IS NULL
+          GROUP BY o.id, o.total, o.administrative_status`,
+        [orderId],
+      );
+      const order = rows[0];
+      if (order && order.administrative_status !== 'Annullato') {
+        const total = Number(order.total || 0);
+        const netPaid = Number(order.net_paid || 0);
+        const refunded = Number(order.refunded || 0);
+        const status =
+          refunded > 0 && netPaid <= 0
+            ? 'Rimborsato'
+            : total > 0 && netPaid >= total
+              ? 'Pagato'
+              : netPaid > 0
+                ? 'Parzialmente pagato'
+                : order.administrative_status === 'Pagato' ||
+                    order.administrative_status === 'Parzialmente pagato' ||
+                    order.administrative_status === 'Rimborsato'
+                  ? 'Confermato'
+                  : order.administrative_status;
+        await this.dataSource.query(
+          `UPDATE "${schema}".orders SET administrative_status = $2, updated_at = now() WHERE id = $1`,
+          [orderId, status],
+        );
+      }
+    }
   }
 
   private async ensureInvoiceExists(schema: string, invoiceId: string) {
@@ -1100,14 +1312,14 @@ export class TenantFinanceService {
     );
     const typePaid = await this.dataSource.query(
       `SELECT
-         COALESCE(SUM(CASE WHEN i.type = 'deposit' THEN p.amount ELSE 0 END), 0)::numeric AS deposit_paid,
-         COALESCE(SUM(CASE WHEN i.type = 'balance' THEN p.amount ELSE 0 END), 0)::numeric AS balance_paid,
+         COALESCE(SUM(CASE WHEN i.type = 'deposit' THEN CASE WHEN p.payment_type = 'refund' THEN -p.amount ELSE p.amount END ELSE 0 END), 0)::numeric AS deposit_paid,
+         COALESCE(SUM(CASE WHEN i.type = 'balance' THEN CASE WHEN p.payment_type = 'refund' THEN -p.amount ELSE p.amount END ELSE 0 END), 0)::numeric AS balance_paid,
          MAX(p.created_at) AS last_payment_at
        FROM "${schema}".payments p
        LEFT JOIN "${schema}".invoices i ON i.id = p.invoice_id
        WHERE COALESCE(p.project_id, i.project_id) = $1
          AND p.deleted_at IS NULL
-         AND p.status IN ('recorded', 'confirmed')`,
+         AND p.status = 'confirmed'`,
       [projectId],
     );
     const overdueRows = await this.dataSource.query(
@@ -1186,6 +1398,48 @@ export class TenantFinanceService {
       params,
     );
     return rows[0];
+  }
+
+  private async insertRowWithRunner(
+    runner: QueryRunner,
+    schema: string,
+    table: string,
+    values: Record<string, unknown>,
+  ) {
+    const entries = Object.entries(values).filter(([, value]) => value !== undefined);
+    const columns = entries.map(([field]) => field);
+    const params = entries.map(([, value]) => value);
+    const rows = await runner.query(
+      `INSERT INTO "${schema}".${table} (${columns.join(', ')})
+       VALUES (${columns.map((_, index) => `$${index + 1}`).join(', ')})
+       RETURNING *`,
+      params,
+    );
+    return rows[0];
+  }
+
+  private async updateRowWithRunner(
+    runner: QueryRunner,
+    schema: string,
+    table: string,
+    id: string,
+    values: Record<string, unknown>,
+    updatedBy: string | null,
+  ) {
+    const entries = Object.entries(values).filter(([, value]) => value !== undefined);
+    if (entries.length === 0) return;
+    const sets = entries.map(([field], index) => `${field} = $${index + 1}`);
+    const params = entries.map(([, value]) => value);
+    sets.push(`updated_by = $${params.length + 1}`, 'updated_at = now()');
+    params.push(updatedBy, id);
+    const rows = await runner.query(
+      `UPDATE "${schema}".${table}
+       SET ${sets.join(', ')}
+       WHERE id = $${params.length} AND deleted_at IS NULL
+       RETURNING id`,
+      params,
+    );
+    if (!rows[0]) throw new NotFoundException('Risorsa non trovata');
   }
 
   private async updateRow(

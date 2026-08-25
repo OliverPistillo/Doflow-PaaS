@@ -1,6 +1,5 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
-import { Cron, CronExpression } from '@nestjs/schedule';
 import { DataSource } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
 import { hasRoleAtLeast } from '../roles';
@@ -19,6 +18,7 @@ import {
 } from './tenant-automations.types';
 import { TenantNotificationsService } from './tenant-notifications.service';
 import { isDoflowTenant } from './tenant-context';
+import { ensureDoflowAutomationPerformanceTables } from './tenant-automation-performance-schema';
 import {
   normalizeProjectStage,
   PROJECT_ACTIVE_STAGE_ALIASES,
@@ -116,7 +116,13 @@ export class TenantAutomationsService {
   }
 
   private async ensureSchema(schema: string) {
-    await ensureTenantAutomationsTables(this.dataSource, schema);
+    if (isDoflowTenant(schema)) await ensureDoflowAutomationPerformanceTables(this.dataSource, schema);
+    else await ensureTenantAutomationsTables(this.dataSource, schema);
+  }
+
+  requestContext(scope: 'read' | 'manage' | 'run') {
+    const user = scope === 'manage' ? this.assertManage() : scope === 'run' ? this.assertRun() : this.assertRead();
+    return { schema: this.getSchema(), user };
   }
 
   private safeTableName(value: string): string {
@@ -185,6 +191,15 @@ export class TenantAutomationsService {
     const parsed = this.parseJson(value, null);
     const list = Array.isArray(parsed) ? parsed : parsed && typeof parsed === 'object' ? [parsed as Record<string, unknown>] : [];
     for (const condition of list as Array<Record<string, unknown>>) {
+      if ('operator' in condition || 'field' in condition) {
+        const field = String(condition.field || '');
+        const operator = String(condition.operator || '');
+        if (!/^[a-zA-Z0-9_.]{1,100}$/.test(field)) throw new BadRequestException('Campo condizione non consentito');
+        if (!['equals', 'not_equals', 'contains', 'in', 'greater_than', 'less_than', 'exists', 'changed_from', 'changed_to'].includes(operator)) {
+          throw new BadRequestException(`Operatore non consentito: ${operator}`);
+        }
+        continue;
+      }
       const type = String(condition.type || Object.keys(condition)[0] || '').trim();
       if (type && !AUTOMATION_CONDITION_TYPES.includes(type as any) && !['older_than_days', 'due_within_days', 'no_activity_for_days', 'missing_required_items_count_gt'].includes(type)) {
         throw new BadRequestException(`Condizione non consentita: ${type}`);
@@ -200,6 +215,9 @@ export class TenantAutomationsService {
       if (!action || typeof action !== 'object') throw new BadRequestException('azione non valida');
       const type = String((action as any).type || (action as any).action_type || '').trim();
       if (!AUTOMATION_ACTION_TYPES.includes(type as any)) throw new BadRequestException(`Azione non consentita: ${type}`);
+      if (/\b(eval|function|javascript|sql|process\.env|require\s*\()/i.test(JSON.stringify(action))) {
+        throw new BadRequestException('Azione con code execution non consentita');
+      }
     }
     return parsed as Array<Record<string, unknown>>;
   }
@@ -418,7 +436,8 @@ export class TenantAutomationsService {
     const rows = await this.dataSource.query(
       `SELECT id, template_id, name, description, category, trigger_type, trigger_config, conditions, actions, schedule_config,
               is_enabled, run_mode, priority, cooldown_minutes, max_runs_per_day, last_run_at, next_run_at,
-              last_success_at, last_error_at, last_error_message, created_by, updated_by, created_at, updated_at
+              last_success_at, last_error_at, last_error_message, created_by, updated_by, created_at, updated_at,
+              lifecycle_status, optimistic_version, current_version, current_version_id, archived_at
        FROM "${schema}".automation_rules
        WHERE ${where.join(' AND ')}
        ORDER BY ${sort} ${direction}
@@ -443,7 +462,8 @@ export class TenantAutomationsService {
     const rows = await this.dataSource.query(
       `SELECT id, template_id, name, description, category, trigger_type, trigger_config, conditions, actions, schedule_config,
               is_enabled, run_mode, priority, cooldown_minutes, max_runs_per_day, last_run_at, next_run_at,
-              last_success_at, last_error_at, last_error_message, created_by, updated_by, created_at, updated_at
+              last_success_at, last_error_at, last_error_message, created_by, updated_by, created_at, updated_at,
+              lifecycle_status, optimistic_version, current_version, current_version_id, archived_at
        FROM "${schema}".automation_rules
        WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
       [this.requireUuid(id)],
@@ -462,14 +482,15 @@ export class TenantAutomationsService {
     if (!this.canViewFinance(user.role) && (category === 'finance' || FINANCE_AUTOMATION_TRIGGERS.has(triggerType) || actions.some((a) => FINANCE_AUTOMATION_ACTIONS.has(String(a.type))))) {
       throw new ForbiddenException('Automazioni finance riservate a CEO/Admin.');
     }
-    const rows = await this.dataSource.query(
-      `INSERT INTO "${schema}".automation_rules (
+    const rows = await this.dataSource.transaction(async (manager) => {
+      const insertedRules = await manager.query(
+        `INSERT INTO "${schema}".automation_rules (
         template_id, name, description, category, trigger_type, trigger_config, conditions,
         actions, schedule_config, is_enabled, run_mode, priority, cooldown_minutes,
         max_runs_per_day, created_by, updated_by, created_at, updated_at
       ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10, $11, $12, $13, $14, $15, $15, now(), now())
       RETURNING *`,
-      [
+        [
         this.uuidOrNull(body.template_id),
         this.textOrNull(body.name) || (() => { throw new BadRequestException('name obbligatorio'); })(),
         this.textOrNull(body.description),
@@ -485,8 +506,34 @@ export class TenantAutomationsService {
         this.normalizePositiveInt(body.cooldown_minutes, 60, 0, 10080, 'cooldown_minutes'),
         this.normalizePositiveInt(body.max_runs_per_day, 50, 1, 500, 'max_runs_per_day'),
         this.uuidOrNull(user.id),
-      ],
-    );
+        ],
+      );
+      if (!isDoflowTenant(schema)) return insertedRules;
+      const config = {
+        name: insertedRules[0].name, description: insertedRules[0].description, category: insertedRules[0].category,
+        trigger_type: insertedRules[0].trigger_type, trigger_config: insertedRules[0].trigger_config,
+        conditions: insertedRules[0].conditions, actions: insertedRules[0].actions,
+        schedule_config: insertedRules[0].schedule_config, run_mode: insertedRules[0].run_mode,
+        priority: insertedRules[0].priority, cooldown_minutes: insertedRules[0].cooldown_minutes,
+        max_runs_per_day: insertedRules[0].max_runs_per_day,
+      };
+      const versions = await manager.query(
+        `INSERT INTO "${schema}".automation_rule_versions (rule_id,version,config,change_reason,created_by)
+         VALUES ($1,1,$2::jsonb,'Creazione regola',$3) RETURNING id`,
+        [insertedRules[0].id, JSON.stringify(config), this.uuidOrNull(user.id)],
+      );
+      await manager.query(
+        `UPDATE "${schema}".automation_rules
+         SET current_version_id=$2,current_version=1,lifecycle_status=CASE WHEN is_enabled THEN 'active' ELSE 'draft' END
+         WHERE id=$1`,
+        [insertedRules[0].id, versions[0].id],
+      );
+      insertedRules[0].current_version_id = versions[0].id;
+      insertedRules[0].current_version = 1;
+      insertedRules[0].lifecycle_status = insertedRules[0].is_enabled ? 'active' : 'draft';
+      insertedRules[0].optimistic_version = 1;
+      return insertedRules;
+    });
     await this.logActivity(schema, 'rule_created', rows[0].id, rows[0].template_id, user.id, { name: rows[0].name });
     return rows[0];
   }
@@ -499,11 +546,16 @@ export class TenantAutomationsService {
     const category = body.category === undefined ? current.category : this.normalizeEnum(body.category, AUTOMATION_CATEGORIES, current.category, 'category');
     const triggerType = body.trigger_type === undefined ? current.trigger_type : this.normalizeEnum(body.trigger_type, AUTOMATION_TRIGGER_TYPES, current.trigger_type, 'trigger_type');
     const actions = body.actions === undefined ? current.actions : this.normalizeActions(body.actions);
+    const optimisticValue = body.optimistic_version ?? body.optimisticVersion;
+    if (isDoflowTenant(schema) && (!Number.isInteger(Number(optimisticValue)) || Number(optimisticValue) < 1)) {
+      throw new BadRequestException('optimistic_version obbligatoria');
+    }
     if (!this.canViewFinance(user.role) && this.isFinanceRule({ ...current, category, trigger_type: triggerType, actions })) {
       throw new ForbiddenException('Automazioni finance riservate a CEO/Admin.');
     }
-    const rows = await this.dataSource.query(
-      `UPDATE "${schema}".automation_rules
+    const rows = await this.dataSource.transaction(async (manager) => {
+      const updateResult = await manager.query(
+        `UPDATE "${schema}".automation_rules
        SET name = COALESCE($2, name),
            description = COALESCE($3, description),
            category = $4,
@@ -517,10 +569,12 @@ export class TenantAutomationsService {
            cooldown_minutes = COALESCE($12, cooldown_minutes),
            max_runs_per_day = COALESCE($13, max_runs_per_day),
            updated_by = $14,
-           updated_at = now()
+           updated_at = now(),
+           optimistic_version = optimistic_version + 1
        WHERE id = $1 AND deleted_at IS NULL
+         AND ($15::int IS NULL OR optimistic_version = $15)
        RETURNING *`,
-      [
+        [
         this.requireUuid(id),
         body.name === undefined ? null : this.textOrNull(body.name),
         body.description === undefined ? null : this.textOrNull(body.description),
@@ -535,8 +589,35 @@ export class TenantAutomationsService {
         body.cooldown_minutes === undefined ? null : this.normalizePositiveInt(body.cooldown_minutes, current.cooldown_minutes, 0, 10080, 'cooldown_minutes'),
         body.max_runs_per_day === undefined ? null : this.normalizePositiveInt(body.max_runs_per_day, current.max_runs_per_day, 1, 500, 'max_runs_per_day'),
         this.uuidOrNull(user.id),
-      ],
-    );
+        optimisticValue === undefined ? null : Number(optimisticValue),
+        ],
+      );
+      const updated = Array.isArray(updateResult[0]) && typeof updateResult[1] === 'number' ? updateResult[0] : updateResult;
+      if (!updated[0]) throw new ConflictException('Regola modificata da un altro utente');
+      if (!isDoflowTenant(schema)) return updated;
+      const currentVersion = await manager.query(
+        `SELECT COALESCE(MAX(version),0)::int AS version FROM "${schema}".automation_rule_versions WHERE rule_id=$1`,
+        [id],
+      );
+      const version = Number(currentVersion[0]?.version || 0) + 1;
+      const config = {
+        name: updated[0].name, description: updated[0].description, category: updated[0].category,
+        trigger_type: updated[0].trigger_type, trigger_config: updated[0].trigger_config,
+        conditions: updated[0].conditions, actions: updated[0].actions,
+        schedule_config: updated[0].schedule_config, run_mode: updated[0].run_mode,
+        priority: updated[0].priority, cooldown_minutes: updated[0].cooldown_minutes,
+        max_runs_per_day: updated[0].max_runs_per_day,
+      };
+      const inserted = await manager.query(
+        `INSERT INTO "${schema}".automation_rule_versions (rule_id,version,config,change_reason,created_by)
+         VALUES ($1,$2,$3::jsonb,$4,$5) RETURNING id`,
+        [id, version, JSON.stringify(config), this.textOrNull(body.change_reason) || 'Aggiornamento configurazione', this.uuidOrNull(user.id)],
+      );
+      await manager.query(`UPDATE "${schema}".automation_rules SET current_version_id=$2,current_version=$3 WHERE id=$1`, [id, inserted[0].id, version]);
+      updated[0].current_version_id = inserted[0].id;
+      updated[0].current_version = version;
+      return updated;
+    });
     await this.logActivity(schema, 'rule_updated', id, current.template_id, user.id, {});
     return rows[0];
   }
@@ -545,7 +626,7 @@ export class TenantAutomationsService {
     const user = this.assertManage();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
-    await this.dataSource.query(`UPDATE "${schema}".automation_rules SET deleted_at = now(), updated_by = $2, updated_at = now() WHERE id = $1`, [this.requireUuid(id), this.uuidOrNull(user.id)]);
+    await this.dataSource.query(`UPDATE "${schema}".automation_rules SET deleted_at = now(), archived_at=now(), lifecycle_status='archived', updated_by = $2, updated_at = now() WHERE id = $1`, [this.requireUuid(id), this.uuidOrNull(user.id)]);
     await this.logActivity(schema, 'rule_deleted', id, null, user.id, {});
     return { success: true };
   }
@@ -557,7 +638,7 @@ export class TenantAutomationsService {
     const rule = await this.getRuleInternal(schema, id);
     const nextRunAt = enabled ? this.computeNextRunAt(rule.schedule_config, new Date()) : null;
     const rows = await this.dataSource.query(
-      `UPDATE "${schema}".automation_rules SET is_enabled = $2, next_run_at = $3, updated_by = $4, updated_at = now() WHERE id = $1 AND deleted_at IS NULL RETURNING *`,
+      `UPDATE "${schema}".automation_rules SET is_enabled = $2, lifecycle_status=CASE WHEN $2 THEN 'active' ELSE 'paused' END, next_run_at = $3, updated_by = $4, updated_at = now() WHERE id = $1 AND deleted_at IS NULL RETURNING *`,
       [this.requireUuid(id), enabled, nextRunAt, this.uuidOrNull(user.id)],
     );
     await this.logActivity(schema, enabled ? 'rule_enabled' : 'rule_disabled', id, rule.template_id, user.id, {});
@@ -612,7 +693,9 @@ export class TenantAutomationsService {
     const rows = await this.dataSource.query(
       `SELECT r.id, r.rule_id, ar.name AS rule_name, r.trigger_type, r.trigger_source, r.status, r.started_at, r.finished_at,
               r.duration_ms, r.matched_count, r.actions_count, r.actions_success_count, r.actions_failed_count,
-              r.skipped_reason, r.error_message, r.actor_user_id, r.result_payload
+              r.skipped_reason, r.error_message, r.actor_user_id, r.result_payload,
+              r.execution_key, r.operation_id, r.correlation_id, r.rule_version_id,
+              r.attempt, r.retry_of, r.root_run_id, r.queue_job_id, r.worker_id, r.dead_lettered_at
        FROM "${schema}".automation_runs r
        LEFT JOIN "${schema}".automation_rules ar ON ar.id = r.rule_id
        WHERE ${where.join(' AND ')}
@@ -800,7 +883,6 @@ export class TenantAutomationsService {
     return { rulesRun: runs.length, runs };
   }
 
-  @Cron(CronExpression.EVERY_HOUR)
   async runScheduled() {
     try {
       const tenants = await this.dataSource.query(`SELECT schema_name FROM public.tenants WHERE is_active = true AND schema_name IS NOT NULL`);
@@ -1252,9 +1334,8 @@ export class TenantAutomationsService {
           match.entity_id,
           JSON.stringify({
             previous_status: previous.mapped ? previous.stage : 'unknown',
+            previous_status_raw: previous.raw,
             new_status: nextStatus,
-            ...(previous.mapped && previous.isLegacy ? { previous_status_raw: previous.raw } : {}),
-            ...(!previous.mapped ? { previous_status_raw: previous.raw } : {}),
           }),
         ],
       );

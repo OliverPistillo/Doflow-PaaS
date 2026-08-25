@@ -1,4 +1,52 @@
-export type AdministrationRow = Record<string, any>;
+export type AdministrationRow = Record<string, unknown> & {
+  id: string;
+  title?: string | null;
+  name?: string | null;
+  description?: string | null;
+  status?: string | null;
+  kind?: string | null;
+  company_id?: string | null;
+  company_name?: string | null;
+  project_name?: string | null;
+  contract_number?: string | null;
+  contract_type?: string | null;
+  signature_status?: string | null;
+  invoice_number?: string | null;
+  payment_method?: string | null;
+  method?: string | null;
+  payment_date?: string | null;
+  created_at?: string | null;
+  recurring_service_id?: string | null;
+  currency?: string | null;
+  billing_cycle?: string | null;
+  category?: string | null;
+  issue_date?: string | null;
+  due_date?: string | null;
+  renewal_date?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  amount?: number | string | null;
+  total?: number | string | null;
+  paid_total?: number | string | null;
+  remaining_total?: number | string | null;
+  total_invoiced?: number | string | null;
+  total_paid?: number | string | null;
+  total_outstanding?: number | string | null;
+  invoices_overdue_count?: number;
+  renewals_upcoming_30d?: number;
+  signedContracts?: number;
+  waitingSignatureContracts?: number;
+  expiringContracts?: number;
+  overdueContracts?: number;
+  auto_renew?: boolean | null;
+  payments?: AdministrationRow[];
+  contracts?: {
+    signedContracts?: number;
+    waitingSignatureContracts?: number;
+    expiringContracts?: number;
+    overdueContracts?: number;
+  };
+};
 
 export type AdministrationList<T = AdministrationRow> = {
   items: T[];
@@ -140,7 +188,8 @@ export function relationName(
 ) {
   if (!id) return "";
   const row = rows.find((item) => item.id === id);
-  return fields.map((field) => row?.[field]).find(Boolean) || "";
+  const value = fields.map((field) => row?.[field]).find((candidate) => typeof candidate === "string" && candidate.trim());
+  return typeof value === "string" ? value : "";
 }
 
 export function daysUntil(value?: string | null) {

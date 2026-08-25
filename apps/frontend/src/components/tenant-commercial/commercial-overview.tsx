@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { FileText, Filter, Target, Users } from "lucide-react";
+import { useEffect,useMemo,useState } from "react";
+import { FileText,Filter,Target,Users } from "lucide-react";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
-import { commercialConversion, isOpenCommercialStage, normalizeCommercialStage } from "@/lib/commercial-stage-model";
+import { commercialConversion,normalizeCommercialStage } from "@/lib/commercial-stage-model";
 import { getDoFlowUser } from "@/lib/jwt";
 import {
   commercialApi,
@@ -26,7 +26,7 @@ import { CommercialFunnel } from "./commercial-funnel";
 import { CommercialForecast } from "./commercial-forecast";
 import { CommercialRecentActivity } from "./commercial-recent-activity";
 import { CommercialTodayActions } from "./commercial-today-actions";
-import { CommercialKpiCard, CommercialPageHeader } from "./commercial-ui";
+import { CommercialKpiCard,CommercialPageHeader } from "./commercial-ui";
 
 export function CommercialOverview() {
   const { canView } = useTenantAccess();

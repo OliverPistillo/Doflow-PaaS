@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,23 +17,30 @@ export function KnowledgeSearch({ compact = false }: { compact?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const run = async () => {
+  const run = useCallback(async (query: string) => {
     setLoading(true);
     setError("");
     try {
-      const payload = await knowledgeApi.searchKnowledge({ search, limit: compact ? 5 : 50 });
+      const payload = await knowledgeApi.searchKnowledge({ search: query, limit: compact ? 5 : 50 });
       setItems(itemsOf(payload).filter((item) => canViewFinance || item.visibility !== "admin"));
     } catch (err) {
       setError(normalizeError(err));
     } finally {
       setLoading(false);
     }
-  };
+  }, [canViewFinance, compact]);
 
   useEffect(() => {
-    if (!compact) void run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        if (!compact) void run("");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [compact, run]);
 
   return (
     <Card>
@@ -43,8 +50,8 @@ export function KnowledgeSearch({ compact = false }: { compact?: boolean }) {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex gap-2">
-          <Input value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void run(); }} placeholder="Cerca procedure, asset, template..." />
-          <Button onClick={run} disabled={loading}><Search className="mr-2 h-4 w-4" />Cerca</Button>
+          <Input value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void run(search); }} placeholder="Cerca procedure, asset, template..." />
+          <Button onClick={() => void run(search)} disabled={loading}><Search className="mr-2 h-4 w-4" />Cerca</Button>
         </div>
         {error ? <ErrorBox message={error} /> : null}
         {loading ? <Loading /> : (

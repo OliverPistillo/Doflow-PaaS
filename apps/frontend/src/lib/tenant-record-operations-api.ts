@@ -35,15 +35,34 @@ export type AdministrationSummary = {
   payment_status: string;
 };
 
+export type RecordAdministrationItem = {
+  id: string;
+  title?: string | null;
+  name?: string | null;
+  status?: string | null;
+  signature_status?: string | null;
+  signed_at?: string | null;
+  invoice_number?: string | null;
+  due_date?: string | null;
+  next_due_date?: string | null;
+  currency?: string | null;
+  billing_cycle?: string | null;
+  total?: number | string | null;
+  paid_total?: number | string | null;
+  remaining_total?: number | string | null;
+  amount?: number | string | null;
+  auto_renew?: boolean | null;
+};
+
 export type RecordAdministration = {
   summary: AdministrationSummary;
-  quotes: Array<Record<string, any>>;
-  contracts: Array<Record<string, any>>;
-  invoices: Array<Record<string, any>>;
-  payments: Array<Record<string, any>>;
-  deadlines: Array<Record<string, any>>;
-  recurring_services: Array<Record<string, any>>;
-  renewals: Array<Record<string, any>>;
+  quotes: RecordAdministrationItem[];
+  contracts: RecordAdministrationItem[];
+  invoices: RecordAdministrationItem[];
+  payments: RecordAdministrationItem[];
+  deadlines: RecordAdministrationItem[];
+  recurring_services: RecordAdministrationItem[];
+  renewals: RecordAdministrationItem[];
 };
 
 function query(target: OperationsTarget, extra?: Record<string, string>) {
@@ -74,7 +93,7 @@ export const recordOperationsApi = {
     return apiFetch<RecordAdministration>(`/tenant/record-operations/administration?${query(target)}`);
   },
   createPayment(invoiceId: string, body: Record<string, unknown>) {
-    return apiFetch<Record<string, any>>(`/tenant/finance/invoices/${invoiceId}/payments`, {
+    return apiFetch<Record<string, unknown>>(`/tenant/finance/invoices/${invoiceId}/payments`, {
       method: "POST",
       body: JSON.stringify(body),
     });

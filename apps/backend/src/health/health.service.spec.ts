@@ -1,12 +1,15 @@
 import { AddressInfo } from 'net';
-import * as jwt from 'jsonwebtoken';
+import type { IncomingMessage } from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
 import {
-  createHealthProbeToken,
   statusFromChecks,
   wsCheckFromProbe,
   wsProbe,
 } from './health.service';
+import {
+  createHealthProbeSignature,
+  verifyHealthProbeSignature,
+} from './health-probe-signature';
 
 const JWT_SECRET = 'health-probe-test-secret-with-sufficient-length';
 
@@ -14,7 +17,7 @@ describe('HealthService realtime probe contract', () => {
   const servers: WebSocketServer[] = [];
 
   async function server(
-    onConnection: (socket: WebSocket) => void,
+    onConnection: (socket: WebSocket, request: IncomingMessage) => void,
   ): Promise<string> {
     const instance = new WebSocketServer({ host: '127.0.0.1', port: 0 });
     servers.push(instance);
@@ -36,33 +39,35 @@ describe('HealthService realtime probe contract', () => {
     );
   });
 
-  it('signs a short-lived HS256 token accepted only by the configured secret', () => {
-    const token = createHealthProbeToken(JWT_SECRET);
-    const complete = jwt.decode(token, { complete: true });
-    const verified = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as jwt.JwtPayload;
+  it('signs a short-lived internal probe without creating an auth identity', () => {
+    const now = Date.now();
+    const signature = createHealthProbeSignature(
+      JWT_SECRET,
+      now,
+      '0123456789abcdef0123456789abcdef',
+    );
 
-    expect(complete?.header.alg).toBe('HS256');
-    expect(complete?.header.alg).not.toBe('none');
-    expect(verified).toMatchObject({
-      sub: 'health-probe',
-      tenantId: 'public',
-      role: 'superadmin',
-      authStage: 'FULL',
-    });
-    expect((verified.exp ?? 0) - (verified.iat ?? 0)).toBeGreaterThanOrEqual(30);
-    expect((verified.exp ?? 0) - (verified.iat ?? 0)).toBeLessThanOrEqual(60);
-    expect(() => jwt.verify(token, 'wrong-health-probe-secret')).toThrow();
+    expect(signature.split('.')).toHaveLength(3);
+    expect(verifyHealthProbeSignature(signature, JWT_SECRET, now + 44_999)).toBe(true);
+    expect(verifyHealthProbeSignature(signature, JWT_SECRET, now + 45_001)).toBe(false);
+    expect(verifyHealthProbeSignature(signature, 'wrong-health-probe-secret', now)).toBe(false);
+    expect(verifyHealthProbeSignature(`${signature}00`, JWT_SECRET, now)).toBe(false);
   });
 
   it('marks the websocket healthy only after the matching nonce pong', async () => {
-    const url = await server((socket) => {
+    const url = await server((socket, request) => {
+      expect(request.url).not.toContain('token=');
+      expect(request.headers['x-doflow-health-probe']).toBe('signed-internal-probe');
       socket.on('message', (data) => {
         const message = JSON.parse(data.toString('utf8'));
         socket.send(JSON.stringify({ type: 'health_pong', nonce: message.nonce }));
       });
     });
 
-    const result = await wsProbe(url, 200);
+    const result = await wsProbe(url, 200, {
+      Origin: 'http://localhost:3100',
+      'X-Doflow-Health-Probe': 'signed-internal-probe',
+    });
 
     expect(result.ok).toBe(true);
     expect(wsCheckFromProbe(result).status).toBe('ok');

@@ -6,7 +6,7 @@ describe('TenantAutomationsService', () => {
   function makeService(role = 'owner') {
     const query = jest.fn().mockResolvedValue([]);
     const service = new TenantAutomationsService(
-      { query } as any,
+      { query, transaction: (callback: (manager: { query: typeof query }) => unknown) => callback({ query }) } as any,
       { createNotification: jest.fn().mockResolvedValue({ created: true }) } as any,
       { user: { sub: '11111111-1111-4111-8111-111111111111', role, tenantId: 'doflow' } },
     );
@@ -73,6 +73,9 @@ describe('TenantAutomationsService', () => {
       if (compact.includes('INSERT INTO "doflow".automation_rules') && compact.includes('RETURNING *')) {
         return [storedRule];
       }
+      if (compact.includes('INSERT INTO "doflow".automation_rule_versions') && compact.includes('RETURNING id')) {
+        return [{ id: '22222222-2222-4222-8222-222222222222' }];
+      }
       if (compact.includes('SELECT id, template_id, name') && compact.includes('FROM "doflow".automation_rules') && compact.includes('WHERE id = $1')) {
         expect(params[0]).toBe(ruleId);
         return [storedRule];
@@ -85,7 +88,7 @@ describe('TenantAutomationsService', () => {
       return [];
     });
     const service = new TenantAutomationsService(
-      { query } as any,
+      { query, transaction: (callback: (manager: { query: typeof query }) => unknown) => callback({ query }) } as any,
       { createNotification: jest.fn().mockResolvedValue({ created: true }) } as any,
       { user: { sub: '11111111-1111-4111-8111-111111111111', role: 'owner', tenantId: 'doflow' } },
     );
@@ -116,7 +119,7 @@ describe('TenantAutomationsService', () => {
     );
 
     const update = query.mock.calls.find(([sql]) => String(sql).includes('UPDATE "doflow".projects'));
-    expect(update?.[1]).toEqual(['33333333-3333-4333-8333-333333333333', 'paused']);
+    expect(update?.[1]).toEqual(['33333333-3333-4333-8333-333333333333', 'blocked']);
     const audits = query.mock.calls.filter(([sql]) => String(sql).includes('audit_log'));
     expect(audits).toHaveLength(1);
     expect(audits[0][1]?.[3]).toContain('"previous_status_raw":"client_review"');

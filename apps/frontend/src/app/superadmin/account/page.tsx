@@ -3,30 +3,38 @@
 
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useEffect,useState } from "react";
+import { Card,CardContent,CardHeader,CardTitle,CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar,AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { User, Shield, Key, Bell, Save, BadgeCheck } from "lucide-react";
-import { getDoFlowUser, getInitials } from "@/lib/jwt";
+import { User,Key,Bell,Save,BadgeCheck } from "lucide-react";
+import { getDoFlowUser,getInitials } from "@/lib/jwt";
 
 export default function SuperAdminAccountPage() {
   const [user, setUser] = useState<{ email: string; role: string; initials: string } | null>(null);
 
   useEffect(() => {
-    const payload = getDoFlowUser();
-    if (payload) {
-      setUser({
-        email:    payload.email    ?? "superadmin@doflow.it",
-        role:     payload.role     ?? "SUPER_ADMIN",
-        initials: getInitials(payload.email),
-      });
-    }
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        const payload = getDoFlowUser();
+        if (payload) {
+          setUser({
+            email:    payload.email    ?? "superadmin@doflow.it",
+            role:     payload.role     ?? "SUPER_ADMIN",
+            initials: getInitials(payload.email),
+          });
+        }
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (

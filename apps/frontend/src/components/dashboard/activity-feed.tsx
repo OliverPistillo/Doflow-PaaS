@@ -1,10 +1,10 @@
 'use client';
 
 import { useNotifications } from '@/hooks/useNotifications';
-import { useState, useEffect } from 'react';
+import { useState,useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Activity, FileText, Shield, User } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Activity,FileText,Shield } from 'lucide-react';
+import { Card,CardContent,CardHeader,CardTitle } from '@/components/ui/card';
 
 type ActivityItem = {
   id: string;
@@ -28,29 +28,37 @@ export function ActivityFeed() {
 
   // Ascolta WebSocket
   useEffect(() => {
-    const lastEvent = events[events.length - 1];
-    // Controlla se l'evento è un aggiornamento del feed
-    if (lastEvent?.type === 'tenant_notification') {
-      const pl = lastEvent.payload as { type?: string; payload?: ActivityItem };
-      if (pl.type !== 'activity_feed_update' || !pl.payload) return;
-      const newActivity = pl.payload;
-      
-      // Aggiungi in cima e mantieni solo gli ultimi 20
-      setActivities(prev => {
-        // Evita duplicati basati su ID se arrivano burst
-        if (prev.some(a => a.id === newActivity.id)) return prev;
-        return [
-            {
-                id: newActivity.id,
-                action: newActivity.action,
-                actor_email: newActivity.actor_email,
-                timestamp: newActivity.created_at ?? new Date().toISOString(),
-                metadata: newActivity.metadata
-            }, 
-            ...prev
-        ].slice(0, 20);
-      });
-    }
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        const lastEvent = events[events.length - 1];
+        // Controlla se l'evento è un aggiornamento del feed
+        if (lastEvent?.type === 'tenant_notification') {
+          const pl = lastEvent.payload as { type?: string; payload?: ActivityItem };
+          if (pl.type !== 'activity_feed_update' || !pl.payload) return;
+          const newActivity = pl.payload;
+
+          // Aggiungi in cima e mantieni solo gli ultimi 20
+          setActivities(prev => {
+            // Evita duplicati basati su ID se arrivano burst
+            if (prev.some(a => a.id === newActivity.id)) return prev;
+            return [
+                {
+                    id: newActivity.id,
+                    action: newActivity.action,
+                    actor_email: newActivity.actor_email,
+                    timestamp: newActivity.created_at ?? new Date().toISOString(),
+                    metadata: newActivity.metadata
+                },
+                ...prev
+            ].slice(0, 20);
+          });
+        }
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [events]);
 
   return (

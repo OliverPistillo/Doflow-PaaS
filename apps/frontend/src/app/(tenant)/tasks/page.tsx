@@ -1,41 +1,38 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import {
-  Plus, Search, CheckCircle2, Circle, Clock, AlertCircle,
-  MoreHorizontal, Star, Trash2, CalendarDays, Filter,
-  ArrowUpDown, Loader2, ChevronDown, X,
+  Plus,Search,CheckCircle2,Circle,Clock,AlertCircle,
+  MoreHorizontal,Star,Trash2,CalendarDays,Filter
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  Card, CardContent, CardDescription, CardHeader, CardTitle,
+  Card,CardContent
 } from "@/components/ui/card";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,TableBody,TableCell,TableHead,TableHeader,TableRow,
 } from "@/components/ui/table";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu,DropdownMenuContent,DropdownMenuItem,
+  DropdownMenuLabel,DropdownMenuSeparator,DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter,
-  DialogHeader, DialogTitle,
+  Dialog,DialogContent,DialogDescription,DialogFooter,
+  DialogHeader,DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,SelectContent,SelectItem,SelectTrigger,SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs,TabsList,TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar,AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
-import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
-import { PageShell, PageHeader, TableLoadingState, ErrorState } from "@/components/ui/page-shell";
+import { PageShell,PageHeader } from "@/components/ui/page-shell";
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type TaskStatus   = "todo" | "in_progress" | "done";

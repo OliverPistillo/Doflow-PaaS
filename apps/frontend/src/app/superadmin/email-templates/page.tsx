@@ -2,34 +2,33 @@
 
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import { useEffect,useState,useCallback } from "react";
 import {
-  Loader2, RefreshCw, Search, Plus, MoreHorizontal,
-  Mail, Send, Eye, Pencil, Trash2, Copy, Megaphone,
-  Code, Variable, BarChart3, Sparkles,
+  Loader2,RefreshCw,Search,Plus,MoreHorizontal,
+  Mail,Send,Eye,Pencil,Trash2,Megaphone,Variable,Sparkles
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card,CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogDescription, DialogFooter,
+  Dialog,DialogContent,DialogHeader,DialogTitle,
+  DialogDescription,DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,SelectContent,SelectItem,SelectTrigger,SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
-  DropdownMenuItem, DropdownMenuSeparator,
+  DropdownMenu,DropdownMenuTrigger,DropdownMenuContent,
+  DropdownMenuItem,DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle,
+  Sheet,SheetContent,SheetHeader,SheetTitle,
 } from "@/components/ui/sheet";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiFetch } from "@/lib/api";
+import { getErrorMessage } from "@/lib/error-message";
 import { useToast } from "@/hooks/use-toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -86,14 +85,24 @@ export default function EmailTemplatesPage() {
       ]);
       setTemplates(Array.isArray(t) ? t : []);
       setStats(s);
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setLoading(false);
     }
   }, [toast, filterCat]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const handleSave = async () => {
     if (!editDialog.tpl) return;
@@ -108,8 +117,8 @@ export default function EmailTemplatesPage() {
       setEditDialog({ open: false, tpl: null });
       await load();
       toast({ title: "Template salvato" });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -123,8 +132,8 @@ export default function EmailTemplatesPage() {
         method: "POST", body: JSON.stringify({ slug: tpl.slug, testData }),
       });
       setPreviewSheet({ open: true, html: res.html });
-    } catch (e: any) {
-      toast({ title: "Errore preview", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore preview", description: getErrorMessage(e), variant: "destructive" });
     }
   };
 
@@ -139,8 +148,8 @@ export default function EmailTemplatesPage() {
       setSendTo("");
       await load();
       toast({ title: "Email inviata" });
-    } catch (e: any) {
-      toast({ title: "Errore invio", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore invio", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -151,8 +160,8 @@ export default function EmailTemplatesPage() {
       await apiFetch(`/superadmin/email-templates/${id}`, { method: "DELETE" });
       await load();
       toast({ title: "Template eliminato" });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     }
   };
 
@@ -162,9 +171,9 @@ export default function EmailTemplatesPage() {
         method: "POST", body: JSON.stringify({ slug }),
       });
       await load();
-      toast({ title: `Campagna inviata a ${(res as any).sent || 0} tenant` });
-    } catch (e: any) {
-      toast({ title: "Errore campagna", description: e.message, variant: "destructive" });
+      toast({ title: `Campagna inviata a ${res.sent || 0} tenant` });
+    } catch (e) {
+      toast({ title: "Errore campagna", description: getErrorMessage(e), variant: "destructive" });
     }
   };
 

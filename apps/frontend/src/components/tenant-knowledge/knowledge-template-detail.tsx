@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState,useEffectEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +20,7 @@ import { KnowledgeTemplateUsePanel, KnowledgeTemplateUsage } from "./knowledge-t
 import { KnowledgeTemplateVersions } from "./knowledge-template-versions";
 
 export function KnowledgeTemplateDetailPage({ templateId }: { templateId: string }) {
+  const router = useRouter();
   const options = useKnowledgeOptions();
   const { toast } = useToast();
   const [template, setTemplate] = useState<OperationalTemplate | null>(null);
@@ -51,7 +53,18 @@ export function KnowledgeTemplateDetailPage({ templateId }: { templateId: string
     });
   };
 
-  useEffect(() => { void load(); }, [templateId]);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [templateId]);
 
   const update = async () => {
     try {
@@ -70,7 +83,7 @@ export function KnowledgeTemplateDetailPage({ templateId }: { templateId: string
         <Button asChild variant="outline"><Link href="/knowledge/templates">Torna lista</Link></Button>
         <Button variant="outline" onClick={() => knowledgeApi.activateOperationalTemplate(templateId).then(load)}>Activate</Button>
         <Button variant="outline" onClick={() => knowledgeApi.archiveOperationalTemplate(templateId).then(load)}>Archive</Button>
-        <Button variant="outline" onClick={() => knowledgeApi.duplicateOperationalTemplate(templateId).then((copy) => { location.href = `/knowledge/templates/${copy.id}`; })}>Duplica</Button>
+        <Button variant="outline" onClick={() => knowledgeApi.duplicateOperationalTemplate(templateId).then((copy) => router.push(`/knowledge/templates/${copy.id}`))}>Duplica</Button>
         <Button variant="outline" onClick={() => knowledgeApi.exportOperationalTemplate(templateId).then((data) => downloadJson(`knowledge-template-${templateId}.json`, data))}>Export</Button>
       </Header>
       <div className="flex gap-2">

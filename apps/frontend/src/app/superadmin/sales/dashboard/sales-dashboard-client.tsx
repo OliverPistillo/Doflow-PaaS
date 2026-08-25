@@ -2,14 +2,13 @@
 // SPOSTATO da: /superadmin/dashboard/page.tsx → /superadmin/sales/dashboard/
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowUpRight, Loader2, RefreshCw, TrendingUp, TrendingDown, CalendarDays } from "lucide-react";
+import { useEffect,useState,useCallback } from "react";
+import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
+import { ArrowUpRight,Loader2,RefreshCw,TrendingUp,TrendingDown } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { DrillDownSheet, CardContextType } from "./components/DrillDownSheet";
-import { GlobalFilterBar, DashboardFilters } from "./components/GlobalFilterBar";
+import { DrillDownSheet,CardContextType } from "./components/DrillDownSheet";
+import { GlobalFilterBar,DashboardFilters } from "./components/GlobalFilterBar";
 import { formatCurrency } from "./utils";
 import {
   BarChart,
@@ -124,7 +123,15 @@ export default function SalesDashboardClient() {
   }, [filters]);
 
   useEffect(() => {
-    loadData();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        loadData();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [loadData]);
 
   // ─── LOADING STATE ──────────────────────────────────────────────────────────

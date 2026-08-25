@@ -2,15 +2,13 @@
 
 import { useState, useMemo } from "react";
 import {
-  Package, PackageX, Plus, Search, AlertTriangle, ArrowUpDown,
-  TrendingUp, TrendingDown, Edit2, BarChart2, Warehouse, ArrowUp,
-  ArrowDown, RefreshCw, SlidersHorizontal, Download,
+  Package, PackageX, Plus, Search, AlertTriangle,
+  BarChart2, ArrowUp, ArrowDown, Download,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -255,7 +253,7 @@ export default function Page() {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                 <XAxis dataKey="cat" tick={{ fontSize: 9 }} />
                 <YAxis tickFormatter={v => `€${(v/1000).toFixed(0)}k`} tick={{ fontSize: 9 }} />
-                <Tooltip formatter={(v: number) => fmt(v)} labelFormatter={l => l} />
+                <Tooltip formatter={(v) => fmt(Number(v ?? 0))} labelFormatter={l => l} />
                 <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                   {chartData.map((d, i) => <Cell key={i} fill={d.color} />)}
                 </Bar>

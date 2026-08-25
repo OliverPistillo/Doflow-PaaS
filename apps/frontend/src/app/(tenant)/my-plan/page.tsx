@@ -2,16 +2,17 @@
 
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect,useState } from "react";
 import {
-  Loader2, Crown, Puzzle, HardDrive, Bell, Users,
-  CheckCircle2, Lock, Sparkles, ExternalLink, RefreshCw,
+  Loader2,Crown,Puzzle,HardDrive,Users,
+  CheckCircle2,Lock,ExternalLink
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card,CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { apiFetch } from "@/lib/api";
+import { getErrorMessage } from "@/lib/error-message";
 import { useToast } from "@/hooks/use-toast";
 
 type PlanInfo = {
@@ -46,8 +47,8 @@ export default function MyPlanPage() {
         ]);
         setPlan(p);
         setModules(m);
-      } catch (e: any) {
-        toast({ title: "Errore", description: e.message, variant: "destructive" });
+      } catch (e) {
+        toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
       } finally {
         setLoading(false);
       }

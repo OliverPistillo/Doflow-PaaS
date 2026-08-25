@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Boxes, FileText, FolderOpen, LayoutTemplate, Search, Star } from "lucide-react";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
@@ -23,7 +23,7 @@ export function KnowledgeWorkspace() {
   const [search, setSearch] = useState(""); const [category, setCategory] = useState("all"); const [kind, setKind] = useState<"all" | KnowledgeRow["kind"] | "due">("all");
   const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!canView("knowledge")) { setLoading(false); return; } setLoading(true); setError(null);
     try {
       const [articleData, assetData, templateData, favoriteData, memberData] = await Promise.all([
@@ -35,8 +35,18 @@ export function KnowledgeWorkspace() {
       ]);
       setArticles(articleData.items || []); setAssets(assetData.items || []); setTemplates(templateData.items || []); setFavorites(favoriteData.items || []); setMembers(memberData.items || []);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Caricamento della Knowledge non riuscito."); } finally { setLoading(false); }
-  };
-  useEffect(() => { void load(); }, [canView]);
+  }, [canView]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const rows = useMemo(() => knowledgeRows(articles, assets, templates), [articles, assets, templates]);
   const favoriteByTarget = useMemo(() => new Map(favorites.map((item) => [`${item.target_type}:${item.target_id}`, item])), [favorites]);

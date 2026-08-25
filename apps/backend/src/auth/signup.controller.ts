@@ -1,13 +1,14 @@
 // apps/backend/src/auth/signup.controller.ts
 // Public endpoints (no auth) for self-service tenant signup + slug check.
 
-import { Body, Controller, Get, Post, Query, Req, HttpCode, HttpStatus } from '@nestjs/common';
-import { Request } from 'express';
+import { Body, Controller, Get, Post, Query, Req, Res, HttpCode, HttpStatus } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
 import { UseGuards } from '@nestjs/common';
 import { SignupService } from './signup.service';
 import { SignupTenantDto } from './dto/signup-tenant.dto';
 import { AuditService } from '../audit.service';
+import { WebSessionService } from './web-session.service';
 
 @Controller('auth')
 @UseGuards(ThrottlerGuard)
@@ -15,6 +16,7 @@ export class SignupController {
   constructor(
     private readonly signupService: SignupService,
     private readonly auditService: AuditService,
+    private readonly webSessions: WebSessionService,
   ) {}
 
   /**
@@ -34,9 +36,25 @@ export class SignupController {
   @Post('signup-tenant')
   @HttpCode(HttpStatus.CREATED)
   @Throttle({ default: { ttl: 60 * 60 * 1000, limit: 5 } })
-  async signupTenant(@Body() dto: SignupTenantDto, @Req() req: Request) {
+  async signupTenant(
+    @Body() dto: SignupTenantDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     try {
       const result = await this.signupService.signup(dto);
+      if (this.webSessions.isBrowserRequest(req)) {
+        await this.webSessions.create(req, res, {
+          sub: result.user.id,
+          id: result.user.id,
+          email: result.user.email,
+          role: result.user.role,
+          tenantId: result.user.tenantId,
+          tenantSlug: result.user.tenantSlug,
+          authStage: 'FULL',
+          mfa_required: false,
+        }, true);
+      }
       await this.auditService.log(req, {
         action: 'tenant_signup_success',
         targetEmail: dto.email,

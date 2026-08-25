@@ -1,9 +1,9 @@
 "use client";
 
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef,useCallback,useEffect,useImperativeHandle,useMemo,useRef,useState } from "react";
 import {
-  CalendarClock, CheckSquare2, ChevronDown, FileText, Filter, Mail,
-  MessageCircle, NotebookPen, Phone, RefreshCw, SlidersHorizontal,
+  CalendarClock,CheckSquare2,ChevronDown,FileText,Filter,Mail,
+  MessageCircle,NotebookPen,Phone,RefreshCw,SlidersHorizontal,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { timelineApi, type TimelineEvent, type TimelineRecordKind } from "@/lib/tenant-timeline-api";
+import { timelineApi,type TimelineEvent,type TimelineRecordKind } from "@/lib/tenant-timeline-api";
 import type { TeamMember } from "@/lib/tenant-team-api";
 import { RecordPanelEmptyState } from "./unified-record-panel";
 
@@ -36,11 +36,6 @@ const composerKinds: Array<{ value: ComposerKind; label: string }> = [
   { value: "whatsapp", label: "WhatsApp" },
 ];
 
-const eventLabels: Record<string, string> = {
-  activity: "Attività", appointment: "Appuntamento", call: "Chiamata", email: "Email",
-  file: "File", note: "Nota interna", status_change: "Cambio di stato", whatsapp: "WhatsApp",
-};
-
 const statusLabels: Record<string, string> = {
   answered: "Risposto", busy: "Occupato", completed: "Completata",
   manually_confirmed: "Confermato manualmente", no_answer: "Nessuna risposta",
@@ -60,14 +55,15 @@ function timelineDate(value: string) {
 }
 
 function eventIcon(type: string) {
-  if (type === "call") return Phone;
-  if (type === "email") return Mail;
-  if (type === "whatsapp") return MessageCircle;
-  if (type === "appointment") return CalendarClock;
-  if (type === "note") return NotebookPen;
-  if (type === "file") return FileText;
-  if (type === "status_change") return RefreshCw;
-  return CheckSquare2;
+  const className = "h-3.5 w-3.5";
+  if (type === "call") return <Phone className={className} />;
+  if (type === "email") return <Mail className={className} />;
+  if (type === "whatsapp") return <MessageCircle className={className} />;
+  if (type === "appointment") return <CalendarClock className={className} />;
+  if (type === "note") return <NotebookPen className={className} />;
+  if (type === "file") return <FileText className={className} />;
+  if (type === "status_change") return <RefreshCw className={className} />;
+  return <CheckSquare2 className={className} />;
 }
 
 function eventTone(type: string) {
@@ -79,12 +75,11 @@ function eventTone(type: string) {
 }
 
 function TimelineEventCard({ event }: { event: TimelineEvent }) {
-  const Icon = eventIcon(event.type);
   const external = event.direction === "outbound" || event.direction === "inbound";
   const detail = statusLabels[event.outcome || ""] || statusLabels[event.status] || event.outcome || event.status;
   const dueAt = typeof event.metadata?.due_at === "string" ? event.metadata.due_at : null;
   return <article className="relative grid grid-cols-[30px_minmax(0,1fr)] gap-2.5" data-timeline-event>
-    <span className={cn("relative z-10 flex h-8 w-8 items-center justify-center rounded-full border shadow-sm", eventTone(event.type))}><Icon className="h-3.5 w-3.5" /></span>
+    <span className={cn("relative z-10 flex h-8 w-8 items-center justify-center rounded-full border shadow-sm", eventTone(event.type))}>{eventIcon(event.type)}</span>
     <div className="min-w-0 rounded-lg border border-[#e8e8ed] bg-white px-3 py-2.5">
       <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-slate-500">
         <strong className="truncate font-semibold text-slate-700" data-record-sensitive>{event.author_label}</strong>
@@ -155,35 +150,54 @@ export const RecordTimeline = forwardRef<RecordTimelineHandle, RecordTimelinePro
   useImperativeHandle(ref, () => ({ compose: activateComposer }), [activateComposer]);
 
   useEffect(() => {
-    setDestination(composer === "email" ? email || "" : phone || "");
-    setExternalOpened(false);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setDestination(composer === "email" ? email || "" : phone || "");
+        setExternalOpened(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [composer, email, phone]);
 
   useEffect(() => {
-    if (!draft) return;
-    activateComposer(draft.kind);
-    if (draft.body) {
-      setTitle("Richiesta materiale");
-      setBody(draft.body);
-    }
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        if (!draft) return;
+        activateComposer(draft.kind);
+        if (draft.body) {
+          setTitle("Richiesta materiale");
+          setBody(draft.body);
+        }
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [activateComposer, draft]);
 
   useEffect(() => {
     const controller = new AbortController();
     const version = ++requestVersion.current;
-    setLoading(true);
-    setError(null);
-    timelineApi.list(target, {
-      types: [...selectedTypes], operator_id: operatorId || undefined,
-      date_from: dateFrom || undefined, date_to: dateTo ? `${dateTo}T23:59:59.999` : undefined,
-      outcome: outcome || undefined, limit: 20,
-    }, controller.signal).then((page) => {
-      if (version !== requestVersion.current) return;
-      setEvents(page.items || []); setCursor(page.next_cursor || null); setHasMore(Boolean(page.has_more));
-    }).catch((reason) => {
-      if (!controller.signal.aborted && version === requestVersion.current) setError(reason instanceof Error ? reason.message : "Timeline non disponibile");
-    }).finally(() => {
-      if (!controller.signal.aborted && version === requestVersion.current) setLoading(false);
+    queueMicrotask(() => {
+      if (controller.signal.aborted) return;
+      setLoading(true);
+      setError(null);
+      timelineApi.list(target, {
+        types: [...selectedTypes], operator_id: operatorId || undefined,
+        date_from: dateFrom || undefined, date_to: dateTo ? `${dateTo}T23:59:59.999` : undefined,
+        outcome: outcome || undefined, limit: 20,
+      }, controller.signal).then((page) => {
+        if (version !== requestVersion.current) return;
+        setEvents(page.items || []); setCursor(page.next_cursor || null); setHasMore(Boolean(page.has_more));
+      }).catch((reason) => {
+        if (!controller.signal.aborted && version === requestVersion.current) setError(reason instanceof Error ? reason.message : "Timeline non disponibile");
+      }).finally(() => {
+        if (!controller.signal.aborted && version === requestVersion.current) setLoading(false);
+      });
     });
     return () => controller.abort();
   }, [dateFrom, dateTo, operatorId, outcome, reloadKey, selectedTypes, target]);

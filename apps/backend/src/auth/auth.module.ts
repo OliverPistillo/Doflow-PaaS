@@ -28,6 +28,7 @@ import { GoogleStrategy } from './google.strategy';
 import { SignupService } from './signup.service';
 import { PlatformModulesSeedService } from '../superadmin/platform-modules.seed';
 import { AuthHandoffService } from './auth-handoff.service';
+import { WebSessionService } from './web-session.service';
 
 // Entities needed by SignupService
 import { Tenant } from '../superadmin/entities/tenant.entity';
@@ -68,6 +69,7 @@ import { TenantSubscription } from '../superadmin/entities/tenant-subscription.e
   providers: [
     AuthService,
     AuthHandoffService,
+    WebSessionService,
     LoginGuardService,
     AuditService,
     JwtStrategy,
@@ -79,6 +81,7 @@ import { TenantSubscription } from '../superadmin/entities/tenant-subscription.e
   exports: [
     AuthService,
     AuthHandoffService,
+    WebSessionService,
     LoginGuardService,
     AuditService,
     JwtModule,

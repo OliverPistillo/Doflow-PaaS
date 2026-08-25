@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Download, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,14 +18,24 @@ export function KnowledgeAssetsPage() {
   const [items, setItems] = useState<AssetItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     const payload = await knowledgeApi.listKnowledgeAssets(filters);
     setItems(itemsOf(payload).filter((item) => canViewFinance || item.visibility !== "admin"));
     setLoading(false);
-  };
+  }, [canViewFinance, filters]);
 
-  useEffect(() => { void load(); }, [filters]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const action = async (type: "archive" | "delete" | "export", item: AssetItem) => {
     try {

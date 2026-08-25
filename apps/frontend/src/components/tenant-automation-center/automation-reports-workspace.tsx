@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock3, Download, Euro, Workflow } from "lucide-react";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,7 +16,7 @@ export function AutomationReportsWorkspace() {
   const { canView } = useTenantAccess();
   const [days, setDays] = useState(30); const [runs, setRuns] = useState<AutomationRun[]>([]); const [rules, setRules] = useState<AutomationRule[]>([]); const [targets, setTargets] = useState<KpiTarget[]>([]); const [truncated, setTruncated] = useState(false);
   const [loading, setLoading] = useState(true); const [exporting, setExporting] = useState(false); const [error, setError] = useState<string | null>(null);
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!canView("reports")) { setLoading(false); return; } setLoading(true); setError(null);
     try {
       const automationAllowed = canView("automations");
@@ -27,8 +27,18 @@ export function AutomationReportsWorkspace() {
       ]);
       setRuns(runData.items); setRules(ruleData.items); setTargets(executive.targets || []); setTruncated(runData.truncated || ruleData.truncated);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Caricamento del report non riuscito."); } finally { setLoading(false); }
-  };
-  useEffect(() => { void load(); }, [canView, days]);
+  }, [canView, days]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const periodRuns = useMemo(() => runs.filter((run) => inPeriod(run.started_at, days)), [runs, days]); const actions = periodRuns.reduce((sum, run) => sum + numeric(run.actions_count), 0); const rate = successRate(periodRuns);
   const exportReport = async () => {

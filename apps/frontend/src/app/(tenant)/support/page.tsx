@@ -2,28 +2,29 @@
 
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import { useEffect,useState,useCallback } from "react";
 import {
-  Loader2, Plus, LifeBuoy, Clock, CheckCircle2, MessageSquare,
-  Send, AlertTriangle, ChevronRight,
+  Loader2,Plus,LifeBuoy,MessageSquare,
+  Send,ChevronRight
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card,CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogDescription, DialogFooter,
+  Dialog,DialogContent,DialogHeader,DialogTitle,
+  DialogDescription,DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,SelectContent,SelectItem,SelectTrigger,SelectValue,
 } from "@/components/ui/select";
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle,
+  Sheet,SheetContent,SheetHeader,SheetTitle,
 } from "@/components/ui/sheet";
 import { apiFetch } from "@/lib/api";
+import { getErrorMessage } from "@/lib/error-message";
 import { useToast } from "@/hooks/use-toast";
 
 type Reply = { author: string; message: string; timestamp: string; isInternal: boolean };
@@ -59,12 +60,22 @@ export default function SupportPage() {
     try {
       const res = await apiFetch<Ticket[]>("/tenant/self-service/tickets");
       setTickets(Array.isArray(res) ? res : []);
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally { setLoading(false); }
   }, [toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const handleCreate = async () => {
     setSaving(true);
@@ -74,8 +85,8 @@ export default function SupportPage() {
       setForm({ subject: "", description: "", category: "GENERAL", priority: "MEDIUM" });
       await load();
       toast({ title: "Ticket creato", description: "Il nostro team lo prenderà in carico a breve." });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally { setSaving(false); }
   };
 
@@ -91,8 +102,8 @@ export default function SupportPage() {
       setTickets(Array.isArray(updated) ? updated : []);
       const refreshed = (updated as Ticket[]).find(t => t.id === detail.id);
       if (refreshed) setDetail(refreshed);
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally { setSaving(false); }
   };
 

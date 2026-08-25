@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarPlus, ExternalLink, Mail, MessageCircle, Phone, Plus, Upload } from "lucide-react";
+import { useEffect,useMemo,useRef,useState } from "react";
+import { CalendarPlus,ExternalLink,Mail,MessageCircle,Phone,Plus,Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
 import { apiFetch } from "@/lib/api";
@@ -18,16 +18,21 @@ import {
   normalizeProjectStage,
   projectStageLabel,
 } from "@/lib/project-stage-model";
-import { teamApi, type TeamMember } from "@/lib/tenant-team-api";
+import { teamApi,type TeamMember } from "@/lib/tenant-team-api";
 import type { CommercialClientRow } from "@/components/tenant-commercial/commercial-client-types";
 import { pipelineStageLabel } from "@/components/tenant-commercial/commercial-utils";
-import { UnifiedRecordPanel, type RecordPanelAction, type RecordPanelTab } from "./unified-record-panel";
-import { RecordOverview, type RecordPanelOverviewModel } from "./record-overview";
-import { RecordTimeline, type ComposerKind, type RecordTimelineHandle } from "./record-timeline";
-import { RecordFiles, type RecordFilesHandle } from "./record-files";
-import { RecordAdministration, type RecordAdministrationHandle } from "./record-administration";
+import { UnifiedRecordPanel,type RecordPanelAction,type RecordPanelTab } from "./unified-record-panel";
+import { RecordOverview,type RecordPanelOverviewModel } from "./record-overview";
+import { RecordTimeline,type ComposerKind,type RecordTimelineHandle } from "./record-timeline";
+import { RecordFiles,type RecordFilesHandle } from "./record-files";
+import { RecordAdministration,type RecordAdministrationHandle } from "./record-administration";
+import type { WorkProject } from "@/components/tenant-work/work-model";
 
-type ProjectRecord = Record<string, any>;
+type ProjectRecord = WorkProject & {
+  opportunity_id?: string | null;
+  contact_id?: string | null;
+  contact_name?: string | null;
+};
 type ListResponse<T> = { items: T[]; total?: number };
 
 const companyStatusLabels: Record<string, string> = {
@@ -55,15 +60,15 @@ function contactName(contact?: CommercialContact | null, fallback?: string | nul
 function nextProjectStage(project?: ProjectRecord | null) {
   if (!project) return null;
   const normalized = normalizeProjectStage(project.status);
-  if (!normalized.mapped || normalized.stage === "paused") return null;
-  const stages = DOFLOW_PROJECT_STAGE_OPTIONS.filter((item) => item.value !== "paused");
+  if (!normalized.mapped || normalized.stage === "suspended") return null;
+  const stages = DOFLOW_PROJECT_STAGE_OPTIONS.filter((item) => item.value !== "suspended");
   const index = stages.findIndex((item) => item.value === normalized.stage);
   return index >= 0 ? stages[index + 1]?.label || null : null;
 }
 
 function isProjectPaused(project?: ProjectRecord | null) {
   const normalized = normalizeProjectStage(project?.status);
-  return normalized.mapped && normalized.stage === "paused";
+  return normalized.mapped && normalized.stage === "suspended";
 }
 
 function primaryFooter(className = "") {
@@ -78,7 +83,6 @@ export function DoflowCommercialRecordPanel({
   activeTab,
   onTabChange,
   onClose,
-  showEconomic: _showEconomic,
 }: {
   kind: "opportunity" | "company";
   recordId: string;
@@ -105,8 +109,6 @@ export function DoflowCommercialRecordPanel({
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
     const load = async () => {
       try {
         if (kind === "opportunity") {
@@ -152,7 +154,12 @@ export function DoflowCommercialRecordPanel({
         if (!cancelled) setLoading(false);
       }
     };
-    void load();
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setLoading(true);
+      setError(null);
+      void load();
+    });
     return () => { cancelled = true; };
   }, [canView, kind, recordId]);
 

@@ -4,11 +4,9 @@
 "use client";
 
 import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card,CardContent,CardHeader,CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import {
-  Database,
   Cpu,
   MemoryStick,
   HardDrive,
@@ -17,7 +15,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
-  Clock,
+  Clock
 } from "lucide-react";
 import type { SystemData } from "../system-monitor-client";
 

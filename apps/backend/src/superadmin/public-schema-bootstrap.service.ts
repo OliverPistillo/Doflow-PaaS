@@ -10,6 +10,7 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import { ensurePlatformOperationalTables } from './platform-operational-schema';
 
 @Injectable()
 export class PublicSchemaBootstrapService implements OnApplicationBootstrap {
@@ -21,6 +22,7 @@ export class PublicSchemaBootstrapService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
+    await ensurePlatformOperationalTables(this.dataSource);
     await this.ensureInvoiceClientsTable();
     await this.ensureQuoteRequestsTable();
   }

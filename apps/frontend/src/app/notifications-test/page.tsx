@@ -2,46 +2,22 @@
 
 import { useState } from 'react';
 import { useNotifications } from '@/hooks/useNotifications';
-import { getAuthToken } from '@/lib/auth-storage';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api';
+import { apiFetch } from '@/lib/api';
 
 export default function NotificationsTestPage() {
   const { events, connected, error } = useNotifications();
   const [message, setMessage] = useState('Ping realtime da Doflow');
 
   const sendTenantPing = async () => {
-    const token = getAuthToken();
-
-    if (!token) {
-      alert('Nessun token, effettua login prima.');
-      return;
-    }
-
-    await fetch(`${API_BASE}/realtime-test/tenant`, {
+    await apiFetch('/realtime-test/tenant', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
       body: JSON.stringify({ message }),
     });
   };
 
   const sendUserPing = async () => {
-    const token = getAuthToken();
-
-    if (!token) {
-      alert('Nessun token, effettua login prima.');
-      return;
-    }
-
-    await fetch(`${API_BASE}/realtime-test/user`, {
+    await apiFetch('/realtime-test/user', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
       body: JSON.stringify({ message }),
     });
   };

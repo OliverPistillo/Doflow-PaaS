@@ -1,5 +1,5 @@
-import { AutomationRulesWorkspace } from "@/components/tenant-automation-center/automation-rules-workspace";
+import { AutomationRulesPage } from "@/components/tenant-automations/automation-rules-list";
 
 export default function AutomationsRulesPage() {
-  return <AutomationRulesWorkspace />;
+  return <AutomationRulesPage />;
 }

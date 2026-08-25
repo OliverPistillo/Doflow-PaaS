@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CommercialEmptyState, CommercialPageHeader, CommercialSectionCard } from "@/components/tenant-commercial/commercial-ui";
-import { getDoFlowUser } from "@/lib/jwt";
+import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider";
 import { activateProposalTheme, deleteProposalTheme, disableProposalTheme, downloadProposalTheme, fetchProposalThemePreview, listProposalThemes, setDefaultProposalTheme, uploadProposalTheme, type JsonObject, type ProposalTheme } from "@/lib/tenant-site-proposals-api";
 import { downloadBlob, formatDate, getErrorMessage } from "./site-proposal-utils";
 
@@ -18,8 +18,8 @@ type Viewport = "mobile" | "tablet" | "desktop" | "compare";
 const viewportWidth: Record<Exclude<Viewport, "compare">, string> = { mobile: "390px", tablet: "768px", desktop: "100%" };
 
 export function SiteProposalThemes() {
-  const role = String(getDoFlowUser()?.role || "").toLowerCase();
-  const canAdmin = ["admin", "owner", "superadmin", "super_admin"].includes(role);
+  const { currentUser } = useDoflowIdentity();
+  const canAdmin = currentUser.roles.includes("administrator");
   const [themes, setThemes] = useState<ProposalTheme[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -40,7 +40,7 @@ export function SiteProposalThemes() {
     catch (error) { toast.error(getErrorMessage(error)); }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
 
   const activeThemes = useMemo(() => themes.filter((theme) => theme.status === "active"), [themes]);
   const visibleThemes = useMemo(() => themes.filter((theme) => filter === "all" || (filter === "deleted" ? Boolean(theme.deleted_at) || theme.status === "retired" : filter === "disabled" ? !theme.deleted_at && theme.status === "disabled" : !theme.deleted_at && ["active","draft"].includes(theme.status))), [filter, themes]);

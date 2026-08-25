@@ -1,23 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef, type ReactNode } from "react";
-import {
-  Building2, CheckCircle2, Edit3, Loader2, Plus, Search, Trash2,
-} from "lucide-react";
+import { useEffect,useMemo,useState,useRef,type ReactNode,useEffectEvent } from "react";
+import { CheckCircle2,Edit3,Loader2,Plus,Search,Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/components/ui/card";
+import { Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { PageShell, PageHeader } from "@/components/ui/page-shell";
+import { PageShell,PageHeader } from "@/components/ui/page-shell";
 import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
 import { cn } from "@/lib/utils";
@@ -41,7 +39,18 @@ export type CrmColumn = {
   sensitive?: boolean;
 };
 
-export type CrmRow = Record<string, any>;
+type FieldValue = string | number | boolean | null | undefined;
+type FormState = Record<string, FieldValue>;
+export type CrmRow = {
+  id: string; company_name?: string; completed_at?: string; first_name?: string; last_name?: string;
+  name?: string; stage?: string; title?: string; value_estimate?: string | number; source?: string;
+  interest?: unknown; urgency?: unknown; intake_attribution?: unknown; next_action_at?: string;
+  commercial_stage?: string;
+};
+
+function rowField(row: CrmRow, key: string) {
+  return (row as unknown as Record<string, unknown>)[key];
+}
 
 type ListResponse = {
   items: CrmRow[];
@@ -116,7 +125,7 @@ function canSeeEconomicValues() {
 }
 
 function emptyForm(fields: CrmField[]) {
-  return fields.reduce<Record<string, any>>((acc, field) => {
+  return fields.reduce<FormState>((acc, field) => {
     acc[field.key] = "";
     return acc;
   }, {});
@@ -161,7 +170,7 @@ export function CrmResourcePage({
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<CrmRow | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState<Record<string, any>>(() => emptyForm(fields));
+  const [form, setForm] = useState<FormState>(() => emptyForm(fields));
   const [relations, setRelations] = useState<Record<string, CrmRow[]>>({});
   const showEconomic = canSeeEconomicValues();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -213,10 +222,19 @@ export function CrmResourcePage({
     }
   };
 
-  useEffect(() => {
-    void loadRelations();
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const loadEffect = useEffectEvent(load);
+  const loadRelationsEffect = useEffectEvent(loadRelations);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadRelationsEffect();
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -230,18 +248,26 @@ export function CrmResourcePage({
     setForm(emptyForm(fields));
     setDialogOpen(true);
   };
+  const openCreateEffect = useEffectEvent(openCreate);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("new") === "1") openCreate();
-    // The query flag is consumed only on the first mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("new") === "1") openCreateEffect();
+        // The query flag is consumed only on the first mount.
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const openEdit = (row: CrmRow) => {
     setEditing(row);
-    setForm(fields.reduce<Record<string, any>>((acc, field) => {
-      acc[field.key] = toInputValue(row[field.key], field.type);
+    setForm(fields.reduce<FormState>((acc, field) => {
+      acc[field.key] = toInputValue(rowField(row, field.key), field.type);
       return acc;
     }, {}));
     setDialogOpen(true);
@@ -251,7 +277,7 @@ export function CrmResourcePage({
     setSaving(true);
     setError(null);
     try {
-      const body = fields.reduce<Record<string, any>>((acc, field) => {
+      const body = fields.reduce<FormState>((acc, field) => {
         const value = form[field.key];
         if (value === "" || value === undefined) return acc;
         acc[field.key] = value;
@@ -364,7 +390,7 @@ export function CrmResourcePage({
                     <tr key={row.id} className="border-t">
                       {columns.filter((c) => !c.sensitive || showEconomic).map((column) => (
                         <td key={column.key} className="px-4 py-3 align-top">
-                          {column.format ? column.format(row[column.key], row) : String(row[column.key] ?? "-")}
+                          {column.format ? column.format(rowField(row, column.key), row) : String(rowField(row, column.key) ?? "-")}
                         </td>
                       ))}
                       <td className="px-4 py-3">
@@ -440,17 +466,17 @@ function FieldInput({
   onChange,
 }: {
   field: CrmField;
-  value: any;
+  value: FieldValue;
   relations: Record<string, CrmRow[]>;
-  onChange: (value: any) => void;
+  onChange: (value: FieldValue) => void;
 }) {
   if (field.type === "textarea") {
-    return <Textarea value={value || ""} onChange={(e) => onChange(e.target.value)} placeholder={field.placeholder} />;
+    return <Textarea value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} placeholder={field.placeholder} />;
   }
 
   if (field.type === "select" && field.options) {
     return (
-      <Select value={value || ""} onValueChange={onChange}>
+      <Select value={String(value ?? "")} onValueChange={onChange}>
         <SelectTrigger><SelectValue placeholder={field.placeholder || "Seleziona"} /></SelectTrigger>
         <SelectContent>
           {field.options.map((option) => (
@@ -464,7 +490,7 @@ function FieldInput({
   if (field.type === "relation" && field.relation) {
     const items = relations[field.relation] || [];
     return (
-      <Select value={value || "__none__"} onValueChange={(next) => onChange(next === "__none__" ? "" : next)}>
+      <Select value={String(value ?? "__none__")} onValueChange={(next) => onChange(next === "__none__" ? "" : next)}>
         <SelectTrigger><SelectValue placeholder={field.placeholder || "Nessun collegamento"} /></SelectTrigger>
         <SelectContent>
           <SelectItem value="__none__">Nessun collegamento</SelectItem>
@@ -481,7 +507,7 @@ function FieldInput({
   return (
     <Input
       type={field.type || "text"}
-      value={value || ""}
+      value={String(value ?? "")}
       onChange={(e) => onChange(e.target.value)}
       placeholder={field.placeholder}
     />
@@ -507,7 +533,15 @@ export function PipelinePage() {
   };
 
   useEffect(() => {
-    void load();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const move = async (id: string, stage: string) => {

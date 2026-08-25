@@ -46,11 +46,24 @@ describe('Auth flow security contract', () => {
       registerFailure: jest.fn().mockResolvedValue(undefined),
       resetFailures: jest.fn().mockResolvedValue(undefined),
     };
+    const webSessions = {
+      create: jest.fn().mockResolvedValue(undefined),
+      rotate: jest.fn().mockResolvedValue(undefined),
+      revoke: jest.fn().mockResolvedValue(undefined),
+      clear: jest.fn(),
+    };
     return {
       authService,
       audit,
       guard,
-      value: new AuthController(authService as any, audit as any, guard as any, {} as any),
+      webSessions,
+      value: new AuthController(
+        authService as any,
+        audit as any,
+        guard as any,
+        {} as any,
+        webSessions as any,
+      ),
     };
   }
 
@@ -81,7 +94,7 @@ describe('Auth flow security contract', () => {
 
   it('restituisce sempre 401 generico per login non valido', async () => {
     const { value, guard } = controller({ loginAuto: jest.fn().mockRejectedValue(new Error('tenant detail')) });
-    await expect(value.login({ email: 'person@example.test', password: 'wrong' }, req()))
+    await expect(value.login({ email: 'person@example.test', password: 'wrong' }, req(), {} as any))
       .rejects.toMatchObject({ status: HttpStatus.UNAUTHORIZED, message: 'Credenziali non valide' });
     expect(guard.registerFailure).toHaveBeenCalledTimes(1);
   });
@@ -89,16 +102,16 @@ describe('Auth flow security contract', () => {
   it('preserva HTTP 429 senza registrare un nuovo fallimento', async () => {
     const { value, guard } = controller();
     guard.checkBeforeLogin.mockRejectedValue(new HttpException('Troppi tentativi', HttpStatus.TOO_MANY_REQUESTS));
-    await expect(value.login({ email: 'person@example.test', password: 'wrong' }, req()))
+    await expect(value.login({ email: 'person@example.test', password: 'wrong' }, req(), {} as any))
       .rejects.toMatchObject({ status: HttpStatus.TOO_MANY_REQUESTS });
     expect(guard.registerFailure).not.toHaveBeenCalled();
   });
 
   it('rifiuta endpoint MFA usati con lo stage sbagliato', async () => {
     const { value } = controller();
-    await expect(value.mfaVerify({ code: '123456' }, req({ sub: 'u1', authStage: 'FULL' })))
+    await expect(value.mfaVerify({ code: '123456' }, req({ sub: 'u1', authStage: 'FULL' }), {} as any))
       .rejects.toBeInstanceOf(ForbiddenException);
-    await expect(value.mfaConfirm({ code: '123456', secret: 'secret' }, req({ sub: 'u1', authStage: 'MFA_PENDING' })))
+    await expect(value.mfaConfirm({ code: '123456', secret: 'secret' }, req({ sub: 'u1', authStage: 'MFA_PENDING' }), {} as any))
       .rejects.toBeInstanceOf(ForbiddenException);
   });
 });
@@ -115,6 +128,34 @@ describe('AuthService tenant and MFA boundaries', () => {
       .rejects.toBeInstanceOf(UnauthorizedException);
     expect(dataSource.query).toHaveBeenCalledTimes(1);
     expect(dataSource.query.mock.calls[0][0]).toContain('public.users');
+  });
+
+  it('non promuove a public un ruolo superadmin associato a un tenant', async () => {
+    const passwordHash = await bcrypt.hash('password-safe', 4);
+    const dataSource = {
+      query: jest.fn()
+        .mockResolvedValueOnce([{ tenant_id: 'tenant-id', role: 'superadmin' }])
+        .mockResolvedValueOnce([{ schema_name: 'doflow' }])
+        .mockResolvedValueOnce([{ slug: 'doflow' }])
+        .mockResolvedValueOnce([{ is_active: true }])
+        .mockResolvedValueOnce([{
+          id: 'u1', email: 'scoped@example.test', password_hash: passwordHash,
+          created_at: new Date().toISOString(), role: 'superadmin',
+          mfa_enabled: false, mfa_secret: null,
+        }]),
+    };
+    const service = new AuthService(dataSource as any);
+    const result = await service.loginAuto(
+      req(undefined, 'public'),
+      'scoped@example.test',
+      'password-safe',
+    );
+
+    expect(result.user).toMatchObject({ tenantId: 'doflow', tenantSlug: 'doflow' });
+    expect(dataSource.query.mock.calls.some(([sql]) => sql.includes('from "public"."users"')))
+      .toBe(false);
+    expect(dataSource.query.mock.calls.some(([sql]) => sql.includes('from "doflow"."users"')))
+      .toBe(true);
   });
 
   it('non espone più il percorso legacy /auth/register', () => {
@@ -221,18 +262,50 @@ describe('AuthMiddleware partial-session gate', () => {
   beforeAll(() => { process.env.JWT_SECRET = 'auth-middleware-test-secret-with-enough-entropy'; });
   afterAll(() => { process.env.JWT_SECRET = originalSecret; });
 
-  it('blocca risorse applicative con token partial e lascia passare il flusso MFA', () => {
-    const middleware = new AuthMiddleware();
+  it('blocca risorse applicative con token partial e lascia passare il flusso MFA', async () => {
+    const middleware = new AuthMiddleware({
+      isBrowserRequest: jest.fn().mockReturnValue(false),
+      resolve: jest.fn().mockResolvedValue(null),
+    } as any);
     const token = jwt.sign({ sub: 'u1', tenantId: 'doflow', authStage: 'MFA_PENDING' }, process.env.JWT_SECRET!);
     const status = jest.fn().mockReturnThis();
     const json = jest.fn();
     const next = jest.fn();
-    middleware.use({ headers: { authorization: `Bearer ${token}` }, originalUrl: '/api/projects' } as any, { status, json } as any, next);
+    await middleware.use({ headers: { authorization: `Bearer ${token}` }, originalUrl: '/api/projects' } as any, { status, json } as any, next);
     expect(status).toHaveBeenCalledWith(HttpStatus.FORBIDDEN);
     expect(next).not.toHaveBeenCalled();
 
-    middleware.use({ headers: { authorization: `Bearer ${token}` }, originalUrl: '/api/auth/mfa/verify' } as any, { status, json } as any, next);
+    await middleware.use({ headers: { authorization: `Bearer ${token}` }, originalUrl: '/api/auth/mfa/verify' } as any, { status, json } as any, next);
     expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('richiede CSRF anche per logout e MFA quando la sessione è cookie-based', async () => {
+    const session = {
+      user: {
+        sub: 'u1', id: 'u1', email: 'safe@example.test', role: 'owner',
+        tenantId: 'doflow', tenantSlug: 'doflow', authStage: 'FULL',
+      },
+      csrfToken: 'csrf',
+    };
+    const webSessions = {
+      isBrowserRequest: jest.fn().mockReturnValue(false),
+      resolve: jest.fn().mockResolvedValue(session),
+      assertCsrf: jest.fn(),
+    };
+    const middleware = new AuthMiddleware(webSessions as any);
+    const next = jest.fn();
+    await middleware.use(
+      { headers: {}, method: 'POST', originalUrl: '/api/auth/logout' } as any,
+      {} as any,
+      next,
+    );
+    await middleware.use(
+      { headers: {}, method: 'POST', originalUrl: '/api/auth/mfa/verify' } as any,
+      {} as any,
+      next,
+    );
+    expect(webSessions.assertCsrf).toHaveBeenCalledTimes(2);
+    expect(next).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -244,7 +317,7 @@ describe('Public signup contract', () => {
       {} as any,
       { query: jest.fn() } as any,
       {} as any,
-      {} as any,
+      { consumeGoogleSignupGrant: jest.fn().mockResolvedValue(null) } as any,
     );
   }
 
@@ -298,15 +371,14 @@ describe('Public signup contract', () => {
       createQueryRunner: jest.fn().mockReturnValue(queryRunner),
     };
     const bootstrap = { ensureTenantTables: jest.fn(), addTenantToCache: jest.fn() };
-    const authService = { signTokenPublic: jest.fn().mockReturnValue('signed-token') };
-    const signup = new SignupService(tenantRepo as any, {} as any, {} as any, dataSource as any, bootstrap as any, authService as any);
+    const authHandoff = { consumeGoogleSignupGrant: jest.fn().mockResolvedValue(null) };
+    const signup = new SignupService(tenantRepo as any, {} as any, {} as any, dataSource as any, bootstrap as any, authHandoff as any);
     await expect(signup.signup({
       email: 'new@example.test', password: 'password-safe', companyName: 'Example',
       slug: 'example-space', acceptTerms: true,
     })).resolves.toMatchObject({
       tenant: { slug: 'example-space', schemaName: 'example_space' },
       user: { role: 'owner', tenantId: 'example_space' },
-      token: 'signed-token',
       nextStep: 'onboarding',
     });
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
@@ -349,12 +421,19 @@ describe('Password recovery tenant binding', () => {
       used_at: null,
       invalidated_at: null,
     };
-    const conn = {
+    const runner = {
       query: jest.fn()
-        .mockResolvedValueOnce([{ slug: 'doflow', schema_name: 'doflow', is_active: true }])
         .mockResolvedValueOnce([validRow])
         .mockResolvedValueOnce([{ id: 7 }])
+        .mockResolvedValueOnce([{ id: '11111111-1111-4111-8111-111111111111' }])
         .mockResolvedValueOnce([]),
+      connect: jest.fn(), startTransaction: jest.fn(), commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(), release: jest.fn(), isTransactionActive: true,
+    };
+    const conn = {
+      query: jest.fn()
+        .mockResolvedValueOnce([{ slug: 'doflow', schema_name: 'doflow', is_active: true }]),
+      createQueryRunner: jest.fn().mockReturnValue(runner),
     };
     const controller = new AuthPasswordController({} as any);
     const response = { status: jest.fn().mockReturnThis(), json: jest.fn((value) => value) };
@@ -363,20 +442,26 @@ describe('Password recovery tenant binding', () => {
       response as any,
       { token: 'reset-token', password: 'password-safe', tenant: 'doflow' },
     );
-    expect(conn.query.mock.calls[1][0]).toContain('"doflow".password_reset_tokens');
-    expect(conn.query.mock.calls[2][0]).toContain('set used_at');
-    expect(conn.query.mock.calls[3][0]).toContain('set password_hash');
+    expect(runner.query.mock.calls[0][0]).toContain('"doflow".password_reset_tokens');
+    expect(runner.query.mock.calls[1][0]).toContain('set used_at');
+    expect(runner.query.mock.calls[2][0]).toContain('set password_hash');
+    expect(runner.commitTransaction).toHaveBeenCalledTimes(1);
     expect(response.json).toHaveBeenCalledWith({ ok: true });
   });
 
   it('rifiuta un reset token già usato senza riscrivere la password', async () => {
+    const runner = {
+      query: jest.fn().mockResolvedValueOnce([{
+        id: 7, email: 'known@example.test', expires_at: new Date(Date.now() + 60_000).toISOString(),
+        used_at: new Date().toISOString(), invalidated_at: null,
+      }]),
+      connect: jest.fn(), startTransaction: jest.fn(), commitTransaction: jest.fn(),
+      rollbackTransaction: jest.fn(), release: jest.fn(), isTransactionActive: true,
+    };
     const conn = {
       query: jest.fn()
-        .mockResolvedValueOnce([{ slug: 'doflow', schema_name: 'doflow', is_active: true }])
-        .mockResolvedValueOnce([{
-          id: 7, email: 'known@example.test', expires_at: new Date(Date.now() + 60_000).toISOString(),
-          used_at: new Date().toISOString(), invalidated_at: null,
-        }]),
+        .mockResolvedValueOnce([{ slug: 'doflow', schema_name: 'doflow', is_active: true }]),
+      createQueryRunner: jest.fn().mockReturnValue(runner),
     };
     const controller = new AuthPasswordController({} as any);
     const response = { status: jest.fn().mockReturnThis(), json: jest.fn((value) => value) };
@@ -385,7 +470,8 @@ describe('Password recovery tenant binding', () => {
       response as any,
       { token: 'reset-token', password: 'password-safe', tenant: 'doflow' },
     );
-    expect(conn.query).toHaveBeenCalledTimes(2);
+    expect(conn.query).toHaveBeenCalledTimes(1);
+    expect(runner.rollbackTransaction).toHaveBeenCalledTimes(1);
     expect(response.status).toHaveBeenCalledWith(HttpStatus.BAD_REQUEST);
   });
 });
@@ -407,9 +493,8 @@ describe('Google OAuth redirect security', () => {
         }])
         .mockResolvedValueOnce([]),
     };
-    const authService = { signTokenPublic: jest.fn().mockReturnValue('header.payload.signature') };
     const handoff = { createLogin: jest.fn().mockResolvedValue({ handoff: 'opaque-login-code' }) };
-    const controller = new GoogleAuthController(dataSource as any, authService as any, handoff as any);
+    const controller = new GoogleAuthController(dataSource as any, handoff as any);
     const res = response();
     await controller.googleCallback(req({ googleId: 'g1', email: 'existing@example.test', emailVerified: true }), res as any);
     const url = String(res.redirect.mock.calls[0][0]);
@@ -422,7 +507,7 @@ describe('Google OAuth redirect security', () => {
   it('usa handoff opaco anche per la nuova registrazione Google', async () => {
     const dataSource = { query: jest.fn().mockResolvedValue([]) };
     const handoff = { createGoogleSignup: jest.fn().mockResolvedValue({ handoff: 'opaque-signup-code' }) };
-    const controller = new GoogleAuthController(dataSource as any, {} as any, handoff as any);
+    const controller = new GoogleAuthController(dataSource as any, handoff as any);
     const res = response();
     await controller.googleCallback(req({ googleId: 'g2', email: 'new@example.test', emailVerified: true }), res as any);
     const url = String(res.redirect.mock.calls[0][0]);

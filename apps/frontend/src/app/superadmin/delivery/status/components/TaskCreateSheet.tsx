@@ -36,20 +36,22 @@ export function TaskCreateSheet({ isOpen, onClose, onSuccess, taskToEdit }: Task
   });
 
   useEffect(() => {
-    if (isOpen && taskToEdit) {
-      setFormData({
-        name:        taskToEdit.name,
+    if (!isOpen) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setFormData(taskToEdit ? {
+        name: taskToEdit.name,
         serviceName: taskToEdit.serviceName,
-        category:    taskToEdit.category,
-        priority:    taskToEdit.priority,
-        dueDate:     taskToEdit.dueDate
-          ? new Date(taskToEdit.dueDate).toISOString().split("T")[0]
-          : "",
+        category: taskToEdit.category,
+        priority: taskToEdit.priority,
+        dueDate: taskToEdit.dueDate ? new Date(taskToEdit.dueDate).toISOString().split("T")[0] : "",
         notes: taskToEdit.notes || "",
-      });
-    } else if (isOpen && !taskToEdit) {
-      setFormData({ name: "", serviceName: "", category: "Marketing", priority: "Media", dueDate: "", notes: "" });
-    }
+      } : { name: "", serviceName: "", category: "Marketing", priority: "Media", dueDate: "", notes: "" });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen, taskToEdit]);
 
   const handleSubmit = async (e: React.FormEvent) => {

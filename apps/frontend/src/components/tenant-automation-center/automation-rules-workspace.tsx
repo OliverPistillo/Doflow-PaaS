@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AlertTriangle, ChevronLeft, ChevronRight, Pause, Play, Search, Workflow } from "lucide-react";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ import { AutomationRulePanel } from "./automation-rule-panel";
 const PAGE_SIZE = 10;
 
 export function AutomationRulesWorkspace() {
+  const router = useRouter();
   const { canView, canCreate, canUpdate } = useTenantAccess();
   const [rules, setRules] = useState<AutomationRule[]>([]); const [runs, setRuns] = useState<AutomationRun[]>([]); const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState(""); const [area, setArea] = useState("all"); const [status, setStatus] = useState("all"); const [page, setPage] = useState(1);
@@ -23,7 +25,18 @@ export function AutomationRulesWorkspace() {
     try { const [ruleData, runData] = await Promise.all([loadRules(), loadRuns()]); setRules(ruleData.items); setRuns(runData.items); setSelectedId((current) => current || ruleData.items[0]?.id || null); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Caricamento delle automazioni non riuscito."); } finally { setLoading(false); }
   };
-  useEffect(() => { void load(); }, [canView]);
+  const loadEffect = useEffectEvent(load);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [canView]);
 
   const areas = useMemo(() => Array.from(new Set(rules.map(ruleArea))).sort(), [rules]);
   const visible = useMemo(() => rules.filter((rule) => {
@@ -34,7 +47,7 @@ export function AutomationRulesWorkspace() {
   const selected = rules.find((rule) => rule.id === selectedId) || null; const runByRule = new Map(rules.map((rule) => [rule.id, runs.filter((run) => run.rule_id === rule.id)]));
   const active = rules.filter((rule) => rule.is_enabled).length; const paused = rules.filter((rule) => !rule.is_enabled).length; const attention = rules.filter((rule) => ruleStatus(rule).label === "Da controllare").length;
   const toggle = async (rule: AutomationRule) => { if (!canUpdate("automations")) return; setBusy(true); setError(null); try { if (rule.is_enabled) await automationsApi.disableRule(rule.id); else await automationsApi.enableRule(rule.id); await load(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Aggiornamento non riuscito."); } finally { setBusy(false); } };
-  const test = async () => { if (!selected || !canUpdate("automations")) return; setBusy(true); setError(null); try { const result = await automationsApi.runRule(selected.id); const runId = (result as AutomationRun)?.id; if (runId) window.location.assign(`/automations/runs/${runId}`); else await load(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Test non riuscito."); } finally { setBusy(false); } };
+  const test = async () => { if (!selected || !canUpdate("automations")) return; setBusy(true); setError(null); try { const result = await automationsApi.runRule(selected.id); const runId = (result as AutomationRun)?.id; if (runId) router.push(`/automations/runs/${runId}`); else await load(); } catch (reason) { setError(reason instanceof Error ? reason.message : "Test non riuscito."); } finally { setBusy(false); } };
 
   return <main className="space-y-5 px-4 py-6 sm:px-6 lg:px-8">
     <AutomationPageHeader title="Automazioni" description="Crea e gestisci flussi automatici senza duplicare regole e trigger." ctaLabel="Nuova automazione" ctaHref="/automations/rules/new" canCreate={canCreate("automations")}><Link href="/automations/templates" className="inline-flex h-11 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Modelli</Link></AutomationPageHeader>

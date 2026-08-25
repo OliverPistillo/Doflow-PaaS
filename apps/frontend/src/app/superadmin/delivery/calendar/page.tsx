@@ -3,9 +3,9 @@
 "use client";
 
 import * as React from 'react';
-import { Card, CardHeader } from '@/components/ui/card';
+import { Card,CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, CalendarDays, Plus, Loader2, Trash2 } from 'lucide-react';
+import { ChevronLeft,ChevronRight,Plus,Loader2,Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiFetch } from "@/lib/api";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -68,8 +68,17 @@ export default function ProjectCalendarPage() {
     }
   };
 
-  React.useEffect(() => {
-    loadEvents();
+    const loadEventsEffect = React.useEffectEvent(loadEvents);
+React.useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        loadEventsEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {

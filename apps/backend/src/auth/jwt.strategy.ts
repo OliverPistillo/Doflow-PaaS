@@ -18,12 +18,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     super({
-      // Accetta il token sia dall'header Authorization (tutte le chiamate API normali)
-      // che dal query param ?token= (usato da window.open per i download diretti del browser)
-      jwtFromRequest: ExtractJwt.fromExtractors([
-        ExtractJwt.fromAuthHeaderAsBearerToken(),
-        ExtractJwt.fromUrlQueryParameter('token'),
-      ]),
+      // Compatibilità esclusivamente per consumer API non-browser. Il runtime
+      // web usa soltanto la sessione opaca HttpOnly e non accetta token in URL.
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       secretOrKey: secret,
     });

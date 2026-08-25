@@ -1,4 +1,4 @@
-import { DataSource } from 'typeorm';
+import { DataSource, QueryRunner } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
 import {
   IMPORT_STATUSES,
@@ -8,9 +8,11 @@ import {
 import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
 
 const SITE_PROPOSALS_SCHEMA_LOCK = 'site-proposals-schema-v1';
-const provisioningByDataSource = new WeakMap<DataSource, Map<string, Promise<void>>>();
+type SchemaConnection = DataSource | QueryRunner;
 
-export function ensureDoflowSiteProposalTables(ds: DataSource, schema: string): Promise<void> {
+const provisioningByDataSource = new WeakMap<object, Map<string, Promise<void>>>();
+
+export function ensureDoflowSiteProposalTables(ds: SchemaConnection, schema: string): Promise<void> {
   const s = safeSchema(schema, 'ensureDoflowSiteProposalTables');
   if (s !== SITE_PROPOSALS_TENANT) {
     throw new Error('Site proposal tables are available only for doflow');
@@ -33,13 +35,20 @@ export function ensureDoflowSiteProposalTables(ds: DataSource, schema: string): 
   return provisioning;
 }
 
-async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Promise<void> {
-  const runner = ds.createQueryRunner();
+async function provisionDoflowSiteProposalTables(ds: SchemaConnection, s: string): Promise<void> {
+  // Use structural detection so injected/proxied DataSources (including Nest
+  // test doubles) follow the same owned-transaction path as a TypeORM instance.
+  const ownsRunner = typeof (ds as DataSource).createQueryRunner === 'function';
+  const runner = ownsRunner ? (ds as DataSource).createQueryRunner() : (ds as QueryRunner);
   let provisioningFailed = false;
 
   try {
-    await runner.connect();
-    await runner.startTransaction();
+    if (ownsRunner) {
+      await runner.connect();
+      await runner.startTransaction();
+    } else if (!runner.isTransactionActive) {
+      throw new Error('Site proposal schema requires an active external transaction');
+    }
     await runner.query(
       'SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))',
       [SITE_PROPOSALS_TENANT, SITE_PROPOSALS_SCHEMA_LOCK],
@@ -107,6 +116,7 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
       contact_id UUID REFERENCES "${s}".contacts(id) ON DELETE SET NULL,
       lead_id UUID REFERENCES "${s}".leads(id) ON DELETE SET NULL,
       opportunity_id UUID REFERENCES "${s}".opportunities(id) ON DELETE SET NULL,
+      project_id UUID REFERENCES "${s}".projects(id) ON DELETE SET NULL,
       source_data JSONB NOT NULL,
       site_config JSONB NOT NULL,
       validation_warnings JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -127,6 +137,8 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_status" ON "${s}".site_proposals(status)`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_import_batch" ON "${s}".site_proposals(import_batch_id)`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_company" ON "${s}".site_proposals(company_id)`);
+    await runner.query(`ALTER TABLE "${s}".site_proposals ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES "${s}".projects(id) ON DELETE SET NULL`);
+    await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_project" ON "${s}".site_proposals(project_id) WHERE project_id IS NOT NULL`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_fingerprint" ON "${s}".site_proposals(fingerprint)`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_updated_at" ON "${s}".site_proposals(updated_at)`);
     await runner.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_site_proposals_deleted_at" ON "${s}".site_proposals(deleted_at)`);
@@ -478,10 +490,10 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
         )
     `);
 
-    await runner.commitTransaction();
+    if (ownsRunner) await runner.commitTransaction();
   } catch (error) {
     provisioningFailed = true;
-    if (runner.isTransactionActive) {
+    if (ownsRunner && runner.isTransactionActive) {
       try {
         await runner.rollbackTransaction();
       } catch {
@@ -490,10 +502,12 @@ async function provisionDoflowSiteProposalTables(ds: DataSource, s: string): Pro
     }
     throw error;
   } finally {
-    try {
-      await runner.release();
-    } catch (error) {
-      if (!provisioningFailed) throw error;
+    if (ownsRunner) {
+      try {
+        await runner.release();
+      } catch (error) {
+        if (!provisioningFailed) throw error;
+      }
     }
   }
 }

@@ -2,33 +2,32 @@
 
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React,{ useEffect,useState,useCallback } from "react";
 import {
-  Loader2, RefreshCw, Search, Plus, MoreHorizontal,
-  UserPlus, Target, TrendingUp, Zap, Mail, Phone,
-  Building2, Globe, ArrowRight, Filter, Pencil,
-  Trash2, ChevronDown,
+  Loader2,RefreshCw,Search,Plus,MoreHorizontal,
+  UserPlus,Target,TrendingUp,Zap,Mail,Phone,
+  Building2,Pencil,
+  Trash2
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card,CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogDescription, DialogFooter,
+  Dialog,DialogContent,DialogHeader,DialogTitle,
+  DialogDescription,DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,SelectContent,SelectItem,SelectTrigger,SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
-  DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel,
+  DropdownMenu,DropdownMenuTrigger,DropdownMenuContent,
+  DropdownMenuItem,DropdownMenuSeparator,DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { PieChart,Pie,Cell,Tooltip,ResponsiveContainer } from "recharts";
 import { apiFetch } from "@/lib/api";
+import { getErrorMessage } from "@/lib/error-message";
 import { useToast } from "@/hooks/use-toast";
 import { ExportButton } from "@/components/ui/export-button";
 
@@ -135,14 +134,24 @@ export default function LeadsPage() {
       ]);
       setLeads(Array.isArray(l) ? l : []);
       setStats(s);
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setLoading(false);
     }
   }, [toast, filterStatus, filterSource, search]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const handleSave = async () => {
     if (!editDialog.lead) return;
@@ -157,8 +166,8 @@ export default function LeadsPage() {
       setEditDialog({ open: false, lead: null });
       await load();
       toast({ title: "Lead salvato" });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -169,8 +178,8 @@ export default function LeadsPage() {
       await apiFetch(`/superadmin/leads/${id}`, { method: "DELETE" });
       await load();
       toast({ title: "Lead eliminato" });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     }
   };
 
@@ -178,8 +187,8 @@ export default function LeadsPage() {
     try {
       await apiFetch(`/superadmin/leads/${id}/status`, { method: "PUT", body: JSON.stringify({ status }) });
       await load();
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     }
   };
 

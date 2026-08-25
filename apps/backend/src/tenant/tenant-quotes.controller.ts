@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantQuotesService } from './tenant-quotes.service';
 
@@ -72,9 +72,19 @@ export class TenantQuotesController {
     return this.service.deleteItem(id, itemId);
   }
 
+  @Put(':id/items')
+  replaceItems(@Param('id') id: string, @Body() body: { items?: Record<string, any>[] }) {
+    return this.service.replaceItems(id, Array.isArray(body?.items) ? body.items : []);
+  }
+
   @Post(':id/recalculate')
   recalculate(@Param('id') id: string) {
     return this.service.recalculate(id);
+  }
+
+  @Post(':id/versions')
+  createVersion(@Param('id') id: string, @Body() body: { id?: string }) {
+    return this.service.createVersion(id, body || {});
   }
 
   @Patch(':id/accept')

@@ -17,6 +17,22 @@ Ordine di priorità:
 
 Un mockup non autorizza a violare permessi, tenant isolation o comportamento reale del prodotto.
 
+### Dettaglio progetto del replacement — decisione corrente
+
+La precedente struttura del pannello Doflow a quattro tab è **SUPERATA**. Oliver ha richiesto la sostituzione completa con il gestionale sviluppato da Daniele; per il dettaglio progetto la fonte strutturale corrente è quindi il file read-only `src/features/commercial/components/commercial-project-detail-page.tsx` della reference `doflow-gestionale-reference` al commit `e6c3ef5920773afc14b3caff88cfe4027400c54b`.
+
+Le sette tab canoniche sono, in questo ordine:
+
+1. `overview` — Panoramica;
+2. `activities` — Attività;
+3. `phases` — Fasi;
+4. `production` — Produzione e QA;
+5. `documents` — Documenti;
+6. `payments` — Pagamenti;
+7. `timeline` — Timeline.
+
+I riferimenti PNG della precedente esperienza restano storici e continuano a guidare shell, proporzioni, gerarchia, spacing e token quando compatibili, ma le quattro tab non sono più acceptance corrente. Non richiedere il vecchio pannello per il dettaglio progetto e non classificare le sette tab Daniele come differenza critica o maggiore.
+
 ## Criteri visuali
 
 ### Shell
@@ -46,6 +62,8 @@ Un mockup non autorizza a violare permessi, tenant isolation o comportamento rea
 - tab caricate nello stesso contenitore;
 - deep link tramite URL interno autenticato;
 - comportamento full-screen su mobile quando necessario.
+
+Questi criteri si applicano alle superfici che restano pannelli laterali. Il dettaglio progetto del replacement è una route full-page: deve conservare stato in `?tab=`, supportare refresh e navigazione browser, e mantenere lo scroll orizzontale delle sette tab circoscritto al relativo contenitore su mobile.
 
 ### Componenti
 
@@ -173,3 +191,60 @@ La decisione finale deve combinare:
 ## Evidenza locale obbligatoria
 
 Il report deve indicare URL localhost effettivo, route, viewport, reference e percorso dello screenshot actual. Un verdetto basato soltanto sull’ispezione di componenti o CSS è automaticamente `VISUAL NO-GO`.
+
+## Evidenza finale Fase 5A.5 — 24 agosto 2026
+
+Il gate `pnpm acceptance:final` ha avviato realmente frontend production su
+`http://localhost:3100` e backend isolato su `http://localhost:3401`, con
+PostgreSQL/Redis/storage locali e identità esclusivamente sintetiche `.invalid`.
+La reference usata è
+`doflow-gestionale-reference@e6c3ef5920773afc14b3caff88cfe4027400c54b`.
+
+Copertura:
+
+- 30 route canoniche e 31 superfici desktop chiaro/scuro;
+- 14 superfici critiche responsive;
+- viewport `390×900`, `768×900`, `1440×900`;
+- temi chiaro e scuro;
+- 121 screenshot in `actual/final-rc`;
+- 118 controlli accessibilità;
+- sette tab progetto, tastiera, Escape, focus dialog, alternativa al drag,
+  sidebar mobile, browser Back, deep link, Select e input data;
+- access denied finance chiaro/scuro;
+- Control Room Superadmin desktop/mobile/tablet chiaro/scuro;
+- zero errori console, zero warning console e zero `5xx` inattesi.
+
+Sono stati ispezionati direttamente campioni desktop, mobile, dialog ordine,
+access denied e Superadmin. Non restano differenze critiche o maggiori. I dati
+dinamici sono fixture PostgreSQL sintetiche dichiarate; nessun pixel diff
+separato è stato necessario. Login e branding pre-auth non sono stati
+modificati in questa fase.
+
+Verdetti:
+
+- `GLOBAL VISUAL GO`;
+- `VISUAL GO`.
+
+## Addendum visuale Fase 5B.1A — workspace readiness
+
+La copertura e gli screenshot Fase 5A.5 restano evidenza storica. La Fase
+5B.1A non modifica design, reference, route canoniche, shell Doflow, sette tab,
+Builder o login visuale.
+
+Il gate visuale aggiunge una regressione funzionale: dopo l'autenticazione
+`<main>` deve essere presente quando la shell è utilizzabile, anche se dati
+secondari sono pending. Workspace essenziale e dati secondari espongono stati
+semantici distinti; un errore secondario produce un messaggio e un retry
+controllati, mai un loader permanente, full reload o hydration mismatch.
+
+Sono coperti sia il deep link Collaboration di un utente assegnato privo di
+capability lead sia il dettaglio progetto del project manager privo di lettura
+attività CRM: query non pertinenti non possono rendere inert la route progetto.
+Il gate isolato ha verificato marker workspace ready, pannello/commento e
+screenshot a 1440×900, 768×900 e 390×900; il gate globale verifica il marker
+prima delle sette tab e passa 1/1 nella sequenza mirata completa.
+
+Il nuovo `GLOBAL VISUAL GO` è valido soltanto se l'orchestratore finale
+verifica route e Context E alle viewport previste, chiaro/scuro, senza errori
+console, `5xx` inattesi o loader workspace permanente. Il risultato conclusivo
+è registrato nell'evidence stability; questo addendum non lo anticipa.

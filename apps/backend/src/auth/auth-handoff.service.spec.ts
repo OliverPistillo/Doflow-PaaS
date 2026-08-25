@@ -42,54 +42,50 @@ describe('AuthHandoffService', () => {
     const redis = new FakeRedis();
     const service = new AuthHandoffService(redis as any);
     const created = await service.createLogin({
-      token: 'header.payload.signature',
       user,
       tenantTarget: 'acme',
       rememberMe: false,
     });
 
     expect(created.handoff).toMatch(/^[A-Za-z0-9_-]{32,128}$/);
-    expect(created.handoff).not.toContain('header.payload.signature');
     expect(created.expiresIn).toBe(AUTH_HANDOFF_TTL_SECONDS);
     expect(redis.lastTtl).toBe(90);
 
-    await expect(service.exchange(created.handoff, 'acme')).resolves.toMatchObject({
+    await expect(service.exchange(created.handoff, 'acme', 'localhost')).resolves.toMatchObject({
       kind: 'login',
-      token: 'header.payload.signature',
       tenantTarget: 'acme',
       authStage: 'FULL',
       next: 'dashboard',
       rememberMe: false,
     });
-    await expect(service.exchange(created.handoff, 'acme')).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(service.exchange(created.handoff, 'acme', 'localhost')).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('lega il codice al tenant e invalida anche un tentativo sul tenant errato', async () => {
     const service = new AuthHandoffService(new FakeRedis() as any);
-    const created = await service.createLogin({ token: 'jwt', user, tenantTarget: 'acme' });
-    await expect(service.exchange(created.handoff, 'other')).rejects.toBeInstanceOf(UnauthorizedException);
-    await expect(service.exchange(created.handoff, 'acme')).rejects.toBeInstanceOf(UnauthorizedException);
+    const created = await service.createLogin({ user, tenantTarget: 'acme' });
+    await expect(service.exchange(created.handoff, 'other', 'localhost')).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(service.exchange(created.handoff, 'acme', 'localhost')).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('rifiuta codici scaduti o casuali', async () => {
     const redis = new FakeRedis();
     const service = new AuthHandoffService(redis as any);
-    const created = await service.createLogin({ token: 'jwt', user, tenantTarget: 'acme' });
+    const created = await service.createLogin({ user, tenantTarget: 'acme' });
     redis.values.clear();
-    await expect(service.exchange(created.handoff, 'acme')).rejects.toBeInstanceOf(UnauthorizedException);
-    await expect(service.exchange('random-unknown-code-12345678901234567890', 'acme'))
+    await expect(service.exchange(created.handoff, 'acme', 'localhost')).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(service.exchange('random-unknown-code-12345678901234567890', 'acme', 'localhost'))
       .rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('forza il passaggio MFA per ogni sessione parziale', async () => {
     const service = new AuthHandoffService(new FakeRedis() as any);
     const created = await service.createLogin({
-      token: 'jwt',
       user: { ...user, authStage: 'MFA_SETUP_NEEDED' },
       tenantTarget: 'acme',
       next: 'dashboard',
     });
-    await expect(service.exchange(created.handoff, 'acme')).resolves.toMatchObject({
+    await expect(service.exchange(created.handoff, 'acme', 'localhost')).resolves.toMatchObject({
       authStage: 'MFA_SETUP_NEEDED',
       next: 'mfa',
     });
@@ -97,21 +93,36 @@ describe('AuthHandoffService', () => {
 
   it('rifiuta la creazione cross-tenant', async () => {
     const service = new AuthHandoffService(new FakeRedis() as any);
-    await expect(service.createLogin({ token: 'jwt', user, tenantTarget: 'other' }))
+    await expect(service.createLogin({ user, tenantTarget: 'other' }))
       .rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('trasporta il token Google firmato solo nel payload di exchange', async () => {
+  it('lega il codice all host di destinazione e invalida il replay sul host corretto', async () => {
+    const service = new AuthHandoffService(new FakeRedis() as any);
+    const created = await service.createLogin({ user, tenantTarget: 'acme' });
+    await expect(service.exchange(created.handoff, 'acme', 'evil.invalid'))
+      .rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(service.exchange(created.handoff, 'acme', 'localhost'))
+      .rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('scambia il profilo Google con un grant opaco, breve e single-use', async () => {
     const service = new AuthHandoffService(new FakeRedis() as any);
     const created = await service.createGoogleSignup({
-      googleSignupToken: 'signed.google.jwt',
+      googleId: 'google-user-1',
       email: 'new@example.test',
       fullName: 'Nuovo Utente',
     });
-    expect(created.handoff).not.toContain('signed.google.jwt');
-    await expect(service.exchange(created.handoff, 'public')).resolves.toMatchObject({
+    const exchange = await service.exchange(created.handoff, 'public', 'localhost');
+    expect(exchange).toMatchObject({
       kind: 'google_signup',
-      googleSignupToken: 'signed.google.jwt',
+      email: 'new@example.test',
     });
+    expect((exchange as any).signupGrant).toMatch(/^[A-Za-z0-9_-]{32,128}$/);
+    await expect(service.consumeGoogleSignupGrant((exchange as any).signupGrant)).resolves.toMatchObject({
+      googleId: 'google-user-1',
+      email: 'new@example.test',
+    });
+    await expect(service.consumeGoogleSignupGrant((exchange as any).signupGrant)).rejects.toBeDefined();
   });
 });

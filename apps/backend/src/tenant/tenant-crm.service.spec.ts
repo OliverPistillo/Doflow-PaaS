@@ -172,15 +172,41 @@ describe('TenantCrmService lead intake integration', () => {
     }
   });
 
-  it('mantiene invariato il comando di aggiornamento stage', async () => {
+  it('impedisce il bypass doflow della transizione versionata', async () => {
     const service = new TenantCrmService({ query: jest.fn() } as any, {
       user: { sub: '11111111-1111-4111-8111-111111111111', role: 'manager', tenantId: 'doflow' },
     });
-    const update = jest.spyOn(service, 'update').mockResolvedValue({ id: 'opportunity-1', stage: 'contacted' });
+    await expect(service.updateOpportunityStage('opportunity-1', 'contacted'))
+      .rejects.toThrow('Commercial Core versionata');
+  });
 
-    await expect(service.updateOpportunityStage('opportunity-1', 'contacted')).resolves.toEqual({ id: 'opportunity-1', stage: 'contacted' });
-    expect(update).toHaveBeenCalledWith('opportunities', 'opportunity-1', { stage: 'contacted' });
-    await expect(service.updateOpportunityStage('opportunity-1', 'invalid-stage')).rejects.toThrow('Stage non valido');
+  it.each([
+    ['companies', { name: 'Azienda API' }],
+    ['contacts', { first_name: 'Mario' }],
+    ['opportunities', { title: 'Lead API', assigned_to: '11111111-1111-4111-8111-111111111111' }],
+    ['activities', { type: 'task', title: 'Follow-up API', status: 'todo' }],
+  ] as const)('crea %s in transazione con History, audit e outbox', async (resource, body) => {
+    const id = '22222222-2222-4222-8222-222222222222';
+    const stored = { id, ...body, version: 1 };
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('INSERT INTO') && sql.includes('RETURNING *')) return [stored];
+      if (sql.includes('SELECT t.*')) return [stored];
+      return [];
+    });
+    const dataSource = {
+      query,
+      transaction: jest.fn(async (work: (manager: { query: typeof query }) => unknown) => work({ query })),
+    };
+    const service = new TenantCrmService(dataSource as any, {
+      user: { sub: '11111111-1111-4111-8111-111111111111', email: 'manager@example.test', role: 'manager', tenantId: 'doflow' },
+    });
+
+    await expect(service.create(resource, { ...body })).resolves.toEqual(expect.objectContaining({ id }));
+    const statements = query.mock.calls.map(([sql]) => String(sql));
+    expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+    expect(statements.filter((sql) => sql.includes('commercial_history'))).toHaveLength(1);
+    expect(statements.filter((sql) => sql.includes('audit_log'))).toHaveLength(1);
+    expect(statements.filter((sql) => sql.includes('commercial_outbox'))).toHaveLength(1);
   });
 
   it('normalizza in lettura lo stage legacy delle opportunity doflow', async () => {
@@ -249,15 +275,21 @@ describe('TenantCrmService lead intake integration', () => {
 
   it('normalizza anche il PATCH generico, rifiuta sconosciuti e registra un solo audit fase', async () => {
     const query = jest.fn()
-      .mockResolvedValueOnce([{ stage: 'quote_sent' }])
-      .mockResolvedValueOnce([{ id: '11111111-1111-4111-8111-111111111112' }])
+      .mockResolvedValueOnce([{ id: '11111111-1111-4111-8111-111111111112', stage: 'quote_sent', version: 1 }])
+      .mockResolvedValueOnce([{ id: '11111111-1111-4111-8111-111111111112', stage: 'closed_won', version: 2 }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ id: '11111111-1111-4111-8111-111111111112', stage: 'closed_won' }]);
-    const service = new TenantCrmService({ query } as any, {
+    const dataSource = {
+      query,
+      transaction: jest.fn(async (work: (manager: { query: typeof query }) => unknown) => work({ query })),
+    };
+    const service = new TenantCrmService(dataSource as any, {
       user: { sub: '11111111-1111-4111-8111-111111111111', email: 'owner@example.test', role: 'manager', tenantId: 'doflow' },
     });
 
-    const result = await service.update('opportunities', '11111111-1111-4111-8111-111111111112', { stage: 'accepted' });
+    const result = await service.update('opportunities', '11111111-1111-4111-8111-111111111112', { stage: 'accepted', version: 1 });
 
     expect(result.stage).toBe('closed_won');
     expect(query.mock.calls[1][1][0]).toBe('closed_won');
@@ -285,12 +317,56 @@ describe('TenantCrmService lead intake integration', () => {
     expect(pipeline.stages.find((stage: any) => stage.stage === 'accepted')?.items).toHaveLength(1);
 
     const update = jest.fn()
-      .mockResolvedValueOnce([{ id: '11111111-1111-4111-8111-111111111112' }])
+      .mockResolvedValueOnce([{ id: '11111111-1111-4111-8111-111111111112', stage: 'new' }])
+      .mockResolvedValueOnce([{ id: '11111111-1111-4111-8111-111111111112', stage: 'accepted' }])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ id: '11111111-1111-4111-8111-111111111112', stage: 'accepted' }]);
-    const result = await new TenantCrmService({ query: update } as any, request)
+    const legacyDataSource = {
+      query: update,
+      transaction: jest.fn(async (work: (manager: { query: typeof update }) => unknown) => work({ query: update })),
+    };
+    const result = await new TenantCrmService(legacyDataSource as any, request)
       .update('opportunities', '11111111-1111-4111-8111-111111111112', { stage: 'accepted' });
     expect(result.stage).toBe('accepted');
-    expect(update.mock.calls[0][1][0]).toBe('accepted');
+    expect(update.mock.calls[1][1][0]).toBe('accepted');
+  });
+});
+
+describe('TenantCrmService Commercial Core capability scope', () => {
+  const request = {
+    user: { sub: '11111111-1111-4111-8111-111111111111', role: 'user', tenantId: 'doflow' },
+  };
+
+  function access(capabilities: string[]) {
+    const actor = { ...request.user, id: request.user.sub, schema: 'doflow', email: null, capabilities: new Set(capabilities) };
+    return {
+      current: jest.fn().mockResolvedValue(actor),
+      has: jest.fn((_actor, capability) => actor.capabilities.has(capability)),
+      require: jest.fn((_actor, ...required) => {
+        if (!required.some((capability) => actor.capabilities.has(capability))) throw new Error('Capability commerciale richiesta');
+      }),
+    };
+  }
+
+  it('limita le liste ai lead assegnati e oscura i valori economici senza capability', async () => {
+    const query = jest.fn()
+      .mockResolvedValueOnce([{ total: 1 }])
+      .mockResolvedValueOnce([{ id: '22222222-2222-4222-8222-222222222222', assigned_to: request.user.sub, stage: 'new', value_estimate: 5000 }]);
+    const service = new TenantCrmService({ query } as any, request, access(['canViewAssignedLeads']) as any);
+    const result = await service.list('opportunities', {});
+    expect(String(query.mock.calls[0][0])).toContain('t.assigned_to = $1');
+    expect(query.mock.calls[0][1]).toEqual([request.user.sub]);
+    expect(result.items[0].value_estimate).toBeNull();
+  });
+
+  it('nega IDOR su dettaglio di un lead assegnato ad altri', async () => {
+    const query = jest.fn().mockResolvedValueOnce([{
+      id: '22222222-2222-4222-8222-222222222222',
+      assigned_to: '33333333-3333-4333-8333-333333333333',
+      stage: 'new',
+    }]);
+    const service = new TenantCrmService({ query } as any, request, access(['canViewAssignedLeads']) as any);
+    await expect(service.findOne('opportunities', '22222222-2222-4222-8222-222222222222'))
+      .rejects.toThrow('Lead non assegnato');
   });
 });

@@ -993,14 +993,18 @@ export class TenantTeamService {
     }
     const duration = this.computeDuration(body);
     const entryDate = this.textOrNull(body.entry_date) || (body.started_at ? String(body.started_at).slice(0, 10) : new Date().toISOString().slice(0, 10));
+    const requestedId = isDoflowTenant(schema) && body.id
+      ? this.requireUuid(String(body.id), 'id')
+      : null;
     const rows = await this.dataSource.query(
       `INSERT INTO "${schema}".time_entries (
-        team_member_id, user_id, project_id, task_id, company_id, entry_date, started_at, ended_at,
+        ${requestedId ? 'id, ' : ''}team_member_id, user_id, project_id, task_id, company_id, entry_date, started_at, ended_at,
         duration_minutes, activity_type, description, is_billable, status, metadata, created_by, created_at, updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6::date,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,now(),now())
+      VALUES (${requestedId ? '$1,' : ''}$${requestedId ? 2 : 1},$${requestedId ? 3 : 2},$${requestedId ? 4 : 3},$${requestedId ? 5 : 4},$${requestedId ? 6 : 5},$${requestedId ? 7 : 6}::date,$${requestedId ? 8 : 7},$${requestedId ? 9 : 8},$${requestedId ? 10 : 9},$${requestedId ? 11 : 10},$${requestedId ? 12 : 11},$${requestedId ? 13 : 12},$${requestedId ? 14 : 13},$${requestedId ? 15 : 14}::jsonb,$${requestedId ? 16 : 15},now(),now())
       RETURNING *`,
       [
+        ...(requestedId ? [requestedId] : []),
         requestedMemberId,
         this.userIdOrNull(body.user_id) || (current?.user_id || this.userIdOrNull(user.id)),
         body.project_id ? this.requireUuid(String(body.project_id), 'project_id') : null,

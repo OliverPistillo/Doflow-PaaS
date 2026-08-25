@@ -7,12 +7,12 @@ import { AdministrationKpi } from "./administration-ui";
 export function RenewalsKpis({ rows, services, truncated }: { rows: AdministrationRow[]; services: AdministrationRow[]; truncated: boolean }) {
   const today = startOfDay();
   const soon = addDays(today, 30);
-  const active = rows.filter((row) => !["paid", "cancelled", "expired"].includes(row.status)).length;
+  const active = rows.filter((row) => !["paid", "cancelled", "expired"].includes(String(row.status || ""))).length;
   const expiring = rows.filter((row) => {
     const date = dateValue(row.due_date);
-    return date && date >= today && date <= soon && !["paid", "cancelled"].includes(row.status);
+    return date && date >= today && date <= soon && !["paid", "cancelled"].includes(String(row.status || ""));
   }).length;
-  const recurringValue = rows.filter((row) => !["cancelled", "expired"].includes(row.status)).reduce((sum, row) => sum + numeric(row.amount), 0);
+  const recurringValue = rows.filter((row) => !["cancelled", "expired"].includes(String(row.status || ""))).reduce((sum, row) => sum + numeric(row.amount), 0);
   const manualServiceIds = new Set(services.filter((service) => !service.auto_renew).map((service) => service.id));
   const toConfirm = rows.filter((row) => row.status === "upcoming" && (!row.recurring_service_id || manualServiceIds.has(row.recurring_service_id))).length;
   const hint = truncated ? "Conteggio sui primi 100 rinnovi reali" : "Rinnovi registrati";

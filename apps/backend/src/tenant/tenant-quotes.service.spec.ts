@@ -75,4 +75,12 @@ describe('TenantQuotesService accept commercial stage', () => {
     expect((service as any).cleanBody(config, { currency: 'USD' }, false).currency).toBe('USD');
     expect(() => (service as any).cleanBody(config, { currency: 'EURO' }, false)).toThrow(BadRequestException);
   });
+
+  it('rende immutabili i campi economici di una versione non in bozza', async () => {
+    const query = jest.fn().mockResolvedValueOnce([{ status: 'sent' }]);
+    const service = makeService('doflow', query);
+    await expect(service.update('quotes', quoteId, { title: 'Modifica tardiva' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(query).toHaveBeenCalledTimes(1);
+  });
 });

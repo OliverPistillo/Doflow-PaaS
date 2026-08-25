@@ -1,11 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantAutomationsService } from './tenant-automations.service';
+import { TenantAutomationEngineService } from './tenant-automation-engine.service';
+import { isDoflowTenant } from './tenant-context';
 
 @Controller('tenant/automations')
 @UseGuards(JwtAuthGuard)
 export class TenantAutomationsController {
-  constructor(private readonly service: TenantAutomationsService) {}
+  constructor(
+    private readonly service: TenantAutomationsService,
+    private readonly engine: TenantAutomationEngineService,
+  ) {}
 
   @Get('summary')
   summary() {
@@ -48,8 +53,18 @@ export class TenantAutomationsController {
   }
 
   @Post('rules/:ruleId/run')
-  runRule(@Param('ruleId') ruleId: string, @Body() body: Record<string, unknown>) {
-    return this.service.runRuleFromRequest(ruleId, body || {});
+  runRule(@Param('ruleId') ruleId: string, @Body() body: Record<string, unknown>, @Headers('idempotency-key') key?: string) {
+    const context = this.service.requestContext('run');
+    if (!isDoflowTenant(context.schema)) return this.service.runRuleFromRequest(ruleId, body || {});
+    return this.engine.enqueueRule(context.schema, ruleId, context.user, {
+      triggerSource: 'manual', payload: body || {}, idempotencyKey: key,
+    });
+  }
+
+  @Post('runs/:runId/retry')
+  retry(@Param('runId') runId: string, @Headers('idempotency-key') key?: string) {
+    const context = this.service.requestContext('run');
+    return this.engine.retryRun(context.schema, runId, context.user, key);
   }
 
   @Get('rules/:ruleId/runs')
@@ -79,12 +94,22 @@ export class TenantAutomationsController {
 
   @Post('run-due')
   runDue() {
-    return this.service.runDueFromRequest();
+    const context = this.service.requestContext('run');
+    if (!isDoflowTenant(context.schema)) return this.service.runDueFromRequest();
+    return this.engine.enqueueDue(context.schema, context.user);
   }
 
   @Post('run-trigger/:triggerType')
-  runTrigger(@Param('triggerType') triggerType: string, @Body() body: Record<string, unknown>) {
-    return this.service.runTriggerFromRequest(triggerType, body || {});
+  runTrigger(@Param('triggerType') triggerType: string, @Body() body: Record<string, unknown>, @Headers('idempotency-key') key?: string) {
+    const context = this.service.requestContext('run');
+    if (!isDoflowTenant(context.schema)) return this.service.runTriggerFromRequest(triggerType, body || {});
+    return this.engine.enqueueTrigger(context.schema, triggerType, context.user, body || {}, key);
+  }
+
+  @Get('health')
+  health() {
+    this.service.requestContext('read');
+    return this.engine.health();
   }
 
   @Get('runs')

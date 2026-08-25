@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BarChart3, TrendingUp, TrendingDown, DollarSign, Users,
-  ShoppingCart, FileText, ArrowUpRight, Download, Filter } from "lucide-react";
+import { BarChart3, TrendingUp, TrendingDown, DollarSign, Users, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,8 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
-  AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, FunnelChart, Funnel, LabelList,
+  AreaChart, Area, BarChart, Bar, Line, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 
 // ─── Demo Data ────────────────────────────────────────────────────────────────
@@ -59,14 +58,6 @@ const MONTHLY_LEADS = [
   { month: "Dic", leads: 38, converted: 14 },
   { month: "Gen", leads: 45, converted: 18 },
   { month: "Feb", leads: 52, converted: 21 },
-];
-
-const HEATMAP_DATA = [
-  { day: "Lun", h8: 3, h10: 8, h12: 5, h14: 11, h16: 7, h18: 2 },
-  { day: "Mar", h8: 5, h10: 12, h12: 9, h14: 14, h16: 10, h18: 4 },
-  { day: "Mer", h8: 4, h10: 10, h12: 7, h14: 13, h16: 9, h18: 3 },
-  { day: "Gio", h8: 6, h10: 14, h12: 11, h14: 16, h16: 12, h18: 5 },
-  { day: "Ven", h8: 7, h10: 13, h12: 10, h14: 15, h16: 8, h18: 1 },
 ];
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
@@ -222,7 +213,7 @@ export default function Page() {
                     <Pie data={SECTOR_DATA} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} dataKey="value">
                       {SECTOR_DATA.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                     </Pie>
-                    <Tooltip formatter={(v: number) => `${v}%`} />
+                    <Tooltip formatter={(v) => `${Number(v ?? 0)}%`} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="space-y-1.5 mt-2">
@@ -293,7 +284,7 @@ export default function Page() {
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
                     <XAxis type="number" tickFormatter={(v) => `${v}gg`} tick={{ fontSize: 11 }} />
                     <YAxis type="category" dataKey="fase" tick={{ fontSize: 10 }} width={70} />
-                    <Tooltip formatter={(v: number) => `${v} giorni`} />
+                    <Tooltip formatter={(v) => `${Number(v ?? 0)} giorni`} />
                     <Bar dataKey="giorni" name="Giorni" fill="#6366f1" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Search, Settings2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
@@ -35,14 +35,17 @@ export function RenewalsWorkspace() {
   const [period, setPeriod] = useState("all");
   const [type, setType] = useState("all");
   const [page, setPage] = useState(1);
-  const [editing, setEditing] = useState<AdministrationRow | null>(null);
-  const [form, setForm] = useState<AdministrationRow>({});
+  const [editing, setEditing] = useState<Partial<AdministrationRow> | null>(null);
+  const [form, setForm] = useState<Partial<AdministrationRow>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const pageSize = 7;
 
-  const load = async () => {
-    if (!canView("finance")) return;
+  const load = useCallback(async () => {
+    if (!canView("finance")) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -61,16 +64,18 @@ export function RenewalsWorkspace() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [canView]);
 
   useEffect(() => {
-    if (!canView("finance")) {
-      setLoading(false);
-      return;
-    }
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView]);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      void load();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const categories = useMemo(() => Array.from(new Set(services.map((service) => String(service.category || "")).filter(Boolean))).sort(), [services]);
   const filteredRows = useMemo(() => {
@@ -86,7 +91,7 @@ export function RenewalsWorkspace() {
       if (period !== "all") {
         const date = dateValue(row.due_date);
         if (period === "expired") {
-          if (!date || date >= today || ["paid", "cancelled"].includes(row.status)) return false;
+          if (!date || date >= today || ["paid", "cancelled"].includes(String(row.status || ""))) return false;
         } else if (!date || !end || date < today || date > end) return false;
       }
       return true;

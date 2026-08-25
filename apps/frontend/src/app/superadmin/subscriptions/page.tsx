@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import { apiFetch } from "@/lib/api";
@@ -91,14 +91,21 @@ export default function SubscriptionsPage() {
     try {
       const res = await apiFetch<RevenueDashboard>("/superadmin/subscriptions/revenue");
       setData(res);
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({
+        title: "Errore",
+        description: error instanceof Error ? error.message : "Errore sconosciuto",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   }, [toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   if (loading || !data) {
     return (
@@ -108,10 +115,6 @@ export default function SubscriptionsPage() {
       </div>
     );
   }
-
-  const tierPieData = Object.entries(data.tierBreakdown).map(([tier, d]) => ({
-    name: tier, value: d.count, revenue: d.revenue, fill: TIER_COLORS[tier] || "gray",
-  }));
 
   const mrrSplit = [
     { name: "Piani Base", value: data.baseMrr, fill: "hsl(var(--chart-1))" },
@@ -156,7 +159,7 @@ export default function SubscriptionsPage() {
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
                   <YAxis tick={{ fontSize: 11 }} className="fill-muted-foreground" tickFormatter={v => `€${v}`} />
-                  <Tooltip formatter={(v: number) => fmtCurrency(v)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
+                  <Tooltip formatter={(v) => fmtCurrency(Number(v ?? 0))} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
                   <Bar dataKey="amount" name="Revenue" fill="hsl(var(--chart-1))" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -177,7 +180,7 @@ export default function SubscriptionsPage() {
                   <Pie data={mrrSplit} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} strokeWidth={0}>
                     {mrrSplit.map((d, i) => <Cell key={i} fill={d.fill} />)}
                   </Pie>
-                  <Tooltip formatter={(v: number) => fmtCurrency(v)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
+                  <Tooltip formatter={(v) => fmtCurrency(Number(v ?? 0))} contentStyle={{ borderRadius: 12, border: "1px solid hsl(var(--border))", background: "hsl(var(--card))" }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (

@@ -8,7 +8,6 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { getAuthToken } from "@/lib/auth-storage";
 import {
   Download,
   Trash2,
@@ -384,9 +383,8 @@ export default function QuoteRequestsPage() {
   }, [searchQuery]);
 
   useEffect(() => {
-    loadRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, debouncedSearch]);
+    queueMicrotask(() => void loadRequests());
+  }, [loadRequests, debouncedSearch]);
 
   // ── Azioni ────────────────────────────────────────────────────────────
 
@@ -410,9 +408,9 @@ export default function QuoteRequestsPage() {
     setDownloading(id);
     try {
       const baseUrl = getApiBaseUrl();
-      const token = getAuthToken();
       const res = await fetch(baseUrl + "/superadmin/quote-requests/" + id + "/download", {
-        headers: { Authorization: "Bearer " + token },
+        headers: { "X-Doflow-Web": "1" },
+        credentials: "include",
       });
       if (!res.ok) {
         const errText = await res.text();

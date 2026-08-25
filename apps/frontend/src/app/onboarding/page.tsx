@@ -10,13 +10,13 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { apiFetch } from "@/lib/api";
-import { getAuthToken } from "@/lib/auth-storage";
 import {
   Loader2, Check, ArrowRight, ArrowLeft, Sparkles, Lock, AlertCircle,
-  ShoppingCart, Wallet, Briefcase, Users, Megaphone, Headphones, Building2,
+  ShoppingCart, Wallet, Briefcase, Users, Megaphone, Headphones,
   Stethoscope, HardHat, UtensilsCrossed, Hotel, Scissors, Factory, Store,
   GraduationCap,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 type PlatformModule = {
   key: string;
@@ -49,7 +49,7 @@ const SECTORS = [
   { id: "education", name: "Educazione", icon: GraduationCap, description: "Scuole, corsi, formatori", suggested: ["crm.contacts","ops.calendar","fin.invoices","fin.subscriptions","mkt.campaigns","sup.knowledge-base"] },
 ];
 
-const CATEGORY_META: Record<string, { label: string; icon: any; color: string }> = {
+const CATEGORY_META: Record<string, { label: string; icon: LucideIcon; color: string }> = {
   COMMERCIAL: { label: "Vendite & CRM", icon: ShoppingCart, color: "text-blue-400" },
   FINANCE: { label: "Finanza", icon: Wallet, color: "text-green-400" },
   OPERATIONS: { label: "Operations", icon: Briefcase, color: "text-purple-400" },
@@ -78,9 +78,7 @@ export default function OnboardingPage() {
   React.useEffect(() => {
     (async () => {
       try {
-        // Token check
-        const token = getAuthToken();
-        if (!token) { router.push("/login"); return; }
+        await apiFetch("/auth/me");
 
         const [planRes, modsRes] = await Promise.all([
           apiFetch<PlanInfo>("/tenant/self-service/plan"),
@@ -90,8 +88,8 @@ export default function OnboardingPage() {
         setModules(modsRes.available);
         // Pre-select active (trial) modules
         setSelectedModules(new Set(modsRes.active.map(m => m.key)));
-      } catch (err: any) {
-        setError(err?.message || "Errore caricamento dati");
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Errore caricamento dati");
       } finally {
         setLoading(false);
       }
@@ -142,8 +140,8 @@ export default function OnboardingPage() {
         }),
       });
       router.push("/dashboard");
-    } catch (err: any) {
-      setError(err?.message || "Errore salvataggio");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Errore salvataggio");
     } finally {
       setSubmitting(false);
     }

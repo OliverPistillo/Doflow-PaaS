@@ -2,30 +2,31 @@
 
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React,{ useEffect,useState,useCallback } from "react";
 import {
-  Puzzle, Plus, Loader2, RefreshCw, Search, MoreHorizontal,
-  Pencil, Trash2, ToggleLeft, ToggleRight, Grid3x3, List,
-  Sparkles, AlertTriangle, CheckCircle2,
+  Puzzle,Plus,Loader2,RefreshCw,Search,MoreHorizontal,
+  Pencil,Trash2,ToggleRight,Grid3x3,List,
+  Sparkles
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card,CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogDescription, DialogFooter,
+  Dialog,DialogContent,DialogHeader,DialogTitle,
+  DialogDescription,DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,SelectContent,SelectItem,SelectTrigger,SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenu,DropdownMenuTrigger,DropdownMenuContent,DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs,TabsContent,TabsList,TabsTrigger } from "@/components/ui/tabs";
 import { apiFetch } from "@/lib/api";
+import { getErrorMessage } from "@/lib/error-message";
 import { useToast } from "@/hooks/use-toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -118,14 +119,24 @@ export default function ModulesPage() {
       ]);
       setModules(Array.isArray(mods) ? mods : []);
       setMatrix(mat && typeof mat === "object" ? mat : null);
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setLoading(false);
     }
   }, [toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const handleToggle = async (tenantId: string, moduleKey: string, enable: boolean) => {
     const key = `${tenantId}-${moduleKey}`;
@@ -137,8 +148,8 @@ export default function ModulesPage() {
       });
       await load();
       toast({ title: enable ? "Modulo attivato" : "Modulo disattivato" });
-    } catch (e: any) {
-      toast({ title: "Errore toggle", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore toggle", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setToggling(null);
     }
@@ -157,8 +168,8 @@ export default function ModulesPage() {
       setEditDialog({ open: false, module: null });
       await load();
       toast({ title: "Modulo salvato" });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -169,8 +180,8 @@ export default function ModulesPage() {
       await apiFetch(`/superadmin/modules/${id}`, { method: "DELETE" });
       await load();
       toast({ title: "Modulo eliminato" });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     }
   };
 

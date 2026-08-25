@@ -1,4 +1,5 @@
 import { DataSource } from 'typeorm';
+import { provisionSchemaOnce } from '../common/schema-provisioning-once';
 import { safeSchema } from '../common/schema.utils';
 
 const BASE_FOLDERS = [
@@ -22,7 +23,7 @@ function slugify(value: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-export async function ensureTenantDocumentsTables(ds: DataSource, schema: string) {
+async function provisionTenantDocumentsTables(ds: DataSource, schema: string) {
   const s = safeSchema(schema, 'ensureTenantDocumentsTables');
 
   await ds.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
@@ -138,6 +139,16 @@ export async function ensureTenantDocumentsTables(ds: DataSource, schema: string
   `);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_document_shares_document" ON "${s}".document_shares(document_id) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_document_shares_token" ON "${s}".document_shares(token_hash) WHERE token_hash IS NOT NULL AND deleted_at IS NULL`);
+}
+
+export function ensureTenantDocumentsTables(
+  ds: DataSource,
+  schema: string,
+): Promise<void> {
+  const safe = safeSchema(schema, 'ensureTenantDocumentsTables');
+  return provisionSchemaOnce(ds, `tenant-documents:${safe}`, () =>
+    provisionTenantDocumentsTables(ds, safe),
+  );
 }
 
 export async function seedDoflowDocumentFolders(ds: DataSource, schema: string) {

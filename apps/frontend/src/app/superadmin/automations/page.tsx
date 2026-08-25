@@ -2,14 +2,14 @@
 
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React,{ useEffect,useState,useCallback } from "react";
 import {
-  Loader2, RefreshCw, Plus, MoreHorizontal, Zap,
-  Play, Pause, Pencil, Trash2, TestTube, BarChart3,
-  Mail, Bell, ArrowRight, UserCheck, Webhook, ListTodo,
-  Target, Clock, AlertTriangle, CheckCircle2, Settings,
+  Loader2,RefreshCw,Plus,MoreHorizontal,Zap,
+  Play,Pause,Pencil,Trash2,TestTube,BarChart3,
+  Mail,Bell,ArrowRight,UserCheck,Webhook,ListTodo,
+  Target,Clock,AlertTriangle,Settings
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card,CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -17,17 +17,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogDescription, DialogFooter,
+  Dialog,DialogContent,DialogHeader,DialogTitle,
+  DialogDescription,DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,SelectContent,SelectItem,SelectTrigger,SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
-  DropdownMenuItem, DropdownMenuSeparator,
+  DropdownMenu,DropdownMenuTrigger,DropdownMenuContent,
+  DropdownMenuItem,DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { apiFetch } from "@/lib/api";
+import { getErrorMessage } from "@/lib/error-message";
 import { useToast } from "@/hooks/use-toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -40,7 +41,24 @@ type AutomationRule = {
   lastExecutedAt: string | null; cronExpression: string | null; createdAt: string;
 };
 
+type AutomationRuleForm = Omit<Partial<AutomationRule>, "triggerConditions" | "actionConfig"> & {
+  triggerConditions?: Record<string, unknown> | string;
+  actionConfig?: Record<string, unknown> | string;
+};
+
 type AutoStats = { total: number; active: number; totalExecutions: number; byTrigger: { trigger: string; count: number }[]; byAction: { action: string; count: number }[] };
+
+function parseJsonRecord(value: Record<string, unknown> | string | undefined) {
+  if (typeof value !== "string") return value ?? {};
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
 
 const TRIGGER_LABELS: Record<string, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
   LEAD_STATUS_CHANGE:    { label: "Lead: cambio stato",      icon: Target },
@@ -92,7 +110,7 @@ export default function AutomationsPage() {
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [stats, setStats] = useState<AutoStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editDialog, setEditDialog] = useState<{ open: boolean; rule: Partial<AutomationRule> | null }>({ open: false, rule: null });
+  const [editDialog, setEditDialog] = useState<{ open: boolean; rule: AutomationRuleForm | null }>({ open: false, rule: null });
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -104,14 +122,24 @@ export default function AutomationsPage() {
       ]);
       setRules(Array.isArray(r) ? r : []);
       setStats(s);
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setLoading(false);
     }
   }, [toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const handleSave = async () => {
     if (!editDialog.rule) return;
@@ -119,13 +147,11 @@ export default function AutomationsPage() {
     try {
       const r = editDialog.rule;
       // Parse JSON strings from form
-      const payload = { ...r };
-      if (typeof payload.triggerConditions === "string") {
-        try { payload.triggerConditions = JSON.parse(payload.triggerConditions as any); } catch { payload.triggerConditions = {}; }
-      }
-      if (typeof payload.actionConfig === "string") {
-        try { payload.actionConfig = JSON.parse(payload.actionConfig as any); } catch { payload.actionConfig = {}; }
-      }
+      const payload = {
+        ...r,
+        triggerConditions: parseJsonRecord(r.triggerConditions),
+        actionConfig: parseJsonRecord(r.actionConfig),
+      };
       if (r.id) {
         await apiFetch(`/superadmin/automations/${r.id}`, { method: "PUT", body: JSON.stringify(payload) });
       } else {
@@ -134,8 +160,8 @@ export default function AutomationsPage() {
       setEditDialog({ open: false, rule: null });
       await load();
       toast({ title: "Regola salvata" });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -145,21 +171,21 @@ export default function AutomationsPage() {
     try {
       await apiFetch(`/superadmin/automations/${id}/toggle`, { method: "PATCH", body: JSON.stringify({ isActive }) });
       await load();
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     }
   };
 
   const handleTest = async (rule: AutomationRule) => {
     try {
-      const res = await apiFetch<any>("/superadmin/automations/test", {
+      const res = await apiFetch<unknown>("/superadmin/automations/test", {
         method: "POST",
         body: JSON.stringify({ event: rule.triggerEvent, context: { test: true, ruleId: rule.id } }),
       });
       toast({ title: "Test eseguito", description: `Risultato: ${JSON.stringify(res).slice(0, 100)}` });
       await load();
-    } catch (e: any) {
-      toast({ title: "Errore test", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore test", description: getErrorMessage(e), variant: "destructive" });
     }
   };
 
@@ -168,8 +194,8 @@ export default function AutomationsPage() {
       await apiFetch(`/superadmin/automations/${id}`, { method: "DELETE" });
       await load();
       toast({ title: "Regola eliminata" });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     }
   };
 
@@ -248,7 +274,7 @@ export default function AutomationsPage() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => handleTest(rule)}><TestTube className="h-4 w-4 mr-2" />Test manuale</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setEditDialog({ open: true, rule: { ...rule, triggerConditions: JSON.stringify(rule.triggerConditions, null, 2) as any, actionConfig: JSON.stringify(rule.actionConfig, null, 2) as any } })}><Pencil className="h-4 w-4 mr-2" />Modifica</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setEditDialog({ open: true, rule: { ...rule, triggerConditions: JSON.stringify(rule.triggerConditions, null, 2), actionConfig: JSON.stringify(rule.actionConfig, null, 2) } })}><Pencil className="h-4 w-4 mr-2" />Modifica</DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(rule.id)}><Trash2 className="h-4 w-4 mr-2" />Elimina</DropdownMenuItem>
                   </DropdownMenuContent>
@@ -267,7 +293,7 @@ export default function AutomationsPage() {
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editDialog.rule?.id ? "Modifica Regola" : "Nuova Automazione"}</DialogTitle>
-            <DialogDescription>Quando scatta il trigger, l'azione viene eseguita automaticamente.</DialogDescription>
+            <DialogDescription>Quando scatta il trigger, l&apos;azione viene eseguita automaticamente.</DialogDescription>
           </DialogHeader>
           {editDialog.rule && (
             <div className="space-y-4 py-2">
@@ -289,8 +315,8 @@ export default function AutomationsPage() {
                   </Select>
                 </div>
               </div>
-              <div><Label>Condizioni Trigger (JSON)</Label><Textarea value={typeof editDialog.rule.triggerConditions === "string" ? editDialog.rule.triggerConditions as any : JSON.stringify(editDialog.rule.triggerConditions || {}, null, 2)} onChange={e => setEditDialog(p => ({ ...p, rule: { ...p.rule!, triggerConditions: e.target.value as any } }))} rows={4} className="font-mono text-xs" placeholder='{"fromStatus": "NEW", "toStatus": "QUALIFIED"}' /></div>
-              <div><Label>Config Azione (JSON)</Label><Textarea value={typeof editDialog.rule.actionConfig === "string" ? editDialog.rule.actionConfig as any : JSON.stringify(editDialog.rule.actionConfig || {}, null, 2)} onChange={e => setEditDialog(p => ({ ...p, rule: { ...p.rule!, actionConfig: e.target.value as any } }))} rows={4} className="font-mono text-xs" placeholder='{"templateSlug": "lead_qualified", "to": "{{lead.email}}"}' /></div>
+              <div><Label>Condizioni Trigger (JSON)</Label><Textarea value={typeof editDialog.rule.triggerConditions === "string" ? editDialog.rule.triggerConditions : JSON.stringify(editDialog.rule.triggerConditions || {}, null, 2)} onChange={e => setEditDialog(p => ({ ...p, rule: { ...p.rule!, triggerConditions: e.target.value } }))} rows={4} className="font-mono text-xs" placeholder='{"fromStatus": "NEW", "toStatus": "QUALIFIED"}' /></div>
+              <div><Label>Config Azione (JSON)</Label><Textarea value={typeof editDialog.rule.actionConfig === "string" ? editDialog.rule.actionConfig : JSON.stringify(editDialog.rule.actionConfig || {}, null, 2)} onChange={e => setEditDialog(p => ({ ...p, rule: { ...p.rule!, actionConfig: e.target.value } }))} rows={4} className="font-mono text-xs" placeholder='{"templateSlug": "lead_qualified", "to": "{{lead.email}}"}' /></div>
               {editDialog.rule.triggerEvent === "SCHEDULED" && (
                 <div><Label>Cron Expression</Label><Input value={editDialog.rule.cronExpression || ""} onChange={e => setEditDialog(p => ({ ...p, rule: { ...p.rule!, cronExpression: e.target.value } }))} placeholder="0 9 * * 1 (ogni lunedì alle 9)" /></div>
               )}

@@ -10,18 +10,21 @@ import {
   HttpStatus,
   UnauthorizedException,
   UseGuards,
+  Res,
 } from '@nestjs/common';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { AuditService } from './audit.service';
 import { LoginGuardService } from './login-guard.service';
 import { JwtAuthGuard } from './auth/jwt-auth.guard'; // Assicurati che il percorso sia corretto
 import { AuthHandoffService } from './auth/auth-handoff.service';
+import { WebSessionService, WebSessionUser } from './auth/web-session.service';
 
 // --- DTOs ---
 type AuthBody = {
   email: string;
   password: string;
+  rememberMe?: boolean;
 };
 
 type AcceptInviteBody = {
@@ -53,7 +56,36 @@ export class AuthController {
     private readonly auditService: AuditService,
     private readonly loginGuard: LoginGuardService,
     private readonly authHandoff: AuthHandoffService,
+    private readonly webSessions: WebSessionService,
   ) {}
+
+  private isOpaqueWebSessionRequest(req: Request, result?: any) {
+    void result;
+    return this.webSessions.isBrowserRequest(req);
+  }
+
+  private browserOriginHost(req: Request) {
+    try {
+      return new URL(String(req.headers.origin || '')).hostname;
+    } catch {
+      return req.hostname;
+    }
+  }
+
+  private sessionUser(source: any, stage?: AuthStage): WebSessionUser {
+    const user = source?.user || source || {};
+    const id = String(user.id || user.sub || '');
+    return {
+      sub: id,
+      id,
+      email: String(user.email || ''),
+      role: String(user.role || ''),
+      tenantId: String(user.tenantId || user.tenant_id || 'public'),
+      tenantSlug: String(user.tenantSlug || user.tenant_id || 'public'),
+      authStage: stage || String(user.authStage || 'FULL').toUpperCase() as AuthStage,
+      mfa_required: user.mfa_required === true,
+    };
+  }
 
   private assertAuthStage(req: Request, allowed: AuthStage[]) {
     const user = (req as any).user;
@@ -86,7 +118,7 @@ export class AuthController {
    */
   @UseGuards(JwtAuthGuard)
   @Post('mfa/confirm')
-  async mfaConfirm(@Body() body: MfaConfirmBody, @Req() req: Request) {
+  async mfaConfirm(@Body() body: MfaConfirmBody, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     this.assertAuthStage(req, ['FULL', 'MFA_SETUP_NEEDED']);
     if (!/^\d{6}$/.test(String(body.code || '')) || !body.secret) {
       throw new BadRequestException('Codice e segreto MFA obbligatori');
@@ -95,13 +127,17 @@ export class AuthController {
     try {
       const result = await this.authService.confirmMfaAndEnable(req, body.code, body.secret);
 
+      if (this.isOpaqueWebSessionRequest(req)) {
+        await this.webSessions.rotate(req, res, this.sessionUser((req as any).user, 'FULL'));
+      }
+
       const user = (req as any).user;
       await this.auditService.log(req, {
         action: 'auth_mfa_enabled_success',
         targetEmail: user?.email,
       });
 
-      return result;
+      return this.isOpaqueWebSessionRequest(req) ? { status: 'ok' } : result;
     } catch (e) {
       if (e instanceof HttpException) throw e;
       throw new UnauthorizedException('Codice MFA non valido');
@@ -114,7 +150,7 @@ export class AuthController {
    */
   @UseGuards(JwtAuthGuard)
   @Post('mfa/verify')
-  async mfaVerify(@Body() body: MfaVerifyBody, @Req() req: Request) {
+  async mfaVerify(@Body() body: MfaVerifyBody, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const user = this.assertAuthStage(req, ['MFA_PENDING']);
     if (!/^\d{6}$/.test(String(body.code || ''))) {
       throw new BadRequestException('Codice MFA non valido');
@@ -123,12 +159,16 @@ export class AuthController {
     try {
       const result = await this.authService.verifyMfaLogin(user, body.code, req);
 
+      if (this.isOpaqueWebSessionRequest(req)) {
+        await this.webSessions.rotate(req, res, this.sessionUser(user, 'FULL'));
+      }
+
       await this.auditService.log(req, {
         action: 'auth_mfa_login_success',
         targetEmail: user.email,
       });
 
-      return result;
+      return this.isOpaqueWebSessionRequest(req) ? { status: 'ok' } : result;
     } catch (e) {
       // Audit fallimento MFA (opzionale, per sicurezza)
       const user = (req as any).user;
@@ -149,23 +189,40 @@ export class AuthController {
     @Req() req: Request,
   ) {
     const user = (req as any).user;
-    const authorization = String(req.headers.authorization || '');
-    const token = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
-    if (!token || !body.tenantTarget) {
+    const webSession = (req as any).webSession;
+    if (!user?.sub || (!webSession && this.webSessions.isBrowserRequest(req)) || !body.tenantTarget) {
       throw new BadRequestException('Handoff incompleto');
     }
     return this.authHandoff.createLogin({
-      token,
       user,
       tenantTarget: body.tenantTarget,
       rememberMe: body.rememberMe,
       next: body.next,
+      sourceHost: this.browserOriginHost(req),
+      correlationId: String(req.headers['x-correlation-id'] || ''),
     });
   }
 
   @Post('handoff/exchange')
-  async exchangeHandoff(@Body() body: { handoff?: string; tenantTarget?: string }) {
-    return this.authHandoff.exchange(body.handoff, body.tenantTarget);
+  async exchangeHandoff(
+    @Body() body: { handoff?: string; tenantTarget?: string },
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authHandoff.exchange(
+      body.handoff,
+      body.tenantTarget,
+      this.browserOriginHost(req),
+    );
+    if (result.kind !== 'login') return result;
+
+    const { webUser, ...publicResult } = result;
+    if (this.webSessions.isBrowserRequest(req)) {
+      if (!webUser?.id) throw new UnauthorizedException('Handoff non valido');
+      await this.webSessions.create(req, res, webUser, result.rememberMe);
+      return publicResult;
+    }
+    return publicResult;
   }
 
   // ==========================================
@@ -173,7 +230,11 @@ export class AuthController {
   // ==========================================
 
   @Post('accept-invite')
-  async acceptInvite(@Body() body: AcceptInviteBody, @Req() req: Request) {
+  async acceptInvite(
+    @Body() body: AcceptInviteBody,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     if (!body.token || typeof body.password !== 'string' || body.password.length < 8) {
       throw new BadRequestException('Token e password obbligatori');
     }
@@ -191,6 +252,11 @@ export class AuthController {
         targetEmail: result.user?.email,
       });
 
+      if (this.isOpaqueWebSessionRequest(req, result)) {
+        await this.webSessions.create(req, res, this.sessionUser(result, 'FULL'), false);
+        const { token: _token, ...safeResult } = result;
+        return safeResult;
+      }
       return result;
     } catch (e) {
       await this.auditService.log(req, {
@@ -204,7 +270,7 @@ export class AuthController {
   }
 
   @Post('login')
-  async login(@Body() body: AuthBody, @Req() req: Request) {
+  async login(@Body() body: AuthBody, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     if (!isValidEmail(body.email) || typeof body.password !== 'string' || !body.password) {
       throw new BadRequestException('Email e password obbligatorie');
     }
@@ -219,6 +285,15 @@ export class AuthController {
       // 2) login tenant-aware
       const result = await this.authService.loginAuto(req, email, password);
 
+      if (this.isOpaqueWebSessionRequest(req, result)) {
+        await this.webSessions.create(
+          req,
+          res,
+          this.sessionUser(result, result.mfa?.stage || 'FULL'),
+          body.rememberMe === true,
+        );
+      }
+
       // 3) audit successo
       await this.auditService.log(req, {
         action: 'auth_login_success',
@@ -230,6 +305,10 @@ export class AuthController {
       // 4) reset dei fallimenti in caso di successo
       await this.loginGuard.resetFailures(req, email);
 
+      if (this.isOpaqueWebSessionRequest(req, result)) {
+        const { token: _token, ...safeResult } = result;
+        return safeResult;
+      }
       return result;
     } catch (e) {
       // audit fallimento
@@ -257,6 +336,13 @@ export class AuthController {
     }
   }
 
+  @Post('logout')
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    await this.webSessions.revoke(req);
+    this.webSessions.clear(res);
+    return { ok: true };
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('me')
   getMe(@Req() req: Request) {
@@ -273,10 +359,23 @@ export class AuthController {
       email: user.email,
       role: user.role,
       tenantId: user.tenantId ?? user.tenant_id ?? 'public',
+      tenantSlug: user.tenantSlug ?? user.tenant_slug ?? user.tenantId ?? 'public',
       authStage: user.authStage, // ✅ utile per il frontend
       created_at: user.created_at,
     };
 
     return { user: safeUser };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('session-stage')
+  getSessionStage(@Req() req: Request) {
+    const user = (req as any).authUser ?? (req as any).user;
+    if (!user?.sub) throw new UnauthorizedException('Not authenticated');
+    return {
+      authStage: String(user.authStage || 'FULL').toUpperCase(),
+      tenantSlug: String(user.tenantSlug || user.tenantId || ''),
+      role: String(user.role || ''),
+    };
   }
 }

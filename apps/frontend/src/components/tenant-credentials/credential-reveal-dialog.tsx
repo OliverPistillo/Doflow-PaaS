@@ -25,10 +25,6 @@ export function CredentialRevealDialog({ credential, open, onOpenChange }: { cre
   };
 
   useEffect(() => {
-    if (!open) clear();
-  }, [open]);
-
-  useEffect(() => {
     if (!open || !secret) return undefined;
     const timeout = window.setTimeout(() => {
       setSecret(null);
@@ -36,8 +32,6 @@ export function CredentialRevealDialog({ credential, open, onOpenChange }: { cre
     }, 60000);
     return () => window.clearTimeout(timeout);
   }, [open, secret]);
-
-  useEffect(() => () => clear(), []);
 
   const fields = useMemo(() => secret ? secretEntries(secret) : [], [secret]);
 
@@ -120,4 +114,3 @@ function secretEntries(secret: CredentialSecretPayload) {
   (secret.customFields || []).forEach((field, index) => rows.push({ key: `custom-${index}`, label: field.label || `Campo ${index + 1}`, value: field.value }));
   return rows;
 }
-

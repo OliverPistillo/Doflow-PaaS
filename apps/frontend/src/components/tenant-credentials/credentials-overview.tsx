@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Download, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,7 @@ export function CredentialsOverviewPage({ mode = "all" }: { mode?: "all" | "expi
 
   const title = mode === "expiring" ? "Credenziali in scadenza" : mode === "renewals" ? "Rinnovi credenziali" : mode === "rotation" ? "Rotazioni dovute" : "Accessi e credenziali";
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -48,9 +48,19 @@ export function CredentialsOverviewPage({ mode = "all" }: { mode?: "all" | "expi
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters, mode]);
 
-  useEffect(() => { void load(); }, [mode, filters.search, filters.kind, filters.environment, filters.status, filters.access_scope, filters.sort, filters.dir]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const exportAll = async () => {
     try {
@@ -101,4 +111,3 @@ export function CredentialsOverviewPage({ mode = "all" }: { mode?: "all" | "expi
     </div>
   );
 }
-

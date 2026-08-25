@@ -2,15 +2,23 @@
 "use client"
 
 import * as React from "react"
-import { Moon, Sun } from "lucide-react"
+import { Moon,Sun } from "lucide-react"
 import { useTheme } from "next-themes"
 
 export function ThemeToggle() {
-  const { theme, setTheme, resolvedTheme } = useTheme()
+  const { setTheme, resolvedTheme } = useTheme()
   const [mounted, setMounted] = React.useState(false)
 
   React.useEffect(() => {
-    setMounted(true)
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setMounted(true)
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [])
 
   if (!mounted) return null

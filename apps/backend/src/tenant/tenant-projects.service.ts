@@ -283,9 +283,8 @@ export class TenantProjectsService {
         const previous = normalizeProjectStage(previousRaw);
         await this.audit(schema, user, 'project_status_changed', id, {
           previous_status: previous.mapped ? previous.stage : 'unknown',
+          previous_status_raw: previous.raw,
           new_status: nextStatus,
-          ...(previous.mapped && previous.isLegacy ? { previous_status_raw: previous.raw } : {}),
-          ...(!previous.mapped ? { previous_status_raw: previous.raw } : {}),
         });
       }
     }
@@ -355,7 +354,7 @@ export class TenantProjectsService {
       const name = this.normalizeProjectName(body.name || quote.title || quote.opportunity_title);
       const status = this.normalizeProjectStatus(body.status, schema);
       const priority = this.normalizeProjectPriority(body.priority);
-      const progress = this.normalizeProjectProgress(body.progress);
+      const progress = isDoflowTenant(schema) ? 0 : this.normalizeProjectProgress(body.progress);
       const projectRows = await runner.query(
         `INSERT INTO "${schema}".projects (
            company_id, contact_id, opportunity_id, briefing_id, quote_id,
@@ -872,12 +871,18 @@ export class TenantProjectsService {
 
   private cleanProjectBody(body: Record<string, any>, partial: boolean, schema: string) {
     const cleaned = this.pick(body, [
-      'company_id', 'contact_id', 'opportunity_id', 'briefing_id', 'quote_id',
+      'id', 'company_id', 'contact_id', 'opportunity_id', 'briefing_id', 'quote_id',
       'name', 'description', 'type', 'status', 'priority', 'current_phase', 'progress',
       'project_manager_id', 'start_date', 'due_date', 'delivered_at', 'closed_at',
       'internal_notes', 'client_notes',
     ]);
-    if (isDoflowTenant(schema)) delete cleaned.current_phase;
+    if (partial) delete cleaned.id;
+    else if ('id' in cleaned) cleaned.id = this.requireUuid(String(cleaned.id), 'id');
+    if (isDoflowTenant(schema)) {
+      delete cleaned.current_phase;
+      delete cleaned.progress;
+      if (!partial) cleaned.progress = 0;
+    }
     if (!partial || 'name' in cleaned) cleaned.name = this.normalizeProjectName(cleaned.name);
     for (const field of ['company_id', 'contact_id', 'opportunity_id', 'briefing_id', 'quote_id', 'project_manager_id']) {
       if (cleaned[field] === '') cleaned[field] = null;
@@ -885,13 +890,17 @@ export class TenantProjectsService {
     }
     if (!partial || 'status' in cleaned) cleaned.status = this.normalizeProjectStatus(cleaned.status, schema);
     if (!partial || 'priority' in cleaned) cleaned.priority = this.normalizeProjectPriority(cleaned.priority);
-    if (!partial || 'progress' in cleaned) cleaned.progress = this.normalizeProjectProgress(cleaned.progress);
+    if (!isDoflowTenant(schema) && (!partial || 'progress' in cleaned)) {
+      cleaned.progress = this.normalizeProjectProgress(cleaned.progress);
+    }
     if ('type' in cleaned) cleaned.type = this.normalizeProjectType(cleaned.type);
     return cleaned;
   }
 
   private cleanMilestoneBody(body: Record<string, any>, partial: boolean) {
-    const cleaned = this.pick(body, ['title', 'description', 'status', 'due_date', 'completed_at', 'sort_order']);
+    const cleaned = this.pick(body, ['id', 'title', 'description', 'status', 'due_date', 'completed_at', 'sort_order']);
+    if (partial) delete cleaned.id;
+    else if ('id' in cleaned) cleaned.id = this.requireUuid(String(cleaned.id), 'id');
     if (!partial && !String(cleaned.title || '').trim()) throw new BadRequestException('title obbligatorio');
     if (cleaned.status && !MILESTONE_STATUSES.includes(String(cleaned.status))) throw new BadRequestException('Status milestone non valido');
     if ('sort_order' in cleaned) cleaned.sort_order = this.integerOrNull(cleaned.sort_order, 'sort_order') ?? 0;
@@ -900,10 +909,12 @@ export class TenantProjectsService {
 
   private cleanTaskBody(body: Record<string, any>, partial: boolean) {
     const cleaned = this.pick(body, [
-      'project_id', 'milestone_id', 'company_id', 'title', 'description', 'status',
+      'id', 'project_id', 'milestone_id', 'company_id', 'title', 'description', 'status',
       'priority', 'assignee_id', 'assigned_by', 'due_at', 'estimated_minutes',
       'actual_minutes', 'tags', 'blocked_reason', 'completed_at',
     ]);
+    if (partial) delete cleaned.id;
+    else if ('id' in cleaned) cleaned.id = this.requireUuid(String(cleaned.id), 'id');
     if (!partial && !String(cleaned.title || '').trim()) throw new BadRequestException('title obbligatorio');
     for (const field of ['project_id', 'milestone_id', 'company_id', 'assignee_id', 'assigned_by']) {
       if (cleaned[field] === '') cleaned[field] = null;
@@ -947,7 +958,7 @@ export class TenantProjectsService {
 
   private normalizeProjectStatus(value: unknown, schema: string): string {
     const status = String(value ?? '').trim();
-    if (!status) return 'to_start';
+    if (!status) return isDoflowTenant(schema) ? 'not_started' : 'to_start';
     if (isDoflowTenant(schema)) {
       const normalized = normalizeProjectStage(status);
       if (!normalized.mapped) throw new BadRequestException('Status progetto non valido');

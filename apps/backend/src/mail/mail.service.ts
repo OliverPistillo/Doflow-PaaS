@@ -1,5 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { MailerService } from '@nestjs-modules/mailer';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { SendMailOptions, Transporter } from 'nodemailer';
+
+// Keep the injection token beside the consumer so MailService does not import
+// MailModule while MailModule is importing MailService during bootstrap.
+export const DOFLOW_MAIL_TRANSPORT = Symbol('DOFLOW_MAIL_TRANSPORT');
 
 // Manteniamo gli import dei template se ti servono per altre parti del codice
 // Se non li usi più, puoi rimuoverli.
@@ -12,7 +16,7 @@ import {
 export class MailService {
   private readonly logger = new Logger(MailService.name);
 
-  constructor(private readonly mailerService: MailerService) {}
+  constructor(@Inject(DOFLOW_MAIL_TRANSPORT) private readonly mailerService: Pick<Transporter, 'sendMail'>) {}
 
   /**
    * Metodo GENERICO pubblico per inviare email.
@@ -23,6 +27,7 @@ export class MailService {
     subject: string;
     text?: string;
     html?: string;
+    attachments?: SendMailOptions['attachments'];
     purpose?: string;
   }): Promise<boolean> {
     const config = this.currentMailConfig();
@@ -36,6 +41,10 @@ export class MailService {
         subject: params.subject,
         text: params.text, // Versione testo semplice (fallback)
         html: params.html || params.text, // Usa HTML se c'è, altrimenti testo
+        attachments: params.attachments,
+        from: process.env.MAIL_FROM_NAME
+          ? `"${process.env.MAIL_FROM_NAME}" <${process.env.MAIL_USER}>`
+          : process.env.MAIL_USER,
       });
       
       this.logger.log(`✅ Email inviata a ${params.to}`);

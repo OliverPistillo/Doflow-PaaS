@@ -121,7 +121,15 @@ export default function DashboardClient() {
   }, [canView]);
 
   useEffect(() => {
-    if (!accessLoading) void loadDashboard();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        if (!accessLoading) void loadDashboard();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [accessLoading, loadDashboard]);
 
   const jwtUser = getDoFlowUser();

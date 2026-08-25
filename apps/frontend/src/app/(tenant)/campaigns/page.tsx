@@ -1,29 +1,25 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
-import { Megaphone, Plus, Search, Send, Eye, MousePointerClick, Users,
-  BarChart2, Mail, Play, Pause, Edit2, Trash2, Copy, ChevronRight,
-  TrendingUp, CheckCircle2, Clock, XCircle, Calendar } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useState,useMemo,useRef,useEffect } from "react";
+import { Megaphone,Plus,Search,Send,Eye,MousePointerClick,Users,Play,Pause,Edit2,ChevronRight,CheckCircle2,Clock } from "lucide-react";
+import { Card,CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from "@/components/ui/select";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog,DialogContent,DialogHeader,DialogTitle,DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
-import { PageShell, PageHeader } from "@/components/ui/page-shell";
+import { PageShell,PageHeader } from "@/components/ui/page-shell";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -233,8 +229,6 @@ function CampaignDetail({ c, onClose }: { c: Campaign; onClose: () => void }) {
   const tp = TYPE_CONFIG[c.type];
   const openRate  = c.sent && c.opened  ? Math.round(c.opened  / c.sent    * 100) : 0;
   const clickRate = c.opened && c.clicked ? Math.round(c.clicked / c.opened * 100) : 0;
-  const bounceRate = 0.8; // demo
-
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

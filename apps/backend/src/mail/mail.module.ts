@@ -1,7 +1,7 @@
 import { Module, Global } from '@nestjs/common';
-import { MailerModule } from '@nestjs-modules/mailer';
 import { ConfigService, ConfigModule } from '@nestjs/config';
-import { MailService } from './mail.service';
+import { createTransport } from 'nodemailer';
+import { DOFLOW_MAIL_TRANSPORT, MailService } from './mail.service';
 
 export function mailTimeout(config: Pick<ConfigService, 'get'>, key: string, fallback: number) {
   const value = Number(config.get(key));
@@ -11,11 +11,12 @@ export function mailTimeout(config: Pick<ConfigService, 'get'>, key: string, fal
 
 @Global() // 👈 Importante: lo rende disponibile ovunque (anche in TenantsService) senza doverlo re-importare sempre
 @Module({
-  imports: [
-    MailerModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: async (config: ConfigService) => ({
-        transport: {
+  imports: [ConfigModule],
+  providers: [
+    {
+      provide: DOFLOW_MAIL_TRANSPORT,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => createTransport({
           host: config.get('MAIL_HOST'),
           port: Number(config.get('MAIL_PORT')),
           secure: config.get('MAIL_SECURE') === 'true', // Converte la stringa in booleano
@@ -26,15 +27,10 @@ export function mailTimeout(config: Pick<ConfigService, 'get'>, key: string, fal
             user: config.get('MAIL_USER'),
             pass: config.get('MAIL_PASSWORD'),
           },
-        },
-        defaults: {
-          from: `"${config.get('MAIL_FROM_NAME')}" <${config.get('MAIL_USER')}>`,
-        },
       }),
-      inject: [ConfigService],
-    }),
+    },
+    MailService,
   ],
-  providers: [MailService],
   exports: [MailService],
 })
 export class MailModule {}

@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { Loader2, ArrowLeft, Plus, Trash2, FileText, UserPlus, Sparkles, Bookmark } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
+import { getErrorMessage } from "@/lib/error-message";
 import Link from "next/link";
 
 // ─── Tipi ─────────────────────────────────────────────────────────────────────
@@ -27,6 +28,11 @@ type FormValues = {
 type Tenant        = { id: string; name: string };
 type InvoiceClient = { id: string; clientName: string; clientVat?: string; clientAddress?: string; clientCity?: string; clientZip?: string; clientFiscalCode?: string; clientSdi?: string; clientPec?: string; invoiceCount: number };
 type SavedService  = { id: string; description: string; unitPrice: number; quantity: number };
+
+const CLIENT_TEXT_FIELDS = [
+  "tenantId", "clientName", "clientAddress", "clientCity", "clientZip",
+  "clientVat", "clientFiscalCode", "clientSdi", "clientPec",
+] as const satisfies readonly (keyof FormValues)[];
 
 // ─── Dialog salva cliente ──────────────────────────────────────────────────────
 
@@ -90,7 +96,7 @@ export default function NewPreventivoPage() {
   const [clientMode, setClientMode]       = useState<"tenant" | "saved" | "nuovo">("nuovo");
   const [autofilled, setAutofilled]       = useState(false);
   const [showSaveDialog, setShowSaveDialog]               = useState(false);
-  const [pendingData, setPendingData]                     = useState<any>(null);
+  const [pendingData, setPendingData]                     = useState<FormValues | null>(null);
   const [showSaveServiceDialog, setShowSaveServiceDialog] = useState(false);
   const [pendingServiceIdx, setPendingServiceIdx]         = useState<number | null>(null);
 
@@ -98,7 +104,7 @@ export default function NewPreventivoPage() {
   const today = new Date().toISOString().split("T")[0];
   const in30  = (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split("T")[0]; })();
 
-  const { register, control, handleSubmit, watch, setValue, getValues } = useForm<FormValues>({
+  const { register, control, handleSubmit, setValue, getValues } = useForm<FormValues>({
     defaultValues: {
       tenantId: "", clientName: "", clientAddress: "", clientCity: "", clientZip: "",
       clientVat: "", clientFiscalCode: "", clientSdi: "", clientPec: "",
@@ -109,7 +115,7 @@ export default function NewPreventivoPage() {
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "lineItems" });
-  const watchLineItems = watch("lineItems");
+  const watchLineItems = useWatch({ control, name: "lineItems" });
   const safeItems  = Array.isArray(watchLineItems) ? watchLineItems : [];
   const totale     = safeItems.reduce((s, i) => s + (Number(i?.quantity) || 0) * (Number(i?.unitPrice) || 0), 0);
 
@@ -122,7 +128,7 @@ export default function NewPreventivoPage() {
   const handleClientSelect = useCallback((value: string) => {
     if (value === "__nuovo__") {
       setClientMode("nuovo");
-      ["tenantId","clientName","clientAddress","clientCity","clientZip","clientVat","clientFiscalCode","clientSdi","clientPec"].forEach(f => setValue(f as any, ""));
+      CLIENT_TEXT_FIELDS.forEach((field) => setValue(field, ""));
       return;
     }
     const tenant = tenants.find(t => t.id === value);
@@ -176,7 +182,7 @@ export default function NewPreventivoPage() {
       });
       if (clientMode === "nuovo" && data.clientName?.trim()) { setPendingData(data); setShowSaveDialog(true); }
       else router.push("/superadmin/finance/invoices");
-    } catch (e: any) { alert(`Errore: ${e?.message || "Errore sconosciuto"}`); }
+    } catch (e) { alert(`Errore: ${getErrorMessage(e) || "Errore sconosciuto"}`); }
     finally { setSubmitting(false); }
   };
 

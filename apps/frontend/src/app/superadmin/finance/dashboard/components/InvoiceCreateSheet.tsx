@@ -97,9 +97,11 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
 
   useEffect(() => {
     if (!isOpen) return;
-    setShowExtra(false); setAutofilled(false); setClientMode("select"); setSelectedId("");
-    if (invoiceToEdit) {
-      setFormData({
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setShowExtra(false); setAutofilled(false); setClientMode("select"); setSelectedId("");
+      setFormData(invoiceToEdit ? {
         invoiceNumber:    invoiceToEdit.invoiceNumber,
         clientName:       invoiceToEdit.clientName,
         clientAddress:    invoiceToEdit.clientAddress    ?? "",
@@ -113,10 +115,11 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
         issueDate:        invoiceToEdit.issueDate ? new Date(invoiceToEdit.issueDate).toISOString().split("T")[0] : "",
         dueDate:          invoiceToEdit.dueDate   ? new Date(invoiceToEdit.dueDate).toISOString().split("T")[0]   : "",
         status:           invoiceToEdit.status,
-      });
-    } else {
-      setFormData(emptyForm());
-    }
+      } : emptyForm());
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen, invoiceToEdit]);
 
   function handleClientSelect(value: string) {

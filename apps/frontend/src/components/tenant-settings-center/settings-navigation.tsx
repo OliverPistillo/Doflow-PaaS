@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Plug, Settings, ShieldCheck, UsersRound } from "lucide-react";
@@ -16,12 +16,10 @@ const items = [
 
 export function SettingsNavigation() {
   const pathname = usePathname();
-  const [isDoflowTenant, setIsDoflowTenant] = useState<boolean | null>(null);
-
-  useEffect(() => {
+  const isDoflowTenant = useSyncExternalStore<boolean | null>(() => () => undefined, () => {
     const user = getDoFlowUser();
-    setIsDoflowTenant(isInternalDoflowTenant(user?.tenantSlug || user?.tenantId));
-  }, []);
+    return isInternalDoflowTenant(user?.tenantSlug || user?.tenantId);
+  }, () => null);
 
   if (isDoflowTenant !== false) return null;
 

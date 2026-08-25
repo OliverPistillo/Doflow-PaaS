@@ -1,30 +1,38 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect,useState,type ReactNode,useEffectEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Archive, CheckCircle2, Download, FileJson, FileText, Loader2, Plus, RefreshCw, RotateCcw, Search, Trash2 } from "lucide-react";
+import { Download,FileText,Loader2,Plus,RefreshCw,Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/components/ui/card";
+import { Dialog,DialogContent,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from "@/components/ui/select";
+import { Tabs,TabsContent,TabsList,TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { listDocumentsForEntity, type TenantDocument } from "@/lib/tenant-documents-api";
-import { contractsApi, type Contract, type ContractActivity, type ContractChecklistItem, type ContractSigner, type ContractTemplate, type ContractVersion } from "@/lib/tenant-contracts-api";
+import { listDocumentsForEntity,type TenantDocument } from "@/lib/tenant-documents-api";
+import { contractsApi,type Contract,type ContractActivity,type ContractChecklistItem,type ContractSigner,type ContractsSummary,type ContractTemplate,type ContractVersion } from "@/lib/tenant-contracts-api";
 import { paperworkApi } from "@/lib/tenant-paperwork-api";
 import {
-  CHECKLIST_CATEGORIES, CHECKLIST_STATUSES, CONTRACT_STATUSES, CONTRACT_TYPES, PRIORITIES,
-  SIGNATURE_STATUSES, SIGNER_STATUSES, SIGNER_TYPES, VERSION_STATUSES, badgeClass,
-  canAdminTemplates, canManageAdminWorkflow, canViewFinanceValues, downloadJson, formatDate,
-  formatDateTime, labelFor, money, toBody,
+  CHECKLIST_CATEGORIES,CHECKLIST_STATUSES,CONTRACT_STATUSES,CONTRACT_TYPES,PRIORITIES,
+  SIGNATURE_STATUSES,SIGNER_STATUSES,SIGNER_TYPES,VERSION_STATUSES,badgeClass,
+  canAdminTemplates,canManageAdminWorkflow,canViewFinanceValues,downloadJson,formatDate,
+  formatDateTime,labelFor,money,toBody,
 } from "./contract-utils";
 
-type Row = Record<string, any>;
+type FieldValue = string | number | boolean | null | undefined;
+type FormState = Record<string, FieldValue> & {
+  amount?: string | number; body_markdown?: string; category?: string; contract_type?: string; currency?: string;
+  default_checklist?: string; description?: string; due_date?: string; end_date?: string; internal_notes?: string;
+  name?: string; payment_terms?: string; priority?: string; public_notes?: string; renewal_date?: string;
+  signature_status?: string; slug?: string; start_date?: string; status?: string; template_id?: string; title?: string;
+  variables?: string; version_label?: string;
+  is_active?: boolean;
+};
 type Option = { value: string; label: string };
 
 function ErrorBox({ error }: { error?: string | null }) {
@@ -68,16 +76,16 @@ function Header({ title, description, children }: { title: string; description: 
   );
 }
 
-export function ContractsSummaryCards({ summary }: { summary?: any }) {
-  const data = summary?.contracts || summary || {};
+export function ContractsSummaryCards({ summary }: { summary?: ContractsSummary | null }) {
+  const data = summary?.contracts;
   const cards = [
-    ["Totali", data.totalContracts || 0],
-    ["Bozze", data.draftContracts || 0],
-    ["Inviati", data.sentContracts || 0],
-    ["In attesa firma", data.waitingSignatureContracts || 0],
-    ["Firmati/attivi", data.signedContracts || 0],
-    ["In scadenza", data.expiringContracts || 0],
-    ["Scaduti", data.overdueContracts || 0],
+    ["Totali", data?.totalContracts || 0],
+    ["Bozze", data?.draftContracts || 0],
+    ["Inviati", data?.sentContracts || 0],
+    ["In attesa firma", data?.waitingSignatureContracts || 0],
+    ["Firmati/attivi", data?.signedContracts || 0],
+    ["In scadenza", data?.expiringContracts || 0],
+    ["Scaduti", data?.overdueContracts || 0],
   ];
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -89,7 +97,7 @@ export function ContractsSummaryCards({ summary }: { summary?: any }) {
 }
 
 export function ContractsPage() {
-  const [summary, setSummary] = useState<any>(null);
+  const [summary, setSummary] = useState<ContractsSummary | null>(null);
   const [rows, setRows] = useState<Contract[]>([]);
   const [filters, setFilters] = useState({ search: "", status: "", signature_status: "", contract_type: "", priority: "" });
   const [loading, setLoading] = useState(true);
@@ -112,7 +120,18 @@ export function ContractsPage() {
     }
   };
 
-  useEffect(() => { void load(); }, []);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="flex-1 space-y-5 p-4 md:p-6">
@@ -172,7 +191,7 @@ export function ContractFormPage() {
   const canFinance = canViewFinanceValues();
   const [templates, setTemplates] = useState<ContractTemplate[]>([]);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<Record<string, any>>({ title: "", contract_type: "generic", status: "draft", signature_status: "not_started", priority: "medium", currency: "EUR" });
+  const [form, setForm] = useState<FormState>({ title: "", contract_type: "generic", status: "draft", signature_status: "not_started", priority: "medium", currency: "EUR" });
 
   useEffect(() => { contractsApi.listTemplates({ limit: 100 }).then((r) => setTemplates(r.items || [])).catch(() => undefined); }, []);
 
@@ -198,8 +217,8 @@ export function ContractFormPage() {
   );
 }
 
-export function ContractForm({ form, setForm, templates, canFinance }: { form: Record<string, any>; setForm: (fn: any) => void; templates: ContractTemplate[]; canFinance: boolean }) {
-  const set = (key: string, value: unknown) => setForm((p: any) => ({ ...p, [key]: value }));
+export function ContractForm({ form, setForm, templates, canFinance }: { form: FormState; setForm: (updater: (previous: FormState) => FormState) => void; templates: ContractTemplate[]; canFinance: boolean }) {
+  const set = (key: string, value: FieldValue) => setForm((previous) => ({ ...previous, [key]: value }));
   return (
     <Card><CardContent className="grid gap-4 p-4 md:grid-cols-2">
       <div className="grid gap-2 md:col-span-2"><Label>Titolo</Label><Input value={form.title || ""} onChange={(e) => set("title", e.target.value)} /></div>
@@ -213,7 +232,7 @@ export function ContractForm({ form, setForm, templates, canFinance }: { form: R
       <div className="grid gap-2"><Label>Start date</Label><Input type="date" value={form.start_date || ""} onChange={(e) => set("start_date", e.target.value)} /></div>
       <div className="grid gap-2"><Label>End date</Label><Input type="date" value={form.end_date || ""} onChange={(e) => set("end_date", e.target.value)} /></div>
       <div className="grid gap-2"><Label>Renewal date</Label><Input type="date" value={form.renewal_date || ""} onChange={(e) => set("renewal_date", e.target.value)} /></div>
-      {["company_id", "contact_id", "quote_id", "project_id", "opportunity_id"].map((field) => <div key={field} className="grid gap-2"><Label>{field}</Label><Input value={form[field] || ""} onChange={(e) => set(field, e.target.value)} placeholder="UUID opzionale" /></div>)}
+      {["company_id", "contact_id", "quote_id", "project_id", "opportunity_id"].map((field) => <div key={field} className="grid gap-2"><Label>{field}</Label><Input value={String(form[field] ?? "")} onChange={(e) => set(field, e.target.value)} placeholder="UUID opzionale" /></div>)}
       {canFinance ? <>
         <div className="grid gap-2"><Label>Importo</Label><Input type="number" value={form.amount || ""} onChange={(e) => set("amount", e.target.value)} /></div>
         <div className="grid gap-2"><Label>Currency</Label><Input value={form.currency || "EUR"} onChange={(e) => set("currency", e.target.value)} /></div>
@@ -263,7 +282,18 @@ export function ContractDetailPage({ contractId }: { contractId: string }) {
       setLoading(false);
     }
   };
-  useEffect(() => { void load(); }, [contractId]);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [contractId]);
 
   const createDossier = async () => {
     if (!contract) return;
@@ -381,11 +411,11 @@ function CrudPanel({ title, empty, onCreate, children }: { title: string; empty:
   return <Card><CardHeader className="flex flex-row items-center justify-between"><div><CardTitle>{title}</CardTitle><CardDescription>{empty}</CardDescription></div><Button onClick={onCreate}><Plus className="mr-2 h-4 w-4" /> Nuovo</Button></CardHeader><CardContent>{children}</CardContent></Card>;
 }
 
-function SimpleCreateDialog({ open, setOpen, title, fields, select, onSave }: { open: boolean; setOpen: (v: boolean) => void; title: string; fields: string[]; select?: Record<string, Option[]>; onSave: (body: Record<string, any>) => Promise<void> }) {
+function SimpleCreateDialog({ open, setOpen, title, fields, select, onSave }: { open: boolean; setOpen: (v: boolean) => void; title: string; fields: string[]; select?: Record<string, Option[]>; onSave: (body: Record<string, unknown>) => Promise<void> }) {
   const { toast } = useToast();
-  const [form, setForm] = useState<Record<string, any>>({});
+  const [form, setForm] = useState<FormState>({});
   const save = async () => { try { await onSave(toBody(form)); setForm({}); setOpen(false); toast({ title: "Salvato" }); } catch (err) { toast({ title: "Errore", description: err instanceof Error ? err.message : "Operazione non riuscita", variant: "destructive" }); } };
-  return <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader><div className="grid gap-3">{Object.entries(select || {}).map(([key, options]) => <div key={key} className="grid gap-2"><Label>{key}</Label><SelectField value={form[key]} options={options} placeholder={key} onChange={(v) => setForm((p) => ({ ...p, [key]: v }))} /></div>)}{fields.map((field) => <div key={field} className="grid gap-2"><Label>{field}</Label>{field.includes("body") || field.includes("note") || field === "description" ? <Textarea value={form[field] || ""} onChange={(e) => setForm((p) => ({ ...p, [field]: e.target.value }))} /> : <Input type={field.includes("date") ? "date" : "text"} value={form[field] || ""} onChange={(e) => setForm((p) => ({ ...p, [field]: e.target.value }))} />}</div>)}<Button onClick={save}>Salva</Button></div></DialogContent></Dialog>;
+  return <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader><div className="grid gap-3">{Object.entries(select || {}).map(([key, options]) => <div key={key} className="grid gap-2"><Label>{key}</Label><SelectField value={String(form[key] ?? "")} options={options} placeholder={key} onChange={(v) => setForm((p) => ({ ...p, [key]: v }))} /></div>)}{fields.map((field) => <div key={field} className="grid gap-2"><Label>{field}</Label>{field.includes("body") || field.includes("note") || field === "description" ? <Textarea value={String(form[field] ?? "")} onChange={(e) => setForm((p) => ({ ...p, [field]: e.target.value }))} /> : <Input type={field.includes("date") ? "date" : "text"} value={String(form[field] ?? "")} onChange={(e) => setForm((p) => ({ ...p, [field]: e.target.value }))} />}</div>)}<Button onClick={save}>Salva</Button></div></DialogContent></Dialog>;
 }
 
 export function ContractTemplatesPage({ templateId, createMode = false }: { templateId?: string; createMode?: boolean }) {
@@ -402,16 +432,27 @@ export function ContractTemplatesPage({ templateId, createMode = false }: { temp
     if (templateId) setSelected(await contractsApi.getTemplate(templateId));
     setLoading(false);
   };
-  useEffect(() => { void load(); }, [templateId]);
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [templateId]);
   const seed = async () => { await contractsApi.seedTemplates(); toast({ title: "Template base sincronizzati" }); await load(); };
   if (createMode) return <TemplateEditor onSave={async (body) => { const created = await contractsApi.createTemplate(body); router.push(`/contracts/templates/${created.id}`); }} />;
   if (templateId && selected) return <TemplateEditor template={selected} onSave={async (body) => { await contractsApi.updateTemplate(selected.id, body); toast({ title: "Template aggiornato" }); await load(); }} />;
   return <div className="flex-1 space-y-5 p-4 md:p-6"><Header title="Template contratti" description="Template markdown operativi per contratti interni."><Button asChild><Link href="/contracts/templates/new"><Plus className="mr-2 h-4 w-4" /> Nuovo template</Link></Button>{canAdmin ? <Button variant="outline" onClick={seed}>Seed base</Button> : null}</Header>{loading ? <Loading /> : rows.length === 0 ? <Empty>Nessun template contratto.</Empty> : <div className="grid gap-3 md:grid-cols-2">{rows.map((row) => <Card key={row.id}><CardContent className="p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{row.name}</p><p className="text-sm text-muted-foreground">{row.slug} · {labelFor(row.category, CONTRACT_TYPES)}</p></div><Badge variant="outline">{row.is_active ? "Attivo" : "Disattivo"}</Badge></div><Button asChild className="mt-3" size="sm" variant="outline"><Link href={`/contracts/templates/${row.id}`}>Apri</Link></Button></CardContent></Card>)}</div>}</div>;
 }
 
-export function TemplateEditor({ template, onSave }: { template?: ContractTemplate; onSave: (body: Record<string, any>) => Promise<void> }) {
+export function TemplateEditor({ template, onSave }: { template?: ContractTemplate; onSave: (body: Record<string, unknown>) => Promise<void> }) {
   const { toast } = useToast();
-  const [form, setForm] = useState<Record<string, any>>({
+  const [form, setForm] = useState<FormState>({
     name: template?.name || "",
     slug: template?.slug || "",
     category: template?.category || "generic",
@@ -429,7 +470,7 @@ export function TemplateEditor({ template, onSave }: { template?: ContractTempla
       toast({ title: "Template non salvato", description: err instanceof Error ? err.message : "JSON non valido o errore backend", variant: "destructive" });
     }
   };
-  return <div className="flex-1 space-y-5 p-4 md:p-6"><Header title={template ? "Modifica template" : "Nuovo template"} description="Body markdown e variabili operative."><Button asChild variant="outline"><Link href="/contracts/templates">Torna</Link></Button></Header><Card><CardContent className="grid gap-4 p-4 md:grid-cols-2"><InputField label="name" value={form.name} onChange={(v) => setForm((p) => ({ ...p, name: v }))} /><InputField label="slug" value={form.slug} onChange={(v) => setForm((p) => ({ ...p, slug: v }))} /><div className="grid gap-2"><Label>category</Label><SelectField value={form.category} options={CONTRACT_TYPES} placeholder="Categoria" onChange={(v) => setForm((p) => ({ ...p, category: v }))} /></div><InputField label="version_label" value={form.version_label} onChange={(v) => setForm((p) => ({ ...p, version_label: v }))} /><TextField label="description" value={form.description} onChange={(v) => setForm((p) => ({ ...p, description: v }))} /><TextField label="body_markdown" value={form.body_markdown} onChange={(v) => setForm((p) => ({ ...p, body_markdown: v }))} wide /><TextField label="variables JSON" value={form.variables} onChange={(v) => setForm((p) => ({ ...p, variables: v }))} /><TextField label="default_checklist JSON" value={form.default_checklist} onChange={(v) => setForm((p) => ({ ...p, default_checklist: v }))} /></CardContent></Card><Button onClick={save}>Salva template</Button></div>;
+  return <div className="flex-1 space-y-5 p-4 md:p-6"><Header title={template ? "Modifica template" : "Nuovo template"} description="Body markdown e variabili operative."><Button asChild variant="outline"><Link href="/contracts/templates">Torna</Link></Button></Header><Card><CardContent className="grid gap-4 p-4 md:grid-cols-2"><InputField label="name" value={form.name ?? ""} onChange={(v) => setForm((p) => ({ ...p, name: v }))} /><InputField label="slug" value={form.slug ?? ""} onChange={(v) => setForm((p) => ({ ...p, slug: v }))} /><div className="grid gap-2"><Label>category</Label><SelectField value={form.category} options={CONTRACT_TYPES} placeholder="Categoria" onChange={(v) => setForm((p) => ({ ...p, category: v }))} /></div><InputField label="version_label" value={form.version_label ?? ""} onChange={(v) => setForm((p) => ({ ...p, version_label: v }))} /><TextField label="description" value={form.description ?? ""} onChange={(v) => setForm((p) => ({ ...p, description: v }))} /><TextField label="body_markdown" value={form.body_markdown ?? ""} onChange={(v) => setForm((p) => ({ ...p, body_markdown: v }))} wide /><TextField label="variables JSON" value={form.variables ?? ""} onChange={(v) => setForm((p) => ({ ...p, variables: v }))} /><TextField label="default_checklist JSON" value={form.default_checklist ?? ""} onChange={(v) => setForm((p) => ({ ...p, default_checklist: v }))} /></CardContent></Card><Button onClick={save}>Salva template</Button></div>;
 }
 
 function InputField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {

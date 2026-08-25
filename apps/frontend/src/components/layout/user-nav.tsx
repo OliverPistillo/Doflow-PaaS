@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { clearAuthStorage } from "@/lib/auth-storage";
+import { apiFetch } from "@/lib/api";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { User, Settings, Moon, Sun, LogOut } from "lucide-react";
-import { getDoFlowUser, getInitials } from "@/lib/jwt";
+import { clearDoFlowUser, getDoFlowUser, getInitials } from "@/lib/jwt";
 
 export function UserNav() {
   const router = useRouter();
@@ -30,18 +30,20 @@ export function UserNav() {
   const [user, setUser] = React.useState<{ email: string; role: string; initials: string } | null>(null);
 
   React.useEffect(() => {
-    const payload = getDoFlowUser();
-    if (payload) {
-      setUser({
-        email:    payload.email ?? "utente",
-        role:     payload.role  ?? "user",
-        initials: getInitials(payload.email),
-      });
-    }
+    queueMicrotask(() => {
+      const payload = getDoFlowUser();
+      if (payload) {
+        setUser({
+          email: payload.email ?? "utente",
+          role: payload.role ?? "user",
+          initials: getInitials(payload.email),
+        });
+      }
+    });
   }, []);
 
-  const logout = () => {
-    clearAuthStorage();
+  const logout = async () => {
+    try { await apiFetch("/auth/logout", { method: "POST" }); } finally { clearDoFlowUser(); }
     router.push("/login");
   };
 

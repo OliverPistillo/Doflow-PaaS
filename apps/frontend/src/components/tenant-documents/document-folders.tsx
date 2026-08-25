@@ -58,7 +58,15 @@ export function DocumentFoldersPage() {
   }, [toast]);
 
   useEffect(() => {
-    void load();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [load]);
 
   const openCreate = () => {

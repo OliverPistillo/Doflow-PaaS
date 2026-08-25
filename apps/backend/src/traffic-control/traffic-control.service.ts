@@ -14,11 +14,25 @@ export class TrafficControlService {
   private readonly logger = new Logger(TrafficControlService.name);
 
   // CONFIGURAZIONE BASE (In v4 sposteremo questo nel DB per ogni Tenant)
-  private readonly GLOBAL_LIMIT = 200; // Burst capacity
-  private readonly GLOBAL_RATE = 20;   // Tokens per secondo (refill)
+  private readonly GLOBAL_LIMIT = this.acceptanceLimit(
+    'DOFLOW_ACCEPTANCE_TRAFFIC_BURST',
+    200,
+  ); // Burst capacity
+  private readonly GLOBAL_RATE = this.acceptanceLimit(
+    'DOFLOW_ACCEPTANCE_TRAFFIC_RATE',
+    20,
+  ); // Tokens per secondo (refill)
   private readonly COST_PER_REQ = 1;
 
   constructor(private readonly redisScriptManager: RedisScriptManager) {}
+
+  private acceptanceLimit(name: string, fallback: number): number {
+    if (process.env.NODE_ENV !== 'test') return fallback;
+    const configured = Number(process.env[name]);
+    return Number.isSafeInteger(configured) && configured > 0
+      ? configured
+      : fallback;
+  }
 
   /**
    * Esegue il controllo del traffico per una richiesta specifica.

@@ -1,17 +1,15 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState,useMemo } from "react";
 import {
-  Truck, Package, MapPin, Hash, Calendar, Plus, Search, Eye,
-  ExternalLink, Printer, AlertTriangle, CheckCircle2, Clock,
-  Box, Building2, ChevronRight, X, Navigation, RefreshCw,
-  PackageCheck, PackageSearch, Loader2, ArrowRight,
+  Truck,Package,MapPin,Hash,Calendar,Plus,Search,ExternalLink,Printer,AlertTriangle,Box,Building2,ChevronRight,X,Navigation,RefreshCw,
+  PackageCheck
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card,CardContent,CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
@@ -68,6 +66,10 @@ const CARRIER_COLORS: Record<string, string> = {
 
 const ALL_STATUSES: Array<"Tutti" | ShipmentStatus> = ["Tutti","in_preparazione","spedito","in_transito","consegnato","problema"];
 const ALL_CARRIERS = ["Tutti","BRT","DHL","GLS","UPS"];
+
+function isShipmentStatusFilter(value: string): value is "Tutti" | ShipmentStatus {
+  return ALL_STATUSES.some((status) => status === value);
+}
 
 // ─── Shipment timeline ────────────────────────────────────────────────────────
 
@@ -187,7 +189,9 @@ export default function Page() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Cerca spedizione, tracking, destinazione..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <Select value={statusFilter} onValueChange={v => setStatus(v as any)}>
+        <Select value={statusFilter} onValueChange={(value) => {
+          if (isShipmentStatusFilter(value)) setStatus(value);
+        }}>
           <SelectTrigger className="w-full sm:w-48">
             <SelectValue placeholder="Stato" />
           </SelectTrigger>
@@ -317,7 +321,7 @@ export default function Page() {
                     <info.icon className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
                     <div className="min-w-0">
                       <p className="text-[10px] text-muted-foreground">{info.label}</p>
-                      <p className={cn("text-xs font-semibold mt-0.5 break-all", (info as any).mono && "font-mono")}>{info.value}</p>
+                      <p className={cn("text-xs font-semibold mt-0.5 break-all", "mono" in info && info.mono && "font-mono")}>{info.value}</p>
                     </div>
                   </div>
                 ))}

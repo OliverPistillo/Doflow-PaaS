@@ -1,5 +1,6 @@
 import { AutomationRunDetailPage } from "@/components/tenant-automations/automation-run-detail";
 
-export default function AutomationRunPage({ params }: { params: { id: string } }) {
-  return <AutomationRunDetailPage runId={params.id} />;
+export default async function AutomationRunPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <AutomationRunDetailPage runId={id} />;
 }

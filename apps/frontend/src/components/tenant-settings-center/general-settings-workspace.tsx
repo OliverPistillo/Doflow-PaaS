@@ -35,29 +35,32 @@ export function GeneralSettingsWorkspace() {
 
   useEffect(() => {
     let active = true;
-    if (!canView("settings")) { setLoading(false); return; }
-    const memberRequest = canView("team") && user?.email
-      ? teamApi.members({ search: user.email, limit: 20 })
-      : Promise.resolve({ items: [] as TeamMember[] });
-    const preferenceRequest = canView("notifications")
-      ? getNotificationPreferences()
-      : Promise.resolve(null);
-    Promise.all([memberRequest, preferenceRequest]).then(([members, notificationPreferences]) => {
+    queueMicrotask(() => {
       if (!active) return;
-      const current = members.items.find((item) => item.user_id === user?.sub || item.email.toLowerCase() === user?.email?.toLowerCase()) || null;
-      setMember(current);
-      if (current) {
-        setProfile({
-          display_name: current.display_name || "",
-          first_name: current.first_name || "",
-          last_name: current.last_name || "",
-          phone: current.phone || "",
-        });
-      }
-      setPreferences(notificationPreferences);
-    }).catch((reason) => {
-      if (active) setError(reason instanceof Error ? reason.message : "Impossibile caricare le impostazioni reali.");
-    }).finally(() => active && setLoading(false));
+      if (!canView("settings")) { setLoading(false); return; }
+      const memberRequest = canView("team") && user?.email
+        ? teamApi.members({ search: user.email, limit: 20 })
+        : Promise.resolve({ items: [] as TeamMember[] });
+      const preferenceRequest = canView("notifications")
+        ? getNotificationPreferences()
+        : Promise.resolve(null);
+      Promise.all([memberRequest, preferenceRequest]).then(([members, notificationPreferences]) => {
+        if (!active) return;
+        const current = members.items.find((item) => item.user_id === user?.sub || item.email.toLowerCase() === user?.email?.toLowerCase()) || null;
+        setMember(current);
+        if (current) {
+          setProfile({
+            display_name: current.display_name || "",
+            first_name: current.first_name || "",
+            last_name: current.last_name || "",
+            phone: current.phone || "",
+          });
+        }
+        setPreferences(notificationPreferences);
+      }).catch((reason) => {
+        if (active) setError(reason instanceof Error ? reason.message : "Impossibile caricare le impostazioni reali.");
+      }).finally(() => active && setLoading(false));
+    });
     return () => { active = false; };
   }, [canView, user?.email, user?.sub]);
 

@@ -24,9 +24,9 @@ export default function PrivacyPage() {
                 Doflow raccoglie e tratta le seguenti categorie di dati:
               </p>
               <ul className="list-disc pl-6 space-y-2">
-                <li><strong>Dati di navigazione:</strong> indirizzi IP, nomi a dominio dei computer utilizzati dagli utenti che si connettono al sito, orari delle richieste e altri parametri relativi al sistema operativo e all'ambiente informatico dell'utente.</li>
-                <li><strong>Dati forniti volontariamente dall'utente:</strong> indirizzo email, nome, cognome e altre informazioni fornite durante la registrazione o l'utilizzo dei servizi.</li>
-                <li><strong>Dati di autenticazione:</strong> in caso di utilizzo di servizi di Single Sign-On (es. Google), raccogliamo i dati strettamente necessari all'autenticazione.</li>
+                <li><strong>Dati di navigazione:</strong> indirizzi IP, nomi a dominio dei computer utilizzati dagli utenti che si connettono al sito, orari delle richieste e altri parametri relativi al sistema operativo e all&apos;ambiente informatico dell&apos;utente.</li>
+                <li><strong>Dati forniti volontariamente dall&apos;utente:</strong> indirizzo email, nome, cognome e altre informazioni fornite durante la registrazione o l&apos;utilizzo dei servizi.</li>
+                <li><strong>Dati di autenticazione:</strong> in caso di utilizzo di servizi di Single Sign-On (es. Google), raccogliamo i dati strettamente necessari all&apos;autenticazione.</li>
                 <li><strong>Dati di pagamento:</strong> per la gestione degli abbonamenti, ci avvaliamo di fornitori terzi (es. Stripe) che elaborano i dati di fatturazione e le carte di credito. Doflow non memorizza direttamente i dati completi delle carte di credito.</li>
               </ul>
             </section>
@@ -50,25 +50,25 @@ export default function PrivacyPage() {
               </p>
               <ul className="list-disc pl-6 space-y-2">
                 <li><strong>Google LLC:</strong> Utilizzato per i servizi di autenticazione (OAuth) e infrastruttura.</li>
-                <li><strong>Stripe Inc.:</strong> Utilizzato per l'elaborazione sicura dei pagamenti e la gestione degli abbonamenti. Stripe raccoglie e processa i dati di pagamento in conformità ai propri standard di sicurezza (PCI-DSS).</li>
+                <li><strong>Stripe Inc.:</strong> Utilizzato per l&apos;elaborazione sicura dei pagamenti e la gestione degli abbonamenti. Stripe raccoglie e processa i dati di pagamento in conformità ai propri standard di sicurezza (PCI-DSS).</li>
               </ul>
             </section>
 
             <section className="space-y-4">
               <h2 className="text-xl font-bold text-foreground">5. Modalità e Tempi di Conservazione</h2>
               <p>
-                Il trattamento è effettuato mediante strumenti informatici e/o telematici, con logiche strettamente correlate alle finalità indicate e, in ogni caso, in modo da garantire la sicurezza e la riservatezza dei dati stessi. I dati sono conservati per il tempo strettamente necessario a conseguire gli scopi per cui sono stati raccolti, o fino a quando l'utente non richiede la cancellazione del proprio account, fatto salvo l'obbligo di conservazione dettato da normative fiscali o legali.
+                Il trattamento è effettuato mediante strumenti informatici e/o telematici, con logiche strettamente correlate alle finalità indicate e, in ogni caso, in modo da garantire la sicurezza e la riservatezza dei dati stessi. I dati sono conservati per il tempo strettamente necessario a conseguire gli scopi per cui sono stati raccolti, o fino a quando l&apos;utente non richiede la cancellazione del proprio account, fatto salvo l&apos;obbligo di conservazione dettato da normative fiscali o legali.
               </p>
             </section>
 
             <section className="space-y-4">
-              <h2 className="text-xl font-bold text-foreground">6. Diritti dell'Interessato</h2>
+              <h2 className="text-xl font-bold text-foreground">6. Diritti dell&apos;Interessato</h2>
               <p>
-                Ai sensi degli artt. 15-22 del GDPR, l'utente ha il diritto di:
+                Ai sensi degli artt. 15-22 del GDPR, l&apos;utente ha il diritto di:
               </p>
               <ul className="list-disc pl-6 space-y-2">
-                <li>Ottenere la conferma dell'esistenza o meno di dati personali che lo riguardano e l'accesso agli stessi.</li>
-                <li>Ottenere l'aggiornamento, la rettifica o l'integrazione dei dati.</li>
+                <li>Ottenere la conferma dell&apos;esistenza o meno di dati personali che lo riguardano e l&apos;accesso agli stessi.</li>
+                <li>Ottenere l&apos;aggiornamento, la rettifica o l&apos;integrazione dei dati.</li>
                 <li>Richiedere la cancellazione, la trasformazione in forma anonima o il blocco dei dati trattati in violazione di legge.</li>
                 <li>Opporsi in tutto o in parte al trattamento.</li>
                 <li>Esercitare il diritto alla portabilità dei dati.</li>

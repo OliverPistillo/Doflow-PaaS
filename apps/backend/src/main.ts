@@ -8,16 +8,19 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { NotificationsService } from './realtime/notifications.service';
-import { WebSocketServer, WebSocket } from 'ws';
-import * as jwt from 'jsonwebtoken';
-import { ValidationPipe } from '@nestjs/common';
+import { WebSocketServer, WebSocket, type RawData } from 'ws';
+import { WebSessionService } from './auth/web-session.service';
+import { ForbiddenException, ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as express from 'express';
+import type { IncomingMessage, Server as HttpServer } from 'node:http';
+import type { Duplex } from 'node:stream';
 import * as dotenv from 'dotenv';
 import { Logger } from '@nestjs/common';
 import * as path from 'path';
 import { parseTrustProxy } from './common/client-ip.utils';
+import { verifyHealthProbeSignature } from './health/health-probe-signature';
 
 // --- AGGIUNTE v3.5 (Monitoring) ---
 import { TelemetryService } from './telemetry/telemetry.service';
@@ -29,11 +32,13 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 type ClientMeta = {
   userId: string;
   tenantId: string;
-  tenantSlug?: string;
-  email?: string;
+  request: express.Request;
+  heartbeat: ReturnType<typeof setInterval>;
 };
 
 type ClientWithMeta = WebSocket & { __meta?: ClientMeta };
+
+const CORS_ORIGIN_FORBIDDEN_MESSAGE = 'Origine CORS non autorizzata';
 
 function normalizeCorsOrigin(origin: string): string | null {
   try {
@@ -44,30 +49,7 @@ function normalizeCorsOrigin(origin: string): string | null {
   }
 }
 
-function pickTenantFromJwt(decoded: any): { tenantId: string; tenantSlug?: string } {
-  const slug =
-    decoded.tenantSlug ??
-    decoded.tenant_slug ??
-    decoded.activeTenantSlug ??
-    decoded.active_tenant_slug ??
-    undefined;
-
-  const tenantId =
-    (decoded.tenantId ??
-      decoded.tenant_id ??
-      decoded.activeTenantId ??
-      decoded.active_tenant_id ??
-      decoded.tenant ??
-      slug ??
-      'public') as string;
-
-  return {
-    tenantId: String(tenantId).toLowerCase(),
-    tenantSlug: slug ? String(slug).toLowerCase() : undefined,
-  };
-}
-
-async function bootstrap() {
+export async function bootstrap() {
   if (!process.env.JWT_SECRET) {
     new Logger('Bootstrap').error('❌ FATAL: JWT_SECRET is not defined in .env. Exiting.');
     process.exit(1);
@@ -76,6 +58,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false,
   });
+  app.enableShutdownHooks();
   try {
     app.set('trust proxy', parseTrustProxy(process.env.TRUST_PROXY));
   } catch (error) {
@@ -83,7 +66,12 @@ async function bootstrap() {
     process.exit(1);
   }
 
-  app.use(express.json({ limit: '50mb', verify: (req, res, buf) => { (req as any).rawBody = buf; } }));
+  app.use(express.json({
+    limit: '50mb',
+    verify: (request, _response, buffer) => {
+      (request as IncomingMessage & { rawBody?: Buffer }).rawBody = buffer;
+    },
+  }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   app.setGlobalPrefix('api');
@@ -115,16 +103,21 @@ async function bootstrap() {
       if (!origin) return callback(null, true);
       const normalized = normalizeCorsOrigin(origin);
       if (normalized && allowedOrigins.includes(normalized)) return callback(null, true);
-      return callback(new Error(`CORS: origin '${origin}' non autorizzata`));
+      return callback(new ForbiddenException(CORS_ORIGIN_FORBIDDEN_MESSAGE));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type',
       'Authorization',
+      'X-Doflow-Web',
+      'X-CSRF-Token',
       'X-DOFLOW-TENANT-ID',
       'x-doflow-tenant-id',
       'x-doflow-pathname',
+      'Idempotency-Key',
+      'If-Match',
+      'X-Correlation-ID',
       'Accept',
     ],
     // Content-Disposition per download file dal CRM
@@ -170,21 +163,27 @@ async function bootstrap() {
   const port = Number(process.env.PORT ?? 4000);
   await app.listen(port, '0.0.0.0');
 
-  // ── WebSocket (invariato) ────────────────────────────────────────────────
-  const httpAdapter: any = (app as any).getHttpAdapter();
-  const httpServer: any = httpAdapter.getHttpServer();
+  // ── WebSocket: sessione opaque Redis, tenant/user scope e revalidation ───
+  const httpServer = app.getHttpServer() as HttpServer;
 
   const notifications = app.get(NotificationsService);
+  const webSessions = app.get(WebSessionService);
   const wsPath = process.env.WS_PATH ?? '/ws';
 
   const wss = new WebSocketServer({ noServer: true });
   const clients = new Set<ClientWithMeta>();
 
-  httpServer.on('upgrade', (req: any, socket: any, head: Buffer) => {
+  httpServer.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     try {
       const url = req.url ?? '/';
       const fullUrl = new URL(url, `http://${req.headers.host || 'localhost'}`);
       if (fullUrl.pathname !== wsPath) return;
+      const origin = normalizeCorsOrigin(String(req.headers.origin || ''));
+      if (!origin || !allowedOrigins.includes(origin)) {
+        socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+        socket.destroy();
+        return;
+      }
       wss.handleUpgrade(req, socket, head, (ws) => {
         wss.emit('connection', ws, req);
       });
@@ -194,22 +193,59 @@ async function bootstrap() {
     }
   });
 
-  wss.on('connection', (socket: ClientWithMeta, req: any) => {
+  wss.on('connection', async (socket: ClientWithMeta, req: IncomingMessage) => {
     try {
-      const urlStr = req.url ?? '/';
-      const fullUrl = new URL(urlStr, `http://${req.headers.host || 'localhost'}`);
-      const token = fullUrl.searchParams.get('token');
-
-      if (!token) { socket.close(4001, 'Missing token'); return; }
-
-      const decoded: any = jwt.verify(token, process.env.JWT_SECRET as string);
-      const { tenantId, tenantSlug } = pickTenantFromJwt(decoded);
+      const healthProbe = String(req.headers['x-doflow-health-probe'] || '');
+      if (healthProbe) {
+        if (!verifyHealthProbeSignature(
+          healthProbe,
+          String(process.env.JWT_SECRET || ''),
+        )) {
+          socket.close(4003, 'Invalid health probe');
+          return;
+        }
+        socket.on('message', (data: RawData) => {
+          try {
+            const message = JSON.parse(data.toString('utf8'));
+            if (message?.type === 'health_ping' && typeof message.nonce === 'string') {
+              socket.send(JSON.stringify({
+                type: 'health_pong',
+                nonce: message.nonce,
+                ts: new Date().toISOString(),
+              }));
+            }
+          } catch { /* ignore malformed health probes */ }
+        });
+        return;
+      }
+      const request = req as express.Request;
+      const session = await webSessions.resolve(request);
+      if (!session || session.user.authStage !== 'FULL') {
+        socket.close(4001, 'Session required');
+        return;
+      }
+      const userId = String(session.user.id || session.user.sub || '');
+      const tenantId = String(session.user.tenantSlug || '').toLowerCase();
+      if (!userId || !tenantId || tenantId === 'public') {
+        socket.close(4002, 'Invalid session');
+        return;
+      }
+      const heartbeat = setInterval(() => {
+        void webSessions.resolve(request).then((current) => {
+          const valid = current?.user.authStage === 'FULL'
+            && String(current.user.id || current.user.sub) === userId
+            && String(current.user.tenantSlug || '').toLowerCase() === tenantId;
+          if (!valid) socket.close(4001, 'Session revoked');
+          else if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'heartbeat', timestamp: new Date().toISOString() }));
+        }).catch(() => socket.close(1011, 'Session validation unavailable'));
+      }, 25_000);
+      heartbeat.unref?.();
 
       const meta: ClientMeta = {
-        userId: String(decoded.sub),
+        userId,
         tenantId,
-        tenantSlug,
-        email: decoded.email as string | undefined,
+        request,
+        heartbeat,
       };
 
       socket.__meta = meta;
@@ -218,11 +254,11 @@ async function bootstrap() {
       socket.send(
         JSON.stringify({
           type: 'hello',
-          payload: { tenantId: meta.tenantId, tenantSlug: meta.tenantSlug, userId: meta.userId },
+          payload: { tenantId: meta.tenantId, userId: meta.userId },
         }),
       );
 
-      socket.on('message', (data: any) => {
+      socket.on('message', (data: RawData) => {
         try {
           const raw = typeof data === 'string' ? data : data?.toString?.('utf8');
           if (!raw) return;
@@ -239,15 +275,19 @@ async function bootstrap() {
         } catch { /* ignore garbage */ }
       });
 
-      socket.on('close', () => clients.delete(socket));
+      socket.on('close', () => {
+        clearInterval(heartbeat);
+        clients.delete(socket);
+      });
       socket.on('error', (err) => {
         new Logger('WS').error('[WS] Socket error', (err as Error).message);
+        clearInterval(heartbeat);
         clients.delete(socket);
       });
 
     } catch (e) {
-      new Logger('WS').error('[WS] Auth connection error:', (e as Error).message);
-      socket.close(4002, 'Invalid or expired token');
+      new Logger('WS').error('[WS] Session connection error:', (e as Error).message);
+      socket.close(4002, 'Invalid session');
     }
   });
 
@@ -277,4 +317,9 @@ async function bootstrap() {
   new Logger('Bootstrap').log(`   CORS Public origins: ${publicOrigins.join(', ') || '(nessuna)'}`);
 }
 
-bootstrap();
+if (require.main === module) {
+  void bootstrap().catch(() => {
+    new Logger('Bootstrap').error('BACKEND_BOOTSTRAP_FAILED');
+    process.exitCode = 1;
+  });
+}

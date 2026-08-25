@@ -45,7 +45,7 @@ export function InvoicesWorkspace() {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<AdministrationRow | null>(null);
   const [editing, setEditing] = useState<AdministrationRow | null>(null);
-  const [form, setForm] = useState<AdministrationRow>({});
+  const [form, setForm] = useState<Partial<AdministrationRow>>({});
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("bank_transfer");
   const [loading, setLoading] = useState(true);
@@ -77,8 +77,13 @@ export function InvoicesWorkspace() {
 
   useEffect(() => {
     if (!canView("finance")) {
-      setLoading(false);
-      return;
+      let cancelled = false;
+      queueMicrotask(() => {
+        if (!cancelled) setLoading(false);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
     const timer = window.setTimeout(() => void load(), 250);
     return () => window.clearTimeout(timer);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Check, Edit2, Plus, Send, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,7 @@ export function TeamTimeEntriesPage({ memberId }: { memberId?: string }) {
   const [dateTo, setDateTo] = useState("");
   const [form, setForm] = useState({ team_member_id: memberId || "", entry_date: new Date().toISOString().slice(0, 10), duration_minutes: "", activity_type: "work", description: "", project_id: "", task_id: "", is_billable: false });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -55,8 +55,18 @@ export function TeamTimeEntriesPage({ memberId }: { memberId?: string }) {
     } finally {
       setLoading(false);
     }
-  };
-  useEffect(() => { void load(); }, [memberId, memberFilter, status, activityFilter, dateFrom, dateTo]);
+  }, [activityFilter, dateFrom, dateTo, memberFilter, memberId, status]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const save = async () => {
     try {

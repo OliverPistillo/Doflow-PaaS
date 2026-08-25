@@ -15,8 +15,8 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getDoFlowUser, getInitials } from "@/lib/jwt";
-import { clearAuthStorage } from "@/lib/auth-storage";
+import { apiFetch } from "@/lib/api";
+import { clearDoFlowUser, getDoFlowUser, getInitials, setDoFlowUser } from "@/lib/jwt";
 import { Shield, LogOut, User, Bell } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -152,11 +152,16 @@ function UserNav() {
   const [user, setUser] = React.useState<{ email: string; initials: string } | null>(null);
 
   React.useEffect(() => {
-    const payload = getDoFlowUser();
-    if (payload) setUser({ email: payload.email ?? "superadmin", initials: getInitials(payload.email) });
+    queueMicrotask(() => {
+      const payload = getDoFlowUser();
+      if (payload) setUser({ email: payload.email ?? "superadmin", initials: getInitials(payload.email) });
+    });
   }, []);
 
-  const logout = () => { clearAuthStorage(); router.push("/login"); };
+  const logout = async () => {
+    try { await apiFetch("/auth/logout", { method: "POST" }); } finally { clearDoFlowUser(); }
+    router.push("/login");
+  };
 
   return (
     <DropdownMenu>
@@ -247,21 +252,26 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
   const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
-    const user = getDoFlowUser();
-    if (!user) {
-      if (pathname !== "/login") router.replace("/login");
-      else setReady(true);
-      return;
-    }
-    const role     = String(user.role     ?? "").toLowerCase().trim();
-    const tenantId = String(user.tenantId ?? "").toLowerCase().trim();
-    // Regular owners (tenant owners) shouldn't be granted superadmin access, except when tenantId is public.
-    const isSuperAdmin = ["superadmin", "super_admin"].includes(role) || tenantId === "public";
-    if (!isSuperAdmin) {
-      if (!pathname.startsWith("/dashboard")) router.replace("/dashboard");
-      return;
-    }
-    setReady(true);
+    let cancelled = false;
+    apiFetch<{ user: { id: string; email?: string; role?: string; tenantId?: string; tenantSlug?: string; authStage?: string } }>("/auth/me")
+      .then(({ user }) => {
+        if (cancelled) return;
+        setDoFlowUser({ ...user, sub: user.id });
+        const role = String(user.role ?? "").toLowerCase().trim();
+        const tenantId = String(user.tenantSlug || user.tenantId || "").toLowerCase().trim();
+        const isSuperAdmin = ["superadmin", "super_admin"].includes(role) && tenantId === "public";
+        if (!isSuperAdmin) {
+          router.replace("/dashboard");
+          return;
+        }
+        setReady(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        clearDoFlowUser();
+        router.replace("/login");
+      });
+    return () => { cancelled = true; };
   }, [router, pathname]);
 
   if (!ready) {

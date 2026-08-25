@@ -113,7 +113,15 @@ export function DocumentsPage() {
   }, [loadDocuments, loadFolders, loadSummary, toast]);
 
   useEffect(() => {
-    void reload();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void reload();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [reload]);
 
   const runAction = async (action: () => Promise<unknown>, success: string) => {

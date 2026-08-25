@@ -6,9 +6,9 @@
  */
 
 import { type SVGProps } from "react";
-import { Settings, CircleCheck, RotateCcw } from "lucide-react";
+import { Settings,CircleCheck,RotateCcw } from "lucide-react";
 import { useTheme } from "next-themes";
-import { Root as RadioGroup, Item as RadioItem } from "@radix-ui/react-radio-group";
+import { Root as RadioGroup,Item as RadioItem } from "@radix-ui/react-radio-group";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -16,8 +16,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  Sheet, SheetContent, SheetDescription,
-  SheetFooter, SheetHeader, SheetTitle, SheetTrigger,
+  Sheet,SheetContent,SheetDescription,
+  SheetFooter,SheetHeader,SheetTitle,SheetTrigger,
 } from "@/components/ui/sheet";
 import { useSidebar } from "@/components/ui/sidebar";
 import {
@@ -113,22 +113,6 @@ function IconSidebarSidebar(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-function IconLayoutDefault(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 79.86 51.14" {...props}>
-      <g strokeLinecap="round" strokeMiterlimit={10}>
-        <rect x={5.84} y={5.02} width={19.14} height={40} rx={2} opacity={0.8}/>
-        <g stroke="#fff">
-          <path fill="none" opacity={0.72} strokeWidth="2px" d="M9.02 17.39L21.25 17.39"/>
-          <circle cx={10.98} cy={9.91} r={2.54} fill="#fff" opacity={0.8}/>
-        </g>
-      </g>
-      <rect x={29.63} y={24.22} width={21.8} height={19.95} rx={2.11} opacity={0.4}/>
-      <path d="M75.1 6.68v1.45c0 .63-.49 1.14-1.09 1.14H30.72c-.6 0-1.09-.51-1.09-1.14V6.68c0-.62.49-1.14 1.09-1.14h43.29c.6 0 1.09.52 1.09 1.14z" opacity={0.9}/>
-    </svg>
-  );
-}
-
 function IconLayoutCompact(props: SVGProps<SVGSVGElement>) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 79.86 51.14" {...props}>
@@ -139,16 +123,6 @@ function IconLayoutCompact(props: SVGProps<SVGSVGElement>) {
       </g>
       <rect x={14.93} y={24.22} width={32.68} height={19.95} rx={2.11} opacity={0.4} strokeLinecap="round" strokeMiterlimit={10}/>
       <rect x={14.93} y={5.89} width={59.16} height={2.73} rx={0.64} opacity={0.9} strokeLinecap="round" strokeMiterlimit={10}/>
-    </svg>
-  );
-}
-
-function IconLayoutFull(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 79.86 51.14" {...props}>
-      <rect x={5.84} y={5.89} width={68.26} height={2.73} rx={0.64} opacity={0.9} strokeLinecap="round" strokeMiterlimit={10}/>
-      <rect x={5.84} y={24.22} width={37.71} height={19.95} rx={2.11} opacity={0.4} strokeLinecap="round" strokeMiterlimit={10}/>
-      <path fill="none" opacity={0.75} strokeLinecap="round" strokeMiterlimit={10} strokeWidth="3px" d="M6.85 14.49L15.02 14.49"/>
     </svg>
   );
 }

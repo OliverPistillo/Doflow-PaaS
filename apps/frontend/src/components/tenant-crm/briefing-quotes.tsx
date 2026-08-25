@@ -1,22 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect,useRef,useState,type ReactNode,useEffectEvent } from "react";
+import { useRouter,useSearchParams } from "next/navigation";
 import {
-  CheckCircle2, ClipboardCheck, Edit3, Eye, FileCheck2, FileText, Loader2, Plus, RefreshCw,
-  Search, Send, Trash2, XCircle, FolderKanban, Receipt,
+  CheckCircle2,ClipboardCheck,Edit3,Eye,FileText,Loader2,Plus,RefreshCw,
+  Search,Send,Trash2,FolderKanban,Receipt
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Card,CardContent,CardDescription,CardHeader,CardTitle } from "@/components/ui/card";
+import { Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch } from "@/lib/api";
 import { getDoFlowUser } from "@/lib/jwt";
-import { money, shortDate } from "@/components/tenant-crm/crm-core";
+import { money,shortDate } from "@/components/tenant-crm/crm-core";
 import { useToast } from "@/hooks/use-toast";
 import { canUseFinanceFrontend } from "@/components/tenant-finance/finance-core";
 import { contractsApi } from "@/lib/tenant-contracts-api";
@@ -27,9 +27,29 @@ import { CommercialPageHeader } from "@/components/tenant-commercial/commercial-
 import { QuotesKpis } from "@/components/tenant-commercial/quotes-kpis";
 import { QuotesFollowUpPanel } from "@/components/tenant-commercial/quotes-follow-up-panel";
 import { QuotesTable } from "@/components/tenant-commercial/quotes-table";
-import { briefingTypeForProject, intakeText, parseIntakeFormData } from "@/lib/public-lead-intake";
+import { briefingTypeForProject,intakeText,parseIntakeFormData } from "@/lib/public-lead-intake";
 
-type Row = Record<string, any>;
+type FieldValue = string | number | boolean | null | undefined;
+type Row = {
+  id: string; billing_type?: string; budget_estimate?: string | number; client_notes?: string; company_id?: string;
+  company_name?: string; deadline?: string; default_unit_price?: string | number; description?: string;
+  contact_id?: string; default_quantity?: string | number; due_at?: string; first_name?: string; intake_form_data?: unknown;
+  internal_notes?: string; is_active?: boolean; items?: Row[]; last_name?: string; lead_interest?: string;
+  name?: string; objective?: string; opportunity_title?: string; quote_number?: string; schema_json?: unknown;
+  opportunity_id?: string; service_template_name?: string; service_type?: string; status?: string;
+  subtotal?: string | number; target?: string; terms?: string;
+  title?: string; total?: string | number; type?: string; valid_until?: string;
+};
+type FormState = Record<string, FieldValue> & {
+  billing_type?: string; briefing_id?: string; budget_estimate?: string | number; category?: string;
+  client_notes?: string; company_id?: string; contact_id?: string; currency?: string; deadline?: string;
+  default_quantity?: string | number; default_unit_price?: string | number; description?: string; discount?: string | number;
+  due_at?: string; internal_notes?: string; is_active?: boolean; name?: string; objective?: string;
+  opportunity_id?: string; quantity?: string | number; schema_json?: string; service_template_id?: string;
+  sort_order?: string | number; status?: string; target?: string; tax_rate?: string | number; template_id?: string;
+  terms?: string; title?: string; type?: string; unit_price?: string | number; valid_until?: string;
+};
+const NEW_ROW: Row = { id: "" };
 type ListResponse<T = Row> = { items: T[]; total: number; limit: number; offset: number };
 type Option = { value: string; label: string };
 
@@ -106,7 +126,7 @@ function AccessDenied({ title }: { title: string }) {
       <Card className="border-dashed">
         <CardHeader>
           <CardTitle>{title}</CardTitle>
-          <CardDescription>Questa sezione e' disponibile solo a owner, admin e project manager.</CardDescription>
+          <CardDescription>Questa sezione e&apos; disponibile solo a owner, admin e project manager.</CardDescription>
         </CardHeader>
       </Card>
     </div>
@@ -170,8 +190,12 @@ function RelationSelect({
   );
 }
 
-function toBody(form: Record<string, any>) {
+function toBody(form: FormState) {
   return Object.fromEntries(Object.entries(form).filter(([, value]) => value !== "" && value !== undefined));
+}
+
+function rowValue(row: Row, key: string) {
+  return (row as unknown as Record<string, unknown>)[key];
 }
 
 function projectFromConversionResult(result: Row | { project?: Row; existing?: boolean }) {
@@ -179,9 +203,11 @@ function projectFromConversionResult(result: Row | { project?: Row; existing?: b
   return result as Row;
 }
 
-function entityFromConversionResult(result: Row | Record<string, any>, key: string) {
-  if (result && typeof result === "object" && key in result) return result[key] || null;
-  return result as Row;
+function entityFromConversionResult(result: unknown, key: string): Row | null {
+  if (!result || typeof result !== "object") return null;
+  const record = result as Record<string, unknown>;
+  const entity = key in record ? record[key] : record;
+  return entity && typeof entity === "object" && !Array.isArray(entity) ? entity as Row : null;
 }
 
 function conversionErrorMessage(err: unknown) {
@@ -238,9 +264,17 @@ function useRelations(includeBriefings = false) {
     setRelationsLoaded(true);
   };
 
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const loadEffect = useEffectEvent(load);
+useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void loadEffect();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return { relations, relationsLoaded, reloadRelations: load };
@@ -260,13 +294,13 @@ export function BriefingListPage({
   const [materials, setMaterials] = useState<Row[]>([]);
   const [selected, setSelected] = useState<Row | null>(null);
   const [editing, setEditing] = useState<Row | null>(null);
-  const [editForm, setEditForm] = useState<Record<string, any>>({});
+  const [editForm, setEditForm] = useState<FormState>({});
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState(initialStatuses?.[0] || "__all__");
   const [type, setType] = useState("__all__");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [materialForm, setMaterialForm] = useState<Record<string, any>>({ title: "", type: "other", status: "missing" });
+  const [materialForm, setMaterialForm] = useState<FormState>({ title: "", type: "other", status: "missing" });
 
   const statusOptions = initialStatuses
     ? BRIEFING_STATUSES.filter((s) => initialStatuses.includes(s.value))
@@ -347,7 +381,7 @@ export function BriefingListPage({
     await loadMaterials(selected);
   };
 
-  const patchMaterial = async (material: Row, patch: Record<string, any>) => {
+  const patchMaterial = async (material: Row, patch: FormState) => {
     await apiFetch(`/tenant/briefing/materials/${material.id}`, { method: "PATCH", body: JSON.stringify(patch) });
     if (selected) await loadMaterials(selected);
   };
@@ -367,7 +401,7 @@ export function BriefingListPage({
           <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         </div>
-        <Button onClick={() => { window.location.href = "/briefings/new"; }}>
+        <Button onClick={() => router.push("/briefings/new")}>
           <Plus className="mr-2 h-4 w-4" /> Nuovo briefing
         </Button>
       </div>
@@ -456,7 +490,7 @@ export function BriefingListPage({
             <DialogDescription>{selected?.title}</DialogDescription>
           </DialogHeader>
           <div>
-            <Button variant="outline" onClick={() => { if (selected?.id) window.location.href = `/quotes/new?briefing=${encodeURIComponent(selected.id)}`; }}>
+            <Button variant="outline" onClick={() => { if (selected?.id) router.push(`/quotes/new?briefing=${encodeURIComponent(selected.id)}`); }}>
               <Send className="mr-2 h-4 w-4" /> Crea preventivo
             </Button>
           </div>
@@ -537,32 +571,40 @@ export function BriefingCreatePage() {
   const prefillAttempted = useRef(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState<Record<string, any>>({ title: "", type: "website", status: "draft" });
+  const [form, setForm] = useState<FormState>({ title: "", type: "website", status: "draft" });
 
   useEffect(() => {
-    if (!relationsLoaded || prefillAttempted.current) return;
-    const opportunityId = searchParams.get("opportunity");
-    if (!opportunityId || !UUID_RE.test(opportunityId)) {
-      prefillAttempted.current = true;
-      return;
-    }
-    const opportunity = relations.opportunities.find((row) => row.id === opportunityId);
-    prefillAttempted.current = true;
-    if (!opportunity) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        if (!relationsLoaded || prefillAttempted.current) return;
+        const opportunityId = searchParams.get("opportunity");
+        if (!opportunityId || !UUID_RE.test(opportunityId)) {
+          prefillAttempted.current = true;
+          return;
+        }
+        const opportunity = relations.opportunities.find((row) => row.id === opportunityId);
+        prefillAttempted.current = true;
+        if (!opportunity) return;
 
-    const intake = parseIntakeFormData(opportunity.intake_form_data);
-    const company = relations.companies.find((row) => row.id === opportunity.company_id);
-    const titleSubject = intakeText(company?.name) || intakeText(opportunity.company_name) || intakeText(opportunity.title) || "opportunità";
-    const objective = intake.goals.length ? intake.goals.join(", ") : intakeText(opportunity.lead_interest) || "";
-    setForm((current) => ({
-      ...current,
-      opportunity_id: opportunity.id,
-      company_id: opportunity.company_id || "",
-      contact_id: opportunity.contact_id || "",
-      title: `Briefing - ${titleSubject}`,
-      type: briefingTypeForProject(intake.projectType || intakeText(opportunity.service_type)),
-      objective,
-    }));
+        const intake = parseIntakeFormData(opportunity.intake_form_data);
+        const company = relations.companies.find((row) => row.id === opportunity.company_id);
+        const titleSubject = intakeText(company?.name) || intakeText(opportunity.company_name) || intakeText(opportunity.title) || "opportunità";
+        const objective = intake.goals.length ? intake.goals.join(", ") : intakeText(opportunity.lead_interest) || "";
+        setForm((current) => ({
+          ...current,
+          opportunity_id: opportunity.id,
+          company_id: opportunity.company_id || "",
+          contact_id: opportunity.contact_id || "",
+          title: `Briefing - ${titleSubject}`,
+          type: briefingTypeForProject(intake.projectType || intakeText(opportunity.service_type)),
+          objective,
+        }));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [relations, relationsLoaded, searchParams]);
 
   const save = async () => {
@@ -614,7 +656,7 @@ export function BriefingCreatePage() {
 export function BriefingTemplatesPage() {
   const [items, setItems] = useState<Row[]>([]);
   const [editing, setEditing] = useState<Row | null>(null);
-  const [form, setForm] = useState<Record<string, any>>({ name: "", type: "website", schema_json: "{}" });
+  const [form, setForm] = useState<FormState>({ name: "", type: "website", schema_json: "{}" });
   const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
@@ -623,12 +665,25 @@ export function BriefingTemplatesPage() {
   };
 
   useEffect(() => {
-    void load();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const open = (row?: Row) => {
-    setEditing(row || {});
-    setForm(row ? { ...row, schema_json: JSON.stringify(row.schema_json || {}, null, 2) } : { name: "", type: "website", schema_json: "{}", is_active: true });
+    setEditing(row ?? NEW_ROW);
+    setForm(row ? {
+      name: row.name || "",
+      type: row.type || "website",
+      schema_json: JSON.stringify(row.schema_json || {}, null, 2),
+      is_active: row.is_active !== false,
+    } : { name: "", type: "website", schema_json: "{}", is_active: true });
     setError(null);
   };
 
@@ -695,18 +750,18 @@ export function QuotesListPage({
   const { toast } = useToast();
   const [items, setItems] = useState<Row[]>([]);
   const [selected, setSelected] = useState<Row | null>(null);
-  const [editing, setEditing] = useState<Row | null>(null);
-  const [editForm, setEditForm] = useState<Record<string, any>>({});
+  const [editing, setEditing] = useState<Row | CommercialQuote | null>(null);
+  const [editForm, setEditForm] = useState<FormState>({});
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState(initialStatus || "all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [acceptedQuoteCta, setAcceptedQuoteCta] = useState<Row | null>(null);
+  const [acceptedQuoteCta, setAcceptedQuoteCta] = useState<Row | CommercialQuote | null>(null);
   const [creatingProjectId, setCreatingProjectId] = useState<string | null>(null);
   const [creatingInvoiceId, setCreatingInvoiceId] = useState<string | null>(null);
   const [creatingContractId, setCreatingContractId] = useState<string | null>(null);
   const [creatingDossierId, setCreatingDossierId] = useState<string | null>(null);
-  const [itemForm, setItemForm] = useState<Record<string, any>>({ name: "", quantity: 1, unit_price: 0, discount: 0, tax_rate: 0, billing_type: "one_time" });
+  const [itemForm, setItemForm] = useState<FormState>({ name: "", quantity: 1, unit_price: 0, discount: 0, tax_rate: 0, billing_type: "one_time" });
   const { relations } = useRelations(true);
   const showMoney = canSeeEconomicValues();
   const canCreateFinanceInvoice = canUseFinanceFrontend();
@@ -726,31 +781,24 @@ export function QuotesListPage({
     }
   };
 
-  const loadQuote = async (row: Row) => {
+  const loadQuote = async (row: Row | CommercialQuote) => {
     const data = await apiFetch<Row>(`/tenant/quotes/${row.id}`);
     setSelected(data);
   };
 
   useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const updateStatus = async (row: Row, next: string) => {
-    await apiFetch(`/tenant/quotes/${row.id}/status`, { method: "PATCH", body: JSON.stringify({ status: next }) });
-    await load();
-    if (selected?.id === row.id) await loadQuote({ ...row, status: next });
-    if (next === "accepted") {
-      const updated = { ...row, status: "accepted" };
-      setAcceptedQuoteCta(updated);
-      toast({
-        title: "Preventivo accettato",
-        description: "Ora puoi creare il progetto operativo collegato.",
-      });
-    }
-  };
-
-  const openEdit = (row: Row) => {
+  const openEdit = (row: Row | CommercialQuote) => {
     setEditing(row);
     setEditForm({
       title: row.title || "",
@@ -770,7 +818,7 @@ export function QuotesListPage({
     if (selected?.id === editing.id) await loadQuote(editing);
   };
 
-  const accept = async (row: Row) => {
+  const accept = async (row: Row | CommercialQuote) => {
     await apiFetch(`/tenant/quotes/${row.id}/accept`, { method: "PATCH", body: JSON.stringify({}) });
     await load();
     if (selected?.id === row.id) await loadQuote(row);
@@ -781,19 +829,19 @@ export function QuotesListPage({
     });
   };
 
-  const reject = async (row: Row) => {
+  const reject = async (row: Row | CommercialQuote) => {
     await apiFetch(`/tenant/quotes/${row.id}/reject`, { method: "PATCH" });
     await load();
     if (selected?.id === row.id) await loadQuote(row);
   };
 
-  const recalculate = async (row: Row) => {
+  const recalculate = async (row: Row | CommercialQuote) => {
     await apiFetch(`/tenant/quotes/${row.id}/recalculate`, { method: "POST" });
     await load();
     if (selected?.id === row.id) await loadQuote(row);
   };
 
-  const remove = async (row: Row) => {
+  const remove = async (row: Row | CommercialQuote) => {
     if (!window.confirm("Eliminare questo preventivo?")) return;
     await apiFetch(`/tenant/quotes/${row.id}`, { method: "DELETE" });
     await load();
@@ -814,7 +862,7 @@ export function QuotesListPage({
     await load();
   };
 
-  const createProjectFromQuote = async (row: Row) => {
+  const createProjectFromQuote = async (row: Row | CommercialQuote) => {
     if (row.status !== "accepted") return;
     const endpoint = `/tenant/projects/from-quote/${row.id}`;
     setCreatingProjectId(row.id);
@@ -842,7 +890,7 @@ export function QuotesListPage({
     }
   };
 
-  const createInvoiceFromQuote = async (row: Row) => {
+  const createInvoiceFromQuote = async (row: Row | CommercialQuote) => {
     const endpoint = `/tenant/finance/invoices/from-quote/${row.id}`;
     setCreatingInvoiceId(row.id);
     setError(null);
@@ -854,7 +902,7 @@ export function QuotesListPage({
         method: "POST",
         body: JSON.stringify({}),
       });
-      const invoice = result && typeof result === "object" && "invoice" in result ? result.invoice : result;
+      const invoice = entityFromConversionResult(result, "invoice");
       toast({
         title: result && typeof result === "object" && "existing" in result && result.existing ? "Fattura gia esistente" : "Fattura creata",
         description: "Apro l'area fatture Finance V2.",
@@ -869,7 +917,7 @@ export function QuotesListPage({
     }
   };
 
-  const createContractFromQuote = async (row: Row) => {
+  const createContractFromQuote = async (row: Row | CommercialQuote) => {
     if (row.status !== "accepted") return;
     setCreatingContractId(row.id);
     setError(null);
@@ -890,7 +938,7 @@ export function QuotesListPage({
     }
   };
 
-  const createDossierFromQuote = async (row: Row) => {
+  const createDossierFromQuote = async (row: Row | CommercialQuote) => {
     setCreatingDossierId(row.id);
     setError(null);
     try {
@@ -1097,45 +1145,53 @@ export function QuoteCreatePage() {
   const prefillAttempted = useRef(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState<Record<string, any>>({ title: "", status: "draft", currency: "EUR" });
+  const [form, setForm] = useState<FormState>({ title: "", status: "draft", currency: "EUR" });
 
   useEffect(() => {
-    if (!relationsLoaded || prefillAttempted.current) return;
-    const briefingId = searchParams.get("briefing");
-    const opportunityId = searchParams.get("opportunity");
-    const briefing = briefingId && UUID_RE.test(briefingId)
-      ? relations.briefings.find((row) => row.id === briefingId)
-      : null;
-    const opportunity = !briefing && opportunityId && UUID_RE.test(opportunityId)
-      ? relations.opportunities.find((row) => row.id === opportunityId)
-      : null;
-    prefillAttempted.current = true;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        if (!relationsLoaded || prefillAttempted.current) return;
+        const briefingId = searchParams.get("briefing");
+        const opportunityId = searchParams.get("opportunity");
+        const briefing = briefingId && UUID_RE.test(briefingId)
+          ? relations.briefings.find((row) => row.id === briefingId)
+          : null;
+        const opportunity = !briefing && opportunityId && UUID_RE.test(opportunityId)
+          ? relations.opportunities.find((row) => row.id === opportunityId)
+          : null;
+        prefillAttempted.current = true;
 
-    if (briefing) {
-      const company = relations.companies.find((row) => row.id === briefing.company_id);
-      const titleSubject = intakeText(company?.name) || intakeText(briefing.company_name) || intakeText(briefing.title) || "briefing";
-      setForm((current) => ({
-        ...current,
-        briefing_id: briefing.id,
-        opportunity_id: briefing.opportunity_id || "",
-        company_id: briefing.company_id || "",
-        contact_id: briefing.contact_id || "",
-        title: `Preventivo - ${titleSubject}`,
-      }));
-      return;
-    }
+        if (briefing) {
+          const company = relations.companies.find((row) => row.id === briefing.company_id);
+          const titleSubject = intakeText(company?.name) || intakeText(briefing.company_name) || intakeText(briefing.title) || "briefing";
+          setForm((current) => ({
+            ...current,
+            briefing_id: briefing.id,
+            opportunity_id: briefing.opportunity_id || "",
+            company_id: briefing.company_id || "",
+            contact_id: briefing.contact_id || "",
+            title: `Preventivo - ${titleSubject}`,
+          }));
+          return;
+        }
 
-    if (opportunity) {
-      const company = relations.companies.find((row) => row.id === opportunity.company_id);
-      const titleSubject = intakeText(company?.name) || intakeText(opportunity.company_name) || intakeText(opportunity.title) || "opportunità";
-      setForm((current) => ({
-        ...current,
-        opportunity_id: opportunity.id,
-        company_id: opportunity.company_id || "",
-        contact_id: opportunity.contact_id || "",
-        title: `Preventivo - ${titleSubject}`,
-      }));
-    }
+        if (opportunity) {
+          const company = relations.companies.find((row) => row.id === opportunity.company_id);
+          const titleSubject = intakeText(company?.name) || intakeText(opportunity.company_name) || intakeText(opportunity.title) || "opportunità";
+          setForm((current) => ({
+            ...current,
+            opportunity_id: opportunity.id,
+            company_id: opportunity.company_id || "",
+            contact_id: opportunity.contact_id || "",
+            title: `Preventivo - ${titleSubject}`,
+          }));
+        }
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [relations, relationsLoaded, searchParams]);
 
   const save = async () => {
@@ -1182,7 +1238,7 @@ export function QuoteCreatePage() {
 export function ServiceTemplatesPage() {
   const [items, setItems] = useState<Row[]>([]);
   const [editing, setEditing] = useState<Row | null>(null);
-  const [form, setForm] = useState<Record<string, any>>({ name: "", billing_type: "one_time", default_unit_price: 0, default_quantity: 1, is_active: true });
+  const [form, setForm] = useState<FormState>({ name: "", billing_type: "one_time", default_unit_price: 0, default_quantity: 1, is_active: true });
 
   const load = async () => {
     const data = await loadList("/tenant/quotes/service-templates", new URLSearchParams({ limit: "100" }));
@@ -1190,12 +1246,27 @@ export function ServiceTemplatesPage() {
   };
 
   useEffect(() => {
-    void load();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const open = (row?: Row) => {
-    setEditing(row || {});
-    setForm(row || { name: "", billing_type: "one_time", default_unit_price: 0, default_quantity: 1, is_active: true });
+    setEditing(row ?? NEW_ROW);
+    setForm(row ? {
+      name: row.name || "",
+      description: row.description || "",
+      billing_type: row.billing_type || "one_time",
+      default_unit_price: row.default_unit_price || 0,
+      default_quantity: row.default_quantity || 1,
+      is_active: row.is_active !== false,
+    } : { name: "", billing_type: "one_time", default_unit_price: 0, default_quantity: 1, is_active: true });
   };
 
   const save = async () => {
@@ -1290,7 +1361,7 @@ function SimpleTable({
         <tbody>
           {rows.map((row) => (
             <tr key={row.id} className="border-t">
-              {columns.map(([key, , format]) => <td key={key} className="px-4 py-3">{format ? format(row) : String(row[key] ?? "-")}</td>)}
+              {columns.map(([key, , format]) => <td key={key} className="px-4 py-3">{format ? format(row) : String(rowValue(row, key) ?? "-")}</td>)}
               <td className="px-4 py-3"><div className="flex justify-end gap-2"><Button size="sm" variant="outline" onClick={() => onEdit(row)}><Edit3 className="h-4 w-4" /></Button><Button size="sm" variant="outline" onClick={() => onDelete(row)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div></td>
             </tr>
           ))}
@@ -1306,8 +1377,8 @@ function TemplateForm({
   typeOptions,
   includeSchema,
 }: {
-  form: Record<string, any>;
-  setForm: (updater: (prev: Record<string, any>) => Record<string, any>) => void;
+  form: FormState;
+  setForm: (updater: (prev: FormState) => FormState) => void;
   typeOptions: Option[];
   includeSchema?: boolean;
 }) {
@@ -1325,8 +1396,8 @@ function ServiceTemplateForm({
   form,
   setForm,
 }: {
-  form: Record<string, any>;
-  setForm: (updater: (prev: Record<string, any>) => Record<string, any>) => void;
+  form: FormState;
+  setForm: (updater: (prev: FormState) => FormState) => void;
 }) {
   return (
     <div className="grid gap-4 md:grid-cols-2">

@@ -1,7 +1,8 @@
 import { DataSource } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
+import { provisionSchemaOnce } from '../common/schema-provisioning-once';
 
-export async function ensureLeadIntakeSubmissionsTable(ds: DataSource, schema: string) {
+async function provisionLeadIntakeSubmissionsTable(ds: DataSource, schema: string) {
   const s = safeSchema(schema, 'ensureLeadIntakeSubmissionsTable');
 
   await ds.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
@@ -33,4 +34,11 @@ export async function ensureLeadIntakeSubmissionsTable(ds: DataSource, schema: s
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_lead_intake_lead" ON "${s}".lead_intake_submissions(lead_id)`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_lead_intake_opportunity" ON "${s}".lead_intake_submissions(opportunity_id)`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_lead_intake_created" ON "${s}".lead_intake_submissions(created_at)`);
+}
+
+export function ensureLeadIntakeSubmissionsTable(ds: DataSource, schema: string) {
+  const safe = safeSchema(schema, 'ensureLeadIntakeSubmissionsTable');
+  return provisionSchemaOnce(ds, `lead-intake:${safe}`, () =>
+    provisionLeadIntakeSubmissionsTable(ds, safe),
+  );
 }

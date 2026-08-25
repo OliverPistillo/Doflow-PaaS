@@ -1,4 +1,5 @@
 import { DataSource } from 'typeorm';
+import { provisionSchemaOnce } from '../common/schema-provisioning-once';
 import { safeSchema } from '../common/schema.utils';
 
 export type NotificationRuleSeed = {
@@ -42,7 +43,7 @@ async function addColumns(ds: DataSource, schema: string, table: string, columns
   }
 }
 
-export async function ensureTenantNotificationsTables(ds: DataSource, schema: string) {
+async function provisionTenantNotificationsTables(ds: DataSource, schema: string) {
   const s = safeSchema(schema, 'ensureTenantNotificationsTables');
 
   await ds.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
@@ -179,6 +180,16 @@ export async function ensureTenantNotificationsTables(ds: DataSource, schema: st
   await ds.query(`CREATE UNIQUE INDEX IF NOT EXISTS "uq_${s}_notification_preferences_user_active" ON "${s}".notification_preferences(user_id) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_notification_digests_user_date" ON "${s}".notification_digests(user_id, digest_date DESC) WHERE deleted_at IS NULL`);
   await ds.query(`CREATE INDEX IF NOT EXISTS "idx_${s}_notification_digests_role_date" ON "${s}".notification_digests(role, digest_date DESC) WHERE deleted_at IS NULL`);
+}
+
+export function ensureTenantNotificationsTables(
+  ds: DataSource,
+  schema: string,
+): Promise<void> {
+  const safe = safeSchema(schema, 'ensureTenantNotificationsTables');
+  return provisionSchemaOnce(ds, `tenant-notifications:${safe}`, () =>
+    provisionTenantNotificationsTables(ds, safe),
+  );
 }
 
 export async function seedTenantNotificationRules(ds: DataSource, schema: string) {

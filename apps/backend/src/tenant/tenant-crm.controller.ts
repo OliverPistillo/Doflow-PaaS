@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { OpportunityStageDto, TenantCrmMutationDto } from './dto/tenant-crm.dto';
 import { TenantCrmService } from './tenant-crm.service';
 
 @Controller('tenant/crm')
@@ -13,7 +14,7 @@ export class TenantCrmController {
   }
 
   @Post('companies')
-  createCompany(@Body() body: Record<string, any>) {
+  createCompany(@Body() body: TenantCrmMutationDto) {
     return this.service.create('companies', body);
   }
 
@@ -23,7 +24,7 @@ export class TenantCrmController {
   }
 
   @Patch('companies/:id')
-  updateCompany(@Param('id') id: string, @Body() body: Record<string, any>) {
+  updateCompany(@Param('id') id: string, @Body() body: TenantCrmMutationDto) {
     return this.service.update('companies', id, body);
   }
 
@@ -38,7 +39,7 @@ export class TenantCrmController {
   }
 
   @Post('contacts')
-  createContact(@Body() body: Record<string, any>) {
+  createContact(@Body() body: TenantCrmMutationDto) {
     return this.service.create('contacts', body);
   }
 
@@ -48,7 +49,7 @@ export class TenantCrmController {
   }
 
   @Patch('contacts/:id')
-  updateContact(@Param('id') id: string, @Body() body: Record<string, any>) {
+  updateContact(@Param('id') id: string, @Body() body: TenantCrmMutationDto) {
     return this.service.update('contacts', id, body);
   }
 
@@ -63,7 +64,7 @@ export class TenantCrmController {
   }
 
   @Post('leads')
-  createLead(@Body() body: Record<string, any>) {
+  createLead(@Body() body: TenantCrmMutationDto) {
     return this.service.create('leads', body);
   }
 
@@ -73,7 +74,7 @@ export class TenantCrmController {
   }
 
   @Patch('leads/:id')
-  updateLead(@Param('id') id: string, @Body() body: Record<string, any>) {
+  updateLead(@Param('id') id: string, @Body() body: TenantCrmMutationDto) {
     return this.service.update('leads', id, body);
   }
 
@@ -88,7 +89,7 @@ export class TenantCrmController {
   }
 
   @Post('opportunities')
-  createOpportunity(@Body() body: Record<string, any>) {
+  createOpportunity(@Body() body: TenantCrmMutationDto) {
     return this.service.create('opportunities', body);
   }
 
@@ -98,7 +99,7 @@ export class TenantCrmController {
   }
 
   @Patch('opportunities/:id')
-  updateOpportunity(@Param('id') id: string, @Body() body: Record<string, any>) {
+  updateOpportunity(@Param('id') id: string, @Body() body: TenantCrmMutationDto) {
     return this.service.update('opportunities', id, body);
   }
 
@@ -108,7 +109,7 @@ export class TenantCrmController {
   }
 
   @Patch('opportunities/:id/stage')
-  updateOpportunityStage(@Param('id') id: string, @Body() body: { stage?: string }) {
+  updateOpportunityStage(@Param('id') id: string, @Body() body: OpportunityStageDto) {
     return this.service.updateOpportunityStage(id, String(body.stage || ''));
   }
 
@@ -118,12 +119,12 @@ export class TenantCrmController {
   }
 
   @Post('activities')
-  createActivity(@Body() body: Record<string, any>) {
+  createActivity(@Body() body: TenantCrmMutationDto) {
     return this.service.create('activities', body);
   }
 
   @Patch('activities/:id')
-  updateActivity(@Param('id') id: string, @Body() body: Record<string, any>) {
+  updateActivity(@Param('id') id: string, @Body() body: TenantCrmMutationDto) {
     return this.service.update('activities', id, body);
   }
 

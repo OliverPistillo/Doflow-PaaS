@@ -26,6 +26,7 @@ import {
   DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { apiFetch } from "@/lib/api";
+import { getErrorMessage } from "@/lib/error-message";
 import { useToast } from "@/hooks/use-toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -57,14 +58,24 @@ export default function ChangelogPage() {
     try {
       const res = await apiFetch<ChangelogEntry[]>("/superadmin/changelog");
       setEntries(Array.isArray(res) ? res : []);
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setLoading(false);
     }
   }, [toast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const handleSave = async () => {
     if (!editDialog.entry) return;
@@ -79,8 +90,8 @@ export default function ChangelogPage() {
       setEditDialog({ open: false, entry: null });
       await load();
       toast({ title: "Release note salvata" });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -91,8 +102,8 @@ export default function ChangelogPage() {
       await apiFetch(`/superadmin/changelog/${id}/publish`, { method: "PATCH" });
       await load();
       toast({ title: "Pubblicato e notificato ai tenant" });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     }
   };
 
@@ -101,8 +112,8 @@ export default function ChangelogPage() {
       await apiFetch(`/superadmin/changelog/${id}/unpublish`, { method: "PATCH" });
       await load();
       toast({ title: "Nascosto dai tenant" });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     }
   };
 
@@ -111,8 +122,8 @@ export default function ChangelogPage() {
       await apiFetch(`/superadmin/changelog/${id}`, { method: "DELETE" });
       await load();
       toast({ title: "Eliminato" });
-    } catch (e: any) {
-      toast({ title: "Errore", description: e.message, variant: "destructive" });
+    } catch (e) {
+      toast({ title: "Errore", description: getErrorMessage(e), variant: "destructive" });
     }
   };
 

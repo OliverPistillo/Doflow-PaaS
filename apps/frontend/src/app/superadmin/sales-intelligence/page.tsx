@@ -306,7 +306,7 @@ function CampaignResults({ campaign, onCopy }: { campaign: Campaign; onCopy: (t:
                     <span>{conf.icon}</span>
                     <Badge variant="secondary" className="text-xs">{conf.label}</Badge>
                   </div>
-                  <p className="text-sm italic">"{h.hook}"</p>
+                  <p className="text-sm italic">&ldquo;{h.hook}&rdquo;</p>
                   <p className="text-xs text-muted-foreground">{h.whyItWorks}</p>
                   <Button variant="ghost" size="sm" className="h-7 px-2 text-xs -ml-2" onClick={() => onCopy(h.hook)}>
                     <Copy className="w-3 h-3 mr-1" /> Copia hook
@@ -355,23 +355,23 @@ export default function SalesIntelligencePage() {
   const fetchHistory = useCallback(async () => {
     setHistoryLoading(true);
     try {
-      const data = await apiFetch<Campaign[]>("/sales-intel/campaigns", { auth: true });
+      const data = await apiFetch<Campaign[]>("/sales-intel/campaigns");
       setHistory(data ?? []);
     } catch {
       toast({ title: "Errore caricamento storico", variant: "destructive" });
     } finally {
       setHistoryLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   // Carica storico al primo mount
-  useEffect(() => { fetchHistory(); }, [fetchHistory]);
+  useEffect(() => { queueMicrotask(() => void fetchHistory()); }, [fetchHistory]);
 
   // ── Pipeline completion ────────────────────────────────────────────────────
 
   useEffect(() => {
     if (status === "completed" && campaignId) {
-      apiFetch<Campaign>(`/sales-intel/campaigns/${campaignId}`, { auth: true })
+      apiFetch<Campaign>(`/sales-intel/campaigns/${campaignId}`)
         .then(data => {
           setCampaign(data);
           setWorkflowView("results");
@@ -383,10 +383,12 @@ export default function SalesIntelligencePage() {
     }
     if (status === "failed") {
       toast({ title: "Analisi fallita", description: error || "Riprova", variant: "destructive" });
-      setWorkflowView("select");
-      setJobId(null);
+      queueMicrotask(() => {
+        setWorkflowView("select");
+        setJobId(null);
+      });
     }
-  }, [status, campaignId, error]);
+  }, [status, campaignId, error, toast]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -411,22 +413,22 @@ export default function SalesIntelligencePage() {
     try {
       const data = await apiFetch<CompanyLookupResult>(
         `/sales-intel/lookup?domain=${encodeURIComponent(clean)}`,
-        { auth: true }
+        {}
       );
       setLookupResult(data);
       setWorkflowView("select");
-    } catch (e: any) {
-      toast({ title: "Dominio non trovato", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      toast({ title: "Dominio non trovato", description: e instanceof Error ? e.message : "Errore sconosciuto", variant: "destructive" });
     } finally {
       setIsLooking(false);
     }
-  }, [domain]);
+  }, [domain, toast]);
 
   const handleAnalyze = useCallback(async () => {
     if (!selectedPerson || !lookupResult) return;
     try {
       const res = await apiFetch<{ jobId: string }>("/sales-intel/analyze", {
-        method: "POST", auth: true,
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           fullName:            selectedPerson.name,
@@ -442,10 +444,10 @@ export default function SalesIntelligencePage() {
       });
       setJobId(res.jobId);
       setWorkflowView("pipeline");
-    } catch (e: any) {
-      toast({ title: "Errore avvio analisi", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      toast({ title: "Errore avvio analisi", description: e instanceof Error ? e.message : "Errore sconosciuto", variant: "destructive" });
     }
-  }, [selectedPerson, lookupResult, customEmail, solutionsCatalog]);
+  }, [selectedPerson, lookupResult, customEmail, solutionsCatalog, toast]);
 
   const activeStep  = PIPELINE_STEPS.findIndex(s => progress < s.progress);
   const currentStep = activeStep === -1 ? PIPELINE_STEPS.length - 1 : activeStep;
@@ -463,7 +465,7 @@ export default function SalesIntelligencePage() {
             <h1 className="text-xl font-semibold">Sales Intelligence AI</h1>
           </div>
           <p className="text-sm text-muted-foreground">
-            Cerca un'azienda per dominio, scegli il prospect e genera outreach iper-personalizzato
+            Cerca un&apos;azienda per dominio, scegli il prospect e genera outreach iper-personalizzato
           </p>
         </div>
         {(workflowView !== "lookup" || selectedCampaign) && (
@@ -514,7 +516,7 @@ export default function SalesIntelligencePage() {
                         {isLooking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                       </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1.5">Apollo cercherà l'azienda e le persone che ci lavorano</p>
+                    <p className="text-xs text-muted-foreground mt-1.5">Apollo cercherà l&apos;azienda e le persone che ci lavorano</p>
                   </div>
                 </CardContent>
               </Card>
@@ -522,7 +524,7 @@ export default function SalesIntelligencePage() {
                 <CardContent className="pt-4 text-xs text-muted-foreground space-y-1">
                   <p className="font-medium text-foreground text-sm">Come funziona</p>
                   <p>1. Inserisci il dominio → Apollo arricchisce i dati aziendali</p>
-                  <p>2. Apollo trova i decision maker dell'azienda</p>
+                  <p>2. Apollo trova i decision maker dell&apos;azienda</p>
                   <p>3. Scegli il prospect dalla lista</p>
                   <p>4. Gemini analizza pain points e genera le email</p>
                 </CardContent>

@@ -267,7 +267,17 @@ export default function PipelinePage() {
     }
   };
 
-  useEffect(() => { loadDeals(); }, []);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        loadDeals();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleDelete = async (id: string) => {
     const ok = await confirm({

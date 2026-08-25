@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { ShieldCheck, RefreshCw, QrCode, Lock, CheckCircle2, ArrowLeft, Copy, Check } from "lucide-react";
+import { ShieldCheck, RefreshCw, QrCode, CheckCircle2, ArrowLeft, Copy, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { AuthShell } from "@/components/auth/auth-shell";
@@ -20,20 +20,13 @@ import {
 } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
-import { getAuthToken, replaceAuthToken } from "@/lib/auth-storage";
-
-// Helper per decodificare il token JWT e leggere authStage
-function parseJwtPayload(token: string) {
-  try {
-    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    return JSON.parse(atob(base64));
-  } catch {
-    return null;
-  }
-}
 
 function normalizeCode(v: string) {
   return v.replace(/[^\d]/g, "").slice(0, 6);
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "";
 }
 
 export default function TenantMfaPage() {
@@ -50,7 +43,6 @@ export default function TenantMfaPage() {
   // Dati per Setup
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
-  const [otpUrl, setOtpUrl] = useState<string | null>(null);
 
   // Input Utente
   const [code, setCode] = useState("");
@@ -58,61 +50,58 @@ export default function TenantMfaPage() {
   const [copied, setCopied] = useState(false);
 
   // ==========================================
-  // 1. INIT: Controlla Token e Stage
-  // ==========================================
-  useEffect(() => {
-    initMfa();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const initMfa = async () => {
-    const token = getAuthToken();
-    
-    if (!token) {
-      // Nessun token -> Login
-      router.replace("/login");
-      return;
-    }
-
-    const payload = parseJwtPayload(token);
-    const stage = payload?.authStage;
-
-    if (stage === "FULL" && searchParams.get("setup") !== "1") {
-      // Già autenticato -> Dashboard
-      router.replace("/dashboard");
-      return;
-    }
-
-    if (stage === "MFA_SETUP_NEEDED" || (stage === "FULL" && searchParams.get("setup") === "1")) {
-      setMode("SETUP");
-      await fetchSetupData();
-    } else {
-      // MFA_PENDING o fallback -> Verify
-      setMode("VERIFY");
-      setLoading(false);
-    }
-  };
-
-  // ==========================================
   // 2. SETUP: Scarica QR dal Backend
   // ==========================================
-  const fetchSetupData = async () => {
+  const fetchSetupData = useCallback(async () => {
     try {
-      // Chiama GET /auth/mfa/setup (JWT temporaneo viene inviato automaticamente da apiFetch se configurato)
-      const res = await apiFetch<{ secret: string; qrCodeUrl: string; otpauthUrl: string }>("/auth/mfa/setup");
+      // Chiama GET /auth/mfa/setup usando la sessione opaca HttpOnly.
+      const res = await apiFetch<{ secret: string; qrCodeUrl: string }>("/auth/mfa/setup");
       setQrCode(res.qrCodeUrl);
       setSecret(res.secret);
-      setOtpUrl(res.otpauthUrl);
-    } catch (e: any) {
+    } catch (error: unknown) {
       toast({
         title: "Errore Setup",
-        description: "Impossibile generare i dati MFA. " + (e.message || ""),
+        description: `Impossibile generare i dati MFA. ${errorMessage(error)}`,
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  // ==========================================
+  // 1. INIT: Controlla la sessione HttpOnly e lo stage
+  // ==========================================
+  useEffect(() => {
+    async function initMfa() {
+      let payload: { authStage?: string; tenantSlug?: string };
+      try {
+        payload = await apiFetch<{ authStage: string; tenantSlug: string }>(
+          "/auth/session-stage",
+        );
+      } catch {
+        router.replace("/login");
+        return;
+      }
+      const stage = payload.authStage;
+      const setupRequested = searchParams.get("setup") === "1";
+
+      if (stage === "FULL" && !setupRequested) {
+        router.replace("/dashboard");
+        return;
+      }
+
+      if (stage === "MFA_SETUP_NEEDED" || (stage === "FULL" && setupRequested)) {
+        setMode("SETUP");
+        await fetchSetupData();
+        return;
+      }
+      setMode("VERIFY");
+      setLoading(false);
+    }
+
+    void initMfa();
+  }, [fetchSetupData, router, searchParams]);
 
   // ==========================================
   // 3. ACTIONS
@@ -126,7 +115,7 @@ export default function TenantMfaPage() {
         description: "Codice segreto copiato negli appunti.",
       });
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
+    } catch {
       toast({
         title: "Errore",
         description: "Impossibile copiare il codice.",
@@ -141,7 +130,7 @@ export default function TenantMfaPage() {
 
     setSubmitting(true);
     try {
-      let res: { token?: string; error?: string; status?: string };
+      let res: { error?: string; status?: string };
 
       if (mode === "SETUP") {
         // SETUP: Inviamo codice + secret per confermare e salvare nel DB
@@ -157,9 +146,9 @@ export default function TenantMfaPage() {
         });
       }
 
-      if (res.token) {
-        // Successo! Salviamo il token FULL
-        replaceAuthToken(res.token);
+      if (res.status === "ok") {
+        const profile = await apiFetch<{ user: { tenantSlug?: string; tenantId?: string; role?: string } }>("/auth/me");
+        const targetSlug = String(profile.user.tenantSlug || profile.user.tenantId || tenantSlug).toLowerCase();
         
         toast({
           title: "Accesso Effettuato",
@@ -167,17 +156,16 @@ export default function TenantMfaPage() {
         });
 
         // Redirect intelligente
-        const p = parseJwtPayload(res.token);
-        const targetSlug = p?.tenantSlug || tenantSlug;
-        
-        window.location.href = targetSlug === 'public' ? "/superadmin" : "/dashboard";
+        const role = String(profile.user.role || "").toLowerCase();
+        router.replace(targetSlug === "public" && ["superadmin", "super_admin"].includes(role) ? "/superadmin" : "/dashboard");
+        router.refresh();
       } else {
         throw new Error(res.error || "Errore sconosciuto");
       }
-    } catch (e: any) {
+    } catch (error: unknown) {
       toast({
         title: "Codice non valido",
-        description: e.message || "Riprova con un nuovo codice.",
+        description: errorMessage(error) || "Riprova con un nuovo codice.",
         variant: "destructive",
       });
       setCode(""); // Pulisci input per riprovare

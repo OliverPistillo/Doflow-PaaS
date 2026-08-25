@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Check,
@@ -96,7 +96,7 @@ function LegacyTasksWorkspace() {
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const currentUser = getDoFlowUser();
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     const results = await Promise.allSettled([
@@ -123,11 +123,19 @@ function LegacyTasksWorkspace() {
       }
     }));
     setChecklistSummary(Object.fromEntries(summaries));
-  };
+  }, [canView]);
 
   useEffect(() => {
-    void load();
-  }, []);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        void load();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const visibleTasks = useMemo(() => tasks.filter((task) => {
     const needle = search.trim().toLowerCase();

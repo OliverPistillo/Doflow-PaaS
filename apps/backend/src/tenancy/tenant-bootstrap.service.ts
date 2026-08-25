@@ -24,10 +24,12 @@ import {
   seedDoflowContractTemplates,
 } from '../tenant/tenant-contracts-schema';
 import { seedTenantAutomationTemplatesAndRules } from '../tenant/tenant-automations-schema';
+import { ensureDoflowAutomationPerformanceTables } from '../tenant/tenant-automation-performance-schema';
 import { seedTenantPlanningViews } from '../tenant/tenant-calendar-schema';
 import { seedTenantKnowledgeBase } from '../tenant/tenant-knowledge-schema';
 import { ensureTenantCredentialsTables } from '../tenant/tenant-credentials-schema';
 import { ensureDoflowSiteProposalTables } from '../tenant/tenant-site-proposals-schema';
+import { ensureTenantAuthSupportTables } from '../auth/auth-schema';
 
 @Injectable()
 export class TenantBootstrapService implements OnApplicationBootstrap {
@@ -153,7 +155,7 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
         created_at  TIMESTAMP    DEFAULT NOW()
       )
     `);
-    await ds.query(`ALTER TABLE "${s}".audit_log ADD COLUMN IF NOT EXISTS actor_role TEXT`);
+    await ensureTenantAuthSupportTables(ds, s);
 
     // Tabella file metadata (S3)
     await ds.query(`
@@ -202,6 +204,7 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
     await ensureTenantContractsTables(ds, s);
     await seedDoflowContractTemplates(ds, s);
     await seedTenantAutomationTemplatesAndRules(ds, s);
+    if (s === 'doflow') await ensureDoflowAutomationPerformanceTables(ds, s);
     await seedTenantPlanningViews(ds, s);
     await seedTenantKnowledgeBase(ds, s);
     await ensureTenantCredentialsTables(ds, s);

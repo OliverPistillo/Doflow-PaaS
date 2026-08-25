@@ -2,12 +2,12 @@
 
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Plus, Clock, Loader2, RefreshCw, Trash2, Edit, MoreHorizontal } from "lucide-react";
+import { useEffect,useState } from "react";
+import { ChevronDown,ChevronRight,Plus,Clock,Loader2,RefreshCw,Trash2,Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
 import { useConfirm } from "@/hooks/useConfirm";
 import { TaskCreateSheet } from "./components/TaskCreateSheet";
@@ -39,14 +39,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Technical Services": "bg-sky-100 text-sky-700",
   "Content Creation": "bg-teal-100 text-teal-700",
   "Default": "bg-muted text-muted-foreground"
-};
-
-// Mapping visivo degli stati
-const STATUS_LABELS: Record<string, string> = {
-  todo: "Da iniziare",
-  inprogress: "In corso",
-  review: "In revisione",
-  done: "Completato"
 };
 
 const PRIORITY_STYLES: Record<string, string> = {
@@ -85,7 +77,15 @@ export default function DeliveryStatusPage() {
   };
 
   useEffect(() => {
-    loadTasks();
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        loadTasks();
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // 2. Aggiornamento Stato

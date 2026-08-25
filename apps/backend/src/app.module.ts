@@ -51,12 +51,35 @@ import { FeatureAccessGuard } from './feature-access/feature-access.guard';
 // ── Middleware ────────────────────────────────────────────────────────────────
 import { TenancyMiddleware } from './tenancy/tenancy.middleware';
 import { AuthMiddleware } from './auth.middleware';
+import { resolveRuntimeDatabaseSynchronize } from './scripts/production-migration-runtime';
 
-// ── Sales Intelligence entities (per autoLoadEntities fallback) ──────────────
-import { CompanyIntel }     from './sales-intelligence/entities/company-intel.entity';
-import { Prospect }         from './sales-intelligence/entities/prospect.entity';
-import { ResearchData }     from './sales-intelligence/entities/research-data.entity';
-import { OutreachCampaign } from './sales-intelligence/entities/outreach-campaign.entity';
+export const ALL_MIDDLEWARE_ROUTES = '{*splat}';
+
+export const AUTH_MIDDLEWARE_EXCLUDED_ROUTES = [
+  'public/{*splat}',
+  'api/public/{*splat}',
+  'billing/webhook',
+  'api/billing/webhook',
+] as const;
+
+export const TENANCY_MIDDLEWARE_EXCLUDED_ROUTES = [
+  'superadmin/{*splat}',
+  'public/{*splat}',
+  'tenant/self-service/{*splat}',
+  'auth/signup-tenant',
+  'auth/check-slug',
+  'auth/google',
+  'auth/google/{*splat}',
+  'api/superadmin/{*splat}',
+  'api/public/{*splat}',
+  'api/tenant/self-service/{*splat}',
+  'api/auth/signup-tenant',
+  'api/auth/check-slug',
+  'api/auth/google',
+  'api/auth/google/{*splat}',
+  'billing/webhook',
+  'api/billing/webhook',
+] as const;
 
 @Module({
   imports: [
@@ -80,7 +103,7 @@ import { OutreachCampaign } from './sales-intelligence/entities/outreach-campaig
         type: 'postgres' as const,
         url: cfg.get<string>('DATABASE_URL'),
         autoLoadEntities: true,
-        synchronize: process.env.DB_SYNC === 'true',
+        synchronize: resolveRuntimeDatabaseSynchronize(process.env),
       }),
     }),
 
@@ -139,24 +162,13 @@ import { OutreachCampaign } from './sales-intelligence/entities/outreach-campaig
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
-      .apply(TenancyMiddleware, AuthMiddleware)
-      .exclude(
-        'superadmin/(.*)',
-        'public/(.*)',
-        'tenant/self-service/(.*)',
-        'auth/signup-tenant',
-        'auth/check-slug',
-        'auth/google',
-        'auth/google/(.*)',
-        'api/superadmin/(.*)',
-        'api/public/(.*)',
-        'api/tenant/self-service/(.*)',
-        'api/auth/signup-tenant',
-        'api/auth/check-slug',
-        'api/auth/google',
-        'api/auth/google/(.*)',
-        'api/billing/webhook',
-      )
-      .forRoutes('*');
+      .apply(AuthMiddleware)
+      .exclude(...AUTH_MIDDLEWARE_EXCLUDED_ROUTES)
+      .forRoutes(ALL_MIDDLEWARE_ROUTES);
+
+    consumer
+      .apply(TenancyMiddleware)
+      .exclude(...TENANCY_MIDDLEWARE_EXCLUDED_ROUTES)
+      .forRoutes(ALL_MIDDLEWARE_ROUTES);
   }
 }

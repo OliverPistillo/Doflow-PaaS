@@ -3,12 +3,11 @@
 
 import React, { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Search, Filter, Plus, Loader2, Download, Receipt, FileText, FileCheck2 } from "lucide-react";
+import { Search, Filter, Loader2, Download, Receipt, FileText, FileCheck2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiFetch, getApiBaseUrl } from "@/lib/api";
-import { getAuthToken } from "@/lib/auth-storage";
 import { useConfirm } from "@/hooks/useConfirm";
 import { InvoiceCreateSheet } from "../dashboard/components/InvoiceCreateSheet";
 import { ClientRow, ClientGroup } from "./components/ClientRow";
@@ -23,21 +22,11 @@ function InvoicesContent() {
   const { ConfirmDialog, confirm }      = useConfirm();
   const [isSheetOpen, setIsSheetOpen]   = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
-  const [search, setSearch]             = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [search, setSearch]             = useState(() => searchParams.get("search") ?? "");
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get("status") ?? "all");
   const [docTypeFilter, setDocTypeFilter] = useState("all");
-  const [initialized, setInitialized]   = useState(false);
-
-  useEffect(() => {
-    const qs  = searchParams.get("search");
-    const qst = searchParams.get("status");
-    if (qs)  setSearch(qs);
-    if (qst) setStatusFilter(qst);
-    setInitialized(true);
-  }, [searchParams]);
 
   const loadInvoices = async () => {
-    if (!initialized) return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -53,7 +42,7 @@ function InvoicesContent() {
     const t = setTimeout(loadInvoices, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, statusFilter, initialized]);
+  }, [search, statusFilter]);
 
   const openEdit = (invoice: Invoice) => { setEditingInvoice(invoice); setIsSheetOpen(true); };
 
@@ -66,16 +55,15 @@ function InvoicesContent() {
 
   const handleDownload = async (id: string, num: string) => {
     try {
-      const token = getAuthToken();
       const url   = `${getApiBaseUrl()}/superadmin/finance/invoices/${id}/pdf`;
-      const res   = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      const res   = await fetch(url, { headers: { "X-Doflow-Web": "1" }, credentials: "include" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const a    = Object.assign(document.createElement("a"), {
         href: URL.createObjectURL(blob), download: `Documento_${num || id}.pdf`,
       });
       document.body.appendChild(a); a.click(); a.remove();
-    } catch (e: any) { alert(`Download fallito: ${e?.message}`); }
+    } catch (e: unknown) { alert(`Download fallito: ${e instanceof Error ? e.message : "errore sconosciuto"}`); }
   };
 
   const handleSend = async (id: string, num: string) => {
@@ -89,7 +77,7 @@ function InvoicesContent() {
 
   const filteredInvoices = useMemo(() => {
     if (docTypeFilter === "all") return rawInvoices;
-    return rawInvoices.filter(i => ((i as any).docType ?? "fattura") === docTypeFilter);
+    return rawInvoices.filter(i => (i.docType ?? "fattura") === docTypeFilter);
   }, [rawInvoices, docTypeFilter]);
 
   const groupedClients = useMemo(() => {
@@ -109,7 +97,7 @@ function InvoicesContent() {
       "Tipo,Cliente,Numero,Data,Importo,Stato\n" +
       filteredInvoices
         .map(i =>
-          `"${(i as any).docType ?? "fattura"}","${i.clientName}",${i.invoiceNumber || ""},${i.issueDate},${i.amount},${i.status}`
+          `"${i.docType ?? "fattura"}","${i.clientName}",${i.invoiceNumber || ""},${i.issueDate},${i.amount},${i.status}`
         )
         .join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -123,8 +111,8 @@ function InvoicesContent() {
     paid:       rawInvoices.filter(i => i.status === "paid").reduce((s, i) => s + (Number(i.amount) || 0), 0),
     pending:    rawInvoices.filter(i => i.status === "pending").length,
     overdue:    rawInvoices.filter(i => i.status === "overdue").length,
-    preventivi: rawInvoices.filter(i => (i as any).docType === "preventivo").length,
-    fatture:    rawInvoices.filter(i => ((i as any).docType ?? "fattura") === "fattura").length,
+    preventivi: rawInvoices.filter(i => i.docType === "preventivo").length,
+    fatture:    rawInvoices.filter(i => (i.docType ?? "fattura") === "fattura").length,
   }), [rawInvoices]);
 
   const fmt = (n: number) =>

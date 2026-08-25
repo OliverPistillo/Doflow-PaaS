@@ -164,6 +164,9 @@ describe('TenantsController platform authorization', () => {
       { method: 'POST', headers: jsonHeaders, body: JSON.stringify({}) },
       platformToken,
     );
-    expect(impersonateResponse.status).toBe(201);
+    expect(impersonateResponse.status).toBe(501);
+    expect(await impersonateResponse.json()).toEqual(
+      expect.objectContaining({ statusCode: 501 }),
+    );
   });
 });

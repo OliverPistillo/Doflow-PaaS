@@ -1,6 +1,6 @@
 // apps/backend/src/auth/signup.service.ts
 // Self-service tenant signup — pubblico, no auth richiesta.
-// Crea: tenant + schema + admin user (in transazione) + auto-login JWT.
+// Crea tenant + schema + owner in transazione. La sessione web viene creata dal controller.
 
 import {
   Injectable,
@@ -12,24 +12,14 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
-import * as jwt from 'jsonwebtoken';
 
 import { Tenant } from '../superadmin/entities/tenant.entity';
 import { TenantSubscription } from '../superadmin/entities/tenant-subscription.entity';
 import { PlatformModule } from '../superadmin/entities/platform-module.entity';
 import { TenantBootstrapService } from '../tenancy/tenant-bootstrap.service';
 import { normalizeSlugToSchema } from '../common/schema.utils';
-import { AuthService } from '../auth.service';
-import { Role } from '../roles';
 import { SignupTenantDto } from './dto/signup-tenant.dto';
-
-type GoogleSignupPayload = jwt.JwtPayload & {
-  purpose?: 'google_signup';
-  googleId?: string;
-  email?: string;
-  fullName?: string;
-  picture?: string;
-};
+import { AuthHandoffService } from './auth-handoff.service';
 
 const RESERVED_SLUGS = new Set([
   'public', 'admin', 'superadmin', 'api', 'auth', 'login', 'register', 'signup',
@@ -49,28 +39,8 @@ export class SignupService {
     @InjectRepository(PlatformModule) private moduleRepo: Repository<PlatformModule>,
     private dataSource: DataSource,
     private bootstrap: TenantBootstrapService,
-    private authService: AuthService,
+    private authHandoff: AuthHandoffService,
   ) {}
-
-  private verifyGoogleSignupToken(token?: string): GoogleSignupPayload | null {
-    if (!token) return null;
-
-    const secret = process.env.JWT_SECRET;
-    if (!secret) throw new Error('JWT_SECRET not set');
-
-    try {
-      const decoded = jwt.verify(token, secret) as GoogleSignupPayload;
-      if (decoded.purpose !== 'google_signup' || !decoded.googleId || !decoded.email) {
-        throw new Error('Invalid Google signup token payload');
-      }
-      return {
-        ...decoded,
-        email: decoded.email.toLowerCase(),
-      };
-    } catch {
-      throw new BadRequestException('Sessione Google non valida o scaduta. Ripeti accesso con Google.');
-    }
-  }
 
   /** Verifica se uno slug è disponibile. Non solleva eccezioni. */
   async checkSlugAvailability(slug: string): Promise<{ available: boolean; reason?: string }> {
@@ -88,7 +58,7 @@ export class SignupService {
   }
 
   async signup(dto: SignupTenantDto) {
-    const googleSignup = this.verifyGoogleSignupToken(dto.googleSignupToken);
+    const googleSignup = await this.authHandoff.consumeGoogleSignupGrant(dto.googleSignupGrant);
     const email = (googleSignup?.email || dto.email || '').trim().toLowerCase();
     const fullName = (googleSignup?.fullName || dto.fullName || '').trim() || null;
 
@@ -199,16 +169,7 @@ export class SignupService {
       // 7. Add to Redis cache
       await this.bootstrap.addTenantToCache(dto.slug);
 
-      // 8. Issue JWT (auto-login). Use AuthService's public sign method.
       const ownerUser = ownerInsert[0];
-      const token = this.authService.signTokenPublic(
-        ownerUser.id,
-        email,
-        schemaName,
-        dto.slug,
-        'owner' as Role,
-        { authStage: 'FULL', mfaRequired: false },
-      );
 
       this.logger.log(`Tenant signup completato via ${authProvider}`);
 
@@ -227,7 +188,6 @@ export class SignupService {
           tenantId: schemaName,
           tenantSlug: dto.slug,
         },
-        token,
         nextStep: 'onboarding', // frontend redirect to /onboarding wizard
       };
     } catch (err: any) {

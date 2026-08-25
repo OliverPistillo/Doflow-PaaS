@@ -25,12 +25,11 @@ export default function ForgotPasswordPage() {
     try {
       await apiFetch('/auth/forgot-password', {
         method: 'POST',
-        auth: false,
         body: JSON.stringify({ email }),
       });
       setDone(true);
-    } catch (err: any) {
-      setError(err?.message || 'Errore durante la richiesta di reset');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Errore durante la richiesta di reset');
     } finally {
       setSubmitting(false);
     }
@@ -50,7 +49,7 @@ export default function ForgotPasswordPage() {
               </div>
               <p className="text-xl font-bold tracking-tight text-center px-4">Link inviato!</p>
               <p className="text-sm text-muted-foreground mt-2 text-center px-6 leading-relaxed">
-                Se l'indirizzo esiste nel sistema, riceverai a breve un'email con le istruzioni.
+                Se l&apos;indirizzo esiste nel sistema, riceverai a breve un&apos;email con le istruzioni.
               </p>
               <Button asChild variant="link" className="mt-8 text-primary font-semibold">
                 <Link href="/login" className="flex items-center gap-2">

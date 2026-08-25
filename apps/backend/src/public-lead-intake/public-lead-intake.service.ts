@@ -7,7 +7,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { DataSource, QueryRunner } from 'typeorm';
 import { NotificationsService } from '../realtime/notifications.service';
 import { RedisService } from '../redis/redis.service';
@@ -327,6 +327,67 @@ export class PublicLeadIntakeService {
           JSON.stringify(this.attribution(dto)),
           JSON.stringify(this.formData(dto)),
         ],
+      );
+
+      const attribution = this.attribution(dto);
+      await runner.query(
+        `INSERT INTO "${schema}".commercial_attributions (
+           company_id, contact_id, lead_id, opportunity_id, source, medium,
+           campaign_name, content, term, gclid, fbclid, ttclid, landing_url,
+           referrer, attribution_model, occurred_at, metadata
+         ) VALUES (
+           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+           'last_non_direct', now(), $15::jsonb
+         )`,
+        [
+          companyId,
+          contactId,
+          leadId,
+          opportunityId,
+          dto.utm_source || 'website_form',
+          dto.utm_medium || null,
+          dto.utm_campaign || null,
+          dto.utm_content || null,
+          dto.utm_term || null,
+          dto.gclid || null,
+          dto.fbclid || null,
+          dto.ttclid || null,
+          dto.landing_url,
+          dto.referrer || null,
+          JSON.stringify({ submission_id: dto.submission_id, form_version: dto.form_version }),
+        ],
+      );
+
+      const operationId = randomUUID();
+      const correlationId = randomUUID();
+      const eventMetadata = {
+        submission_id: dto.submission_id,
+        company_id: companyId,
+        contact_id: contactId,
+        lead_id: leadId,
+        opportunity_id: opportunityId,
+        activity_id: activityId,
+        attribution_model: 'last_non_direct',
+      };
+      await runner.query(
+        `INSERT INTO "${schema}".commercial_history
+           (operation_id, correlation_id, entity_type, entity_id, event_type,
+            before_state, after_state, metadata)
+         VALUES ($1, $2, 'opportunity', $3, 'commercial_public_lead_intake_created',
+                 NULL, $4::jsonb, $5::jsonb)`,
+        [operationId, correlationId, opportunityId, JSON.stringify({ stage: isDoflowTenant(schema) ? 'new' : 'new_lead' }), JSON.stringify(eventMetadata)],
+      );
+      await runner.query(
+        `INSERT INTO "${schema}".audit_log
+           (actor_email, actor_role, action, target, metadata, created_at)
+         VALUES (NULL, 'public_intake', 'commercial_public_lead_intake_created', $1, $2::jsonb, now())`,
+        [opportunityId, JSON.stringify({ operation_id: operationId, correlation_id: correlationId, ...eventMetadata })],
+      );
+      await runner.query(
+        `INSERT INTO "${schema}".commercial_outbox
+           (operation_id, correlation_id, topic, aggregate_type, aggregate_id, payload)
+         VALUES ($1, $2, 'commercial_public_lead_intake_created', 'opportunity', $3, $4::jsonb)`,
+        [operationId, correlationId, opportunityId, JSON.stringify(eventMetadata)],
       );
 
       await runner.commitTransaction();

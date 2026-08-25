@@ -66,7 +66,7 @@ export function ExecutiveReportPage() {
               empty="Nessun rischio rilevato."
               columns={[
                 { key: "type", label: "Tipo" },
-                { key: "name", label: "Nome", format: (value, row) => value || row.title || row.invoice_number || row.id },
+                { key: "name", label: "Nome", format: (value, row) => String(value || row.title || row.invoice_number || row.id || "-") },
                 { key: "status", label: "Stato" },
                 { key: "due_date", label: "Scadenza" },
                 { key: "remaining_total", label: "Residuo", format: (value) => value ? formatCurrency(value) : "-" },

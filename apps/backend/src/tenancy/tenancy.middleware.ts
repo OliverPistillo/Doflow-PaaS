@@ -84,7 +84,12 @@ export class TenancyMiddleware implements NestMiddleware, OnModuleDestroy {
       try {
         await qr.startTransaction();
         await qr.query(`SET LOCAL search_path TO "${s}", public`);
-        const result = await qr.query(sql, params);
+        const raw = await qr.query(sql, params);
+        // Keep DataSource.query semantics stable across TypeORM versions: UPDATE
+        // with RETURNING may otherwise leak the internal [rows, affected] tuple.
+        const result = Array.isArray(raw) && Array.isArray(raw[0]) && typeof raw[1] === 'number'
+          ? raw[0]
+          : raw;
         await qr.commitTransaction();
         return result;
       } catch (err) {
@@ -103,6 +108,17 @@ export class TenancyMiddleware implements NestMiddleware, OnModuleDestroy {
   // ── Middleware entry ─────────────────────────────────────────────────────
 
   async use(req: Request, res: Response, next: NextFunction) {
+    const webSessionTenant = String((req as any).webSession?.user?.tenantSlug || '').trim().toLowerCase();
+    if (webSessionTenant) {
+      if (webSessionTenant === 'public') return this.attachTenant(req, next, 'public');
+      if (!/^[a-z0-9_-]+$/.test(webSessionTenant) || !(await this.checkWhitelist(webSessionTenant))) {
+        return res.status(401).json({ error: 'Session tenant unavailable' });
+      }
+      const sessionSchema = await this.resolveSlugToSchema(webSessionTenant, res);
+      if (!sessionSchema) return;
+      return this.attachTenant(req, next, sessionSchema);
+    }
+
     const hdr = (req.headers['x-doflow-tenant-id'] as string | undefined)?.trim();
 
     // Modalità Header (priorità massima)

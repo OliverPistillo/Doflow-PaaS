@@ -9,8 +9,7 @@ import {
   commercialStageLabel as stageLabel,
   DOFLOW_PIPELINE_GROUPS,
   isOpenCommercialStage,
-  LEGACY_PIPELINE_GROUPS,
-  normalizeCommercialStage,
+  LEGACY_PIPELINE_GROUPS
 } from "@/lib/commercial-stage-model";
 
 export function commercialMoney(value: unknown) {

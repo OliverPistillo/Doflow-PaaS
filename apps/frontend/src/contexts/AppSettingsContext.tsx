@@ -7,7 +7,7 @@
  * Il tema (light/dark/system) è gestito da next-themes direttamente.
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React,{ createContext,useContext,useState,useEffect,useCallback } from "react";
 
 export type SidebarVariant    = "inset" | "sidebar" | "floating";
 export type SidebarCollapsible = "icon";
@@ -65,8 +65,16 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
 
   // Idratazione client-side (evita mismatch SSR)
   useEffect(() => {
-    _setVariant(readLS("df_sidebar_variant", DEFAULT_VARIANT));
-    _setCollapsible(readSidebarCollapsible());
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        _setVariant(readLS("df_sidebar_variant", DEFAULT_VARIANT));
+        _setCollapsible(readSidebarCollapsible());
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const setSidebarVariant = useCallback((v: SidebarVariant) => {
@@ -74,14 +82,14 @@ export function AppSettingsProvider({ children }: { children: React.ReactNode })
     writeLS("df_sidebar_variant", v);
   }, []);
 
-  const setSidebarCollapsible = useCallback((_c: SidebarCollapsible) => {
+  const setSidebarCollapsible = useCallback(() => {
     _setCollapsible("icon");
     writeLS("df_sidebar_collapsible", "icon");
   }, []);
 
   const resetSettings = useCallback(() => {
     setSidebarVariant(DEFAULT_VARIANT);
-    setSidebarCollapsible(DEFAULT_COLLAPSIBLE);
+    setSidebarCollapsible();
   }, [setSidebarVariant, setSidebarCollapsible]);
 
   return (

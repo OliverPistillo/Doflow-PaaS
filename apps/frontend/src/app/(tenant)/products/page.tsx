@@ -2,33 +2,32 @@
 
 import { useState } from "react";
 import {
-  Plus, Search, Package, MoreHorizontal, Edit2, Trash2,
-  Download, Upload, Filter, Grid3X3, List,
-  Tag, DollarSign, Box,
+  Plus,Search,Package,MoreHorizontal,Edit2,Trash2,Upload,Filter,Grid3X3,List,
+  Tag,Box
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card,CardContent } from "@/components/ui/card";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,TableBody,TableCell,TableHead,TableHeader,TableRow,
 } from "@/components/ui/table";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu,DropdownMenuContent,DropdownMenuItem,
+  DropdownMenuSeparator,DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,SelectContent,SelectItem,SelectTrigger,SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+  Dialog,DialogContent,DialogHeader,DialogTitle,DialogFooter,DialogDescription,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-import { PageShell, PageHeader, TableLoadingState, ErrorState } from "@/components/ui/page-shell";
+import { PageShell,PageHeader } from "@/components/ui/page-shell";
 type ProductType = "servizio" | "prodotto";
 
 interface Product {

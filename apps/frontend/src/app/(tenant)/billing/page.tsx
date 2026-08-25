@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { CreditCard, Check, Zap, Shield, Users, Download, ChevronRight,
-  AlertTriangle, Star, Sparkles, Calendar, Receipt, ExternalLink } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import {
+  CreditCard,Check,Zap,Shield,Users,Download,ChevronRight,
+  AlertTriangle,Sparkles,Calendar,Receipt,ExternalLink
+} from "lucide-react";
+import { Card,CardContent,CardHeader,CardTitle,CardDescription,CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 // ─── Plan definitions ─────────────────────────────────────────────────────────
@@ -139,8 +139,6 @@ function RenewalCard() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Page() {
-  const [showUpgrade, setShowUpgrade] = useState(false);
-
   return (
     <div className="flex-1 p-4 md:p-6 animate-in fade-in duration-500 space-y-6">
 
@@ -173,7 +171,6 @@ export default function Page() {
             </div>
           </div>
           <Button
-            onClick={() => setShowUpgrade(true)}
             className="bg-amber-500 hover:bg-amber-600 text-white font-semibold shrink-0"
           >
             <Sparkles className="mr-1.5 h-4 w-4" /> Passa a Enterprise
