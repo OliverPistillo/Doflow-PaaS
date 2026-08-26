@@ -286,7 +286,7 @@ async function provisionDoflowAutomationPerformanceTables(ds: DataSource, schema
     );
     await ds.query(
       `INSERT INTO "${s}".point_policy_versions (policy_id, version, formula, reason)
-       VALUES ($1, 1, $2::jsonb, 'Baseline verificata dalla reference Daniele')`,
+       VALUES ($1, 1, $2::jsonb, 'Baseline verificata dalla reference finale')`,
       [inserted[0].id, JSON.stringify(DEFAULT_POINT_POLICY)],
     );
   }
@@ -298,7 +298,7 @@ async function provisionDoflowAutomationPerformanceTables(ds: DataSource, schema
     );
     await ds.query(
       `INSERT INTO "${s}".ranking_config_versions (role, formula_version, metrics, reason)
-       VALUES ($1, 2, $2::jsonb, 'Baseline verificata dalla reference Daniele')
+       VALUES ($1, 2, $2::jsonb, 'Baseline verificata dalla reference finale')
        ON CONFLICT (role, formula_version) DO NOTHING`,
       [config.role, JSON.stringify(config.metrics)],
     );

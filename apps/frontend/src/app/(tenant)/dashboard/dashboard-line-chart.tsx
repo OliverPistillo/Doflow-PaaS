@@ -10,19 +10,19 @@ export function DashboardLineChart({ data }: { data: RevenuePoint[] }) {
     <section className="dashboard-card min-h-[320px] p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-slate-950">Andamento ricavi</h2>
-          <p className="mt-1 text-xs text-slate-500">Snapshot finanziari disponibili</p>
+          <h2 className="text-base font-semibold text-foreground">Andamento ricavi</h2>
+          <p className="mt-1 text-xs text-muted-foreground">Snapshot finanziari disponibili</p>
         </div>
-        <span className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600">
+        <span className="rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-muted-foreground">
           Ultimi 6
         </span>
       </div>
 
       {data.length < 2 ? (
-        <div className="flex h-[235px] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-8 text-center">
+        <div className="flex h-[235px] items-center justify-center rounded-xl border border-dashed border-border bg-muted/60 px-8 text-center">
           <div>
-            <p className="text-sm font-semibold text-slate-700">Serie storica non ancora disponibile</p>
-            <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">
+            <p className="text-sm font-semibold text-foreground">Serie storica non ancora disponibile</p>
+            <p className="mt-1 max-w-sm text-xs leading-5 text-muted-foreground">
               Il grafico apparirà quando saranno presenti almeno due snapshot finanziari reali.
             </p>
           </div>

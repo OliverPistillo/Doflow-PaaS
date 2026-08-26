@@ -83,7 +83,7 @@ export function ActivityFeed() {
           <div className="space-y-4" role="log" aria-live="polite">
             {activities.length === 0 && (
               <div className="flex flex-col items-center justify-center py-12 text-center animate-fadeIn">
-                <div className="df-icon-bubble h-12 w-12 mb-4 opacity-50">
+                <div className="mb-4 grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary opacity-50">
                   <Activity className="h-6 w-6 text-primary/60" aria-hidden="true" />
                 </div>
                 <p className="text-sm font-semibold text-foreground">In attesa di attività...</p>

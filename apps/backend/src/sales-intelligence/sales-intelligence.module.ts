@@ -26,6 +26,8 @@ import { OutreachCampaign } from './entities/outreach-campaign.entity';
 // NotificationsModule è già globale in app.module.ts — importiamo solo il service
 import { NotificationsModule } from '../realtime/notifications.module';
 import { RedisModule } from '../redis/redis.module';
+import { AuthModule } from '../auth/auth.module';
+import { PlatformSuperadminGuard } from '../superadmin/platform-superadmin.guard';
 
 @Module({
   imports: [
@@ -45,6 +47,7 @@ import { RedisModule } from '../redis/redis.module';
     // Deps condivisi già in app.module.ts
     NotificationsModule,
     RedisModule,
+    AuthModule,
   ],
   controllers: [SalesIntelligenceController],
   providers: [
@@ -54,7 +57,8 @@ import { RedisModule } from '../redis/redis.module';
     ResearchService,
     StrategicAnalysisService,
     OutreachGeneratorService,
+    PlatformSuperadminGuard,
   ],
-  exports: [SalesIntelProducer],
+  exports: [SalesIntelProducer, EnrichmentService],
 })
 export class SalesIntelligenceModule {}

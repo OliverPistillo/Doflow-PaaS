@@ -1,9 +1,12 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantNotificationsService } from './tenant-notifications.service';
+import { RequireTenantCapability, TenantUniversalCapabilityGuard } from './tenant-universal-capability.guard';
+import { TenantUniversalScopeGuard } from './tenant-universal-scope.guard';
 
 @Controller('tenant/notifications')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantUniversalScopeGuard, TenantUniversalCapabilityGuard)
+@RequireTenantCapability('canReadNotifications')
 export class TenantNotificationsController {
   constructor(private readonly service: TenantNotificationsService) {}
 

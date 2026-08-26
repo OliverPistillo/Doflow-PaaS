@@ -206,7 +206,7 @@ test("legacy input defaults preserve explicit consumer geometry utilities", () =
   )
   assert.doesNotMatch(
     globals,
-    /html:not\(\[data-tenant-ui="doflow-reference"\]\) \[data-slot="input"\]\s*\{[^}]*height:/s,
+    /html:not\(\[data-tenant-ui="universal"\]\) \[data-slot="input"\]\s*\{[^}]*height:/s,
   )
 })
 
@@ -254,11 +254,19 @@ test("Team admin and sidebar fail closed on unverified or filtered access", () =
     new URL("../../apps/frontend/src/app/(tenant)/dashboard/team-space/page.tsx", import.meta.url),
     "utf8",
   )
+  const identitySource = readFileSync(
+    new URL("../../apps/frontend/src/features/identity/doflow-identity-provider.tsx", import.meta.url),
+    "utf8",
+  )
   const settingsSource = readFileSync(
     new URL("../../apps/frontend/src/features/commercial/components/commercial-settings-page.tsx", import.meta.url),
     "utf8",
   )
-  assert.match(teamPageSource, /searchParams\.get\("tab"\) === "team-accounts" && canAdministerAccounts/)
+  assert.match(teamPageSource, /const requestedTab = searchParams\.get\("tab"\)/)
+  assert.match(teamPageSource, /const activeTab = requestedTab === "team-accounts" && canAdministerAccounts/)
   assert.match(teamPageSource, /<Tabs value=\{activeTab\} onValueChange=\{changeTab\}/)
   assert.match(settingsSource, /href="\/dashboard\/team-space\?tab=team-accounts"/)
+  assert.match(identitySource, /error instanceof ApiError && error\.status === 403/)
+  assert.match(identitySource, /if \(error instanceof ApiError && error\.status === 403\) return \{ items: \[\] \}/)
+  assert.doesNotMatch(identitySource, /teamApi\.members\([^)]*\)\.catch\(\(\) =>/)
 })

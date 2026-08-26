@@ -126,6 +126,7 @@ export type CommercialActivity = {
   completed_at?: string | null;
   status?: string | null;
   priority?: string | null;
+  metadata?: Record<string, unknown> | null;
   kanban_order?: number | string | null;
   assigned_to?: string | null;
   updated_at?: string | null;

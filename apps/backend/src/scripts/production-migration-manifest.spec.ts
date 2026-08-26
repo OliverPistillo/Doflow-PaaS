@@ -7,8 +7,8 @@ import {
 describe('production migration manifest', () => {
   const compiledFiles = PRODUCTION_MIGRATIONS.map((migration) => migration.compiledFile);
 
-  it('pins the exact compiled 171, 175-184 chain', () => {
-    expect(PRODUCTION_MIGRATIONS).toHaveLength(11);
+  it('pins the exact compiled 171, 175-185 chain', () => {
+    expect(PRODUCTION_MIGRATIONS).toHaveLength(12);
     expect(PRODUCTION_MIGRATIONS.map((migration) => migration.timestamp)).toEqual([
       1714752000000,
       1750000000000,
@@ -21,8 +21,9 @@ describe('production migration manifest', () => {
       1820000000000,
       1830000000000,
       1840000000000,
+      1850000000000,
     ]);
-    expect(PRODUCTION_MIGRATION_MAX).toBe(1840000000000);
+    expect(PRODUCTION_MIGRATION_MAX).toBe(1850000000000);
     expect(validateCompiledMigrationFileNames(compiledFiles)).toEqual([...compiledFiles].sort());
   });
 
@@ -34,7 +35,7 @@ describe('production migration manifest', () => {
   it('fails closed when an unknown or future compiled migration is present', () => {
     expect(() => validateCompiledMigrationFileNames([
       ...compiledFiles,
-      '1850000000000-UnknownFutureMigration.js',
+      '1860000000000-UnknownFutureMigration.js',
     ])).toThrow('MIGRATION_ARTIFACTS_INVALID');
   });
 });

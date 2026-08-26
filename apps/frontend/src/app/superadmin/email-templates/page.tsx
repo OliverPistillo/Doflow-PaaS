@@ -201,7 +201,7 @@ export default function EmailTemplatesPage() {
             { title: "Email Inviate", value: stats.totalSent, icon: Send, color: "hsl(var(--chart-2))" },
             { title: "Categorie", value: stats.byCategory.length, icon: Sparkles, color: "hsl(var(--chart-3))" },
           ].map(k => (
-            <Card key={k.title} className="glass-card transition-all duration-300 group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative">
+            <Card key={k.title} className="app-surface-card transition-all duration-300 group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative">
               <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-20 blur-2xl group-hover:opacity-40 transition-opacity duration-500" style={{ backgroundColor: k.color }} />
               <CardContent className="p-6 relative z-10 flex justify-between items-start">
                 <div>
@@ -242,7 +242,7 @@ export default function EmailTemplatesPage() {
       {/* Template Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filtered.map(tpl => (
-          <Card key={tpl.id} className="glass-card group hover:-translate-y-0.5 transition-all duration-200">
+          <Card key={tpl.id} className="app-surface-card group hover:-translate-y-0.5 transition-all duration-200">
             <CardContent className="p-5">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3 min-w-0">
@@ -322,7 +322,7 @@ export default function EmailTemplatesPage() {
       <Sheet open={previewSheet.open} onOpenChange={o => { if (!o) setPreviewSheet({ open: false, html: "" }); }}>
         <SheetContent className="sm:max-w-2xl overflow-y-auto">
           <SheetHeader><SheetTitle>Preview Email</SheetTitle></SheetHeader>
-          <div className="mt-4 border border-border rounded-xl overflow-hidden bg-white">
+          <div className="mt-4 border border-border rounded-xl overflow-hidden bg-card">
             <div dangerouslySetInnerHTML={{ __html: previewSheet.html }} className="p-6" />
           </div>
         </SheetContent>

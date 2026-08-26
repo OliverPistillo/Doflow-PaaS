@@ -32,6 +32,7 @@ export type NavigationItem = {
   url: string
   icon?: LucideIcon
   capability?: DoflowCapability
+  featureKey?: string
   items?: NavigationItem[]
 }
 

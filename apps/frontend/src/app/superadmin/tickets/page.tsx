@@ -81,7 +81,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
 };
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  LOW:      { label: "Bassa",    color: "hsl(210 30% 60%)", bg: "bg-slate-500/10 text-slate-500 border-slate-500/20" },
+  LOW:      { label: "Bassa",    color: "hsl(210 30% 60%)", bg: "bg-muted text-muted-foreground border-border" },
   MEDIUM:   { label: "Media",    color: "hsl(40 80% 55%)",  bg: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
   HIGH:     { label: "Alta",     color: "hsl(20 80% 55%)",  bg: "bg-orange-500/10 text-orange-600 border-orange-500/20" },
   CRITICAL: { label: "Critica",  color: "hsl(0 70% 55%)",   bg: "bg-red-500/10 text-red-600 border-red-500/20" },
@@ -99,7 +99,7 @@ function KpiCard({ title, value, sub, icon: Icon, color }: {
   icon: React.ComponentType<{ className?: string }>; color: string;
 }) {
   return (
-    <Card className="glass-card transition-all duration-300 group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative">
+    <Card className="app-surface-card transition-all duration-300 group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative">
       <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-20 blur-2xl group-hover:opacity-40 transition-opacity duration-500" style={{ backgroundColor: color }} />
       <CardContent className="p-6 relative z-10 flex justify-between items-start">
         <div>
@@ -289,7 +289,7 @@ export default function TicketsPage() {
       {/* Ticket List */}
       <div className="space-y-2">
         {tickets.length === 0 ? (
-          <Card className="glass-card"><CardContent className="py-16 text-center text-muted-foreground">
+          <Card className="app-surface-card"><CardContent className="py-16 text-center text-muted-foreground">
             <Ticket className="h-10 w-10 mx-auto mb-3 opacity-40" /><p className="font-medium">Nessun ticket</p>
           </CardContent></Card>
         ) : (
@@ -298,7 +298,7 @@ export default function TicketsPage() {
             const pc = PRIORITY_CONFIG[t.priority] || PRIORITY_CONFIG.MEDIUM;
             const sla = getSlaStatus(t);
             return (
-              <Card key={t.id} className="glass-card group hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
+              <Card key={t.id} className="app-surface-card group hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
                 onClick={() => { setDetailSheet(t); setReplyText(""); }}>
                 <CardContent className="p-4 flex items-center gap-4">
                   <div className="shrink-0 text-center">
@@ -384,7 +384,7 @@ export default function TicketsPage() {
                 </div>
 
                 {/* Description */}
-                <Card className="glass-card">
+                <Card className="app-surface-card">
                   <CardContent className="p-4">
                     <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">Descrizione</p>
                     <p className="text-sm text-foreground whitespace-pre-wrap">{detailSheet.description}</p>

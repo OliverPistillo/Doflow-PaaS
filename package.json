@@ -54,6 +54,7 @@
     "acceptance:automation-performance:down": "node scripts/commercial-core-isolated-stack.mjs down",
     "acceptance:automation-performance": "node scripts/commercial-core-isolated-stack.mjs run-automation-performance",
     "acceptance:final": "node scripts/commercial-core-isolated-stack.mjs run-final",
+    "acceptance:universal": "node scripts/universal-features-isolated-gate.mjs",
     "acceptance:superadmin": "node scripts/commercial-core-isolated-stack.mjs run-superadmin",
     "visual:final": "node scripts/commercial-core-isolated-stack.mjs run-visual-final",
     "acceptance:web-session": "node scripts/commercial-core-isolated-stack.mjs run-web-session",
@@ -65,7 +66,9 @@
     "audit:release-candidate": "node scripts/final-release-audit.mjs",
     "audit:security:final": "node scripts/final-security-audit.mjs",
     "audit:doflow-ui-purity": "node scripts/audit-doflow-ui-purity.mjs",
-    "test:doflow-ui-purity": "node --test tests/frontend/doflow-ui-purity.test.mjs"
+    "audit:universal-ui-purity": "node scripts/audit-doflow-ui-purity.mjs",
+    "test:doflow-ui-purity": "node --test tests/frontend/doflow-ui-purity.test.mjs",
+    "test:universal-ui-purity": "node --test tests/frontend/doflow-ui-purity.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",

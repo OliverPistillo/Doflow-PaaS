@@ -243,6 +243,29 @@ export class TenantCalendarService {
     return { sql: `(${financeSql}) AND (${privateParts.join(' OR ') || 'FALSE'})`, params };
   }
 
+  private viewVisibilityWhere(
+    user: AuthUser,
+    alias = 'v',
+    startParam = 1,
+    write = false,
+  ): { sql: string; params: unknown[] } {
+    if (write && this.isAdmin(user.role)) return { sql: `${alias}.is_system = false`, params: [] };
+    if (!write && this.isAdmin(user.role)) return { sql: 'TRUE', params: [] };
+    const userId = this.uuidOrNull(user.id);
+    if (!userId) {
+      return {
+        sql: write ? 'FALSE' : `(${alias}.is_system = true OR ${alias}.is_shared = true)`,
+        params: [],
+      };
+    }
+    return {
+      sql: write
+        ? `(${alias}.is_system = false AND ${alias}.created_by = $${startParam})`
+        : `(${alias}.is_system = true OR ${alias}.is_shared = true OR ${alias}.created_by = $${startParam})`,
+      params: [userId],
+    };
+  }
+
   private scrubEvent(row: any, user: AuthUser) {
     if (!row) return row;
     if (this.canViewFinance(user.role) || !FINANCE_CALENDAR_EVENT_TYPES.has(row.event_type)) return row;
@@ -529,7 +552,13 @@ export class TenantCalendarService {
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const id = this.requireUuid(eventId, 'eventId');
-    await this.dataSource.query(`UPDATE "${schema}".calendar_events SET deleted_at = now(), updated_at = now() WHERE id = $1 AND deleted_at IS NULL`, [id]);
+    const visibility = this.visibilityWhere(user, 'e', 2);
+    const rows = await this.dataSource.query(
+      `UPDATE "${schema}".calendar_events AS e SET deleted_at = now(), updated_at = now()
+       WHERE e.id = $1 AND e.deleted_at IS NULL AND ${visibility.sql} RETURNING e.id`,
+      [id, ...visibility.params],
+    );
+    if (!rows[0]) throw new NotFoundException('Evento non trovato');
     await this.logActivity(schema, 'event_deleted', { eventId: id, actorUserId: this.uuidOrNull(user.id) });
     return { deleted: true };
   }
@@ -539,9 +568,11 @@ export class TenantCalendarService {
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const id = this.requireUuid(eventId, 'eventId');
+    const visibility = this.visibilityWhere(user, 'e', 3);
     const rows = await this.dataSource.query(
-      `UPDATE "${schema}".calendar_events SET status = $2, updated_at = now() WHERE id = $1 AND deleted_at IS NULL RETURNING *`,
-      [id, status],
+      `UPDATE "${schema}".calendar_events AS e SET status = $2, updated_at = now()
+       WHERE e.id = $1 AND e.deleted_at IS NULL AND ${visibility.sql} RETURNING e.*`,
+      [id, status, ...visibility.params],
     );
     if (!rows[0]) throw new NotFoundException('Evento non trovato');
     await this.logActivity(schema, status === 'completed' ? 'event_completed' : 'event_cancelled', { eventId: id, actorUserId: this.uuidOrNull(user.id) });
@@ -651,9 +682,18 @@ export class TenantCalendarService {
     const user = this.assertRead();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
+    const id = this.requireUuid(reminderId, 'reminderId');
+    const visibility = this.visibilityWhere(user, 'e', 2);
     const rows = await this.dataSource.query(
-      `UPDATE "${schema}".calendar_event_reminders SET status = 'dismissed', dismissed_at = now(), updated_at = now() WHERE id = $1 RETURNING *`,
-      [this.requireUuid(reminderId, 'reminderId')],
+      `UPDATE "${schema}".calendar_event_reminders AS r
+       SET status = 'dismissed', dismissed_at = now(), updated_at = now()
+       WHERE r.id = $1
+         AND EXISTS (
+           SELECT 1 FROM "${schema}".calendar_events e
+           WHERE e.id = r.event_id AND e.deleted_at IS NULL AND ${visibility.sql}
+         )
+       RETURNING r.*`,
+      [id, ...visibility.params],
     );
     if (!rows[0]) throw new NotFoundException('Reminder non trovato');
     await this.logActivity(schema, 'reminder_dismissed', { eventId: rows[0].event_id, actorUserId: this.uuidOrNull(user.id), metadata: { reminder_id: reminderId } });
@@ -664,7 +704,19 @@ export class TenantCalendarService {
     const user = this.assertManage();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
-    await this.dataSource.query(`DELETE FROM "${schema}".calendar_event_reminders WHERE id = $1`, [this.requireUuid(reminderId, 'reminderId')]);
+    const id = this.requireUuid(reminderId, 'reminderId');
+    const visibility = this.visibilityWhere(user, 'e', 2);
+    const rows = await this.dataSource.query(
+      `DELETE FROM "${schema}".calendar_event_reminders AS r
+       WHERE r.id = $1
+         AND EXISTS (
+           SELECT 1 FROM "${schema}".calendar_events e
+           WHERE e.id = r.event_id AND e.deleted_at IS NULL AND ${visibility.sql}
+         )
+       RETURNING r.id`,
+      [id, ...visibility.params],
+    );
+    if (!rows[0]) throw new NotFoundException('Reminder non trovato');
     await this.logActivity(schema, 'reminder_deleted', { actorUserId: this.uuidOrNull(user.id), metadata: { reminder_id: reminderId } });
     return { deleted: true };
   }
@@ -791,7 +843,8 @@ export class TenantCalendarService {
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const range = this.defaultRange(query);
-    const visibility = this.visibilityWhere(user, 'a', 3);
+    const visibilityA = this.visibilityWhere(user, 'a', 3);
+    const visibilityB = this.visibilityWhere(user, 'b', 3 + visibilityA.params.length);
     const rows = await this.dataSource.query(
       `SELECT
          a.id AS event_a_id,
@@ -816,10 +869,11 @@ export class TenantCalendarService {
         AND b.start_at < COALESCE(a.end_at, a.start_at + interval '1 hour')
        WHERE a.start_at <= $2::timestamptz
          AND COALESCE(a.end_at, a.start_at) >= $1::timestamptz
-         AND ${visibility.sql}
+         AND ${visibilityA.sql}
+         AND ${visibilityB.sql}
        ORDER BY overlap_start ASC
-       LIMIT $${visibility.params.length + 3}`,
-      [range.start, range.end, ...visibility.params, this.normalizeLimit(query.limit, 100)],
+       LIMIT $${visibilityA.params.length + visibilityB.params.length + 3}`,
+      [range.start, range.end, ...visibilityA.params, ...visibilityB.params, this.normalizeLimit(query.limit, 100)],
     );
     return { range, items: rows, total: rows.length };
   }
@@ -871,23 +925,31 @@ export class TenantCalendarService {
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const params: unknown[] = [];
-    const where = ['deleted_at IS NULL'];
+    const where = ['v.deleted_at IS NULL'];
     if (query.view_type) {
       params.push(this.normalizeEnum(query.view_type, PLANNING_VIEW_TYPES, 'calendar', 'view_type'));
-      where.push(`view_type = $${params.length}`);
+      where.push(`v.view_type = $${params.length}`);
     }
+    const visibility = this.viewVisibilityWhere(user, 'v', params.length + 1);
+    where.push(visibility.sql);
+    params.push(...visibility.params);
     const rows = await this.dataSource.query(
-      `SELECT * FROM "${schema}".planning_views WHERE ${where.join(' AND ')} ORDER BY is_default DESC, name ASC`,
+      `SELECT v.* FROM "${schema}".planning_views v WHERE ${where.join(' AND ')} ORDER BY v.is_default DESC, v.name ASC`,
       params,
     );
     return { items: rows };
   }
 
   async getView(viewId: string) {
-    this.assertRead();
+    const user = this.assertRead();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
-    const rows = await this.dataSource.query(`SELECT * FROM "${schema}".planning_views WHERE id = $1 AND deleted_at IS NULL LIMIT 1`, [this.requireUuid(viewId, 'viewId')]);
+    const visibility = this.viewVisibilityWhere(user, 'v', 2);
+    const rows = await this.dataSource.query(
+      `SELECT v.* FROM "${schema}".planning_views v
+       WHERE v.id = $1 AND v.deleted_at IS NULL AND ${visibility.sql} LIMIT 1`,
+      [this.requireUuid(viewId, 'viewId'), ...visibility.params],
+    );
     if (!rows[0]) throw new NotFoundException('Vista non trovata');
     return rows[0];
   }
@@ -919,11 +981,12 @@ export class TenantCalendarService {
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const existing = await this.getView(viewId);
+    const visibility = this.viewVisibilityWhere(user, 'v', 9, true);
     const rows = await this.dataSource.query(
-      `UPDATE "${schema}".planning_views
+      `UPDATE "${schema}".planning_views AS v
        SET name=$2, description=$3, view_type=$4, filters=$5::jsonb, layout_config=$6::jsonb,
-           is_default=$7, is_shared=$8, updated_at=now()
-       WHERE id=$1 AND deleted_at IS NULL RETURNING *`,
+            is_default=$7, is_shared=$8, updated_at=now()
+       WHERE v.id=$1 AND v.deleted_at IS NULL AND ${visibility.sql} RETURNING v.*`,
       [
         this.requireUuid(viewId, 'viewId'),
         String(body.name ?? existing.name).trim(),
@@ -933,8 +996,10 @@ export class TenantCalendarService {
         body.layout_config !== undefined ? JSON.stringify(this.parseJsonObject(body.layout_config)) : JSON.stringify(existing.layout_config || {}),
         body.is_default !== undefined ? this.parseBool(body.is_default) : Boolean(existing.is_default),
         body.is_shared !== undefined ? this.parseBool(body.is_shared) : Boolean(existing.is_shared),
+        ...visibility.params,
       ],
     );
+    if (!rows[0]) throw new NotFoundException('Vista non trovata');
     await this.logActivity(schema, 'view_updated', { viewId, actorUserId: this.uuidOrNull(user.id) });
     return rows[0];
   }
@@ -943,7 +1008,13 @@ export class TenantCalendarService {
     const user = this.assertManage();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
-    await this.dataSource.query(`UPDATE "${schema}".planning_views SET deleted_at = now(), updated_at = now() WHERE id = $1 AND deleted_at IS NULL`, [this.requireUuid(viewId, 'viewId')]);
+    const visibility = this.viewVisibilityWhere(user, 'v', 2, true);
+    const rows = await this.dataSource.query(
+      `UPDATE "${schema}".planning_views AS v SET deleted_at = now(), updated_at = now()
+       WHERE v.id = $1 AND v.deleted_at IS NULL AND ${visibility.sql} RETURNING v.id`,
+      [this.requireUuid(viewId, 'viewId'), ...visibility.params],
+    );
+    if (!rows[0]) throw new NotFoundException('Vista non trovata');
     await this.logActivity(schema, 'view_deleted', { viewId, actorUserId: this.uuidOrNull(user.id) });
     return { deleted: true };
   }
@@ -1069,11 +1140,14 @@ export class TenantCalendarService {
   }
 
   async derivedPreview() {
-    this.assertRead();
+    const user = this.assertRead();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const matches = await this.collectDerivedMatches(schema);
-    return { total: matches.length, items: matches.slice(0, 200) };
+    const visible = this.canViewFinance(user.role)
+      ? matches
+      : matches.filter((match) => !FINANCE_CALENDAR_EVENT_TYPES.has(match.event_type));
+    return { total: visible.length, items: visible.slice(0, 200) };
   }
 
   async syncDerived(body: Record<string, any> = {}) {

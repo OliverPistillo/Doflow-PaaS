@@ -1,811 +1,396 @@
 import fs from "node:fs"
 import path from "node:path"
-import process from "node:process"
-import { pathToFileURL } from "node:url"
+import { fileURLToPath } from "node:url"
 
-export const PURITY_SUCCESS = "DOFLOW FRONTEND LEGACY RESIDUE = 0 REACHABLE"
+export const LEGACY_SUCCESS = "GLOBAL FRONTEND LEGACY VISUAL RESIDUE = 0 REACHABLE"
+export const SEMANTIC_SUCCESS = "UNIVERSAL UI SEMANTIC TOKEN COMPLIANCE = PASS"
+export const ARCADE_SUCCESS = "FLOW ARCADE FRONTEND REACHABILITY = 0"
 
-const MODULE_EXTENSIONS = [
-  ".ts",
-  ".tsx",
-  ".mts",
-  ".cts",
-  ".js",
-  ".jsx",
-  ".mjs",
-  ".cjs",
-  ".css",
-  ".scss",
-  ".sass",
-  ".json",
-]
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url))
+const REPOSITORY_ROOT = path.resolve(SCRIPT_DIR, "..")
+const FRONTEND_SOURCE = path.join(REPOSITORY_ROOT, "apps", "frontend", "src")
+const CODE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]
+const STYLE_EXTENSIONS = [".css", ".scss", ".sass"]
+const RESOLVABLE_EXTENSIONS = [...CODE_EXTENSIONS, ...STYLE_EXTENSIONS, ".json"]
 const NEXT_ROUTE_FILE = /^(?:page|layout|template|loading|error|not-found)\.(?:ts|tsx|js|jsx)$/
-const REQUIRED_ROUTE_ENTRIES = [
-  "app/(tenant)/dashboard/page.tsx",
-  "app/(tenant)/dashboard/commercial/page.tsx",
-  "app/(tenant)/commercial/site-proposals/page.tsx",
-  "app/(tenant)/dashboard/clienti/page.tsx",
-  "app/(tenant)/dashboard/progetti/page.tsx",
-  "app/(tenant)/dashboard/team-space/page.tsx",
-  "app/(tenant)/dashboard/automazioni/page.tsx",
-  "app/(tenant)/dashboard/impostazioni/page.tsx",
-]
+const PERSONAL_RUNTIME_NAME = ["dani", "ele"].join("")
+
 const REQUIRED_GRAPH_ROOTS = [
   "app/layout.tsx",
-  "app/(tenant)/layout.tsx",
   "app/globals.css",
-  "components/layout/doflow-daniele-shell.tsx",
+  "app/(tenant)/layout.tsx",
+  "app/superadmin/layout.tsx",
+  "components/layout/tenant-app-shell.tsx",
+  "components/layout/platform-app-shell.tsx",
+  "components/ui/sidebar.tsx",
+]
+
+const FORBIDDEN_FILES = [
+  "components/layout/legacy-tenant-shell.tsx",
+  "components/layout/roomy-sidebar.tsx",
+  "components/layout/tenant-sidebar.tsx",
+  "components/layout/tenant-sidebar-section.tsx",
+  "components/layout/theme-settings-drawer.tsx",
+]
+
+const SEMANTIC_SCOPE = [
+  "app/(tenant)/dashboard/",
+  "app/(tenant)/commercial/site-proposals/",
+  "app/superadmin/",
+  "app/login/",
+  "app/signup/",
+  "app/register/",
+  "app/forgot-password/",
+  "app/reset-password/",
+  "app/auth/",
+  "app/[tenant]/mfa/",
+  "components/auth/",
+  "components/flow-experience/",
+  "components/layout/",
+  "components/tenant-bonus/",
+  "components/tenant-collaboration/",
+  "components/tenant-company-intelligence/",
+  "components/tenant-flowboard/",
+  "components/tenant-inbox/",
+  "components/tenant-site-proposals/",
+  "components/ui/",
   "components/app-sidebar.tsx",
   "components/dashboard-header.tsx",
-  "components/theme-toggle.tsx",
-  "components/ui/sidebar.tsx",
-  "components/tenant-site-proposals/site-proposals-access-gate.tsx",
+  "components/team-switcher.tsx",
+  "features/commercial/components/quote-preview-page.tsx",
 ]
 
-const CODE_RULES = [
-  { label: "legacy TenantSidebar component", pattern: /\bTenantSidebar\b/gi },
-  { label: "legacy LegacyTenantLayout component", pattern: /\bLegacyTenantLayout\b/gi },
-  { label: "legacy LegacyTenantShell component", pattern: /\bLegacyTenantShell\b/gi },
-  { label: "legacy ThemeSettingsDrawer component", pattern: /\bThemeSettingsDrawer\b/gi },
-  { label: "legacy doflow-topbar class", pattern: /(?<!--)\bdoflow-topbar\b/gi },
-  { label: "legacy df-* class or token", pattern: /\bdf-(?!auth(?:-|\b)|login(?:-|\b))[a-z0-9-]+\b/gi },
-  { label: "legacy --df-* custom property", pattern: /--df-(?!auth(?:-|\b))[a-z0-9-]+\b/gi },
-  { label: "late Daniele visual token", pattern: /--daniele-[a-z0-9-]+\b/gi },
-  { label: "Figma-era visual primitive", pattern: /\bfigma\b/gi },
-  { label: "legacy rounded-card primitive", pattern: /\brounded-card\b/gi },
-  { label: "legacy rounded-nav primitive", pattern: /\brounded-nav\b/gi },
-  { label: "legacy shadow-card primitive", pattern: /\bshadow-card\b/gi },
-  {
-    label: "superseded default/Daniele visual marker",
-    pattern: /data-(?:doflow-(?:theme|prepaint|shell)|builder-shell)\s*=\s*["'](?:default|daniele-(?:default|design))["']/gi,
-  },
-  {
-    label: "authoritative fixture or demo-data import",
-    pattern: /(?:from\s+|import\s*\()["'][^"']*(?:fixtures?|demo-data)[^"']*["']/gi,
-  },
-  {
-    label: "removed Client Portal surface",
-    pattern: /(?:\bClientPortal\b|client-portal|["']\/client(?:\/|["'])|["']\/client-portal(?:\/|["']))/gi,
-  },
-  {
-    label: "authoritative business state in localStorage",
-    pattern: /(?:window\.)?localStorage\.(?:getItem|setItem)\([^\n]*(?:lead|customer|project|catalog|sale|order|payment|refund|invoice|contract)/gi,
-  },
+const STRUCTURAL_COLOR_PATTERNS = [
+  { label: "fixed white background", pattern: /\bbg-white(?:\/\d+)?\b/g },
+  { label: "legacy slate text", pattern: /\btext-slate-\d+(?:\/\d+)?\b/g },
+  { label: "legacy slate border", pattern: /\bborder-slate-\d+(?:\/\d+)?\b/g },
+  { label: "legacy indigo structural color", pattern: /\b(?:bg|text|border)-indigo-\d+(?:\/\d+)?\b/g },
+  { label: "legacy radius alias", pattern: /\brounded-(?:card|nav)\b/g },
+  { label: "legacy shadow alias", pattern: /\bshadow-card\b/g },
 ]
 
-function walk(directory, accept) {
+const STRUCTURAL_CSS_PATTERNS = [
+  { label: "fixed structural CSS color", pattern: /\b(?:background(?:-color)?|border(?:-color)?|color)\s*:[^;}]*?(?:#[0-9a-f]{3,8}\b|rgba?\()/gi },
+  { label: "fixed structural CSS radius", pattern: /\bborder-radius\s*:\s*(?!var\(|50%\b|999px\b)[0-9.]+(?:px|rem)\b/gi },
+  { label: "legacy CSS radius token", pattern: /var\(\s*--radius-(?:card|nav)\b/gi },
+  { label: "legacy CSS shadow token", pattern: /var\(\s*--shadow-(?:card|button|sm|md|lg)\b/gi },
+]
+
+const GLOBAL_CSS_LEGACY_PATTERNS = [
+  { label: "legacy .df-* selector remains in global CSS", pattern: /\.df-[a-z0-9-]+\b/gi },
+  { label: "legacy --df-* token remains in global CSS", pattern: /--df-[a-z0-9-]+\b/gi },
+  { label: "legacy Superadmin visual wrapper remains in global CSS", pattern: /\.(?:dashboard-content|glass-card)\b/gi },
+]
+
+function unixPath(value) {
+  return value.split(path.sep).join("/")
+}
+
+function relativeTo(root, file) {
+  return unixPath(path.relative(root, file))
+}
+
+function walkFiles(directory) {
   if (!fs.existsSync(directory)) return []
-  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const target = path.join(directory, entry.name)
-    return entry.isDirectory() ? walk(target, accept) : accept(target) ? [target] : []
-  })
+  const files = []
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const absolute = path.join(directory, entry.name)
+    if (entry.isDirectory()) files.push(...walkFiles(absolute))
+    else files.push(absolute)
+  }
+  return files
 }
 
-function unixRelative(root, file) {
-  return path.relative(root, file).split(path.sep).join("/")
-}
-
-function isInside(parent, candidate) {
-  const relative = path.relative(parent, candidate)
-  return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative))
-}
-
-function lineNumber(source, offset) {
-  return source.slice(0, Math.max(0, offset)).split(/\r?\n/).length
-}
-
-function addFinding(findings, seen, file, source, offset, label) {
-  const location = `${file}:${lineNumber(source, offset)}`
-  const finding = `${location}: ${label}`
-  if (!seen.has(finding)) {
-    seen.add(finding)
-    findings.push(finding)
-  }
-}
-
-export function extractImportRequests(source, extension = ".tsx") {
-  const requests = new Set()
-  const patterns = [
-    /\bfrom\s*["']([^"']+)["']/g,
-    /\b(?:import|require)\s*\(\s*["']([^"']+)["']\s*\)/g,
-    /\bimport\s*["']([^"']+)["']/g,
-  ]
-  if ([".css", ".scss", ".sass"].includes(extension)) {
-    patterns.push(/@import\s+(?:url\(\s*)?["']([^"']+)["']/g)
-  }
-  for (const pattern of patterns) {
-    for (const match of source.matchAll(pattern)) requests.add(match[1])
-  }
-  return [...requests]
-}
-
-export function resolveLocalImport(sourceRoot, from, request) {
-  if (!request.startsWith("@/") && !request.startsWith(".")) return null
-  const cleanRequest = request.split(/[?#]/, 1)[0]
-  const base = cleanRequest.startsWith("@/")
-    ? path.join(sourceRoot, cleanRequest.slice(2))
-    : path.resolve(path.dirname(from), cleanRequest)
-  if (!isInside(sourceRoot, base)) return null
-  const candidates = [
-    base,
-    ...MODULE_EXTENSIONS.map((extension) => `${base}${extension}`),
-    ...MODULE_EXTENSIONS.map((extension) => path.join(base, `index${extension}`)),
-  ]
-  return candidates.find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile()) ?? null
-}
-
-export function isInactiveDoflowEdge(sourceRoot, from, request) {
-  const relative = unixRelative(sourceRoot, from)
-  // The tenant layout is itself part of the authenticated Doflow graph. Only
-  // its explicit non-Doflow fallback shell edge is inactive for Doflow.
-  if (
-    relative === "app/(tenant)/layout.tsx" &&
-    request === "@/components/layout/legacy-tenant-shell"
-  ) {
-    return true
-  }
-  // `/dashboard` is shared by all tenants. Doflow takes RoleAwareDashboard;
-  // DashboardClient is the explicitly retained non-Doflow branch.
-  return relative === "app/(tenant)/dashboard/page.tsx" && request === "./dashboard-client"
-}
-
-export function traceReachableGraph({ sourceRoot, entries, skipEdge = () => false }) {
-  const visited = new Set()
-  const parents = new Map()
-  const queue = [...new Set(entries.map((entry) => path.resolve(entry)))]
-
-  while (queue.length) {
-    const file = queue.shift()
-    if (!file || visited.has(file) || !isInside(sourceRoot, file) || !fs.existsSync(file)) continue
-    visited.add(file)
-    const extension = path.extname(file).toLowerCase()
-    if (![".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".css", ".scss", ".sass"].includes(extension)) continue
-    const source = fs.readFileSync(file, "utf8")
-    for (const request of extractImportRequests(source, extension)) {
-      if (skipEdge(file, request)) continue
-      const resolved = resolveLocalImport(sourceRoot, file, request)
-      if (!resolved || visited.has(resolved)) continue
-      if (!parents.has(resolved)) parents.set(resolved, { from: file, request })
-      queue.push(resolved)
-    }
-  }
-
-  return { visited, parents }
-}
-
-function cssBlocks(source) {
-  const blocks = []
-  const stack = []
-  let boundary = 0
-  let quote = null
-  let comment = false
-
-  for (let index = 0; index < source.length; index += 1) {
-    const character = source[index]
-    const next = source[index + 1]
-    if (comment) {
-      if (character === "*" && next === "/") {
-        comment = false
-        index += 1
-      }
-      continue
-    }
-    if (quote) {
-      if (character === "\\") index += 1
-      else if (character === quote) quote = null
-      continue
-    }
-    if (character === "/" && next === "*") {
-      comment = true
-      index += 1
-      continue
-    }
-    if (character === '"' || character === "'") {
-      quote = character
-      continue
-    }
-    if (character === "{") {
-      const rawHeader = source.slice(boundary, index)
-      const leading = rawHeader.length - rawHeader.trimStart().length
-      const block = {
-        header: rawHeader.replace(/\/\*[\s\S]*?\*\//g, " ").trim(),
-        headerStart: boundary + leading,
-        open: index,
-        close: source.length,
-        parent: stack.at(-1) ?? null,
-      }
-      blocks.push(block)
-      stack.push(block)
-      boundary = index + 1
-    } else if (character === "}") {
-      const block = stack.pop()
-      if (block) block.close = index
-      boundary = index + 1
-    } else if (character === ";") {
-      boundary = index + 1
-    }
-  }
-  return blocks
-}
-
-function cssAncestors(block) {
-  const ancestors = []
-  let current = block
-  while (current) {
-    ancestors.unshift(current.header)
-    current = current.parent
-  }
-  return ancestors
-}
-
-function classTokensFromSource(source) {
-  const classes = new Set(["dark", "light"])
-  for (const literal of source.matchAll(/["'`]([^"'`\r\n]+)["'`]/g)) {
-    for (const token of literal[1].split(/\s+/)) {
-      const normalized = token
-        .replace(/^[^a-z_.-]+/i, "")
-        .replace(/[^a-z0-9_-]+$/gi, "")
-      if (/^[a-z_][a-z0-9_-]*$/i.test(normalized)) classes.add(normalized)
-    }
-  }
-  return classes
-}
-
-export function collectGraphSymbols(sources) {
-  const classes = new Set(["dark", "light"])
-  const dataAttributes = new Set()
-  const dataValues = new Set()
-  const cssVariables = new Set()
-  for (const source of sources) {
-    for (const value of classTokensFromSource(source)) classes.add(value)
-    for (const match of source.matchAll(/\b(data-[a-z0-9-]+)(?:\s*=\s*["']([^"']+)["'])?/gi)) {
-      const attribute = match[1].toLowerCase()
-      dataAttributes.add(attribute)
-      if (match[2]) dataValues.add(`${attribute}=${match[2].toLowerCase()}`)
-    }
-    for (const match of source.matchAll(/setAttribute\(\s*["'](data-[a-z0-9-]+)["']\s*,\s*["']([^"']+)["']\s*\)/gi)) {
-      const attribute = match[1].toLowerCase()
-      dataAttributes.add(attribute)
-      dataValues.add(`${attribute}=${match[2].toLowerCase()}`)
-    }
-    for (const match of source.matchAll(/var\(\s*(--[a-z0-9-]+)\b/gi)) cssVariables.add(match[1].toLowerCase())
-  }
-  return { classes, dataAttributes, dataValues, cssVariables }
-}
-
-function selectorCouldMatchDoflow(selector, symbols) {
-  const branches = selector.split(/,(?![^()]*\))/)
-  return branches.some((branch) => {
-    for (const negative of branch.matchAll(/:not\(\s*\[(data-[a-z0-9-]+)\s*=\s*["']([^"']+)["']\s*\]\s*\)/gi)) {
-      if (symbols.dataValues.has(`${negative[1].toLowerCase()}=${negative[2].toLowerCase()}`)) return false
-    }
-    for (const attribute of branch.matchAll(/\[(data-[a-z0-9-]+)(?:\s*=\s*["']([^"']+)["'])?[^\]]*\]/gi)) {
-      const key = attribute[1].toLowerCase()
-      if (branch.slice(Math.max(0, attribute.index - 6), attribute.index).includes(":not(")) continue
-      if (!symbols.dataAttributes.has(key)) return false
-      if (attribute[2] && !symbols.dataValues.has(`${key}=${attribute[2].toLowerCase()}`)) return false
-    }
-    for (const classMatch of branch.matchAll(/\.([a-z_][a-z0-9_-]*)/gi)) {
-      if (!symbols.classes.has(classMatch[1])) return false
-    }
-    return true
-  })
-}
-
-function isCanonicalComponentLayer(block) {
-  return cssAncestors(block).some((header) => /^@layer\s+components\b/i.test(header))
-}
-
-export function scanCssForLegacy(source, file = "styles.css", symbols = collectGraphSymbols([])) {
-  const findings = []
-  const seen = new Set()
-  const blocks = cssBlocks(source)
-
-  for (const block of blocks) {
-    const selector = block.header
-    if (!selector || selector.startsWith("@") || !selectorCouldMatchDoflow(selector, symbols)) continue
-    const body = source.slice(block.open + 1, block.close)
-    const selectorOffset = block.headerStart
-    if (/\.df-[a-z0-9-]+\b/i.test(selector)) {
-      addFinding(findings, seen, file, source, selectorOffset, "legacy df-* selector matches the Doflow graph")
-    }
-    if (/\.doflow-(?:app-frame|main(?:-[a-z0-9-]+)?|topbar|page(?:-[a-z0-9-]+)?|content(?:-[a-z0-9-]+)?|sidebar(?:-[a-z0-9-]+)?)\b/i.test(selector)) {
-      addFinding(findings, seen, file, source, selectorOffset, "legacy Doflow wrapper selector matches the Doflow graph")
-    }
-    if (/\[data-(?:doflow|builder)-shell\s*=\s*["']daniele-design["']\]/i.test(selector)) {
-      addFinding(findings, seen, file, source, selectorOffset, "superseded Daniele-design CSS selector matches the Doflow graph")
-    }
-    for (const match of body.matchAll(/var\(\s*(--(?:df|daniele)-[a-z0-9-]+)\b/gi)) {
-      addFinding(findings, seen, file, source, block.open + 1 + match.index, "legacy visual custom property is consumed by Doflow CSS")
-    }
-    for (const match of body.matchAll(/(--(?:df|daniele)-[a-z0-9-]+)\s*:/gi)) {
-      if (!symbols.cssVariables.has(match[1].toLowerCase())) continue
-      addFinding(findings, seen, file, source, block.open + 1 + match.index, "legacy visual custom property referenced by the Doflow graph is defined globally")
-    }
-    const primitiveSelector = /\[data-sidebar(?:=|\])|\[data-slot\s*=\s*["'](?:sidebar|button|card|input|progress)/i.test(selector)
-    const canonicalDoflowScope = /\[data-tenant-ui\s*=\s*["']doflow-reference["']\]/i.test(selector)
-    const legacyOverride = /!important|var\(\s*--(?:df|daniele)-|var\(\s*--(?:radius-nav|shadow-card)|backdrop-filter/i.test(body)
-    if (primitiveSelector && !canonicalDoflowScope && (!isCanonicalComponentLayer(block) || legacyOverride)) {
-      addFinding(findings, seen, file, source, selectorOffset, "unscoped generic primitive CSS override matches the Doflow graph")
-    }
-  }
-  return findings
-}
-
-export function scanCodeForLegacy(source, file = "module.tsx", options = {}) {
-  const findings = []
-  const seen = new Set()
-  for (const rule of CODE_RULES) {
-    if (options.allowLegacyTenantShell === true && rule.label === "legacy LegacyTenantShell component") continue
-    for (const match of source.matchAll(rule.pattern)) {
-      addFinding(findings, seen, file, source, match.index, rule.label)
-    }
-  }
-  return findings
-}
-
-function sourceHas(source, pattern) {
-  return pattern.test(source)
-}
-
-function contractFinding(file, label) {
-  return `${file}: ${label}`
-}
-
-export function auditThemeContract({ rootLayout, shell, header, toggle }, files = {}) {
-  const names = {
-    rootLayout: files.rootLayout ?? "app/layout.tsx",
-    shell: files.shell ?? "components/layout/doflow-daniele-shell.tsx",
-    header: files.header ?? "components/dashboard-header.tsx",
-    toggle: files.toggle ?? "components/theme-toggle.tsx",
-  }
-  const findings = []
-  if (!sourceHas(rootLayout, /<ThemeProvider\b[\s\S]*?attribute\s*=\s*["']class["']/)) {
-    findings.push(contractFinding(names.rootLayout, "ThemeProvider must drive the html class attribute"))
-  }
-  if (/\bforcedTheme\s*=/.test(rootLayout)) {
-    findings.push(contractFinding(names.rootLayout, "ThemeProvider must not force a single theme"))
-  }
-  if (!/from\s+["']next-themes["']/.test(toggle) || !/\buseTheme\s*\(/.test(toggle)) {
-    findings.push(contractFinding(names.toggle, "ThemeToggle must use next-themes useTheme()"))
-  }
-  if (!/\bresolvedTheme\b/.test(toggle) || !/\bsetTheme\s*\(/.test(toggle)) {
-    findings.push(contractFinding(names.toggle, "ThemeToggle must read resolvedTheme and call setTheme"))
-  }
-  if (!/["']dark["']/.test(toggle) || !/["']light["']/.test(toggle)) {
-    findings.push(contractFinding(names.toggle, "ThemeToggle must support both dark and light"))
-  }
-  if (!/\bSun\b/.test(toggle) || !/\bMoon\b/.test(toggle) || !/aria-label\s*=/.test(toggle)) {
-    findings.push(contractFinding(names.toggle, "ThemeToggle must expose Sun/Moon state and an accessible label"))
-  }
-  if (!/from\s+["']@\/components\/(?:theme\/)?theme-toggle["']/.test(header) || !/<ThemeToggle\b/.test(header)) {
-    findings.push(contractFinding(names.header, "DashboardHeader must render the real ThemeToggle"))
-  }
-  if (/aria-label\s*=\s*["'][^"']*tema predefinito/i.test(header) || /aria-pressed\s*=\s*["']true["'][\s\S]{0,160}<Sun\b/i.test(header)) {
-    findings.push(contractFinding(names.header, "static decorative theme button is forbidden"))
-  }
-  const hardLocks = [
-    /classList\.remove\(\s*["']dark["']\s*\)/,
-    /classList\.toggle\(\s*["']dark["']\s*,\s*false\s*\)/,
-    /localStorage\.removeItem\(\s*["'](?:doflow_theme|theme)["']\s*\)/,
-  ]
-  if (hardLocks.some((pattern) => pattern.test(shell))) {
-    findings.push(contractFinding(names.shell, "Doflow shell must not hard-lock or reset the selected theme"))
-  }
-  return findings
-}
-
-export function auditSidebarContract({ primitive, shell, appSidebar }, files = {}) {
-  const names = {
-    primitive: files.primitive ?? "components/ui/sidebar.tsx",
-    shell: files.shell ?? "components/layout/doflow-daniele-shell.tsx",
-    appSidebar: files.appSidebar ?? "components/app-sidebar.tsx",
-  }
-  const findings = []
-  const widths = [
-    ["SIDEBAR_WIDTH", "16rem"],
-    ["SIDEBAR_WIDTH_MOBILE", "18rem"],
-    ["SIDEBAR_WIDTH_ICON", "3rem"],
-  ]
-  for (const [constant, value] of widths) {
-    const pattern = new RegExp(`const\\s+${constant}\\s*=\\s*["']${value}["']`)
-    if (!pattern.test(primitive)) findings.push(contractFinding(names.primitive, `${constant} must be ${value}`))
-  }
-  for (const slot of ["sidebar-wrapper", "sidebar", "sidebar-trigger", "sidebar-inset", "sidebar-menu-button"]) {
-    if (!primitive.includes(`data-slot="${slot}"`) && !primitive.includes(`data-slot='${slot}'`)) {
-      findings.push(contractFinding(names.primitive, `missing canonical data-slot=${slot}`))
-    }
-  }
-  if (/\b(?:280px|72px|rounded-card|rounded-nav|shadow-card|figma)\b/i.test(primitive)) {
-    findings.push(contractFinding(names.primitive, "legacy/Figma sidebar primitive residue is forbidden"))
-  }
-  if (!/state\s*!==\s*["']collapsed["']\s*\|\|\s*isMobile/.test(primitive)) {
-    findings.push(contractFinding(names.primitive, "collapsed desktop items must retain tooltip behavior"))
-  }
-  if (/--sidebar-width(?:-icon)?["']?\s*:/.test(shell) || /--sidebar-width(?:-icon)?\s*\]/.test(shell)) {
-    findings.push(contractFinding(names.shell, "Doflow shell must not override canonical sidebar widths"))
-  }
-  if (!/<Sidebar\b[^>]*collapsible\s*=\s*["']icon["']/.test(appSidebar) || !/<SidebarRail\b/.test(appSidebar)) {
-    findings.push(contractFinding(names.appSidebar, "AppSidebar must use canonical icon collapse and SidebarRail"))
-  }
-  return findings
-}
-
-function structuralPairs(source) {
-  const tokens = []
-  const pairs = new Map()
-  const stack = []
-  let quote = null
-  let lineComment = false
-  let blockComment = false
-
-  for (let index = 0; index < source.length; index += 1) {
-    const character = source[index]
-    const next = source[index + 1]
-    if (lineComment) {
-      if (character === "\n") lineComment = false
-      continue
-    }
-    if (blockComment) {
-      if (character === "*" && next === "/") {
-        blockComment = false
-        index += 1
-      }
-      continue
-    }
-    if (quote) {
-      if (character === "\\") index += 1
-      else if (character === quote) quote = null
-      continue
-    }
-    if (character === "/" && next === "/") {
-      lineComment = true
-      index += 1
-      continue
-    }
-    if (character === "/" && next === "*") {
-      blockComment = true
-      index += 1
-      continue
-    }
-    if (character === '"' || character === "'" || character === "`") {
-      quote = character
-      continue
-    }
-    if (character === "{" || character === "[") {
-      const token = { character, index }
-      tokens.push(token)
-      stack.push(token)
-    } else if (character === "}" || character === "]") {
-      const expected = character === "}" ? "{" : "["
-      const open = stack.pop()
-      if (open?.character === expected) pairs.set(open.index, index)
-    }
-  }
-  return { tokens, pairs }
-}
-
-export function builderItemArrayDepth(source, offset) {
-  const { tokens, pairs } = structuralPairs(source)
-  return tokens.filter((token) => {
-    if (token.character !== "[" || token.index >= offset || (pairs.get(token.index) ?? -1) <= offset) return false
-    const prefix = source.slice(Math.max(0, token.index - 80), token.index)
-    return /\bitems\s*:\s*$/.test(prefix)
-  }).length
-}
-
-function enclosingObject(source, offset) {
-  const { tokens, pairs } = structuralPairs(source)
-  const candidates = tokens.filter((token) => token.character === "{" && token.index < offset && (pairs.get(token.index) ?? -1) > offset)
-  const open = candidates.at(-1)
-  return open ? source.slice(open.index, pairs.get(open.index) + 1) : ""
-}
-
-export function auditBuilderContract({ appSidebar, header, gate }, files = {}) {
-  const names = {
-    appSidebar: files.appSidebar ?? "components/app-sidebar.tsx",
-    header: files.header ?? "components/dashboard-header.tsx",
-    gate: files.gate ?? "components/tenant-site-proposals/site-proposals-access-gate.tsx",
-  }
-  const findings = []
-  const matches = [...appSidebar.matchAll(/title\s*:\s*["']Builder["']/g)]
-  if (matches.length !== 1) {
-    findings.push(contractFinding(names.appSidebar, "navigation must define exactly one Builder item"))
-  } else {
-    const offset = matches[0].index
-    const item = enclosingObject(appSidebar, offset)
-    if (builderItemArrayDepth(appSidebar, offset) !== 1) {
-      findings.push(contractFinding(names.appSidebar, "Builder must be a top-level navigation item, not a submenu child"))
-    }
-    if (!/url\s*:\s*["']\/commercial\/site-proposals["']/.test(item)) {
-      findings.push(contractFinding(names.appSidebar, "Builder must use /commercial/site-proposals"))
-    }
-    if (!/capability\s*:\s*["']canUseBuilder["']/.test(item)) {
-      findings.push(contractFinding(names.appSidebar, "Builder must be gated by canUseBuilder"))
-    }
-    if (!/\bicon\s*:/.test(item)) {
-      findings.push(contractFinding(names.appSidebar, "Builder top-level item must expose an icon for collapsed mode"))
-    }
-  }
-  if (!/hasCapability\(\s*item\.capability\s*\)/.test(appSidebar)) {
-    findings.push(contractFinding(names.appSidebar, "navigation filtering must evaluate item capabilities"))
-  }
-  if (header.includes("/commercial/site-proposals") && (!/\bhasCapability\b/.test(header) || !/hasCapability\(\s*["']canUseBuilder["']\s*\)/.test(header))) {
-    findings.push(contractFinding(names.header, "Builder header shortcut must use canUseBuilder"))
-  }
-  if (!/hasCapability\(\s*["']canUseBuilder["']\s*\)/.test(gate)) {
-    findings.push(contractFinding(names.gate, "Builder route must preserve its canUseBuilder access gate"))
-  }
-  return findings
-}
-
-export function auditTenantLayoutContract({ tenantLayout }, files = {}) {
-  const name = files.tenantLayout ?? "app/(tenant)/layout.tsx"
-  const findings = []
-  const requests = extractImportRequests(tenantLayout)
-  const legacyRequest = "@/components/layout/legacy-tenant-shell"
-  const doflowImportCount = tenantLayout.match(/import\(\s*["']@\/components\/layout\/doflow-daniele-shell["']\s*\)/g)?.length ?? 0
-  const legacyImportCount = tenantLayout.match(/import\(\s*["']@\/components\/layout\/legacy-tenant-shell["']\s*\)/g)?.length ?? 0
-  if (doflowImportCount !== 1) {
-    findings.push(contractFinding(name, "tenant layout must load exactly one DoflowDanieleShell module"))
-  }
-  if (legacyImportCount !== 1) {
-    findings.push(contractFinding(name, "tenant layout must retain exactly one explicit non-Doflow LegacyTenantShell edge"))
-  }
-  if (!/const\s+DoflowDanieleShell\s*=\s*dynamic\s*\([\s\S]*?import\(\s*["']@\/components\/layout\/doflow-daniele-shell["']\s*\)/.test(tenantLayout)) {
-    findings.push(contractFinding(name, "DoflowDanieleShell must remain an explicit dynamic shell import"))
-  }
-  if (!/const\s+LegacyTenantShell\s*=\s*dynamic\s*\([\s\S]*?import\(\s*["']@\/components\/layout\/legacy-tenant-shell["']\s*\)/.test(tenantLayout)) {
-    findings.push(contractFinding(name, "LegacyTenantShell exemption is valid only for its explicit dynamic fallback import"))
-  }
-  if (!/if\s*\(\s*tenant\s*===\s*["']doflow["']\s*\)\s*return\s*<DoflowDanieleShell\b/.test(tenantLayout)) {
-    findings.push(contractFinding(name, "tenant doflow must select DoflowDanieleShell directly"))
-  }
-  if (!/return\s*<LegacyTenantShell\b[^>]*>\s*\{children\}\s*<\/LegacyTenantShell>/.test(tenantLayout)) {
-    findings.push(contractFinding(name, "LegacyTenantShell must remain only the terminal non-Doflow fallback"))
-  }
-  const legacyReferences = tenantLayout.match(/\bLegacyTenantShell\b/g)?.length ?? 0
-  if (legacyReferences !== 4) {
-    findings.push(contractFinding(name, "LegacyTenantShell must have only its loader, export selection and fallback render references"))
-  }
-  const extraLegacyImports = requests.filter((request) =>
-    /(?:legacy-tenant|tenant-sidebar|theme-settings-drawer|roomy-sidebar)/i.test(request) && request !== legacyRequest,
-  )
-  if (extraLegacyImports.length > 0) {
-    findings.push(contractFinding(name, `additional legacy compatibility imports are forbidden: ${extraLegacyImports.join(", ")}`))
-  }
-  return findings
-}
-
-function sourceSection(source, startPattern, endPattern) {
-  const start = source.search(startPattern)
-  if (start < 0) return ""
-  const remainder = source.slice(start)
-  const relativeEnd = remainder.search(endPattern)
-  return relativeEnd > 0 ? remainder.slice(0, relativeEnd) : remainder
-}
-
-export function auditIdentityAdminContract({ provider, admin }, files = {}) {
-  const names = {
-    provider: files.provider ?? "features/identity/doflow-identity-provider.tsx",
-    admin: files.admin ?? "components/team-space/doflow-team-account-admin.tsx",
-  }
-  const findings = []
-  const rolesUpdate = sourceSection(provider, /updateUserRoles\s*:\s*async\b/, /updateUserCapabilities\s*:\s*async\b/)
-  const capabilitiesUpdate = sourceSection(provider, /updateUserCapabilities\s*:\s*async\b/, /updateUserAvatar\s*:/)
-
-  if (!/explicitCapabilities\?\s*:\s*DoflowCapability\[\]/.test(provider)) {
-    findings.push(contractFinding(names.provider, "identity users and bootstrap must expose explicitCapabilities separately"))
-  }
-  if (!/function\s+explicitCapabilitiesForAssignment\b[\s\S]*?capabilitiesForRoles\(assignment\.roles\)[\s\S]*?!inherited\.has\(capability\)/.test(provider)) {
-    findings.push(contractFinding(names.provider, "legacy assignments must derive explicit capabilities by subtracting inherited role capabilities"))
-  }
-  if (!/user\.explicitCapabilities\s*\|\|\s*\[\]/.test(rolesUpdate) || !/effectiveCapabilities\(normalized,\s*explicitCapabilities\)/.test(rolesUpdate)) {
-    findings.push(contractFinding(names.provider, "role updates must preserve explicit grants and recompute effective capabilities"))
-  }
-  if (!/await\s+apiFetch\b/.test(rolesUpdate) || !/return\s+true\b/.test(rolesUpdate) || !/return\s+false\b/.test(rolesUpdate)) {
-    findings.push(contractFinding(names.provider, "role updates must await the server and resolve a success boolean"))
-  }
-  if (!/const\s+normalized\s*=\s*normalizeCapabilities\(nextCapabilities\)/.test(capabilitiesUpdate)) {
-    findings.push(contractFinding(names.provider, "capability updates must normalize the explicit nextCapabilities input"))
-  }
-  if (!/explicitCapabilities\s*:\s*normalized/.test(capabilitiesUpdate) || !/effectiveCapabilities\(user\.roles,\s*normalized\)/.test(capabilitiesUpdate)) {
-    findings.push(contractFinding(names.provider, "capability updates must store explicit grants separately from their effective union"))
-  }
-  if (!/await\s+apiFetch\b/.test(capabilitiesUpdate) || !/body\s*:\s*JSON\.stringify\(\{\s*capabilities\s*:\s*normalized\s*\}\)/.test(capabilitiesUpdate)) {
-    findings.push(contractFinding(names.provider, "capability updates must await and write only normalized explicit grants"))
-  }
-  if (!/return\s+true\b/.test(capabilitiesUpdate) || !/return\s+false\b/.test(capabilitiesUpdate)) {
-    findings.push(contractFinding(names.provider, "capability updates must resolve a success boolean"))
-  }
-  if (!/capabilities\s*:\s*identity\?\.explicitCapabilities\s*\|\|\s*\[\]/.test(admin) || /capabilities\s*:\s*identity\?\.capabilities\b/.test(admin)) {
-    findings.push(contractFinding(names.admin, "Team account drafts must edit only explicitCapabilities, never the effective union"))
-  }
-  if (!/const\s*\[\s*rolesSaved\s*,\s*capabilitiesSaved\s*\]\s*=\s*await\s+Promise\.all\s*\(/.test(admin) || !/if\s*\(\s*!rolesSaved\s*\|\|\s*!capabilitiesSaved\s*\)\s*throw\b/.test(admin)) {
-    findings.push(contractFinding(names.admin, "Team account save must await and validate both identity mutations"))
-  }
-  if (!/const\s+inheritedCapabilities\s*=\s*capabilitiesForRoles\(draft\?\.roles\s*\|\|\s*\[\]\)/.test(admin) || !/disabled=\{[^}]*\binherited\b[^}]*\}/.test(admin) || !/>Ereditata<\/Badge>/.test(admin)) {
-    findings.push(contractFinding(names.admin, "inherited capabilities must stay visible, labelled and non-editable"))
-  }
-  if (!/disabled=\{busy\}/.test(admin) || !/busy\s*\?\s*<LoaderCircle\b/.test(admin)) {
-    findings.push(contractFinding(names.admin, "Team account save must expose a disabled pending state"))
-  }
-  if (/\bsetPermissions\b|\bpermissions\.map\s*\(/.test(admin)) {
-    findings.push(contractFinding(names.admin, "Team account must not reference the removed flat permission state"))
-  }
-  if (!/buildModulePermissionPatch\(\s*modulePermissionState\s*,\s*draft\.tenantRole\s*,?\s*\)/.test(admin) || !/setModulePermissionState\b/.test(admin)) {
-    findings.push(contractFinding(names.admin, "Team account module permissions must use the server-aware draft policy"))
-  }
-  return findings
-}
-
-export function auditCompatibilitySidebarContract(
-  { roomy, tenantSidebar, tenantSection, legacyShell, superadminSidebar, superadminLayout, doflowShell, appSidebar, primitive },
-  files = {},
-) {
-  const names = {
-    roomy: files.roomy ?? "components/layout/roomy-sidebar.tsx",
-    tenantSidebar: files.tenantSidebar ?? "components/layout/tenant-sidebar.tsx",
-    tenantSection: files.tenantSection ?? "components/layout/tenant-sidebar-section.tsx",
-    legacyShell: files.legacyShell ?? "components/layout/legacy-tenant-shell.tsx",
-    superadminSidebar: files.superadminSidebar ?? "app/superadmin/components/super-admin-sidebar.tsx",
-    superadminLayout: files.superadminLayout ?? "app/superadmin/layout.tsx",
-    doflowShell: files.doflowShell ?? "components/layout/doflow-daniele-shell.tsx",
-    appSidebar: files.appSidebar ?? "components/app-sidebar.tsx",
-    primitive: files.primitive ?? "components/ui/sidebar.tsx",
-  }
-  const findings = []
-  if (!/RoomySidebarMenuButton[\s\S]*?["']h-11\b/.test(roomy) || !/["']\[&>svg\]:size-6["']/.test(roomy)) {
-    findings.push(contractFinding(names.roomy, "roomy compatibility adapter must preserve 44px items and 24px icons"))
-  }
-  if (!/RoomySidebarMenuSubButton[\s\S]*?["']h-7\b/.test(roomy) || !/["']h-7[^"']*\[&>svg\]:size-4["']/.test(roomy)) {
-    findings.push(contractFinding(names.roomy, "roomy compatibility adapter must preserve 28px subitems and 16px icons"))
-  }
-  if (!/roomy-sidebar/.test(tenantSidebar) || !/RoomySidebarMenuButton\s+as\s+SidebarMenuButton/.test(tenantSidebar)) {
-    findings.push(contractFinding(names.tenantSidebar, "legacy tenant sidebar must consume the roomy menu-button adapter"))
-  }
-  if (!/roomy-sidebar/.test(tenantSection) || !/RoomySidebarMenuButton\s+as\s+SidebarMenuButton/.test(tenantSection) || !/RoomySidebarMenuSubButton\s+as\s+SidebarMenuSubButton/.test(tenantSection)) {
-    findings.push(contractFinding(names.tenantSection, "legacy tenant sidebar sections must consume both roomy adapters"))
-  }
-  if (!/roomy-sidebar/.test(superadminSidebar) || !/RoomySidebarMenuButton\s+as\s+SidebarMenuButton/.test(superadminSidebar)) {
-    findings.push(contractFinding(names.superadminSidebar, "superadmin sidebar must consume the roomy menu-button adapter"))
-  }
-  if (!/mobileWidth\s*=\s*["']280px["']/.test(legacyShell) || !/--sidebar-width["']?\s*:\s*["']280px["']/.test(legacyShell) || !/--sidebar-width-icon["']?\s*:\s*["']72px["']/.test(legacyShell)) {
-    findings.push(contractFinding(names.legacyShell, "legacy tenant shell must preserve 280px/72px compatibility widths"))
-  }
-  if (!/mobileWidth\s*=\s*["']280px["']/.test(superadminLayout) || !/--sidebar-width["']?\s*:\s*["']220px["']/.test(superadminLayout) || !/--sidebar-width-icon["']?\s*:\s*["']72px["']/.test(superadminLayout)) {
-    findings.push(contractFinding(names.superadminLayout, "superadmin shell must preserve 220px/72px compatibility widths and 280px mobile width"))
-  }
-  for (const [source, file] of [[doflowShell, names.doflowShell], [appSidebar, names.appSidebar], [primitive, names.primitive]]) {
-    if (/roomy-sidebar|RoomySidebar|data-sidebar-density\s*=\s*["']roomy["']/.test(source)) {
-      findings.push(contractFinding(file, "Doflow canonical sidebar graph must not consume the roomy compatibility adapter"))
-    }
-  }
-  return findings
-}
-
-function discoverEntries(sourceRoot) {
-  const routeRoots = [
-    path.join(sourceRoot, "app", "(tenant)", "dashboard"),
-    path.join(sourceRoot, "app", "(tenant)", "commercial", "site-proposals"),
-  ]
-  const routeEntries = routeRoots.flatMap((directory) => walk(directory, (file) => NEXT_ROUTE_FILE.test(path.basename(file))))
-  return [...new Set([...REQUIRED_GRAPH_ROOTS.map((relative) => path.join(sourceRoot, relative)), ...routeEntries])]
-}
-
-function readContractSource(sourceRoot, relative, findings) {
-  const file = path.join(sourceRoot, relative)
-  if (!fs.existsSync(file)) {
-    findings.push(`${relative}: required Doflow graph file is missing`)
-    return ""
-  }
+function read(file) {
   return fs.readFileSync(file, "utf8")
 }
 
-export function auditDoflowUiPurity({ repositoryRoot = process.cwd(), sourceRoot = path.join(repositoryRoot, "apps", "frontend", "src") } = {}) {
-  const findings = []
-  const entries = discoverEntries(sourceRoot)
-  for (const relative of REQUIRED_ROUTE_ENTRIES) {
-    if (!fs.existsSync(path.join(sourceRoot, relative))) findings.push(`${relative}: required Doflow route entry is missing`)
+function resolveCandidate(base) {
+  const candidates = [base]
+  for (const extension of RESOLVABLE_EXTENSIONS) candidates.push(`${base}${extension}`)
+  for (const extension of RESOLVABLE_EXTENSIONS) candidates.push(path.join(base, `index${extension}`))
+  return candidates.find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile()) || null
+}
+
+function importRequests(source, extension) {
+  const requests = []
+  if (STYLE_EXTENSIONS.includes(extension)) {
+    for (const match of source.matchAll(/@import\s+(?:url\()?\s*["']([^"']+)["']/g)) requests.push(match[1])
+    return requests
   }
+  for (const match of source.matchAll(/(?:import|export)\s+(?:[^"']*?\sfrom\s*)?["']([^"']+)["']/g)) requests.push(match[1])
+  for (const match of source.matchAll(/import\(\s*["']([^"']+)["']\s*\)/g)) requests.push(match[1])
+  for (const match of source.matchAll(/require\(\s*["']([^"']+)["']\s*\)/g)) requests.push(match[1])
+  return requests
+}
 
-  const graph = traceReachableGraph({
-    sourceRoot,
-    entries,
-    skipEdge: (from, request) => isInactiveDoflowEdge(sourceRoot, from, request),
-  })
-  const reachableSources = [...graph.visited].map((file) => ({
-    file,
-    extension: path.extname(file).toLowerCase(),
-    source: fs.readFileSync(file, "utf8"),
-  }))
-  const graphSymbols = collectGraphSymbols(
-    reachableSources
-      .filter(({ extension }) => ![".css", ".scss", ".sass", ".json"].includes(extension))
-      .map(({ source }) => source),
-  )
-  for (const { file, extension, source } of reachableSources) {
-    if (extension === ".json") continue
-    const display = unixRelative(repositoryRoot, file)
-    const isTenantLayout = unixRelative(sourceRoot, file) === "app/(tenant)/layout.tsx"
-    findings.push(...([".css", ".scss", ".sass"].includes(extension)
-      ? scanCssForLegacy(source, display, graphSymbols)
-      : scanCodeForLegacy(source, display, { allowLegacyTenantShell: isTenantLayout })))
-  }
+function resolveImport(sourceRoot, importer, request) {
+  if (!request || request.startsWith("node:") || request.startsWith("http:") || request.startsWith("https:")) return null
+  const clean = request.split(/[?#]/, 1)[0]
+  if (!clean.startsWith(".") && !clean.startsWith("@/")) return null
+  const base = clean.startsWith("@/")
+    ? path.join(sourceRoot, clean.slice(2))
+    : path.resolve(path.dirname(importer), clean)
+  const resolved = resolveCandidate(base)
+  return resolved && resolved.startsWith(sourceRoot) ? resolved : null
+}
 
-  const contractFiles = {
-    rootLayout: "app/layout.tsx",
-    tenantLayout: "app/(tenant)/layout.tsx",
-    shell: "components/layout/doflow-daniele-shell.tsx",
-    appSidebar: "components/app-sidebar.tsx",
-    header: "components/dashboard-header.tsx",
-    toggle: "components/theme-toggle.tsx",
-    primitive: "components/ui/sidebar.tsx",
-    gate: "components/tenant-site-proposals/site-proposals-access-gate.tsx",
-    identityProvider: "features/identity/doflow-identity-provider.tsx",
-    teamAdmin: "components/team-space/doflow-team-account-admin.tsx",
-    roomy: "components/layout/roomy-sidebar.tsx",
-    tenantSidebar: "components/layout/tenant-sidebar.tsx",
-    tenantSection: "components/layout/tenant-sidebar-section.tsx",
-    legacyShell: "components/layout/legacy-tenant-shell.tsx",
-    superadminSidebar: "app/superadmin/components/super-admin-sidebar.tsx",
-    superadminLayout: "app/superadmin/layout.tsx",
-  }
-  const sources = Object.fromEntries(Object.entries(contractFiles).map(([key, relative]) => [key, readContractSource(sourceRoot, relative, findings)]))
-  const displayFiles = Object.fromEntries(Object.entries(contractFiles).map(([key, relative]) => [key, unixRelative(repositoryRoot, path.join(sourceRoot, relative))]))
+export function discoverEntries(sourceRoot = FRONTEND_SOURCE) {
+  const routeEntries = walkFiles(path.join(sourceRoot, "app")).filter((file) => NEXT_ROUTE_FILE.test(path.basename(file)))
+  return [...new Set([
+    ...REQUIRED_GRAPH_ROOTS.map((relative) => path.join(sourceRoot, relative)),
+    ...routeEntries,
+  ])].filter(fs.existsSync)
+}
 
-  findings.push(...auditThemeContract(sources, displayFiles))
-  findings.push(...auditSidebarContract(sources, displayFiles))
-  findings.push(...auditBuilderContract(sources, displayFiles))
-  findings.push(...auditTenantLayoutContract(sources, displayFiles))
-  findings.push(...auditIdentityAdminContract({ provider: sources.identityProvider, admin: sources.teamAdmin }, {
-    provider: displayFiles.identityProvider,
-    admin: displayFiles.teamAdmin,
-  }))
-  findings.push(...auditCompatibilitySidebarContract({
-    roomy: sources.roomy,
-    tenantSidebar: sources.tenantSidebar,
-    tenantSection: sources.tenantSection,
-    legacyShell: sources.legacyShell,
-    superadminSidebar: sources.superadminSidebar,
-    superadminLayout: sources.superadminLayout,
-    doflowShell: sources.shell,
-    appSidebar: sources.appSidebar,
-    primitive: sources.primitive,
-  }, displayFiles))
-
-  const compatibilityOnly = [
-    "components/layout/legacy-tenant-shell.tsx",
-    "components/layout/roomy-sidebar.tsx",
-    "components/layout/tenant-sidebar.tsx",
-    "components/layout/tenant-sidebar-section.tsx",
-    "app/superadmin/components/super-admin-sidebar.tsx",
-  ]
-  for (const relative of compatibilityOnly) {
-    if (graph.visited.has(path.join(sourceRoot, relative))) {
-      findings.push(`${unixRelative(repositoryRoot, path.join(sourceRoot, relative))}: compatibility sidebar module is reachable from the Doflow graph`)
+export function traceReachableGraph(sourceRoot = FRONTEND_SOURCE, entries = discoverEntries(sourceRoot)) {
+  const visited = new Set()
+  const queue = [...entries]
+  while (queue.length) {
+    const file = queue.shift()
+    if (!file || visited.has(file) || !fs.existsSync(file)) continue
+    visited.add(file)
+    const source = read(file)
+    for (const request of importRequests(source, path.extname(file).toLowerCase())) {
+      const resolved = resolveImport(sourceRoot, file, request)
+      if (resolved && !visited.has(resolved)) queue.push(resolved)
     }
   }
+  return visited
+}
 
+function finding(file, source, offset, message) {
+  const line = source.slice(0, offset).split(/\r?\n/).length
+  return `${file}:${line}: ${message}`
+}
+
+function scanMatches(source, file, rules) {
+  const findings = []
+  for (const { label, pattern } of rules) {
+    pattern.lastIndex = 0
+    for (const match of source.matchAll(pattern)) findings.push(finding(file, source, match.index, label))
+  }
+  return findings
+}
+
+function classSymbols(reachable, sourceRoot) {
+  const classes = new Set()
+  const variables = new Set()
+  const attributes = new Set()
+  for (const file of reachable) {
+    if (!CODE_EXTENSIONS.includes(path.extname(file).toLowerCase())) continue
+    const source = read(file)
+    for (const match of source.matchAll(/\b(?:className|class)\s*=\s*(?:\{?\s*)?["'`]([^"'`]+)["'`]/g)) {
+      for (const token of match[1].split(/\s+/)) if (/^[a-z_][a-z0-9_-]*$/i.test(token)) classes.add(token)
+    }
+    for (const match of source.matchAll(/var\(\s*(--[a-z0-9-]+)/gi)) variables.add(match[1].toLowerCase())
+    for (const match of source.matchAll(/\b(data-[a-z0-9-]+)\s*=/gi)) attributes.add(match[1].toLowerCase())
+  }
+  return { attributes, classes, variables, sourceRoot }
+}
+
+function cssSelectorIsReachable(selector, symbols) {
+  return selector.split(",").some((branch) => {
+    const classes = [...branch.matchAll(/\.([a-z_][a-z0-9_-]*)/gi)]
+      .map((match) => match[1])
+      .filter((name) => name !== "dark")
+    const attributes = [...branch.matchAll(/\[(data-[a-z0-9-]+)/gi)].map((match) => match[1].toLowerCase())
+    if (classes.length === 0 && attributes.length === 0) return false
+    return classes.every((name) => symbols.classes.has(name))
+      && attributes.every((name) => symbols.attributes.has(name))
+  })
+}
+
+function cssSemanticException(selector, label) {
+  const artworkOrStatus = /(?:chart|status|badge|logo|mascot|illustration|media|spark|strength|error|success|\bdot\b)/i.test(selector)
+  return artworkOrStatus && /color|shadow/i.test(label)
+}
+
+function cssSemanticFindings(file, source, symbols) {
+  const findings = []
+  for (const block of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selector = block[1]
+    const body = block[2]
+    if (!cssSelectorIsReachable(selector, symbols)) continue
+    for (const rule of [...STRUCTURAL_COLOR_PATTERNS, ...STRUCTURAL_CSS_PATTERNS]) {
+      if (cssSemanticException(selector, rule.label)) continue
+      rule.pattern.lastIndex = 0
+      for (const match of body.matchAll(rule.pattern)) {
+        findings.push(finding(file, source, block.index + selector.length + match.index, rule.label))
+      }
+    }
+  }
+  return findings
+}
+
+function cssBlockFindings(file, source, symbols) {
+  const findings = []
+  for (const block of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selector = block[1]
+    const body = block[2]
+    const usedLegacyClass = [...selector.matchAll(/\.((?:df)-[a-z0-9-]+)/gi)]
+      .some((match) => symbols.classes.has(match[1]))
+    if (usedLegacyClass) findings.push(finding(file, source, block.index, "reachable legacy .df-* selector"))
+    for (const match of body.matchAll(/var\(\s*(--df-[a-z0-9-]+)/gi)) {
+      if (symbols.variables.has(match[1].toLowerCase()) || usedLegacyClass) {
+        findings.push(finding(file, source, block.index + selector.length + match.index, "reachable legacy --df-* token"))
+      }
+    }
+    const sidebarSelector = /\[data-sidebar(?:=|\])/i.test(selector)
+    const universalScope = /\[data-tenant-ui=["']universal["']\]/i.test(selector)
+    const legacyOverride = /!important|var\(\s*--(?:df|radius-nav|shadow-card)|backdrop-filter/i.test(body)
+    if (sidebarSelector && !universalScope && legacyOverride) {
+      const selectorClasses = [...selector.matchAll(/\.([a-z_][a-z0-9_-]*)/gi)].map((match) => match[1])
+      if (selectorClasses.length === 0 || selectorClasses.some((name) => symbols.classes.has(name))) {
+        findings.push(finding(file, source, block.index, "reachable unscoped legacy sidebar override"))
+      }
+    }
+  }
+  return findings
+}
+
+export function auditLegacyReachability(sourceRoot = FRONTEND_SOURCE) {
+  const reachable = traceReachableGraph(sourceRoot)
+  const symbols = classSymbols(reachable, sourceRoot)
+  const findings = []
+  const personalPattern = new RegExp(`\\b${PERSONAL_RUNTIME_NAME}\\b`, "gi")
+  const codeRules = [
+    { label: "personal-name runtime identifier", pattern: personalPattern },
+    { label: "LegacyTenantShell is reachable", pattern: /\bLegacyTenantShell\b/g },
+    { label: "ThemeSettingsDrawer is reachable", pattern: /\bThemeSettingsDrawer\b/g },
+    { label: "roomy sidebar adapter is reachable", pattern: /\bRoomySidebar\w*\b|roomy-sidebar/gi },
+    { label: "legacy tenant sidebar is reachable", pattern: /legacy-tenant-shell|tenant-sidebar-section/gi },
+    { label: "reachable legacy .df-* class", pattern: /["'`\s](df-[a-z0-9-]+)\b/gi },
+    { label: "reachable legacy --df-* token", pattern: /--df-[a-z0-9-]+\b/gi },
+    { label: "reachable legacy Superadmin visual wrapper", pattern: /["'`\s](?:dashboard-content|glass-card)\b/gi },
+  ]
+  for (const file of reachable) {
+    const relative = relativeTo(sourceRoot, file)
+    const source = read(file)
+    if (STYLE_EXTENSIONS.includes(path.extname(file).toLowerCase())) {
+      findings.push(...cssBlockFindings(relative, source, symbols))
+      if (relative === "app/globals.css") findings.push(...scanMatches(source, relative, GLOBAL_CSS_LEGACY_PATTERNS))
+    }
+    else findings.push(...scanMatches(source, relative, codeRules))
+  }
+  for (const forbidden of FORBIDDEN_FILES) {
+    const absolute = path.join(sourceRoot, forbidden)
+    if (reachable.has(absolute)) findings.push(`${forbidden}: reachable forbidden visual layer`)
+  }
+  return { findings: [...new Set(findings)].sort(), reachable }
+}
+
+function semanticException(line) {
+  return /data-semantic-color-exception=["'](?:qr-code|chart|status|brand-art|media)["']/.test(line)
+}
+
+export function auditSemanticTokens(sourceRoot = FRONTEND_SOURCE) {
+  const reachable = traceReachableGraph(sourceRoot)
+  const symbols = classSymbols(reachable, sourceRoot)
+  const findings = []
+  for (const file of reachable) {
+    const relative = relativeTo(sourceRoot, file)
+    if (STYLE_EXTENSIONS.includes(path.extname(file).toLowerCase())) {
+      if (relative === "app/globals.css") findings.push(...cssSemanticFindings(relative, read(file), symbols))
+      continue
+    }
+    if (!CODE_EXTENSIONS.includes(path.extname(file).toLowerCase())) continue
+    if (!SEMANTIC_SCOPE.some((scope) => relative === scope || relative.startsWith(scope))) continue
+    const source = read(file)
+    const lines = source.split(/\r?\n/)
+    lines.forEach((line, index) => {
+      if (semanticException(line)) return
+      for (const { label, pattern } of STRUCTURAL_COLOR_PATTERNS) {
+        pattern.lastIndex = 0
+        if (pattern.test(line)) findings.push(`${relative}:${index + 1}: ${label}`)
+      }
+    })
+  }
+  return { findings: [...new Set(findings)].sort(), reachable }
+}
+
+export function auditShellContracts(sourceRoot = FRONTEND_SOURCE) {
+  const findings = []
+  const source = (relative) => read(path.join(sourceRoot, relative))
+  const tenantLayout = source("app/(tenant)/layout.tsx")
+  const tenantShell = source("components/layout/tenant-app-shell.tsx")
+  const platformLayout = source("app/superadmin/layout.tsx")
+  const platformShell = source("components/layout/platform-app-shell.tsx")
+  const sidebar = source("components/ui/sidebar.tsx")
+  const appSidebar = source("components/app-sidebar.tsx")
+  const header = source("components/dashboard-header.tsx")
+  const builderGate = source("components/tenant-site-proposals/site-proposals-access-gate.tsx")
+  const tenantNavigation = source("config/tenant-navigation.ts")
+
+  if (!/import\(["']@\/components\/layout\/tenant-app-shell["']\)/.test(tenantLayout) || !/<TenantAppShell\s+session=\{session\}>/.test(tenantLayout)) findings.push("app/(tenant)/layout.tsx: every normal tenant must use TenantAppShell with its server session")
+  if (/LegacyTenantShell|legacy-tenant-shell/.test(tenantLayout)) findings.push("app/(tenant)/layout.tsx: legacy tenant fallback remains")
+  if (!/PlanProvider/.test(tenantShell) || !/TenantAccessProvider/.test(tenantShell)) findings.push("components/layout/tenant-app-shell.tsx: future tenants must use Plan and TenantAccess")
+  if (!/isDoflow/.test(tenantShell) || !/DoflowIdentityProvider/.test(tenantShell)) findings.push("components/layout/tenant-app-shell.tsx: Doflow extensions must stay explicit and isolated")
+  if (!/PlatformAppShell/.test(platformLayout) || !/\/auth\/me/.test(platformLayout) || !/tenant\s*===\s*["']public["']/.test(platformLayout)) findings.push("app/superadmin/layout.tsx: PlatformAppShell must preserve the platform auth boundary")
+  if (!/SidebarProvider/.test(platformShell) || !/SuperAdminSidebar/.test(platformShell)) findings.push("components/layout/platform-app-shell.tsx: platform shell must use the shared sidebar primitive")
+  if (!/SIDEBAR_WIDTH\s*=\s*["']15\.5rem["']/.test(sidebar) || !/SIDEBAR_WIDTH_MOBILE\s*=\s*["']18rem["']/.test(sidebar) || !/SIDEBAR_WIDTH_ICON\s*=\s*["']3rem["']/.test(sidebar)) findings.push("components/ui/sidebar.tsx: canonical 15.5rem/18rem/3rem geometry changed")
+  const builderItems = [...appSidebar.matchAll(/title\s*:\s*["']Builder["']/g)]
+  if (builderItems.length !== 1 || !/title\s*:\s*["']Builder["'][^\n]*url\s*:\s*["']\/commercial\/site-proposals["'][^\n]*capability\s*:\s*["']canUseBuilder["']/.test(appSidebar)) findings.push("components/app-sidebar.tsx: Builder must remain one top-level canUseBuilder item")
+  if (!/hasCapability\(["']canUseBuilder["']\)/.test(header)) findings.push("components/dashboard-header.tsx: Builder shortcut must remain capability-gated")
+  if (!/hasCapability\(["']canUseBuilder["']\)/.test(builderGate)) findings.push("components/tenant-site-proposals/site-proposals-access-gate.tsx: Builder route gate must remain capability-gated")
+  for (const [route, capability] of [
+    ["/dashboard/inbox", "canReadNotifications"],
+    ["/dashboard/team-space", "canViewProjects"],
+    ["/dashboard/flowboard", "canViewProjects"],
+    ["/dashboard/company-intelligence", "canViewAssignedLeads"],
+    ["/dashboard/bonus", "canViewOwnPoints"],
+  ]) {
+    if (!tenantShell.includes(`["${route}", "${capability}"]`)) findings.push(`components/layout/tenant-app-shell.tsx: ${route} must enforce ${capability}`)
+  }
+  for (const [route, moduleKey] of [
+    ["/dashboard/inbox", "notifications"],
+    ["/dashboard/team-space", "team"],
+    ["/dashboard/flowboard", "projects"],
+    ["/dashboard/company-intelligence", "crm"],
+    ["/dashboard/bonus", "reports"],
+  ]) {
+    if (!tenantNavigation.includes(`["${route}", "${moduleKey}"]`)) findings.push(`config/tenant-navigation.ts: ${route} must enforce ${moduleKey} for future tenants`)
+  }
+  return findings
+}
+
+export function auditArcadeReachability(sourceRoot = FRONTEND_SOURCE) {
+  const findings = []
+  const pattern = /flow[- ]arcade|\/dashboard\/flow-arcade|\bGamepad2\b/gi
+  for (const file of walkFiles(sourceRoot).filter((candidate) => CODE_EXTENSIONS.includes(path.extname(candidate).toLowerCase()))) {
+    const source = read(file)
+    pattern.lastIndex = 0
+    if (pattern.test(source)) findings.push(`${relativeTo(sourceRoot, file)}: excluded arcade surface remains`)
+  }
+  return findings.sort()
+}
+
+export function runAudit(sourceRoot = FRONTEND_SOURCE) {
+  const legacy = auditLegacyReachability(sourceRoot)
+  const semantic = auditSemanticTokens(sourceRoot)
+  const contracts = auditShellContracts(sourceRoot)
+  const arcade = auditArcadeReachability(sourceRoot)
   return {
-    entries,
-    visited: graph.visited,
-    findings: [...new Set(findings)].sort(),
+    legacyFindings: [...new Set([...legacy.findings, ...contracts])].sort(),
+    semanticFindings: semantic.findings,
+    arcadeFindings: arcade,
+    reachable: legacy.reachable,
   }
 }
 
-function isMainModule() {
-  if (!process.argv[1]) return false
-  return import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
-}
-
-if (isMainModule()) {
-  const result = auditDoflowUiPurity()
-  if (result.findings.length) {
-    console.error(`DOFLOW FRONTEND LEGACY RESIDUE = ${result.findings.length} REACHABLE`)
-    for (const finding of result.findings) console.error(`- ${finding}`)
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const result = runAudit()
+  for (const item of result.legacyFindings) console.error(`[legacy] ${item}`)
+  for (const item of result.semanticFindings) console.error(`[semantic] ${item}`)
+  for (const item of result.arcadeFindings) console.error(`[arcade] ${item}`)
+  if (result.legacyFindings.length || result.semanticFindings.length || result.arcadeFindings.length) {
+    console.error(`GLOBAL FRONTEND LEGACY VISUAL RESIDUE = ${result.legacyFindings.length} REACHABLE`)
+    console.error(`UNIVERSAL UI SEMANTIC TOKEN COMPLIANCE = ${result.semanticFindings.length ? "FAIL" : "PASS"}`)
+    console.error(`FLOW ARCADE FRONTEND REACHABILITY = ${result.arcadeFindings.length}`)
     process.exitCode = 1
   } else {
-    console.log(PURITY_SUCCESS)
+    console.log(LEGACY_SUCCESS)
+    console.log(SEMANTIC_SUCCESS)
+    console.log(ARCADE_SUCCESS)
   }
 }

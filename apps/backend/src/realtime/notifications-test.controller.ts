@@ -57,7 +57,7 @@ export class NotificationsTestController {
       message: body.message ?? 'Test user notification',
       tenantId,
       ts: new Date().toISOString(),
-    });
+    }, tenantId);
 
     return res.json({ ok: true });
   }

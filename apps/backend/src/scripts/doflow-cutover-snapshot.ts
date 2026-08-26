@@ -5,7 +5,7 @@ export type CutoverQueryable = {
 };
 
 export type DoflowCeoFingerprint = {
-  alias: 'ceo_1' | 'ceo_2';
+  alias: `owner_${number}`;
   tenantPresent: boolean;
   publicMirrorPresent: boolean;
   uuidMatches: boolean;
@@ -62,10 +62,10 @@ export type DoflowCutoverSnapshot = {
   fingerprint: string;
 };
 
-const CEO_ACCOUNTS = [
-  { alias: 'ceo_1' as const, email: 'oliver@doflow.it' },
-  { alias: 'ceo_2' as const, email: 'daniele@doflow.it' },
-];
+type ProtectedOwnerAccount = {
+  alias: `owner_${number}`;
+  email: string;
+};
 
 const DOMAIN_TABLES: Record<string, string> = {
   users: 'users',
@@ -154,7 +154,7 @@ async function scalarCount(db: CutoverQueryable, sql: string, parameters: unknow
 
 async function captureCeo(
   db: CutoverQueryable,
-  account: (typeof CEO_ACCOUNTS)[number],
+  account: ProtectedOwnerAccount,
   tenantId: string | null,
 ): Promise<DoflowCeoFingerprint> {
   const tenantRows = await db.query(
@@ -239,6 +239,19 @@ async function captureCeo(
       references: shortCutoverFingerprint(references),
     },
   };
+}
+
+async function discoverProtectedOwnerAccounts(db: CutoverQueryable): Promise<ProtectedOwnerAccount[]> {
+  const rows = await db.query(
+    `SELECT lower(email) AS email
+       FROM doflow.users
+      WHERE lower(role) = 'owner' AND is_active = true
+      ORDER BY lower(email)`,
+  );
+  return rows.map((row, index) => ({
+    alias: `owner_${index + 1}` as ProtectedOwnerAccount['alias'],
+    email: String(row.email),
+  }));
 }
 
 async function captureSecondTenant(db: CutoverQueryable) {
@@ -369,14 +382,15 @@ export async function captureDoflowCutoverSnapshot(db: CutoverQueryable): Promis
   }
 
   const ceo: DoflowCeoFingerprint[] = [];
-  for (const account of CEO_ACCOUNTS) ceo.push(await captureCeo(db, account, binding?.id || null));
+  const protectedOwners = await discoverProtectedOwnerAccounts(db);
+  for (const account of protectedOwners) ceo.push(await captureCeo(db, account, binding?.id || null));
   const counts = await captureCounts(db);
   const economics = await captureEconomics(db);
   const relations = await captureRelations(db);
   const duplicates = await captureDuplicates(db);
   const registries = await captureRegistries(db);
   const secondTenant = await captureSecondTenant(db);
-  const ceoPresent = ceo.length === 2 && ceo.every((account) =>
+  const ceoPresent = ceo.length >= 2 && ceo.every((account) =>
     account.tenantPresent
     && account.publicMirrorPresent
     && account.uuidMatches

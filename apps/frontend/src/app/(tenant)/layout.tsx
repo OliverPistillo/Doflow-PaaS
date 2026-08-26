@@ -19,20 +19,15 @@ type AuthMe = {
 
 const ShellLoader = () => (
   <div
-    data-doflow-prepaint="reference-e6c3"
-    className="grid min-h-screen place-items-center bg-[#f8f9ff] text-sm text-[#667085]"
+    data-app-prepaint="universal-v1"
+    className="grid min-h-screen place-items-center bg-background text-sm text-muted-foreground"
   >
     Apertura spazio di lavoro…
   </div>
 )
 
-const DoflowDanieleShell = dynamic(
-  () => import("@/components/layout/doflow-daniele-shell").then((module) => module.DoflowDanieleShell),
-  { ssr: false, loading: ShellLoader },
-)
-
-const LegacyTenantShell = dynamic(
-  () => import("@/components/layout/legacy-tenant-shell").then((module) => module.LegacyTenantShell),
+const TenantAppShell = dynamic(
+  () => import("@/components/layout/tenant-app-shell").then((module) => module.TenantAppShell),
   { ssr: false, loading: ShellLoader },
 )
 
@@ -75,7 +70,5 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
     )
   }
 
-  if (tenant === "doflow") return <DoflowDanieleShell>{children}</DoflowDanieleShell>
-
-  return <LegacyTenantShell>{children}</LegacyTenantShell>
+  return <TenantAppShell session={session}>{children}</TenantAppShell>
 }

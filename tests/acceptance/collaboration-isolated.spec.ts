@@ -100,9 +100,9 @@ async function login(
   return page;
 }
 async function assertDefaultTheme(page: Page) {
-  await expect(page.locator('[data-doflow-shell="daniele-design"][data-doflow-theme="default"]')).toHaveCount(1);
+  await expect(page.locator('html[data-tenant-ui="universal"] [data-app-ui-generation="universal-v1"]')).toHaveCount(1);
   await expect(page.locator("html")).not.toHaveClass(/dark/);
-  await expect(page.getByRole("button", { name: "Tema predefinito Doflow" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Attiva tema scuro", exact: true })).toBeVisible();
   await page.waitForTimeout(500);
 }
 async function appFetch(
@@ -221,6 +221,7 @@ test("Phase 4A collaboration, notifications and realtime are PostgreSQL-authorit
   const projectId = randomUUID();
   const companyId = randomUUID();
   const marker = `COLLAB-${Date.now()}`;
+  let viewerFixtureDeactivated = false;
   try {
     await db.connect();
     await db.query(
@@ -391,6 +392,7 @@ test("Phase 4A collaboration, notifications and realtime are PostgreSQL-authorit
     await db.query(`UPDATE doflow.users SET is_active = false WHERE id = $1`, [
       "a0000000-0000-4000-8000-000000000004",
     ]);
+    viewerFixtureDeactivated = true;
     expect(
       (
         await write(owner, "/tenant/doflow/collaboration/comments", "POST", {
@@ -401,6 +403,10 @@ test("Phase 4A collaboration, notifications and realtime are PostgreSQL-authorit
         })
       ).status,
     ).toBe(400);
+    await db.query(`UPDATE doflow.users SET is_active = true WHERE id = $1`, [
+      "a0000000-0000-4000-8000-000000000004",
+    ]);
+    viewerFixtureDeactivated = false;
     const xssText = `<img src=x onerror="window.__collaborationXss=true">${marker}`;
     const xssComment = await write(
       owner,
@@ -1045,6 +1051,11 @@ test("Phase 4A collaboration, notifications and realtime are PostgreSQL-authorit
       { mode: 0o600 },
     );
   } finally {
+    if (viewerFixtureDeactivated) {
+      await db.query(`UPDATE doflow.users SET is_active = true WHERE id = $1`, [
+        "a0000000-0000-4000-8000-000000000004",
+      ]);
+    }
     await Promise.allSettled([
       contextA.close(),
       contextB.close(),

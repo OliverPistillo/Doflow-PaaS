@@ -96,7 +96,7 @@ test('Document & Revenue visual QA autenticata', async ({ browser }) => {
           localStorage.removeItem('doflow_theme');
           localStorage.removeItem('theme');
         });
-        await expect(page.locator('[data-doflow-shell="daniele-design"][data-doflow-theme="default"]')).toHaveCount(1);
+        await expect(page.locator('html[data-tenant-ui="universal"] [data-app-ui-generation="universal-v1"]')).toHaveCount(1);
         await page.waitForTimeout(250);
         await page.screenshot({
           path: path.join(outputDirectory, `document-revenue-${route.slug}-${theme}-${viewport.name}.png`),

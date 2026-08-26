@@ -150,9 +150,16 @@ export class EnrichmentService {
     }
   }
 
+  isConfigured(): boolean {
+    return Boolean(this.apolloKey);
+  }
+
   // ─── STEP A: lookup azienda + lista persone (chiamato dal controller lookup) ─
 
   async lookupCompany(domain: string): Promise<CompanyLookupResult> {
+    if (!this.apolloKey) {
+      throw new InternalServerErrorException('Sales Intelligence provider non configurato');
+    }
     const org    = await this.fetchOrganization(domain);
 
     // Apollo non ha questo dominio — restituisce dati minimi senza bloccare

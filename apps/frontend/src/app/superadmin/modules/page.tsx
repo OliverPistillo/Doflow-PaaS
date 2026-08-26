@@ -81,7 +81,7 @@ function KpiCard({ title, value, sub, icon: Icon, color }: {
   icon: React.ComponentType<{ className?: string }>; color: string;
 }) {
   return (
-    <Card className="glass-card transition-all duration-300 group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative">
+    <Card className="app-surface-card transition-all duration-300 group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative">
       <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-20 blur-2xl group-hover:opacity-40 transition-opacity duration-500" style={{ backgroundColor: color }} />
       <CardContent className="p-6 relative z-10 flex justify-between items-start">
         <div>
@@ -239,7 +239,7 @@ export default function ModulesPage() {
         <TabsContent value="catalog" className="mt-4">
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filteredModules.map(mod => (
-              <Card key={mod.id} className="glass-card group hover:-translate-y-0.5 transition-all duration-200">
+              <Card key={mod.id} className="app-surface-card group hover:-translate-y-0.5 transition-all duration-200">
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
@@ -290,7 +290,7 @@ export default function ModulesPage() {
         {/* ── Matrice Tenant / Moduli ─────────────────────────────── */}
         <TabsContent value="matrix" className="mt-4">
           {matrix && matrix.tenants.length > 0 && matrix.modules.length > 0 ? (
-            <Card className="glass-card overflow-hidden">
+            <Card className="app-surface-card overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>

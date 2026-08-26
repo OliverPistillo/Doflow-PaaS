@@ -159,7 +159,7 @@ export default function ChangelogPage() {
           const tc = TYPE_CONFIG[entry.type] || TYPE_CONFIG.MINOR;
           const IconComp = tc.icon;
           return (
-            <Card key={entry.id} className={`glass-card group hover:-translate-y-0.5 transition-all duration-200 ${!entry.isPublished ? "opacity-60" : ""}`}>
+            <Card key={entry.id} className={`app-surface-card group hover:-translate-y-0.5 transition-all duration-200 ${!entry.isPublished ? "opacity-60" : ""}`}>
               <CardContent className="p-5">
                 <div className="flex items-start gap-4">
                   {/* Version badge */}

@@ -80,7 +80,8 @@ function getTenantIdForRequestServer(): string | null {
 
 /**
  * Client-side tenant resolution:
- * - app/admin -> public SEMPRE
+ * - app/admin/localhost -> public solo sui flussi pubblici/auth; dopo il login
+ *   il tenant deriva esclusivamente dalla sessione HttpOnly
  * - subdomain tenant (*.doflow.it) -> SEMPRE quel tenant (anche su /login)
  * - path mode su app: /{tenant}/... -> tenant
  * - custom domain -> null (backend fa lookup)
@@ -91,8 +92,10 @@ function getTenantIdForRequestClient(): string | null {
   const hostTenant = getTenantFromHostString(window.location.host);
   const pathname = window.location.pathname;
 
-  // app/admin/api/www/localhost -> public fisso
-  if (hostTenant === "public") return "public";
+  // Sugli host condivisi un header `public` divergerebbe dal tenant della
+  // sessione autenticata. Le route applicative omettono quindi l'header e
+  // lasciano al backend l'autorità tenant-bound del JWT/cookie.
+  if (hostTenant === "public") return isAuthOrPublicPath(pathname) ? "public" : null;
 
   // subdomain tenant -> usa sempre quello
   if (hostTenant) return hostTenant;

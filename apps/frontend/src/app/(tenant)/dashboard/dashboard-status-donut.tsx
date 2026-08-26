@@ -13,7 +13,7 @@ export function DashboardStatusDonut({ data }: { data: StatusDatum[] }) {
 
   return (
     <section className="dashboard-card min-h-[320px] p-5">
-      <h2 className="text-base font-semibold text-slate-950">Stato attività</h2>
+      <h2 className="text-base font-semibold text-foreground">Stato attività</h2>
       <div className="mt-4 grid min-h-[235px] grid-cols-[minmax(130px,1fr)_105px] items-center gap-2">
         {total > 0 ? (
           <div className="relative h-[190px] min-w-0">
@@ -35,12 +35,12 @@ export function DashboardStatusDonut({ data }: { data: StatusDatum[] }) {
               </PieChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-2xl font-bold text-slate-950">{total}</span>
-              <span className="text-[11px] text-slate-500">attività</span>
+              <span className="text-2xl font-bold text-foreground">{total}</span>
+              <span className="text-[11px] text-muted-foreground">attività</span>
             </div>
           </div>
         ) : (
-          <div className="flex h-[190px] items-center justify-center text-center text-xs text-slate-500">
+          <div className="flex h-[190px] items-center justify-center text-center text-xs text-muted-foreground">
             Nessuna attività disponibile.
           </div>
         )}
@@ -49,8 +49,8 @@ export function DashboardStatusDonut({ data }: { data: StatusDatum[] }) {
             <div key={item.label} className="flex items-start gap-2">
               <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
               <div>
-                <p className="text-xs text-slate-600">{item.label}</p>
-                <p className="text-sm font-bold text-slate-950">{item.value}</p>
+                <p className="text-xs text-muted-foreground">{item.label}</p>
+                <p className="text-sm font-bold text-foreground">{item.value}</p>
               </div>
             </div>
           ))}

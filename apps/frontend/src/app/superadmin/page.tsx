@@ -113,7 +113,7 @@ function KpiCard({
   href?: string;
 }) {
   const inner = (
-    <Card className="glass-card border-none overflow-hidden relative group transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer">
+    <Card className="app-surface-card border-none overflow-hidden relative group transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer">
       {/* Glow blob */}
       <div
         className="absolute -top-8 -right-8 w-28 h-28 rounded-full opacity-15 blur-2xl group-hover:opacity-30 transition-opacity duration-500 pointer-events-none"
@@ -394,7 +394,7 @@ export default function ControlRoomPage() {
         <SystemHealthCard status={data.systemStatus} />
 
         <Link href="/superadmin/tickets">
-          <Card className="border-none glass-card overflow-hidden relative group transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer">
+          <Card className="border-none app-surface-card overflow-hidden relative group transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer">
             <CardContent className="pt-5 pb-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-amber-50 dark:bg-amber-900/20 text-amber-500">
@@ -421,7 +421,7 @@ export default function ControlRoomPage() {
         </Link>
 
         <Link href="/superadmin/sales/quote-requests">
-          <Card className="border-none glass-card overflow-hidden relative group transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer">
+          <Card className="border-none app-surface-card overflow-hidden relative group transition-all duration-300 hover:-translate-y-1 hover:shadow-xl cursor-pointer">
             <CardContent className="pt-5 pb-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-violet-50 dark:bg-violet-900/20 text-violet-500">
@@ -448,7 +448,7 @@ export default function ControlRoomPage() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
         {/* Revenue Trend MoM */}
-        <Card className="glass-card border-none">
+        <Card className="app-surface-card border-none">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
@@ -510,7 +510,7 @@ export default function ControlRoomPage() {
         </Card>
 
         {/* Pipeline Funnel */}
-        <Card className="glass-card border-none">
+        <Card className="app-surface-card border-none">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
@@ -572,7 +572,7 @@ export default function ControlRoomPage() {
       </div>
 
       {/* ── TIER 4: Activity Feed (full-width) ───────────────────────── */}
-      <Card className="glass-card border-none">
+      <Card className="app-surface-card border-none">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
             Attività recente

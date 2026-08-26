@@ -183,7 +183,7 @@ export class TenantNotificationsService {
       eventId: `${event}:${notificationId || 'all'}:${Date.now()}`,
       notificationId: notificationId || null,
       unreadNotifications: summary.unreadNotifications,
-    });
+    }, this.getSchema(req));
   }
 
   async createNotification(schema: string, input: NotificationInput): Promise<{ created: boolean; notification?: any }> {

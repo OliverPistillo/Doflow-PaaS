@@ -38,15 +38,15 @@ export default function SuperAdminAccountPage() {
   }, []);
 
   return (
-    <div className="dashboard-content animate-fadeIn max-w-3xl">
+    <div className="app-page-content animate-fadeIn max-w-3xl">
 
       {/* ── Profilo Header ────────────────────────────────────────── */}
-      <Card className="glass-card border-none">
+      <Card className="app-surface-card border-none">
         <CardContent className="p-6">
           <div className="flex items-center gap-5">
-            <Avatar className="h-16 w-16 rounded-card border-2 border-primary/20 shadow-md">
+            <Avatar className="h-16 w-16 rounded-lg border-2 border-primary/20 shadow-md">
               <AvatarFallback
-                className="rounded-card text-xl font-black"
+                className="rounded-lg text-xl font-black"
                 style={{
                   background: "hsl(var(--primary) / 0.12)",
                   color:      "hsl(var(--primary))",
@@ -77,7 +77,7 @@ export default function SuperAdminAccountPage() {
       </Card>
 
       {/* ── Dati Personali ────────────────────────────────────────── */}
-      <Card className="glass-card border-none">
+      <Card className="app-surface-card border-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <User className="h-5 w-5 text-primary" aria-hidden="true" />
@@ -107,7 +107,7 @@ export default function SuperAdminAccountPage() {
       </Card>
 
       {/* ── Sicurezza ─────────────────────────────────────────────── */}
-      <Card className="glass-card border-none">
+      <Card className="app-surface-card border-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Key className="h-5 w-5 text-primary" aria-hidden="true" />
@@ -146,7 +146,7 @@ export default function SuperAdminAccountPage() {
       </Card>
 
       {/* ── Notifiche ─────────────────────────────────────────────── */}
-      <Card className="glass-card border-none">
+      <Card className="app-surface-card border-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Bell className="h-5 w-5 text-primary" aria-hidden="true" />

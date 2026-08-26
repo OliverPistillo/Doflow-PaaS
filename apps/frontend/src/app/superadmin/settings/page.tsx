@@ -16,7 +16,7 @@ import {
 
 export default function SuperAdminSettingsPage() {
   return (
-    <div className="dashboard-content animate-fadeIn">
+    <div className="app-page-content animate-fadeIn">
 
       {/* ── Header ────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
@@ -32,7 +32,7 @@ export default function SuperAdminSettingsPage() {
       </div>
 
       {/* ── Sezione: Piattaforma ───────────────────────────────────── */}
-      <Card className="glass-card border-none">
+      <Card className="app-surface-card border-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Globe className="h-5 w-5 text-primary" aria-hidden="true" />
@@ -78,7 +78,7 @@ export default function SuperAdminSettingsPage() {
       </Card>
 
       {/* ── Sezione: Sicurezza ─────────────────────────────────────── */}
-      <Card className="glass-card border-none">
+      <Card className="app-surface-card border-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Shield className="h-5 w-5 text-primary" aria-hidden="true" />
@@ -120,7 +120,7 @@ export default function SuperAdminSettingsPage() {
       </Card>
 
       {/* ── Sezione: Email ─────────────────────────────────────────── */}
-      <Card className="glass-card border-none">
+      <Card className="app-surface-card border-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Mail className="h-5 w-5 text-primary" aria-hidden="true" />
@@ -158,7 +158,7 @@ export default function SuperAdminSettingsPage() {
       </Card>
 
       {/* ── Sezione: Database ──────────────────────────────────────── */}
-      <Card className="glass-card border-none">
+      <Card className="app-surface-card border-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Database className="h-5 w-5 text-primary" aria-hidden="true" />

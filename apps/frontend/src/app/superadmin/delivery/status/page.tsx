@@ -156,7 +156,7 @@ export default function DeliveryStatusPage() {
   );
 
   return (
-    <div className="dashboard-content animate-fadeIn">
+    <div className="app-page-content animate-fadeIn">
       <ConfirmDialog />
 
       {/* ── Action bar ─────────────────────────────────────────────── */}
@@ -174,7 +174,7 @@ export default function DeliveryStatusPage() {
         {loading && tasks.length === 0 ? (
              <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary h-8 w-8" /></div>
         ) : groupedData.length === 0 ? (
-            <div className="text-center py-16 bg-muted/40 rounded-xl border border-dashed border-slate-300">
+            <div className="text-center py-16 bg-muted/40 rounded-xl border border-dashed border-border">
                 <p className="text-muted-foreground font-medium">Nessun task attivo.</p>
                 <Button onClick={openCreate} variant="outline" className="mt-4">Crea il primo Task</Button>
             </div>
@@ -182,11 +182,18 @@ export default function DeliveryStatusPage() {
             groupedData.map((group) => (
             <div key={group.id} className="space-y-3">
                 {/* Header Gruppo Servizio */}
-                <div className="flex items-center gap-3 select-none group/header" onClick={() => toggle(group.id)}>
-                    <button className="p-1 hover:bg-slate-200 rounded-md transition-colors text-muted-foreground group-hover/header:text-muted-foreground">
+                <div className="group/header flex items-center gap-3 select-none">
+                    <button
+                        type="button"
+                        className="grid size-9 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted group-hover/header:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        aria-label={`${expanded[group.id] ? "Comprimi" : "Espandi"} ${group.name}`}
+                        aria-expanded={Boolean(expanded[group.id])}
+                        aria-controls={`delivery-group-${group.id}`}
+                        onClick={() => toggle(group.id)}
+                    >
                         {expanded[group.id] ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
                     </button>
-                    <h3 className="font-bold text-lg text-foreground cursor-pointer">{group.name}</h3>
+                    <h3 className="text-lg font-bold text-foreground">{group.name}</h3>
                     <Badge variant="secondary" className={`rounded-full px-2.5 py-0.5 text-xs font-medium border-0 ${group.categoryColor}`}>
                         {group.category}
                     </Badge>
@@ -195,7 +202,7 @@ export default function DeliveryStatusPage() {
 
                 {/* Lista Task */}
                 {expanded[group.id] && (
-                <div className="ml-9 pl-4 border-l-2 border-border space-y-4 animate-in slide-in-from-top-1 duration-300">
+                <div id={`delivery-group-${group.id}`} className="ml-9 space-y-4 border-l-2 border-border pl-4 animate-in slide-in-from-top-1 duration-300">
                     {group.tasks.map((task) => (
                     <div key={task.id} className="space-y-2">
                         
@@ -230,11 +237,16 @@ export default function DeliveryStatusPage() {
                                         task.status === 'done' ? 'bg-green-500' : 
                                         task.status === 'inprogress' ? 'bg-blue-500' :
                                         task.status === 'review' ? 'bg-amber-500' :
-                                        'bg-slate-300'
+                                        'bg-muted'
                                     }`}></div>
-                                    <span className={`font-medium text-base cursor-pointer hover:text-primary ${task.status === 'done' ? 'text-muted-foreground line-through' : 'text-muted-foreground'}`} onClick={() => openEdit(task)}>
+                                    <button
+                                        type="button"
+                                        className={`rounded-sm text-left text-base font-medium hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${task.status === 'done' ? 'text-muted-foreground line-through' : 'text-muted-foreground'}`}
+                                        onClick={() => openEdit(task)}
+                                        aria-label={`Modifica ${task.name}`}
+                                    >
                                         {task.name}
-                                    </span>
+                                    </button>
                                 </div>
                                 
                                 {/* Date */}
@@ -268,7 +280,7 @@ export default function DeliveryStatusPage() {
                                 >
                                     <Edit className="h-3.5 w-3.5 mr-1" /> Modifica
                                 </Button>
-                                <div className="h-4 w-px bg-slate-200"></div>
+                                <div className="h-4 w-px bg-muted"></div>
                                 <Button 
                                     variant="ghost" 
                                     size="sm" 

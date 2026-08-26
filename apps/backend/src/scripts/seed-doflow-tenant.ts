@@ -44,11 +44,13 @@ const TENANT_SLUG = 'doflow';
 const TENANT_SCHEMA = 'doflow';
 const TENANT_NAME = 'doflow';
 const PLAN_TIER = 'ENTERPRISE';
-const CEO_EMAILS = ['oliver@doflow.it', 'daniele@doflow.it'];
+const DEFAULT_TENANT_CONTACT_EMAIL = 'admin@doflow.it';
+const MIN_PROTECTED_OWNER_COUNT = 2;
 
 export type DoflowSeedOptions = {
   ceoPolicy?: 'ensure' | 'require-existing-preserve';
   updateRedis?: boolean;
+  protectedOwnerEmails?: readonly string[];
 };
 
 export type DoflowSeedResult = {
@@ -61,6 +63,19 @@ export type DoflowSeedResult = {
 function loadSeedEnvironment() {
   dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: false });
   dotenv.config({ path: path.resolve(process.cwd(), '..', '..', '.env'), override: false });
+}
+
+function configuredProtectedOwnerEmails(explicit?: readonly string[]): string[] {
+  const source = explicit?.length
+    ? explicit
+    : String(process.env.DOFLOW_PROTECTED_OWNER_EMAILS || '').split(',');
+  const emails = [...new Set(source.map((email) => email.trim().toLowerCase()).filter(Boolean))];
+  if (emails.length < MIN_PROTECTED_OWNER_COUNT || emails.some((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+    throw new Error(
+      'Ensuring owner identities requires at least two valid addresses via protectedOwnerEmails or DOFLOW_PROTECTED_OWNER_EMAILS.',
+    );
+  }
+  return emails;
 }
 
 type ErrorLike = Error & {
@@ -332,7 +347,7 @@ async function ensureTenantTables(ds: DataSource, schema: string) {
   await ensureTenantCredentialsTables(ds, s);
 }
 
-async function ensureTenantRecord(ds: DataSource): Promise<{ id: string }> {
+async function ensureTenantRecord(ds: DataSource, contactEmail: string): Promise<{ id: string }> {
   const rows = await ds.query(
     `
     INSERT INTO public.tenants (
@@ -353,13 +368,13 @@ async function ensureTenantRecord(ds: DataSource): Promise<{ id: string }> {
           updated_at = now()
     RETURNING id
     `,
-    [TENANT_SLUG, TENANT_NAME, TENANT_SCHEMA, CEO_EMAILS[0], PLAN_TIER],
+    [TENANT_SLUG, TENANT_NAME, TENANT_SCHEMA, contactEmail, PLAN_TIER],
   );
 
   return { id: rows[0].id };
 }
 
-async function ensureCeoUsers(ds: DataSource, tenantId: string) {
+async function ensureCeoUsers(ds: DataSource, tenantId: string, protectedOwnerEmails: readonly string[]) {
   const schema = safeSchema(TENANT_SCHEMA, 'seed-doflow-tenant.ensureCeoUsers');
   let fallbackPasswordHash: string | null = null;
 
@@ -368,7 +383,7 @@ async function ensureCeoUsers(ds: DataSource, tenantId: string) {
     return fallbackPasswordHash;
   };
 
-  for (const email of CEO_EMAILS) {
+  for (const email of protectedOwnerEmails) {
     const [tenantRows, publicRows] = await Promise.all([
       ds.query(
         `SELECT id, email, password_hash, role, full_name, auth_provider, google_id,
@@ -467,13 +482,16 @@ async function requireExistingCeoUsers(ds: DataSource, tenantId: string) {
     `SELECT lower(t.email) AS email
        FROM "doflow".users t
        JOIN public.users p ON p.id = t.id AND p.tenant_id = $1
-      WHERE lower(t.email) = ANY($2::text[])
-        AND lower(p.email) = lower(t.email)
+      WHERE lower(t.email) = lower(p.email)
+        AND lower(t.role) = 'owner'
+        AND lower(p.role) = 'owner'
+        AND t.is_active = true
+        AND p.is_active = true
       ORDER BY lower(t.email)`,
-    [tenantId, CEO_EMAILS],
+    [tenantId],
   );
-  if (rows.length !== CEO_EMAILS.length) {
-    throw new Error('Both existing Doflow owner identities and public mirrors are required; the production cutover seed never creates them.');
+  if (rows.length < MIN_PROTECTED_OWNER_COUNT) {
+    throw new Error('At least two existing Doflow owner identities and public mirrors are required; the production cutover seed never creates them.');
   }
   return rows.length;
 }
@@ -567,8 +585,11 @@ export async function runDoflowTenantSeed(
   options: DoflowSeedOptions = {},
 ): Promise<DoflowSeedResult> {
   const ceoPolicy = options.ceoPolicy || 'ensure';
+  const protectedOwnerEmails = ceoPolicy === 'ensure'
+    ? configuredProtectedOwnerEmails(options.protectedOwnerEmails)
+    : [];
   console.log('[seed:doflow] Ensuring tenant record...');
-  const tenant = await ensureTenantRecord(ds);
+  const tenant = await ensureTenantRecord(ds, protectedOwnerEmails[0] || DEFAULT_TENANT_CONTACT_EMAIL);
 
   console.log('[seed:doflow] Ensuring tenant schema/tables...');
   await ensureTenantTables(ds, TENANT_SCHEMA);
@@ -578,7 +599,7 @@ export async function runDoflowTenantSeed(
   console.log('[seed:doflow] Ensuring CEO users...');
   const ceoAccountsPresent = ceoPolicy === 'require-existing-preserve'
     ? await requireExistingCeoUsers(ds, tenant.id)
-    : (await ensureCeoUsers(ds, tenant.id), CEO_EMAILS.length);
+    : (await ensureCeoUsers(ds, tenant.id, protectedOwnerEmails), protectedOwnerEmails.length);
 
   console.log('[seed:doflow] Ensuring team members and skills...');
   await seedTenantTeamSkills(ds, TENANT_SCHEMA);

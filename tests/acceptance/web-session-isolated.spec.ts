@@ -329,7 +329,9 @@ test('browser web auth usa esclusivamente sessioni opache HttpOnly nei Context A
       await badPage.getByLabel('Email').fill(email);
       await badPage.getByLabel('Password', { exact: true }).fill('synthetic-wrong-password');
       await badPage.getByRole('button', { name: 'Accedi', exact: true }).click();
-      await expect(badPage.locator('.df-auth-error')).toContainText('Credenziali non valide');
+      await expect(
+        badPage.getByRole('alert').filter({ hasText: 'Credenziali non valide' }),
+      ).toBeVisible();
     }
 
     let contextA = await browser.newContext();
@@ -455,7 +457,7 @@ test('browser web auth usa esclusivamente sessioni opache HttpOnly nei Context A
     expect((await appFetch(secondary.page, '/tenant/doflow/commerce/services', {
       headers: { 'X-Doflow-Tenant-Id': 'doflow' },
     })).status).toBe(403);
-    await connectBusinessSocket(secondary.page, 'acceptance-secondary');
+    await connectBusinessSocket(secondary.page, 'acceptance_secondary');
     await secondary.page.evaluate(() => (window as any).__webSessionAcceptanceSocket?.close());
 
     const contextD = await browser.newContext();

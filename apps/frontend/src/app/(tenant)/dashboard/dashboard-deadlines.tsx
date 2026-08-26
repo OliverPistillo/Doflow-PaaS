@@ -7,21 +7,21 @@ import { dashboardDate } from "./dashboard-format";
 function deadlineTone(priority?: string | null) {
   if (priority === "urgent") return "bg-rose-500";
   if (priority === "high") return "bg-amber-500";
-  return "bg-indigo-500";
+  return "bg-primary";
 }
 
 export function DashboardDeadlines({ items }: { items: CalendarEvent[] }) {
   return (
     <section className="dashboard-card min-h-[320px] p-5">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-base font-semibold text-slate-950">Prossime scadenze</h2>
-        <Link href="/calendar/deadlines" className="text-xs font-semibold text-indigo-600 hover:text-indigo-700">
+        <h2 className="text-base font-semibold text-foreground">Prossime scadenze</h2>
+        <Link href="/calendar/deadlines" className="text-xs font-semibold text-primary hover:text-primary/80">
           Vedi tutte
         </Link>
       </div>
 
       {items.length === 0 ? (
-        <div className="flex min-h-[225px] items-center justify-center text-center text-sm text-slate-500">
+        <div className="flex min-h-[225px] items-center justify-center text-center text-sm text-muted-foreground">
           Nessuna scadenza imminente.
         </div>
       ) : (
@@ -30,14 +30,14 @@ export function DashboardDeadlines({ items }: { items: CalendarEvent[] }) {
             <Link
               key={item.id}
               href={`/calendar/events/${item.id}`}
-              className="group flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2.5 transition-colors hover:border-indigo-200 hover:bg-indigo-50/40"
+              className="group flex items-center gap-3 rounded-xl border border-border px-3 py-2.5 transition-colors hover:border-primary/30 hover:bg-accent/40"
             >
               <span className={`h-2 w-2 shrink-0 rounded-full ${deadlineTone(item.priority)}`} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-slate-900 group-hover:text-indigo-700">{item.title}</p>
-                <p className="truncate text-xs text-slate-500">{item.event_type.replaceAll("_", " ")}</p>
+                <p className="truncate text-sm font-semibold text-foreground group-hover:text-primary">{item.title}</p>
+                <p className="truncate text-xs text-muted-foreground">{item.event_type.replaceAll("_", " ")}</p>
               </div>
-              <time className="shrink-0 text-xs font-medium text-indigo-600">{dashboardDate(item.start_at)}</time>
+              <time className="shrink-0 text-xs font-medium text-primary">{dashboardDate(item.start_at)}</time>
             </Link>
           ))}
         </div>
@@ -45,7 +45,7 @@ export function DashboardDeadlines({ items }: { items: CalendarEvent[] }) {
 
       <Link
         href="/calendar"
-        className="mt-4 inline-flex h-8 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+        className="mt-4 inline-flex h-8 items-center gap-2 rounded-lg border border-border px-3 text-xs font-semibold text-foreground hover:bg-muted/60"
       >
         <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
         Vedi calendario

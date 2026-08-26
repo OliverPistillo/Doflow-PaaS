@@ -45,7 +45,7 @@ function KpiCard({
   trend,
   trendUp,
   onClick,
-  className = "glass-card", // Default fallback
+  className = "app-surface-card", // Default fallback
 }: {
   title:    string;
   value:    string;
@@ -57,8 +57,17 @@ function KpiCard({
 }) {
   return (
     <Card
-      className={`${className} transition-all duration-300 cursor-pointer group hover:-translate-y-1 hover:shadow-xl overflow-hidden relative`}
+      className={`${className} group relative cursor-pointer overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
+      role="button"
+      tabIndex={0}
+      aria-label={`${title}: ${value}${trend ? `. ${trend}` : ""}`}
       onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick();
+        }
+      }}
     >
       <CardContent className="p-6 relative z-10">
         <div className="flex justify-between items-start">
@@ -169,7 +178,7 @@ export default function SalesDashboardClient() {
   // ─── MAIN RENDER ────────────────────────────────────────────────────────────
 
   return (
-    <div className="dashboard-content animate-fadeIn">
+    <div className="app-page-content animate-fadeIn">
 
       {/* ── 1. BARRA FILTRI GLOBALE ──────────────────────────────────── */}
       <div className="animate-fadeInUp" style={{ animationDelay: "0.1s" }}>
@@ -203,7 +212,7 @@ export default function SalesDashboardClient() {
           trend={data.kpi.winRate >= 30 ? "Sopra target" : "Sotto target"}
           trendUp={data.kpi.winRate >= 30}
           onClick={() => setActiveCard('WIN_RATE')}
-          className="glass-card"
+          className="app-surface-card"
         />
         <KpiCard
           title="Media per deal"
@@ -212,15 +221,24 @@ export default function SalesDashboardClient() {
           trend="Valore medio"
           trendUp
           onClick={() => setActiveCard('AVG_VALUE')}
-          className="glass-card"
+          className="app-surface-card"
         />
       </div>
 
       {/* ── 4. Alert Row (Chiusura Mese) ──────────────────────────────── */}
       <div className="animate-fadeInUp" style={{ animationDelay: "0.3s" }}>
         <Card
-          className="sa-card-yellow cursor-pointer hover:shadow-lg transition-all mb-6 group"
+          className="sa-card-yellow cursor-pointer hover:shadow-lg transition-all mb-6 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          role="button"
+          tabIndex={0}
+          aria-label="Apri i deal in chiusura nel mese"
           onClick={() => setActiveCard('CLOSING_THIS_MONTH')}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault()
+              setActiveCard('CLOSING_THIS_MONTH')
+            }
+          }}
         >
           <CardContent className="flex items-center justify-between p-6">
             <div>
@@ -243,7 +261,7 @@ export default function SalesDashboardClient() {
       <div className="charts-grid animate-fadeInUp" style={{ animationDelay: "0.4s" }}>
 
         {/* Pipeline Bar Chart */}
-        <Card className="glass-card border-none">
+        <Card className="app-surface-card border-none">
           <CardHeader className="pb-2">
             <div className="flex justify-between items-center">
               <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
@@ -290,7 +308,7 @@ export default function SalesDashboardClient() {
         </Card>
 
         {/* Pie Chart */}
-        <Card className="glass-card border-none">
+        <Card className="app-surface-card border-none">
           <CardHeader className="pb-2">
             <div className="flex justify-between items-center">
               <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
@@ -345,7 +363,7 @@ export default function SalesDashboardClient() {
 
       {/* ── 6. Top Deals Chart ────────────────────────────────────────── */}
       <div className="animate-fadeInUp" style={{ animationDelay: "0.5s" }}>
-        <Card className="glass-card border-none">
+        <Card className="app-surface-card border-none">
           <CardHeader className="pb-2">
             <div className="flex justify-between items-center">
               <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wider">

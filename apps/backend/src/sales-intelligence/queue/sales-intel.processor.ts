@@ -70,6 +70,7 @@ export class SalesIntelProcessor extends WorkerHost {
       await this.notificationsService.notifyUser(
         job.data.userId,
         { event: 'si:complete', jobId: job.id, campaignId: campaign.id },
+        'public',
       );
     }
 

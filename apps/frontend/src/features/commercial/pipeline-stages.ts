@@ -12,7 +12,19 @@ export const pipelineStages: Array<{ id: PipelineStage; label: string; probabili
   { id: "lost", label: "Perso", probability: 0 },
 ]
 
+const canonicalStageFallbacks: Readonly<Record<string, PipelineStage>> = {
+  new: "new",
+  contacted: "qualified",
+  qualified: "qualified",
+  appointment: "proposal",
+  quote: "proposal",
+  "closed-won": "won",
+  lost: "lost",
+  paused: "follow-up",
+}
+
 export function normalizePipelineStage(value: unknown): PipelineStage {
   const normalized = String(value || "").trim().toLowerCase().replaceAll("_", "-")
-  return pipelineStages.some((stage) => stage.id === normalized) ? normalized as PipelineStage : "new"
+  if (pipelineStages.some((stage) => stage.id === normalized)) return normalized as PipelineStage
+  return canonicalStageFallbacks[normalized] ?? "new"
 }

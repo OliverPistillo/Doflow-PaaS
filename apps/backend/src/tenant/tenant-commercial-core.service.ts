@@ -71,6 +71,23 @@ export class TenantCommercialCoreService {
     return normalized.mapped ? normalized.stage : normalized.raw;
   }
 
+  private uiStageValue(stageValue: unknown, uiStageValue: unknown) {
+    const explicit = String(uiStageValue || '').trim().toLowerCase().replace(/_/g, '-');
+    if (explicit) return explicit;
+    const canonical = this.stageValue(stageValue);
+    const fallbacks: Record<string, string> = {
+      new: 'new',
+      contacted: 'qualified',
+      qualified: 'qualified',
+      appointment: 'proposal',
+      quote: 'proposal',
+      closed_won: 'won',
+      lost: 'lost',
+      paused: 'follow-up',
+    };
+    return fallbacks[canonical] || canonical;
+  }
+
   private requestedStage(value: unknown) {
     const raw = String(value || '').trim().toLowerCase();
     const aliases: Record<string, string> = {
@@ -439,8 +456,7 @@ export class TenantCommercialCoreService {
   }
 
   async reorderPipeline(body: Record<string, unknown>, keyValue: unknown) {
-    const stage = normalizeCommercialStage(body.stage);
-    if (!stage.mapped) throw new BadRequestException('Fase commerciale non valida');
+    const stage = this.requestedStage(body.stage);
     const leadIds = Array.isArray(body.leadIds)
       ? body.leadIds.map((id) => this.uuid(id, 'Lead'))
       : [];
@@ -450,11 +466,11 @@ export class TenantCommercialCoreService {
     return this.withIdempotency(
       'commercial.pipeline.reorder',
       keyValue,
-      { stage: stage.stage, leadIds },
+      { stage: stage.canonical, uiStage: stage.ui, leadIds },
       async (context) => {
         const { actor, manager } = context;
         const rows = await manager.query(
-          `SELECT id, stage, assigned_to, version, pipeline_order
+          `SELECT id, stage, ui_stage, assigned_to, version, pipeline_order
            FROM "${actor.schema}".opportunities
            WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL FOR UPDATE`,
           [leadIds],
@@ -462,20 +478,22 @@ export class TenantCommercialCoreService {
         if (rows.length !== leadIds.length) throw new NotFoundException('Uno o più lead non esistono');
         for (const row of rows) {
           this.assertEditOpportunity(actor, row);
-          if (this.stageValue(row.stage) !== stage.stage) {
+          if (this.stageValue(row.stage) !== stage.canonical || this.uiStageValue(row.stage, row.ui_stage) !== stage.ui) {
             throw new ConflictException('La pipeline è cambiata durante il riordino');
           }
         }
         const currentOrder = new Map(rows.map((row: any) => [String(row.id), Number(row.pipeline_order || 0)]));
-        if (leadIds.every((id, index) => currentOrder.get(id) === index + 1)) {
-          return { ok: true, stage: stage.stage, leadIds, unchanged: true, correlationId: context.correlationId };
+        const needsUiStageBackfill = rows.some((row: any) => !String(row.ui_stage || '').trim());
+        if (!needsUiStageBackfill && leadIds.every((id, index) => currentOrder.get(id) === index + 1)) {
+          return { ok: true, stage: stage.canonical, leadIds, unchanged: true, correlationId: context.correlationId };
         }
         for (let index = 0; index < leadIds.length; index += 1) {
           await manager.query(
             `UPDATE "${actor.schema}".opportunities
-             SET pipeline_order = $1, version = version + 1, updated_by = $2, updated_at = now()
-             WHERE id = $3`,
-            [index + 1, this.actorId(actor), leadIds[index]],
+             SET pipeline_order = $1, ui_stage = COALESCE(ui_stage, $2),
+                 version = version + 1, updated_by = $3, updated_at = now()
+             WHERE id = $4`,
+            [index + 1, stage.ui, this.actorId(actor), leadIds[index]],
           );
         }
         await this.recordOperation(
@@ -483,11 +501,11 @@ export class TenantCommercialCoreService {
           'commercial_pipeline_reordered',
           'opportunity',
           leadIds[0],
-          rows.map((row: any) => ({ id: row.id, order: row.pipeline_order })),
-          leadIds.map((id, index) => ({ id, order: index + 1 })),
-          { stage: stage.stage, lead_ids: leadIds },
+          rows.map((row: any) => ({ id: row.id, order: row.pipeline_order, ui_stage: row.ui_stage || null })),
+          leadIds.map((id, index) => ({ id, order: index + 1, ui_stage: stage.ui })),
+          { stage: stage.canonical, ui_stage: stage.ui, lead_ids: leadIds },
         );
-        return { ok: true, stage: stage.stage, leadIds, correlationId: context.correlationId };
+        return { ok: true, stage: stage.canonical, leadIds, correlationId: context.correlationId };
       },
     );
   }

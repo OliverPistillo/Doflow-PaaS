@@ -58,6 +58,7 @@ const expectedMigrationFiles = [
   "1820000000000-CreateDocumentRevenueCoreAuthority.js",
   "1830000000000-CreateCollaborationNotificationsRealtimeAuthority.js",
   "1840000000000-CreateAutomationPerformanceAuthority.js",
+  "1850000000000-CreateUniversalTenantFeatures.js",
 ];
 const compiledScripts = [
   "apps/backend/dist/scripts/run-production-migrations.js",
@@ -624,7 +625,7 @@ async function scenarioBaseline(config) {
   startContainer(names.baseline);
   const health = await waitForHealth(3401);
   const after = migrationState(databases.baseline);
-  if (after.max !== 1840000000000 || after.count !== 11) throw new Error("Production image did not apply migrations 179-184 exactly once.");
+  if (after.max !== 1850000000000 || after.count !== 12) throw new Error("Production image did not apply migrations 179-185 exactly once.");
   const logs = await waitForLog(names.baseline, /"event"\s*:\s*"complete"/i);
   const events = productionMigrationEvents(logs);
   const lockAcquired = migrationEvent(events, "lock_acquired")?.acquired === true;
@@ -705,7 +706,7 @@ async function scenarioConcurrent(config) {
   const duplicateRows = state.rows.length - new Set(state.rows.map((row) => `${row.timestamp}|${row.name}`)).size;
   removeContainer(names.concurrentB);
   removeContainer(names.concurrentA);
-  if (state.max !== 1840000000000 || state.count !== 11 || duplicateRows !== 0) {
+  if (state.max !== 1850000000000 || state.count !== 12 || duplicateRows !== 0) {
     throw new Error("Concurrent startup produced an incoherent migration history.");
   }
   const firstEvents = productionMigrationEvents(firstLogs);
@@ -774,7 +775,7 @@ async function scenarioFailure(config) {
   const retryHealth = await waitForHealth(3401);
   const retryState = migrationState(databases.failure);
   removeContainer(names.retry);
-  if (retryState.max !== 1840000000000 || retryState.count !== 11) throw new Error("Retry after removal of the isolated fault did not reach migration 184.");
+  if (retryState.max !== 1850000000000 || retryState.count !== 12) throw new Error("Retry after removal of the isolated fault did not reach migration 185.");
   return {
     fault: "invalid isolated schema name discovered by migration 179",
     exitCode: exited.exitCode,
@@ -831,7 +832,7 @@ async function scenarioCutover(config, baselineCapture) {
   const crossTenant = finalCapture.evidence.secondary.crossTenant ?? {};
   const reconciliation = {
     migrationMax: finalCapture.evidence.maxMigration,
-    zeroPending: migrationState(databases.baseline).max === 1840000000000,
+    zeroPending: migrationState(databases.baseline).max === 1850000000000,
     relationsComplete: finalCapture.evidence.relations.complete === true,
     ceoPreserved,
     secondTenantUnchanged,
@@ -840,7 +841,7 @@ async function scenarioCutover(config, baselineCapture) {
     businessHash: finalCapture.evidence.business.hash,
   };
   if (!Object.entries(reconciliation).filter(([key]) => !key.endsWith("Hash") && key !== "migrationMax").every(([, value]) => value === true)
-      || reconciliation.migrationMax !== 1840000000000) {
+      || reconciliation.migrationMax !== 1850000000000) {
     throw new Error("Cutover reconciliation, CEO preservation or second-tenant isolation failed.");
   }
   return {

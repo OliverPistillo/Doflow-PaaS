@@ -52,7 +52,7 @@ describe('production migration runtime', () => {
       synchronize: false,
       logging: false,
     });
-    expect(dataSource.options.migrations).toHaveLength(11);
+    expect(dataSource.options.migrations).toHaveLength(PRODUCTION_MIGRATIONS.length);
     expect((dataSource.options.migrations as string[]).every((file) => file.endsWith('.js'))).toBe(true);
   });
 
@@ -104,7 +104,7 @@ describe('production migration runtime', () => {
     ])).toThrow(expect.objectContaining({ code: 'MIGRATION_HISTORY_INCOMPATIBLE' }));
     expect(() => validateProductionMigrationHistory([
       ...prefix,
-      { timestamp: 1850000000000, name: 'UnknownFuture1850000000000' },
+      { timestamp: 1860000000000, name: 'UnknownFuture1860000000000' },
     ])).toThrow(expect.objectContaining({ code: 'MIGRATION_HISTORY_FUTURE' }));
     expect(() => validateProductionMigrationHistory([
       { timestamp: prefix[0].timestamp, name: 'WrongName1714752000000' },

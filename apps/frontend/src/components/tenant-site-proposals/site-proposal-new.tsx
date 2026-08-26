@@ -114,31 +114,31 @@ export function SiteProposalNew() {
             <SelectTrigger className="h-11"><SelectValue placeholder="Seleziona tema" /></SelectTrigger>
             <SelectContent>{selectableTemplates.map((item) => { const key = `${item.slug}@${item.version}`; return <SelectItem key={key} value={key}>{item.name} · {item.version}{item.default_version === item.version ? " · Predefinito" : ""}{recommendation?.key === key ? " · Consigliato" : ""}</SelectItem>; })}</SelectContent>
           </Select>
-          {selected ? <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600"><strong className="text-slate-900">{selected.name}</strong> · {(selected.categories || []).slice(0, 4).join(", ")} · {selected.content_profile} · Adattatore attivo · Versione immutabile {recommendation?.key === `${selected.slug}@${selected.version}` ? <span className="font-medium text-indigo-700">· Consigliato per questa attività ({recommendation.reason})</span> : null} <Button size="sm" variant="outline" className="ml-3" onClick={() => void fetchProposalThemePreview(selected.slug, selected.version).then(setPreviewHtml).catch((error) => toast.error(getErrorMessage(error)))}>Anteprima</Button></div> : <p className="text-sm text-slate-500">Caricamento temi…</p>}
+          {selected ? <div className="rounded-xl bg-muted/50 px-4 py-3 text-sm text-muted-foreground"><strong className="text-foreground">{selected.name}</strong> · {(selected.categories || []).slice(0, 4).join(", ")} · {selected.content_profile} · Adattatore attivo · Versione immutabile {recommendation?.key === `${selected.slug}@${selected.version}` ? <span className="font-medium text-primary">· Consigliato per questa attività ({recommendation.reason})</span> : null} <Button size="sm" variant="outline" className="ml-3" onClick={() => void fetchProposalThemePreview(selected.slug, selected.version).then(setPreviewHtml).catch((error) => toast.error(getErrorMessage(error)))}>Anteprima</Button></div> : <p className="text-sm text-muted-foreground">Caricamento temi…</p>}
         </div>
         {pendingTemplates.length ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><strong>Altri temi in preparazione:</strong> {pendingTemplates.map((item) => `${item.name} ${item.version}`).join(", ")}. Saranno selezionabili dopo l&apos;integrazione del profilo di generazione.</div> : null}
-        {previewHtml ? <div className="mt-4 overflow-hidden rounded-xl border bg-white"><div className="flex justify-end border-b p-2"><Button size="sm" variant="ghost" onClick={() => setPreviewHtml("")}>Chiudi</Button></div><iframe title="Anteprima tema selezionato" srcDoc={previewHtml} sandbox="allow-scripts" referrerPolicy="no-referrer" className="h-[620px] w-full" /></div> : null}
+        {previewHtml ? <div className="mt-4 overflow-hidden rounded-xl border bg-card"><div className="flex justify-end border-b p-2"><Button size="sm" variant="ghost" onClick={() => setPreviewHtml("")}>Chiudi</Button></div><iframe title="Anteprima tema selezionato" srcDoc={previewHtml} sandbox="allow-scripts" referrerPolicy="no-referrer" className="h-[620px] w-full" /></div> : null}
       </CommercialSectionCard>
       <Tabs defaultValue="csv">
         <TabsList className="w-full justify-start overflow-x-auto"><TabsTrigger value="csv">Importa CSV</TabsTrigger><TabsTrigger value="manual">Crea manualmente</TabsTrigger></TabsList>
         <TabsContent value="csv" className="mt-5">
           <CommercialSectionCard title="Importa CSV">
-            <p className="mb-4 text-sm text-slate-600"><strong>Tema per questo batch:</strong> {selected ? `${selected.name} ${selected.version}` : "seleziona un tema attivo"}</p>
+            <p className="mb-4 text-sm text-muted-foreground"><strong>Tema per questo batch:</strong> {selected ? `${selected.name} ${selected.version}` : "seleziona un tema attivo"}</p>
             <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
-              <button type="button" className="flex min-h-52 flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 px-5 text-center transition-colors hover:border-indigo-300 hover:bg-indigo-50/30" onClick={() => inputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); pickFile(event.dataTransfer.files[0] || null); }}>
-                <Upload className="h-7 w-7 text-indigo-600" /><span className="mt-3 font-medium text-slate-900">Trascina qui il CSV</span><span className="mt-1 text-sm text-slate-500">oppure premi per selezionarlo, massimo 2 MiB</span>
+              <button type="button" className="flex min-h-52 flex-col items-center justify-center rounded-xl border-2 border-dashed border-border bg-muted/50 px-5 text-center transition-colors hover:border-primary/40 hover:bg-primary/5" onClick={() => inputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); pickFile(event.dataTransfer.files[0] || null); }}>
+                <Upload className="h-7 w-7 text-primary" /><span className="mt-3 font-medium text-foreground">Trascina qui il CSV</span><span className="mt-1 text-sm text-muted-foreground">oppure premi per selezionarlo, massimo 2 MiB</span>
                 <input ref={inputRef} className="sr-only" type="file" accept=".csv,text/csv" onChange={(event) => pickFile(event.target.files?.[0] || null)} />
               </button>
-              <div className="rounded-xl border border-slate-200 p-4">
-                <h2 className="font-semibold text-slate-900">Guida CSV</h2>
-                <ul className="mt-3 space-y-2 text-sm text-slate-600">
+              <div className="rounded-xl border border-border p-4">
+                <h2 className="font-semibold text-foreground">Guida CSV</h2>
+                <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
                   <li>Servizi separati da punto e virgola.</li><li>Immagini con URL HTTPS.</li><li>Campi JSON opzionali.</li><li><code>business_name</code> obbligatorio.</li>
                   <li>Sono accettate anche intestazioni italiane comuni come “Nome azienda / struttura”, “Ambito” e “Ruolo pubblico”.</li><li>Massimo 50 righe.</li>
                 </ul>
                 <Button variant="outline" className="mt-5 w-full" onClick={downloadCsvTemplate}><Download className="mr-2 h-4 w-4" />Scarica CSV modello</Button>
               </div>
             </div>
-            {file ? <p className="mt-4 text-sm text-slate-700"><FileUp className="mr-2 inline h-4 w-4" />{file.name} · {(file.size / 1024).toFixed(1)} KiB</p> : null}
+            {file ? <p className="mt-4 text-sm text-muted-foreground"><FileUp className="mr-2 inline h-4 w-4" />{file.name} · {(file.size / 1024).toFixed(1)} KiB</p> : null}
             {fileError ? <p className="mt-3 text-sm text-rose-600" role="alert">{fileError}</p> : null}
             <div className="mt-5 flex justify-end"><Button disabled={!canUseBuilder || busy || !file || !selected} onClick={() => void submitCsv()}>{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Analizza CSV</Button></div>
           </CommercialSectionCard>

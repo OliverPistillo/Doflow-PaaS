@@ -594,7 +594,7 @@ useEffect(() => {
    ======================================================= */
 
   return (
-    <div className="dashboard-content animate-fadeIn">
+    <div className="app-page-content animate-fadeIn">
       {/* ── Action bar ─────────────────────────────────────────────── */}
       <div className="flex justify-end gap-2 mb-6">
         <Button variant="outline" onClick={loadTenants} disabled={loadingTenants}>
@@ -781,11 +781,30 @@ useEffect(() => {
                     data={kpi?.trend || []}
                     margin={{ top: 12, right: 16, left: 0, bottom: 0 }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="day" tick={{ fontSize: 12 }} minTickGap={24} />
-                    <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="new_users" strokeWidth={2} dot={false} />
+                    <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="day"
+                      tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                      tickLine={false}
+                      axisLine={false}
+                      minTickGap={24}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                      tickLine={false}
+                      axisLine={false}
+                      allowDecimals={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: 8,
+                        border: "1px solid hsl(var(--border))",
+                        backgroundColor: "hsl(var(--popover))",
+                        color: "hsl(var(--popover-foreground))",
+                      }}
+                      labelStyle={{ color: "hsl(var(--popover-foreground))" }}
+                    />
+                    <Line type="monotone" dataKey="new_users" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -796,8 +815,9 @@ useEffect(() => {
           <div className="mt-6">
             <div className="font-bold text-foreground mb-2">Top tenant (per totale utenti)</div>
 
-            <div className="rounded-2xl border border-border overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="overflow-hidden rounded-2xl border border-border">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead className="bg-muted/40 border-b text-xs uppercase font-bold text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3 text-left">Tenant</th>
@@ -810,23 +830,25 @@ useEffect(() => {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {(kpi?.kpiByTenant || []).map((t) => (
-                    <tr
-                      key={t.tenant_id}
-                      className="hover:bg-muted/40 cursor-pointer"
-                      onClick={() => {
-                        const found = tenants.find(
-                          local => local.slug === t.tenant_slug || local.schema_name === t.tenant_schema
-                        );
-                        if (found) {
-                          setActiveTab("tenant");
-                          setTargetTenantId(found.id);
-                          setPage(1);
-                        }
-                      }}
-                      title="Click per aprire questo tenant"
-                    >
+                    <tr key={t.tenant_id} className="hover:bg-muted/40">
                       <td className="px-4 py-3 font-medium text-foreground">
-                        {t.tenant_name || t.tenant_slug || "—"}
+                        <button
+                          type="button"
+                          className="rounded-sm text-left font-medium text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          onClick={() => {
+                            const found = tenants.find(
+                              local => local.slug === t.tenant_slug || local.schema_name === t.tenant_schema
+                            );
+                            if (found) {
+                              setActiveTab("tenant");
+                              setTargetTenantId(found.id);
+                              setPage(1);
+                            }
+                          }}
+                          aria-label={`Apri gli utenti di ${t.tenant_name || t.tenant_slug || "questo tenant"}`}
+                        >
+                          {t.tenant_name || t.tenant_slug || "—"}
+                        </button>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
                         {t.tenant_slug || "—"}
@@ -846,13 +868,15 @@ useEffect(() => {
                   )}
                 </tbody>
               </table>
+              </div>
             </div>
           </div>
         </Card>
 
         {/* TABLE */}
-        <Card className="overflow-hidden mt-4">
-          <table className="w-full text-sm">
+        <Card className="mt-4 overflow-hidden">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-sm">
             <thead className="bg-muted/40 border-b text-xs uppercase font-bold text-muted-foreground">
               <tr>
                 <th className="px-6 py-4">Email</th>
@@ -949,6 +973,7 @@ useEffect(() => {
               )}
             </tbody>
           </table>
+          </div>
         </Card>
 
         {/* Pagination */}

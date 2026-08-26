@@ -2,9 +2,12 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } f
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantTeamService } from './tenant-team.service';
 import { TenantEffectivePermissionsService } from './tenant-effective-permissions.service';
+import { RequireTenantCapability, TenantUniversalCapabilityGuard } from './tenant-universal-capability.guard';
+import { TenantUniversalScopeGuard } from './tenant-universal-scope.guard';
 
 @Controller('tenant/team')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, TenantUniversalScopeGuard, TenantUniversalCapabilityGuard)
+@RequireTenantCapability('canViewTeam')
 export class TenantTeamController {
   constructor(
     private readonly service: TenantTeamService,
@@ -32,6 +35,7 @@ export class TenantTeamController {
   }
 
   @Get('me/module-permissions')
+  @RequireTenantCapability()
   currentModulePermissions() {
     return this.access.getCurrentAccess();
   }

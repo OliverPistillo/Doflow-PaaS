@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
-import { apiFetch } from "@/lib/api"
+import { ApiError, apiFetch } from "@/lib/api"
 import { clearDoFlowUser } from "@/lib/jwt"
 import { teamApi, type TeamMember } from "@/lib/tenant-team-api"
 import {
@@ -204,9 +204,13 @@ export function DoflowIdentityProvider({ children }: { children: React.ReactNode
       shouldApply?: () => boolean
     } = {}) => {
       const identityRequest = apiFetch<IdentityBootstrap>("/tenant/doflow/identity")
+      const membersRequest = teamApi.members({ limit: 200 }).catch((error) => {
+        if (error instanceof ApiError && error.status === 403) return { items: [] }
+        throw error
+      })
       const [auth, members, bootstrap] = await Promise.all([
         apiFetch<AuthMe>("/auth/me"),
-        teamApi.members({ limit: 200 }),
+        membersRequest,
         allowIdentityFallback
           ? identityRequest.catch(
               (): IdentityBootstrap => ({ preferences: defaultPreferences, capabilities: [] }),

@@ -70,7 +70,7 @@ function KpiCard({ title, value, icon: Icon, color }: {
   icon: React.ComponentType<{ className?: string }>; color: string;
 }) {
   return (
-    <Card className="glass-card transition-all duration-300 group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative">
+    <Card className="app-surface-card transition-all duration-300 group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative">
       <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-20 blur-2xl group-hover:opacity-40 transition-opacity duration-500" style={{ backgroundColor: color }} />
       <CardContent className="p-6 relative z-10 flex justify-between items-start">
         <div>
@@ -253,7 +253,7 @@ export default function NotificationsPage() {
       {/* Notification List */}
       <div className="space-y-2">
         {notifs.length === 0 ? (
-          <Card className="glass-card">
+          <Card className="app-surface-card">
             <CardContent className="py-16 text-center text-muted-foreground">
               <Bell className="h-10 w-10 mx-auto mb-3 opacity-40" />
               <p className="font-medium">Nessuna notifica</p>
@@ -264,7 +264,7 @@ export default function NotificationsPage() {
             const tc = TYPE_CONFIG[n.type] || TYPE_CONFIG.INFO;
             const IconComp = tc.icon;
             return (
-              <Card key={n.id} className={`glass-card group hover:-translate-y-0.5 transition-all duration-200 ${!n.isRead ? "border-l-2" : ""}`}
+              <Card key={n.id} className={`app-surface-card group hover:-translate-y-0.5 transition-all duration-200 ${!n.isRead ? "border-l-2" : ""}`}
                 style={!n.isRead ? { borderLeftColor: tc.color } : undefined}>
                 <CardContent className="p-4 flex items-start gap-4">
                   <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"

@@ -63,6 +63,11 @@ export const PRODUCTION_MIGRATIONS = [
     name: 'CreateAutomationPerformanceAuthority1840000000000',
     compiledFile: '1840000000000-CreateAutomationPerformanceAuthority.js',
   },
+  {
+    timestamp: 1850000000000,
+    name: 'CreateUniversalTenantFeatures1850000000000',
+    compiledFile: '1850000000000-CreateUniversalTenantFeatures.js',
+  },
 ] as const satisfies readonly ProductionMigrationDefinition[];
 
 export const PRODUCTION_MIGRATION_MAX =

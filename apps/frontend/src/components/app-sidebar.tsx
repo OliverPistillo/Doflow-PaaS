@@ -3,11 +3,11 @@
 import * as React from "react"
 import {
   Archive,
+  BrainCircuit,
   CalendarDays,
   CircleHelp,
   ContactRound,
   FileText,
-  Gamepad2,
   Handshake,
   Headphones,
   Inbox,
@@ -17,6 +17,8 @@ import {
   PanelsTopLeft,
   ReceiptText,
   Settings,
+  Trophy,
+  Workflow,
   Zap,
 } from "lucide-react"
 
@@ -25,14 +27,18 @@ import { NavUser } from "@/components/nav-user"
 import { TeamSwitcher } from "@/components/team-switcher"
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail } from "@/components/ui/sidebar"
 import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider"
+import { usePlan } from "@/contexts/PlanContext"
 
 const groups: NavigationGroup[] = [
   {
     label: "Workspace",
     items: [
       { title: "Panoramica", url: "/dashboard", icon: LayoutDashboard },
-      { title: "Inbox", url: "/dashboard/notifiche", icon: Inbox, capability: "canReadNotifications" },
+      { title: "Inbox", url: "/dashboard/inbox", icon: Inbox, capability: "canReadNotifications" },
       { title: "Team Space", url: "/dashboard/team-space", icon: MessageSquareText, capability: "canViewProjects" },
+      { title: "Flowboard", url: "/dashboard/flowboard", icon: Workflow, capability: "canViewProjects" },
+      { title: "Company Intelligence", url: "/dashboard/company-intelligence", icon: BrainCircuit, capability: "canViewAssignedLeads", featureKey: "crm.sales-intel" },
+      { title: "Bonus", url: "/dashboard/bonus", icon: Trophy, capability: "canViewOwnPoints" },
       {
         title: "Commerciale",
         url: "/dashboard/commercial",
@@ -87,10 +93,6 @@ const groups: NavigationGroup[] = [
     ],
   },
   {
-    label: "Pausa",
-    items: [{ title: "Flow Arcade", url: "/dashboard/flow-arcade", icon: Gamepad2 }],
-  },
-  {
     label: "Sistema",
     placement: "bottom",
     items: [
@@ -105,39 +107,71 @@ const groups: NavigationGroup[] = [
   },
 ]
 
-function filterItem(item: NavigationItem, hasCapability: ReturnType<typeof useDoflowIdentity>["hasCapability"]): NavigationItem | null {
+function filterItem(
+  item: NavigationItem,
+  hasCapability: ReturnType<typeof useDoflowIdentity>["hasCapability"],
+  activeModules: ReadonlySet<string>,
+): NavigationItem | null {
   const children = item.items?.flatMap((child) => {
-    const filtered = filterItem(child, hasCapability)
+    const filtered = filterItem(child, hasCapability, activeModules)
     return filtered ? [filtered] : []
   })
   const allowed = item.items
     ? Boolean(children?.length) || Boolean(item.capability && hasCapability(item.capability))
     : !item.capability || hasCapability(item.capability)
-  return allowed ? { ...item, items: item.items ? children : undefined } : null
+  return allowed && (!item.featureKey || activeModules.has(item.featureKey))
+    ? { ...item, items: item.items ? children : undefined }
+    : null
 }
 
-export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
-  const { hasCapability } = useDoflowIdentity()
-  const visibleGroups = groups.map((group) => ({
-    ...group,
-    items: group.items.flatMap((item) => {
-      const filtered = filterItem(item, hasCapability)
-      return filtered ? [filtered] : []
-    }),
-  }))
+type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
+  navigationGroups?: NavigationGroup[]
+  tenantName?: string
+  tenantSlug?: string
+  footer?: React.ReactNode
+}
 
+function AppSidebarFrame({
+  navigationGroups,
+  tenantName,
+  tenantSlug,
+  footer,
+  ...props
+}: AppSidebarProps & { navigationGroups: NavigationGroup[] }) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader className="px-2 pb-1 pt-3">
-        <TeamSwitcher />
+        <TeamSwitcher name={tenantName} slug={tenantSlug} />
       </SidebarHeader>
       <SidebarContent className="gap-0 pb-1">
-        <NavMain groups={visibleGroups} />
+        <NavMain groups={navigationGroups} />
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border/70 px-2 py-2">
-        <NavUser />
+        {footer ?? <NavUser />}
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )
+}
+
+function DoflowAppSidebar(props: Omit<AppSidebarProps, "navigationGroups">) {
+  const { hasCapability } = useDoflowIdentity()
+  const { activeModules } = usePlan()
+  const visibleGroups = groups.map((group) => ({
+    ...group,
+    items: group.items.flatMap((item) => {
+      const filtered = filterItem(item, hasCapability, activeModules)
+      return filtered ? [filtered] : []
+    }),
+  }))
+
+  return <AppSidebarFrame navigationGroups={visibleGroups} {...props} />
+}
+
+export function AppSidebar({ navigationGroups, ...props }: AppSidebarProps) {
+  if (navigationGroups) {
+    return <AppSidebarFrame navigationGroups={navigationGroups} {...props} />
+  }
+
+  return <DoflowAppSidebar {...props} />
 }

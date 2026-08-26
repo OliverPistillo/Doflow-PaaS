@@ -3,12 +3,14 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
+  BrainCircuit,
   BookOpen,
   BriefcaseBusiness,
   Building2,
   CheckSquare,FileCheck2,FolderKanban,
   FolderOpen,
   Handshake,Layers,
+  Inbox,
   LayoutTemplate,Plug,
   Receipt,
   RefreshCw,
@@ -16,6 +18,7 @@ import {
   Settings,
   ShieldCheck,
   Timer,
+  Trophy,
   UserCog,
   UsersRound,Workflow,
   Zap
@@ -34,6 +37,7 @@ export type TenantNavigationItem = {
   icon: LucideIcon;
   minPlan?: PlanTier;
   moduleKey?: TenantModuleKey;
+  featureKey?: string;
   roles?: TenantNavigationRole[];
   visibility?: TenantVisibility;
 };
@@ -47,6 +51,7 @@ export type TenantNavigationSection = {
   roles?: TenantNavigationRole[];
   visibility?: TenantVisibility;
   moduleKey?: TenantModuleKey;
+  featureKey?: string;
   activeHrefs?: string[];
   inactiveHrefs?: string[];
   children?: TenantNavigationItem[];
@@ -59,6 +64,41 @@ export const DOFLOW_TENANT_NAVIGATION: TenantNavigationSection[] = [
     icon: BarChart3,
     href: "/dashboard",
     moduleKey: "dashboard",
+  },
+  {
+    id: "inbox",
+    label: "Inbox",
+    icon: Inbox,
+    href: "/dashboard/inbox",
+    visibility: "external",
+    moduleKey: "notifications",
+  },
+  {
+    id: "flowboard",
+    label: "Flowboard",
+    icon: Workflow,
+    href: "/dashboard/flowboard",
+    visibility: "external",
+    minPlan: "PRO",
+    moduleKey: "projects",
+  },
+  {
+    id: "company-intelligence",
+    label: "Company Intelligence",
+    icon: BrainCircuit,
+    href: "/dashboard/company-intelligence",
+    visibility: "external",
+    moduleKey: "crm",
+    featureKey: "crm.sales-intel",
+  },
+  {
+    id: "bonus",
+    label: "Bonus",
+    icon: Trophy,
+    href: "/dashboard/bonus",
+    visibility: "external",
+    minPlan: "PRO",
+    moduleKey: "reports",
   },
   {
     id: "commerciale",
@@ -176,6 +216,11 @@ function hrefMatches(pathname: string, href: string) {
 // Access control is intentionally independent from the tenant's visible menu.
 // Hidden legacy routes stay mapped so direct access still enforces capabilities.
 export const TENANT_ROUTE_MODULES: Array<[string, TenantModuleKey]> = [
+  ["/dashboard/company-intelligence", "crm"],
+  ["/dashboard/team-space", "team"],
+  ["/dashboard/flowboard", "projects"],
+  ["/dashboard/inbox", "notifications"],
+  ["/dashboard/bonus", "reports"],
   ["/dashboard", "dashboard"],
   ["/commercial/site-proposals", "crm"],
   ["/commercial", "crm"],

@@ -125,7 +125,7 @@ function InvoicesContent() {
   ] as const;
 
   return (
-    <div className="dashboard-content animate-fadeIn">
+    <div className="app-page-content animate-fadeIn">
       <ConfirmDialog />
 
       {/* ── Action bar ── */}
@@ -136,7 +136,7 @@ function InvoicesContent() {
         <Button
           variant="outline"
           onClick={() => router.push("/superadmin/finance/preventivi/new")}
-          className="gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:border-indigo-300"
+          className="gap-2 border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/40"
         >
           <FileText className="h-4 w-4" /> Nuovo Preventivo
         </Button>

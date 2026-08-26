@@ -50,6 +50,7 @@ apps/backend/dist/migrations/1810000000000-CreateCommerceCashCoreAuthority.js
 apps/backend/dist/migrations/1820000000000-CreateDocumentRevenueCoreAuthority.js
 apps/backend/dist/migrations/1830000000000-CreateCollaborationNotificationsRealtimeAuthority.js
 apps/backend/dist/migrations/1840000000000-CreateAutomationPerformanceAuthority.js
+apps/backend/dist/migrations/1850000000000-CreateUniversalTenantFeatures.js
 ```
 
 Il runtime usa Node sui file JavaScript compilati. Non dipende da
@@ -60,11 +61,11 @@ Il runtime usa Node sui file JavaScript compilati. Non dipende da
 Il runner legge `DATABASE_URL`, usa PostgreSQL,
 `migrationsTableName: "doflow_migrations"`, migrazioni JavaScript da
 `dist/migrations`, `synchronize: false` e transazione TypeORM `all`. Il manifest
-compilato contiene esattamente 11 file: 171 e 175–184; 172–174 non esistono
+compilato contiene esattamente 12 file: 171 e 175–185; 172–174 non esistono
 nella catena corrente e non vengono sintetizzate.
 
 La strategia `all` è la stessa già provata dal true pre-179 rehearsal. Le
-migrazioni del manifest 171, 175–184 non usano `CREATE INDEX CONCURRENTLY`, transaction opt-out
+migrazioni del manifest 171, 175–185 non usano `CREATE INDEX CONCURRENTLY`, transaction opt-out
 o `BEGIN`/`COMMIT` manuali. Il runner non invoca mai `down`, revert o history
 finta.
 
@@ -74,13 +75,13 @@ Il backend non parte quando si verifica almeno una delle seguenti condizioni:
 
 - `DATABASE_URL` assente, non parsabile o non raggiungibile;
 - `DB_SYNC=true`, senza distinzione tra maiuscole e minuscole;
-- uno degli 11 file JavaScript attesi 171, 175–184 assente;
+- uno dei 12 file JavaScript attesi 171, 175–185 assente;
 - tabella `public.doflow_migrations` incompatibile;
 - history non prefisso della catena compilata, record sconosciuto, duplicato
   o migration futura;
 - advisory lock non acquisito entro il timeout;
 - migration pending fallita;
-- verifica post-run con migration ancora pending o max diversa da 184.
+- verifica post-run con migration ancora pending o max diversa da 185.
 
 I log mostrano soltanto run ID, ambiente, classificazione del database, nomi
 migration, conteggi, durata ed exit code. URL completo, username, password,
@@ -109,7 +110,7 @@ che non restino pending e avvia NestJS in no-op.
 
 ## Restart
 
-Con migration max 184 e zero pending, il runner registra `status=no-op`,
+Con migration max 185 e zero pending, il runner registra `status=no-op`,
 rilascia il lock e importa NestJS. Non riesegue mapper, seed, reconciliation o
 cutover; non duplica schema o dati.
 
@@ -147,7 +148,7 @@ stato mapper/seed, CEO in forma booleana, conteggi aggregati e readiness.
 
 ### Dry-run
 
-Sola lettura: richiede il solo tenant `doflow`, migration max 184 e zero
+Sola lettura: richiede il solo tenant `doflow`, migration max 185 e zero
 pending; valuta mapper, seed impact, ambiguità e reconciliation prevista senza
 scritture.
 
@@ -161,7 +162,7 @@ contemporaneamente:
 - `--backup-ref=<identificatore-non-sensibile>`;
 - `NODE_ENV=production` nel futuro container Coolify;
 - `DB_SYNC` diverso da `true`;
-- migration max 184 e zero pending.
+- migration max 185 e zero pending.
 
 Esegue mapper pass 1 e 2, seed pass 1 e 2, reconciliation e confronto CEO/
 secondo tenant. `federicanerone` e ogni tenant diverso da `doflow` sono
@@ -273,7 +274,7 @@ pnpm acceptance:production-startup
 
 Costruisce l'esatto `apps/backend/Dockerfile` e verifica da stack vuoto:
 
-1. baseline sintetica 178, startup 179–184 e health;
+1. baseline sintetica 178, startup 179–185 e health;
 2. restart no-op;
 3. due container sullo stesso database e advisory lock;
 4. fault tramite schema acceptance dal nome invalido, app non avviata e retry

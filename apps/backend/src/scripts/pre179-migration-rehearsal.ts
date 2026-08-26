@@ -114,7 +114,7 @@ export const SENTINELS = {
   doflowTenant: '10000000-0000-4000-8000-000000000001',
   secondaryTenant: '10000000-0000-4000-8000-000000000002',
   oliver: '20000000-0000-4000-8000-000000000001',
-  daniele: '20000000-0000-4000-8000-000000000002',
+  executiveTwo: '20000000-0000-4000-8000-000000000002',
   secondaryUser: '20000000-0000-4000-8000-000000000003',
   company: '30000000-0000-4000-8000-000000000001',
   archivedCompany: '30000000-0000-4000-8000-000000000002',
@@ -150,7 +150,7 @@ export const SENTINELS = {
   automationTemplate: '66000000-0000-4000-8000-000000000001',
   automationRule: '67000000-0000-4000-8000-000000000001',
   teamOliver: '68000000-0000-4000-8000-000000000001',
-  teamDaniele: '68000000-0000-4000-8000-000000000002',
+  teamExecutiveTwo: '68000000-0000-4000-8000-000000000002',
   secondaryCompany: '70000000-0000-4000-8000-000000000001',
   secondaryProject: '71000000-0000-4000-8000-000000000001',
 } as const;
@@ -576,7 +576,7 @@ async function insertPlatformFixture(dataSource: DataSource) {
   );
   const publicUsers = [
     [SENTINELS.oliver, 'oliver@doflow.it', 'synthetic-hash-oliver', 'owner', SENTINELS.doflowTenant, 'Oliver Synthetic', 'google', 'synthetic-google-oliver', 'https://example.invalid/avatar/oliver', true, 'synthetic-mfa-oliver'],
-    [SENTINELS.daniele, 'daniele@doflow.it', 'synthetic-hash-daniele', 'owner', SENTINELS.doflowTenant, 'Daniele Synthetic', 'google', 'synthetic-google-daniele', 'https://example.invalid/avatar/daniele', true, 'synthetic-mfa-daniele'],
+    [SENTINELS.executiveTwo, 'executive-two@acceptance.invalid', 'synthetic-hash-executive-two', 'owner', SENTINELS.doflowTenant, 'Executive Two Synthetic', 'google', 'synthetic-google-executive-two', 'https://example.invalid/avatar/executive-two', true, 'synthetic-mfa-executive-two'],
     [SENTINELS.secondaryUser, 'secondary-owner@example.invalid', 'synthetic-hash-secondary', 'owner', SENTINELS.secondaryTenant, 'Secondary Synthetic', 'password', null, null, false, null],
   ];
   for (const row of publicUsers) {
@@ -597,7 +597,7 @@ async function insertDoflowFixture(dataSource: DataSource) {
   const s = 'doflow';
   for (const row of [
     [SENTINELS.oliver, 'oliver@doflow.it', 'synthetic-hash-oliver', 'owner', 'Oliver Synthetic', 'google', 'synthetic-google-oliver', 'https://example.invalid/avatar/oliver', true, 'synthetic-mfa-oliver'],
-    [SENTINELS.daniele, 'daniele@doflow.it', 'synthetic-hash-daniele', 'owner', 'Daniele Synthetic', 'google', 'synthetic-google-daniele', 'https://example.invalid/avatar/daniele', true, 'synthetic-mfa-daniele'],
+    [SENTINELS.executiveTwo, 'executive-two@acceptance.invalid', 'synthetic-hash-executive-two', 'owner', 'Executive Two Synthetic', 'google', 'synthetic-google-executive-two', 'https://example.invalid/avatar/executive-two', true, 'synthetic-mfa-executive-two'],
   ]) {
     await dataSource.query(
       `INSERT INTO "${s}".users (id,email,password_hash,role,full_name,auth_provider,google_id,avatar_url,email_verified_at,mfa_enabled,mfa_secret,is_active,created_at,updated_at)
@@ -619,17 +619,17 @@ async function insertDoflowFixture(dataSource: DataSource) {
   await dataSource.query(
     `INSERT INTO "${s}".leads (id,company_id,contact_id,title,source,interest,budget_estimate,urgency,quality,status,assigned_to,next_action,next_action_at,created_by,updated_by,created_at,updated_at)
      VALUES ($1,$2,$3,'Synthetic legacy lead','referral','website',1234.56,'medium','qualified','qualified',$4,'Follow up','2025-02-15T09:00:00Z',$4,$4,$5,$5)`,
-    [SENTINELS.lead, SENTINELS.company, SENTINELS.contact, SENTINELS.daniele, FIXED_CREATED_AT],
+    [SENTINELS.lead, SENTINELS.company, SENTINELS.contact, SENTINELS.executiveTwo, FIXED_CREATED_AT],
   );
   await dataSource.query(
     `INSERT INTO "${s}".opportunities (id,company_id,contact_id,lead_id,title,service_type,lead_source,lead_interest,lead_urgency,value_estimate,probability,stage,expected_close_date,assigned_to,created_by,updated_by,created_at,updated_at)
      VALUES ($1,$2,$3,$4,'Synthetic legacy opportunity','website','referral','website','medium',9876.54,60,'proposal','2025-03-31',$5,$5,$5,$6,$6)`,
-    [SENTINELS.opportunity, SENTINELS.company, SENTINELS.contact, SENTINELS.lead, SENTINELS.daniele, FIXED_CREATED_AT],
+    [SENTINELS.opportunity, SENTINELS.company, SENTINELS.contact, SENTINELS.lead, SENTINELS.executiveTwo, FIXED_CREATED_AT],
   );
   await dataSource.query(
     `INSERT INTO "${s}".commercial_activities (id,company_id,contact_id,lead_id,opportunity_id,type,title,description,due_at,assigned_to,created_by,updated_by,created_at,updated_at)
      VALUES ($1,$2,$3,$4,$5,'call','Synthetic legacy activity','Acceptance-only activity','2025-02-20T10:00:00Z',$6,$6,$6,$7,$7)`,
-    [SENTINELS.activity, SENTINELS.company, SENTINELS.contact, SENTINELS.lead, SENTINELS.opportunity, SENTINELS.daniele, FIXED_CREATED_AT],
+    [SENTINELS.activity, SENTINELS.company, SENTINELS.contact, SENTINELS.lead, SENTINELS.opportunity, SENTINELS.executiveTwo, FIXED_CREATED_AT],
   );
   await dataSource.query(
     `INSERT INTO "${s}".service_templates (id,name,category,description,default_unit_price,default_quantity,billing_type,is_active,created_by,updated_by,created_at,updated_at)
@@ -670,7 +670,7 @@ async function insertDoflowFixture(dataSource: DataSource) {
   await dataSource.query(
     `INSERT INTO "${s}".tasks (id,project_id,milestone_id,company_id,title,status,priority,assignee_id,assigned_by,due_at,estimated_minutes,actual_minutes,created_by,updated_by,created_at,updated_at)
      VALUES ($1,$2,$3,$4,'Synthetic legacy task','in_progress','high',$5,$6,'2025-04-10T12:00:00Z',180,45,$6,$6,$7,$7)`,
-    [SENTINELS.task, SENTINELS.project, SENTINELS.milestone, SENTINELS.company, SENTINELS.daniele, SENTINELS.oliver, FIXED_CREATED_AT],
+    [SENTINELS.task, SENTINELS.project, SENTINELS.milestone, SENTINELS.company, SENTINELS.executiveTwo, SENTINELS.oliver, FIXED_CREATED_AT],
   );
   await dataSource.query(
     `INSERT INTO "${s}".task_checklist_items (id,task_id,title,is_done,sort_order,created_at,updated_at)
@@ -680,7 +680,7 @@ async function insertDoflowFixture(dataSource: DataSource) {
   await dataSource.query(
     `INSERT INTO "${s}".project_comments (id,project_id,task_id,milestone_id,body,visibility,created_by,updated_by,created_at,updated_at)
      VALUES ($1,$2,$3,$4,'Synthetic legacy project comment','internal',$5,$5,$6,$6)`,
-    [SENTINELS.comment, SENTINELS.project, SENTINELS.task, SENTINELS.milestone, SENTINELS.daniele, FIXED_CREATED_AT],
+    [SENTINELS.comment, SENTINELS.project, SENTINELS.task, SENTINELS.milestone, SENTINELS.executiveTwo, FIXED_CREATED_AT],
   );
   await dataSource.query(
     `INSERT INTO "${s}".project_file_links (id,project_id,task_id,file_id,type,visibility,created_by,created_at)
@@ -745,12 +745,12 @@ async function insertDoflowFixture(dataSource: DataSource) {
   await dataSource.query(
     `INSERT INTO "${s}".contracts (id,contract_number,title,description,template_id,company_id,contact_id,quote_id,project_id,opportunity_id,owner_user_id,assigned_to_user_id,status,signature_status,priority,contract_type,amount,currency,start_date,end_date,due_date,created_by,updated_by,created_at,updated_at)
      VALUES ($1,'LEGACY-C-001','Synthetic legacy contract','Unsigned legacy contract',$2,$3,$4,$5,$6,$7,$8,$9,'draft','not_started','medium','website',1464.61,'EUR','2025-02-01','2025-06-30','2025-02-28',$8,$8,$10,$10)`,
-    [SENTINELS.contract, SENTINELS.contractTemplate, SENTINELS.company, SENTINELS.contact, SENTINELS.quote, SENTINELS.project, SENTINELS.opportunity, SENTINELS.oliver, SENTINELS.daniele, FIXED_CREATED_AT],
+    [SENTINELS.contract, SENTINELS.contractTemplate, SENTINELS.company, SENTINELS.contact, SENTINELS.quote, SENTINELS.project, SENTINELS.opportunity, SENTINELS.oliver, SENTINELS.executiveTwo, FIXED_CREATED_AT],
   );
   await dataSource.query(
     `INSERT INTO "${s}".notifications (id,recipient_user_id,recipient_role,title,body,type,priority,status,entity_type,entity_id,fingerprint,metadata,created_by,created_at,updated_at)
      VALUES ($1,$2,'owner','Synthetic legacy notification','Acceptance-only notification','legacy_project','medium','unread','project',$3,'synthetic-legacy-notification','{"synthetic":true}',$4,$5,$5)`,
-    [SENTINELS.notification, SENTINELS.daniele, SENTINELS.project, SENTINELS.oliver, FIXED_CREATED_AT],
+    [SENTINELS.notification, SENTINELS.executiveTwo, SENTINELS.project, SENTINELS.oliver, FIXED_CREATED_AT],
   );
   await dataSource.query(
     `INSERT INTO "${s}".automation_templates (id,key,name,description,category,trigger_type,default_conditions,default_actions,is_active,is_system,created_at,updated_at)
@@ -765,8 +765,8 @@ async function insertDoflowFixture(dataSource: DataSource) {
   await dataSource.query(
     `INSERT INTO "${s}".team_members (id,user_id,email,display_name,tenant_role,operational_role,employment_type,status,availability_status,currency,created_by,created_at,updated_at) VALUES
       ($1,$3,'oliver@doflow.it','Oliver Synthetic','owner','ceo_label','admin','active','available','EUR',$3,$5,$5),
-      ($2,$4,'daniele@doflow.it','Daniele Synthetic','owner','ceo_label','admin','active','available','EUR',$3,$5,$5)`,
-    [SENTINELS.teamOliver, SENTINELS.teamDaniele, SENTINELS.oliver, SENTINELS.daniele, FIXED_CREATED_AT],
+      ($2,$4,'executive-two@acceptance.invalid','Executive Two Synthetic','owner','ceo_label','admin','active','available','EUR',$3,$5,$5)`,
+    [SENTINELS.teamOliver, SENTINELS.teamExecutiveTwo, SENTINELS.oliver, SENTINELS.executiveTwo, FIXED_CREATED_AT],
   );
   await dataSource.query(
     `INSERT INTO "${s}".audit_log (actor_email,actor_role,action,target,metadata,created_at)
@@ -877,7 +877,7 @@ async function ceoEvidence(dataSource: DataSource) {
      JOIN public.users p ON p.id=t.id
      LEFT JOIN doflow.team_members tm ON tm.user_id=t.id AND tm.deleted_at IS NULL
      WHERE lower(t.email)=ANY($1::text[]) ORDER BY lower(t.email)`,
-    [['oliver@doflow.it', 'daniele@doflow.it']],
+    [['oliver@doflow.it', 'executive-two@acceptance.invalid']],
   );
   const safe = rows.map((row: Record<string, unknown>) => ({
     id: row.id,
@@ -955,7 +955,7 @@ async function secondaryEvidence(dataSource: DataSource) {
     `SELECT
        (SELECT COUNT(*)::int FROM doflow.users WHERE id=$1) AS secondary_in_doflow,
        (SELECT COUNT(*)::int FROM acceptance_secondary.users WHERE id=ANY($2::uuid[])) AS doflow_in_secondary`,
-    [SENTINELS.secondaryUser, [SENTINELS.oliver, SENTINELS.daniele]],
+    [SENTINELS.secondaryUser, [SENTINELS.oliver, SENTINELS.executiveTwo]],
   );
   return { hash: sha256(rows), rows, crossTenant: crossTenant[0] };
 }

@@ -43,11 +43,11 @@ function SaveClientDialog({ open, clientName, onSave, onSkip }: {
   const [saving, setSaving] = useState(false);
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onSkip(); }}>
-      <DialogContent className="sm:max-w-sm rounded-card">
+      <DialogContent className="sm:max-w-sm rounded-lg">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
-            {/* ✅ bg-primary/10 invece di bg-indigo-100 */}
-            <div className="h-10 w-10 rounded-nav bg-primary/10 flex items-center justify-center">
+            {/* ✅ bg-primary/10 invece di bg-primary/10 */}
+            <div className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center">
               <Save className="h-5 w-5 text-primary" aria-hidden="true" />
             </div>
             <DialogTitle>Salvare il cliente?</DialogTitle>
@@ -216,7 +216,7 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
 
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                {/* ✅ text-primary invece di text-indigo-600 */}
+                {/* ✅ text-primary invece di text-primary */}
                 <Building2 className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground/70">Cliente</span>
                 {autofilled && (
@@ -252,8 +252,8 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
               </div>
 
               {clientMode === "select" && selectedClient && (
-                // ✅ bg-primary/5 border-primary/20 invece di bg-indigo-50 border-indigo-100
-                <div className="rounded-nav border border-primary/20 bg-primary/5 px-3 py-2">
+                // ✅ bg-primary/5 border-primary/20 invece di bg-primary/10 border-primary/20
+                <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
                   <p className="text-sm font-semibold text-primary">{selectedClient.clientName}</p>
                   {(selectedClient.clientAddress || selectedClient.clientCity) && (
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -264,7 +264,7 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
               )}
 
               {clientMode === "nuovo" && (
-                // ✅ border-primary/30 invece di border-indigo-200
+                // ✅ border-primary/30 invece di border-primary/30
                 <div className="space-y-3 pl-3 border-l-2 border-primary/30">
                   <div className="grid gap-1.5">
                     <Label className="text-xs">Ragione Sociale *</Label>
@@ -351,7 +351,7 @@ export function InvoiceCreateSheet({ isOpen, onClose, onSuccess, invoiceToEdit }
             </div>
 
             <div className="pt-2 flex justify-end">
-              {/* ✅ bg-foreground invece di bg-slate-900 */}
+              {/* ✅ bg-foreground invece di bg-foreground */}
               <Button type="submit"
                 disabled={loading || (!selectedId && clientMode === "select" && !invoiceToEdit)}>
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}

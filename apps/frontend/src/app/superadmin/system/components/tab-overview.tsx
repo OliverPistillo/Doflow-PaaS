@@ -155,7 +155,7 @@ export function TabOverview({ data }: Props) {
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
       {/* ── STATUS SERVIZI ──────────────────────────────────────────── */}
-      <Card className="glass-card border-none">
+      <Card className="app-surface-card border-none">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
@@ -188,7 +188,7 @@ export function TabOverview({ data }: Props) {
       </Card>
 
       {/* ── HARDWARE ────────────────────────────────────────────────── */}
-      <Card className="glass-card border-none">
+      <Card className="app-surface-card border-none">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
@@ -227,7 +227,7 @@ export function TabOverview({ data }: Props) {
       </Card>
 
       {/* ── INFO RAPIDE ─────────────────────────────────────────────── */}
-      <Card className="glass-card border-none lg:col-span-2">
+      <Card className="app-surface-card border-none lg:col-span-2">
         <CardContent className="pt-5 pb-5">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[

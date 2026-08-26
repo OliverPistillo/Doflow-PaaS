@@ -34,7 +34,7 @@ export function DealEditForm({ deal, onSave, onCancel }: DealEditFormProps) {
     stage: deal.stage,
     winProbability: deal.winProbability * 100, // Visualizza come 0-100
     expectedCloseDate: deal.expectedCloseDate ? new Date(deal.expectedCloseDate).toISOString().split('T')[0] : '',
-    assignedTo: "Daniele", // Mock
+    assignedTo: "Operatore Demo", // Mock
   });
 
   // Mock dei servizi (solo UI per ora)
@@ -167,7 +167,7 @@ export function DealEditForm({ deal, onSave, onCancel }: DealEditFormProps) {
                 <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                <SelectItem value="Daniele">Daniele</SelectItem>
+                <SelectItem value="Operatore Demo">Operatore Demo</SelectItem>
                 <SelectItem value="Federica">Federica</SelectItem>
                 <SelectItem value="Marco">Marco</SelectItem>
                 </SelectContent>
@@ -189,7 +189,7 @@ export function DealEditForm({ deal, onSave, onCancel }: DealEditFormProps) {
            <Label>Servizi inclusi</Label>
            <div className="space-y-2">
               {services.map((s, idx) => (
-                 <div key={idx} className="flex justify-between items-center bg-white border p-2 rounded text-sm">
+                 <div key={idx} className="flex justify-between items-center bg-card border p-2 rounded text-sm">
                     <span>{s}</span>
                     <Trash2 className="h-4 w-4 text-muted-foreground/70 cursor-pointer hover:text-red-500" onClick={() => setServices(services.filter((_, i) => i !== idx))} />
                  </div>
@@ -200,7 +200,7 @@ export function DealEditForm({ deal, onSave, onCancel }: DealEditFormProps) {
                 placeholder="Nuovo servizio..." 
                 value={newService} 
                 onChange={(e) => setNewService(e.target.value)}
-                className="bg-white"
+                className="bg-card"
               />
               <Button type="button" size="sm" onClick={addService} variant="outline"><Plus className="h-4 w-4" /></Button>
            </div>

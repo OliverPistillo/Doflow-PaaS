@@ -96,7 +96,7 @@ export function TabApiUsage() {
             color: errorRate > 5 ? "hsl(0 70% 55%)" : "hsl(150 60% 45%)",
           },
         ].map(({ label, value, color }) => (
-          <Card key={label} className="glass-card border-none">
+          <Card key={label} className="app-surface-card border-none">
             <CardContent className="pt-5 pb-5">
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</p>
               <p className="text-3xl font-black mt-2 tabular-nums" style={{ color }}>{value}</p>
@@ -118,7 +118,7 @@ export function TabApiUsage() {
 
       {/* Timeline */}
       {(data.requestsTimeline?.length ?? 0) > 0 && (
-        <Card className="glass-card border-none">
+        <Card className="app-surface-card border-none">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
               Traffico per ora
@@ -143,7 +143,7 @@ export function TabApiUsage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
         {/* Top Endpoints */}
-        <Card className="glass-card border-none">
+        <Card className="app-surface-card border-none">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
               Endpoint più chiamati
@@ -170,7 +170,7 @@ export function TabApiUsage() {
         </Card>
 
         {/* Top Tenants */}
-        <Card className="glass-card border-none">
+        <Card className="app-surface-card border-none">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
               Tenant più attivi

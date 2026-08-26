@@ -53,7 +53,7 @@ const ACTION_COLORS: Record<string, string> = {
   UPDATE:  "bg-blue-100    text-blue-700",
   DELETE:  "bg-red-100     text-red-700",
   LOGIN:   "bg-violet-100  text-violet-700",
-  LOGOUT:  "bg-slate-100   text-slate-600",
+  LOGOUT:  "bg-muted   text-muted-foreground",
   EXPORT:  "bg-amber-100   text-amber-700",
 };
 
@@ -153,7 +153,7 @@ export function TabAudit() {
       </div>
 
       {/* Table */}
-      <Card className="glass-card border-none overflow-hidden">
+      <Card className="app-surface-card border-none overflow-hidden">
         <CardHeader className="pb-0 pt-4 px-4">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">

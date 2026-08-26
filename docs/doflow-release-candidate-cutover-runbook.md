@@ -136,6 +136,10 @@ Non ripristinare sessioni opache da un ambiente a un altro.
 9. `1820000000000-CreateDocumentRevenueCoreAuthority`
 10. `1830000000000-CreateCollaborationNotificationsRealtimeAuthority`
 11. `1840000000000-CreateAutomationPerformanceAuthority`
+12. `1850000000000-CreateUniversalTenantFeatures`
+
+La migration 185 aggiunge soltanto strutture tenant-scoped per le feature
+universali; non esegue seed, mapper o mutation su dati di produzione.
 
 Prima di `apply` eseguire i mapper in dry-run sul solo tenant `doflow`, salvare
 conteggi e ambiguità e ottenere approvazione. L’apply deve essere esplicito.
@@ -228,7 +232,7 @@ isolato. Baseline da riconfermare sul futuro SHA immutabile:
 - `SUPERADMIN CONTEXT E GO` e `GLOBAL VISUAL GO`;
 - 121 screenshot, 118 controlli accessibilità, zero console warning/error e
   zero `5xx` inattesi nel visual gate;
-- migrazione massima `1840000000000`, secondo run senza pending;
+- migrazione massima `1850000000000`, secondo run senza pending;
 - true pre-179 replay/backup/restore e preservazione CEO sintetica verdi;
 - dependency/security audit a zero vulnerabilità;
 - 10/10 health probe;
@@ -246,7 +250,7 @@ nel cutover.
    compilato acquisisce l'advisory lock, applica le sole migrazioni TypeORM
    pending, verifica zero pending e importa NestJS. Un errore deve lasciare il
    nuovo container failed.
-3. Verificare health e migration max `184` prima di ogni azione dati.
+3. Verificare health e migration max `185` prima di ogni azione dati.
 4. Eseguire dalla shell del container prima `status`, poi `dry-run`; ottenere
    l'approvazione sull'evidence redatta.
 5. Eseguire manualmente la CLI `apply` con conferma e backup-ref, quindi
@@ -347,7 +351,7 @@ prefisso esatto del manifest a 11 file 171 e 175–184 (172–174 non esistono);
 migration sconosciute/future, file compilati
 mancanti, `DB_SYNC=true`, lock timeout e pending post-run bloccano NestJS.
 
-Un restart a max 184 è un no-op. Due container possono attendere lo stesso
+Un restart a max 185 è un no-op. Due container possono attendere lo stesso
 lock senza duplicare la history. Nessun mapper o seed viene avviato dal
 container startup.
 
@@ -448,7 +452,7 @@ route, asset, stop/start, tre restart, dieci probe, cinque minuti senza restart
 loop e teardown selettivo.
 
 Dopo l'autodeploy hotfix verificare che backend e frontend usino lo stesso SHA,
-che il migration runner riporti max 184/zero pending/no-op, che frontend resti
+che il migration runner riporti max 185/zero pending/no-op, che frontend resti
 running e che il CORS estraneo sia un rifiuto controllato senza `500`. Solo a
 quel punto eseguire nel container backend:
 

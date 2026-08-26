@@ -545,7 +545,7 @@ test('release candidate globale integra i Context A/B/C/D e tutte le authority p
       method: 'POST',
       body: { tenant: 'doflow', name: 'Body spoof forbidden', category: 'Altro', price: 10, currency: 'EUR' },
     })).status);
-    await connectBusinessSocket(secondary, 'acceptance-secondary');
+    await connectBusinessSocket(secondary, 'acceptance_secondary');
     await secondary.evaluate(() => (window as any).__finalAcceptanceSocket?.close());
     operations += 6;
     globalEvidence.contexts.D = {

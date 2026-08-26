@@ -441,6 +441,10 @@ test("final orchestration checkpoints gates before spawn and enforces hard basel
   assert.match(orchestratorSource, /maxBuffer: options\.maxBuffer \?\? 64 \* 1024 \* 1024/);
   assert.match(orchestratorSource, /label: "git tracked fingerprint",\s*maxBuffer: 128 \* 1024 \* 1024/s);
   assert.match(orchestratorSource, /doflow-pre179-acceptance/);
+  assert.match(
+    orchestratorSource,
+    /DOFLOW_PROTECTED_OWNER_EMAILS:\s*[\s\S]*executive-one@acceptance\.invalid,executive-two@acceptance\.invalid/,
+  );
   assert.match(orchestratorSource, /isolatedServiceProcessMatches\(label, pid\)/);
   assert.ok(
     orchestratorSource.indexOf("isolatedServiceProcessMatches(label, pid)")

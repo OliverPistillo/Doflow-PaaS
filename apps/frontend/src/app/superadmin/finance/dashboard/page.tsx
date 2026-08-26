@@ -86,8 +86,17 @@ function DrillDownSheet({
                         invoices.map(inv => (
                             <div 
                                 key={inv.id} 
-                                className="bg-card border rounded-lg p-3 shadow-sm hover:shadow-md transition-all flex items-center justify-between group cursor-pointer hover:border-primary/20"
+                                className="bg-card border rounded-lg p-3 shadow-sm hover:shadow-md transition-all flex items-center justify-between group cursor-pointer hover:border-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                role="button"
+                                tabIndex={0}
+                                aria-label={`Apri la fattura ${inv.invoiceNumber} di ${inv.clientName}`}
                                 onClick={() => handleNavigateToInvoice(inv.clientName)}
+                                onKeyDown={(event) => {
+                                    if (event.key === "Enter" || event.key === " ") {
+                                        event.preventDefault()
+                                        handleNavigateToInvoice(inv.clientName)
+                                    }
+                                }}
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="h-8 w-8 bg-muted/40 rounded flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 transition-colors">
@@ -135,8 +144,17 @@ interface KpiProps {
 function FinanceKpiCard({ title, value, subtitle, icon: Icon, titleColorClass, hoverColorClass, onClick }: KpiProps) {
   return (
     <Card 
-        className="shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 border-border group cursor-pointer relative overflow-hidden"
+        className="group relative cursor-pointer overflow-hidden border-border shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        role="button"
+        tabIndex={0}
+        aria-label={`${title}: ${value}. ${subtitle}`}
         onClick={onClick}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onClick();
+          }
+        }}
     >
       <div className={`absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity`}>
           <ArrowUpRight className={`h-5 w-5 ${titleColorClass}`} />
@@ -237,11 +255,11 @@ export default function FinanceDashboardPage() {
   const drillContent = getDrillData();
 
   return (
-    <div className="dashboard-content animate-fadeIn">
+    <div className="app-page-content animate-fadeIn">
 
       {/* ── Year filter ──────────────────────────────────────────────── */}
       <div className="flex justify-end mb-6">
-        <div className="flex items-center gap-2 glass-card p-1 rounded-xl border shadow-sm">
+        <div className="flex items-center gap-2 app-surface-card p-1 rounded-xl border shadow-sm">
           <div className="px-3 flex items-center gap-2 text-sm font-bold text-muted-foreground border-r border-border/50">
             <Filter className="h-4 w-4" />
             Filtra:
@@ -322,7 +340,8 @@ export default function FinanceDashboardPage() {
                         ))}
                       </Pie>
                       <Tooltip 
-                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                        contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                        labelStyle={{ color: 'hsl(var(--popover-foreground))' }}
                       />
                     </PieChart>
                   </ResponsiveContainer>
@@ -364,29 +383,29 @@ export default function FinanceDashboardPage() {
               {stats.trend.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={stats.trend} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                       <XAxis 
                         dataKey="month" 
-                        tick={{fontSize: 10, fill: "#94a3b8", fontWeight: 600}} 
+                        tick={{fontSize: 10, fill: "hsl(var(--muted-foreground))", fontWeight: 600}}
                         tickLine={false} 
                         axisLine={false} 
                       />
                       <YAxis 
                         tickFormatter={(v) => `€${v}`} 
-                        tick={{fontSize: 10, fill: "#94a3b8", fontWeight: 600}} 
+                        tick={{fontSize: 10, fill: "hsl(var(--muted-foreground))", fontWeight: 600}}
                         tickLine={false} 
                         axisLine={false} 
                       />
                       <Tooltip 
-                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                        contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                         formatter={(value) => [formatCurrency(Number(value ?? 0)), "Ricavi"]}
                       />
                       <Line 
                         type="monotone" 
                         dataKey="revenue" 
-                        stroke="#0f172a" 
+                        stroke="hsl(var(--foreground))"
                         strokeWidth={4} 
-                        dot={{r: 4, fill: "#0f172a", strokeWidth: 2, stroke: "#fff"}} 
+                        dot={{r: 4, fill: "hsl(var(--foreground))", strokeWidth: 2, stroke: "hsl(var(--card))"}}
                         activeDot={{r: 6, strokeWidth: 0}} 
                       />
                     </LineChart>
@@ -414,30 +433,30 @@ export default function FinanceDashboardPage() {
               {stats.topClients.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={stats.topClients} margin={{top: 0, right: 0, left: 0, bottom: 20}}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                       <XAxis 
                         dataKey="name" 
-                        tick={{fontSize: 10, fill: "#64748B", fontWeight: 700}} 
+                        tick={{fontSize: 10, fill: "hsl(var(--muted-foreground))", fontWeight: 700}}
                         axisLine={false}
                         tickLine={false}
                         interval={0}
                       />
                       <YAxis hide />
                       <Tooltip 
-                        cursor={{fill: '#f8fafc'}}
-                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                        cursor={{fill: 'hsl(var(--muted))'}}
+                        contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', backgroundColor: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                         formatter={(value) => [formatCurrency(Number(value ?? 0)), "Fatturato"]}
                       />
                       <Bar 
                         dataKey="value" 
-                        fill="#3b82f6" 
+                        fill="hsl(var(--chart-1))"
                         radius={[6, 6, 0, 0]} 
                         barSize={50}
                       >
                         {stats.topClients.map((entry, index) => (
                             <Cell 
                                 key={`cell-${index}`} 
-                                fill={index % 2 === 0 ? '#0f172a' : '#3b82f6'} 
+                                fill={index % 2 === 0 ? 'hsl(var(--foreground))' : 'hsl(var(--chart-1))'}
                                 fillOpacity={0.9}
                             />
                         ))}

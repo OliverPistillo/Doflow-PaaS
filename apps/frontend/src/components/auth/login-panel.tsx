@@ -309,13 +309,13 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="df-auth-form df-login-form">
-        <form onSubmit={handleSubmit(onSubmit)} className="df-auth-form" noValidate>
-          <div className="df-auth-field">
-            <Label htmlFor="email" className="df-auth-label">
+      <div className="auth-form auth-login-form">
+        <form onSubmit={handleSubmit(onSubmit)} className="auth-form" noValidate>
+          <div className="auth-field">
+            <Label htmlFor="email" className="auth-label">
               Email
             </Label>
-            <div className="df-auth-input-wrap">
+            <div className="auth-input-wrap">
               <input
                 id="email"
                 type="email"
@@ -323,24 +323,24 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
                 autoComplete="email"
                 disabled={isSubmitting}
                 aria-invalid={!!errors.email}
-                className={cn("df-auth-input no-right", errors.email && "err")}
+                className={cn("auth-input no-right", errors.email && "err")}
                 {...register("email")}
                 autoFocus
               />
-              <Mail className="df-auth-field-icon" aria-hidden="true" />
+              <Mail className="auth-field-icon" aria-hidden="true" />
             </div>
             {errors.email && (
-              <p role="alert" className="df-auth-help">
+              <p role="alert" className="auth-help">
                 {errors.email.message}
               </p>
             )}
           </div>
 
-          <div className="df-auth-field">
-            <Label htmlFor="password" className="df-auth-label">
+          <div className="auth-field">
+            <Label htmlFor="password" className="auth-label">
               Password
             </Label>
-            <div className="df-auth-input-wrap">
+            <div className="auth-input-wrap">
               <input
                 id="password"
                 type={showPassword ? "text" : "password"}
@@ -348,12 +348,12 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
                 autoComplete="current-password"
                 disabled={isSubmitting}
                 aria-invalid={!!errors.password}
-                className={cn("df-auth-input", errors.password && "err")}
+                className={cn("auth-input", errors.password && "err")}
                 {...register("password")}
                 onFocus={() => setPasswordFocused(true)}
                 onBlur={() => setPasswordFocused(false)}
               />
-              <Lock className="df-auth-field-icon" aria-hidden="true" />
+              <Lock className="auth-field-icon" aria-hidden="true" />
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -361,7 +361,7 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
                     onClick={() => setShowPassword((v) => !v)}
                     disabled={isSubmitting}
                     aria-label={showPassword ? "Nascondi password" : "Mostra password"}
-                    className="df-auth-password-toggle"
+                    className="auth-password-toggle"
                   >
                     {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
                   </button>
@@ -372,14 +372,14 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
               </Tooltip>
             </div>
             {errors.password && (
-              <p role="alert" className="df-auth-help">
+              <p role="alert" className="auth-help">
                 {errors.password.message}
               </p>
             )}
           </div>
 
-          <div className="df-auth-row df-login-options">
-            <div className="df-auth-check-row">
+          <div className="auth-row auth-login-options">
+            <div className="auth-check-row">
               <Controller
                 name="rememberMe"
                 control={control}
@@ -396,20 +396,20 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
                 Ricordami
               </Label>
             </div>
-            <Link href="/forgot-password" className="df-auth-link">
+            <Link href="/forgot-password" className="auth-link">
               Password dimenticata?
             </Link>
           </div>
 
           {generalError && (
-            <div role="alert" className="df-auth-error">
+            <div role="alert" className="auth-error">
               <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
               <span>{generalError}</span>
             </div>
           )}
 
-          <button type="submit" disabled={isSubmitting} className="df-auth-submit">
-            <span className="df-auth-button-content">
+          <button type="submit" disabled={isSubmitting} className="auth-submit">
+            <span className="auth-button-content">
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -422,11 +422,11 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
           </button>
         </form>
 
-        <div className="df-auth-divider">oppure</div>
+        <div className="auth-divider">oppure</div>
 
         <button
           type="button"
-          className="df-auth-social"
+          className="auth-social"
           aria-label="Continua con Google"
           data-testid="login-google-btn"
           onClick={() => {
@@ -437,10 +437,10 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
           Continua con Google
         </button>
 
-        <div className="df-auth-foot">
+        <div className="auth-foot">
           Non hai un account?{" "}
           {onSwitchToRegister ? (
-            <button type="button" className="df-auth-inline-action" onClick={onSwitchToRegister}>
+            <button type="button" className="auth-inline-action" onClick={onSwitchToRegister}>
               Registrati
             </button>
           ) : (

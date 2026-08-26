@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { CircleCheck, FolderKanban, LockKeyhole, ShieldCheck, Sun, UsersRound } from "lucide-react"
+import { CircleCheck, FolderKanban, LockKeyhole, ShieldCheck, UsersRound } from "lucide-react"
 
 import { ThemeToggle } from "@/components/theme-toggle"
 
@@ -19,10 +19,9 @@ const FLOW = [
 
 export function LoginExperience({ children }: LoginExperienceProps) {
   return (
-    <main data-doflow-auth="daniele-design" className="relative grid min-h-dvh bg-background lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+    <main data-auth-ui="universal" className="relative grid min-h-dvh bg-background lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
       <div className="absolute right-4 top-4 z-20 lg:right-6 lg:top-6">
-        <span className="doflow-auth-default-control hidden size-9 items-center justify-center rounded-lg border bg-white text-slate-600" aria-label="Tema predefinito"><Sun className="size-4" /></span>
-        <span className="tenant-auth-theme-control"><ThemeToggle /></span>
+        <ThemeToggle />
       </div>
 
       <section className="flex items-center justify-center px-5 py-10 sm:px-10 lg:px-14">
@@ -51,7 +50,7 @@ export function LoginExperience({ children }: LoginExperienceProps) {
           <p className="mt-4 max-w-lg text-base text-white/75">Dati commerciali, attività, progetti e amministrazione con autorizzazioni coerenti.</p>
           <div className="mt-10 grid gap-3 sm:grid-cols-3">
             {FLOW.map(({ label, icon: Icon }) => (
-              <div key={label} className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
+              <div key={label} data-semantic-color-exception="brand-art" className="rounded-2xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
                 <Icon className="mb-5 size-5 text-white/85" />
                 <p className="text-sm font-medium">{label}</p>
               </div>

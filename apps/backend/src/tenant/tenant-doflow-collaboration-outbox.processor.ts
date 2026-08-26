@@ -36,7 +36,7 @@ export class TenantDoflowCollaborationOutboxProcessor extends WorkerHost {
       if (event.recipient_user_id) await this.notifications.notifyUserOrThrow(String(event.recipient_user_id), {
         eventId: String(event.id),
         ...(event.payload || {}),
-      });
+      }, schema);
       await this.dataSource.query(
         `UPDATE "${schema}".collaboration_outbox
          SET processed_at = now(), attempts = attempts + 1, last_error = NULL WHERE id = $1 AND processed_at IS NULL`,

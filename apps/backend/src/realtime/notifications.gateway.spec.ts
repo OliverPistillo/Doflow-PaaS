@@ -14,6 +14,7 @@ describe('NotificationsGateway cookie session authority', () => {
     user: {
       id: 'user-1',
       sub: 'user-1',
+      tenantId: 'doflow',
       tenantSlug: 'doflow',
       authStage: 'FULL',
     },
@@ -66,5 +67,26 @@ describe('NotificationsGateway cookie session authority', () => {
     webSessions.resolve.mockResolvedValueOnce(null);
     await (gateway as any).revalidate(socket);
     expect(socket.close).toHaveBeenCalledWith(4001, 'Session revoked');
+  });
+
+  it('isola lo stesso userId per tenant e ignora i vecchi canali user tenantless', () => {
+    const { gateway } = fixture();
+    const tenantA = client();
+    const tenantB = client();
+    const meta = (tenantId: string) => ({
+      userId: 'shared-user', tenantId, request: {}, heartbeat: setInterval(() => undefined, 60_000), presenceId: 'presence',
+    });
+    (gateway as any).clients.set(tenantA, meta('tenant_a'));
+    (gateway as any).clients.set(tenantB, meta('tenant_b'));
+
+    (gateway as any).broadcastFromChannel('tenant-user:tenant_a:shared-user', { ok: true });
+    expect(tenantA.send).toHaveBeenCalledTimes(1);
+    expect(tenantB.send).not.toHaveBeenCalled();
+
+    tenantA.send.mockClear();
+    (gateway as any).broadcastFromChannel('user:shared-user', { legacy: true });
+    expect(tenantA.send).not.toHaveBeenCalled();
+    expect(tenantB.send).not.toHaveBeenCalled();
+    for (const entry of (gateway as any).clients.values()) clearInterval(entry.heartbeat);
   });
 });

@@ -21,6 +21,8 @@ import { Logger } from '@nestjs/common';
 import * as path from 'path';
 import { parseTrustProxy } from './common/client-ip.utils';
 import { verifyHealthProbeSignature } from './health/health-probe-signature';
+import { PresenceRegistryService } from './realtime/presence-registry.service';
+import { randomUUID } from 'node:crypto';
 
 // --- AGGIUNTE v3.5 (Monitoring) ---
 import { TelemetryService } from './telemetry/telemetry.service';
@@ -34,6 +36,7 @@ type ClientMeta = {
   tenantId: string;
   request: express.Request;
   heartbeat: ReturnType<typeof setInterval>;
+  presenceId: string;
 };
 
 type ClientWithMeta = WebSocket & { __meta?: ClientMeta };
@@ -167,6 +170,7 @@ export async function bootstrap() {
   const httpServer = app.getHttpServer() as HttpServer;
 
   const notifications = app.get(NotificationsService);
+  const presence = app.get(PresenceRegistryService);
   const webSessions = app.get(WebSessionService);
   const wsPath = process.env.WS_PATH ?? '/ws';
 
@@ -225,18 +229,23 @@ export async function bootstrap() {
         return;
       }
       const userId = String(session.user.id || session.user.sub || '');
-      const tenantId = String(session.user.tenantSlug || '').toLowerCase();
+      const tenantId = String(session.user.tenantId || '').toLowerCase();
       if (!userId || !tenantId || tenantId === 'public') {
         socket.close(4002, 'Invalid session');
         return;
       }
+      const presenceId = randomUUID();
       const heartbeat = setInterval(() => {
         void webSessions.resolve(request).then((current) => {
           const valid = current?.user.authStage === 'FULL'
             && String(current.user.id || current.user.sub) === userId
-            && String(current.user.tenantSlug || '').toLowerCase() === tenantId;
+            && String(current.user.tenantId || '').toLowerCase() === tenantId;
           if (!valid) socket.close(4001, 'Session revoked');
-          else if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'heartbeat', timestamp: new Date().toISOString() }));
+          else if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'heartbeat', timestamp: new Date().toISOString() }));
+            return presence.heartbeat(tenantId, userId, presenceId, 'online', 'ws');
+          }
+          return undefined;
         }).catch(() => socket.close(1011, 'Session validation unavailable'));
       }, 25_000);
       heartbeat.unref?.();
@@ -246,10 +255,12 @@ export async function bootstrap() {
         tenantId,
         request,
         heartbeat,
+        presenceId,
       };
 
       socket.__meta = meta;
       clients.add(socket);
+      await presence.heartbeat(tenantId, userId, presenceId, 'online', 'ws');
 
       socket.send(
         JSON.stringify({
@@ -278,11 +289,13 @@ export async function bootstrap() {
       socket.on('close', () => {
         clearInterval(heartbeat);
         clients.delete(socket);
+        void presence.disconnect(tenantId, userId, presenceId).catch(() => undefined);
       });
       socket.on('error', (err) => {
         new Logger('WS').error('[WS] Socket error', (err as Error).message);
         clearInterval(heartbeat);
         clients.delete(socket);
+        void presence.disconnect(tenantId, userId, presenceId).catch(() => undefined);
       });
 
     } catch (e) {
@@ -302,9 +315,9 @@ export async function bootstrap() {
         if (socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({ type: 'tenant_notification', channel, payload }));
         }
-      } else if (channel.startsWith('user:')) {
-        const [, userId] = channel.split(':');
-        if (meta.userId !== userId) continue;
+      } else if (channel.startsWith('tenant-user:')) {
+        const [, tenantId, userId] = channel.split(':');
+        if (meta.tenantId !== tenantId || meta.userId !== userId) continue;
         if (socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({ type: 'user_notification', channel, payload }));
         }

@@ -89,6 +89,27 @@ import { TenantDoflowPerformanceRuntimeService } from './tenant-doflow-performan
 import { TenantDoflowPerformanceController } from './tenant-doflow-performance.controller';
 import { TenantDoflowPerformanceService } from './tenant-doflow-performance.service';
 import { AuthModule } from '../auth/auth.module';
+import { NotificationsModule } from '../realtime/notifications.module';
+import { SalesIntelligenceModule } from '../sales-intelligence/sales-intelligence.module';
+import { TenantConversationsController } from './tenant-conversations.controller';
+import { TenantConversationsService } from './tenant-conversations.service';
+import { TenantFlowboardsController } from './tenant-flowboards.controller';
+import { TenantFlowboardsService } from './tenant-flowboards.service';
+import { TenantPresenceController } from './tenant-presence.controller';
+import { TenantPresenceService } from './tenant-presence.service';
+import { TenantLivekitController } from './tenant-livekit.controller';
+import { TenantLivekitService } from './tenant-livekit.service';
+import { TenantBonusController } from './tenant-bonus.controller';
+import { TenantBonusService } from './tenant-bonus.service';
+import { TenantPreferencesController } from './tenant-preferences.controller';
+import { TenantPreferencesService } from './tenant-preferences.service';
+import { TenantReleasesController } from './tenant-releases.controller';
+import { TenantReleasesService } from './tenant-releases.service';
+import { TenantCompanyIntelligenceController } from './tenant-company-intelligence.controller';
+import { TenantCompanyIntelligenceService } from './tenant-company-intelligence.service';
+import { TenantUniversalScopeGuard } from './tenant-universal-scope.guard';
+import { TenantUniversalCapabilitiesService } from './tenant-universal-capabilities.service';
+import { TenantUniversalCapabilityGuard } from './tenant-universal-capability.guard';
 
 import { Tenant } from '../superadmin/entities/tenant.entity';
 import { TenantSubscription } from '../superadmin/entities/tenant-subscription.entity';
@@ -100,6 +121,8 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
 @Module({
   imports: [
     AuthModule,
+    NotificationsModule,
+    SalesIntelligenceModule,
     BullModule.registerQueue({ name: SITE_PROPOSAL_PREPARATION_QUEUE }),
     BullModule.registerQueue({ name: DOFLOW_COLLABORATION_OUTBOX_QUEUE }),
     BullModule.registerQueue({ name: DOFLOW_AUTOMATION_PERFORMANCE_QUEUE }),
@@ -141,6 +164,14 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantDoflowCollaborationController,
     TenantDoflowDocumentRevenueController,
     TenantDoflowPerformanceController,
+    TenantConversationsController,
+    TenantFlowboardsController,
+    TenantPresenceController,
+    TenantLivekitController,
+    TenantBonusController,
+    TenantPreferencesController,
+    TenantReleasesController,
+    TenantCompanyIntelligenceController,
   ],
   providers: [
     TenantDashboardService,
@@ -199,6 +230,17 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
       TenantAutomationPerformanceDispatcher,
       TenantDoflowPerformanceRuntimeService,
       TenantDoflowPerformanceService,
+      TenantConversationsService,
+      TenantFlowboardsService,
+      TenantPresenceService,
+      TenantLivekitService,
+      TenantBonusService,
+      TenantPreferencesService,
+      TenantReleasesService,
+      TenantCompanyIntelligenceService,
+      TenantUniversalScopeGuard,
+      TenantUniversalCapabilitiesService,
+      TenantUniversalCapabilityGuard,
   ],
   exports: [TenantTeamService],
 })

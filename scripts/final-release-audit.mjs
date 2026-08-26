@@ -58,17 +58,28 @@ for (const [name, expected] of [["next", 16], ["react", 19], ["reactDom", 19], [
 
 const referenceRoutes = collectPageRoutes(path.join(referenceRoot, "src/app"));
 const currentRoutes = collectPageRoutes(frontendRoot);
+const excludedReferenceRoutes = new Set([
+  "/dashboard/flow-arcade",
+]);
 const routeEquivalents = new Map([
   ["/activities/[activityId]", "/dashboard/attivita?activityId=[activityId]"],
   ["/projects/[projectId]", "/dashboard/progetti/[projectId]"],
+  ["/dashboard/punti", "/dashboard/bonus"],
 ]);
-const routeExists = (route) => currentRoutes.includes(route.split("?")[0]);
-const missingRoutes = referenceRoutes.filter((route) => !routeExists(routeEquivalents.get(route) || route));
+const normalizeDynamicRoute = (route) => route.replace(/\[[^/\]]+\]/g, "[]");
+const routeExists = (route) => {
+  const expected = normalizeDynamicRoute(route.split("?")[0]);
+  return currentRoutes.some((candidate) => normalizeDynamicRoute(candidate) === expected);
+};
+const missingRoutes = referenceRoutes
+  .filter((route) => !excludedReferenceRoutes.has(route))
+  .filter((route) => !routeExists(routeEquivalents.get(route) || route));
 if (missingRoutes.length) fail(`reference route equivalents missing: ${missingRoutes.join(", ")}`);
 evidence.routes = {
   reference: referenceRoutes.length,
   current: currentRoutes.length,
   mappedEquivalents: routeEquivalents.size,
+  excludedByFinalScope: [...excludedReferenceRoutes],
   missing: missingRoutes,
 };
 
@@ -86,12 +97,12 @@ for (const token of tabTokens) {
 }
 
 const tenantLayout = read("apps/frontend/src/app/(tenant)/layout.tsx");
-const doflowShell = read("apps/frontend/src/components/layout/doflow-daniele-shell.tsx");
-if (!tenantLayout.includes("DoflowDanieleShell")) fail("Doflow replacement shell is not selected by tenant layout");
+const tenantShell = read("apps/frontend/src/components/layout/tenant-app-shell.tsx");
+if (!tenantLayout.includes("TenantAppShell")) fail("Universal tenant shell is not selected by tenant layout");
 for (const redirect of ["/leads", "/pipeline", "/projects", "/activities", "/quotes", "/contracts", "/orders", "/payments", "/invoices", "/notifications"]) {
-  if (!doflowShell.includes(`[\"${redirect}\"`)) fail(`legacy Doflow redirect missing: ${redirect}`);
+  if (!tenantShell.includes(`[\"${redirect}\"`)) fail(`legacy Doflow redirect missing: ${redirect}`);
 }
-if (!doflowShell.includes('pathname.startsWith("/commercial/site-proposals")')) fail("Builder is not exempted from legacy redirects");
+if (!tenantShell.includes('pathname.startsWith("/commercial/site-proposals")')) fail("Builder is not exempted from legacy redirects");
 
 const jwtStorage = read("apps/frontend/src/lib/jwt.ts");
 if (existsSync(path.join(root, "apps/frontend/src/lib/auth-storage.ts")) || /localStorage|sessionStorage|atob|parseJwt|getAuthToken/.test(jwtStorage)) {

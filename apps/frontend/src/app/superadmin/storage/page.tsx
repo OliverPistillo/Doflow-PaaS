@@ -127,7 +127,7 @@ function KpiCard({ title, value, sub, icon: Icon, color }: {
   icon: React.ComponentType<{ className?: string }>; color: string;
 }) {
   return (
-    <Card className="glass-card transition-all duration-300 group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative">
+    <Card className="app-surface-card transition-all duration-300 group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative">
       <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-20 blur-2xl group-hover:opacity-40 transition-opacity duration-500" style={{ backgroundColor: color }} />
       <CardContent className="p-6 relative z-10 flex justify-between items-start">
         <div>
@@ -449,7 +449,7 @@ export default function StoragePage() {
       </div>
 
       {/* Trigger manuale */}
-      <Card className="glass-card">
+      <Card className="app-surface-card">
         <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
           <div className="flex-1">
             <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
@@ -498,7 +498,7 @@ export default function StoragePage() {
         <TabsContent value="backups" className="mt-4">
           <div className="space-y-2">
             {data.recentBackups.map(b => (
-              <Card key={b.id} className="glass-card group hover:-translate-y-0.5 transition-all duration-200">
+              <Card key={b.id} className="app-surface-card group hover:-translate-y-0.5 transition-all duration-200">
                 <CardContent className="p-4 flex items-center gap-4">
                   <div className="shrink-0">{getStatusBadge(b.status)}</div>
                   <div className="flex-1 min-w-0">
@@ -565,7 +565,7 @@ export default function StoragePage() {
           </div>
           <div className="space-y-3">
             {(data.schedules ?? []).map(s => (
-              <Card key={s.id} className="glass-card group hover:-translate-y-0.5 transition-all duration-200">
+              <Card key={s.id} className="app-surface-card group hover:-translate-y-0.5 transition-all duration-200">
                 <CardContent className="p-4 flex items-center gap-4">
                   <div className="shrink-0">
                     {s.isActive
@@ -615,7 +615,7 @@ export default function StoragePage() {
         <TabsContent value="storage" className="mt-4">
           <div className="space-y-3">
             {data.tenants.map(t => (
-              <Card key={t.id} className="glass-card group hover:-translate-y-0.5 transition-all duration-200">
+              <Card key={t.id} className="app-surface-card group hover:-translate-y-0.5 transition-all duration-200">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">

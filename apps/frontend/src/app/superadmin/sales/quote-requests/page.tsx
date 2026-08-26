@@ -46,6 +46,8 @@ import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
+  SheetTitle,
 } from "@/components/ui/sheet";
 import {
   DropdownMenu,
@@ -117,8 +119,8 @@ const STATUS_CONFIG: Record<QuoteRequestStatus, {
   },
   archiviata: {
     label: "Archiviata",
-    badgeClass: "bg-slate-100 text-slate-600 dark:bg-slate-800/50 dark:text-slate-400",
-    dotColor: "bg-slate-400",
+    badgeClass: "bg-muted text-muted-foreground",
+    dotColor: "bg-muted-foreground",
     icon: Archive,
   },
 };
@@ -506,7 +508,7 @@ export default function QuoteRequestsPage() {
   // ══════════════════════════════════════════════════════════════════════════
 
   return (
-    <div className="dashboard-content animate-fadeIn">
+    <div className="app-page-content animate-fadeIn">
       <ConfirmDialog />
 
       {/* ── Barra filtri ─────────────────────────────────────────────── */}
@@ -568,8 +570,9 @@ export default function QuoteRequestsPage() {
           <p className="text-sm">Nessuna richiesta trovata</p>
         </div>
       ) : (
-        <div className="border rounded-lg bg-card shadow-sm overflow-hidden">
-          <table className="w-full text-sm text-left">
+        <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="text-xs text-muted-foreground uppercase bg-muted/40 border-b">
               <tr>
                 <th className="px-4 py-3 font-medium">Cliente</th>
@@ -584,15 +587,25 @@ export default function QuoteRequestsPage() {
               {requests.map((req) => {
                 const statusCfg = STATUS_CONFIG[req.status];
                 return (
-                  <tr key={req.id} className="hover:bg-muted/30 group transition-colors cursor-pointer" onClick={() => openDetail(req)}>
+                  <tr key={req.id} className="group transition-colors hover:bg-muted/30">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-foreground">{req.clientName}</div>
-                      <div className="text-xs text-muted-foreground">{req.clientEmail}</div>
-                      {req.companyName && (
-                        <div className="text-xs text-muted-foreground/70 flex items-center gap-1 mt-0.5">
-                          <Building2 className="h-3 w-3" /> {req.companyName}
-                        </div>
-                      )}
+                      <button
+                        type="button"
+                        className="block w-full rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        aria-label={`Apri la richiesta di ${req.clientName}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openDetail(req);
+                        }}
+                      >
+                        <span className="block font-medium text-foreground">{req.clientName}</span>
+                        <span className="block text-xs text-muted-foreground">{req.clientEmail}</span>
+                        {req.companyName && (
+                          <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground/70">
+                            <Building2 className="h-3 w-3" /> {req.companyName}
+                          </span>
+                        )}
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground max-w-[250px] truncate">
                       {req.subject || <span className="italic text-muted-foreground/50">&mdash;</span>}
@@ -611,10 +624,15 @@ export default function QuoteRequestsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{timeAgo(req.createdAt)}</td>
-                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-4 py-3 text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 focus-visible:opacity-100"
+                            aria-label={`Azioni per la richiesta di ${req.clientName}`}
+                          >
                             <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -646,6 +664,7 @@ export default function QuoteRequestsPage() {
               })}
             </tbody>
           </table>
+          </div>
           <div className="px-4 py-2 border-t bg-muted/20 text-xs text-muted-foreground">
             {requests.length} {requests.length === 1 ? "richiesta" : "richieste"} totali
           </div>
@@ -669,9 +688,12 @@ export default function QuoteRequestsPage() {
                 <div className="p-6 pb-4 border-b bg-muted/20">
                   <div className="flex items-start justify-between gap-4 mb-4">
                     <div className="flex-1 min-w-0">
-                      <h2 className="text-xl font-bold text-foreground truncate">
+                      <SheetTitle className="truncate text-xl font-bold text-foreground">
                         {req.clientName}
-                      </h2>
+                      </SheetTitle>
+                      <SheetDescription className="sr-only">
+                        Dettaglio e gestione della richiesta di preventivo di {req.clientName}.
+                      </SheetDescription>
                       {req.companyName && (
                         <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5">
                           <Building2 className="h-3.5 w-3.5" />
@@ -705,7 +727,7 @@ export default function QuoteRequestsPage() {
                       </SelectContent>
                     </Select>
 
-                    <Badge variant="outline" className="text-xs border-0 bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                    <Badge variant="outline" className="border-0 bg-muted text-xs text-muted-foreground">
                       <Globe className="h-3 w-3 mr-1" /> Sito Web
                     </Badge>
 

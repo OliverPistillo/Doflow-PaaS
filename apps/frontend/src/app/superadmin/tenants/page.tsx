@@ -446,7 +446,7 @@ export default function TenantsPage() {
   if (!mounted) return <div className="flex items-center justify-center p-20"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 
   return (
-    <div className="dashboard-content animate-fadeIn">
+    <div className="app-page-content animate-fadeIn">
       <ConfirmDialog />
 
       {/* ── Action bar ─────────────────────────────────────────────── */}
@@ -541,7 +541,8 @@ export default function TenantsPage() {
                 </div>
                 </div>
 
-                <table className="w-full text-sm text-left">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[960px] text-left text-sm">
                 <thead className="bg-muted/40 text-muted-foreground uppercase font-bold text-xs border-b border-border/50">
                     <tr>
                     <th className="px-6 py-4">Azienda</th>
@@ -719,6 +720,7 @@ export default function TenantsPage() {
                     )}
                 </tbody>
                 </table>
+                </div>
             </div>
         </div>
 

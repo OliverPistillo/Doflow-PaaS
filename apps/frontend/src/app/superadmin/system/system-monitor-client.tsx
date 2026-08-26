@@ -111,7 +111,7 @@ function HardwareDetail({ data }: { data: SystemData }) {
         {bars.map(({ label, used, total, percent, unit }) => {
           const accent = accentForPercent(percent);
           return (
-            <Card key={label} className="glass-card border-none">
+            <Card key={label} className="app-surface-card border-none">
               <CardContent className="pt-5 pb-5 space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</p>
@@ -129,7 +129,7 @@ function HardwareDetail({ data }: { data: SystemData }) {
           );
         })}
       </div>
-      <Card className="glass-card border-none">
+      <Card className="app-surface-card border-none">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Specifiche CPU</CardTitle>
         </CardHeader>

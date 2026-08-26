@@ -514,8 +514,8 @@ function visibleSidebar(page: Page) {
 }
 
 async function waitForDoflowShell(page: Page) {
-  await expect(page.locator("html")).toHaveAttribute("data-tenant-ui", "doflow-reference")
-  await expect(page.locator('[data-doflow-ui-generation="reference-e6c3"]')).toBeVisible()
+  await expect(page.locator("html")).toHaveAttribute("data-tenant-ui", "universal")
+  await expect(page.locator('[data-app-ui-generation="universal-v1"]')).toBeVisible()
   await expect(page.locator('[data-app-shell-ready="true"][data-workspace-ready="true"]')).toBeVisible()
   await expect(page.locator('[data-app-shell-ready="true"]')).toHaveAttribute("data-secondary-status", "ready")
   await expect(page.locator('[data-sidebar-kind="tenant-legacy"]')).toHaveCount(0)
@@ -642,7 +642,7 @@ async function gotoSurface(page: Page, surface: Surface) {
   await waitForDoflowShell(page)
   if (surface.teamAccount) await openTeamAccount(page)
   if (surface.slug === "builder") {
-    await expect(page.locator('[data-builder-shell="doflow-reference"]')).toBeVisible()
+    await expect(page.locator('[data-builder-shell="universal"]')).toBeVisible()
     await expect(page.getByRole("heading", { name: "Proposte web" })).toBeVisible()
     if (await page.evaluate(() => window.innerWidth < 768)) {
       await page.locator('[data-slot="sidebar-trigger"]').click()
@@ -862,7 +862,7 @@ test("tema persistente, sidebar canonica e routing Builder", async ({ browser })
     await builder.click()
     await expect(page).toHaveURL(/\/commercial\/site-proposals$/)
     await waitForDoflowShell(page)
-    await expect(page.locator('[data-builder-shell="doflow-reference"]')).toBeVisible()
+    await expect(page.locator('[data-builder-shell="universal"]')).toBeVisible()
     await page.reload({ waitUntil: "domcontentloaded" })
     await waitForDoflowShell(page)
     await assertTheme(page, "dark")
@@ -900,7 +900,7 @@ test("Builder è nascosto e non carica API privilegiate senza canUseBuilder", as
 
     await page.goto("/commercial/site-proposals", { waitUntil: "domcontentloaded" })
     await waitForDoflowShell(page)
-    await expect(page.locator('[data-builder-shell="doflow-reference"]')).toBeVisible()
+    await expect(page.locator('[data-builder-shell="universal"]')).toBeVisible()
     await expect(page.getByRole("heading", { name: "Modulo non disponibile" })).toBeVisible()
     expect(observation.apiPaths.some((pathName) => pathName.startsWith("/api/tenant/commercial/site-proposals"))).toBe(false)
   } finally {

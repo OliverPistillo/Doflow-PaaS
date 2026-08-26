@@ -8,20 +8,20 @@ import { syncTenantUsersToTeamMembers } from '../tenant/tenant-team-schema';
 const ACCOUNTS = [
   {
     id: 'ce000000-0000-4000-8000-000000000001',
-    email: 'oliver@doflow.it',
-    name: 'Oliver Synthetic',
+    email: 'executive-one@acceptance.invalid',
+    name: 'Executive One Synthetic',
     provider: 'google',
-    googleId: 'acceptance-google-oliver',
-    avatar: 'https://acceptance.invalid/avatar/oliver.png',
+    googleId: 'acceptance-google-executive-one',
+    avatar: 'https://acceptance.invalid/avatar/executive-one.png',
     verifiedAt: '2024-01-02T09:00:00.000Z',
   },
   {
     id: 'ce000000-0000-4000-8000-000000000002',
-    email: 'daniele@doflow.it',
-    name: 'Daniele Synthetic',
+    email: 'executive-two@acceptance.invalid',
+    name: 'Executive Two Synthetic',
     provider: 'password',
-    googleId: 'acceptance-google-daniele',
-    avatar: 'https://acceptance.invalid/avatar/daniele.png',
+    googleId: 'acceptance-google-executive-two',
+    avatar: 'https://acceptance.invalid/avatar/executive-two.png',
     verifiedAt: '2024-01-03T09:00:00.000Z',
   },
 ] as const;

@@ -23,7 +23,7 @@ import { Button }   from "@/components/ui/button";
 import { Badge }    from "@/components/ui/badge";
 import { Input }    from "@/components/ui/input";
 import { Label }    from "@/components/ui/label";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import {
   Select,
   SelectContent,
@@ -131,9 +131,12 @@ function DealEditForm({ deal, onSave, onCancel }: DealEditFormProps) {
     <div className="space-y-6 px-1">
       <div className="flex items-center justify-between border-b pb-4 mb-4">
         <div>
-          <h2 className="text-xl font-bold text-foreground">
+          <SheetTitle className="text-xl font-bold text-foreground">
             {formData.title || "Nuova Offerta"}
-          </h2>
+          </SheetTitle>
+          <SheetDescription className="sr-only">
+            Crea o modifica i dati dell&apos;offerta commerciale.
+          </SheetDescription>
           {deal.id && (
             <p className="text-xs text-muted-foreground">ID: {deal.id}</p>
           )}
@@ -322,7 +325,7 @@ export default function PipelinePage() {
   });
 
   return (
-    <div className="dashboard-content animate-fadeIn">
+    <div className="app-page-content animate-fadeIn">
       <ConfirmDialog />
 
       {/* Action bar */}
@@ -346,17 +349,20 @@ export default function PipelinePage() {
             <div key={stage.id} className="space-y-2">
 
               {/* Header fase */}
-              <div
-                className="flex items-center gap-2 cursor-pointer select-none py-1"
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-md py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                aria-expanded={Boolean(expanded[stage.id])}
+                aria-controls={`pipeline-stage-${stage.id}`}
                 onClick={() =>
                   setExpanded((prev) => ({ ...prev, [stage.id]: !prev[stage.id] }))
                 }
               >
-                <div className="p-1 rounded-md hover:bg-muted transition-colors">
+                <span className="rounded-md p-1 transition-colors hover:bg-muted">
                   {expanded[stage.id]
                     ? <ChevronDown  className="h-4 w-4 text-muted-foreground" />
                     : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                </div>
+                </span>
                 <Badge
                   variant="outline"
                   className={`px-2 py-1 text-xs font-semibold rounded-md border-0 ${stage.badgeClass}`}
@@ -371,17 +377,18 @@ export default function PipelinePage() {
                     Tot: {formatCurrency(stage.items.reduce((a, i) => a + i.value, 0))}
                   </span>
                 )}
-              </div>
+              </button>
 
               {/* Tabella fase */}
               {expanded[stage.id] && (
-                <div className="border rounded-lg bg-card shadow-sm overflow-hidden">
+                <div id={`pipeline-stage-${stage.id}`} className="overflow-hidden rounded-lg border bg-card shadow-sm">
                   {stage.items.length === 0 ? (
                     <div className="p-4 text-xs text-muted-foreground italic text-center bg-muted/30">
                       Nessuna offerta in questa fase
                     </div>
                   ) : (
-                    <table className="w-full text-sm text-left">
+                    <div className="overflow-x-auto">
+                    <table className="w-full min-w-[720px] text-left text-sm">
                       <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b">
                         <tr>
                           <th className="px-4 py-3 font-medium w-1/3">Offerta</th>
@@ -428,7 +435,8 @@ export default function PipelinePage() {
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    className="h-8 w-8 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 focus-visible:opacity-100"
+                                    aria-label={`Azioni per ${deal.name}`}
                                   >
                                     <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
                                   </Button>
@@ -450,6 +458,7 @@ export default function PipelinePage() {
                         ))}
                       </tbody>
                     </table>
+                    </div>
                   )}
 
                   {/* Quick add */}

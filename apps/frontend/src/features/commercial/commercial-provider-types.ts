@@ -821,7 +821,7 @@ export type CommercialLeadsStore = {
     leadId: string,
     updates: Partial<CommercialLead>,
     options?: { silentTimeline?: boolean },
-  ) => void;
+  ) => Promise<boolean>;
   archiveLead: (leadId: string, reason?: string) => boolean;
   updateCustomer: (
     clientId: string,

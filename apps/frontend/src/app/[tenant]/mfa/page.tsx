@@ -202,7 +202,7 @@ export default function TenantMfaPage() {
       <div className="animate-fadeInUp space-y-6">
           {/* Header Icon */}
           <div className="flex flex-col items-center text-center space-y-4 mb-2">
-            <div className="df-icon-bubble h-16 w-16">
+            <div className="grid h-16 w-16 place-items-center rounded-2xl bg-primary/10 text-primary">
               {mode === "SETUP" ? <QrCode className="h-8 w-8" /> : <ShieldCheck className="h-8 w-8" />}
             </div>
           </div>
@@ -210,7 +210,7 @@ export default function TenantMfaPage() {
           {/* QR Code Section (Solo SETUP) */}
           {mode === "SETUP" && qrCode && (
             <div className="flex flex-col items-center mb-2 animate-in fade-in zoom-in duration-300">
-              <div className="border-4 border-white shadow-lg rounded-xl overflow-hidden bg-white">
+              <div data-semantic-color-exception="qr-code" className="overflow-hidden rounded-xl border-4 border-white bg-white shadow-lg">
                 <Image src={qrCode} alt="QR Code" width={180} height={180} priority />
               </div>
 

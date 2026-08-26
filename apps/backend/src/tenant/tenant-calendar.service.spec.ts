@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ensureTenantCalendarTables, seedTenantPlanningViews } from './tenant-calendar-schema';
 import { TenantCalendarService } from './tenant-calendar.service';
 
@@ -93,6 +93,22 @@ describe('TenantCalendarService', () => {
     expect(scrubbed.metadata).toEqual({ scrubbed: true });
   });
 
+  it('non espone eventi finance nella preview derivata a un manager', async () => {
+    const { service } = makeService(managerUser);
+    jest.spyOn(service as any, 'collectDerivedMatches').mockResolvedValue([
+      { title: 'Fattura riservata', event_type: 'invoice_due', source_entity_id: 'invoice-1' },
+      { title: 'Task operativo', event_type: 'task_due', source_entity_id: 'task-1' },
+    ]);
+
+    const result = await service.derivedPreview();
+
+    expect(result.total).toBe(1);
+    expect(result.items).toEqual([expect.objectContaining({ event_type: 'task_due' })]);
+    expect(result.items).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ event_type: 'invoice_due' }),
+    ]));
+  });
+
   it('conflicts costruisce query overlap busy events', async () => {
     const { service, query } = makeService();
     query.mockImplementation(async (sql: string) => {
@@ -122,6 +138,70 @@ describe('TenantCalendarService', () => {
     expect(visibility.params).toHaveLength(2);
     expect(visibility.params[0]).toEqual(expect.any(Array));
     expect(visibility.params[1]).toBe(managerUser.sub);
+  });
+
+  it('applica la visibilità a entrambi gli eventi nei conflitti', async () => {
+    const { service, query } = makeService(managerUser);
+
+    await service.conflicts({
+      start: '2026-07-10T00:00:00.000Z',
+      end: '2026-07-17T00:00:00.000Z',
+    });
+
+    const [sql, params] = query.mock.calls[0];
+    expect(String(sql)).toContain("a.visibility <> 'private'");
+    expect(String(sql)).toContain("b.visibility <> 'private'");
+    expect(String(sql)).toContain('a.event_type <> ALL($3::text[])');
+    expect(String(sql)).toContain('b.event_type <> ALL($5::text[])');
+    expect(params).toEqual([
+      '2026-07-10T00:00:00.000Z',
+      '2026-07-17T00:00:00.000Z',
+      expect.any(Array),
+      managerUser.sub,
+      expect.any(Array),
+      managerUser.sub,
+      100,
+    ]);
+  });
+
+  it('rende effettivo il confine delle planning view private', async () => {
+    const viewId = '55555555-5555-4555-8555-555555555555';
+    const { service, query } = makeService(managerUser);
+
+    await service.listViews();
+    await expect(service.getView(viewId)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.deleteView(viewId)).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(String(query.mock.calls[0][0])).toContain('v.is_shared = true');
+    expect(String(query.mock.calls[0][0])).toContain('v.created_by = $1');
+    expect(String(query.mock.calls[1][0])).toContain('v.created_by = $2');
+    expect(String(query.mock.calls[2][0])).toContain('v.is_system = false');
+    expect(String(query.mock.calls[2][0])).toContain('v.created_by = $2');
+    expect(query.mock.calls[2][1]).toEqual([viewId, managerUser.sub]);
+  });
+
+  it('nega mutazioni evento e reminder quando il relativo evento non e visibile', async () => {
+    const eventId = '33333333-3333-4333-8333-333333333333';
+    const reminderId = '44444444-4444-4444-8444-444444444444';
+    const { service, query } = makeService(managerUser);
+
+    await expect(service.deleteEvent(eventId)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.setEventStatus(eventId, 'completed')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.dismissReminder(reminderId)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.deleteReminder(reminderId)).rejects.toBeInstanceOf(NotFoundException);
+
+    const mutationQueries = query.mock.calls
+      .map(([sql]) => String(sql))
+      .filter((sql) => /(?:UPDATE|DELETE FROM) "doflow"\.(?:calendar_events|calendar_event_reminders)/.test(sql));
+    expect(mutationQueries).toHaveLength(4);
+    for (const sql of mutationQueries) {
+      expect(sql).toContain("e.visibility <> 'private'");
+      expect(sql).toContain('e.event_type <> ALL(');
+    }
+    for (const sql of mutationQueries.filter((candidate) => candidate.includes('calendar_event_reminders'))) {
+      expect(sql).toContain('EXISTS (');
+      expect(sql).toContain('e.id = r.event_id');
+    }
   });
 
   it('endpoint calendario user non usano UUID come LIMIT o array text come UUID', async () => {

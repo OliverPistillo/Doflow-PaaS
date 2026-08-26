@@ -5,7 +5,7 @@ import {
   shortCutoverFingerprint,
 } from './doflow-cutover-snapshot';
 
-function ceo(alias: 'ceo_1' | 'ceo_2', suffix = ''): DoflowCeoFingerprint {
+function owner(alias: `owner_${number}`, suffix = ''): DoflowCeoFingerprint {
   const fingerprint = (name: string) => shortCutoverFingerprint(`${alias}:${name}:${suffix}`);
   return {
     alias,
@@ -50,15 +50,15 @@ describe('Doflow cutover snapshots', () => {
   });
 
   it('compares every CEO property and reports only boolean preservation', () => {
-    const before = [ceo('ceo_1'), ceo('ceo_2')];
+    const before = [owner('owner_1'), owner('owner_2')];
     expect(compareCeoPreservation(before, before)).toEqual({
       preserved: true,
-      accounts: [{ alias: 'ceo_1', preserved: true }, { alias: 'ceo_2', preserved: true }],
+      accounts: [{ alias: 'owner_1', preserved: true }, { alias: 'owner_2', preserved: true }],
     });
-    const changed = [ceo('ceo_1'), ceo('ceo_2', 'changed')];
+    const changed = [owner('owner_1'), owner('owner_2', 'changed')];
     expect(compareCeoPreservation(before, changed)).toEqual({
       preserved: false,
-      accounts: [{ alias: 'ceo_1', preserved: true }, { alias: 'ceo_2', preserved: false }],
+      accounts: [{ alias: 'owner_1', preserved: true }, { alias: 'owner_2', preserved: false }],
     });
   });
 

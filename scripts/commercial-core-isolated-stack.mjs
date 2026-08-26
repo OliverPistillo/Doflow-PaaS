@@ -265,6 +265,12 @@ function serviceEnv(config) {
     AUTOMATION_ACCEPTANCE_SYNTHETIC_ADAPTER: "true",
     DOFLOW_ACCEPTANCE_TRAFFIC_BURST: "2000",
     DOFLOW_ACCEPTANCE_TRAFFIC_RATE: "200",
+    LIVEKIT_ENABLED: "false",
+    LIVEKIT_URL: "",
+    LIVEKIT_API_KEY: "",
+    LIVEKIT_API_SECRET: "",
+    APOLLO_API_KEY: "",
+    GEMINI_API_KEY: "",
     DB_HOST: database.hostname,
     DB_PORT: database.port,
     DB_NAME: database.pathname.slice(1),
@@ -1614,6 +1620,8 @@ async function runFinalAcceptanceLocked(runId) {
       DOFLOW_ACCEPTANCE_PASSWORD: String(credentials.password),
       DOFLOW_ACCEPTANCE_MFA_SECRET: String(credentials.mfaSecret),
       DOFLOW_CEO_PASSWORD: `${String(credentials.password)}:ceo-seed`,
+      DOFLOW_PROTECTED_OWNER_EMAILS:
+        "executive-one@acceptance.invalid,executive-two@acceptance.invalid",
     };
 
     await recordProgress("fixtures", "running", { source: "isolated-synthetic" });

@@ -15,12 +15,12 @@ export function SiteProposalProgress({ value, compact = false }: { value: Prepar
   const stage = value.progressStage || (status === "queued" ? "waiting" : status === "running" ? "loading-data" : status === "failed" ? "failed" : "ready");
   const stageLabel = value.stalled ? "Accodamento bloccato" : labels[stage] || stage;
   const message = value.stalled ? value.stalledReason || "Il job non è stato acquisito dal worker." : value.progressMessage;
-  if (status === "idle" && percent === 0) return <p className="text-xs text-slate-500">Preparazione da avviare</p>;
+  if (status === "idle" && percent === 0) return <p className="text-xs text-muted-foreground">Preparazione da avviare</p>;
   const fallback = status === "fallback" || value.provider === "local";
-  return <div className={compact ? "min-w-44" : "w-full max-w-3xl rounded-xl border border-slate-200 bg-white p-4"}>
-    <div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className={`truncate font-medium ${value.stalled ? "text-amber-700" : "text-slate-700"}`}>{stageLabel}</span><strong className="tabular-nums text-slate-900">{percent}%</strong></div>
-    <div className="h-2 overflow-hidden rounded-full bg-slate-200" role="progressbar" aria-label={stageLabel} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><div className={`h-full rounded-full transition-[width] duration-500 ${status === "failed" ? "bg-rose-500" : value.stalled ? "bg-amber-500" : fallback ? "bg-indigo-500" : "bg-emerald-500"}`} style={{ width: `${percent}%` }} /></div>
-    {message ? <p className={`mt-1.5 text-xs ${value.stalled ? "text-amber-700" : "text-slate-500"}`}>{message}</p> : null}
-    {!compact ? <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">{value.stalled ? <Badge variant="outline">Recovery disponibile</Badge> : null}{value.provider ? <Badge variant="outline">{value.provider === "gemini" ? "Gemini" : "Fallback locale"}</Badge> : null}{value.progressUpdatedAt ? <span>Aggiornato {formatDate(value.progressUpdatedAt)}</span> : null}</div> : null}
+  return <div className={compact ? "min-w-44" : "w-full max-w-3xl rounded-xl border border-border bg-card p-4"}>
+    <div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className={`truncate font-medium ${value.stalled ? "text-amber-700" : "text-muted-foreground"}`}>{stageLabel}</span><strong className="tabular-nums text-foreground">{percent}%</strong></div>
+    <div className="h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label={stageLabel} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><div className={`h-full rounded-full transition-[width] duration-500 ${status === "failed" ? "bg-rose-500" : value.stalled ? "bg-amber-500" : fallback ? "bg-primary/100" : "bg-emerald-500"}`} style={{ width: `${percent}%` }} /></div>
+    {message ? <p className={`mt-1.5 text-xs ${value.stalled ? "text-amber-700" : "text-muted-foreground"}`}>{message}</p> : null}
+    {!compact ? <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">{value.stalled ? <Badge variant="outline">Recovery disponibile</Badge> : null}{value.provider ? <Badge variant="outline">{value.provider === "gemini" ? "Gemini" : "Fallback locale"}</Badge> : null}{value.progressUpdatedAt ? <span>Aggiornato {formatDate(value.progressUpdatedAt)}</span> : null}</div> : null}
   </div>;
 }

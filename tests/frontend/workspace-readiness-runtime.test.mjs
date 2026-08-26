@@ -12,8 +12,8 @@ const providerTypes = read(
   "apps/frontend/src/features/commercial/commercial-provider-types.ts",
 );
 const layout = read("apps/frontend/src/app/(tenant)/layout.tsx");
-const doflowShell = read(
-  "apps/frontend/src/components/layout/doflow-daniele-shell.tsx",
+const tenantShell = read(
+  "apps/frontend/src/components/layout/tenant-app-shell.tsx",
 );
 
 const bootstrap = provider.slice(
@@ -22,17 +22,17 @@ const bootstrap = provider.slice(
 );
 
 test("the Doflow shell keeps main mounted while workspace data is pending", () => {
-  assert.match(layout, /<DoflowDanieleShell>\{children\}<\/DoflowDanieleShell>/);
-  assert.match(doflowShell, /function DoflowWorkspace/);
-  assert.match(doflowShell, /data-app-shell-ready="true"/);
+  assert.match(layout, /<TenantAppShell session=\{session\}>\{children\}<\/TenantAppShell>/);
+  assert.match(tenantShell, /function DoflowWorkspace/);
+  assert.match(tenantShell, /data-app-shell-ready="true"/);
   assert.match(
-    doflowShell,
+    tenantShell,
     /data-workspace-ready=\{workspaceReady \? "true" : "false"\}/,
   );
-  assert.match(doflowShell, /data-workspace-status=\{workspaceStatus\}/);
-  assert.match(doflowShell, /data-secondary-status=\{secondaryStatus\}/);
-  assert.match(doflowShell, /inert=\{workspaceReady \? undefined : true\}/);
-  assert.match(doflowShell, /aria-hidden=\{workspaceReady \? undefined : true\}/);
+  assert.match(tenantShell, /data-workspace-status=\{workspaceStatus\}/);
+  assert.match(tenantShell, /data-secondary-status=\{secondaryStatus\}/);
+  assert.match(tenantShell, /inert=\{workspaceReady \? undefined : true\}/);
+  assert.match(tenantShell, /aria-hidden=\{workspaceReady \? undefined : true\}/);
   assert.doesNotMatch(provider, /if \(!hasHydrated\)\s*return/);
 });
 
@@ -134,16 +134,16 @@ test("optional authority failures use one named, abort-aware fallback boundary",
 });
 
 test("readiness errors remain controlled and retry does not reload the page", () => {
-  assert.match(doflowShell, /workspaceError\?\.status === 401/);
-  assert.match(doflowShell, /workspaceError\?\.status === 403/);
-  assert.match(doflowShell, /router\.replace\(`\/login\?next=/);
-  assert.match(doflowShell, /onClick=\{retryWorkspace\}/);
-  assert.match(doflowShell, /Riprova caricamento/);
-  assert.match(doflowShell, /secondaryStatus !== "ready"/);
-  assert.match(doflowShell, /Caricamento dei dati secondari/);
-  assert.match(doflowShell, /onClick=\{retrySecondary\}/);
-  assert.match(doflowShell, /Riprova dati secondari/);
-  assert.doesNotMatch(doflowShell, /window\.location\.reload|router\.refresh/);
+  assert.match(tenantShell, /workspaceError\?\.status === 401/);
+  assert.match(tenantShell, /workspaceError\?\.status === 403/);
+  assert.match(tenantShell, /router\.replace\(`\/login\?next=/);
+  assert.match(tenantShell, /onClick=\{retryWorkspace\}/);
+  assert.match(tenantShell, /Riprova caricamento/);
+  assert.match(tenantShell, /secondaryStatus !== "ready"/);
+  assert.match(tenantShell, /Caricamento dei dati secondari/);
+  assert.match(tenantShell, /onClick=\{retrySecondary\}/);
+  assert.match(tenantShell, /Riprova dati secondari/);
+  assert.doesNotMatch(tenantShell, /window\.location\.reload|router\.refresh/);
 });
 
 test("every provider bootstrap client accepts an AbortSignal", () => {

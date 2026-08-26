@@ -89,7 +89,7 @@ function KpiCard({ title, value, sub, icon: Icon, color }: {
   icon: React.ComponentType<{ className?: string }>; color: string;
 }) {
   return (
-    <Card className="glass-card transition-all duration-300 group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative">
+    <Card className="app-surface-card transition-all duration-300 group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative">
       <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-20 blur-2xl group-hover:opacity-40 transition-opacity duration-500" style={{ backgroundColor: color }} />
       <CardContent className="p-6 relative z-10 flex justify-between items-start">
         <div>
@@ -238,7 +238,7 @@ export default function AutomationsPage() {
           const TrigIcon = trig.icon;
           const ActIcon = act.icon;
           return (
-            <Card key={rule.id} className={`glass-card group hover:-translate-y-0.5 transition-all duration-200 ${!rule.isActive ? "opacity-50" : ""}`}>
+            <Card key={rule.id} className={`app-surface-card group hover:-translate-y-0.5 transition-all duration-200 ${!rule.isActive ? "opacity-50" : ""}`}>
               <CardContent className="p-5 flex items-center gap-4">
                 {/* Toggle */}
                 <Switch checked={rule.isActive} onCheckedChange={v => handleToggle(rule.id, v)} className="shrink-0" />

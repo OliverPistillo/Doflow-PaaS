@@ -104,6 +104,7 @@ function serviceEnv(config, database) {
     DOFLOW_ACCEPTANCE_STORAGE_SECRET_KEY: config.storageSecretKey,
     DOFLOW_ACCEPTANCE_JWT_SECRET: config.jwtSecret,
     DOFLOW_CEO_PASSWORD: config.syntheticCeoPassword,
+    DOFLOW_PROTECTED_OWNER_EMAILS: 'oliver@doflow.it,executive-two@acceptance.invalid',
     FRONTEND_URL: 'http://localhost:3100',
     APP_BASE_URL: 'http://localhost:3100',
     PUBLIC_API_URL: 'http://localhost:3401',

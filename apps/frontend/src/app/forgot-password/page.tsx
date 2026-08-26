@@ -44,7 +44,7 @@ export default function ForgotPasswordPage() {
       <div className="space-y-6">
           {done ? (
             <div className="flex flex-col items-center justify-center py-10 animate-fadeInUp" role="status">
-              <div className="df-icon-bubble h-20 w-20 mb-6">
+              <div className="mb-6 grid h-20 w-20 place-items-center rounded-2xl bg-primary/10 text-primary">
                 <CheckCircle2 className="h-10 w-10" aria-hidden="true" />
               </div>
               <p className="text-xl font-bold tracking-tight text-center px-4">Link inviato!</p>

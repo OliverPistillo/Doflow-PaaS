@@ -10,6 +10,7 @@ import { reportsApi } from "@/lib/tenant-reports-api";
 import { commercialApi, type CommercialPipeline } from "@/lib/tenant-commercial-api";
 import { isInternalDoflowTenant } from "@/lib/tenant-url";
 import { useTenantAccess } from "@/contexts/TenantAccessContext";
+import { Skeleton } from "@/components/ui/skeleton";
 import { groupPipeline, pipelineItems, pipelineTotal } from "@/components/tenant-commercial/commercial-utils";
 import { DashboardDeadlines } from "./dashboard-deadlines";
 import { dashboardCurrency, dashboardDisplayName, dashboardGreeting } from "./dashboard-format";
@@ -201,11 +202,11 @@ export default function DashboardClient() {
   if (loading || accessLoading) {
     return (
       <div className="doflow-dashboard-page">
-        <div className="h-14 w-80 animate-pulse rounded-xl bg-slate-100" />
+        <Skeleton className="h-14 w-80 max-w-full rounded-xl" />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-[132px] animate-pulse rounded-2xl bg-slate-100" />)}
+          {Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-[132px] rounded-2xl" />)}
         </div>
-        <div className="h-[320px] animate-pulse rounded-2xl bg-slate-100" />
+        <Skeleton className="h-[320px] rounded-2xl" />
       </div>
     );
   }
@@ -213,16 +214,16 @@ export default function DashboardClient() {
   return (
     <main className="doflow-dashboard-page">
       <header>
-        <h1 className="text-[30px] font-bold leading-tight tracking-normal text-slate-950">
+        <h1 className="text-[30px] font-bold leading-tight tracking-normal text-foreground">
           {dashboardGreeting()}, {dashboardDisplayName(email)}
         </h1>
-        <p className="mt-1 text-[15px] text-slate-500">
+        <p className="mt-1 text-[15px] text-muted-foreground">
           {isExecutive ? "Ecco cosa richiede la tua attenzione oggi." : "Ecco le tue attività e scadenze di oggi."}
         </p>
       </header>
 
       {error ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           Non è stato possibile aggiornare la dashboard. {error}
         </div>
       ) : null}

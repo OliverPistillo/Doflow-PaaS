@@ -10,7 +10,7 @@ import { EntityImageDialog } from "@/components/entity-image-dialog"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { ActivityFormDialog } from "@/features/commercial/components/activity-form-dialog"
-import { LeadDetailTopActions } from "@/features/commercial/components/lead-detail/lead-detail-actions"
+import { LeadDetailTopActions, type GeneralLeadFields } from "@/features/commercial/components/lead-detail/lead-detail-actions"
 import { useCommercialLeads } from "@/features/commercial/components/commercial-leads-provider"
 import { LeadDetailOperationalCard } from "@/features/commercial/components/lead-detail/lead-detail-operational-card"
 import { LeadDetailWorkspace } from "@/features/commercial/components/lead-detail/lead-detail-workspace"
@@ -20,10 +20,11 @@ import { CustomerLogo } from "@/features/commercial/components/customer-logo"
 import { RankingWinnerBadges } from "@/features/commercial/components/ranking-winner-badges"
 import { Badge } from "@/components/ui/badge"
 import type { TimelineEvent } from "@/features/commercial/components/lead-detail/lead-timeline-card"
-import type { CommercialLead, PipelineStage, TeamMember } from "@/features/commercial/types"
+import type { PipelineStage, TeamMember } from "@/features/commercial/types"
 import { AccessDenied } from "@/features/identity/access-denied"
 import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider"
 import { canEditLead, canManageCustomerBranding, canViewLead } from "@/features/identity/permissions"
+import { commercialApi } from "@/lib/tenant-commercial-api"
 
 type Stage = { id: PipelineStage; label: string }
 const italianDateTime = new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })
@@ -31,7 +32,7 @@ const italianDateTime = new Intl.DateTimeFormat("it-IT", { day: "numeric", month
 export function LeadDetailPage({ leadId, team, stages }: { leadId: string; team: TeamMember[]; stages: Stage[] }) {
   const router = useRouter()
   const commercialStore = useCommercialLeads()
-  const { allLeads, allCustomers, allProjects, leadActivities, timelineEvents, updateLead: updateSharedLead } = commercialStore
+  const { allLeads, allCustomers, allProjects, leadActivities, timelineEvents } = commercialStore
   const identity = useDoflowIdentity()
   const [activityOpen, setActivityOpen] = useState(false)
   const [archiveOpen, setArchiveOpen] = useState(false)
@@ -52,12 +53,43 @@ export function LeadDetailPage({ leadId, team, stages }: { leadId: string; team:
   const customer = allCustomers.find((item) => item.id === lead.convertedClientId || item.sourceLeadId === lead.id)
   const canEditLogo = customer ? canManageCustomerBranding(identity.currentUser, customer, { leads: allLeads, customers: allCustomers, projects: allProjects }) : false
   const selectedActivity = leadActivities.find((activity) => activity.id === selectedActivityId && activity.leadId === lead.id)
-  const updateLead = (updates: Pick<CommercialLead, "opportunityName" | "firstName" | "lastName" | "company" | "email" | "phone" | "location" | "source">) => {
-    updateSharedLead(lead.id, updates)
+  const updateLead = async (updates: GeneralLeadFields) => {
+    try {
+      const opportunity = await commercialApi.opportunity(lead.id)
+      const opportunityChanged = updates.opportunityName !== lead.opportunityName || updates.source !== lead.source
+      const companyChanged = updates.company !== lead.company || updates.location !== (lead.location || "")
+      const contactChanged = updates.firstName !== lead.firstName || updates.lastName !== lead.lastName || updates.email !== lead.email || updates.phone !== lead.phone
+      if (companyChanged && !opportunity.company_id) throw new Error("Azienda collegata non disponibile")
+      if (contactChanged && !opportunity.contact_id) throw new Error("Contatto collegato non disponibile")
+      const [company, contact] = await Promise.all([
+        companyChanged && opportunity.company_id ? commercialApi.company(opportunity.company_id) : null,
+        contactChanged && opportunity.contact_id ? commercialApi.contact(opportunity.contact_id) : null,
+      ])
+      await Promise.all([
+        opportunityChanged ? commercialApi.updateOpportunity(lead.id, { version: opportunity.version, title: updates.opportunityName, lead_source: updates.source }) : null,
+        company ? commercialApi.updateCompany(company.id, { version: company.version, name: updates.company, address: updates.location }) : null,
+        contact ? commercialApi.updateContact(contact.id, { version: contact.version, first_name: updates.firstName, last_name: updates.lastName, email: updates.email, phone: updates.phone }) : null,
+      ])
+      commercialStore.retryWorkspace()
+      return true
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Aggiornamento anagrafica non riuscito")
+      return false
+    }
+  }
+  const addNote = async (text: string) => Boolean(await commercialStore.addComment({ recordType: "lead", recordId: lead.id, text }))
+  const changeOutcome = async (stage: "won" | "lost", reason?: string) => {
+    try {
+      if (stage === "won") await commercialStore.convertLeadToClient({ leadId: lead.id, createOnboardingActivity: true })
+      else await commercialStore.moveLead(lead.id, stage, { reason })
+      return true
+    } catch {
+      return false
+    }
   }
 
   return <main className="mx-auto w-full max-w-[1600px] space-y-4 px-3 py-5 md:px-4 lg:px-6">
-    <header className="flex flex-col gap-3 border-b py-3 lg:flex-row lg:items-start lg:justify-between"><div className="flex min-w-0 items-center gap-3">{customer && <CustomerLogo customer={customer} className="size-14" />}<div className="min-w-0"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Scheda commerciale</p><h1 className="line-clamp-2 text-2xl font-semibold">{lead.company || `${lead.firstName} ${lead.lastName}`}</h1><p className="truncate text-sm text-muted-foreground">{lead.firstName} {lead.lastName} · {lead.service}</p><div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><Badge variant="secondary">{stages.find((stage) => stage.id === lead.stage)?.label ?? lead.stage}</Badge><span>Responsabile: {owner?.name ?? lead.owner}</span><RankingWinnerBadges userId={lead.assigneeId} compact /><span>Modificato {italianDateTime.format(new Date(latestEvent?.date ?? lead.lastContact))}</span><span>Prossima azione {italianDateTime.format(new Date(lead.nextActionAt))}</span><span>Origine: {lead.formSubmission?.utmCampaign || lead.source}</span></div></div></div><div className="flex shrink-0 flex-wrap items-center gap-2">{canEditLogo && <Button variant="outline" onClick={() => setLogoOpen(true)}><Camera />Logo</Button>}{lead.convertedClientId && <Button asChild variant="outline"><Link href={`/dashboard/clienti/${lead.convertedClientId}`}>Apri cliente</Link></Button>}{editable && <Button variant="destructive" onClick={() => setArchiveOpen(true)}><Archive />Archivia</Button>}{editable && <LeadDetailTopActions lead={lead} onSave={updateLead} onCreateActivity={() => setActivityOpen(true)} />}</div>{customer && logoOpen && <EntityImageDialog open={logoOpen} onOpenChange={setLogoOpen} title={`Logo di ${customer.profile.company}`} description="Salvato sul record cliente dal server." currentUrl={customer.logoUrl} fallback={customer.profile.company.slice(0, 2).toUpperCase()} onSave={async (logoUrl) => { const saved = await commercialStore.updateCustomerLogo(customer.id, logoUrl); if (saved) toast.success(logoUrl ? "Logo cliente aggiornato" : "Logo cliente rimosso"); return saved }} />}</header>
+    <header className="flex flex-col gap-3 border-b py-3 lg:flex-row lg:items-start lg:justify-between"><div className="flex min-w-0 items-center gap-3">{customer && <CustomerLogo customer={customer} className="size-14" />}<div className="min-w-0"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Scheda commerciale</p><h1 className="line-clamp-2 text-2xl font-semibold">{lead.company || `${lead.firstName} ${lead.lastName}`}</h1><p className="truncate text-sm text-muted-foreground">{lead.firstName} {lead.lastName} · {lead.service}</p><div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><Badge variant="secondary">{stages.find((stage) => stage.id === lead.stage)?.label ?? lead.stage}</Badge><span>Responsabile: {owner?.name ?? lead.owner}</span><RankingWinnerBadges userId={lead.assigneeId} compact /><span>Modificato {italianDateTime.format(new Date(latestEvent?.date ?? lead.lastContact))}</span><span>Prossima azione {italianDateTime.format(new Date(lead.nextActionAt))}</span><span>Origine: {lead.formSubmission?.utmCampaign || lead.source}</span></div></div></div><div className="flex shrink-0 flex-wrap items-center gap-2">{canEditLogo && <Button variant="outline" onClick={() => setLogoOpen(true)}><Camera />Logo</Button>}{lead.convertedClientId && <Button asChild variant="outline"><Link href={`/dashboard/clienti/${lead.convertedClientId}`}>Apri cliente</Link></Button>}{editable && <Button variant="destructive" onClick={() => setArchiveOpen(true)}><Archive />Archivia</Button>}{editable && <LeadDetailTopActions lead={lead} onSave={updateLead} onCreateActivity={() => setActivityOpen(true)} onAddNote={addNote} onChangeOutcome={changeOutcome} />}</div>{customer && logoOpen && <EntityImageDialog open={logoOpen} onOpenChange={setLogoOpen} title={`Logo di ${customer.profile.company}`} description="Salvato sul record cliente dal server." currentUrl={customer.logoUrl} fallback={customer.profile.company.slice(0, 2).toUpperCase()} onSave={async (logoUrl) => { const saved = await commercialStore.updateCustomerLogo(customer.id, logoUrl); if (saved) toast.success(logoUrl ? "Logo cliente aggiornato" : "Logo cliente rimosso"); return saved }} />}</header>
     <LeadDetailOperationalCard lead={lead} team={assignableTeam} stages={stages} onCreateActivity={editable ? () => setActivityOpen(true) : undefined} />
     <LeadCommercialPath lead={lead} />
     <LeadDocumentCenter lead={lead} />

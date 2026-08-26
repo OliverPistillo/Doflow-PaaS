@@ -90,7 +90,7 @@ function KpiCard({ title, value, sub, icon: Icon, color }: {
   icon: React.ComponentType<{ className?: string }>; color: string;
 }) {
   return (
-    <Card className="glass-card transition-all duration-300 group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative">
+    <Card className="app-surface-card transition-all duration-300 group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative">
       <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-20 blur-2xl group-hover:opacity-40 transition-opacity duration-500" style={{ backgroundColor: color }} />
       <CardContent className="p-6 relative z-10 flex justify-between items-start">
         <div>
@@ -257,7 +257,7 @@ export default function LeadsPage() {
         {/* Lead List */}
         <div className="lg:col-span-3 space-y-2">
           {leads.length === 0 ? (
-            <Card className="glass-card">
+            <Card className="app-surface-card">
               <CardContent className="py-16 text-center text-muted-foreground">
                 <UserPlus className="h-10 w-10 mx-auto mb-3 opacity-40" />
                 <p className="font-medium">Nessun lead trovato</p>
@@ -268,7 +268,7 @@ export default function LeadsPage() {
             leads.map(lead => {
               const sc = STATUS_CONFIG[lead.status] || STATUS_CONFIG.NEW;
               return (
-                <Card key={lead.id} className="glass-card group hover:-translate-y-0.5 transition-all duration-200">
+                <Card key={lead.id} className="app-surface-card group hover:-translate-y-0.5 transition-all duration-200">
                   <CardContent className="p-4 flex items-center gap-4">
                     {/* Score circle */}
                     <div className="h-11 w-11 rounded-full flex items-center justify-center shrink-0 text-sm font-black border-2"
@@ -333,7 +333,7 @@ export default function LeadsPage() {
         </div>
 
         {/* Source Distribution */}
-        <Card className="glass-card h-fit">
+        <Card className="app-surface-card h-fit">
           <CardContent className="p-6">
             <h3 className="font-bold text-foreground mb-1 text-sm">Lead per Fonte</h3>
             <p className="text-xs text-muted-foreground mb-4">Distribuzione sorgente acquisizione</p>

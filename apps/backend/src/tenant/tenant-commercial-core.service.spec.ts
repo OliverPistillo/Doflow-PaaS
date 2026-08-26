@@ -122,6 +122,97 @@ describe('TenantCommercialCoreService', () => {
     expect(updateCall?.[1]).toEqual(['quote', 'proposal', actor.id, opportunity.id, 3]);
   });
 
+  it.each(['proposal', 'negotiation'])(
+    'riordina la colonna UI %s usando la fase canonica quote senza perdere la partizione visuale',
+    async (uiStage) => {
+      const opportunityId = '22222222-2222-4222-8222-222222222222';
+      const query = jest.fn(async (sql: string, _params?: unknown[]) => {
+        if (sql.includes('commercial_idempotency') && sql.includes('SELECT')) return [];
+        if (sql.includes('FROM "doflow".opportunities') && sql.includes('FOR UPDATE')) {
+          return [{
+            id: opportunityId,
+            stage: 'quote',
+            ui_stage: uiStage,
+            assigned_to: actor.id,
+            version: 3,
+            pipeline_order: 9,
+          }];
+        }
+        return [];
+      });
+      const service = new TenantCommercialCoreService(transactionalDataSource(query) as any, access() as any);
+
+      await expect(service.reorderPipeline(
+        { stage: uiStage, leadIds: [opportunityId] },
+        `pipeline:reorder:${uiStage}`,
+      )).resolves.toEqual(expect.objectContaining({
+        ok: true,
+        stage: 'quote',
+        leadIds: [opportunityId],
+      }));
+
+      const selectCall = query.mock.calls.find(([sql]) => String(sql).includes('FROM "doflow".opportunities'));
+      expect(String(selectCall?.[0])).toContain('ui_stage');
+      const historyCall = query.mock.calls.find(([sql]) => String(sql).includes('commercial_history'));
+      expect(JSON.parse(String(historyCall?.[1]?.[8]))).toEqual(expect.objectContaining({
+        stage: 'quote',
+        ui_stage: uiStage,
+      }));
+    },
+  );
+
+  it('rifiuta un riordino che mescola due colonne UI sulla stessa fase canonica', async () => {
+    const opportunityId = '22222222-2222-4222-8222-222222222222';
+    const query = jest.fn(async (sql: string, _params?: unknown[]) => {
+      if (sql.includes('commercial_idempotency') && sql.includes('SELECT')) return [];
+      if (sql.includes('FROM "doflow".opportunities') && sql.includes('FOR UPDATE')) {
+        return [{
+          id: opportunityId,
+          stage: 'quote',
+          ui_stage: 'proposal',
+          assigned_to: actor.id,
+          version: 3,
+          pipeline_order: 1,
+        }];
+      }
+      return [];
+    });
+    const service = new TenantCommercialCoreService(transactionalDataSource(query) as any, access() as any);
+
+    await expect(service.reorderPipeline(
+      { stage: 'negotiation', leadIds: [opportunityId] },
+      'pipeline:reorder:mixed-ui-stage',
+    )).rejects.toBeInstanceOf(ConflictException);
+    expect(query.mock.calls.some(([sql]) => String(sql).includes('SET pipeline_order'))).toBe(false);
+  });
+
+  it('riordina e completa ui_stage per un record canonico preesistente', async () => {
+    const opportunityId = '22222222-2222-4222-8222-222222222222';
+    const query = jest.fn(async (sql: string, _params?: unknown[]) => {
+      if (sql.includes('commercial_idempotency') && sql.includes('SELECT')) return [];
+      if (sql.includes('FROM "doflow".opportunities') && sql.includes('FOR UPDATE')) {
+        return [{
+          id: opportunityId,
+          stage: 'quote',
+          ui_stage: null,
+          assigned_to: actor.id,
+          version: 3,
+          pipeline_order: 1,
+        }];
+      }
+      return [];
+    });
+    const service = new TenantCommercialCoreService(transactionalDataSource(query) as any, access() as any);
+
+    await expect(service.reorderPipeline(
+      { stage: 'proposal', leadIds: [opportunityId] },
+      'pipeline:reorder:legacy-null-ui-stage',
+    )).resolves.toEqual(expect.objectContaining({ ok: true, stage: 'quote' }));
+    const updateCall = query.mock.calls.find(([sql]) => String(sql).includes('SET pipeline_order'));
+    expect(String(updateCall?.[0])).toContain('ui_stage = COALESCE(ui_stage, $2)');
+    expect(updateCall?.[1]).toEqual([1, 'proposal', actor.id, opportunityId]);
+  });
+
   it('restituisce un conflitto controllato quando la versione è cambiata', async () => {
     const query = jest.fn(async (sql: string, _params?: unknown[]) => {
       if (sql.includes('commercial_idempotency') && sql.includes('SELECT')) return [];

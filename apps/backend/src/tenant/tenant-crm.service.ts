@@ -206,10 +206,148 @@ export class TenantCrmService {
   }
 
   private scopedWhere(resource: ResourceKey, schema: string, where: string, actor: any) {
-    if (!isDoflowTenant(schema) || !actor?.capabilities || actor.capabilities.has('*') || actor.capabilities.has('canViewAllLeads')) return where;
+    if (
+      !isDoflowTenant(schema)
+      || !actor?.capabilities
+      || actor.capabilities.has('*')
+      || actor.capabilities.has('canViewAllLeads')
+    ) return where;
     if (resource === 'opportunities') return `${where} AND t.assigned_to = $${'__ACTOR_PARAM__'}`;
     if (resource === 'leads') return `${where} AND commercial_opportunity.assigned_to = $${'__ACTOR_PARAM__'}`;
+    if (resource === 'activities') {
+      if (actor.capabilities.has('canAssignLeads')) return where;
+      const actorParam = `$${'__ACTOR_PARAM__'}`;
+      return `${where} AND (
+        t.assigned_to = ${actorParam}
+        OR t.created_by = ${actorParam}
+        OR EXISTS (
+          SELECT 1 FROM "${schema}".opportunities activity_opportunity
+          WHERE activity_opportunity.deleted_at IS NULL
+            AND activity_opportunity.assigned_to = ${actorParam}
+            AND (
+              activity_opportunity.id = t.opportunity_id
+              OR activity_opportunity.lead_id = t.lead_id
+              OR activity_opportunity.company_id = t.company_id
+              OR activity_opportunity.contact_id = t.contact_id
+            )
+        )
+        OR EXISTS (
+          SELECT 1 FROM "${schema}".leads activity_lead
+          WHERE activity_lead.id = t.lead_id
+            AND activity_lead.deleted_at IS NULL
+            AND activity_lead.assigned_to = ${actorParam}
+        )
+      )`;
+    }
     return where;
+  }
+
+  private async assertActivityMutationScope(
+    schema: string,
+    actor: CommercialActor,
+    activity: Record<string, unknown>,
+    queryable: Queryable,
+  ) {
+    if (!isDoflowTenant(schema)) return;
+    const globalScope = Boolean(
+      this.commercialAccess?.has(actor, '*')
+      || this.commercialAccess?.has(actor, 'canViewAllLeads')
+      || this.commercialAccess?.has(actor, 'canAssignLeads'),
+    );
+
+    const assignedTo = String(activity.assigned_to || '');
+    if (!globalScope && assignedTo && assignedTo !== actor.id) {
+      throw new ForbiddenException('Assegnatario attività non autorizzato');
+    }
+
+    const opportunityId = activity.opportunity_id ? String(activity.opportunity_id) : null;
+    const leadId = activity.lead_id ? String(activity.lead_id) : null;
+    const companyId = activity.company_id ? String(activity.company_id) : null;
+    const contactId = activity.contact_id ? String(activity.contact_id) : null;
+    if (!opportunityId && !leadId && !companyId && !contactId) return;
+
+    if (opportunityId) {
+      const rows = await queryable.query(
+        `SELECT o.lead_id, o.company_id, o.contact_id
+         FROM "${schema}".opportunities o
+         WHERE o.id = $1 AND o.deleted_at IS NULL
+           ${globalScope ? '' : 'AND o.assigned_to = $2'}
+         LIMIT 1`,
+        globalScope ? [opportunityId] : [opportunityId, actor.id],
+      );
+      const opportunity = rows[0];
+      if (!opportunity) throw new ForbiddenException('Record commerciale non assegnato');
+      if (
+        (leadId && String(opportunity.lead_id || '') !== leadId)
+        || (companyId && String(opportunity.company_id || '') !== companyId)
+        || (contactId && String(opportunity.contact_id || '') !== contactId)
+      ) throw new BadRequestException('Riferimenti attività incoerenti');
+      return;
+    }
+
+    if (leadId) {
+      const rows = await queryable.query(
+        `SELECT l.company_id, l.contact_id
+         FROM "${schema}".leads l
+         WHERE l.id = $1 AND l.deleted_at IS NULL
+           ${globalScope ? '' : `AND (
+             l.assigned_to = $2
+             OR EXISTS (
+               SELECT 1 FROM "${schema}".opportunities o
+               WHERE o.lead_id = l.id AND o.deleted_at IS NULL AND o.assigned_to = $2
+             )
+           )`}
+         LIMIT 1`,
+        globalScope ? [leadId] : [leadId, actor.id],
+      );
+      const lead = rows[0];
+      if (!lead) throw new ForbiddenException('Record commerciale non assegnato');
+      if (
+        (companyId && String(lead.company_id || '') !== companyId)
+        || (contactId && String(lead.contact_id || '') !== contactId)
+      ) throw new BadRequestException('Riferimenti attività incoerenti');
+      return;
+    }
+
+    if (contactId) {
+      const rows = await queryable.query(
+        `SELECT ct.company_id
+         FROM "${schema}".contacts ct
+         LEFT JOIN "${schema}".companies c ON c.id = ct.company_id AND c.deleted_at IS NULL
+         WHERE ct.id = $1 AND ct.deleted_at IS NULL
+           ${globalScope ? '' : `AND (
+             c.owner_user_id = $2
+             OR EXISTS (
+               SELECT 1 FROM "${schema}".opportunities o
+               WHERE o.deleted_at IS NULL AND o.assigned_to = $2
+                 AND (o.contact_id = ct.id OR o.company_id = ct.company_id)
+             )
+           )`}
+         LIMIT 1`,
+        globalScope ? [contactId] : [contactId, actor.id],
+      );
+      const contact = rows[0];
+      if (!contact) throw new ForbiddenException('Record commerciale non assegnato');
+      if (companyId && String(contact.company_id || '') !== companyId) {
+        throw new BadRequestException('Riferimenti attività incoerenti');
+      }
+      return;
+    }
+
+    const rows = await queryable.query(
+      `SELECT 1 FROM "${schema}".companies c
+       WHERE c.id = $1 AND c.deleted_at IS NULL
+         ${globalScope ? '' : `AND (
+           c.owner_user_id = $2
+           OR EXISTS (
+             SELECT 1 FROM "${schema}".opportunities o
+             WHERE o.company_id = c.id AND o.deleted_at IS NULL AND o.assigned_to = $2
+           )
+         )`}
+       LIMIT 1`,
+      globalScope ? [companyId] : [companyId, actor.id],
+    );
+    if (!rows[0]) throw new ForbiddenException('Record commerciale non assegnato');
   }
 
   private async ensureSchema(schema: string) {
@@ -561,7 +699,7 @@ export class TenantCrmService {
     const scoped = this.scopedWhere(resource, schema, where, actor);
     if (scoped.includes('__ACTOR_PARAM__')) {
       params.push(actor.id);
-      where = scoped.replace('__ACTOR_PARAM__', String(params.length));
+      where = scoped.split('__ACTOR_PARAM__').join(String(params.length));
     } else where = scoped;
 
     const countRows = await this.dataSource.query(
@@ -593,13 +731,20 @@ export class TenantCrmService {
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const config = this.getConfig(resource);
+    let where = 't.id = $1 AND t.deleted_at IS NULL';
+    const params: unknown[] = [id];
+    const scoped = this.scopedWhere(resource, schema, where, actor);
+    if (scoped.includes('__ACTOR_PARAM__')) {
+      params.push(actor.id);
+      where = scoped.split('__ACTOR_PARAM__').join(String(params.length));
+    } else where = scoped;
     const rows = await this.dataSource.query(
       `SELECT ${this.select(config, schema)}
        FROM "${schema}".${config.table} t
        ${this.joins(config, schema)}
-       WHERE t.id = $1 AND t.deleted_at IS NULL
+       WHERE ${where}
        LIMIT 1`,
-      [id],
+      params,
     );
     if (!rows[0]) throw new NotFoundException('Record CRM non trovato');
     await this.assertCrmAccess(resource, false, rows[0]);
@@ -619,6 +764,9 @@ export class TenantCrmService {
     const placeholders = columns.map((_, index) => `$${index + 1}`).join(', ');
 
     const id = await this.dataSource.transaction(async (manager) => {
+      if (resource === 'activities' && isDoflowTenant(schema) && this.commercialAccess) {
+        await this.assertActivityMutationScope(schema, user as CommercialActor, cleaned, manager);
+      }
       const rows = await manager.query(
         `INSERT INTO "${schema}".${config.table} (${columns.join(', ')})
          VALUES (${placeholders})
@@ -655,15 +803,47 @@ export class TenantCrmService {
       throw new BadRequestException('version obbligatoria');
     }
     const legacyAudit = await this.dataSource.transaction(async (manager) => {
-      const currentRows = await manager.query(
-        `SELECT * FROM "${schema}".${config.table}
-         WHERE id = $1 AND deleted_at IS NULL
-         LIMIT 1 FOR UPDATE`,
-        [id],
-      );
+      let user: any;
+      let currentRows: any[];
+      if (resource === 'activities' && isDoflowTenant(schema) && this.commercialAccess) {
+        user = await this.assertCrmAccess(resource, true);
+        let where = 't.id = $1 AND t.deleted_at IS NULL';
+        const params: unknown[] = [id];
+        const scoped = this.scopedWhere(resource, schema, where, user);
+        if (scoped.includes('__ACTOR_PARAM__')) {
+          params.push(user.id);
+          where = scoped.split('__ACTOR_PARAM__').join(String(params.length));
+        } else where = scoped;
+        currentRows = await manager.query(
+          `SELECT t.* FROM "${schema}".${config.table} t
+           WHERE ${where}
+           LIMIT 1 FOR UPDATE`,
+          params,
+        );
+      } else {
+        currentRows = await manager.query(
+          `SELECT * FROM "${schema}".${config.table}
+           WHERE id = $1 AND deleted_at IS NULL
+           LIMIT 1 FOR UPDATE`,
+          [id],
+        );
+      }
       const current = currentRows[0];
       if (!current) throw new NotFoundException('Record CRM non trovato');
-      const user = await this.assertCrmAccess(resource, true, current);
+      if (!user) user = await this.assertCrmAccess(resource, true, current);
+      if (
+        resource === 'activities'
+        && isDoflowTenant(schema)
+        && this.commercialAccess
+        && ['company_id', 'contact_id', 'lead_id', 'opportunity_id', 'assigned_to'].some((field) => field in cleaned)
+      ) {
+        await this.assertActivityMutationScope(
+          schema,
+          user as CommercialActor,
+          { ...current, ...cleaned },
+          manager,
+        );
+      }
       if (isDoflowTenant(schema) && body.assigned_to !== undefined && body.assigned_to !== current.assigned_to && this.commercialAccess) {
         this.commercialAccess.require(user as CommercialActor, 'canAssignLeads');
       }

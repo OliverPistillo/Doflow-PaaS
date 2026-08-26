@@ -10,7 +10,7 @@ import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LogOut, Moon, Sun, ChevronsUpDown, BadgeCheck,
-  User, Settings, Palette, ChevronRight,
+  User, Settings, ChevronRight,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { apiFetch } from "@/lib/api";
@@ -26,10 +26,10 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupContent,
+  SidebarMenuButton,
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { RoomySidebarMenuButton as SidebarMenuButton } from "@/components/layout/roomy-sidebar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,10 +38,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
 import {
   Collapsible,
@@ -59,26 +55,11 @@ import {
   type NavGroup,
 } from "../config/sidebar-config";
 
-// ─── Color themes ─────────────────────────────────────────────────────────────
-
-const COLOR_THEMES = [
-  { id: "default", label: "Neutro (Default)",       colorClass: "bg-slate-500"   },
-  { id: "ocean",   label: "Ocean (Blu/Verde)",       colorClass: "bg-blue-500"    },
-  { id: "sunset",  label: "Sunset (Giallo/Arancio)", colorClass: "bg-orange-500"  },
-  { id: "emerald", label: "Emerald (Verde Smeraldo)",colorClass: "bg-emerald-500" },
-];
-
-function setColorTheme(themeId: string) {
-  if (typeof window !== "undefined") {
-    document.documentElement.setAttribute("data-color-theme", themeId);
-    localStorage.setItem("doflow_color_theme", themeId);
-  }
-}
-
 // ─── NavLeafItem ──────────────────────────────────────────────────────────────
 
 function NavLeafItem({ item }: { item: NavLeaf }) {
   const pathname = usePathname();
+  const { isMobile, setOpenMobile } = useSidebar();
   // Match esatto o prefisso (gestisce rotte nested come /superadmin/sales/*)
   // Eccezione: /superadmin esatto per non attivare tutto il subtree
   const isActive =
@@ -93,6 +74,9 @@ function NavLeafItem({ item }: { item: NavLeaf }) {
           href={item.href}
           target={item.external ? "_blank" : undefined}
           rel={item.external ? "noopener noreferrer" : undefined}
+          onClick={() => {
+            if (isMobile) setOpenMobile(false);
+          }}
         >
           <item.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
           <span className="flex-1 group-data-[collapsible=icon]:hidden truncate">
@@ -168,8 +152,6 @@ export function SuperAdminSidebar() {
   React.useEffect(() => {
     queueMicrotask(() => {
       setMounted(true);
-      const savedColorTheme = localStorage.getItem("doflow_color_theme") || "default";
-      setColorTheme(savedColorTheme);
       const payload = getDoFlowUser();
       if (payload) {
         setUser({
@@ -258,13 +240,9 @@ export function SuperAdminSidebar() {
                   }`}
                   aria-label="Menu utente"
                 >
-                  <Avatar className="h-10 w-10 rounded-nav border border-border shrink-0">
+                  <Avatar className="h-9 w-9 shrink-0 rounded-lg border border-border">
                     <AvatarFallback
-                      className="rounded-nav text-base font-bold"
-                      style={{
-                        background: "hsl(var(--primary) / 0.12)",
-                        color: "hsl(var(--primary))",
-                      }}
+                      className="rounded-lg bg-primary/10 text-sm font-bold text-primary"
                     >
                       {user?.initials ?? "SA"}
                     </AvatarFallback>
@@ -283,20 +261,16 @@ export function SuperAdminSidebar() {
               </DropdownMenuTrigger>
 
               <DropdownMenuContent
-                className="w-60 rounded-card shadow-card border-border"
+                className="w-60 rounded-lg border-border shadow-lg"
                 side={isOpen ? "bottom" : "right"}
                 align="end"
                 sideOffset={8}
               >
                 <DropdownMenuLabel className="p-2 font-normal">
                   <div className="flex items-center gap-2.5">
-                    <Avatar className="h-10 w-10 rounded-nav">
+                    <Avatar className="h-10 w-10 rounded-lg">
                       <AvatarFallback
-                        className="rounded-nav font-bold"
-                        style={{
-                          background: "hsl(var(--primary) / 0.12)",
-                          color: "hsl(var(--primary))",
-                        }}
+                        className="rounded-lg bg-primary/10 font-bold text-primary"
                       >
                         {user?.initials ?? "SA"}
                       </AvatarFallback>
@@ -333,29 +307,6 @@ export function SuperAdminSidebar() {
                     )}
                     Passa a {resolvedTheme === "dark" ? "Light Mode" : "Dark Mode"}
                   </DropdownMenuItem>
-
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger className="cursor-pointer">
-                      <Palette className="mr-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                      Stile e Colori
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuPortal>
-                      <DropdownMenuSubContent className="rounded-card border-border">
-                        {COLOR_THEMES.map((ct) => (
-                          <DropdownMenuItem
-                            key={ct.id}
-                            onClick={() => setColorTheme(ct.id)}
-                            className="cursor-pointer gap-2"
-                          >
-                            <div
-                              className={`h-3 w-3 rounded-full ${ct.colorClass} ring-1 ring-offset-1 ring-offset-card ring-black/10`}
-                            />
-                            {ct.label}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuPortal>
-                  </DropdownMenuSub>
 
                   <DropdownMenuItem asChild>
                     <Link href="/superadmin/settings" className="cursor-pointer">

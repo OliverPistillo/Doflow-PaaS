@@ -4792,63 +4792,100 @@ export function CommercialLeadsProvider({
           })),
         };
       },
-      updateLead(leadId, updates, options) {
+      async updateLead(leadId, updates, options) {
         const lead = leads.find((item) => item.id === leadId);
-        if (!lead || !canEditLead(identity.currentUser, lead)) return;
+        if (!lead || !canEditLead(identity.currentUser, lead)) return false;
         const authorizedUpdates = identity.hasCapability("canAssignLeads")
           ? updates
           : { ...updates, assigneeId: lead.assigneeId, owner: lead.owner };
-        if (!hasMeaningfulChanges(lead, authorizedUpdates)) return;
+        if (!hasMeaningfulChanges(lead, authorizedUpdates)) return true;
         const campaignChanged =
           authorizedUpdates.campaignId !== undefined &&
           authorizedUpdates.campaignId !== lead.campaignId;
-        void commercialApi
-          .updateOpportunity(leadId, {
+        if (!lead.version) {
+          toast.error("Versione lead non disponibile: ricarica la pagina");
+          return false;
+        }
+        try {
+          const updated = await commercialApi.updateOpportunity(leadId, {
             ...opportunityPayload(authorizedUpdates),
             version: lead.version,
-          })
-          .then((updated) =>
-            campaignChanged
-              ? commercialApi
-                  .updateAttribution(leadId, {
-                    version: updated.version,
-                    campaignId: authorizedUpdates.campaignId || null,
-                  })
-                  .then((response) => response.item)
-              : updated,
-          )
-          .then((updated) => {
-            setLeads((items) =>
-              items.map((item) =>
-                item.id === leadId
-                  ? {
-                      ...item,
-                      ...authorizedUpdates,
-                      version: updated.version,
-                      lastContact: dateValue(updated.updated_at),
-                    }
-                  : item,
-              ),
-            );
-            setCustomers((items) =>
-              items.map((customer) =>
-                customer.sourceLeadId === leadId
-                  ? {
-                      ...customer,
-                      profile: { ...customer.profile, ...authorizedUpdates },
-                    }
-                  : customer,
-              ),
-            );
-            void options;
-          })
-          .catch((error) =>
-            toast.error(
-              error instanceof Error
-                ? error.message
-                : "Aggiornamento non riuscito",
+          });
+          const finalItem = campaignChanged
+            ? (
+                await commercialApi.updateAttribution(leadId, {
+                  version: updated.version,
+                  campaignId: authorizedUpdates.campaignId || null,
+                })
+              ).item
+            : updated;
+          const persistedUpdates: Partial<CommercialLead> = {
+            ...(authorizedUpdates.opportunityName !== undefined
+              ? { opportunityName: authorizedUpdates.opportunityName }
+              : {}),
+            ...(authorizedUpdates.source !== undefined
+              ? { source: authorizedUpdates.source }
+              : {}),
+            ...(authorizedUpdates.service !== undefined
+              ? {
+                  service: authorizedUpdates.service,
+                  services: authorizedUpdates.service ? [authorizedUpdates.service] : [],
+                }
+              : {}),
+            ...(authorizedUpdates.value !== undefined
+              ? { value: authorizedUpdates.value }
+              : {}),
+            ...(authorizedUpdates.probability !== undefined
+              ? { probability: authorizedUpdates.probability }
+              : {}),
+            ...(authorizedUpdates.assigneeId !== undefined
+              ? {
+                  assigneeId: authorizedUpdates.assigneeId,
+                  owner: authorizedUpdates.owner ?? lead.owner,
+                }
+              : {}),
+            ...(authorizedUpdates.nextAction !== undefined
+              ? { nextAction: authorizedUpdates.nextAction }
+              : {}),
+            ...(authorizedUpdates.nextActionAt !== undefined
+              ? { nextActionAt: authorizedUpdates.nextActionAt }
+              : {}),
+            ...(campaignChanged
+              ? { campaignId: authorizedUpdates.campaignId }
+              : {}),
+          };
+          setLeads((items) =>
+            items.map((item) =>
+              item.id === leadId
+                ? {
+                    ...item,
+                    ...persistedUpdates,
+                    version: finalItem.version,
+                    lastContact: dateValue(finalItem.updated_at),
+                  }
+                : item,
             ),
           );
+          setCustomers((items) =>
+            items.map((customer) =>
+              customer.sourceLeadId === leadId
+                ? {
+                    ...customer,
+                    profile: { ...customer.profile, ...persistedUpdates },
+                  }
+                : customer,
+            ),
+          );
+          void options;
+          return true;
+        } catch (error) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Aggiornamento non riuscito",
+          );
+          return false;
+        }
       },
       archiveLead(leadId, reason) {
         const lead = leads.find((item) => item.id === leadId);

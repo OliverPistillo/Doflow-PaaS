@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '../..');
 const credentialPath = path.join(root, '.visual-auth', 'acceptance-credentials.json');
 const runtimeConfigPath = path.join(root, '.visual-runtime', 'commercial-core-stack.json');
 const resultPath = path.join(root, '.visual-runtime', 'final-global-visual-result.json');
-const canonicalActualDir = path.join(root, 'docs', 'design-references', 'doflow-crm-projects', 'actual', 'full-daniele-design');
+const canonicalActualDir = path.join(root, 'docs', 'design-references', 'doflow-crm-projects', 'actual', 'universal-ui');
 const configuredActualDir = process.env.DOFLOW_FINAL_VISUAL_OUTPUT_DIR?.trim();
 const actualDir = configuredActualDir
   ? path.resolve(root, configuredActualDir)
@@ -227,9 +227,9 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
   const commerce = JSON.parse(await readFile(path.join(root, '.visual-runtime', 'commerce-cash-acceptance-result.json'), 'utf8'));
   const db = new PgClient({ connectionString: config.databaseUrl });
   await db.connect();
-  await db.query(`UPDATE doflow.users SET full_name = 'Daniele' WHERE email = $1`, [credentials.email]);
-  await db.query(`UPDATE public.users SET full_name = 'Daniele' WHERE email = $1`, [credentials.email]);
-  await db.query(`UPDATE doflow.team_members SET display_name = 'Daniele', updated_at = now() WHERE lower(email) = lower($1) AND deleted_at IS NULL`, [credentials.email]);
+  await db.query(`UPDATE doflow.users SET full_name = 'Visual Owner' WHERE email = $1`, [credentials.email]);
+  await db.query(`UPDATE public.users SET full_name = 'Visual Owner' WHERE email = $1`, [credentials.email]);
+  await db.query(`UPDATE doflow.team_members SET display_name = 'Visual Owner', updated_at = now() WHERE lower(email) = lower($1) AND deleted_at IS NULL`, [credentials.email]);
   const [leadRow] = (await db.query(`SELECT id::text FROM doflow.leads WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 1`)).rows;
   const [companyRow] = (await db.query(`SELECT id::text FROM doflow.companies WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 1`)).rows;
   await db.end();
@@ -261,7 +261,6 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
     { slug: 'team-space', path: '/dashboard/team-space' },
     { slug: 'calendar', path: '/dashboard/calendario' },
     { slug: 'support', path: '/dashboard/supporto' },
-    { slug: 'flow-arcade', path: '/dashboard/flow-arcade' },
     { slug: 'automations', path: '/dashboard/automazioni' },
     { slug: 'settings', path: '/dashboard/impostazioni' },
     { slug: 'builder', path: '/commercial/site-proposals' },
@@ -273,7 +272,7 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
   const critical = new Set([
     'dashboard', 'pipeline', 'lead-detail', 'customer-detail', 'project-detail', 'activities',
     'order-detail', 'quotes', 'invoices', 'notifications', 'team-space', 'calendar',
-    'support', 'flow-arcade', 'automations', 'builder',
+    'support', 'automations', 'builder',
   ]);
   const contexts: BrowserContext[] = [];
   const consoleErrors: string[] = [];
@@ -345,12 +344,10 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
         }
         await accessibilitySmoke(owner);
         accessibilityChecks += 1;
-        await expect(owner.locator('[data-doflow-shell="daniele-design"]')).toHaveCount(1);
-        await expect(owner.locator('[data-doflow-shell="daniele-design"][data-doflow-theme="default"]')).toHaveCount(1);
-        await expect(owner.locator('[data-doflow-ui-generation="replacement"]')).toHaveCount(1);
+        await expect(owner.locator('html[data-tenant-ui="universal"] [data-app-ui-generation="universal-v1"]')).toHaveCount(1);
         await expect(owner.locator('[data-sidebar-kind="tenant-legacy"]')).toHaveCount(0);
         if (route.slug === 'builder') {
-          await expect(owner.locator('[data-builder-shell="daniele-design"]')).toHaveCount(1);
+          await expect(owner.locator('[data-builder-shell="universal"]')).toHaveCount(1);
         }
         await capture(owner, route.slug, desktop, theme);
       }
@@ -358,9 +355,9 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
 
     await owner.setViewportSize(canonicalTarget);
     await navigate(owner, '/dashboard', 'default');
-    await expect(owner.locator('[data-doflow-shell="daniele-design"]')).toHaveCount(1);
-    const canonicalHeader = owner.locator('[data-doflow-shell="daniele-design"] header').first();
-    const canonicalSidebar = owner.locator('[data-doflow-shell="daniele-design"] [data-sidebar="sidebar"]').first();
+    await expect(owner.locator('html[data-tenant-ui="universal"] [data-app-ui-generation="universal-v1"]')).toHaveCount(1);
+    const canonicalHeader = owner.locator('[data-app-ui-generation="universal-v1"] header').first();
+    const canonicalSidebar = owner.locator('[data-app-ui-generation="universal-v1"] [data-sidebar="sidebar"]').first();
     await expect(canonicalHeader).toHaveCSS('height', '64px');
     await expect(canonicalSidebar).toHaveCSS('width', '248px');
     await owner.screenshot({
@@ -472,9 +469,9 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
     const result = {
       verdict: 'GLOBAL VISUAL GO',
       frontendUrl: 'http://localhost:3100',
-      reference: 'doflow-gestionale-reference:daniele-design@b9a08eea2acaabf23ed56c75111f714c551374f8',
-      canonicalBaseline: 'TARGET — Reference Daniele.png (1348x888, default theme)',
-      canonicalScreenshot: 'docs/design-references/doflow-crm-projects/actual/full-daniele-design/dashboard-target-1348x888-default.png',
+      reference: 'doflow-gestionale-reference@b9a08eea2acaabf23ed56c75111f714c551374f8',
+      canonicalBaseline: 'TARGET — universal reference (1348x888, default theme)',
+      canonicalScreenshot: 'docs/design-references/doflow-crm-projects/actual/universal-ui/dashboard-target-1348x888-default.png',
       canonicalRoutes: canonicalRoutes.length + 2,
       desktopDefaultRoutes: canonicalRoutes.length + 3,
       criticalResponsiveRoutes: critical.size + 2,

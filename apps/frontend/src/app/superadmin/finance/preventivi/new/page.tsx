@@ -40,7 +40,7 @@ function SaveClientDialog({ open, clientName, onSave, onSkip }: { open: boolean;
   const [saving, setSaving] = useState(false);
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onSkip(); }}>
-      <DialogContent className="sm:max-w-sm rounded-card">
+      <DialogContent className="sm:max-w-sm rounded-lg">
         <DialogHeader>
           <DialogTitle>Salvare il cliente?</DialogTitle>
           <DialogDescription>Vuoi salvare <strong>{clientName}</strong> nell&apos;anagrafica? Comparirà nel menu a tendina la prossima volta.</DialogDescription>
@@ -62,11 +62,11 @@ function SaveServiceDialog({ open, item, onSave, onSkip }: { open: boolean; item
   const [saving, setSaving] = useState(false);
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onSkip(); }}>
-      <DialogContent className="sm:max-w-sm rounded-card">
+      <DialogContent className="sm:max-w-sm rounded-lg">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
-            <div className="h-10 w-10 rounded-nav bg-indigo-50 flex items-center justify-center">
-              <Bookmark className="h-5 w-5 text-indigo-600" />
+            <div className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center">
+              <Bookmark className="h-5 w-5 text-primary" />
             </div>
             <DialogTitle>Salvare il servizio?</DialogTitle>
           </div>
@@ -208,7 +208,7 @@ export default function NewPreventivoPage() {
           </Link>
           <div>
             <h1 className="text-3xl font-black tracking-tight flex items-center gap-2">
-              <FileText className="h-6 w-6 text-indigo-600" /> Nuovo Preventivo
+              <FileText className="h-6 w-6 text-primary" /> Nuovo Preventivo
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
               Documento proforma non fiscale — da inviare al cliente per approvazione prima di iniziare i lavori.
@@ -220,14 +220,14 @@ export default function NewPreventivoPage() {
 
           {/* Dati Documento + Cliente */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-card glass-card p-6 rounded-2xl shadow-sm border border-border/50 space-y-4">
+            <div className="bg-card app-surface-card p-6 rounded-2xl shadow-sm border border-border/50 space-y-4">
               <h2 className="text-base font-bold border-b pb-2">Dati Documento</h2>
 
               {/* Selettore cliente */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-2">
                   Cliente
-                  {autofilled && <span className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full"><Sparkles className="h-2.5 w-2.5" /> Compilato</span>}
+                  {autofilled && <span className="flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full"><Sparkles className="h-2.5 w-2.5" /> Compilato</span>}
                 </label>
                 <Select onValueChange={handleClientSelect} value={clientMode === "nuovo" ? "__nuovo__" : ""}>
                   <SelectTrigger><SelectValue placeholder={loadingTenants ? "Caricamento..." : "Scegli cliente..."} /></SelectTrigger>
@@ -235,7 +235,7 @@ export default function NewPreventivoPage() {
                     {tenants.length > 0 && (<><div className="px-2 py-1 text-[10px] font-bold uppercase text-muted-foreground">Tenant</div>{tenants.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</>)}
                     {savedClients.length > 0 && (<><Separator className="my-1" /><div className="px-2 py-1 text-[10px] font-bold uppercase text-muted-foreground">Salvati</div>{savedClients.map(c => <SelectItem key={c.id} value={c.id}><span className="font-medium">{c.clientName}</span>{c.clientVat && <span className="text-muted-foreground text-xs ml-2">{c.clientVat}</span>}</SelectItem>)}</>)}
                     <Separator className="my-1" />
-                    <SelectItem value="__nuovo__"><span className="flex items-center gap-2 text-indigo-600 font-semibold"><UserPlus className="h-3.5 w-3.5" /> Nuovo cliente…</span></SelectItem>
+                    <SelectItem value="__nuovo__"><span className="flex items-center gap-2 text-primary font-semibold"><UserPlus className="h-3.5 w-3.5" /> Nuovo cliente…</span></SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -260,7 +260,7 @@ export default function NewPreventivoPage() {
             </div>
 
             {/* Dati cliente (solo ragione, indirizzo, piva) */}
-            <div className="bg-card glass-card p-6 rounded-2xl shadow-sm border border-border/50 space-y-4">
+            <div className="bg-card app-surface-card p-6 rounded-2xl shadow-sm border border-border/50 space-y-4">
               <h2 className="text-base font-bold border-b pb-2">Dati Cliente</h2>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2"><label className="text-xs font-bold text-muted-foreground uppercase">Partita IVA</label><Input {...register("clientVat")} placeholder="IT12345678901" /></div>
@@ -279,7 +279,7 @@ export default function NewPreventivoPage() {
           </div>
 
           {/* Voci */}
-          <div className="bg-card glass-card p-6 rounded-2xl shadow-sm border border-border/50">
+          <div className="bg-card app-surface-card p-6 rounded-2xl shadow-sm border border-border/50">
             <div className="flex justify-between items-center border-b pb-3 mb-4">
               <h2 className="text-base font-bold">Voci Preventivo</h2>
             </div>
@@ -291,7 +291,7 @@ export default function NewPreventivoPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {savedServices.length > 0 && (<><div className="px-2 py-1 text-[10px] font-bold uppercase text-muted-foreground">Servizi Salvati</div>{savedServices.map(s => <SelectItem key={s.id} value={s.id}><span className="font-medium">{s.description}</span><span className="text-muted-foreground text-xs ml-2">— {fmt(s.unitPrice)}</span></SelectItem>)}<Separator className="my-1" /></>)}
-                  <SelectItem value="__nuovo__"><span className="flex items-center gap-2 text-indigo-600 font-semibold"><Plus className="h-3.5 w-3.5" /> Aggiungi riga vuota</span></SelectItem>
+                  <SelectItem value="__nuovo__"><span className="flex items-center gap-2 text-primary font-semibold"><Plus className="h-3.5 w-3.5" /> Aggiungi riga vuota</span></SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -308,7 +308,7 @@ export default function NewPreventivoPage() {
                     <Input type="number" step="0.01" {...register(`lineItems.${index}.unitPrice`, { required: true, valueAsNumber: true })} />
                     <div className="text-right font-mono font-bold text-sm bg-muted/50 p-2 rounded-md h-10 flex items-center justify-end">{fmt(rowTotal)}</div>
                     <div className="flex justify-center">
-                      <Button type="button" variant="ghost" size="icon" className="text-muted-foreground hover:text-indigo-600 hover:bg-indigo-50 h-10 w-10" onClick={() => openSaveService(index)}><Bookmark className="h-4 w-4" /></Button>
+                      <Button type="button" variant="ghost" size="icon" className="text-muted-foreground hover:text-primary hover:bg-primary/10 h-10 w-10" onClick={() => openSaveService(index)}><Bookmark className="h-4 w-4" /></Button>
                     </div>
                     <div className="flex justify-end">
                       <Button type="button" variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => remove(index)} disabled={fields.length === 1}><Trash2 className="h-4 w-4" /></Button>
@@ -321,19 +321,19 @@ export default function NewPreventivoPage() {
 
           {/* Note + Totale */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-card glass-card p-6 rounded-2xl shadow-sm border border-border/50 space-y-2">
+            <div className="bg-card app-surface-card p-6 rounded-2xl shadow-sm border border-border/50 space-y-2">
               <label className="text-xs font-bold text-muted-foreground uppercase">Note / Condizioni</label>
               <textarea {...register("notes")} className="w-full min-h-[140px] rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none" placeholder="Es. Tempi di consegna, modalità di pagamento, esclusioni…" />
             </div>
-            <div className="bg-indigo-50/60 dark:bg-indigo-950/20 p-6 rounded-2xl border border-indigo-100 dark:border-indigo-800/40 space-y-3">
+            <div className="bg-primary/10 dark:bg-primary/10 p-6 rounded-2xl border border-primary/20 dark:border-primary/30 space-y-3">
               <h2 className="text-base font-bold mb-4">Riepilogo</h2>
               <div className="flex justify-between items-center text-sm text-muted-foreground">
                 <span>Totale voci:</span>
                 <span className="tabular-nums font-medium">{fmt(totale)}</span>
               </div>
-              <div className="pt-3 border-t border-indigo-200/60 flex justify-between items-center">
+              <div className="pt-3 border-t border-primary/30 flex justify-between items-center">
                 <span className="font-bold text-foreground">Totale preventivo:</span>
-                <span className="text-3xl font-black text-indigo-600 tabular-nums">{fmt(totale)}</span>
+                <span className="text-3xl font-black text-primary tabular-nums">{fmt(totale)}</span>
               </div>
               <p className="text-[11px] text-muted-foreground pt-2">
                 Il preventivo non include IVA (regime forfettario). Il prezzo è da intendersi tutto incluso.
@@ -346,7 +346,7 @@ export default function NewPreventivoPage() {
             <Link href="/superadmin/finance/invoices">
               <Button type="button" variant="ghost" className="rounded-xl px-8">Annulla</Button>
             </Link>
-            <Button type="submit" className="rounded-xl px-8 shadow-md gap-2 bg-indigo-600 hover:bg-indigo-700 text-white" disabled={isSubmitting}>
+            <Button type="submit" className="rounded-xl px-8 shadow-md gap-2 bg-primary hover:bg-primary text-white" disabled={isSubmitting}>
               {isSubmitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Salvataggio…</> : <><FileText className="h-4 w-4" /> Salva Preventivo</>}
             </Button>
           </div>

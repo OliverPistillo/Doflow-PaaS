@@ -1,7 +1,7 @@
 // apps/backend/src/sales-intelligence/sales-intelligence.controller.ts
 import {
   Controller, Post, Get, Body, Param, Query,
-  NotFoundException,
+  NotFoundException, UseGuards,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -12,9 +12,12 @@ import { Repository } from 'typeorm';
 import { OutreachCampaign } from './entities/outreach-campaign.entity';
 import { EnrichmentService } from './workers/enrichment.service';
 import { RequireFeature } from '../feature-access/feature-access.decorator';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { PlatformSuperadminGuard } from '../superadmin/platform-superadmin.guard';
 
 @RequireFeature('crm.sales-intel')
 @Controller('sales-intel')
+@UseGuards(JwtAuthGuard, PlatformSuperadminGuard)
 export class SalesIntelligenceController {
   constructor(
     private readonly producer: SalesIntelProducer,

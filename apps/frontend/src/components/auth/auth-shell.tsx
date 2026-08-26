@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { LockKeyhole, ShieldCheck, Sun } from "lucide-react"
+import { LockKeyhole, ShieldCheck } from "lucide-react"
 
 import { ThemeToggle } from "@/components/theme-toggle"
 import { cn } from "@/lib/utils"
@@ -33,8 +33,8 @@ export function AuthShell({
   brandDescription = "Commerciale, produzione e amministrazione restano collegate dal primo contatto alla consegna.",
 }: AuthShellProps) {
   return (
-    <main data-doflow-auth="daniele-design" className="relative grid min-h-dvh bg-background lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-      <div className="absolute right-4 top-4 z-20 lg:right-6 lg:top-6"><span className="doflow-auth-default-control hidden size-9 items-center justify-center rounded-lg border bg-white text-slate-600" aria-label="Tema predefinito"><Sun className="size-4" /></span><span className="tenant-auth-theme-control"><ThemeToggle /></span></div>
+    <main data-auth-ui="universal" className="relative grid min-h-dvh bg-background lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+      <div className="absolute right-4 top-4 z-20 lg:right-6 lg:top-6"><ThemeToggle /></div>
       <section className="flex items-center justify-center px-5 py-10 sm:px-10 lg:px-14">
         <div className={cn("w-full max-w-md", mode === "register" && "max-w-xl", cardClassName)}>
           <Link href="/" aria-label="Vai alla home Doflow" className="inline-flex">

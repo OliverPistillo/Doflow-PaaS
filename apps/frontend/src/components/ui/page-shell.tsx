@@ -45,12 +45,12 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    <div className="df-page-hero flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+    <div className="flex flex-col gap-6 rounded-2xl border bg-card p-6 shadow-sm lg:flex-row lg:items-end lg:justify-between">
       <div className="min-w-0 space-y-4">
-        <div className="df-page-eyebrow">Doflow Workspace</div>
-        <h1 className="df-page-title truncate tracking-tight">{title}</h1>
+        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Doflow Workspace</div>
+        <h1 className="truncate text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
         {description && (
-          <p className="df-page-description text-balance">{description}</p>
+          <p className="max-w-3xl text-balance text-sm text-muted-foreground sm:text-base">{description}</p>
         )}
       </div>
       {actions && (
@@ -89,8 +89,8 @@ export function LoadingState({ rows = 5, centered = false, label }: LoadingState
       </div>
       {/* Row skeletons */}
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="df-glass-panel flex items-center gap-3 p-4 rounded-card">
-          <Skeleton className="h-10 w-10 rounded-nav shrink-0" />
+        <div key={i} className="flex items-center gap-3 rounded-xl border bg-card p-4 shadow-sm">
+          <Skeleton className="h-10 w-10 shrink-0 rounded-md" />
           <div className="flex-1 space-y-1.5">
             <Skeleton className="h-4 w-3/4" />
             <Skeleton className="h-3 w-1/2" />
@@ -107,7 +107,7 @@ export function LoadingState({ rows = 5, centered = false, label }: LoadingState
 
 export function TableLoadingState({ cols = 4, rows = 6 }: { cols?: number; rows?: number }) {
   return (
-    <div className="df-glass-panel overflow-hidden" role="status" aria-label="Caricamento...">
+    <div className="overflow-hidden rounded-xl border bg-card shadow-sm" role="status" aria-label="Caricamento...">
       {/* Header */}
       <div className="flex items-center gap-4 px-6 py-3 bg-muted/40 border-b border-border">
         {Array.from({ length: cols }).map((_, i) => (
@@ -119,7 +119,7 @@ export function TableLoadingState({ cols = 4, rows = 6 }: { cols?: number; rows?
         <div key={i} className="flex items-center gap-4 px-6 py-4 border-b border-border/50 last:border-0">
           {Array.from({ length: cols }).map((_, j) => (
             <div key={j} className={j === 0 ? "flex-1 flex items-center gap-3" : "w-20"}>
-              {j === 0 && <Skeleton className="h-8 w-8 rounded-nav shrink-0" />}
+              {j === 0 && <Skeleton className="h-8 w-8 shrink-0 rounded-md" />}
               <Skeleton className={`h-4 ${j === 0 ? "flex-1" : "w-full"}`} />
             </div>
           ))}
@@ -143,7 +143,7 @@ export function ErrorState({
   onRetry,
 }: ErrorStateProps) {
   return (
-    <div className="df-glass-panel flex flex-col items-center justify-center min-h-[30vh] gap-6 border-dashed p-10">
+    <div className="flex min-h-[30vh] flex-col items-center justify-center gap-6 rounded-xl border border-dashed bg-card p-10 shadow-sm">
       <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center">
         <AlertTriangle className="h-8 w-8 text-destructive" aria-hidden="true" />
       </div>
@@ -177,8 +177,8 @@ export function EmptyState({
   icon: Icon = PackageOpen,
 }: EmptyStateProps) {
   return (
-    <div className="df-glass-panel flex flex-col items-center justify-center min-h-[24vh] gap-4 border-dashed p-10">
-      <div className="df-icon-bubble h-14 w-14">
+    <div className="flex min-h-[24vh] flex-col items-center justify-center gap-4 rounded-xl border border-dashed bg-card p-10 shadow-sm">
+      <div className="grid h-14 w-14 place-items-center rounded-xl bg-primary/10 text-primary">
         <Icon className="h-7 w-7 text-primary/60" aria-hidden="true" />
       </div>
       <div className="text-center max-w-xs space-y-1">
@@ -197,10 +197,10 @@ export function KpiSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" role="status" aria-label="Caricamento metriche...">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="df-kpi-card p-5 space-y-3">
+        <div key={i} className="space-y-3 rounded-xl border bg-card p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <Skeleton className="h-3 w-24" />
-            <Skeleton className="h-8 w-8 rounded-nav" />
+            <Skeleton className="h-8 w-8 rounded-md" />
           </div>
           <Skeleton className="h-8 w-20" />
           <Skeleton className="h-3 w-16" />

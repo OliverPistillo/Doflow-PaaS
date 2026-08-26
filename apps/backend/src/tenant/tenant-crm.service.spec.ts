@@ -369,4 +369,140 @@ describe('TenantCrmService Commercial Core capability scope', () => {
     await expect(service.findOne('opportunities', '22222222-2222-4222-8222-222222222222'))
       .rejects.toThrow('Lead non assegnato');
   });
+
+  it('limita lista e dettaglio attività al perimetro commerciale assegnato', async () => {
+    const query = jest.fn()
+      .mockResolvedValueOnce([{ total: 0 }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    const service = new TenantCrmService(
+      { query } as any,
+      request,
+      access(['canViewActivities', 'canEditAssignedLead', 'canEditCustomers']) as any,
+    );
+
+    await service.list('activities', {});
+    await expect(service.findOne('activities', '22222222-2222-4222-8222-222222222222'))
+      .rejects.toThrow('Record CRM non trovato');
+
+    const [countCall, listCall, detailCall] = query.mock.calls;
+    for (const [sql, params] of [countCall, listCall, detailCall]) {
+      expect(String(sql)).toMatch(/activity_opportunity\.assigned_to = \$\d+/);
+      expect(String(sql)).toMatch(/t\.assigned_to = \$\d+/);
+      expect(params).toContain(request.user.sub);
+    }
+  });
+
+  it('nega creazione attività su opportunity non assegnata prima dell insert', async () => {
+    const query = jest.fn().mockResolvedValue([]);
+    const dataSource = {
+      query,
+      transaction: jest.fn(async (work: (manager: { query: typeof query }) => unknown) => work({ query })),
+    };
+    const service = new TenantCrmService(
+      dataSource as any,
+      request,
+      access(['canViewActivities', 'canEditAssignedLead', 'canEditCustomers']) as any,
+    );
+
+    await expect(service.create('activities', {
+      opportunity_id: '22222222-2222-4222-8222-222222222222',
+      type: 'guided_call',
+      title: 'Tentativo cross-assignee',
+      assigned_to: request.user.sub,
+    })).rejects.toThrow('Record commerciale non assegnato');
+
+    expect(query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO "doflow".commercial_activities'))).toBe(false);
+    expect(String(query.mock.calls[0][0])).toContain('o.assigned_to = $2');
+  });
+
+  it('rifiuta riferimenti misti incoerenti anche quando la opportunity è assegnata', async () => {
+    const opportunityId = '22222222-2222-4222-8222-222222222222';
+    const companyId = '33333333-3333-4333-8333-333333333333';
+    const unrelatedCompanyId = '44444444-4444-4444-8444-444444444444';
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('FROM "doflow".opportunities o')) {
+        return [{ lead_id: null, company_id: companyId, contact_id: null }];
+      }
+      return [];
+    });
+    const dataSource = {
+      query,
+      transaction: jest.fn(async (work: (manager: { query: typeof query }) => unknown) => work({ query })),
+    };
+    const service = new TenantCrmService(
+      dataSource as any,
+      request,
+      access(['canViewActivities', 'canEditAssignedLead', 'canEditCustomers']) as any,
+    );
+
+    await expect(service.create('activities', {
+      opportunity_id: opportunityId,
+      company_id: unrelatedCompanyId,
+      type: 'guided_call',
+      title: 'Link misti',
+      assigned_to: request.user.sub,
+    })).rejects.toThrow('Riferimenti attività incoerenti');
+
+    expect(query.mock.calls.some(([sql]) => String(sql).includes('INSERT INTO "doflow".commercial_activities'))).toBe(false);
+  });
+
+  it('nega update attività cross-assignee nella SELECT FOR UPDATE scoped', async () => {
+    const query = jest.fn().mockResolvedValue([]);
+    const dataSource = {
+      query,
+      transaction: jest.fn(async (work: (manager: { query: typeof query }) => unknown) => work({ query })),
+    };
+    const service = new TenantCrmService(
+      dataSource as any,
+      request,
+      access(['canViewActivities', 'canEditAssignedLead', 'canEditCustomers']) as any,
+    );
+
+    await expect(service.update(
+      'activities',
+      '22222222-2222-4222-8222-222222222222',
+      { version: 1, description: 'Tentativo cross-assignee' },
+    )).rejects.toThrow('Record CRM non trovato');
+
+    expect(String(query.mock.calls[0][0])).toContain('activity_opportunity.assigned_to = $2');
+    expect(String(query.mock.calls[0][0])).toContain('FOR UPDATE');
+    expect(query.mock.calls.some(([sql]) => /UPDATE "doflow"\.commercial_activities/.test(String(sql)))).toBe(false);
+  });
+
+  it('nega la riscrittura di una attività autorizzata verso una opportunity altrui', async () => {
+    const activityId = '22222222-2222-4222-8222-222222222222';
+    const currentOpportunityId = '33333333-3333-4333-8333-333333333333';
+    const foreignOpportunityId = '44444444-4444-4444-8444-444444444444';
+    const query = jest.fn(async (sql: string, _params?: unknown[]) => {
+      if (sql.includes('SELECT t.* FROM "doflow".commercial_activities')) {
+        return [{
+          id: activityId,
+          opportunity_id: currentOpportunityId,
+          assigned_to: request.user.sub,
+          version: 1,
+          deleted_at: null,
+        }];
+      }
+      return [];
+    });
+    const dataSource = {
+      query,
+      transaction: jest.fn(async (work: (manager: { query: typeof query }) => unknown) => work({ query })),
+    };
+    const service = new TenantCrmService(
+      dataSource as any,
+      request,
+      access(['canViewActivities', 'canEditAssignedLead', 'canEditCustomers']) as any,
+    );
+
+    await expect(service.update('activities', activityId, {
+      version: 1,
+      opportunity_id: foreignOpportunityId,
+    })).rejects.toThrow('Record commerciale non assegnato');
+
+    expect(query.mock.calls.some(([sql]) => /UPDATE "doflow"\.commercial_activities/.test(String(sql)))).toBe(false);
+    const scopeProbe = query.mock.calls.find(([sql]) => String(sql).includes('FROM "doflow".opportunities o'));
+    expect(scopeProbe?.[1]).toEqual([foreignOpportunityId, request.user.sub]);
+  });
 });

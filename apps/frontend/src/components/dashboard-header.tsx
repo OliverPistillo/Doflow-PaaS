@@ -39,9 +39,12 @@ const ROUTE_LABELS: Array<[string, string[]]> = [
   ["/dashboard/supporto", ["Supporto"]],
   ["/dashboard/documenti", ["Documenti"]],
   ["/dashboard/archivio", ["Documenti", "Archivio"]],
-  ["/dashboard/notifiche", ["Inbox"]],
+  ["/dashboard/company-intelligence", ["Company Intelligence"]],
+  ["/dashboard/flowboard", ["Flowboard"]],
   ["/dashboard/team-space", ["Team Space"]],
-  ["/dashboard/flow-arcade", ["Flow Arcade"]],
+  ["/dashboard/inbox", ["Inbox"]],
+  ["/dashboard/bonus", ["Bonus"]],
+  ["/dashboard/notifiche", ["Notifiche"]],
   ["/dashboard/automazioni", ["Automazioni"]],
   ["/dashboard/impostazioni", ["Impostazioni"]],
 ]
@@ -68,7 +71,7 @@ export function DashboardHeader() {
   if (project) parts.push(project.name)
 
   return (
-    <header className="sticky top-0 z-30 grid h-16 min-h-16 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center border-b bg-[var(--doflow-topbar)] backdrop-blur-xl xl:grid-cols-[minmax(250px,1fr)_minmax(360px,493px)_minmax(210px,1fr)]">
+    <header className="sticky top-0 z-30 grid h-16 min-h-16 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center border-b bg-[var(--app-topbar)] backdrop-blur-xl xl:grid-cols-[minmax(250px,1fr)_minmax(360px,493px)_minmax(210px,1fr)]">
       <div className="flex min-w-0 items-center gap-2 px-4 lg:px-6">
         <SidebarTrigger className="-ml-1 shrink-0" />
         <Separator orientation="vertical" className="mx-1 h-5 shrink-0" />

@@ -187,7 +187,7 @@ test('Phase 4B is queued, append-only, PostgreSQL-authoritative and tenant-isola
     await openAutomationDashboard(owner, marker);
     await owner.getByRole('tab', { name: 'Punti' }).click(); await expect(owner.getByText('Rettifica acceptance motivata').first()).toBeVisible();
     await owner.screenshot({ path: path.join(actualDir, 'phase4b-points-1440x900-light.png') });
-    await expect(owner.locator('html[data-tenant-ui="doflow-reference"] [data-doflow-ui-generation="reference-e6c3"]')).toHaveCount(1); await expect(owner.locator('html')).not.toHaveClass(/dark/); await owner.getByRole('tab', { name: 'Classifiche' }).click(); await owner.getByRole('tab', { name: 'Sviluppatori' }).click();
+    await expect(owner.locator('html[data-tenant-ui="universal"] [data-app-ui-generation="universal-v1"]')).toHaveCount(1); await expect(owner.locator('html')).not.toHaveClass(/dark/); await owner.getByRole('tab', { name: 'Classifiche' }).click(); await owner.getByRole('tab', { name: 'Sviluppatori' }).click();
     await expect(owner.getByText('Calcolo server in corso…')).toBeHidden({ timeout: 30_000 }); await expect(owner.getByText(new RegExp(`${month}.*revocata`))).toBeVisible();
     await owner.screenshot({ path: path.join(actualDir, 'phase4b-rankings-1440x900-default.png') });
     await owner.goto('/automations/runs'); await expect(owner.getByRole('heading', { name: 'Monitoraggio' })).toBeVisible(); await expect(owner.getByText('dead letter', { exact: false }).first()).toBeVisible();

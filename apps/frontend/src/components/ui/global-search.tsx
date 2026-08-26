@@ -227,7 +227,7 @@ export function SearchTriggerButton({
         onClick={() => setOpen(true)}
         className={[
           "flex md:hidden items-center justify-center",
-          "h-9 w-9 rounded-nav",
+          "h-9 w-9 rounded-md",
           "text-muted-foreground hover:text-foreground hover:bg-muted",
           "transition-colors",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",

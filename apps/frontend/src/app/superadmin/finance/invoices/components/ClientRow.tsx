@@ -34,31 +34,31 @@ export function ClientRow({
   const nFatture    = client.invoices.filter(i => i.docType !== "preventivo").length;
 
   return (
-    <div className="border rounded-lg bg-white overflow-hidden shadow-sm group transition-all">
+    <div className="border rounded-lg bg-card overflow-hidden shadow-sm group transition-all">
       <div
-        className="grid grid-cols-[30px_2fr_1fr_1fr_1fr] px-4 py-4 items-center hover:bg-slate-50/50 transition-colors cursor-pointer select-none"
+        className="grid grid-cols-[30px_2fr_1fr_1fr_1fr] px-4 py-4 items-center hover:bg-muted/50 transition-colors cursor-pointer select-none"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex justify-center">
           {isExpanded
-            ? <ChevronDown className="h-4 w-4 text-slate-400" />
-            : <ChevronRight className="h-4 w-4 text-slate-400" />}
+            ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
         </div>
 
         <div>
-          <div className="font-bold text-lg text-slate-800">{client.name}</div>
+          <div className="font-bold text-lg text-foreground">{client.name}</div>
         </div>
 
-        <div className="font-mono font-bold text-slate-700 text-right pr-8">
+        <div className="font-mono font-bold text-muted-foreground text-right pr-8">
           €{client.totalVolume.toLocaleString("it-IT", { minimumFractionDigits: 2 })}
         </div>
 
-        <div className="text-sm text-slate-600 pl-2 flex items-center gap-2 flex-wrap">
-          <Badge variant="outline" className="bg-slate-50">
+        <div className="text-sm text-muted-foreground pl-2 flex items-center gap-2 flex-wrap">
+          <Badge variant="outline" className="bg-muted/50">
             {client.invoices.length} docs
           </Badge>
           {nPreventivi > 0 && (
-            <Badge variant="outline" className="bg-indigo-50 text-indigo-600 border-indigo-200 text-[10px]">
+            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px]">
               {nPreventivi} prev.
             </Badge>
           )}
@@ -74,7 +74,7 @@ export function ClientRow({
             variant="secondary"
             className={client.status === "Attivo"
               ? "bg-green-100 text-green-800 border-green-200"
-              : "bg-slate-100 text-slate-600"}
+              : "bg-muted text-muted-foreground"}
           >
             {client.status}
           </Badge>
@@ -82,7 +82,7 @@ export function ClientRow({
       </div>
 
       {isExpanded && (
-        <div className="bg-slate-50/50 border-t p-4 animate-in slide-in-from-top-2 duration-200">
+        <div className="bg-muted/50 border-t p-4 animate-in slide-in-from-top-2 duration-200">
           <div className="ml-0 sm:ml-8 space-y-3">
             {client.invoices.map(inv => (
               <InvoiceRow
@@ -100,7 +100,7 @@ export function ClientRow({
           <div className="mt-4 ml-8">
             <Button
               variant="ghost" size="sm"
-              className="text-slate-500 text-xs hover:text-primary hover:bg-primary/5"
+              className="text-muted-foreground text-xs hover:text-primary hover:bg-primary/5"
               onClick={e => { e.stopPropagation(); onAddInvoice(); }}
             >
               <Plus className="h-3 w-3 mr-1" /> Aggiungi nuova fattura a questo cliente

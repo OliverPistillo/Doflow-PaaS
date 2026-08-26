@@ -56,7 +56,7 @@ function KpiCard({ title, value, sub, icon: Icon, color, trend }: {
   trend?: { value: number; label: string };
 }) {
   return (
-    <Card className="glass-card transition-all duration-300 group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative">
+    <Card className="app-surface-card transition-all duration-300 group hover:-translate-y-1 hover:shadow-2xl overflow-hidden relative">
       <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full opacity-20 blur-2xl group-hover:opacity-40 transition-opacity duration-500" style={{ backgroundColor: color }} />
       <CardContent className="p-6 relative z-10 flex justify-between items-start">
         <div>
@@ -144,7 +144,7 @@ export default function SubscriptionsPage() {
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Revenue Trend */}
-        <Card className="glass-card lg:col-span-2">
+        <Card className="app-surface-card lg:col-span-2">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -170,7 +170,7 @@ export default function SubscriptionsPage() {
         </Card>
 
         {/* MRR Split Donut */}
-        <Card className="glass-card">
+        <Card className="app-surface-card">
           <CardContent className="p-6">
             <h3 className="font-bold text-foreground mb-1">Composizione MRR</h3>
             <p className="text-xs text-muted-foreground mb-4">Piani base vs moduli add-on</p>
@@ -204,7 +204,7 @@ export default function SubscriptionsPage() {
       {/* Bottom Row: Tier Breakdown + Top Modules */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Tier Breakdown */}
-        <Card className="glass-card">
+        <Card className="app-surface-card">
           <CardContent className="p-6">
             <h3 className="font-bold text-foreground mb-4 flex items-center gap-2"><Crown className="h-4 w-4 text-amber-500" />Distribuzione per Tier</h3>
             <div className="space-y-4">
@@ -229,7 +229,7 @@ export default function SubscriptionsPage() {
         </Card>
 
         {/* Top Modules */}
-        <Card className="glass-card">
+        <Card className="app-surface-card">
           <CardContent className="p-6">
             <h3 className="font-bold text-foreground mb-4 flex items-center gap-2"><Layers className="h-4 w-4 text-primary" />Top Moduli per Adozione</h3>
             {data.topModules.length > 0 ? (

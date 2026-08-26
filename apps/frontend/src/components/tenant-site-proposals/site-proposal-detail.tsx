@@ -123,7 +123,7 @@ function PreparationBadge({
     value === "ready"
       ? "bg-emerald-100 text-emerald-700"
       : value === "fallback"
-        ? "bg-indigo-100 text-indigo-700"
+        ? "bg-primary/10 text-primary"
         : value === "failed"
           ? "bg-rose-100 text-rose-700"
           : value === "pending" || value === "queued" || value === "running"
@@ -393,7 +393,7 @@ export function SiteProposalDetail({ id }: { id: string }) {
       <div className="flex flex-wrap items-center gap-3">
         <Link
           href="/commercial/site-proposals"
-          className="inline-flex items-center gap-1 text-sm font-medium text-indigo-600"
+          className="inline-flex items-center gap-1 text-sm font-medium text-primary"
         >
           <ChevronLeft className="h-4 w-4" />
           Proposte web
@@ -401,7 +401,7 @@ export function SiteProposalDetail({ id }: { id: string }) {
         {proposal.project_id ? (
           <Link
             href={`/dashboard/progetti/${proposal.project_id}`}
-            className="text-sm font-semibold text-indigo-600 hover:underline"
+            className="text-sm font-semibold text-primary hover:underline"
           >
             Apri progetto collegato
           </Link>
@@ -410,7 +410,7 @@ export function SiteProposalDetail({ id }: { id: string }) {
       <header className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-[30px] font-bold leading-tight text-slate-950">
+            <h1 className="text-[30px] font-bold leading-tight text-foreground">
               {draft.displayName}
             </h1>
             <Badge>
@@ -426,7 +426,7 @@ export function SiteProposalDetail({ id }: { id: string }) {
               </Badge>
             ) : null}
           </div>
-          <p className="mt-2 text-sm text-slate-500">
+          <p className="mt-2 text-sm text-muted-foreground">
             Tema {proposal.template_slug} {proposal.template_version} ·
             configurazione v{proposal.current_version} · ultima generazione{" "}
             {formatDate(proposal.last_generated_at)}
@@ -440,7 +440,7 @@ export function SiteProposalDetail({ id }: { id: string }) {
             <button
               type="button"
               onClick={() => setUpgradeOpen(true)}
-              className="mt-2 text-sm font-semibold text-indigo-600 hover:underline"
+              className="mt-2 text-sm font-semibold text-primary hover:underline"
             >
               Aggiorna al Tema Colsova 2.4.1
             </button>

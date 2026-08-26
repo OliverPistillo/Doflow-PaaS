@@ -3,7 +3,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Instrument_Serif, Inter, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -19,6 +19,14 @@ const mono = JetBrains_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
   display: "swap",
+});
+
+const serif = Instrument_Serif({
+  subsets: ["latin"],
+  variable: "--font-serif",
+  display: "swap",
+  weight: "400",
+  style: ["normal", "italic"],
 });
 
 export const metadata: Metadata = {
@@ -41,7 +49,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.variable} ${mono.variable} antialiased`}>
+      <body className={`${inter.variable} ${mono.variable} ${serif.variable} antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

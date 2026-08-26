@@ -27,7 +27,6 @@ import { ensureDoflowCollaborationTables } from '../tenant/tenant-doflow-collabo
 
 const TARGET_TENANT = 'doflow';
 const MIGRATION_KEY = 'doflow-reference-canonical-v1';
-const CEO_ACCOUNTS = ['oliver@doflow.it', 'daniele@doflow.it'] as const;
 
 const DOMAIN_TABLES = {
   users: 'users',
@@ -248,9 +247,8 @@ async function ceoIdentityChecksums(runner: QueryRunner, schema: string) {
                 COALESCE(mfa_secret, '') || ':' || COALESCE(email_verified_at::text, '') || ':' ||
                 COALESCE(is_active::text, '') || ':' || COALESCE(role, '')) AS identity_checksum
        FROM "${schema}".users
-      WHERE lower(email) = ANY($1::text[])
+      WHERE lower(role) = 'owner' AND is_active = true
       ORDER BY lower(email)`,
-    [CEO_ACCOUNTS],
   );
   return rows.map((row: any) => ({
     id: String(row.id),

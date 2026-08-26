@@ -29,7 +29,7 @@ export function UnifiedAuthPage({ initialMode = "login" }: UnifiedAuthPageProps)
       title="Crea il tuo account."
       description="Bastano pochi secondi per iniziare a far fluire i progetti."
       mascotShy={mascotShy}
-      cardClassName="df-auth-card-wide"
+      cardClassName="auth-card-wide"
     >
       <RegisterPanel onMascotShyChange={setMascotShy} />
     </AuthShell>

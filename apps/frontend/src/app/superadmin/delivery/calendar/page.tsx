@@ -28,7 +28,7 @@ type ProjectEvent = {
 };
 
 const EVENT_STYLES: Record<string, string> = {
-  milestone: 'bg-indigo-100 text-primary border-l-2 border-indigo-500',
+  milestone: 'bg-primary/10 text-primary border-l-2 border-primary',
   deadline: 'bg-red-100 text-red-700 border-l-2 border-red-500',
   meeting: 'bg-emerald-100 text-emerald-700 border-l-2 border-emerald-500',
 };
@@ -118,7 +118,7 @@ React.useEffect(() => {
   }, [month]);
 
   return (
-    <div className="dashboard-content animate-fadeIn flex flex-col" style={{ height: "calc(100vh - 144px)" }}>
+    <div className="app-page-content animate-fadeIn flex flex-col" style={{ height: "calc(100vh - 144px)" }}>
       <ConfirmDialog />
 
       {/* ── Action bar ─────────────────────────────────────────────── */}

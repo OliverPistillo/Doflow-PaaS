@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CopyPlus, Plus, Printer, RotateCcw } from "lucide-react";
+import Link from "next/link";
+import { CopyPlus, Eye, Plus, Printer, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -427,6 +428,16 @@ function QuotesTable({
             <TableCell>{item.validUntil}</TableCell>
             <TableCell>{euro.format(item.total)}</TableCell>
             <TableCell className="text-right">
+              <Button
+                asChild
+                size="icon-sm"
+                variant="ghost"
+                aria-label={`Anteprima ${item.code}`}
+              >
+                <Link href={`/dashboard/preventivi/${item.id}/anteprima`}>
+                  <Eye />
+                </Link>
+              </Button>
               <RecordCollaborationPanel
                 recordType="quote"
                 recordId={item.id}

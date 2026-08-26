@@ -2,15 +2,33 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { FolderKanban, ListTodo, ShieldCheck, UsersRound } from "lucide-react"
+import { Activity, FolderKanban, ListTodo, MessageCircle, ShieldCheck, UsersRound } from "lucide-react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 
 import { DoflowTeamAccountAdmin } from "@/components/team-space/doflow-team-account-admin"
+import { FlowAssistant, FlowOnboardingLauncher, ReleaseIndicator } from "@/components/flow-experience/flow-experience"
+import { TeamSpaceCollaboration } from "@/components/tenant-collaboration/team-space-collaboration"
+import { TeamSpacePresence } from "@/components/tenant-collaboration/team-space-presence"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider"
 import { useAuthorizedCommercial } from "@/features/identity/use-authorized-commercial"
+
+const teamSpaceTourSteps = [
+  {
+    id: "team-space-overview",
+    title: "Il tuo Team Space",
+    description: "Qui trovi collaborazione, presenze e carico di lavoro nel perimetro autorizzato.",
+    selector: "[data-flow-tour='team-space-header']",
+  },
+  {
+    id: "team-space-sections",
+    title: "Sezioni operative",
+    description: "Passa tra chat, presenze, carico di lavoro e amministrazione account quando autorizzato.",
+    selector: "[data-flow-tour='team-space-tabs']",
+  },
+]
 
 export default function TeamSpacePage() {
   return (
@@ -28,13 +46,17 @@ function TeamSpaceContent() {
   const searchParams = useSearchParams()
   const currentTenantRole = String(identity.currentUser.tenantRole || "").toLowerCase()
   const canAdministerAccounts = identity.hasCapability("canManageRoles") && ["owner", "admin"].includes(currentTenantRole)
-  const activeTab = searchParams.get("tab") === "team-accounts" && canAdministerAccounts
+  const requestedTab = searchParams.get("tab")
+  const activeTab = requestedTab === "team-accounts" && canAdministerAccounts
     ? "team-accounts"
-    : "workspace"
+    : requestedTab === "presence" || requestedTab === "workload"
+      ? requestedTab
+      : "chat"
 
   const changeTab = (value: string) => {
     const params = new URLSearchParams(searchParams.toString())
     if (value === "team-accounts" && canAdministerAccounts) params.set("tab", value)
+    else if (value === "presence" || value === "workload") params.set("tab", value)
     else params.delete("tab")
     const query = params.toString()
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
@@ -42,14 +64,29 @@ function TeamSpaceContent() {
 
   return (
     <main className="w-full space-y-5 p-4 md:p-6" data-team-space-source="server">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Team Space</h1>
-        <p className="text-sm text-muted-foreground">Persone, lavoro e progetti nel perimetro autorizzato.</p>
+      <header className="flex items-start justify-between gap-4" data-flow-tour="team-space-header">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Team Space</h1>
+          <p className="text-sm text-muted-foreground">Persone, lavoro e progetti nel perimetro autorizzato.</p>
+        </div>
+        <div className="flex gap-2">
+          <FlowOnboardingLauncher tourId="team-space" steps={teamSpaceTourSteps} />
+          <ReleaseIndicator />
+          <FlowAssistant context="Team Space" />
+        </div>
       </header>
 
       <Tabs value={activeTab} onValueChange={changeTab} className="space-y-4">
-        <TabsList className="h-auto flex-wrap justify-start">
-          <TabsTrigger value="workspace">Workspace</TabsTrigger>
+        <TabsList className="h-auto flex-wrap justify-start" data-flow-tour="team-space-tabs">
+          <TabsTrigger value="chat" className="gap-2">
+            <MessageCircle className="size-4" />Chat
+          </TabsTrigger>
+          <TabsTrigger value="presence" className="gap-2">
+            <Activity className="size-4" />Presenze
+          </TabsTrigger>
+          <TabsTrigger value="workload" className="gap-2">
+            <ListTodo className="size-4" />Carico di lavoro
+          </TabsTrigger>
           {canAdministerAccounts ? (
             <TabsTrigger value="team-accounts" className="gap-2">
               <ShieldCheck className="size-4" />Team e account
@@ -57,7 +94,15 @@ function TeamSpaceContent() {
           ) : null}
         </TabsList>
 
-        <TabsContent value="workspace" className="mt-0">
+        <TabsContent value="chat" className="mt-0">
+          <TeamSpaceCollaboration />
+        </TabsContent>
+
+        <TabsContent value="presence" className="mt-0">
+          <TeamSpacePresence />
+        </TabsContent>
+
+        <TabsContent value="workload" className="mt-0">
           <section className="grid gap-4 lg:grid-cols-3">
             <Card>
               <CardHeader>

@@ -168,9 +168,8 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a1628] text-white relative overflow-hidden font-[Outfit,sans-serif]" data-testid="onboarding-page">
+    <div className="min-h-screen bg-[#0a1628] text-white relative overflow-hidden font-sans" data-testid="onboarding-page">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
         .ob-bg::before, .ob-bg::after {
           content:""; position:absolute; border-radius:50%; filter:blur(120px); pointer-events:none;
         }

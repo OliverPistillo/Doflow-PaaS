@@ -43,7 +43,7 @@ function SaveClientDialog({ open, clientName, onSave, onSkip }: { open: boolean;
   const [saving, setSaving] = useState(false);
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onSkip(); }}>
-      <DialogContent className="sm:max-w-sm rounded-card">
+      <DialogContent className="sm:max-w-sm rounded-lg">
         <DialogHeader>
           <DialogTitle>Salvare il cliente?</DialogTitle>
           <DialogDescription>Vuoi salvare <strong>{clientName}</strong> nell&apos;anagrafica? Comparirà nel menu a tendina la prossima volta.</DialogDescription>
@@ -65,10 +65,10 @@ function SaveServiceDialog({ open, item, onSave, onSkip }: { open: boolean; item
   const [saving, setSaving] = useState(false);
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onSkip(); }}>
-      <DialogContent className="sm:max-w-sm rounded-card">
+      <DialogContent className="sm:max-w-sm rounded-lg">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
-            <div className="h-10 w-10 rounded-nav bg-primary/10 flex items-center justify-center">
+            <div className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center">
               <Bookmark className="h-5 w-5 text-primary" />
             </div>
             <DialogTitle>Salvare il servizio?</DialogTitle>
@@ -236,7 +236,7 @@ export default function NewInvoicePage() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
 
           {/* Regime Fiscale */}
-          <div className="bg-card glass-card rounded-2xl border border-border/50 p-6">
+          <div className="bg-card app-surface-card rounded-2xl border border-border/50 p-6">
             <h2 className="text-base font-bold mb-4 flex items-center gap-2">
               Regime Fiscale
               {isForfettario && <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">IVA NON APPLICATA</Badge>}
@@ -275,7 +275,7 @@ export default function NewInvoicePage() {
 
           {/* Dati Documento + Cliente */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-card glass-card p-6 rounded-2xl shadow-sm border border-border/50 space-y-4">
+            <div className="bg-card app-surface-card p-6 rounded-2xl shadow-sm border border-border/50 space-y-4">
               <h2 className="text-base font-bold border-b pb-2">Dati Documento</h2>
 
               {/* Numero fattura */}
@@ -337,7 +337,7 @@ export default function NewInvoicePage() {
             </div>
 
             {/* Dati fiscali cliente */}
-            <div className="bg-card glass-card p-6 rounded-2xl shadow-sm border border-border/50 space-y-4">
+            <div className="bg-card app-surface-card p-6 rounded-2xl shadow-sm border border-border/50 space-y-4">
               <h2 className="text-base font-bold border-b pb-2">Dati Fiscali Committente</h2>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2"><label className="text-xs font-bold text-muted-foreground uppercase">Partita IVA</label><Input {...register("clientVat")} placeholder="IT12345678901" /></div>
@@ -356,7 +356,7 @@ export default function NewInvoicePage() {
           </div>
 
           {/* Voci */}
-          <div className="bg-card glass-card p-6 rounded-2xl shadow-sm border border-border/50">
+          <div className="bg-card app-surface-card p-6 rounded-2xl shadow-sm border border-border/50">
             <div className="flex justify-between items-center border-b pb-3 mb-4">
               <h2 className="text-base font-bold">Voci Fattura</h2>
             </div>
@@ -398,7 +398,7 @@ export default function NewInvoicePage() {
 
           {/* Note + Totali */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-card glass-card p-6 rounded-2xl shadow-sm border border-border/50 space-y-2">
+            <div className="bg-card app-surface-card p-6 rounded-2xl shadow-sm border border-border/50 space-y-2">
               <label className="text-xs font-bold text-muted-foreground uppercase">Note / Condizioni di Pagamento</label>
               <textarea {...register("notes")} className="w-full min-h-[140px] rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none" placeholder="Es. Pagamento a 30gg tramite bonifico bancario." />
             </div>
