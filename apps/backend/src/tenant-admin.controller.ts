@@ -1,11 +1,12 @@
-import { Body, Controller, Delete, Get, Post, Req, Res, Param, Logger } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Post, Req, Res, Param, UseGuards } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { DataSource } from 'typeorm';
-import * as crypto from 'crypto';
 import { AuditService } from './audit.service';
 import { hasRoleAtLeast, Role } from './roles';
-import { MailService } from './mail/mail.service';
 import { safeSchema } from './common/schema.utils';
+import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { TenantTeamService } from './tenant/tenant-team.service';
+import { isAssignableTenantRole, normalizedTenantRole } from './tenant/tenant-role-policy';
 
 type InviteBody = {
   email: string;
@@ -17,12 +18,11 @@ type ChangeRoleBody = {
 };
 
 @Controller('tenant/admin')
+@UseGuards(JwtAuthGuard)
 export class TenantAdminController {
-  private readonly logger = new Logger(TenantAdminController.name);
-
   constructor(
     private readonly auditService: AuditService,
-    private readonly mailService: MailService,
+    private readonly teamService: TenantTeamService,
   ) {}
 
   private getConn(req: Request): DataSource {
@@ -34,10 +34,18 @@ export class TenantAdminController {
   }
 
   private getTenantId(req: Request): string {
-    const tenantId = (req as any).tenantId as string | undefined;
-    const tid = tenantId ?? 'public';
-
-    return safeSchema(tid, 'TenantAdminController.getTenantId');
+    const authUser = (req as any).user || (req as any).authUser;
+    const principalTenant = safeSchema(
+      authUser?.tenantId || authUser?.tenant_id || 'public',
+      'TenantAdminController.principalTenant',
+    );
+    const routedTenant = (req as any).tenantId
+      ? safeSchema((req as any).tenantId, 'TenantAdminController.routedTenant')
+      : principalTenant;
+    if (principalTenant !== routedTenant) {
+      throw new ForbiddenException('Il tenant richiesto non coincide con il principal autenticato.');
+    }
+    return principalTenant;
   }
 
   // ✅ HELPER: Blocca chiamate su contesto 'public' (Control Plane)
@@ -66,22 +74,6 @@ export class TenantAdminController {
     return authUser;
   }
 
-  private async getTenantSlug(conn: DataSource, schema: string): Promise<string> {
-    const rows = await conn.query(
-      `select slug from public.tenants where schema_name = $1 or slug = $1 limit 1`,
-      [schema],
-    );
-    return rows[0]?.slug || schema;
-  }
-
-  private async getTenantPublicId(conn: DataSource, schema: string): Promise<string | null> {
-    const rows = await conn.query(
-      `select id::text as id from public.tenants where schema_name = $1 or slug = $1 limit 1`,
-      [schema],
-    );
-    return rows[0]?.id || null;
-  }
-
   @Get('users')
   async listAll(@Req() req: Request, @Res() res: Response) {
     // 🛡️ Guard: Tenant Context
@@ -103,7 +95,7 @@ export class TenantAdminController {
         email,
         role,
         created_at,
-        'active' as status
+        CASE WHEN COALESCE(is_active, true) THEN 'active' ELSE 'suspended' END as status
       from "${tenantId}".users
 
       union all
@@ -144,83 +136,32 @@ export class TenantAdminController {
     if (!body?.email || !body.email.trim()) {
       return res.status(400).json({ error: 'email required' });
     }
-    const email = body.email.trim();
-
-    const rawRole = body.role ?? 'viewer';
-    const allowedRoles: Role[] = ['admin', 'manager', 'editor', 'viewer', 'user'];
-    const role = allowedRoles.includes(rawRole) ? rawRole : 'viewer';
-
-    const conn = this.getConn(req);
-
-    // Controllo se l'utente esiste già
-    const existingUser = await conn.query(
-      `select id from "${tenantId}".users where email = $1 limit 1`,
-      [email],
-    );
-
-    if (existingUser.length > 0) {
-      return res.status(409).json({ error: 'User already exists' });
+    const email = body.email.trim().toLowerCase();
+    const role = normalizedTenantRole(body.role || 'viewer');
+    if (!isAssignableTenantRole(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
     }
 
-    // Check esistenza invito duplicato (pending)
-    const existingInvite = await conn.query(
-      `select id from "${tenantId}".invites
-       where email = $1 and accepted_at is null
-       and (expires_at is null or expires_at > now())
-       limit 1`,
-      [email],
-    );
-
-    if (existingInvite.length > 0) {
-      return res.status(409).json({ error: 'Invite already pending for this email' });
-    }
-
-    // Creazione nuovo invito
-    const token = crypto.randomBytes(32).toString('hex');
-    const rows = await conn.query(
-      `
-      insert into "${tenantId}".invites (email, role, token)
-      values ($1, $2, $3)
-      returning id, email, role, token, created_at, expires_at
-      `,
-      [email, role, token],
-    );
-
-    const invite = rows[0];
+    const result = await this.teamService.createMember({
+      email,
+      display_name: email.split('@')[0] || email,
+      tenant_role: role,
+      operational_role: 'generic',
+      employment_type: 'employee',
+      status: 'invited',
+      send_invite: true,
+    });
 
     await this.auditService.log(req, {
       action: 'admin_invite_created',
-      targetEmail: invite.email,
-      metadata: { role: invite.role },
+      targetEmail: email,
+      metadata: { role },
     });
-
-    const baseUrl = process.env.APP_BASE_URL ?? 'https://app.doflow.it';
-    const tenantSlug = await this.getTenantSlug(conn, tenantId);
-    const acceptUrl = `${baseUrl}/auth/accept-invite?tenant=${encodeURIComponent(tenantSlug)}&token=${invite.token}`;
-
-    try {
-      this.logger.log(`Tentativo invio email a ${invite.email}...`);
-      await this.mailService.sendInviteEmail({
-        to: invite.email,
-        tenantName: tenantId,
-        inviteLink: acceptUrl,
-      });
-      this.logger.log(`Email inviata con successo.`);
-    } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : String(e);
-      this.logger.error(`ERRORE INVIO MAIL (ma l'invito è stato creato): ${errorMsg}`);
-      
-      await this.auditService.log(req, {
-        action: 'admin_invite_email_failed',
-        targetEmail: invite.email,
-        metadata: { error: errorMsg },
-      });
-    }
 
     return res.json({
       status: 'ok',
-      invite,
-      exampleAcceptUrl: acceptUrl,
+      member: result.member,
+      invite: result.invite,
     });
   }
 
@@ -236,56 +177,13 @@ export class TenantAdminController {
     if (!body?.email || !body.email.trim()) {
       return res.status(400).json({ error: 'email required' });
     }
-    const email = body.email.trim();
-
-    const conn = this.getConn(req);
-
-    const rows = await conn.query(
-      `
-      select id, email, role, token
-      from "${tenantId}".invites
-      where email = $1
-        and accepted_at is null
-        and (expires_at is null or expires_at > now())
-      limit 1
-      `,
-      [email],
-    );
-
-    const invite = rows[0];
-    if (!invite) {
-      return res.status(404).json({ error: 'Invite not found or already used' });
-    }
-
-    const baseUrl = process.env.APP_BASE_URL ?? 'https://app.doflow.it';
-    const tenantSlug = await this.getTenantSlug(conn, tenantId);
-    const acceptUrl = `${baseUrl}/auth/accept-invite?tenant=${encodeURIComponent(tenantSlug)}&token=${invite.token}`;
-
-    try {
-      await this.mailService.sendInviteEmail({
-        to: invite.email,
-        tenantName: tenantId,
-        inviteLink: acceptUrl,
-      });
-
-      await this.auditService.log(req, {
-        action: 'admin_invite_resent',
-        targetEmail: invite.email,
-      });
-
-      return res.json({ status: 'ok' });
-    } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : String(e);
-      this.logger.error(`ERRORE RINVIO MAIL: ${errorMsg}`);
-
-      await this.auditService.log(req, {
-        action: 'admin_resend_email_failed',
-        targetEmail: invite.email,
-        metadata: { error: errorMsg },
-      });
-
-      return res.status(500).json({ error: 'Failed to send email' });
-    }
+    const email = body.email.trim().toLowerCase();
+    const invite = await this.teamService.inviteMemberByEmail(email);
+    await this.auditService.log(req, {
+      action: 'admin_invite_resent',
+      targetEmail: email,
+    });
+    return res.json({ status: 'ok', invite });
   }
 
   @Post('users/:id/role')
@@ -312,43 +210,17 @@ export class TenantAdminController {
       return res.status(400).json({ error: 'Invalid user id' });
     }
 
-    const allowedRoles: Role[] = ['admin', 'manager', 'editor', 'viewer', 'user'];
-    if (!body.role || !allowedRoles.includes(body.role)) {
+    const role = normalizedTenantRole(body.role);
+    if (!isAssignableTenantRole(role)) {
       return res.status(400).json({ error: 'Invalid role' });
     }
-
-    const conn = this.getConn(req);
-
-    const existingRows = await conn.query(
-      `select id, email, role from "${tenantId}".users where id = $1 limit 1`,
-      [userId],
-    );
-
-    if (!existingRows[0]) return res.status(404).json({ error: 'User not found' });
-
-    const oldRole = existingRows[0].role;
-
-    const updatedRows = await conn.query(
-      `update "${tenantId}".users set role = $1 where id = $2 returning id, email, role, created_at`,
-      [body.role, userId],
-    );
-
-    const updated = updatedRows[0];
+    const updated = await this.teamService.updateMemberRoleByUserId(userId, role);
 
     await this.auditService.log(req, {
       action: 'admin_change_role',
       targetEmail: updated.email,
-      metadata: { oldRole, newRole: updated.role },
+      metadata: { newRole: role },
     });
-
-    const tenantPublicId = await this.getTenantPublicId(conn, tenantId);
-    await conn.query(
-      `update public.users
-       set role = $1, updated_at = now()
-       where lower(email) = lower($2)
-         and (tenant_id = $3 or tenant_id = $4)`,
-      [body.role, updated.email, tenantPublicId, tenantId],
-    );
 
     return res.json({ status: 'ok', user: updated });
   }
@@ -361,8 +233,6 @@ export class TenantAdminController {
     const authUser = this.ensureAdmin(req, res);
     if (!authUser) return;
 
-    const conn = this.getConn(req);
-
     const isInvite = id.startsWith('invite:');
     const isUser = id.startsWith('user:');
 
@@ -372,44 +242,22 @@ export class TenantAdminController {
 
     const rawId = id.split(':')[1];
 
-    let result: any[];
+    let deletedEmail = '';
     if (isInvite) {
-      // rawId è UUID -> NON convertire a Number
-      result = await conn.query(
-        `delete from "${tenantId}".invites where id = $1 returning id, email`,
-        [rawId],
-      );
+      const result = await this.teamService.cancelInvite(rawId);
+      deletedEmail = result.email || `ID:${id}`;
     } else {
       const userId = rawId.trim();
       if (!userId) return res.status(400).json({ error: 'Invalid user id' });
-
-      result = await conn.query(
-        `delete from "${tenantId}".users where id = $1 returning id, email`,
-        [userId],
-      );
+      const result = await this.teamService.deleteMemberByUserId(userId);
+      deletedEmail = result.email || `ID:${id}`;
     }
-
-    if (!result?.length) {
-      return res.status(404).json({ error: isInvite ? 'Invite not found' : 'User not found' });
-    }
-
-    const deletedEmail = result[0]?.email || `ID:${id}`;
 
     await this.auditService.log(req, {
       action: isInvite ? 'admin_delete_invite' : 'admin_delete_user',
       targetEmail: deletedEmail,
       metadata: { deletedId: id, type: isInvite ? 'invite' : 'user' },
     });
-
-    if (isUser) {
-      const tenantPublicId = await this.getTenantPublicId(conn, tenantId);
-      await conn.query(
-        `delete from public.users
-         where lower(email) = lower($1)
-           and (tenant_id = $2 or tenant_id = $3)`,
-        [deletedEmail, tenantPublicId, tenantId],
-      );
-    }
 
     return res.json({ status: 'ok', deletedId: id });
   }

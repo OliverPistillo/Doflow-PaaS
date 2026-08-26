@@ -1,7 +1,9 @@
-import { Injectable, NestMiddleware } from '@nestjs/common';
+import { Injectable, NestMiddleware, Optional } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import * as jwt from 'jsonwebtoken';
+import { DataSource } from 'typeorm';
 import { WebSessionService } from './auth/web-session.service';
+import { safeSchema } from './common/schema.utils';
 
 /**
  * Path consentiti quando il JWT è in stato MFA parziale.
@@ -47,7 +49,34 @@ function normalizedRequestPath(req: Request) {
 
 @Injectable()
 export class AuthMiddleware implements NestMiddleware {
-  constructor(private readonly webSessions: WebSessionService) {}
+  constructor(
+    private readonly webSessions: WebSessionService,
+    @Optional() private readonly dataSource?: DataSource,
+  ) {}
+
+  private async currentAccount(authUser: Record<string, any>): Promise<Record<string, any> | null> {
+    if (!this.dataSource) return authUser;
+    const schema = safeSchema(authUser.tenantId || authUser.tenant_id || 'public', 'AuthMiddleware.currentAccount');
+    const id = String(authUser.sub || authUser.id || '');
+    if (!id) return null;
+    const rows = await this.dataSource.query(
+      `SELECT id, email, role, COALESCE(is_active, true) AS is_active
+       FROM "${schema}".users
+       WHERE id::text = $1
+       LIMIT 1`,
+      [id],
+    );
+    const account = rows[0];
+    if (!account || account.is_active !== true) return null;
+    return {
+      ...authUser,
+      id: String(account.id),
+      sub: String(account.id),
+      email: account.email,
+      role: String(account.role || 'user').toLowerCase().trim(),
+      tenantId: schema,
+    };
+  }
 
   async use(req: Request, res: Response, next: NextFunction) {
     const authHeader = req.headers['authorization'];
@@ -70,28 +99,15 @@ export class AuthMiddleware implements NestMiddleware {
         if (!secret) throw new Error('JWT_SECRET not configured');
 
         const payload = jwt.verify(token, secret) as Record<string, any>;
-
-        const authUser = {
-          id:       payload.sub,
-          email:    payload.email,
-          role:     payload.role,
-          tenantId: payload.tenantId,
-          ...payload,
-        };
-
-        (req as any).user     = authUser;
-        (req as any).authUser = authUser;
-
-        // ── MFA Gate ──────────────────────────────────────────────────────────
-        // FIX 🟠: Gate attivo sia per MFA_PENDING che per MFA_SETUP_NEEDED.
-        // In precedenza MFA_SETUP_NEEDED non era bloccato → bypass del flusso MFA.
         const authStage = String(payload?.authStage ?? 'FULL').toUpperCase();
 
+        // Enforce the MFA boundary before any database lookup. A transient
+        // revalidation failure must not let a partial bearer token fall through
+        // to Passport and reach a tenant endpoint on a later successful lookup.
         if (MFA_PARTIAL_STAGES.has(authStage)) {
-          const path = String((req as any).originalUrl ?? req.url ?? '').toLowerCase();
-
+          const requestPath = String((req as any).originalUrl ?? req.url ?? '').toLowerCase();
           const isAllowed = MFA_ALLOWED_PATH_PREFIXES.some((prefix) =>
-            path.startsWith(prefix),
+            requestPath.startsWith(prefix),
           );
 
           if (!isAllowed) {
@@ -102,7 +118,19 @@ export class AuthMiddleware implements NestMiddleware {
             });
           }
         }
-        // ── Fine MFA Gate ─────────────────────────────────────────────────────
+
+        const tokenUser = {
+          id:       payload.sub,
+          email:    payload.email,
+          role:     payload.role,
+          tenantId: payload.tenantId,
+          ...payload,
+        };
+        const authUser = await this.currentAccount(tokenUser);
+        if (!authUser) return next();
+
+        (req as any).user = authUser;
+        (req as any).authUser = authUser;
 
       } catch {
         // Token invalido o scaduto: non impostiamo req.user.
@@ -111,7 +139,16 @@ export class AuthMiddleware implements NestMiddleware {
     } else if (!isSessionIndependentBootstrap) {
       const session = await this.webSessions.resolve(req);
       if (session) {
-        const authUser = session.user;
+        let authUser: Record<string, any> | null = null;
+        try {
+          authUser = await this.currentAccount(session.user);
+        } catch {
+          authUser = null;
+        }
+        if (!authUser) {
+          await this.webSessions.revoke(req);
+          return next();
+        }
         (req as any).user = authUser;
         (req as any).authUser = authUser;
         (req as any).webSession = session;

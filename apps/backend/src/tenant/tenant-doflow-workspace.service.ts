@@ -4,43 +4,22 @@ import { DataSource, EntityManager } from 'typeorm';
 import { provisionSchemaOnce } from '../common/schema-provisioning-once';
 import { safeSchema } from '../common/schema.utils';
 import { isDoflowTenant } from './tenant-context';
+import { isProtectedTenantRole } from './tenant-role-policy';
+import {
+  DOFLOW_IDENTITY_CAPABILITIES,
+  DOFLOW_IDENTITY_ROLES,
+  DOFLOW_ROLE_CAPABILITIES,
+} from './tenant-doflow-identity-policy';
+
+export { DOFLOW_ROLE_CAPABILITIES } from './tenant-doflow-identity-policy';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const ROLES = ['administrator', 'commercial', 'web_developer', 'project_manager'] as const;
-const CAPABILITIES = [
-  'canViewAllLeads', 'canViewAssignedLeads', 'canCreateLeads', 'canEditAssignedLead', 'canAssignLeads',
-  'canViewCustomers', 'canEditCustomers', 'canViewProjects', 'canViewActivities', 'canManageProjects',
-  'canManageAssignedActivities', 'canManageRoles', 'canViewCommercialValues', 'canViewGlobalCommerceValues', 'canViewAdministration',
-  'canInspectDuplicates', 'canMergeDuplicates', 'canViewSales', 'canManageOwnSales', 'canViewOrders',
-  'canManageOwnOrders', 'canManagePayments', 'canRecordPayments', 'canRecordRefunds',
-  'canManagePaymentAllocations', 'canGenerateProjectFromOrder', 'canManageCatalog', 'canViewContracts', 'canManageOwnContracts',
-  'canViewRenewals', 'canManageOwnRenewals', 'canManageCommerceRules', 'canApproveProjectWork',
-  'canPublishClientUpdate', 'canManageArchive', 'canManageCustomerBranding', 'canViewCampaigns',
-  'canManageCampaigns', 'canViewQuotes', 'canManageOwnQuotes', 'canViewInvoices', 'canManageInvoices',
-  'canViewAutomations', 'canManageAutomations',
-  'canViewAssignedProjects', 'canCreateProject', 'canEditProject', 'canManageProjectMembers',
-  'canManageProjectTasks', 'canTrackProjectTime', 'canViewTeamTime', 'canSubmitProjectQa',
-  'canSuperviseProject', 'canPublishProject', 'canDeliverProject', 'canReopenProject',
-  'canArchiveProject', 'canViewGlobalWorkload', 'canUseBuilder',
-  'canReadComments', 'canCreateComments', 'canReplyComments', 'canEditOwnComments',
-  'canModerateComments', 'canResolveThreads', 'canMentionUsers', 'canReactComments',
-  'canAttachCommentFiles', 'canReadTimeline', 'canReadHistory',
-  'canReadNotifications', 'canManageNotificationPreferences', 'canReadAdministrativeAudit',
-  'canRunAutomations', 'canRetryAutomations', 'canViewAutomationErrors',
-  'canViewOwnPoints', 'canViewGlobalPoints', 'canManagePointPolicies',
-  'canViewRankings', 'canManageRankings', 'canManageGoals',
-] as const;
+const ROLES = DOFLOW_IDENTITY_ROLES;
+const CAPABILITIES = DOFLOW_IDENTITY_CAPABILITIES;
 const GOAL_METRICS = ['revenue', 'won_leads', 'new_clients', 'completed_projects', 'completed_activities', 'on_time_deliveries', 'resolved_bugs', 'renewals'];
 const GOAL_TARGETS = ['company', 'role', 'user'];
 const GOAL_UNITS = ['number', 'currency', 'percentage'];
 const GOAL_STATUSES = ['active', 'completed', 'paused', 'archived'];
-
-export const DOFLOW_ROLE_CAPABILITIES: Record<string, readonly string[]> = {
-  administrator: CAPABILITIES,
-  commercial: ['canViewAssignedLeads', 'canCreateLeads', 'canEditAssignedLead', 'canViewCustomers', 'canEditCustomers', 'canViewProjects', 'canViewActivities', 'canViewCommercialValues', 'canInspectDuplicates', 'canViewSales', 'canManageOwnSales', 'canViewOrders', 'canManageOwnOrders', 'canManagePayments', 'canRecordPayments', 'canRecordRefunds', 'canGenerateProjectFromOrder', 'canViewContracts', 'canManageOwnContracts', 'canViewRenewals', 'canManageOwnRenewals', 'canViewCampaigns', 'canViewQuotes', 'canManageOwnQuotes', 'canViewOwnPoints', 'canViewRankings', 'canReadComments', 'canCreateComments', 'canReplyComments', 'canEditOwnComments', 'canResolveThreads', 'canMentionUsers', 'canReactComments', 'canAttachCommentFiles', 'canReadTimeline', 'canReadHistory', 'canReadNotifications', 'canManageNotificationPreferences'],
-  web_developer: ['canViewCustomers', 'canViewProjects', 'canViewAssignedProjects', 'canViewActivities', 'canManageAssignedActivities', 'canManageProjectTasks', 'canTrackProjectTime', 'canSubmitProjectQa', 'canUseBuilder', 'canViewOrders', 'canViewContracts', 'canViewRenewals', 'canViewAutomations', 'canViewOwnPoints', 'canViewRankings', 'canReadComments', 'canCreateComments', 'canReplyComments', 'canEditOwnComments', 'canResolveThreads', 'canMentionUsers', 'canReactComments', 'canAttachCommentFiles', 'canReadTimeline', 'canReadHistory', 'canReadNotifications', 'canManageNotificationPreferences'],
-  project_manager: ['canViewCustomers', 'canViewProjects', 'canViewAssignedProjects', 'canCreateProject', 'canEditProject', 'canManageProjects', 'canManageProjectMembers', 'canManageProjectTasks', 'canTrackProjectTime', 'canViewTeamTime', 'canSubmitProjectQa', 'canSuperviseProject', 'canManageAssignedActivities', 'canViewOrders', 'canViewContracts', 'canViewRenewals', 'canApproveProjectWork', 'canPublishClientUpdate', 'canPublishProject', 'canDeliverProject', 'canReopenProject', 'canArchiveProject', 'canViewGlobalWorkload', 'canUseBuilder', 'canViewAutomations', 'canRunAutomations', 'canViewAutomationErrors', 'canViewOwnPoints', 'canViewGlobalPoints', 'canViewRankings', 'canReadComments', 'canCreateComments', 'canReplyComments', 'canEditOwnComments', 'canModerateComments', 'canResolveThreads', 'canMentionUsers', 'canReactComments', 'canAttachCommentFiles', 'canReadTimeline', 'canReadHistory', 'canReadNotifications', 'canManageNotificationPreferences'],
-};
 
 async function provisionDoflowWorkspaceTables(
   dataSource: DataSource,
@@ -187,10 +166,14 @@ export class TenantDoflowWorkspaceService {
 
   private async targetUserExists(manager: EntityManager, schema: string, userId: string) {
     const rows = await manager.query(
-      `SELECT id FROM "${schema}".users WHERE id = $1 AND is_active = true LIMIT 1`,
+      `SELECT id, role FROM "${schema}".users WHERE id = $1 AND is_active = true LIMIT 1`,
       [userId],
     );
     if (!rows[0]) throw new NotFoundException('Utente Doflow non trovato');
+    if (isProtectedTenantRole(rows[0].role)) {
+      throw new ForbiddenException('Il proprietario del tenant non puo ricevere override ordinari.');
+    }
+    return rows[0];
   }
 
   private async repointIfPresent(
@@ -246,6 +229,7 @@ export class TenantDoflowWorkspaceService {
       return {
         userId: accountId,
         roles: assignedRoles,
+        explicitCapabilities: assignedCapabilities,
         capabilities: Array.from(new Set([
           ...assignedRoles.flatMap((role: string) => DOFLOW_ROLE_CAPABILITIES[role] || []),
           ...assignedCapabilities,
@@ -254,6 +238,7 @@ export class TenantDoflowWorkspaceService {
     });
     return {
       preferences: preferenceRows[0]?.preferences || {},
+      explicitCapabilities: explicit,
       capabilities: Array.from(new Set([...inherited, ...explicit])),
       assignments,
     };
@@ -343,7 +328,6 @@ export class TenantDoflowWorkspaceService {
       await this.targetUserExists(manager, actor.schema, userId);
       await manager.query(`DELETE FROM "${actor.schema}".doflow_user_roles WHERE user_id = $1`, [userId]);
       for (const role of roles) await manager.query(`INSERT INTO "${actor.schema}".doflow_user_roles (user_id, role) VALUES ($1, $2)`, [userId, role]);
-      await manager.query(`UPDATE "${actor.schema}".team_members SET operational_role = $1, updated_at = now() WHERE user_id = $2 AND deleted_at IS NULL`, [roles.find((role) => role !== 'administrator') || roles[0] || null, userId]);
       await manager.query(`INSERT INTO "${actor.schema}".audit_log (actor_email, actor_role, action, target, metadata, created_at) VALUES ($1, $2, 'doflow_identity_roles_updated', $3, $4::jsonb, now())`, [actor.email, actor.role, userId, JSON.stringify({ roles })]);
     });
     return { userId, roles };

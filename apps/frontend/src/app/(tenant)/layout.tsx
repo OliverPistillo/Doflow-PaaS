@@ -19,7 +19,7 @@ type AuthMe = {
 
 const ShellLoader = () => (
   <div
-    data-doflow-prepaint="daniele-default"
+    data-doflow-prepaint="reference-e6c3"
     className="grid min-h-screen place-items-center bg-[#f8f9ff] text-sm text-[#667085]"
   >
     Apertura spazio di lavoro…

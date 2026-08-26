@@ -15,7 +15,7 @@ export function ThemeToggle() {
       variant="ghost"
       size="icon"
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      aria-label="Cambia tema"
+      aria-label={isDark ? "Attiva tema chiaro" : "Attiva tema scuro"}
       className="mr-4 shrink-0"
     >
       <Sun className="dark:hidden" />

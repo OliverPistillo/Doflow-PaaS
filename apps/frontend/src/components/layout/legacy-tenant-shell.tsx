@@ -34,7 +34,11 @@ function LegacyTenantLayout({ children }: { children: React.ReactNode }) {
   const { sidebarVariant } = useAppSettings()
   const { canCreate } = useTenantAccess()
   return (
-    <SidebarProvider data-sidebar-kind="tenant-legacy">
+    <SidebarProvider
+      mobileWidth="280px"
+      data-sidebar-kind="tenant-legacy"
+      style={{ "--sidebar-width": "280px", "--sidebar-width-icon": "72px" } as React.CSSProperties}
+    >
       <TenantSidebar variant={sidebarVariant} collapsible="icon" />
       <SidebarInset>
         <header className="doflow-topbar sticky top-0 z-20 flex h-[72px] shrink-0 items-center gap-2 border-b border-border/60 px-3 sm:px-6">

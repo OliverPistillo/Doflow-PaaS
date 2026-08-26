@@ -14,6 +14,13 @@ import { authenticator } from '@otplib/preset-default';
 import { toDataURL } from 'qrcode';
 import { Role } from './roles';
 import { safeSchema } from './common/schema.utils';
+import { INVITE_TOKEN_DIGEST_PREFIX, storedInviteToken } from './auth/invite-token';
+import { isAssignableTenantRole, normalizedTenantRole } from './tenant/tenant-role-policy';
+import { isDoflowTenant } from './tenant/tenant-context';
+import {
+  PENDING_DOFLOW_IDENTITY_METADATA_KEY,
+  inspectPendingDoflowIdentityMetadata,
+} from './tenant/tenant-doflow-identity-policy';
 
 type JwtPayload = {
   sub: any;
@@ -136,7 +143,7 @@ export class AuthService {
     const rows = await conn.query(
       `
       select id, email, password_hash, created_at, role,
-             mfa_enabled, mfa_secret
+             mfa_enabled, mfa_secret, is_active
       from "${t}"."users"
       where lower(email) = lower($1)
       limit 1
@@ -145,7 +152,7 @@ export class AuthService {
     );
 
     const user = rows[0];
-    if (!user || !user.password_hash) {
+    if (!user || user.is_active === false || !user.password_hash) {
         this.logger.warn('Login fallito: credenziali non valide');
         throw new UnauthorizedException('Credenziali non valide');
     }
@@ -198,7 +205,7 @@ export class AuthService {
     }
 
     const directoryLookup = await conn.query(
-      `select tenant_id, role from public.users where lower(email) = lower($1) limit 1`,
+      `select tenant_id, role from public.users where lower(email) = lower($1) and is_active = true limit 1`,
       [email]
     );
 
@@ -262,10 +269,14 @@ export class AuthService {
     const conn = this.dataSource;
     const t = safeSchema(userPayload.tenantId);
 
-    await conn.query(
-      `UPDATE "${t}"."users" SET mfa_secret = $1, mfa_enabled = true WHERE id = $2`,
+    const updated = await conn.query(
+      `UPDATE "${t}"."users"
+       SET mfa_secret = $1, mfa_enabled = true, updated_at = now()
+       WHERE id = $2 AND is_active = true
+       RETURNING id`,
       [secret, userPayload.sub],
     );
+    if (!updated[0]) throw new UnauthorizedException('Account non attivo');
 
     const token = this.signToken(
       userPayload.sub,
@@ -292,12 +303,12 @@ export class AuthService {
     const t = safeSchema(userPayload.tenantId);
 
     const rows = await conn.query(
-      `SELECT mfa_secret, email, role, mfa_enabled FROM "${t}"."users" WHERE id = $1`,
+      `SELECT mfa_secret, email, role, mfa_enabled, is_active FROM "${t}"."users" WHERE id = $1`,
       [userId]
     );
     const user = rows[0];
 
-    if (!user || !user.mfa_enabled || !user.mfa_secret) {
+    if (!user || user.is_active === false || !user.mfa_enabled || !user.mfa_secret) {
       throw new UnauthorizedException('MFA non configurata per questo utente');
     }
 
@@ -372,51 +383,182 @@ export class AuthService {
     }
 
     await this.assertTenantActive(conn, tenantId);
-    const invites = await conn.query(
-      `select id, email, role, accepted_at, expires_at from "${tenantId}"."invites" where token = $1 limit 1`,
-      [token],
-    );
-    const invite = invites[0];
-    if (!invite) throw new BadRequestException('Invito non valido o scaduto');
-    if (invite.accepted_at) throw new ConflictException('Invito già utilizzato');
-    if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
-      throw new BadRequestException('Invito non valido o scaduto');
-    }
-    const existingUsers = await conn.query(`select id from "${tenantId}"."users" where lower(email) = lower($1) limit 1`, [invite.email]);
-    if (existingUsers.length > 0) throw new ConflictException('Esiste già un account con questa email');
+    const encodedToken = storedInviteToken(token);
+    const lookupParams = [encodedToken, token, `${INVITE_TOKEN_DIGEST_PREFIX}%`];
+    const loadInvite = async (executor: { query: (sql: string, params?: unknown[]) => Promise<any> }, lock = false) => {
+      const rows = await executor.query(
+        `select id, email, role, accepted_at, expires_at,
+                (token not like $3) as legacy_raw
+         from "${tenantId}"."invites"
+         where token = $1
+            or (token not like $3 and token = $2)
+         limit 1${lock ? ' FOR UPDATE' : ''}`,
+        lookupParams,
+      );
+      const candidate = rows[0];
+      if (!candidate) throw new BadRequestException('Invito non valido o scaduto');
+      if (candidate.accepted_at) throw new ConflictException('Invito già utilizzato');
+      if (candidate.expires_at && new Date(candidate.expires_at) < new Date()) {
+        throw new BadRequestException('Invito non valido o scaduto');
+      }
+      candidate.role = normalizedTenantRole(candidate.role);
+      if (!isAssignableTenantRole(candidate.role)) {
+        throw new BadRequestException('Ruolo invito non consentito');
+      }
+      return candidate;
+    };
+
+    await loadInvite(conn);
     const passwordHash = await bcrypt.hash(password, 10);
-    const users = await conn.query(
-      `insert into "${tenantId}"."users" (email, password_hash, role) values ($1, $2, $3) returning id, email, created_at, role`,
-      [invite.email, passwordHash, invite.role],
-    );
-    const user = users[0];
-    await conn.query(
-      `UPDATE "${tenantId}"."team_members"
-       SET user_id = $1,
-           tenant_role = $2,
-           status = 'active',
-           updated_at = now()
-       WHERE lower(email) = lower($3)
-         AND deleted_at IS NULL`,
-      [user.id, invite.role, invite.email],
-    );
-    await conn.query(`update "${tenantId}"."invites" set accepted_at = now() where id = $1`, [invite.id]);
+    const createdUser = await conn.transaction(async (manager): Promise<Record<string, any>> => {
+      const invite = await loadInvite(manager, true);
+      const existingUsers = await manager.query(
+        `select id from "${tenantId}"."users" where lower(email) = lower($1) limit 1 FOR UPDATE`,
+        [invite.email],
+      );
+      if (existingUsers.length > 0) throw new ConflictException('Esiste già un account con questa email');
 
-    await this.dataSource.query(
-      `insert into public.users
-         (id, email, password_hash, role, tenant_id, auth_provider, is_active, created_at, updated_at)
-       values ($1, $2, $3, $4, $5, 'password', true, now(), now())
-       on conflict (email) do update
-         set password_hash = excluded.password_hash,
-             role = excluded.role,
-             tenant_id = excluded.tenant_id,
-             auth_provider = 'password',
-             is_active = true,
-             updated_at = now()`,
-      [user.id, user.email, passwordHash, user.role, inviteTenant.tenantPublicId || tenantId],
-    );
+      let pendingMembers = isDoflowTenant(tenantId)
+        ? await manager.query(
+            `select id, metadata
+             from "${tenantId}"."team_members"
+             where lower(email) = lower($1)
+               and user_id is null
+               and deleted_at is null
+             limit 1 FOR UPDATE`,
+            [invite.email],
+          )
+        : [];
+      if (isDoflowTenant(tenantId) && !pendingMembers[0] && invite.legacy_raw === true) {
+        // Gli inviti Doflow emessi dal controller legacy prima del lifecycle Team
+        // non avevano necessariamente un team_member. La compatibilita e limitata
+        // ai soli token raw storici gia validati e a ruoli allowlisted; i token
+        // versionati nuovi restano fail-closed quando il pending e assente.
+        const priorTeamMembers = await manager.query(
+          `select id
+             from "${tenantId}"."team_members"
+            where lower(email) = lower($1)
+            limit 1 FOR UPDATE`,
+          [invite.email],
+        );
+        if (priorTeamMembers[0]) {
+          throw new BadRequestException('Invito legacy associato a un profilo Team non attivo');
+        }
+        pendingMembers = await manager.query(
+          `insert into "${tenantId}"."team_members" (
+             email, display_name, tenant_role, operational_role,
+             employment_type, status, metadata, created_at, updated_at
+           ) values (
+             $1, $2, $3, 'generic', 'employee', 'invited', '{}'::jsonb, now(), now()
+           )
+           returning id, metadata`,
+          [invite.email, String(invite.email).split('@')[0] || invite.email, invite.role],
+        );
+      }
+      if (isDoflowTenant(tenantId) && !pendingMembers[0]) {
+        throw new BadRequestException('Invito Doflow non associato a un profilo Team pending');
+      }
+      const pendingIdentity = inspectPendingDoflowIdentityMetadata(pendingMembers[0]?.metadata);
+      if (
+        pendingIdentity.provided
+        && (!pendingIdentity.validShape
+          || pendingIdentity.invalidRoles.length > 0
+          || pendingIdentity.invalidCapabilities.length > 0)
+      ) {
+        throw new BadRequestException('Configurazione identity Doflow dell’invito non valida');
+      }
 
-    const jwtToken = this.signToken(user.id, user.email, tenantId, realSlug, user.role as Role);
-    return { user: { ...user, tenantId, tenantSlug: realSlug }, token: jwtToken };
+      const directoryUsers = await manager.query(
+        `select id, tenant_id from public.users where lower(email) = lower($1) limit 1 FOR UPDATE`,
+        [invite.email],
+      );
+      if (directoryUsers[0]) {
+        throw new ConflictException('Esiste già un’identità globale con questa email');
+      }
+
+      const claimed = await manager.query(
+        `update "${tenantId}"."invites"
+         set accepted_at = now()
+         where id = $1 and accepted_at is null
+           and (expires_at is null or expires_at >= now())
+         returning id`,
+        [invite.id],
+      );
+      if (!claimed[0]) throw new ConflictException('Invito già utilizzato');
+
+      const users = await manager.query(
+        `insert into "${tenantId}"."users" (email, password_hash, role, is_active)
+         values ($1, $2, $3, true)
+         returning id, email, created_at, role`,
+        [invite.email, passwordHash, invite.role],
+      );
+      const user = users[0] || null;
+      if (!user) throw new BadRequestException('Creazione account non riuscita');
+      if (pendingIdentity.provided) {
+        for (const role of pendingIdentity.value.roles) {
+          await manager.query(
+            `insert into "${tenantId}".doflow_user_roles (user_id, role)
+             values ($1, $2)
+             on conflict (user_id, role) do nothing`,
+            [user.id, role],
+          );
+        }
+        for (const capability of pendingIdentity.value.capabilities) {
+          await manager.query(
+            `insert into "${tenantId}".doflow_user_capabilities (user_id, capability)
+             values ($1, $2)
+             on conflict (user_id, capability) do nothing`,
+            [user.id, capability],
+          );
+        }
+      }
+      await manager.query(
+        `UPDATE "${tenantId}"."team_members"
+         SET user_id = $1,
+             tenant_role = $2,
+             status = 'active',
+             metadata = COALESCE(metadata, '{}'::jsonb) - '${PENDING_DOFLOW_IDENTITY_METADATA_KEY}',
+             updated_at = now()
+         WHERE lower(email) = lower($3)
+           AND deleted_at IS NULL`,
+        [user.id, invite.role, invite.email],
+      );
+      if (pendingIdentity.provided) {
+        await manager.query(
+          `insert into "${tenantId}".audit_log
+             (actor_email, actor_role, action, target, metadata, created_at)
+           values ($1, $2, 'doflow_invite_identity_applied', $3, $4::jsonb, now())`,
+          [
+            user.email,
+            user.role,
+            user.id,
+            JSON.stringify({
+              role_count: pendingIdentity.value.roles.length,
+              explicit_capability_count: pendingIdentity.value.capabilities.length,
+            }),
+          ],
+        );
+      }
+      await manager.query(
+        `insert into public.users
+           (id, email, password_hash, role, tenant_id, auth_provider, is_active, created_at, updated_at)
+         values ($1, $2, $3, $4, $5, 'password', true, now(), now())`,
+        [user.id, user.email, passwordHash, user.role, inviteTenant.tenantPublicId || tenantId],
+      );
+      return user;
+    });
+
+    const jwtToken = this.signToken(createdUser.id, createdUser.email, tenantId, realSlug, createdUser.role as Role);
+    return {
+      user: {
+        id: createdUser.id,
+        email: createdUser.email,
+        created_at: createdUser.created_at,
+        role: createdUser.role,
+        tenantId,
+        tenantSlug: realSlug,
+      },
+      token: jwtToken,
+    };
   }
 }

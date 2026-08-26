@@ -1,11 +1,13 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import * as crypto from 'crypto';
 import { safeSchema } from '../common/schema.utils';
 import { buildFrontendPath } from '../common/public-url.utils';
 import { hasRoleAtLeast } from '../roles';
 import { MailService } from '../mail/mail.service';
+import { WebSessionService } from '../auth/web-session.service';
+import { storedInviteToken } from '../auth/invite-token';
 import {
   ensureTenantTeamTables,
   seedTenantTeamSkills,
@@ -14,12 +16,22 @@ import {
 import { TenantNotificationsService } from './tenant-notifications.service';
 import { isDoflowTenant } from './tenant-context';
 import { PROJECT_ACTIVE_STAGE_ALIASES } from './project-stage-model';
+import {
+  PENDING_DOFLOW_IDENTITY_METADATA_KEY,
+  inspectPendingDoflowIdentity,
+} from './tenant-doflow-identity-policy';
+import { ensureDoflowWorkspaceTables } from './tenant-doflow-workspace.service';
+import { NEVER_OVERRIDE_FOR_NON_ADMIN } from './tenant-effective-permissions.service';
+import {
+  ASSIGNABLE_TENANT_ROLES,
+  isAssignableTenantRole,
+  isProtectedTenantRole,
+  normalizedTenantRole,
+} from './tenant-role-policy';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const ADMIN_ROLES = new Set(['owner', 'admin', 'superadmin', 'super_admin']);
-const TEAM_ROLES = ['owner', 'admin', 'manager', 'editor', 'viewer', 'user', 'superadmin', 'super_admin'];
-const INVITABLE_TENANT_ROLES = ['admin', 'manager', 'editor', 'user', 'viewer'];
 const OPERATIONAL_ROLES = [
   'ceo_label', 'project_manager', 'sales', 'designer', 'developer', 'seo_specialist',
   'copywriter', 'administration', 'external_collaborator', 'generic',
@@ -57,6 +69,23 @@ const MODULE_KEYS = [
   'credentials.manage_permissions',
   'credentials.audit',
 ];
+const MODULE_PERMISSION_FIELDS = [
+  'can_view',
+  'can_create',
+  'can_update',
+  'can_delete',
+  'can_manage',
+] as const;
+const ALWAYS_VISIBLE_MODULES = new Set(['dashboard', 'notifications']);
+
+type NormalizedModulePermission = {
+  moduleKey: string;
+  can_view: boolean;
+  can_create: boolean;
+  can_update: boolean;
+  can_delete: boolean;
+  can_manage: boolean;
+};
 
 type AuthUser = { id: string; email?: string; role: string };
 type ListResult<T = Record<string, any>> = { items: T[]; total?: number; limit?: number; offset?: number };
@@ -69,6 +98,7 @@ export class TenantTeamService {
     private readonly dataSource: DataSource,
     private readonly notifications: TenantNotificationsService,
     private readonly mailService: MailService,
+    private readonly webSessions: WebSessionService,
     @Inject(REQUEST) private readonly request: any,
   ) {}
 
@@ -200,11 +230,11 @@ export class TenantTeamService {
   }
 
   private normalizeTenantRole(value: unknown, actor: AuthUser): string {
-    const role = String(value || 'user').trim().toLowerCase();
-    if (['owner', 'superadmin', 'super_admin', 'ceo'].includes(role)) {
+    const role = normalizedTenantRole(value || 'user');
+    if (isProtectedTenantRole(role)) {
       throw new BadRequestException('Ruolo tenant non consentito per invito team');
     }
-    if (!INVITABLE_TENANT_ROLES.includes(role)) throw new BadRequestException('tenant_role non valido');
+    if (!isAssignableTenantRole(role)) throw new BadRequestException('tenant_role non valido');
     if (role === 'admin' && !['owner', 'superadmin', 'super_admin'].includes(actor.role)) {
       throw new ForbiddenException('Solo owner/superadmin possono invitare admin.');
     }
@@ -227,6 +257,112 @@ export class TenantTeamService {
       throw new BadRequestException('metadata JSON non valido');
     }
     throw new BadRequestException('metadata deve essere un oggetto JSON');
+  }
+
+  private parseCallerMetadata(value: unknown): Record<string, unknown> | null {
+    const metadata = this.parseMetadata(value);
+    if (metadata && Object.prototype.hasOwnProperty.call(metadata, PENDING_DOFLOW_IDENTITY_METADATA_KEY)) {
+      throw new BadRequestException('La configurazione identity pending deve usare il campo doflow_identity.');
+    }
+    return metadata;
+  }
+
+  private normalizeModulePermissionEntries(
+    value: unknown,
+    tenantRoleValue: unknown,
+  ): NormalizedModulePermission[] {
+    if (value === undefined || value === null) return [];
+    if (!Array.isArray(value)) throw new BadRequestException('module_permissions deve essere un array');
+    const tenantRole = normalizedTenantRole(tenantRoleValue || 'user');
+    if (ADMIN_ROLES.has(tenantRole) && value.length > 0) {
+      throw new BadRequestException('I ruoli amministrativi ereditano i permessi modulo e non accettano override.');
+    }
+
+    const seen = new Set<string>();
+    return value.map((rawEntry) => {
+      if (!rawEntry || typeof rawEntry !== 'object' || Array.isArray(rawEntry)) {
+        throw new BadRequestException('Override modulo non valido');
+      }
+      const entry = rawEntry as Record<string, unknown>;
+      const moduleKey = String(entry.module_key || entry.moduleKey || '').trim();
+      if (!MODULE_KEYS.includes(moduleKey)) throw new BadRequestException('module_key non valido');
+      if (seen.has(moduleKey)) throw new BadRequestException('module_key duplicato');
+      seen.add(moduleKey);
+
+      const values = Object.fromEntries(
+        MODULE_PERMISSION_FIELDS.map((field) => [field, entry[field] === true]),
+      ) as Record<(typeof MODULE_PERMISSION_FIELDS)[number], boolean>;
+      if (NEVER_OVERRIDE_FOR_NON_ADMIN.has(moduleKey as any) && MODULE_PERMISSION_FIELDS.some((field) => values[field])) {
+        throw new BadRequestException(`Il modulo ${moduleKey} non accetta grant positivi per ruoli non amministrativi.`);
+      }
+      if (tenantRole === 'viewer' && MODULE_PERMISSION_FIELDS.slice(1).some((field) => values[field])) {
+        throw new BadRequestException('Il ruolo viewer può ricevere soltanto permessi di lettura.');
+      }
+      if (ALWAYS_VISIBLE_MODULES.has(moduleKey) && values.can_view === false) {
+        throw new BadRequestException(`Il modulo ${moduleKey} deve restare visibile.`);
+      }
+      if (!values.can_view) {
+        values.can_create = false;
+        values.can_update = false;
+        values.can_delete = false;
+        values.can_manage = false;
+      }
+      return { moduleKey, ...values };
+    });
+  }
+
+  private normalizeSkillIds(value: unknown): string[] {
+    if (value === undefined || value === null) return [];
+    if (!Array.isArray(value)) throw new BadRequestException('skill_ids deve essere un array');
+    if (value.length > 100) throw new BadRequestException('Troppe competenze selezionate');
+    return Array.from(new Set(value.map((item) => this.requireUuid(String(item), 'skill_id'))));
+  }
+
+  private async insertMemberConfiguration(
+    manager: EntityManager,
+    schema: string,
+    memberId: string,
+    modulePermissions: NormalizedModulePermission[],
+    skillIds: string[],
+    actor: AuthUser,
+  ) {
+    const actorId = this.userIdOrNull(actor.id);
+    for (const entry of modulePermissions) {
+      await manager.query(
+        `INSERT INTO "${schema}".team_module_permissions (
+           team_member_id, module_key, can_view, can_create, can_update, can_delete, can_manage, created_by, created_at, updated_at
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now(),now())`,
+        [
+          memberId,
+          entry.moduleKey,
+          entry.can_view,
+          entry.can_create,
+          entry.can_update,
+          entry.can_delete,
+          entry.can_manage,
+          actorId,
+        ],
+      );
+    }
+
+    if (skillIds.length > 0) {
+      const skillRows = await manager.query(
+        `SELECT id FROM "${schema}".team_skills
+         WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`,
+        [skillIds],
+      );
+      const existingSkillIds = new Set(skillRows.map((row: Record<string, unknown>) => String(row.id)));
+      if (skillIds.some((skillId) => !existingSkillIds.has(skillId))) {
+        throw new BadRequestException('Una o più competenze non sono disponibili nel tenant.');
+      }
+      for (const skillId of skillIds) {
+        await manager.query(
+          `INSERT INTO "${schema}".team_member_skills (team_member_id, skill_id, created_at)
+           VALUES ($1, $2, now())`,
+          [memberId, skillId],
+        );
+      }
+    }
   }
 
   private async ensureSchema(schema: string) {
@@ -292,6 +428,48 @@ export class TenantTeamService {
     await this.activityWith(this.dataSource, schema, action, user, teamMemberId, entityType, entityId, metadata);
   }
 
+  private async administrativeAuditWith(
+    executor: { query: (sql: string, params?: unknown[]) => Promise<any> },
+    schema: string,
+    action: string,
+    user: AuthUser,
+    target: string,
+    metadata: Record<string, unknown>,
+  ) {
+    await executor.query(
+      `INSERT INTO "${schema}".audit_log
+         (actor_email, actor_role, action, target, metadata, created_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, now())`,
+      [user.email || null, user.role, action, target, JSON.stringify(metadata)],
+    );
+  }
+
+  private async tableExists(manager: EntityManager, schema: string, table: string): Promise<boolean> {
+    const rows = await manager.query(`SELECT to_regclass($1) AS relation`, [`${schema}.${table}`]);
+    return Boolean(rows[0]?.relation);
+  }
+
+  private assertMutableTarget(role: unknown) {
+    if (isProtectedTenantRole(role)) {
+      throw new ForbiddenException('Il proprietario del tenant non puo essere modificato da questa operazione.');
+    }
+  }
+
+  private normalizeLifecycleStatus(value: unknown): string {
+    const status = String(value || '').trim().toLowerCase();
+    if (!MEMBER_STATUSES.includes(status)) throw new BadRequestException('status non valido');
+    if (!['active', 'inactive', 'suspended'].includes(status)) {
+      throw new BadRequestException('Usa il flusso invito o rimozione per questo stato.');
+    }
+    return status;
+  }
+
+  private async revokeMemberSessions(schema: string, userId: string | null | undefined) {
+    if (!userId || !UUID_RE.test(userId)) return;
+    const tenantSlug = await this.tenantSlugFor(schema);
+    await this.webSessions.revokeUserSessions(tenantSlug, userId);
+  }
+
   private generateInviteToken(): string {
     return crypto.randomBytes(32).toString('hex');
   }
@@ -333,7 +511,29 @@ export class TenantTeamService {
     return Math.max(1000, Math.min(60000, Math.trunc(raw)));
   }
 
-  private async createInviteRecord(executor: { query: (sql: string, params?: unknown[]) => Promise<any> }, schema: string, email: string, role: string, token: string) {
+  private async lockInviteEmail(
+    executor: { query: (sql: string, params?: unknown[]) => Promise<any> },
+    schema: string,
+    email: string,
+  ) {
+    await executor.query(
+      'SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+      [`${schema}:${email.trim().toLowerCase()}`],
+    );
+  }
+
+  private async createInviteRecord(
+    executor: { query: (sql: string, params?: unknown[]) => Promise<any> },
+    schema: string,
+    email: string,
+    role: string,
+    token: string,
+    acquireLock = true,
+  ) {
+    // Serializza create/resend sulla coppia tenant+email. Senza un lock stabile,
+    // due transazioni concorrenti potrebbero entrambe invalidare il vecchio
+    // invito e poi inserire due nuovi token ancora validi.
+    if (acquireLock) await this.lockInviteEmail(executor, schema, email);
     await executor.query(
       `UPDATE "${schema}".invites
        SET accepted_at = now()
@@ -346,7 +546,7 @@ export class TenantTeamService {
       `INSERT INTO "${schema}".invites (email, role, token, expires_at, created_at)
        VALUES ($1, $2, $3, $4::timestamptz, now())
        RETURNING expires_at`,
-      [email, role, token, expiresAt],
+       [email, role, storedInviteToken(token), expiresAt],
     );
     return rows[0]?.expires_at ? new Date(rows[0].expires_at).toISOString() : expiresAt;
   }
@@ -446,8 +646,33 @@ export class TenantTeamService {
     const displayName = String(body.display_name || body.displayName || email).trim();
     if (!displayName) throw new BadRequestException('display_name obbligatorio');
     const sendInvite = body.send_invite !== false;
+    const linkedUserId = !sendInvite && body.user_id
+      ? this.requireUuid(String(body.user_id), 'user_id')
+      : null;
     const tenantRole = this.normalizeTenantRole(body.tenant_role, user);
     const status = sendInvite ? 'invited' : this.pick(body.status, MEMBER_STATUSES, 'active');
+    const identityInspection = inspectPendingDoflowIdentity(body.doflow_identity);
+    if (identityInspection.provided && !isDoflowTenant(schema)) {
+      throw new BadRequestException('La configurazione identity pre-invito è disponibile soltanto per Doflow.');
+    }
+    if (
+      identityInspection.provided
+      && (!identityInspection.validShape
+        || identityInspection.invalidRoles.length > 0
+        || identityInspection.invalidCapabilities.length > 0)
+    ) {
+      throw new BadRequestException('Ruoli o capability Doflow non validi.');
+    }
+    if (identityInspection.provided && !sendInvite && body.user_id) {
+      throw new BadRequestException('Usa le API identity per configurare un account già collegato.');
+    }
+    const metadata = { ...(this.parseCallerMetadata(body.metadata) || {}) };
+    if (identityInspection.provided) {
+      metadata[PENDING_DOFLOW_IDENTITY_METADATA_KEY] = identityInspection.value;
+      await ensureDoflowWorkspaceTables(this.dataSource, schema);
+    }
+    const modulePermissions = this.normalizeModulePermissionEntries(body.module_permissions, tenantRole);
+    const skillIds = this.normalizeSkillIds(body.skill_ids);
     const startDate = this.normalizeNullableDate(body.start_date, 'start_date') ?? null;
     const endDate = this.normalizeNullableDate(body.end_date, 'end_date') ?? null;
     this.assertDateRange(startDate, endDate);
@@ -476,6 +701,20 @@ export class TenantTeamService {
           [email],
         );
         if (existingUser[0]) throw new BadRequestException('Esiste gia un utente tenant con questa email.');
+      } else if (linkedUserId) {
+        const linkedUsers = await queryRunner.manager.query(
+          `SELECT id, email, role, is_active
+           FROM "${schema}".users
+           WHERE id = $1
+           LIMIT 1
+           FOR UPDATE`,
+          [linkedUserId],
+        );
+        const linkedUser = linkedUsers[0];
+        if (!linkedUser) throw new NotFoundException('Account tenant collegato non trovato');
+        if (String(linkedUser.email || '').trim().toLowerCase() !== email) {
+          throw new BadRequestException('L\'email del profilo Team non coincide con l\'account tenant collegato.');
+        }
       }
 
       const rows = await queryRunner.manager.query(
@@ -488,7 +727,7 @@ export class TenantTeamService {
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::text[],$14,$15,$16,$17,$18,$19,$20,$21,$22,$23::jsonb,$24,now(),now())
         RETURNING *`,
         [
-          sendInvite ? null : (body.user_id ? this.requireUuid(String(body.user_id), 'user_id') : null),
+          linkedUserId,
           email,
           displayName,
           this.textOrNull(body.first_name),
@@ -510,11 +749,20 @@ export class TenantTeamService {
           endDate,
           this.textOrNull(body.notes),
           this.textOrNull(body.private_notes),
-          JSON.stringify(this.parseMetadata(body.metadata) || {}),
+          JSON.stringify(metadata),
           this.userIdOrNull(user.id),
         ],
       );
       member = rows[0];
+
+      await this.insertMemberConfiguration(
+        queryRunner.manager,
+        schema,
+        String(member!.id),
+        modulePermissions,
+        skillIds,
+        user,
+      );
 
       if (sendInvite) {
         const token = this.generateInviteToken();
@@ -525,7 +773,27 @@ export class TenantTeamService {
         invite = { invite_link: inviteLink, expires_at: expiresAt };
       }
 
-      await this.activityWith(queryRunner.manager, schema, 'profile_created', user, member!.id, 'team_member', member!.id, { invite_created: sendInvite });
+      await this.activityWith(queryRunner.manager, schema, 'profile_created', user, member!.id, 'team_member', member!.id, {
+        invite_created: sendInvite,
+        identity_staged: identityInspection.provided,
+        module_override_count: modulePermissions.length,
+        skill_count: skillIds.length,
+      });
+      if (identityInspection.provided || modulePermissions.length > 0 || skillIds.length > 0) {
+        await this.administrativeAuditWith(
+          queryRunner.manager,
+          schema,
+          'team_member_invite_configuration_staged',
+          user,
+          String(member!.id),
+          {
+            identity_role_count: identityInspection.value.roles.length,
+            explicit_capability_count: identityInspection.value.capabilities.length,
+            module_override_count: modulePermissions.length,
+            skill_count: skillIds.length,
+          },
+        );
+      }
       await queryRunner.commitTransaction();
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -559,23 +827,42 @@ export class TenantTeamService {
     const member = rows[0];
     if (!member) throw new NotFoundException('Membro team non trovato');
     if (member.user_id) throw new BadRequestException('Il membro ha gia un account attivo.');
-    const email = this.validateEmail(member.email);
-    const tenantRole = this.normalizeTenantRole(member.tenant_role || 'user', user);
-    const existingUser = await this.dataSource.query(
-      `SELECT id FROM "${schema}".users WHERE lower(email) = lower($1) LIMIT 1`,
-      [email],
-    );
-    if (existingUser[0]) throw new BadRequestException('Esiste gia un utente tenant con questa email.');
+    const initialEmail = this.validateEmail(member.email);
 
     const queryRunner = this.dataSource.createQueryRunner();
     let inviteLink = '';
     let expiresAt = '';
+    let email = initialEmail;
     const tenantSlug = await this.tenantSlugFor(schema);
     await queryRunner.connect();
     await queryRunner.startTransaction();
     try {
+      // Tutte le mutation che possono rendere un invito obsoleto condividono
+      // questo lock e lo acquisiscono prima del row lock del membro.
+      await this.lockInviteEmail(queryRunner.manager, schema, initialEmail);
+      const lockedRows = await queryRunner.manager.query(
+        `SELECT id, email, tenant_role, user_id, status
+         FROM "${schema}".team_members
+         WHERE id = $1 AND deleted_at IS NULL
+         FOR UPDATE`,
+        [memberId],
+      );
+      const lockedMember = lockedRows[0];
+      if (!lockedMember) throw new NotFoundException('Membro team non trovato');
+      if (lockedMember.user_id) throw new BadRequestException('Il membro ha gia un account attivo.');
+      email = this.validateEmail(lockedMember.email);
+      if (email !== initialEmail) {
+        await this.lockInviteEmail(queryRunner.manager, schema, email);
+      }
+      const tenantRole = this.normalizeTenantRole(lockedMember.tenant_role || 'user', user);
+      const existingUser = await queryRunner.manager.query(
+        `SELECT id FROM "${schema}".users WHERE lower(email) = lower($1) LIMIT 1 FOR UPDATE`,
+        [email],
+      );
+      if (existingUser[0]) throw new BadRequestException('Esiste gia un utente tenant con questa email.');
+
       const token = this.generateInviteToken();
-      expiresAt = await this.createInviteRecord(queryRunner.manager, schema, email, tenantRole, token);
+      expiresAt = await this.createInviteRecord(queryRunner.manager, schema, email, tenantRole, token, false);
       await queryRunner.manager.query(
         `UPDATE "${schema}".team_members
          SET status = 'invited',
@@ -601,6 +888,136 @@ export class TenantTeamService {
     return { email_sent: emailSent, invite_link: inviteLink, expires_at: expiresAt };
   }
 
+  async inviteMemberByEmail(emailValue: unknown): Promise<TeamInviteResult> {
+    this.assertCanManage();
+    const schema = this.getSchema();
+    const email = this.validateEmail(emailValue);
+    await syncTenantUsersToTeamMembers(this.dataSource, schema);
+    const rows = await this.dataSource.query(
+      `SELECT id FROM "${schema}".team_members
+       WHERE lower(email) = lower($1) AND deleted_at IS NULL
+       LIMIT 1`,
+      [email],
+    );
+    if (!rows[0]) throw new NotFoundException('Membro team non trovato');
+    return this.inviteMember(String(rows[0].id));
+  }
+
+  async cancelInvite(inviteIdValue: string) {
+    const user = this.assertCanManage();
+    const schema = this.getSchema();
+    await this.ensureSchema(schema);
+    const inviteId = this.requireUuid(inviteIdValue, 'invite_id');
+    const previewRows = await this.dataSource.query(
+      `SELECT id, email
+       FROM "${schema}".invites
+       WHERE id = $1
+       LIMIT 1`,
+      [inviteId],
+    );
+    if (!previewRows[0]) throw new NotFoundException('Invito non trovato');
+    const initialEmail = this.validateEmail(previewRows[0].email);
+    let memberId: string | null = null;
+
+    await this.dataSource.transaction(async (manager) => {
+      await this.lockInviteEmail(manager, schema, initialEmail);
+      const inviteRows = await manager.query(
+        `SELECT id, email, accepted_at
+         FROM "${schema}".invites
+         WHERE id = $1
+         LIMIT 1
+         FOR UPDATE`,
+        [inviteId],
+      );
+      if (!inviteRows[0]) throw new NotFoundException('Invito non trovato');
+      const email = this.validateEmail(inviteRows[0].email);
+      if (email !== initialEmail) {
+        await this.lockInviteEmail(manager, schema, email);
+      }
+
+      // L'ID legacy identifica la richiesta dell'amministratore, ma la revoca
+      // deve coprire ogni token ancora vivo per la stessa identità.
+      await manager.query(
+        `UPDATE "${schema}".invites
+         SET accepted_at = now()
+         WHERE lower(email) = lower($1)
+           AND accepted_at IS NULL`,
+        [email],
+      );
+
+      const pendingRows = await manager.query(
+        `SELECT id
+         FROM "${schema}".team_members
+         WHERE lower(email) = lower($1)
+           AND user_id IS NULL
+           AND deleted_at IS NULL
+         LIMIT 1
+         FOR UPDATE`,
+        [email],
+      );
+      memberId = pendingRows[0]?.id ? String(pendingRows[0].id) : null;
+      if (memberId) {
+        await manager.query(
+          `UPDATE "${schema}".team_module_permissions
+           SET deleted_at = now(), updated_at = now()
+           WHERE team_member_id = $1 AND deleted_at IS NULL`,
+          [memberId],
+        );
+        await manager.query(
+          `UPDATE "${schema}".team_member_skills
+           SET deleted_at = now()
+           WHERE team_member_id = $1 AND deleted_at IS NULL`,
+          [memberId],
+        );
+        await manager.query(
+          `UPDATE "${schema}".team_members
+           SET status = 'archived', deleted_at = now(), updated_at = now()
+           WHERE id = $1 AND user_id IS NULL AND deleted_at IS NULL`,
+          [memberId],
+        );
+        await this.activityWith(manager, schema, 'member_invite_cancelled', user, memberId, 'team_member', memberId, {
+          invite_id: inviteId,
+        });
+      }
+      await this.administrativeAuditWith(manager, schema, 'team_member_invite_cancelled', user, memberId || inviteId, {
+        invite_id: inviteId,
+        pending_member_archived: Boolean(memberId),
+      });
+    });
+
+    return { success: true, invite_id: inviteId, email: initialEmail, member_id: memberId };
+  }
+
+  async updateMemberRoleByUserId(userIdValue: string, role: unknown) {
+    this.assertCanManage();
+    const schema = this.getSchema();
+    const userId = this.requireUuid(userIdValue, 'user_id');
+    await syncTenantUsersToTeamMembers(this.dataSource, schema);
+    const rows = await this.dataSource.query(
+      `SELECT id FROM "${schema}".team_members
+       WHERE user_id = $1 AND deleted_at IS NULL
+       LIMIT 1`,
+      [userId],
+    );
+    if (!rows[0]) throw new NotFoundException('Membro team non trovato');
+    return this.updateMember(String(rows[0].id), { tenant_role: role });
+  }
+
+  async deleteMemberByUserId(userIdValue: string) {
+    this.assertCanManage();
+    const schema = this.getSchema();
+    const userId = this.requireUuid(userIdValue, 'user_id');
+    await syncTenantUsersToTeamMembers(this.dataSource, schema);
+    const rows = await this.dataSource.query(
+      `SELECT id FROM "${schema}".team_members
+       WHERE user_id = $1 AND deleted_at IS NULL
+       LIMIT 1`,
+      [userId],
+    );
+    if (!rows[0]) throw new NotFoundException('Membro team non trovato');
+    return this.deleteMember(String(rows[0].id));
+  }
+
   async getMember(id: string) {
     const user = this.assertCanRead();
     const schema = this.getSchema();
@@ -621,27 +1038,75 @@ export class TenantTeamService {
     const schema = this.getSchema();
     const member = await this.getMember(id);
     const isSelf = member.user_id && member.user_id === this.userIdOrNull(user.id);
-    if (!this.canManageTeam(user.role) && !isSelf) throw new ForbiddenException('Puoi modificare solo il tuo profilo.');
+    const canManage = this.canManageTeam(user.role);
+    if (!canManage && !isSelf) throw new ForbiddenException('Puoi modificare solo il tuo profilo.');
+    const allowedForSelf = new Set(['display_name', 'first_name', 'last_name', 'phone', 'notes', 'availability_status', 'skills', 'metadata']);
+    if (!canManage && Object.entries(body).some(([key, value]) => value !== undefined && !allowedForSelf.has(key))) {
+      throw new ForbiddenException('Il campo richiesto richiede amministrazione account.');
+    }
+    let normalizedEmail: string | undefined;
+    if (body.email !== undefined) {
+      normalizedEmail = this.validateEmail(body.email);
+      const memberEmail = String(member.email || '').trim().toLowerCase();
+      if (member.user_id) {
+        const accountRows = await this.dataSource.query(
+          `SELECT id, email FROM "${schema}".users WHERE id = $1 LIMIT 1`,
+          [member.user_id],
+        );
+        const account = accountRows[0];
+        if (!account) throw new NotFoundException('Account tenant collegato non trovato');
+        const accountEmail = String(account.email || '').trim().toLowerCase();
+        if (normalizedEmail !== accountEmail) {
+          throw new BadRequestException('L’email di un account attivo non puo essere modificata dal profilo team.');
+        }
+        if (memberEmail === accountEmail) {
+          normalizedEmail = undefined;
+        }
+      } else if (normalizedEmail === memberEmail) {
+        normalizedEmail = undefined;
+      } else {
+        const pendingInviteRows = String(member.status || '').trim().toLowerCase() === 'invited'
+          ? [{ pending: true }]
+          : await this.dataSource.query(
+              `SELECT 1 AS pending
+               FROM "${schema}".invites
+               WHERE lower(email) = lower($1)
+                 AND accepted_at IS NULL
+               LIMIT 1`,
+              [memberEmail],
+            );
+        if (pendingInviteRows[0]) {
+          throw new BadRequestException(
+            'L’email di un membro invitato non puo essere modificata: rimuovi il profilo e crea un nuovo invito.',
+          );
+        }
+      }
+    }
     await this.ensureSchema(schema);
     const normalizedStartDate = this.normalizeNullableDate(body.start_date, 'start_date');
     const normalizedEndDate = this.normalizeNullableDate(body.end_date, 'end_date');
     const effectiveStartDate = normalizedStartDate !== undefined ? normalizedStartDate : (member.start_date ? String(member.start_date).slice(0, 10) : null);
     const effectiveEndDate = normalizedEndDate !== undefined ? normalizedEndDate : (member.end_date ? String(member.end_date).slice(0, 10) : null);
     this.assertDateRange(effectiveStartDate, effectiveEndDate);
+    const requestedRole = canManage && body.tenant_role !== undefined
+      ? this.normalizeTenantRole(body.tenant_role, user)
+      : undefined;
+    const requestedStatus = canManage && body.status !== undefined
+      ? this.normalizeLifecycleStatus(body.status)
+      : undefined;
 
-    const allowedForSelf = new Set(['display_name', 'first_name', 'last_name', 'phone', 'notes', 'availability_status', 'skills', 'metadata']);
     const fields: Array<[string, unknown, string]> = [
-      ['email', body.email ? String(body.email).toLowerCase() : undefined, 'email'],
+      ['email', normalizedEmail, 'email'],
       ['display_name', body.display_name, 'display_name'],
       ['first_name', body.first_name, 'first_name'],
       ['last_name', body.last_name, 'last_name'],
       ['phone', body.phone, 'phone'],
-      ['tenant_role', body.tenant_role, 'tenant_role'],
+      ['tenant_role', requestedRole, 'tenant_role'],
       ['job_title', body.job_title, 'job_title'],
       ['department', body.department, 'department'],
       ['operational_role', body.operational_role ? this.pick(body.operational_role, OPERATIONAL_ROLES, 'generic') : undefined, 'operational_role'],
       ['employment_type', body.employment_type ? this.pick(body.employment_type, EMPLOYMENT_TYPES, 'employee') : undefined, 'employment_type'],
-      ['status', body.status ? this.pick(body.status, MEMBER_STATUSES, 'active') : undefined, 'status'],
+      ['status', requestedStatus, 'status'],
       ['skills', body.skills !== undefined ? this.parseStringArray(body.skills) : undefined, 'skills'],
       ['capacity_hours_per_week', this.normalizeNullableNumber(body.capacity_hours_per_week, 'capacity_hours_per_week'), 'capacity_hours_per_week'],
       ['availability_status', body.availability_status ? this.pick(body.availability_status, AVAILABILITY_STATUSES, 'available') : undefined, 'availability_status'],
@@ -652,19 +1117,142 @@ export class TenantTeamService {
       ['end_date', normalizedEndDate, 'end_date'],
       ['notes', body.notes, 'notes'],
       ['private_notes', body.private_notes, 'private_notes'],
-      ['metadata', body.metadata !== undefined ? this.parseMetadata(body.metadata) : undefined, 'metadata'],
+      ['metadata', body.metadata !== undefined ? this.parseCallerMetadata(body.metadata) : undefined, 'metadata'],
     ];
     const sets: string[] = [];
     const params: unknown[] = [this.requireUuid(id)];
     for (const [column, value, key] of fields) {
       if (value === undefined) continue;
-      if (!this.canManageTeam(user.role) && !allowedForSelf.has(key)) continue;
+      if (!canManage && !allowedForSelf.has(key)) continue;
       if (!this.canSeeSensitive(user.role) && ['hourly_rate_cents', 'daily_rate_cents', 'private_notes'].includes(key)) continue;
       params.push(column === 'metadata' ? JSON.stringify(value || {}) : value);
       const cast = column === 'metadata' ? '::jsonb' : column === 'skills' ? '::text[]' : '';
       sets.push(`${column} = $${params.length}${cast}`);
     }
     if (sets.length === 0) return member;
+
+    if (canManage && (
+      requestedRole !== undefined
+      || requestedStatus !== undefined
+      || normalizedEmail !== undefined
+    )) {
+      let updated: Record<string, any> | null = null;
+      let accountUserId: string | null = null;
+      await this.dataSource.transaction(async (manager) => {
+        await this.lockInviteEmail(manager, schema, String(member.email || '').trim().toLowerCase());
+        const lockedRows = await manager.query(
+          `SELECT * FROM "${schema}".team_members
+           WHERE id = $1 AND deleted_at IS NULL
+           FOR UPDATE`,
+          [this.requireUuid(id)],
+        );
+        const lockedMember = lockedRows[0];
+        if (!lockedMember) throw new NotFoundException('Membro team non trovato');
+        const lockedEmail = this.validateEmail(lockedMember.email);
+        const previewEmail = this.validateEmail(member.email);
+        if (lockedEmail !== previewEmail) {
+          await this.lockInviteEmail(manager, schema, lockedEmail);
+        }
+
+        const accountRows = lockedMember.user_id
+          ? await manager.query(
+              `SELECT id, email, role, is_active FROM "${schema}".users WHERE id = $1 FOR UPDATE`,
+              [lockedMember.user_id],
+            )
+          : [];
+        const account = accountRows[0] || null;
+        if (lockedMember.user_id && !account) throw new NotFoundException('Account tenant collegato non trovato');
+        const currentRole = account?.role || lockedMember.tenant_role;
+        this.assertMutableTarget(currentRole);
+
+        if (normalizedEmail !== undefined) {
+          if (account) {
+            if (normalizedEmail !== String(account.email || '').trim().toLowerCase()) {
+              throw new BadRequestException('L’email di un account attivo non puo essere modificata dal profilo team.');
+            }
+          } else if (normalizedEmail !== lockedEmail) {
+            const pendingInviteRows = await manager.query(
+              `SELECT 1 AS pending
+               FROM "${schema}".invites
+               WHERE lower(email) = lower($1)
+                 AND accepted_at IS NULL
+               LIMIT 1`,
+              [lockedEmail],
+            );
+            if (String(lockedMember.status || '').trim().toLowerCase() === 'invited' || pendingInviteRows[0]) {
+              throw new BadRequestException(
+                'L’email di un membro invitato non puo essere modificata: rimuovi il profilo e crea un nuovo invito.',
+              );
+            }
+            // Serializza anche rispetto a una creazione/invito concorrente sul
+            // nuovo indirizzo prima di affidarsi al vincolo univoco del profilo.
+            await this.lockInviteEmail(manager, schema, normalizedEmail);
+          }
+        }
+
+        const rows = await manager.query(
+          `UPDATE "${schema}".team_members SET ${sets.join(', ')}, updated_at = now()
+           WHERE id = $1 AND deleted_at IS NULL
+           RETURNING *`,
+          params,
+        );
+        updated = rows[0] || null;
+        if (!updated) throw new NotFoundException('Membro team non trovato');
+
+        if (account) {
+          const accountSets: string[] = [];
+          const accountParams: unknown[] = [account.id];
+          if (requestedRole !== undefined) {
+            accountParams.push(requestedRole);
+            accountSets.push(`role = $${accountParams.length}`);
+          }
+          if (requestedStatus !== undefined) {
+            accountParams.push(requestedStatus === 'active');
+            accountSets.push(`is_active = $${accountParams.length}`);
+          }
+          if (accountSets.length) {
+            await manager.query(
+              `UPDATE "${schema}".users
+               SET ${accountSets.join(', ')}, updated_at = now()
+               WHERE id = $1`,
+              accountParams,
+            );
+          }
+          accountUserId = String(account.id);
+        }
+
+        if (requestedStatus && ['inactive', 'suspended'].includes(requestedStatus)) {
+          await manager.query(
+            `UPDATE "${schema}".invites
+             SET accepted_at = now()
+             WHERE lower(email) = lower($1)
+               AND accepted_at IS NULL`,
+            [lockedEmail],
+          );
+        } else if (requestedRole !== undefined && !account) {
+          await manager.query(
+            `UPDATE "${schema}".invites
+             SET role = $2
+             WHERE lower(email) = lower($1)
+               AND accepted_at IS NULL`,
+            [lockedEmail, requestedRole],
+          );
+        }
+
+        const changes = {
+          before: { tenant_role: currentRole || null, status: lockedMember.status || null },
+          after: {
+            tenant_role: requestedRole ?? currentRole ?? null,
+            status: requestedStatus ?? lockedMember.status ?? null,
+          },
+        };
+        await this.activityWith(manager, schema, 'member_access_updated', user, id, 'team_member', id, changes);
+        await this.administrativeAuditWith(manager, schema, 'team_member_access_updated', user, id, changes);
+      });
+      await this.revokeMemberSessions(schema, accountUserId);
+      return this.sanitizeMember(updated!, user);
+    }
+
     const rows = await this.dataSource.query(
       `UPDATE "${schema}".team_members SET ${sets.join(', ')}, updated_at = now()
        WHERE id = $1 AND deleted_at IS NULL
@@ -679,13 +1267,95 @@ export class TenantTeamService {
     const user = this.assertCanManage();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
-    await this.dataSource.query(
-      `UPDATE "${schema}".team_members SET deleted_at = now(), status = 'archived', updated_at = now()
-       WHERE id = $1 AND deleted_at IS NULL`,
-      [this.requireUuid(id)],
-    );
-    await this.activity(schema, 'status_changed', user, id, 'team_member', id, { status: 'archived' });
-    return { success: true };
+    const memberId = this.requireUuid(id);
+    const initialMember = await this.getMember(memberId);
+    const initialEmail = this.validateEmail(initialMember.email);
+    let accountUserId: string | null = null;
+    let deletedEmail = '';
+
+    await this.dataSource.transaction(async (manager) => {
+      await this.lockInviteEmail(manager, schema, initialEmail);
+      const memberRows = await manager.query(
+        `SELECT id, user_id, email, tenant_role, status
+         FROM "${schema}".team_members
+         WHERE id = $1 AND deleted_at IS NULL
+         FOR UPDATE`,
+        [memberId],
+      );
+      const member = memberRows[0];
+      if (!member) throw new NotFoundException('Membro team non trovato');
+      const lockedEmail = this.validateEmail(member.email);
+      if (lockedEmail !== initialEmail) {
+        await this.lockInviteEmail(manager, schema, lockedEmail);
+      }
+
+      const accountRows = member.user_id
+        ? await manager.query(
+            `SELECT id, role, is_active FROM "${schema}".users WHERE id = $1 FOR UPDATE`,
+            [member.user_id],
+          )
+        : [];
+      const account = accountRows[0] || null;
+      if (member.user_id && !account) throw new NotFoundException('Account tenant collegato non trovato');
+      this.assertMutableTarget(account?.role || member.tenant_role);
+      accountUserId = account ? String(account.id) : null;
+      deletedEmail = lockedEmail;
+
+      if (account) {
+        await manager.query(
+          `UPDATE "${schema}".users SET is_active = false, updated_at = now() WHERE id = $1`,
+          [account.id],
+        );
+      }
+      await manager.query(
+        `UPDATE "${schema}".team_module_permissions
+         SET deleted_at = now(), updated_at = now()
+         WHERE team_member_id = $1 AND deleted_at IS NULL`,
+        [memberId],
+      );
+
+      if (account && isDoflowTenant(schema)) {
+        if (await this.tableExists(manager, schema, 'doflow_user_roles')) {
+          await manager.query(`DELETE FROM "${schema}".doflow_user_roles WHERE user_id = $1`, [account.id]);
+        }
+        if (await this.tableExists(manager, schema, 'doflow_user_capabilities')) {
+          await manager.query(`DELETE FROM "${schema}".doflow_user_capabilities WHERE user_id = $1`, [account.id]);
+        }
+      }
+
+      await manager.query(
+        `UPDATE "${schema}".invites SET accepted_at = now()
+         WHERE lower(email) = lower($1) AND accepted_at IS NULL`,
+        [deletedEmail],
+      );
+      if (await this.tableExists(manager, schema, 'password_reset_tokens')) {
+        await manager.query(
+          `UPDATE "${schema}".password_reset_tokens
+           SET invalidated_at = now()
+           WHERE lower(email) = lower($1) AND used_at IS NULL AND invalidated_at IS NULL`,
+          [deletedEmail],
+        );
+      }
+
+      const archived = await manager.query(
+        `UPDATE "${schema}".team_members
+         SET deleted_at = now(), status = 'archived', updated_at = now()
+         WHERE id = $1 AND deleted_at IS NULL
+         RETURNING id`,
+        [memberId],
+      );
+      if (!archived[0]) throw new NotFoundException('Membro team non trovato');
+      const metadata = {
+        before: { tenant_role: account?.role || member.tenant_role || null, status: member.status || null },
+        after: { status: 'archived', account_active: false },
+        revoked: ['module_permissions', 'pending_invites', 'password_reset_tokens', 'doflow_roles', 'doflow_capabilities'],
+      };
+      await this.activityWith(manager, schema, 'member_removed', user, memberId, 'team_member', memberId, metadata);
+      await this.administrativeAuditWith(manager, schema, 'team_member_removed', user, memberId, metadata);
+    });
+
+    await this.revokeMemberSessions(schema, accountUserId);
+    return { success: true, member_id: memberId, email: deletedEmail };
   }
 
   async listSkills(query: Record<string, any>) {
@@ -757,6 +1427,7 @@ export class TenantTeamService {
     const user = this.assertCanManageOperations();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
+    await this.getMember(memberId);
     const skillId = this.requireUuid(String(body.skill_id || body.skillId || ''), 'skill_id');
     const rows = await this.dataSource.query(
       `INSERT INTO "${schema}".team_member_skills (team_member_id, skill_id, level, years_experience, notes, created_at)
@@ -779,6 +1450,7 @@ export class TenantTeamService {
   async removeMemberSkill(memberId: string, skillId: string) {
     const user = this.assertCanManageOperations();
     const schema = this.getSchema();
+    await this.getMember(memberId);
     await this.dataSource.query(
       `UPDATE "${schema}".team_member_skills SET deleted_at = now()
        WHERE team_member_id = $1 AND skill_id = $2 AND deleted_at IS NULL`,
@@ -1151,6 +1823,7 @@ export class TenantTeamService {
     const user = this.assertCanManage();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
+    await this.getMember(memberId);
     const rows = await this.dataSource.query(
       `SELECT * FROM "${schema}".team_module_permissions
        WHERE team_member_id = $1 AND deleted_at IS NULL
@@ -1164,33 +1837,51 @@ export class TenantTeamService {
     const user = this.assertCanManage();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
-    const entries = Array.isArray(body.permissions) ? body.permissions : [];
-    for (const entry of entries) {
-      const moduleKey = String(entry.module_key || entry.moduleKey || '').trim();
-      if (!MODULE_KEYS.includes(moduleKey)) continue;
-      await this.dataSource.query(
-        `INSERT INTO "${schema}".team_module_permissions (
-           team_member_id, module_key, can_view, can_create, can_update, can_delete, can_manage, created_by, created_at, updated_at
-         )
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now(),now())
-         ON CONFLICT (team_member_id, module_key) WHERE deleted_at IS NULL DO UPDATE
-           SET can_view = EXCLUDED.can_view,
-               can_create = EXCLUDED.can_create,
-               can_update = EXCLUDED.can_update,
-               can_delete = EXCLUDED.can_delete,
-               can_manage = EXCLUDED.can_manage,
-               updated_at = now()`,
-        [
-          this.requireUuid(memberId, 'team_member_id'),
-          moduleKey,
-          Boolean(entry.can_view),
-          Boolean(entry.can_create),
-          Boolean(entry.can_update),
-          Boolean(entry.can_delete),
-          Boolean(entry.can_manage),
-          this.userIdOrNull(user.id),
-        ],
-      );
+    const member = await this.getMember(memberId);
+    const roleRows = member.user_id
+      ? await this.dataSource.query(
+          `SELECT role FROM "${schema}".users WHERE id = $1 LIMIT 1`,
+          [member.user_id],
+        )
+      : [];
+    this.assertMutableTarget(roleRows[0]?.role || member.tenant_role);
+    const normalized = this.normalizeModulePermissionEntries(
+      body.permissions,
+      roleRows[0]?.role || member.tenant_role,
+    );
+    const id = this.requireUuid(memberId, 'team_member_id');
+    await this.dataSource.transaction(async (manager) => {
+      for (const entry of normalized) {
+        await manager.query(
+          `INSERT INTO "${schema}".team_module_permissions (
+             team_member_id, module_key, can_view, can_create, can_update, can_delete, can_manage, created_by, created_at, updated_at
+           )
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now(),now())
+           ON CONFLICT (team_member_id, module_key) WHERE deleted_at IS NULL DO UPDATE
+             SET can_view = EXCLUDED.can_view,
+                 can_create = EXCLUDED.can_create,
+                 can_update = EXCLUDED.can_update,
+                 can_delete = EXCLUDED.can_delete,
+                 can_manage = EXCLUDED.can_manage,
+                 updated_at = now()`,
+          [
+            id,
+            entry.moduleKey,
+            entry.can_view,
+            entry.can_create,
+            entry.can_update,
+            entry.can_delete,
+            entry.can_manage,
+            this.userIdOrNull(user.id),
+          ],
+        );
+      }
+      await this.administrativeAuditWith(manager, schema, 'team_member_module_permissions_updated', user, id, {
+        modules: normalized.map((entry) => entry.moduleKey),
+      });
+    });
+    if (member.user_id) {
+      await this.revokeMemberSessions(schema, String(member.user_id));
     }
     return this.getModulePermissions(memberId);
   }
@@ -1323,9 +2014,11 @@ export class TenantTeamService {
   }
 
   options() {
-    this.assertCanRead();
+    const user = this.assertCanRead();
     return {
-      tenantRoles: TEAM_ROLES,
+      tenantRoles: user.role === 'admin'
+        ? ASSIGNABLE_TENANT_ROLES.filter((role) => role !== 'admin')
+        : [...ASSIGNABLE_TENANT_ROLES],
       operationalRoles: OPERATIONAL_ROLES,
       employmentTypes: EMPLOYMENT_TYPES,
       memberStatuses: MEMBER_STATUSES,
@@ -1336,7 +2029,7 @@ export class TenantTeamService {
       timeActivityTypes: TIME_ACTIVITY_TYPES,
       timeStatuses: TIME_STATUSES,
       moduleKeys: MODULE_KEYS,
-      sensitiveFieldsVisible: this.canSeeSensitive(this.getUser().role),
+      sensitiveFieldsVisible: this.canSeeSensitive(user.role),
     };
   }
 }

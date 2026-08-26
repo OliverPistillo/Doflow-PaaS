@@ -49,6 +49,12 @@ export type TeamInviteResult = {
 
 export type CreateTeamMemberInput = Partial<TeamMember> & {
   send_invite?: boolean;
+  doflow_identity?: {
+    roles: string[];
+    capabilities: string[];
+  };
+  module_permissions?: Partial<TeamModulePermission>[];
+  skill_ids?: string[];
 };
 
 export type CreateTeamMemberResult = {

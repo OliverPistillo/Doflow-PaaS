@@ -79,11 +79,30 @@ describe('Auth flow security contract', () => {
   });
 
   it('rifiuta payload JWT invalidi prima di creare una sessione', async () => {
-    const strategy = new JwtStrategy({ get: () => 'strategy-test-secret-with-enough-entropy' } as any);
+    const strategy = new JwtStrategy(
+      { get: () => 'strategy-test-secret-with-enough-entropy' } as any,
+      { query: jest.fn() } as any,
+    );
     await expect(strategy.validate({ tenantId: 'doflow', authStage: 'FULL' }))
       .rejects.toBeInstanceOf(UnauthorizedException);
     await expect(strategy.validate({ sub: 'u1', tenantId: 'doflow', authStage: 'UNKNOWN' }))
       .rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('rende autorevole lo stato tenant corrente per bearer JWT già emessi', async () => {
+    const suspended = new JwtStrategy(
+      { get: () => 'strategy-test-secret-with-enough-entropy' } as any,
+      { query: jest.fn().mockResolvedValue([{ id: 'u1', email: 'member@example.test', role: 'user', is_active: false }]) } as any,
+    );
+    await expect(suspended.validate({ sub: 'u1', tenantId: 'doflow', role: 'owner', authStage: 'FULL' }))
+      .rejects.toBeInstanceOf(UnauthorizedException);
+
+    const demoted = new JwtStrategy(
+      { get: () => 'strategy-test-secret-with-enough-entropy' } as any,
+      { query: jest.fn().mockResolvedValue([{ id: 'u1', email: 'member@example.test', role: 'viewer', is_active: true }]) } as any,
+    );
+    await expect(demoted.validate({ sub: 'u1', tenantId: 'doflow', role: 'owner', authStage: 'FULL' }))
+      .resolves.toMatchObject({ sub: 'u1', tenantId: 'doflow', role: 'viewer' });
   });
 
   it('mantiene un solo controller MFA canonico nel modulo', () => {
@@ -195,6 +214,26 @@ describe('AuthService tenant and MFA boundaries', () => {
       .rejects.toThrow('Tenant disabled');
   });
 
+  it('nega il login password quando il tenant user è sospeso', async () => {
+    const dataSource = {
+      query: jest.fn()
+        .mockResolvedValueOnce([{ slug: 'acme' }])
+        .mockResolvedValueOnce([{ is_active: true }])
+        .mockResolvedValueOnce([{
+          id: '11111111-1111-4111-8111-111111111111',
+          email: 'suspended@example.test',
+          password_hash: 'unused',
+          role: 'user',
+          mfa_enabled: false,
+          mfa_secret: null,
+          is_active: false,
+        }]),
+    };
+    const service = new AuthService(dataSource as any);
+    await expect(service.loginAuto(req(undefined, 'tenant_acme'), 'suspended@example.test', 'password-safe'))
+      .rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
   it('non persiste un secret MFA prima della conferma OTP valida', async () => {
     const dataSource = { query: jest.fn() };
     const service = new AuthService(dataSource as any);
@@ -234,6 +273,26 @@ describe('AuthService tenant and MFA boundaries', () => {
     const payload = jwt.verify(result.token, process.env.JWT_SECRET!) as any;
     expect(payload).toMatchObject({ tenantId: 'tenant_acme', tenantSlug: 'acme', authStage: 'FULL' });
     expect(dataSource.query.mock.calls[0][0]).toContain('"tenant_acme"."users"');
+  });
+
+  it('nega il completamento MFA quando nel frattempo l’account è stato sospeso', async () => {
+    const secret = authenticator.generateSecret();
+    const code = authenticator.generate(secret);
+    const dataSource = {
+      query: jest.fn().mockResolvedValueOnce([{
+        mfa_secret: secret,
+        email: 'suspended@example.test',
+        role: 'user',
+        mfa_enabled: true,
+        is_active: false,
+      }]),
+    };
+    const service = new AuthService(dataSource as any);
+    await expect(service.verifyMfaLogin(
+      { sub: 'u1', tenantId: 'tenant_acme', tenantSlug: 'acme', authStage: 'MFA_PENDING' },
+      code,
+      req(),
+    )).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it.each([
@@ -277,6 +336,34 @@ describe('AuthMiddleware partial-session gate', () => {
 
     await middleware.use({ headers: { authorization: `Bearer ${token}` }, originalUrl: '/api/auth/mfa/verify' } as any, { status, json } as any, next);
     expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('applica il gate MFA prima della revalidation DB e non può fallire aperto', async () => {
+    const dataSource = {
+      query: jest.fn().mockRejectedValue(new Error('synthetic transient database failure')),
+    };
+    const middleware = new AuthMiddleware({
+      isBrowserRequest: jest.fn().mockReturnValue(false),
+      resolve: jest.fn().mockResolvedValue(null),
+    } as any, dataSource as any);
+    const token = jwt.sign(
+      { sub: 'u1', tenantId: 'doflow', authStage: 'MFA_SETUP_NEEDED' },
+      process.env.JWT_SECRET!,
+    );
+    const status = jest.fn().mockReturnThis();
+    const json = jest.fn();
+    const next = jest.fn();
+
+    await middleware.use(
+      { headers: { authorization: `Bearer ${token}` }, originalUrl: '/api/tenant/team' } as any,
+      { status, json } as any,
+      next,
+    );
+
+    expect(status).toHaveBeenCalledWith(HttpStatus.FORBIDDEN);
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ error: 'MFA_REQUIRED', stage: 'MFA_SETUP_NEEDED' }));
+    expect(dataSource.query).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
   });
 
   it('richiede CSRF anche per logout e MFA quando la sessione è cookie-based', async () => {
@@ -435,6 +522,40 @@ describe('AuthMiddleware partial-session gate', () => {
     );
     expect(webSessions.assertBrowserOrigin).toHaveBeenCalledTimes(1);
     expect(webSessions.assertCsrf).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  it('revoca e non autentica una sessione il cui tenant user è stato sospeso', async () => {
+    const session = {
+      user: {
+        sub: '11111111-1111-4111-8111-111111111111',
+        id: '11111111-1111-4111-8111-111111111111',
+        email: 'suspended@example.test',
+        role: 'user',
+        tenantId: 'doflow',
+        tenantSlug: 'doflow',
+        authStage: 'FULL',
+      },
+      csrfToken: 'expected',
+    };
+    const webSessions = {
+      isBrowserRequest: jest.fn().mockReturnValue(false),
+      resolve: jest.fn().mockResolvedValue(session),
+      revoke: jest.fn().mockResolvedValue(undefined),
+    };
+    const dataSource = {
+      query: jest.fn().mockResolvedValue([{
+        id: session.user.id,
+        email: session.user.email,
+        role: session.user.role,
+        is_active: false,
+      }]),
+    };
+    const request = { headers: {}, method: 'GET', originalUrl: '/api/tenant/team' } as any;
+    const next = jest.fn();
+    await new AuthMiddleware(webSessions as any, dataSource as any).use(request, {} as any, next);
+    expect(webSessions.revoke).toHaveBeenCalledWith(request);
+    expect(request.authUser).toBeUndefined();
     expect(next).toHaveBeenCalledTimes(1);
   });
 });

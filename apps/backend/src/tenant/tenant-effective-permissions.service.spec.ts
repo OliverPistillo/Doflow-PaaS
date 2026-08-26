@@ -1,3 +1,4 @@
+import { ServiceUnavailableException } from '@nestjs/common';
 import {
   TENANT_MODULE_KEYS,
   TenantEffectivePermissionsService,
@@ -146,6 +147,31 @@ describe('TenantEffectivePermissionsService', () => {
     expect(access.modules.projects.can_view).toBe(false);
     expect(access.modules.dashboard.can_view).toBe(true);
     expect(access.modules.notifications.can_view).toBe(true);
+  });
+
+  it('nega fail-closed se il lookup del membro tenant fallisce', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('FROM "tenant_a".team_members')) throw new Error('member lookup unavailable');
+      return [];
+    });
+    const service = new TenantEffectivePermissionsService({ query } as any, { user: USER }) as any;
+
+    await expect(service.getCurrentAccess()).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(query).not.toHaveBeenCalledWith(
+      expect.stringContaining('team_module_permissions'),
+      expect.anything(),
+    );
+  });
+
+  it('nega fail-closed se la query degli override fallisce invece di concedere i default ruolo', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('FROM "tenant_a".team_members')) return [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }];
+      if (sql.includes('FROM "tenant_a".team_module_permissions')) throw new Error('override lookup unavailable');
+      return [];
+    });
+    const service = new TenantEffectivePermissionsService({ query } as any, { user: MANAGER }) as any;
+
+    await expect(service.getCurrentAccess()).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
   it('override concesso abilita un modulo consentibile', async () => {

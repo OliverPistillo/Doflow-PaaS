@@ -1,20 +1,23 @@
 "use client"
 
+import * as React from "react"
 import Link from "next/link"
-import { CalendarDays, Link2, MessageCircle, Sun } from "lucide-react"
+import { CalendarDays, Link2, MessageCircle } from "lucide-react"
 import { usePathname } from "next/navigation"
 
 import { GlobalSearch } from "@/components/global-search"
 import { NotificationsMenu } from "@/components/notifications-menu"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useOptionalCommercialLeads } from "@/features/commercial/components/commercial-leads-provider"
+import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider"
 
 const ROUTE_LABELS: Array<[string, string[]]> = [
-  ["/commercial/site-proposals", ["Commerciale", "Builder"]],
+  ["/commercial/site-proposals", ["Builder"]],
   ["/dashboard/commercial/leads", ["Commerciale", "Tutti i lead"]],
   ["/dashboard/commercial/pipeline", ["Commerciale", "Pipeline"]],
   ["/dashboard/commercial", ["Commerciale"]],
@@ -54,6 +57,7 @@ function hrefForPart(part: string) {
 export function DashboardHeader() {
   const pathname = usePathname()
   const commercial = useOptionalCommercialLeads()
+  const { hasCapability } = useDoflowIdentity()
   const id = pathname.split("/").at(-1)
   const lead = pathname.includes("/leads/") ? commercial?.leads.find((item) => item.id === id) : undefined
   const customer = pathname.includes("/clienti/") ? commercial?.customers.find((item) => item.id === id) : undefined
@@ -64,7 +68,7 @@ export function DashboardHeader() {
   if (project) parts.push(project.name)
 
   return (
-    <header className="sticky top-0 z-30 grid h-16 min-h-16 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center border-b bg-[var(--daniele-topbar)] backdrop-blur-xl xl:grid-cols-[minmax(250px,1fr)_minmax(360px,493px)_minmax(210px,1fr)]">
+    <header className="sticky top-0 z-30 grid h-16 min-h-16 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center border-b bg-[var(--doflow-topbar)] backdrop-blur-xl xl:grid-cols-[minmax(250px,1fr)_minmax(360px,493px)_minmax(210px,1fr)]">
       <div className="flex min-w-0 items-center gap-2 px-4 lg:px-6">
         <SidebarTrigger className="-ml-1 shrink-0" />
         <Separator orientation="vertical" className="mx-1 h-5 shrink-0" />
@@ -72,12 +76,12 @@ export function DashboardHeader() {
           <BreadcrumbList className="flex-nowrap overflow-hidden">
             <BreadcrumbItem className="hidden shrink-0 sm:inline-flex"><BreadcrumbLink href="/dashboard">Workspace</BreadcrumbLink></BreadcrumbItem>
             {parts.map((part, index) => (
-              <span key={`${part}-${index}`} className="contents">
+              <React.Fragment key={`${part}-${index}`}>
                 <BreadcrumbSeparator className="hidden shrink-0 sm:block" />
                 <BreadcrumbItem className={index === parts.length - 1 ? "min-w-0" : "shrink-0"}>
                   {index === parts.length - 1 ? <BreadcrumbPage className="block truncate">{part}</BreadcrumbPage> : <BreadcrumbLink href={hrefForPart(part)}>{part}</BreadcrumbLink>}
                 </BreadcrumbItem>
-              </span>
+              </React.Fragment>
             ))}
           </BreadcrumbList>
         </Breadcrumb>
@@ -85,14 +89,11 @@ export function DashboardHeader() {
       <div className="hidden min-w-0 px-2 xl:block"><GlobalSearch /></div>
       <div className="flex min-w-0 items-center justify-end gap-0.5 pr-3 lg:pr-5">
         <div className="xl:hidden"><GlobalSearch compact /></div>
-        <HeaderAction href="/commercial/site-proposals" label="Apri Builder"><Link2 /></HeaderAction>
-        <HeaderAction href="/dashboard/team-space" label="Apri Team Space"><MessageCircle /></HeaderAction>
-        <HeaderAction href="/dashboard/calendario" label="Apri Calendario"><CalendarDays /></HeaderAction>
+        {hasCapability("canUseBuilder") ? <HeaderAction href="/commercial/site-proposals" label="Apri Builder"><Link2 /></HeaderAction> : null}
+        {hasCapability("canViewProjects") ? <HeaderAction href="/dashboard/team-space" label="Apri Team Space"><MessageCircle /></HeaderAction> : null}
+        {hasCapability("canViewActivities") ? <HeaderAction href="/dashboard/calendario" label="Apri Calendario"><CalendarDays /></HeaderAction> : null}
         <NotificationsMenu />
-        <Tooltip>
-          <TooltipTrigger asChild><Button variant="ghost" size="icon" aria-label="Tema predefinito Doflow" aria-pressed="true"><Sun /></Button></TooltipTrigger>
-          <TooltipContent>Tema predefinito</TooltipContent>
-        </Tooltip>
+        <ThemeToggle />
       </div>
     </header>
   )

@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import { apiFetch } from "@/lib/api"
@@ -23,11 +23,13 @@ export type DoflowIdentityUser = {
   email: string
   roles: DoflowRole[]
   capabilities?: DoflowCapability[]
+  explicitCapabilities?: DoflowCapability[]
   avatarUrl?: string
   avatarUpdatedAt?: string
   avatarUpdatedBy?: string
   weeklyCapacityHours?: number
   teamMemberId?: string
+  tenantRole?: string
 }
 
 type IdentityPreferences = {
@@ -51,10 +53,12 @@ type AuthMe = {
 type IdentityBootstrap = {
   preferences?: Partial<IdentityPreferences>
   capabilities?: DoflowCapability[]
+  explicitCapabilities?: DoflowCapability[]
   assignments?: Array<{
     userId: string
     roles: DoflowRole[]
     capabilities: DoflowCapability[]
+    explicitCapabilities?: DoflowCapability[]
   }>
 }
 
@@ -64,8 +68,9 @@ type IdentityContextValue = {
   currentUserId: string
   capabilities: ReadonlySet<DoflowCapability>
   hasCapability: (capability: DoflowCapability) => boolean
-  updateUserRoles: (userId: string, roles: DoflowRole[]) => void
-  updateUserCapabilities: (userId: string, capabilities: DoflowCapability[]) => void
+  reloadIdentity: () => Promise<boolean>
+  updateUserRoles: (userId: string, roles: DoflowRole[]) => Promise<boolean>
+  updateUserCapabilities: (userId: string, capabilities: DoflowCapability[]) => Promise<boolean>
   updateUserAvatar: (userId: string, avatarUrl?: string) => boolean
   updateUserWeeklyCapacity: (userId: string, hours: number) => boolean
   leadOpenMode: LeadOpenMode
@@ -138,6 +143,7 @@ function toIdentityUser(member: TeamMember, accountRole = ""): DoflowIdentityUse
         : undefined,
     weeklyCapacityHours: Number(member.capacity_hours_per_week || 40),
     teamMemberId: member.id,
+    tenantRole: String(accountRole || member.tenant_role || "user"),
   }
 }
 
@@ -156,6 +162,30 @@ function normalizePreferences(value?: Partial<IdentityPreferences>): IdentityPre
   }
 }
 
+function normalizeCapabilities(values: readonly DoflowCapability[] = []) {
+  const allowed = capabilitiesForRoles(["administrator"])
+  return Array.from(new Set(values.filter((capability) => allowed.has(capability))))
+}
+
+function explicitCapabilitiesForAssignment(
+  assignment: NonNullable<IdentityBootstrap["assignments"]>[number],
+) {
+  if (assignment.explicitCapabilities) {
+    return normalizeCapabilities(assignment.explicitCapabilities)
+  }
+  const inherited = capabilitiesForRoles(assignment.roles)
+  return normalizeCapabilities(assignment.capabilities).filter(
+    (capability) => !inherited.has(capability),
+  )
+}
+
+function effectiveCapabilities(
+  roles: readonly DoflowRole[],
+  explicitCapabilities: readonly DoflowCapability[],
+) {
+  return Array.from(new Set([...capabilitiesForRoles(roles), ...explicitCapabilities]))
+}
+
 export function DoflowIdentityProvider({ children }: { children: React.ReactNode }) {
   const [users, setUsers] = useState<DoflowIdentityUser[]>([])
   const [currentUserId, setCurrentUserId] = useState("")
@@ -165,23 +195,36 @@ export function DoflowIdentityProvider({ children }: { children: React.ReactNode
   const [hasHydrated, setHasHydrated] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
+  const hydrateIdentity = useCallback(
+    async ({
+      allowIdentityFallback = false,
+      shouldApply = () => true,
+    }: {
+      allowIdentityFallback?: boolean
+      shouldApply?: () => boolean
+    } = {}) => {
+      const identityRequest = apiFetch<IdentityBootstrap>("/tenant/doflow/identity")
+      const [auth, members, bootstrap] = await Promise.all([
+        apiFetch<AuthMe>("/auth/me"),
+        teamApi.members({ limit: 200 }),
+        allowIdentityFallback
+          ? identityRequest.catch(
+              (): IdentityBootstrap => ({ preferences: defaultPreferences, capabilities: [] }),
+            )
+          : identityRequest,
+      ])
+      if (!shouldApply()) return false
 
-    Promise.all([
-      apiFetch<AuthMe>("/auth/me"),
-      teamApi.members({ limit: 200 }),
-      apiFetch<IdentityBootstrap>("/tenant/doflow/identity").catch(
-        (): IdentityBootstrap => ({ preferences: defaultPreferences, capabilities: [] }),
-      ),
-    ])
-      .then(([auth, members, bootstrap]) => {
-        if (cancelled) return
-        const tenant = String(auth.user.tenantSlug || auth.user.tenantId || "").toLowerCase()
-        const stage = String(auth.user.authStage || "FULL").toUpperCase()
-        if (tenant !== "doflow" || stage !== "FULL") throw new Error("Sessione Doflow non valida")
+      const tenant = String(auth.user.tenantSlug || auth.user.tenantId || "").toLowerCase()
+      const stage = String(auth.user.authStage || "FULL").toUpperCase()
+      if (tenant !== "doflow" || stage !== "FULL") throw new Error("Sessione Doflow non valida")
 
-        const mapped = members.items.map((member) => {
+      const mapped = members.items
+        .filter((member) =>
+          Boolean(member.user_id)
+          && String(member.status || "active").trim().toLowerCase() === "active",
+        )
+        .map((member) => {
           const mappedUser = toIdentityUser(
             member,
             String(member.user_id || member.id) === String(auth.user.id)
@@ -191,47 +234,75 @@ export function DoflowIdentityProvider({ children }: { children: React.ReactNode
           const assignment = bootstrap.assignments?.find(
             (candidate) => candidate.userId === mappedUser.id,
           )
-          return assignment
-            ? { ...mappedUser, roles: assignment.roles, capabilities: assignment.capabilities }
-            : mappedUser
+          if (!assignment) return mappedUser
+          const explicitCapabilities = explicitCapabilitiesForAssignment(assignment)
+          return {
+            ...mappedUser,
+            roles: assignment.roles,
+            capabilities: normalizeCapabilities(assignment.capabilities),
+            explicitCapabilities,
+          }
         })
-        const current =
-          mapped.find((candidate) => candidate.id === String(auth.user.id)) ||
-          ({
-            id: String(auth.user.id),
-            name: auth.user.email.split("@")[0] || auth.user.email,
-            email: auth.user.email,
-            roles: rolesForAccount(auth.user.role),
-            weeklyCapacityHours: 40,
-          } satisfies DoflowIdentityUser)
+      const fallbackRoles = rolesForAccount(auth.user.role)
+      const fallbackExplicitCapabilities = normalizeCapabilities(
+        bootstrap.explicitCapabilities || [],
+      )
+      const current =
+        mapped.find((candidate) => candidate.id === String(auth.user.id)) ||
+        ({
+          id: String(auth.user.id),
+          name: auth.user.email.split("@")[0] || auth.user.email,
+          email: auth.user.email,
+          roles: fallbackRoles,
+          capabilities: effectiveCapabilities(fallbackRoles, fallbackExplicitCapabilities),
+          explicitCapabilities: fallbackExplicitCapabilities,
+          weeklyCapacityHours: 40,
+          tenantRole: auth.user.role,
+        } satisfies DoflowIdentityUser)
 
-        setUsers(mapped.some((candidate) => candidate.id === current.id) ? mapped : [current, ...mapped])
-        setCurrentUserId(current.id)
-        setAuthenticatedUserId(current.id)
-        setPreferences(normalizePreferences(bootstrap.preferences))
-        setServerCapabilities(
-          (bootstrap.capabilities || []).filter((capability) =>
-            capabilitiesForRoles(["administrator"]).has(capability),
-          ),
-        )
-        setIsAuthenticated(true)
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setUsers([])
-          setCurrentUserId("")
-          setAuthenticatedUserId("")
-          setIsAuthenticated(false)
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setHasHydrated(true)
-      })
+      setUsers(mapped.some((candidate) => candidate.id === current.id) ? mapped : [current, ...mapped])
+      setCurrentUserId(current.id)
+      setAuthenticatedUserId(current.id)
+      setPreferences(normalizePreferences(bootstrap.preferences))
+      setServerCapabilities(normalizeCapabilities(bootstrap.capabilities || []))
+      setIsAuthenticated(true)
+      return true
+    },
+    [],
+  )
+
+  useEffect(() => {
+    let cancelled = false
+
+    queueMicrotask(() => {
+      if (cancelled) return
+      void hydrateIdentity({ allowIdentityFallback: true, shouldApply: () => !cancelled })
+        .catch(() => {
+          if (!cancelled) {
+            setUsers([])
+            setCurrentUserId("")
+            setAuthenticatedUserId("")
+            setIsAuthenticated(false)
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setHasHydrated(true)
+        })
+    })
 
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [hydrateIdentity])
+
+  const reloadIdentity = useCallback(async () => {
+    try {
+      return await hydrateIdentity()
+    } catch {
+      toast.error("Impossibile ricaricare ruoli e capability")
+      return false
+    }
+  }, [hydrateIdentity])
 
   const currentUser =
     users.find((candidate) => candidate.id === currentUserId) ||
@@ -260,52 +331,69 @@ export function DoflowIdentityProvider({ children }: { children: React.ReactNode
       currentUserId: currentUser.id,
       capabilities: capabilitySet,
       hasCapability: (capability) => capabilitySet.has(capability),
-      updateUserRoles: (userId, roles) => {
-        if (!capabilitySet.has("canManageRoles")) return
+      reloadIdentity,
+      updateUserRoles: async (userId, roles) => {
+        if (!capabilitySet.has("canManageRoles")) return false
         const normalized = Array.from(new Set(roles.filter((role) => doflowRoles.includes(role))))
-        const previous = users.find((user) => user.id === userId)?.roles || []
+        const previous = users.find((user) => user.id === userId)
         setUsers((current) =>
-          current.map((user) => (user.id === userId ? { ...user, roles: normalized } : user)),
+          current.map((user) => {
+            if (user.id !== userId) return user
+            const explicitCapabilities = user.explicitCapabilities || []
+            return {
+              ...user,
+              roles: normalized,
+              capabilities: effectiveCapabilities(normalized, explicitCapabilities),
+            }
+          }),
         )
-        void apiFetch(`/tenant/doflow/identity/users/${encodeURIComponent(userId)}/roles`, {
-          method: "PATCH",
-          body: JSON.stringify({ roles: normalized }),
-        }).catch(() => {
+        try {
+          await apiFetch(`/tenant/doflow/identity/users/${encodeURIComponent(userId)}/roles`, {
+            method: "PATCH",
+            body: JSON.stringify({ roles: normalized }),
+          })
+          return true
+        } catch {
           setUsers((current) =>
-            current.map((user) => (user.id === userId ? { ...user, roles: previous } : user)),
+            current.map((user) => (user.id === userId && previous ? previous : user)),
           )
           toast.error("Impossibile aggiornare i ruoli")
-        })
+          return false
+        }
       },
-      updateUserCapabilities: (userId, nextCapabilities) => {
-        if (!capabilitySet.has("canManageRoles")) return
-        const normalized = Array.from(
-          new Set(
-            nextCapabilities.filter((capability) =>
-              capabilitiesForRoles(["administrator"]).has(capability),
-            ),
-          ),
-        )
-        const previous = users.find((user) => user.id === userId)?.capabilities || []
+      updateUserCapabilities: async (userId, nextCapabilities) => {
+        if (!capabilitySet.has("canManageRoles")) return false
+        const normalized = normalizeCapabilities(nextCapabilities)
+        const previous = users.find((user) => user.id === userId)
         setUsers((current) =>
           current.map((user) =>
-            user.id === userId ? { ...user, capabilities: normalized } : user,
+            user.id === userId
+              ? {
+                  ...user,
+                  explicitCapabilities: normalized,
+                  capabilities: effectiveCapabilities(user.roles, normalized),
+                }
+              : user,
           ),
         )
-        void apiFetch(
-          `/tenant/doflow/identity/users/${encodeURIComponent(userId)}/capabilities`,
-          {
-            method: "PATCH",
-            body: JSON.stringify({ capabilities: normalized }),
-          },
-        ).catch(() => {
+        try {
+          await apiFetch(
+            `/tenant/doflow/identity/users/${encodeURIComponent(userId)}/capabilities`,
+            {
+              method: "PATCH",
+              body: JSON.stringify({ capabilities: normalized }),
+            },
+          )
+          return true
+        } catch {
           setUsers((current) =>
             current.map((user) =>
-              user.id === userId ? { ...user, capabilities: previous } : user,
+              user.id === userId && previous ? previous : user,
             ),
           )
           toast.error("Impossibile aggiornare le capability")
-        })
+          return false
+        }
       },
       updateUserAvatar: () => false,
       updateUserWeeklyCapacity: (userId, hours) => {
@@ -363,6 +451,7 @@ export function DoflowIdentityProvider({ children }: { children: React.ReactNode
       hasHydrated,
       isAuthenticated,
       preferences,
+      reloadIdentity,
       users,
     ],
   )

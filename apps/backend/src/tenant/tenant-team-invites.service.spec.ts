@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AuthService } from '../auth.service';
 import { TenantTeamService } from './tenant-team.service';
 
@@ -10,8 +10,20 @@ jest.mock('./tenant-team-schema', () => ({
 
 const actorId = '11111111-1111-4111-8111-111111111111';
 const memberId = '22222222-2222-4222-8222-222222222222';
+const skillId = '33333333-3333-4333-8333-333333333333';
 
-function makeQueryRunner(options: { mailFails?: boolean; mailHangs?: boolean; inviteInsertFails?: boolean; existingMember?: boolean } = {}) {
+type RunnerOptions = {
+  mailFails?: boolean;
+  mailHangs?: boolean;
+  inviteInsertFails?: boolean;
+  existingMember?: boolean;
+  initialMemberRole?: string;
+  lockedMemberRole?: string;
+  availableSkillIds?: string[];
+  linkedTenantUser?: { id: string; email: string; role?: string; is_active?: boolean } | null;
+};
+
+function makeQueryRunner(options: RunnerOptions = {}) {
   const calls: Array<{ sql: string; params?: unknown[] }> = [];
   const manager = {
     query: jest.fn(async (sql: string, params?: unknown[]) => {
@@ -19,7 +31,22 @@ function makeQueryRunner(options: { mailFails?: boolean; mailHangs?: boolean; in
       if (sql.includes('FROM "doflow".team_members') && sql.includes('lower(email)')) {
         return options.existingMember ? [{ id: memberId }] : [];
       }
+      if (sql.includes('FROM "doflow".team_members') && sql.includes('FOR UPDATE')) {
+        return [{
+          id: memberId,
+          email: 'nuovo@example.com',
+          tenant_role: options.lockedMemberRole || options.initialMemberRole || 'user',
+          user_id: null,
+          status: 'active',
+        }];
+      }
+      if (sql.includes('SELECT id, email, role, is_active') && sql.includes('FROM "doflow".users')) {
+        return options.linkedTenantUser ? [options.linkedTenantUser] : [];
+      }
       if (sql.includes('FROM "doflow".users')) return [];
+      if (sql.includes('FROM "doflow".team_skills')) {
+        return (options.availableSkillIds || []).map((id) => ({ id }));
+      }
       if (sql.includes('INSERT INTO "doflow".team_members')) {
         return [{
           id: memberId,
@@ -48,7 +75,7 @@ function makeQueryRunner(options: { mailFails?: boolean; mailHangs?: boolean; in
   return { runner, calls };
 }
 
-function makeTeamService(role = 'owner', runnerOptions: { mailFails?: boolean; mailHangs?: boolean; inviteInsertFails?: boolean; existingMember?: boolean } = {}, dataSourceOverrides: Record<string, unknown> = {}) {
+function makeTeamService(role = 'owner', runnerOptions: RunnerOptions = {}, dataSourceOverrides: Record<string, unknown> = {}) {
   const { runner, calls } = makeQueryRunner(runnerOptions);
   const dataSource = {
     createQueryRunner: jest.fn(() => runner),
@@ -56,7 +83,7 @@ function makeTeamService(role = 'owner', runnerOptions: { mailFails?: boolean; m
       calls.push({ sql, params });
       if (sql.includes('public.tenants')) return [{ slug: 'doflow', is_active: true, schema_name: 'doflow' }];
       if (sql.includes('SELECT id, email, tenant_role, user_id, status FROM "doflow".team_members')) {
-        return [{ id: memberId, email: 'nuovo@example.com', tenant_role: 'user', user_id: null, status: 'active' }];
+        return [{ id: memberId, email: 'nuovo@example.com', tenant_role: runnerOptions.initialMemberRole || 'user', user_id: null, status: 'active' }];
       }
       if (sql.includes('FROM "doflow".users')) return [];
       return [];
@@ -69,9 +96,10 @@ function makeTeamService(role = 'owner', runnerOptions: { mailFails?: boolean; m
       return Promise.resolve(!runnerOptions.mailFails);
     }),
   };
+  const webSessions = { revokeUserSessions: jest.fn().mockResolvedValue(0) };
   const request = { user: { sub: actorId, id: actorId, role, tenantId: 'doflow', tenantSlug: 'doflow', email: 'owner@example.com' } };
-  const service = new TenantTeamService(dataSource, {} as any, mailService as any, request);
-  return { service, dataSource, mailService, runner, calls };
+  const service = new TenantTeamService(dataSource, {} as any, mailService as any, webSessions as any, request);
+  return { service, dataSource, mailService, webSessions, runner, calls };
 }
 
 describe('TenantTeamService invite flow', () => {
@@ -107,7 +135,8 @@ describe('TenantTeamService invite flow', () => {
 
     const inviteInsert = calls.find((call) => call.sql.includes('INSERT INTO "doflow".invites'));
     const token = inviteInsert?.params?.[2] as string;
-    expect(token).toMatch(/^[a-f0-9]{64}$/);
+    expect(token).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(result.invite?.invite_link).not.toContain(token);
     const activityPayloads = calls.filter((call) => call.sql.includes('team_activity')).map((call) => JSON.stringify(call.params));
     expect(activityPayloads.join(' ')).not.toContain(token);
   });
@@ -185,6 +214,139 @@ describe('TenantTeamService invite flow', () => {
     expect(mailService.sendInviteEmail).not.toHaveBeenCalled();
   });
 
+  it('send_invite=false rifiuta un user_id che non appartiene al tenant corrente', async () => {
+    const foreignUserId = '55555555-5555-4555-8555-555555555555';
+    const { service, calls, runner } = makeTeamService('owner', { linkedTenantUser: null });
+
+    await expect(service.createMember({
+      email: 'foreign@example.com',
+      display_name: 'Foreign identity',
+      tenant_role: 'user',
+      send_invite: false,
+      user_id: foreignUserId,
+    })).rejects.toBeInstanceOf(NotFoundException);
+
+    const lookup = calls.find((call) =>
+      call.sql.includes('SELECT id, email, role, is_active') && call.sql.includes('FROM "doflow".users'),
+    );
+    expect(lookup?.params).toEqual([foreignUserId]);
+    expect(lookup?.sql).toContain('FOR UPDATE');
+    expect(calls.some((call) => call.sql.includes('INSERT INTO "doflow".team_members'))).toBe(false);
+    expect(runner.rollbackTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('send_invite=false rifiuta email discordante dall account tenant collegato', async () => {
+    const linkedUserId = '55555555-5555-4555-8555-555555555555';
+    const { service, calls, runner } = makeTeamService('owner', {
+      linkedTenantUser: {
+        id: linkedUserId,
+        email: 'account@example.com',
+        role: 'user',
+        is_active: true,
+      },
+    });
+
+    await expect(service.createMember({
+      email: 'other@example.com',
+      display_name: 'Wrong email',
+      tenant_role: 'user',
+      send_invite: false,
+      user_id: linkedUserId,
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(calls.some((call) => call.sql.includes('INSERT INTO "doflow".team_members'))).toBe(false);
+    expect(runner.rollbackTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('send_invite=false collega soltanto account tenant con la stessa email normalizzata', async () => {
+    const linkedUserId = '55555555-5555-4555-8555-555555555555';
+    const { service, calls, runner } = makeTeamService('owner', {
+      linkedTenantUser: {
+        id: linkedUserId,
+        email: 'linked@example.com',
+        role: 'user',
+        is_active: true,
+      },
+    });
+
+    const result = await service.createMember({
+      email: ' LINKED@EXAMPLE.COM ',
+      display_name: 'Linked account',
+      tenant_role: 'user',
+      send_invite: false,
+      user_id: linkedUserId,
+    });
+
+    const insert = calls.find((call) => call.sql.includes('INSERT INTO "doflow".team_members'));
+    expect(insert?.params?.[0]).toBe(linkedUserId);
+    expect(result.member.user_id).toBe(linkedUserId);
+    expect(runner.commitTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('salva identity allowlisted, override modulo e skill nella transazione che crea il pending', async () => {
+    const { service, calls, runner } = makeTeamService('owner', { availableSkillIds: [skillId] });
+    await service.createMember({
+      email: 'nuovo@example.com',
+      display_name: 'Nuovo membro',
+      tenant_role: 'user',
+      send_invite: true,
+      doflow_identity: {
+        roles: ['web_developer'],
+        capabilities: ['canViewAllLeads'],
+      },
+      module_permissions: [{
+        module_key: 'crm',
+        can_view: true,
+        can_create: true,
+        can_update: false,
+        can_delete: false,
+        can_manage: false,
+      }],
+      skill_ids: [skillId],
+    });
+
+    const memberInsert = calls.find((call) => call.sql.includes('INSERT INTO "doflow".team_members'));
+    const metadata = JSON.parse(String(memberInsert?.params?.[22] || '{}'));
+    expect(metadata.pending_doflow_identity).toEqual({
+      roles: ['web_developer'],
+      capabilities: ['canViewAllLeads'],
+    });
+    expect(calls.some((call) => call.sql.includes('INSERT INTO "doflow".team_module_permissions'))).toBe(true);
+    expect(calls.some((call) => call.sql.includes('INSERT INTO "doflow".team_member_skills'))).toBe(true);
+    const inviteIndex = calls.findIndex((call) => call.sql.includes('INSERT INTO "doflow".invites'));
+    expect(calls.findIndex((call) => call.sql.includes('INSERT INTO "doflow".team_module_permissions'))).toBeLessThan(inviteIndex);
+    expect(runner.commitTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('rifiuta valori identity fuori allowlist e grant positivi impossibili', async () => {
+    await expect(makeTeamService().service.createMember({
+      email: 'owner@example.com',
+      display_name: 'Owner tecnico',
+      tenant_role: 'user',
+      doflow_identity: { roles: ['owner'], capabilities: [] },
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    await expect(makeTeamService().service.createMember({
+      email: 'finance@example.com',
+      display_name: 'Finance',
+      tenant_role: 'user',
+      module_permissions: [{ module_key: 'finance', can_view: true }],
+    })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rollbacka l intera creazione quando una skill staged non esiste', async () => {
+    const { service, runner, mailService } = makeTeamService();
+    await expect(service.createMember({
+      email: 'nuovo@example.com',
+      display_name: 'Nuovo membro',
+      tenant_role: 'user',
+      skill_ids: [skillId],
+    })).rejects.toBeInstanceOf(BadRequestException);
+    expect(runner.rollbackTransaction).toHaveBeenCalledTimes(1);
+    expect(runner.commitTransaction).not.toHaveBeenCalled();
+    expect(mailService.sendInviteEmail).not.toHaveBeenCalled();
+  });
+
   it('membro duplicato restituisce 400 e non crea nuovo invito', async () => {
     const { service, mailService, runner } = makeTeamService('owner', { existingMember: true });
     await expect(service.createMember({
@@ -201,9 +363,37 @@ describe('TenantTeamService invite flow', () => {
     const { service, calls } = makeTeamService();
     const result = await service.inviteMember(memberId);
     expect(result.invite_link).toContain('/accept-invite?token=');
+    const inviteCalls = calls.filter((call) =>
+      call.sql.includes('pg_advisory_xact_lock') ||
+      call.sql.includes('UPDATE "doflow".invites') ||
+      call.sql.includes('INSERT INTO "doflow".invites'),
+    );
+    expect(inviteCalls.map((call) =>
+      call.sql.includes('pg_advisory_xact_lock') ? 'lock' :
+      call.sql.includes('UPDATE') ? 'invalidate' : 'insert',
+    )).toEqual(['lock', 'invalidate', 'insert']);
+    expect(inviteCalls[0].params).toEqual(['doflow:nuovo@example.com']);
     expect(calls.some((call) => call.sql.includes('UPDATE "doflow".invites'))).toBe(true);
     const token = calls.find((call) => call.sql.includes('INSERT INTO "doflow".invites'))?.params?.[2] as string;
-    expect(token).toMatch(/^[a-f0-9]{64}$/);
+    expect(token).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  it('reinvio rilegge il ruolo sotto advisory e row lock prima di creare il token', async () => {
+    const { service, calls } = makeTeamService('owner', {
+      initialMemberRole: 'manager',
+      lockedMemberRole: 'viewer',
+    });
+    await service.inviteMember(memberId);
+
+    const advisoryIndex = calls.findIndex((call) => call.sql.includes('pg_advisory_xact_lock'));
+    const rowLockIndex = calls.findIndex((call) =>
+      call.sql.includes('FROM "doflow".team_members') && call.sql.includes('FOR UPDATE'),
+    );
+    const insertIndex = calls.findIndex((call) => call.sql.includes('INSERT INTO "doflow".invites'));
+    expect(advisoryIndex).toBeGreaterThanOrEqual(0);
+    expect(rowLockIndex).toBeGreaterThan(advisoryIndex);
+    expect(insertIndex).toBeGreaterThan(rowLockIndex);
+    expect(calls[insertIndex]?.params?.[1]).toBe('viewer');
   });
 
   it('manager non puo invitare e admin non puo invitare admin', async () => {
@@ -240,13 +430,63 @@ describe('AuthService accept invite team link', () => {
       if (sql.includes('from public.tenants') && sql.includes('id::text')) return [{ id: 'tenant-public-id', slug: 'doflow', schema_name: 'doflow' }];
       if (sql.includes('from "doflow"."invites"')) return [{ id: memberId, email: 'nuovo@example.com', role: 'user', accepted_at: null, expires_at: '2030-01-01T00:00:00.000Z' }];
       if (sql.includes('from "doflow"."users"')) return [];
+      if (sql.includes('from "doflow"."team_members"')) return [{ id: memberId, metadata: {} }];
+      if (sql.includes('update "doflow"."invites"')) return [{ id: memberId }];
       if (sql.includes('insert into "doflow"."users"')) return [{ id: actorId, email: 'nuovo@example.com', created_at: new Date(), role: 'user' }];
       return [];
     });
-    const service = new AuthService({ query } as any);
+    const service = new AuthService({
+      query,
+      transaction: jest.fn(async (work: (manager: { query: typeof query }) => Promise<unknown>) => work({ query })),
+    } as any);
     await service.acceptInvite({} as any, 'token', 'Password123!', 'doflow');
 
     expect(query).toHaveBeenCalledWith(expect.stringContaining('UPDATE "doflow"."team_members"'), [actorId, 'user', 'nuovo@example.com']);
+    process.env.JWT_SECRET = previousSecret;
+  });
+
+  it('applica identity staged e rimuove soltanto la chiave riservata nella stessa accept transaction', async () => {
+    const previousSecret = process.env.JWT_SECRET;
+    process.env.JWT_SECRET = 'test-secret';
+    const calls: Array<{ sql: string; params?: unknown[] }> = [];
+    const query = jest.fn(async (sql: string, params?: unknown[]) => {
+      calls.push({ sql, params });
+      if (sql.includes('select is_active from public.tenants')) return [{ is_active: true }];
+      if (sql.includes('from public.tenants') && sql.includes('id::text')) return [{ id: 'tenant-public-id', slug: 'doflow', schema_name: 'doflow' }];
+      if (sql.includes('from "doflow"."invites"')) return [{ id: memberId, email: 'nuovo@example.com', role: 'user', accepted_at: null, expires_at: '2030-01-01T00:00:00.000Z' }];
+      if (sql.includes('from "doflow"."users"')) return [];
+      if (sql.includes('from "doflow"."team_members"')) return [{
+        id: memberId,
+        metadata: {
+          retained: true,
+          pending_doflow_identity: {
+            roles: ['web_developer'],
+            capabilities: ['canViewAllLeads'],
+          },
+        },
+      }];
+      if (sql.includes('update "doflow"."invites"')) return [{ id: memberId }];
+      if (sql.includes('insert into "doflow"."users"')) return [{ id: actorId, email: 'nuovo@example.com', created_at: new Date(), role: 'user' }];
+      return [];
+    });
+    const service = new AuthService({
+      query,
+      transaction: jest.fn(async (work: (manager: { query: typeof query }) => Promise<unknown>) => work({ query })),
+    } as any);
+    await service.acceptInvite({} as any, 'token', 'Password123!', 'doflow');
+
+    expect(calls).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        sql: expect.stringContaining('doflow_user_roles'),
+        params: [actorId, 'web_developer'],
+      }),
+      expect.objectContaining({
+        sql: expect.stringContaining('doflow_user_capabilities'),
+        params: [actorId, 'canViewAllLeads'],
+      }),
+    ]));
+    const activation = calls.find((call) => call.sql.includes('UPDATE "doflow"."team_members"'));
+    expect(activation?.sql).toContain("metadata = COALESCE(metadata, '{}'::jsonb) - 'pending_doflow_identity'");
     process.env.JWT_SECRET = previousSecret;
   });
 });
@@ -273,7 +513,16 @@ describe('TenantTeamService member update nullable fields', () => {
       }),
     };
     const request = { user: { sub: actorId, id: actorId, role: 'owner', tenantId: 'doflow', tenantSlug: 'doflow', email: 'owner@example.com' } };
-    return { service: new TenantTeamService(dataSource as any, {} as any, {} as any, request), calls };
+    return {
+      service: new TenantTeamService(
+        dataSource as any,
+        {} as any,
+        {} as any,
+        { revokeUserSessions: jest.fn().mockResolvedValue(0) } as any,
+        request,
+      ),
+      calls,
+    };
   }
 
   it('date vuote e numerici vuoti diventano NULL', async () => {

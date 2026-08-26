@@ -286,7 +286,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <SidebarProvider style={{ "--sidebar-width": "220px", "--sidebar-width-icon": "72px" } as React.CSSProperties}>
+    <SidebarProvider mobileWidth="280px" style={{ "--sidebar-width": "220px", "--sidebar-width-icon": "72px" } as React.CSSProperties}>
       <SuperAdminSidebar />
       <SidebarInset className="doflow-app-frame">
         <SuperAdminHeader />

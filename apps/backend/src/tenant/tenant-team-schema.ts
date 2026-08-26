@@ -296,8 +296,7 @@ export async function syncTenantUsersToTeamMembers(ds: DataSource, schema: strin
     WHERE u.email IS NOT NULL
       AND NOT EXISTS (
         SELECT 1 FROM "${s}".team_members tm
-        WHERE tm.deleted_at IS NULL
-          AND (tm.user_id = u.id OR lower(tm.email) = lower(u.email))
+        WHERE tm.user_id = u.id OR lower(tm.email) = lower(u.email)
       )
     ON CONFLICT (user_id) WHERE user_id IS NOT NULL AND deleted_at IS NULL DO UPDATE
       SET email = EXCLUDED.email,

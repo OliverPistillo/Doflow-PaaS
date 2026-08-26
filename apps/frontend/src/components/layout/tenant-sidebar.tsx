@@ -22,13 +22,13 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
   SidebarGroup,
   SidebarGroupContent,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { RoomySidebarMenuButton as SidebarMenuButton } from "@/components/layout/roomy-sidebar";
 import {
   DropdownMenu,
   DropdownMenuContent,

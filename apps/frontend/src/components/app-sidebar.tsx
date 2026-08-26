@@ -44,9 +44,9 @@ const groups: NavigationGroup[] = [
           { title: "Pipeline", url: "/dashboard/commercial/pipeline", capability: "canViewAssignedLeads" },
           { title: "Campagne", url: "/dashboard/campagne", capability: "canViewCampaigns" },
           { title: "Duplicati", url: "/dashboard/duplicati", capability: "canInspectDuplicates" },
-          { title: "Builder", url: "/commercial/site-proposals", icon: PanelsTopLeft, capability: "canUseBuilder" },
         ],
       },
+      { title: "Builder", url: "/commercial/site-proposals", icon: PanelsTopLeft, capability: "canUseBuilder" },
       { title: "Clienti", url: "/dashboard/clienti", icon: ContactRound, capability: "canViewCustomers" },
       {
         title: "Lavoro",
@@ -110,7 +110,9 @@ function filterItem(item: NavigationItem, hasCapability: ReturnType<typeof useDo
     const filtered = filterItem(child, hasCapability)
     return filtered ? [filtered] : []
   })
-  const allowed = !item.capability || hasCapability(item.capability) || Boolean(children?.length)
+  const allowed = item.items
+    ? Boolean(children?.length) || Boolean(item.capability && hasCapability(item.capability))
+    : !item.capability || hasCapability(item.capability)
   return allowed ? { ...item, items: item.items ? children : undefined } : null
 }
 

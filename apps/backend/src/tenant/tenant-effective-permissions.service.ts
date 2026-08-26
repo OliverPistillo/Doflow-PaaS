@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, Inject } from '@nestjs/common';
+import { ForbiddenException, Injectable, Inject, ServiceUnavailableException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { DataSource } from 'typeorm';
 import { safeSchema } from '../common/schema.utils';
@@ -88,7 +88,7 @@ const EMPLOYEE_DEFAULTS: TenantModuleKey[] = [
   'notifications',
   'knowledge',
 ];
-const NEVER_OVERRIDE_FOR_NON_ADMIN = new Set<TenantModuleKey>([
+export const NEVER_OVERRIDE_FOR_NON_ADMIN = new Set<TenantModuleKey>([
   'finance',
   'credentials',
   'credentials.read',
@@ -171,15 +171,19 @@ export class TenantEffectivePermissionsService {
   }
 
   private async currentMemberId(schema: string, user: { id: string; email?: string }) {
-    const rows = await this.dataSource.query(
-      `SELECT id
-       FROM "${schema}".team_members
-       WHERE deleted_at IS NULL
-         AND (($1::uuid IS NOT NULL AND user_id = $1::uuid) OR lower(email) = lower($2))
-       LIMIT 1`,
-      [UUID_RE.test(user.id) ? user.id : null, user.email || ''],
-    ).catch(() => []);
-    return rows[0]?.id || null;
+    try {
+      const rows = await this.dataSource.query(
+        `SELECT id
+         FROM "${schema}".team_members
+         WHERE deleted_at IS NULL
+           AND (($1::uuid IS NOT NULL AND user_id = $1::uuid) OR lower(email) = lower($2))
+         LIMIT 1`,
+        [UUID_RE.test(user.id) ? user.id : null, user.email || ''],
+      );
+      return rows[0]?.id || null;
+    } catch {
+      throw new ServiceUnavailableException('Impossibile verificare i permessi del membro tenant.');
+    }
   }
 
   async getCurrentAccess(): Promise<EffectiveTenantAccess> {
@@ -190,12 +194,17 @@ export class TenantEffectivePermissionsService {
     if (schema !== 'public' && !this.isAdminRole(user.role)) {
       const memberId = await this.currentMemberId(schema, user);
       if (memberId) {
-        const rows = await this.dataSource.query(
-          `SELECT module_key, can_view, can_create, can_update, can_delete, can_manage
-           FROM "${schema}".team_module_permissions
-           WHERE team_member_id = $1 AND deleted_at IS NULL`,
-          [memberId],
-        ).catch(() => []);
+        let rows: Array<Record<string, any>>;
+        try {
+          rows = await this.dataSource.query(
+            `SELECT module_key, can_view, can_create, can_update, can_delete, can_manage
+             FROM "${schema}".team_module_permissions
+             WHERE team_member_id = $1 AND deleted_at IS NULL`,
+            [memberId],
+          );
+        } catch {
+          throw new ServiceUnavailableException('Impossibile verificare gli override dei permessi tenant.');
+        }
 
         for (const row of rows) {
           const key = String(row.module_key || '') as TenantModuleKey;

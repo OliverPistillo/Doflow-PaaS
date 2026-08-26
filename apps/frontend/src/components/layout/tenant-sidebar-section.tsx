@@ -6,13 +6,15 @@ import { ChevronRight,Sparkles } from "lucide-react";
 
 import {
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
-  SidebarMenuSubButton,
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import {
+  RoomySidebarMenuButton as SidebarMenuButton,
+  RoomySidebarMenuSubButton as SidebarMenuSubButton,
+} from "@/components/layout/roomy-sidebar";
 import {
   Collapsible,
   CollapsibleContent,

@@ -92,6 +92,13 @@ test('Phase 4B is queued, append-only, PostgreSQL-authoritative and tenant-isola
       if (message.type() === 'error') ownerConsoleErrors.push(message.text());
     });
 
+    // Keep the scenario rerunnable after a prior interrupted run: the failure
+    // branch requires this synthetic adapter to start disabled.
+    const disabledAdapter = await api(owner, '/tenant/doflow/performance/adapters/acceptance-synthetic', {
+      method: 'PATCH', body: { enabled: false },
+    });
+    expect(disabledAdapter.ok, disabledAdapter.text).toBe(true);
+
     const created = await api(owner, '/tenant/automations/rules', { method: 'POST', body: {
       name: `Deal sopra soglia · ${marker}`, description: 'Acceptance BullMQ', category: 'general', trigger_type: 'manual_run',
       conditions: [], actions: [{ type: 'noop' }], is_enabled: true, run_mode: 'manual', priority: 'medium',
@@ -180,7 +187,7 @@ test('Phase 4B is queued, append-only, PostgreSQL-authoritative and tenant-isola
     await openAutomationDashboard(owner, marker);
     await owner.getByRole('tab', { name: 'Punti' }).click(); await expect(owner.getByText('Rettifica acceptance motivata').first()).toBeVisible();
     await owner.screenshot({ path: path.join(actualDir, 'phase4b-points-1440x900-light.png') });
-    await expect(owner.locator('[data-doflow-shell="daniele-design"][data-doflow-theme="default"]')).toHaveCount(1); await expect(owner.locator('html')).not.toHaveClass(/dark/); await owner.getByRole('tab', { name: 'Classifiche' }).click(); await owner.getByRole('tab', { name: 'Sviluppatori' }).click();
+    await expect(owner.locator('html[data-tenant-ui="doflow-reference"] [data-doflow-ui-generation="reference-e6c3"]')).toHaveCount(1); await expect(owner.locator('html')).not.toHaveClass(/dark/); await owner.getByRole('tab', { name: 'Classifiche' }).click(); await owner.getByRole('tab', { name: 'Sviluppatori' }).click();
     await expect(owner.getByText('Calcolo server in corso…')).toBeHidden({ timeout: 30_000 }); await expect(owner.getByText(new RegExp(`${month}.*revocata`))).toBeVisible();
     await owner.screenshot({ path: path.join(actualDir, 'phase4b-rankings-1440x900-default.png') });
     await owner.goto('/automations/runs'); await expect(owner.getByRole('heading', { name: 'Monitoraggio' })).toBeVisible(); await expect(owner.getByText('dead letter', { exact: false }).first()).toBeVisible();
@@ -196,7 +203,7 @@ test('Phase 4B is queued, append-only, PostgreSQL-authoritative and tenant-isola
     limited.on('request', (request) => {
       if (request.method() === 'GET' && new URL(request.url()).pathname === '/api/tenant/automations/rules') limitedRulesGets += 1;
     });
-    await limited.goto('/automations/rules'); await expect(limited.getByRole('heading', { name: 'Automazioni' })).toBeVisible(); await expect(limited.getByText('Deal sopra soglia', { exact: false }).first()).toBeVisible({ timeout: 30_000 }); await expect(limited.getByText(marker).first()).toBeVisible(); await expect(limited.getByRole('link', { name: 'Nuova automazione' })).toHaveCount(0); await expect(limited.getByRole('button', { name: /Pausa|Attiva|Esegui test/ })).toHaveCount(0); expect(limitedForbiddenGets, `Unexpected limited-user GET 403 responses: ${limitedForbiddenGets.join(', ')}`).toEqual([]); await expect(limited.locator('main[data-secondary-status]')).toHaveAttribute('data-secondary-status', 'ready'); await expect(limited.getByText('Non disponi dei permessi per caricare questo workspace.')).toHaveCount(0); expect(limitedRulesGets).toBeGreaterThan(0);
+    await limited.goto('/automations/rules'); await expect(limited.getByRole('heading', { name: 'Automazioni' })).toBeVisible(); await expect(limited.getByText('Deal sopra soglia', { exact: false }).first()).toBeVisible({ timeout: 30_000 }); await expect(limited.getByText(marker).first()).toBeVisible(); await expect(limited.getByRole('link', { name: 'Nuova automazione' })).toHaveCount(0); await expect(limited.locator('main').getByRole('button', { name: /^(Pausa|Attiva|Esegui test)$/ })).toHaveCount(0); expect(limitedForbiddenGets, `Unexpected limited-user GET 403 responses: ${limitedForbiddenGets.join(', ')}`).toEqual([]); await expect(limited.locator('main[data-secondary-status]')).toHaveAttribute('data-secondary-status', 'ready'); await expect(limited.getByText('Non disponi dei permessi per caricare questo workspace.')).toHaveCount(0); expect(limitedRulesGets).toBeGreaterThan(0);
     await limited.goto(`/automations/rules/${ruleId}`);
     await expect(limited.getByRole('heading', { name: new RegExp(marker) })).toBeVisible();
     await expect(limited.getByRole('button', { name: /Salva configurazione|Run|Retry/ })).toHaveCount(0);

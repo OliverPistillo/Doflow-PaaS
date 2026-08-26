@@ -87,14 +87,11 @@ function legacyDestination(pathname: string) {
 function DoflowThemeBoundary({ children }: { children: React.ReactNode }) {
   React.useLayoutEffect(() => {
     const root = document.documentElement
-    const previousTheme = root.getAttribute("data-doflow-theme")
-    const wasDark = root.classList.contains("dark")
-    root.setAttribute("data-doflow-theme", "default")
-    root.classList.remove("dark")
+    const previousTheme = root.getAttribute("data-tenant-ui")
+    root.setAttribute("data-tenant-ui", "doflow-reference")
     return () => {
-      if (previousTheme === null) root.removeAttribute("data-doflow-theme")
-      else root.setAttribute("data-doflow-theme", previousTheme)
-      if (wasDark) root.classList.add("dark")
+      if (previousTheme === null) root.removeAttribute("data-tenant-ui")
+      else root.setAttribute("data-tenant-ui", previousTheme)
     }
   }, [])
   return <>{children}</>
@@ -122,16 +119,10 @@ function DoflowWorkspace({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider
-      data-doflow-shell="daniele-design"
-      data-doflow-theme="default"
-      data-doflow-ui-generation="replacement"
-      className="doflow-daniele-shell"
-      style={{
-        "--sidebar-width": "248px",
-        "--sidebar-width-icon": "64px",
-      } as React.CSSProperties}
+      data-doflow-ui-generation="reference-e6c3"
+      className="doflow-reference-shell"
     >
-      <AppSidebar data-sidebar-kind="daniele-design" style={{ borderRightWidth: 0 }} />
+      <AppSidebar data-sidebar-kind="doflow-reference" style={{ borderRightWidth: 0 }} />
       <SidebarInset as="div" data-doflow-inset="true">
         <DashboardHeader />
         <main

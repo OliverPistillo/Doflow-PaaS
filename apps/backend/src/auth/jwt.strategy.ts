@@ -3,10 +3,15 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { DataSource } from 'typeorm';
+import { safeSchema } from '../common/schema.utils';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(configService: ConfigService) {
+  constructor(
+    configService: ConfigService,
+    private readonly dataSource: DataSource,
+  ) {
     const secret = configService.get<string>('JWT_SECRET');
     if (!secret) {
       // Blocca il boot dell'applicazione se JWT_SECRET non è configurato.
@@ -39,11 +44,39 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException();
     }
 
+    // A signed bearer token is not the current authorization authority: the
+    // tenant membership may have been suspended, removed, or assigned a new
+    // role after the JWT was issued. Revalidate it on every guarded request so
+    // Passport cannot restore stale claims after AuthMiddleware has rejected
+    // the account.
+    let account: Record<string, any> | undefined;
+    let tenantId: string;
+    try {
+      tenantId = safeSchema(
+        payload.tenantId || payload.tenant_id || 'public',
+        'JwtStrategy.validate',
+      );
+      const rows = await this.dataSource.query(
+        `SELECT id, email, role, COALESCE(is_active, true) AS is_active
+         FROM "${tenantId}".users
+         WHERE id::text = $1
+         LIMIT 1`,
+        [String(payload.sub)],
+      );
+      account = rows[0];
+    } catch {
+      // Database/revalidation failures must never fall back to JWT claims.
+      throw new UnauthorizedException();
+    }
+    if (!account || account.is_active !== true) {
+      throw new UnauthorizedException();
+    }
+
     return { 
-        sub: payload.sub, 
-        email: payload.email, 
-        role: payload.role,
-        tenantId: payload.tenantId,
+        sub: String(account.id),
+        email: account.email,
+        role: String(account.role || 'user').toLowerCase().trim(),
+        tenantId,
         tenantSlug: payload.tenantSlug,
         authStage,
         mfa_required: payload.mfa_required === true,

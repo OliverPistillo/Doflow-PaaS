@@ -88,6 +88,7 @@ import { TenantAutomationPerformanceDispatcher } from './tenant-automation-perfo
 import { TenantDoflowPerformanceRuntimeService } from './tenant-doflow-performance-runtime.service';
 import { TenantDoflowPerformanceController } from './tenant-doflow-performance.controller';
 import { TenantDoflowPerformanceService } from './tenant-doflow-performance.service';
+import { AuthModule } from '../auth/auth.module';
 
 import { Tenant } from '../superadmin/entities/tenant.entity';
 import { TenantSubscription } from '../superadmin/entities/tenant-subscription.entity';
@@ -98,6 +99,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
 
 @Module({
   imports: [
+    AuthModule,
     BullModule.registerQueue({ name: SITE_PROPOSAL_PREPARATION_QUEUE }),
     BullModule.registerQueue({ name: DOFLOW_COLLABORATION_OUTBOX_QUEUE }),
     BullModule.registerQueue({ name: DOFLOW_AUTOMATION_PERFORMANCE_QUEUE }),
@@ -198,5 +200,6 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
       TenantDoflowPerformanceRuntimeService,
       TenantDoflowPerformanceService,
   ],
+  exports: [TenantTeamService],
 })
 export class TenantModule {}

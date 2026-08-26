@@ -6,6 +6,14 @@ import { usePathname } from "next/navigation"
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
@@ -14,6 +22,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import type { DoflowCapability } from "@/features/identity/permissions"
 import { cn } from "@/lib/utils"
@@ -41,6 +50,11 @@ function routeIsActive(pathname: string, item: NavigationItem, parentUrl?: strin
 
 export function NavMain({ groups }: { groups: NavigationGroup[] }) {
   const pathname = usePathname()
+  const { isMobile, setOpenMobile, state } = useSidebar()
+  const isCollapsed = !isMobile && state === "collapsed"
+  const closeMobileNavigation = () => {
+    if (isMobile) setOpenMobile(false)
+  }
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
@@ -58,6 +72,37 @@ export function NavMain({ groups }: { groups: NavigationGroup[] }) {
             {group.items.map((item) => {
               const isGroupOpen = Boolean(item.items?.some((subItem) => routeIsActive(pathname, subItem, item.url)))
               if (item.items?.length) {
+                if (isCollapsed) {
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <SidebarMenuButton
+                            isActive={pathname === item.url || isGroupOpen}
+                            aria-label={`Apri il menu ${item.title}`}
+                            title={item.title}
+                          >
+                            {item.icon ? <item.icon /> : null}
+                            <span className="sr-only">{item.title}</span>
+                          </SidebarMenuButton>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent side="right" align="start" sideOffset={8} className="min-w-56">
+                          <DropdownMenuLabel>{item.title}</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          {item.items.map((subItem) => (
+                            <DropdownMenuItem key={subItem.title} asChild>
+                              <Link href={subItem.url} onClick={closeMobileNavigation} className="gap-2">
+                                {subItem.icon ? <subItem.icon /> : null}
+                                <span>{subItem.title}</span>
+                              </Link>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </SidebarMenuItem>
+                  )
+                }
+
                 return (
                   <Collapsible key={`${item.title}-${isGroupOpen}`} asChild defaultOpen={isGroupOpen} className="group/collapsible">
                     <SidebarMenuItem>
@@ -73,7 +118,7 @@ export function NavMain({ groups }: { groups: NavigationGroup[] }) {
                           {item.items.map((subItem) => (
                             <SidebarMenuSubItem key={subItem.title}>
                               <SidebarMenuSubButton isActive={routeIsActive(pathname, subItem, item.url)} asChild>
-                                <Link href={subItem.url}>
+                                <Link href={subItem.url} onClick={closeMobileNavigation}>
                                   {subItem.icon ? <subItem.icon /> : null}
                                   <span>{subItem.title}</span>
                                 </Link>
@@ -90,7 +135,7 @@ export function NavMain({ groups }: { groups: NavigationGroup[] }) {
               return (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={routeIsActive(pathname, item)} tooltip={item.title}>
-                    <Link href={item.url}>
+                    <Link href={item.url} onClick={closeMobileNavigation}>
                       {item.icon ? <item.icon /> : null}
                       <span>{item.title}</span>
                     </Link>

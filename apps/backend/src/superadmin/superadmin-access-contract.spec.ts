@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 import { Test } from '@nestjs/testing';
 import * as jwt from 'jsonwebtoken';
+import { DataSource } from 'typeorm';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { JwtStrategy } from '../auth/jwt.strategy';
 import { ApiUsageController } from './api-usage.controller';
@@ -95,12 +96,25 @@ describe('SuperadminModule access contract', () => {
 describe('Private platform request enforcement', () => {
   let app: INestApplication;
   let baseUrl: string;
+  let accountSequence = 0;
+  const accountRoles = new Map<string, string>();
   const dashboardService = { getSalesStats: jest.fn() };
+  const dataSource = {
+    query: jest.fn(async (_sql: string, params?: unknown[]) => {
+      const subject = String(params?.[0] || '');
+      const role = accountRoles.get(subject);
+      return role
+        ? [{ id: subject, email: 'platform-contract@example.invalid', role, is_active: true }]
+        : [];
+    }),
+  };
 
   function token(payload: Record<string, unknown>) {
+    const subject = `platform-contract-${++accountSequence}`;
+    accountRoles.set(subject, String(payload.role || 'user'));
     return jwt.sign(
       {
-        sub: '11111111-1111-4111-8111-111111111111',
+        sub: subject,
         email: 'platform-contract@example.invalid',
         ...payload,
       },
@@ -123,6 +137,7 @@ describe('Private platform request enforcement', () => {
         JwtStrategy,
         PlatformSuperadminGuard,
         { provide: ConfigService, useValue: { get: () => JWT_SECRET } },
+        { provide: DataSource, useValue: dataSource },
         { provide: SuperadminDashboardService, useValue: dashboardService },
       ],
     }).compile();
