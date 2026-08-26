@@ -1,5 +1,5 @@
-import { AutomationRunsPage } from "@/components/tenant-automations/automation-runs";
+import { AutomationMonitoringWorkspace } from "@/components/tenant-automation-center/automation-monitoring-workspace";
 
 export default function AutomationsRunsPage() {
-  return <AutomationRunsPage />;
+  return <AutomationMonitoringWorkspace />;
 }

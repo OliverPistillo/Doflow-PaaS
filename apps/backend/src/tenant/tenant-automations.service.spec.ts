@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { seedTenantAutomationTemplatesAndRules } from './tenant-automations-schema';
 import { TenantAutomationsService } from './tenant-automations.service';
 
@@ -37,12 +37,40 @@ describe('TenantAutomationsService', () => {
 
   it('manager non vede rules finance nella lista', async () => {
     const { service, query } = makeService('manager');
+    jest.spyOn(service as any, 'hasDoflowCapability').mockResolvedValue(true);
     query.mockResolvedValueOnce([]).mockResolvedValueOnce([{ total: 0 }]);
 
     await service.listRules({});
 
     expect(query.mock.calls[0][0]).toContain("category <> 'finance'");
     expect(query.mock.calls[0][1]).toEqual(expect.arrayContaining([expect.arrayContaining(['invoice_overdue'])]));
+  });
+
+  it('applica capability Doflow distinte per lettura, gestione, run e retry', async () => {
+    const { service, query } = makeService('editor');
+    const capability = jest.spyOn(service as any, 'hasDoflowCapability').mockImplementation(
+      async (...args: unknown[]) => args[1] === 'canViewAutomations',
+    );
+    query.mockResolvedValueOnce([]).mockResolvedValueOnce([{ total: 0 }]);
+
+    await expect(service.listRules({})).resolves.toMatchObject({ items: [], total: 0 });
+    await expect(service.createRule({ name: 'forbidden' })).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.updateRule('4f52eac3-aee6-4d27-ab51-48632ca2df2a', {})).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.deleteRule('4f52eac3-aee6-4d27-ab51-48632ca2df2a')).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.setEnabled('4f52eac3-aee6-4d27-ab51-48632ca2df2a', true)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.runRuleFromRequest('4f52eac3-aee6-4d27-ab51-48632ca2df2a')).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(service.requestContext('retry')).rejects.toBeInstanceOf(ForbiddenException);
+    expect(capability).toHaveBeenCalledWith(expect.any(Object), 'canViewAutomations');
+    expect(capability).toHaveBeenCalledWith(expect.any(Object), 'canManageAutomations');
+    expect(capability).toHaveBeenCalledWith(expect.any(Object), 'canRunAutomations');
+    expect(capability).toHaveBeenCalledWith(expect.any(Object), 'canRetryAutomations');
+  });
+
+  it('nega la lettura Doflow quando la capability read-only manca', async () => {
+    const { service } = makeService('editor');
+    jest.spyOn(service as any, 'hasDoflowCapability').mockResolvedValue(false);
+
+    await expect(service.listRules({})).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('gestisce una rule appena creata con UUID valido su get/enable/disable/run/export', async () => {

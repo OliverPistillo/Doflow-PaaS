@@ -20,6 +20,10 @@ import { TenantNotificationsService } from './tenant-notifications.service';
 import { isDoflowTenant } from './tenant-context';
 import { ensureDoflowAutomationPerformanceTables } from './tenant-automation-performance-schema';
 import {
+  DOFLOW_ROLE_CAPABILITIES,
+  ensureDoflowWorkspaceTables,
+} from './tenant-doflow-workspace.service';
+import {
   normalizeProjectStage,
   PROJECT_ACTIVE_STAGE_ALIASES,
   PROJECT_PAUSED_STAGE_ALIASES,
@@ -84,34 +88,78 @@ export class TenantAutomationsService {
     return ADMIN_ROLES.has(String(role || '').toLowerCase());
   }
 
-  private canRead(role: string): boolean {
-    return READ_ROLES.has(String(role || '').toLowerCase());
+  private async hasDoflowCapability(user: AuthUser, capability: string): Promise<boolean> {
+    const schema = this.getSchema();
+    if (!isDoflowTenant(schema)) return false;
+    if (this.isAdmin(user.role)) return true;
+    if (!UUID_RE.test(user.id)) return false;
+    await ensureDoflowWorkspaceTables(this.dataSource, schema);
+    const [roleRows, capabilityRows] = await Promise.all([
+      this.dataSource.query(
+        `SELECT role FROM "${schema}".doflow_user_roles WHERE user_id = $1`,
+        [user.id],
+      ),
+      this.dataSource.query(
+        `SELECT 1 FROM "${schema}".doflow_user_capabilities WHERE user_id = $1 AND capability = $2 LIMIT 1`,
+        [user.id, capability],
+      ),
+    ]);
+    return Boolean(capabilityRows[0]) || roleRows.some((row: any) =>
+      (DOFLOW_ROLE_CAPABILITIES[String(row.role)] || []).includes(capability),
+    );
   }
 
-  private canManage(role: string): boolean {
-    return this.isAdmin(role);
+  private async canReadRules(user: AuthUser): Promise<boolean> {
+    if (!isDoflowTenant(this.getSchema())) return READ_ROLES.has(user.role);
+    return this.hasDoflowCapability(user, 'canViewAutomations');
   }
 
-  private canRun(role: string): boolean {
-    return this.isAdmin(role) || hasRoleAtLeast(role, 'manager');
+  private async canReadMonitoring(user: AuthUser): Promise<boolean> {
+    if (!isDoflowTenant(this.getSchema())) return READ_ROLES.has(user.role);
+    return this.hasDoflowCapability(user, 'canViewAutomationErrors');
+  }
+
+  private async canManage(user: AuthUser): Promise<boolean> {
+    if (!isDoflowTenant(this.getSchema())) return this.isAdmin(user.role);
+    return this.hasDoflowCapability(user, 'canManageAutomations');
+  }
+
+  private async canRun(user: AuthUser): Promise<boolean> {
+    if (!isDoflowTenant(this.getSchema())) return this.isAdmin(user.role) || hasRoleAtLeast(user.role, 'manager');
+    return this.hasDoflowCapability(user, 'canRunAutomations');
+  }
+
+  private async canRetry(user: AuthUser): Promise<boolean> {
+    if (!isDoflowTenant(this.getSchema())) return this.isAdmin(user.role) || hasRoleAtLeast(user.role, 'manager');
+    return this.hasDoflowCapability(user, 'canRetryAutomations');
   }
 
   private canViewFinance(role: string): boolean {
     return this.isAdmin(role);
   }
 
-  private assertRead(user = this.getUser()) {
-    if (!this.canRead(user.role)) throw new ForbiddenException('Non hai accesso alle automazioni interne.');
+  private async assertReadRules(user = this.getUser()) {
+    if (!(await this.canReadRules(user))) throw new ForbiddenException('Non hai accesso alle regole di automazione.');
     return user;
   }
 
-  private assertManage(user = this.getUser()) {
-    if (!this.canManage(user.role)) throw new ForbiddenException('Solo CEO/Admin possono gestire automazioni.');
+  private async assertReadMonitoring(user = this.getUser()) {
+    if (!(await this.canReadMonitoring(user))) throw new ForbiddenException('Non hai accesso al monitoraggio automazioni.');
     return user;
   }
 
-  private assertRun(user = this.getUser()) {
-    if (!this.canRun(user.role)) throw new ForbiddenException('Non hai permessi per eseguire automazioni.');
+  private async assertManage(user = this.getUser()) {
+    if (!(await this.canManage(user))) throw new ForbiddenException('Solo CEO/Admin possono gestire automazioni.');
+    return user;
+  }
+
+  private async assertRun(user = this.getUser()) {
+    if (!(await this.canRun(user))) throw new ForbiddenException('Non hai permessi per eseguire automazioni.');
+    return user;
+  }
+
+  private async assertRetry(user = this.getUser()) {
+    if (!(await this.canRetry(user))) throw new ForbiddenException('Non hai permessi per riprovare automazioni.');
     return user;
   }
 
@@ -120,8 +168,16 @@ export class TenantAutomationsService {
     else await ensureTenantAutomationsTables(this.dataSource, schema);
   }
 
-  requestContext(scope: 'read' | 'manage' | 'run') {
-    const user = scope === 'manage' ? this.assertManage() : scope === 'run' ? this.assertRun() : this.assertRead();
+  async requestContext(scope: 'rules:read' | 'monitor:read' | 'manage' | 'run' | 'retry') {
+    const user = scope === 'manage'
+      ? await this.assertManage()
+      : scope === 'run'
+        ? await this.assertRun()
+        : scope === 'retry'
+          ? await this.assertRetry()
+          : scope === 'monitor:read'
+            ? await this.assertReadMonitoring()
+            : await this.assertReadRules();
     return { schema: this.getSchema(), user };
   }
 
@@ -290,7 +346,7 @@ export class TenantAutomationsService {
   }
 
   async summary() {
-    const user = this.assertRead();
+    const user = await this.assertReadMonitoring();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const visibility = this.financeWhere(user);
@@ -346,7 +402,7 @@ export class TenantAutomationsService {
   }
 
   async options() {
-    this.assertRead();
+    await this.assertReadRules();
     return {
       triggers: AUTOMATION_TRIGGER_TYPES,
       conditions: AUTOMATION_CONDITION_TYPES,
@@ -360,7 +416,7 @@ export class TenantAutomationsService {
   }
 
   async seedBaseTemplates() {
-    const user = this.assertManage();
+    const user = await this.assertManage();
     const schema = this.getSchema();
     await seedTenantAutomationTemplatesAndRules(this.dataSource, schema, this.uuidOrNull(user.id));
     await this.logActivity(schema, 'template_seeded', null, null, user.id, { source: 'api' });
@@ -368,7 +424,7 @@ export class TenantAutomationsService {
   }
 
   async listTemplates(query: Record<string, any> = {}) {
-    const user = this.assertRead();
+    const user = await this.assertReadRules();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const limit = this.normalizeLimit(query.limit);
@@ -395,7 +451,7 @@ export class TenantAutomationsService {
   }
 
   async getTemplate(id: string) {
-    const user = this.assertRead();
+    const user = await this.assertReadRules();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const rows = await this.dataSource.query(
@@ -409,7 +465,7 @@ export class TenantAutomationsService {
   }
 
   async listRules(query: Record<string, any> = {}) {
-    const user = this.assertRead();
+    const user = await this.assertReadRules();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const limit = this.normalizeLimit(query.limit);
@@ -449,7 +505,7 @@ export class TenantAutomationsService {
   }
 
   async getRule(id: string) {
-    const user = this.assertRead();
+    const user = await this.assertReadRules();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const rule = await this.getRuleInternal(schema, id);
@@ -473,7 +529,7 @@ export class TenantAutomationsService {
   }
 
   async createRule(body: Record<string, any>) {
-    const user = this.assertManage();
+    const user = await this.assertManage();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const triggerType = this.normalizeEnum(body.trigger_type, AUTOMATION_TRIGGER_TYPES, 'manual_run', 'trigger_type');
@@ -539,7 +595,7 @@ export class TenantAutomationsService {
   }
 
   async updateRule(id: string, body: Record<string, any>) {
-    const user = this.assertManage();
+    const user = await this.assertManage();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const current = await this.getRuleInternal(schema, id);
@@ -623,7 +679,7 @@ export class TenantAutomationsService {
   }
 
   async deleteRule(id: string) {
-    const user = this.assertManage();
+    const user = await this.assertManage();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     await this.dataSource.query(`UPDATE "${schema}".automation_rules SET deleted_at = now(), archived_at=now(), lifecycle_status='archived', updated_by = $2, updated_at = now() WHERE id = $1`, [this.requireUuid(id), this.uuidOrNull(user.id)]);
@@ -632,7 +688,7 @@ export class TenantAutomationsService {
   }
 
   async setEnabled(id: string, enabled: boolean) {
-    const user = this.assertManage();
+    const user = await this.assertManage();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const rule = await this.getRuleInternal(schema, id);
@@ -646,7 +702,7 @@ export class TenantAutomationsService {
   }
 
   async runRuleFromRequest(id: string, payload: Record<string, unknown> = {}) {
-    const user = this.assertRun();
+    const user = await this.assertRun();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const rule = await this.getRuleInternal(schema, id);
@@ -656,14 +712,14 @@ export class TenantAutomationsService {
   }
 
   async runDueFromRequest() {
-    const user = this.assertRun();
+    const user = await this.assertRun();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     return this.runDueRulesForSchema(schema, { actorUserId: this.uuidOrNull(user.id), triggerSource: 'manual_due', force: this.isAdmin(user.role) }, user);
   }
 
   async runTriggerFromRequest(triggerType: string, payload: Record<string, unknown> = {}) {
-    const user = this.assertRun();
+    const user = await this.assertRun();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const trigger = this.normalizeEnum(triggerType, AUTOMATION_TRIGGER_TYPES, 'manual_run', 'triggerType');
@@ -680,7 +736,7 @@ export class TenantAutomationsService {
   }
 
   async listRuns(query: Record<string, any> = {}) {
-    const user = this.assertRead();
+    const user = await this.assertReadMonitoring();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const limit = this.normalizeLimit(query.limit);
@@ -711,7 +767,7 @@ export class TenantAutomationsService {
   }
 
   async getRun(id: string) {
-    const user = this.assertRead();
+    const user = await this.assertReadMonitoring();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const rows = await this.dataSource.query(
@@ -740,7 +796,7 @@ export class TenantAutomationsService {
   }
 
   async activity(query: Record<string, any> = {}) {
-    const user = this.assertRead();
+    const user = await this.assertReadMonitoring();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const limit = this.normalizeLimit(query.limit);
@@ -757,7 +813,7 @@ export class TenantAutomationsService {
   }
 
   async listDedupe(query: Record<string, any> = {}) {
-    this.assertManage();
+    await this.assertManage();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     const limit = this.normalizeLimit(query.limit);
@@ -770,7 +826,7 @@ export class TenantAutomationsService {
   }
 
   async deleteDedupe(id: string) {
-    this.assertManage();
+    await this.assertManage();
     const schema = this.getSchema();
     await this.ensureSchema(schema);
     await this.dataSource.query(`DELETE FROM "${schema}".automation_dedupe WHERE id = $1`, [this.requireUuid(id)]);

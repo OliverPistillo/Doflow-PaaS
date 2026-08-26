@@ -1,5 +1,54 @@
 import { automationsApi, type AutomationParams, type AutomationRule, type AutomationRun } from "@/lib/tenant-automations-api";
 import { CATEGORY_LABELS, RUN_STATUS_LABELS, TRIGGER_LABELS, label } from "@/components/tenant-automations/automation-utils";
+import { useOptionalTenantAccess } from "@/contexts/TenantAccessContext";
+import { useOptionalDoflowIdentity } from "@/features/identity/doflow-identity-provider";
+
+export function useAutomationCenterAccess() {
+  const tenantAccess = useOptionalTenantAccess();
+  const doflowIdentity = useOptionalDoflowIdentity();
+  const isDoflow = doflowIdentity !== null;
+  const canViewRules = isDoflow
+    ? Boolean(doflowIdentity?.hasCapability("canViewAutomations"))
+    : Boolean(tenantAccess?.canView("automations"));
+  const canManageRules = isDoflow
+    ? Boolean(doflowIdentity?.hasCapability("canManageAutomations"))
+    : Boolean(tenantAccess?.canUpdate("automations"));
+  const canRunRules = isDoflow
+    ? Boolean(doflowIdentity?.hasCapability("canRunAutomations"))
+    : Boolean(tenantAccess?.canUpdate("automations"));
+  const canRetryRuns = isDoflow
+    ? Boolean(doflowIdentity?.hasCapability("canRetryAutomations"))
+    : Boolean(tenantAccess?.canUpdate("automations"));
+  const canViewRuns = isDoflow
+    ? Boolean(doflowIdentity?.hasCapability("canViewAutomationErrors"))
+    : Boolean(tenantAccess?.canView("automations"));
+  const canViewNotifications = isDoflow
+    ? Boolean(doflowIdentity?.hasCapability("canReadNotifications"))
+    : Boolean(tenantAccess?.canView("notifications"));
+  const canViewReports = isDoflow
+    ? Boolean(doflowIdentity?.currentUser.roles.includes("administrator"))
+    : Boolean(tenantAccess?.canView("reports"));
+  const doflowCanView = (moduleKey?: string | null) => {
+    if (!moduleKey) return true;
+    if (moduleKey === "automations") return canViewRules;
+    if (moduleKey === "notifications") return canViewNotifications;
+    if (moduleKey === "reports") return canViewReports;
+    return false;
+  };
+  const doflowCanManage = (moduleKey?: string | null) => !moduleKey || (moduleKey === "automations" && canManageRules);
+  return {
+    canViewRules,
+    canManageRules,
+    canRunRules,
+    canRetryRuns,
+    canViewRuns,
+    canViewNotifications,
+    canViewReports,
+    canView: (moduleKey?: string | null) => isDoflow ? doflowCanView(moduleKey) : Boolean(tenantAccess?.canView(moduleKey)),
+    canCreate: (moduleKey?: string | null) => isDoflow ? doflowCanManage(moduleKey) : Boolean(tenantAccess?.canCreate(moduleKey)),
+    canUpdate: (moduleKey?: string | null) => isDoflow ? doflowCanManage(moduleKey) : Boolean(tenantAccess?.canUpdate(moduleKey)),
+  };
+}
 
 export function numeric(value: unknown) { const result = Number(value || 0); return Number.isFinite(result) ? result : 0; }
 export function formatDuration(value?: number | null) { const ms = numeric(value); if (!ms) return "—"; if (ms < 1000) return `${Math.round(ms)} ms`; return `${new Intl.NumberFormat("it-IT", { maximumFractionDigits: 1 }).format(ms / 1000)} s`; }

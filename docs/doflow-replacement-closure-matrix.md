@@ -902,3 +902,45 @@ esclusi da Git. Backup-ref CLI:
 Il push può procedere soltanto dopo release inventory, secret scan, staged
 review e ultimo controllo del remoto. Migrazioni automatiche e cutover CLI
 restano fail-closed; nessun SQL manuale e nessun `DB_SYNC=true` sono ammessi.
+
+## Chiusura frontend — Full Daniele Design (25 agosto 2026)
+
+Le classificazioni visuali storiche della matrice sopra restano utili come
+cronologia delle authority, ma il loro target grafico `master/e6c3ef…` è
+**SUPERATO**. Il target corrente è lo screenshot Daniele `1348×888`, integrato
+con `origin/daniele-design@b9a08ee…`, tema default.
+
+| Boundary | Prima | Dopo | Evidenza |
+| --- | --- | --- | --- |
+| Shell `doflow` | composizione ibrida con residui della UI Oliver | `DoflowDanieleShell` tenant-only, 248/64, topbar 64, default | marker runtime + screenshot canonico |
+| Altri tenant | shell condivisa | `LegacyTenantShell` esplicita, comportamento preservato | Context D e marker legacy |
+| Superadmin | shell separata | invariata e non montata sotto shell tenant | Context E GO |
+| Dashboard | proporzioni anti-reference e max-width dispersivo | griglia/reference Daniele, card a quota target e KPI server-backed | pixel diff + visual matrix |
+| Navigazione | tassonomia Oliver | Workspace/Pausa/Sistema/help, submenu reali e capability-aware | route matrix + 51 entry audit |
+| Builder | funzione legacy con involucro eterogeneo | stessa autorità funzionale dentro shell Daniele | marker Builder + Nest/Builder smoke |
+| Auth UI | host precedente | presentazione Daniele; protocollo auth/session/CSRF invariato | web-session e auth visual |
+| Theme | preferenze/varianti condivise influenzabili | baseline `default` fissata solo per `doflow` | first-paint marker e visual |
+| Readiness | shell sensibile a query secondarie | `<main>` esplicito; core/secondary separati, error/retry controllati | 4/4 browser readiness |
+| Route Automation | redirect generico | rules/runs reali con adapter capability tenant-aware | Automation acceptance GO |
+
+Residui legacy:
+
+- `TenantSidebar`, vecchie theme drawer/tokens e business localStorage non sono
+  raggiungibili dal route graph Doflow;
+- la shell compatibile resta intenzionalmente per tenant diversi da `doflow`;
+- nessun componente condiviso necessario agli altri tenant è stato eliminato;
+- Client Portal resta assente;
+- Builder è l'unica funzione legacy preservata, ma non la vecchia shell.
+
+Audit e gate:
+
+- `pnpm audit:doflow-ui-purity`: GO, 227 moduli e 51 route entry;
+- frontend: lint strict 0 warning, type-check, 25/25 test, build 224 pagine;
+- backend regressione: 103 suite e 1127 test;
+- finale: Context A–E, 75 screenshot, visual 4/4, health 10/10;
+- reference locale pulita e non modificata;
+- zero staged, nessun commit/push/deploy in questa fase.
+
+`DOFLOW FULL DANIELE FRONTEND REPLACEMENT GO`
+
+`VISUAL GO`

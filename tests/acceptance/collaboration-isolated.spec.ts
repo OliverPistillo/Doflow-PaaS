@@ -99,19 +99,10 @@ async function login(
   await expect(page).toHaveURL(/\/dashboard$/, { timeout: 20_000 });
   return page;
 }
-async function setTheme(page: Page, theme: "light" | "dark") {
-  const expected = theme === "dark";
-  const current = await page.evaluate(() =>
-    document.documentElement.classList.contains("dark"),
-  );
-  if (current !== expected)
-    await page.getByRole("button", { name: "Cambia tema" }).click();
-  await expect
-    .poll(() =>
-      page.evaluate(() => document.documentElement.classList.contains("dark")),
-    )
-    .toBe(expected);
-  // Theme tokens transition after the class flips; capture only the settled palette.
+async function assertDefaultTheme(page: Page) {
+  await expect(page.locator('[data-doflow-shell="daniele-design"][data-doflow-theme="default"]')).toHaveCount(1);
+  await expect(page.locator("html")).not.toHaveClass(/dark/);
+  await expect(page.getByRole("button", { name: "Tema predefinito Doflow" })).toBeVisible();
   await page.waitForTimeout(500);
 }
 async function appFetch(
@@ -888,31 +879,18 @@ test("Phase 4A collaboration, notifications and realtime are PostgreSQL-authorit
     await expect(
       limited.getByRole("heading", { name: "Notifiche" }),
     ).toBeVisible();
-    await setTheme(limited, "light");
+    await assertDefaultTheme(limited);
     await limited.screenshot({
-      path: path.join(actualDir, "phase4a-notifications-390x900-light.png"),
-      fullPage: true,
-    });
-    await setTheme(limited, "dark");
-    await limited.screenshot({
-      path: path.join(actualDir, "phase4a-notifications-390x900-dark.png"),
+      path: path.join(actualDir, "phase4a-notifications-390x900-default.png"),
       fullPage: true,
     });
     for (const width of [768, 1440]) {
       await limited.setViewportSize({ width, height: 900 });
-      await setTheme(limited, "light");
+      await assertDefaultTheme(limited);
       await limited.screenshot({
         path: path.join(
           actualDir,
-          `phase4a-notifications-${width}x900-light.png`,
-        ),
-        fullPage: true,
-      });
-      await setTheme(limited, "dark");
-      await limited.screenshot({
-        path: path.join(
-          actualDir,
-          `phase4a-notifications-${width}x900-dark.png`,
+          `phase4a-notifications-${width}x900-default.png`,
         ),
         fullPage: true,
       });

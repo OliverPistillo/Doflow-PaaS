@@ -2,193 +2,137 @@
 
 import * as React from "react"
 import {
-  CalendarClock,
-  FileText,
-  FolderKanban,
-  Handshake,
-  LayoutDashboard,
-  ListTodo,
-  Settings,
-  UsersRound,
-  CopyCheck,
-  Workflow,
-  ReceiptText,
-  FileSignature,
-  Repeat2,
   Archive,
-  Megaphone,
-  Zap,
+  CalendarDays,
+  CircleHelp,
+  ContactRound,
+  FileText,
+  Gamepad2,
+  Handshake,
+  Headphones,
+  Inbox,
+  LayoutDashboard,
+  ListChecks,
+  MessageSquareText,
   PanelsTopLeft,
+  ReceiptText,
+  Settings,
+  Zap,
 } from "lucide-react"
 
-import { NavMain } from "@/components/nav-main"
+import { NavMain, type NavigationGroup, type NavigationItem } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import { TeamSwitcher } from "@/components/team-switcher"
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarRail,
-} from "@/components/ui/sidebar"
+import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail } from "@/components/ui/sidebar"
 import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider"
-import type { DoflowCapability } from "@/features/identity/permissions"
 
-type NavigationItem = {
-  title: string
-  url: string
-  icon?: typeof LayoutDashboard
-  isActive?: boolean
-  capability?: DoflowCapability
-  items?: NavigationItem[]
-}
-const data: { teams: Array<{ name: string; logo: typeof Workflow; plan: string }>; navMain: NavigationItem[] } = {
-  teams: [
-    {
-      name: "DoFlow Workspace",
-      logo: Workflow,
-      plan: "Workspace",
-    },
-  ],
-  navMain: [
-    {
-      title: "Panoramica",
-      url: "/dashboard",
-      icon: LayoutDashboard,
-      isActive: true,
-    },
-    {
-      title: "Commerciale",
-      url: "/dashboard/commercial",
-      icon: Handshake,
-      capability: "canViewAssignedLeads",
-      items: [
-        {
-          title: "Dashboard commerciale",
-          url: "/dashboard/commercial",
-          capability: "canViewAssignedLeads",
-        },
-        {
-          title: "Tutti i lead",
-          url: "/dashboard/commercial/leads",
-          capability: "canViewAssignedLeads",
-        },
-        {
-          title: "Pipeline",
-          url: "/dashboard/commercial/pipeline",
-          capability: "canViewAssignedLeads",
-        },
-        {
-          title: "Duplicati",
-          url: "/dashboard/duplicati",
-          icon: CopyCheck,
-          capability: "canInspectDuplicates",
-        },
-      ],
-    },
-    {
-      title: "Campagne",
-      url: "/dashboard/campagne",
-      icon: Megaphone,
-      capability: "canViewCampaigns",
-    },
-    {
-      title: "Clienti",
-      url: "/dashboard/clienti",
-      icon: UsersRound,
-      capability: "canViewCustomers",
-    },
-    {
-      title: "Vendite",
-      url: "/dashboard/vendite",
-      icon: ReceiptText,
-      items: [
-        { title: "Catalogo", url: "/dashboard/catalogo", capability: "canViewSales" },
-        { title: "Vendite", url: "/dashboard/vendite", capability: "canViewSales" },
-        { title: "Ordini", url: "/dashboard/ordini", capability: "canViewOrders" },
-        { title: "Pagamenti", url: "/dashboard/pagamenti", capability: "canManagePayments" },
-        { title: "Preventivi", url: "/dashboard/preventivi", capability: "canViewQuotes" },
-        { title: "Fatture locali", url: "/dashboard/fatture", capability: "canViewInvoices" },
-      ],
-    },
-    {
-      title: "Contratti",
-      url: "/dashboard/contratti",
-      icon: FileSignature,
-      capability: "canViewContracts",
-    },
-    {
-      title: "Rinnovi",
-      url: "/dashboard/rinnovi",
-      icon: Repeat2,
-      capability: "canViewRenewals",
-    },
-    {
-      title: "Attività",
-      url: "/dashboard/attivita",
-      icon: ListTodo,
-      capability: "canViewActivities",
-    },
-    {
-      title: "Progetti",
-      url: "/dashboard/progetti",
-      icon: FolderKanban,
-      capability: "canViewProjects",
-    },
-    {
-      title: "Scadenze",
-      url: "/dashboard/scadenze",
-      icon: CalendarClock,
-      capability: "canViewProjects",
-    },
-    {
-      title: "Documenti",
-      url: "/dashboard/documenti",
-      icon: FileText,
-      capability: "canViewProjects",
-    },
-    {
-      title: "Archivio",
-      url: "/dashboard/archivio",
-      icon: Archive,
-      capability: "canManageArchive",
-    },
-    {
-      title: "Automazioni",
-      url: "/dashboard/automazioni",
-      icon: Zap,
-      capability: "canViewAutomations",
-    },
-    {
-      title: "Builder",
-      url: "/commercial/site-proposals",
-      icon: PanelsTopLeft,
-      capability: "canUseBuilder",
-    },
-    {
-      title: "Impostazioni",
-      url: "/dashboard/impostazioni",
-      icon: Settings,
-    },
-  ],
-}
+const groups: NavigationGroup[] = [
+  {
+    label: "Workspace",
+    items: [
+      { title: "Panoramica", url: "/dashboard", icon: LayoutDashboard },
+      { title: "Inbox", url: "/dashboard/notifiche", icon: Inbox, capability: "canReadNotifications" },
+      { title: "Team Space", url: "/dashboard/team-space", icon: MessageSquareText, capability: "canViewProjects" },
+      {
+        title: "Commerciale",
+        url: "/dashboard/commercial",
+        icon: Handshake,
+        capability: "canViewAssignedLeads",
+        items: [
+          { title: "Dashboard commerciale", url: "/dashboard/commercial", capability: "canViewAssignedLeads" },
+          { title: "Tutti i lead", url: "/dashboard/commercial/leads", capability: "canViewAssignedLeads" },
+          { title: "Pipeline", url: "/dashboard/commercial/pipeline", capability: "canViewAssignedLeads" },
+          { title: "Campagne", url: "/dashboard/campagne", capability: "canViewCampaigns" },
+          { title: "Duplicati", url: "/dashboard/duplicati", capability: "canInspectDuplicates" },
+          { title: "Builder", url: "/commercial/site-proposals", icon: PanelsTopLeft, capability: "canUseBuilder" },
+        ],
+      },
+      { title: "Clienti", url: "/dashboard/clienti", icon: ContactRound, capability: "canViewCustomers" },
+      {
+        title: "Lavoro",
+        url: "/dashboard/attivita",
+        icon: ListChecks,
+        items: [
+          { title: "Attività", url: "/dashboard/attivita", capability: "canViewActivities" },
+          { title: "Progetti", url: "/dashboard/progetti", capability: "canViewProjects" },
+          { title: "Scadenze", url: "/dashboard/scadenze", capability: "canViewProjects" },
+        ],
+      },
+      {
+        title: "Vendite",
+        url: "/dashboard/vendite",
+        icon: ReceiptText,
+        items: [
+          { title: "Catalogo", url: "/dashboard/catalogo", capability: "canViewSales" },
+          { title: "Vendite", url: "/dashboard/vendite", capability: "canViewSales" },
+          { title: "Ordini", url: "/dashboard/ordini", capability: "canViewOrders" },
+          { title: "Pagamenti", url: "/dashboard/pagamenti", capability: "canManagePayments" },
+          { title: "Preventivi", url: "/dashboard/preventivi", capability: "canViewQuotes" },
+          { title: "Contratti", url: "/dashboard/contratti", capability: "canViewContracts" },
+          { title: "Fatture locali", url: "/dashboard/fatture", capability: "canViewInvoices" },
+          { title: "Rinnovi", url: "/dashboard/rinnovi", capability: "canViewRenewals" },
+        ],
+      },
+      { title: "Calendario", url: "/dashboard/calendario", icon: CalendarDays, capability: "canViewActivities" },
+      { title: "Supporto", url: "/dashboard/supporto", icon: Headphones },
+      {
+        title: "Documenti",
+        url: "/dashboard/documenti",
+        icon: FileText,
+        items: [
+          { title: "Documenti", url: "/dashboard/documenti", capability: "canViewProjects" },
+          { title: "Archivio", url: "/dashboard/archivio", icon: Archive, capability: "canManageArchive" },
+        ],
+      },
+    ],
+  },
+  {
+    label: "Pausa",
+    items: [{ title: "Flow Arcade", url: "/dashboard/flow-arcade", icon: Gamepad2 }],
+  },
+  {
+    label: "Sistema",
+    placement: "bottom",
+    items: [
+      { title: "Automazioni", url: "/dashboard/automazioni", icon: Zap, capability: "canViewAutomations" },
+      { title: "Impostazioni", url: "/dashboard/impostazioni", icon: Settings },
+    ],
+  },
+  {
+    label: "",
+    separated: true,
+    items: [{ title: "Aiuto e tutorial", url: "/dashboard/supporto?view=tutorial", icon: CircleHelp }],
+  },
+]
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { hasCapability } = useDoflowIdentity()
-  const items = data.navMain.flatMap((item) => {
-    const children = item.items?.filter((child) => !child.capability || hasCapability(child.capability))
-    const allowed = !item.capability || hasCapability(item.capability) || Boolean(children?.length)
-    return allowed ? [{ ...item, items: item.items ? children : undefined }] : []
+function filterItem(item: NavigationItem, hasCapability: ReturnType<typeof useDoflowIdentity>["hasCapability"]): NavigationItem | null {
+  const children = item.items?.flatMap((child) => {
+    const filtered = filterItem(child, hasCapability)
+    return filtered ? [filtered] : []
   })
+  const allowed = !item.capability || hasCapability(item.capability) || Boolean(children?.length)
+  return allowed ? { ...item, items: item.items ? children : undefined } : null
+}
+
+export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
+  const { hasCapability } = useDoflowIdentity()
+  const visibleGroups = groups.map((group) => ({
+    ...group,
+    items: group.items.flatMap((item) => {
+      const filtered = filterItem(item, hasCapability)
+      return filtered ? [filtered] : []
+    }),
+  }))
+
   return (
     <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+      <SidebarHeader className="px-2 pb-1 pt-3">
+        <TeamSwitcher />
       </SidebarHeader>
-      <SidebarContent>
-        <NavMain items={items} />
+      <SidebarContent className="gap-0 pb-1">
+        <NavMain groups={visibleGroups} />
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="border-t border-sidebar-border/70 px-2 py-2">
         <NavUser />
       </SidebarFooter>
       <SidebarRail />

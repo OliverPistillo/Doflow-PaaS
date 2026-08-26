@@ -69,7 +69,7 @@ function RoleDashboard({ user }: { user: DoflowIdentityUser }) {
     return () => { cancelled = true }
   }, [commercial, user.id])
 
-  return <main className="@container/main mx-auto w-full max-w-7xl space-y-6 p-4 md:p-6">
+  return <main className="@container/main w-full space-y-6 p-4 md:p-6">
     <header><p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Dashboard personale autorizzata</p><h1 className="mt-1 text-2xl font-semibold">Buon pomeriggio, {user.name}</h1><div className="mt-2 flex flex-wrap items-center gap-1">{user.roles.map((role) => <Badge key={role} variant="secondary">{roleLabels[role]}</Badge>)}<RankingWinnerBadges userId={user.id} /></div></header>
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {commercial && <Metric label="Lead assegnati" value={leads.length} detail={`${won} conversioni vinte`} icon={UsersRound} />}
@@ -97,7 +97,7 @@ export function RoleAwareDashboard() {
 
   if (!administrator) return <RoleDashboard user={identity.currentUser} />
   return <div className="min-w-0">
-    <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-2 px-4 pt-4 md:px-6 md:pt-6" aria-label="Ambito dashboard amministratore">
+    <div className="flex w-full flex-wrap items-center gap-2 px-4 pt-5 md:px-6 md:pt-6" aria-label="Ambito dashboard amministratore">
       <Button size="sm" variant={view === "agency" ? "default" : "outline"} onClick={() => setView("agency")}>Agenzia</Button>
       <Button size="sm" variant={view === "personal" ? "default" : "outline"} onClick={() => setView("personal")}>Personale</Button>
       <Button size="sm" variant={view === "collaborator" ? "default" : "outline"} onClick={() => setView("collaborator")}>Collaboratore</Button>

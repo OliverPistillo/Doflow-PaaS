@@ -54,10 +54,8 @@ test('auth desktop: login Doflow coerente e accessibile', async ({ page }) => {
   expect(formBox?.x).toBeGreaterThanOrEqual(145);
   expect(formBox?.x).toBeLessThanOrEqual(180);
   await authScreenshot(page, 'auth-login-reference-desktop.png');
-  await page.getByRole('button', { name: 'Cambia tema' }).click();
-  await expect(page.locator('html')).toHaveClass(/dark/);
-  await expect(page.locator('img[src*="logo_doflow_bianco"]:visible')).toBeVisible();
-  await authScreenshot(page, 'auth-login-reference-desktop-dark.png');
+  await expect(page.getByRole('button', { name: 'Tema predefinito Doflow' })).toBeVisible();
+  await expect(page.locator('html')).not.toHaveClass(/dark/);
 });
 
 test('auth responsive: viewport richieste 1440x900 e 768x900', async ({ page }) => {

@@ -70,9 +70,15 @@ test('Phase 4B is queued, append-only, PostgreSQL-authoritative and tenant-isola
   const credentials = JSON.parse(await readFile(credentialPath, 'utf8')) as Credentials;
   const db = new PgClient({ connectionString: config.databaseUrl });
   const contextA = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  const contextB = await browser.newContext({ viewport: { width: 1440, height: 900 } }); const contextC = await browser.newContext();
+  const contextB = await browser.newContext({ viewport: { width: 1440, height: 900 } }); const contextC = await browser.newContext(); const contextD = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const pageErrors: string[] = [];
   const ownerConsoleErrors: string[] = [];
+  const limitedForbiddenGets: string[] = [];
+  contextB.on('response', (response) => {
+    if (response.request().method() === 'GET' && response.status() === 403) {
+      limitedForbiddenGets.push(new URL(response.url()).pathname);
+    }
+  });
   let fresh: BrowserContext | undefined;
   const marker = `AUTO4B-${Date.now()}`; const idempotencyKey = `run:${marker}`; const adjustmentKey = `points:${marker}`;
   try {
@@ -80,13 +86,14 @@ test('Phase 4B is queued, append-only, PostgreSQL-authoritative and tenant-isola
     const owner = await login(contextA, credentials.email, credentials, true);
     const limited = await login(contextB, 'visual.editor@acceptance.invalid', credentials);
     const secondary = await login(contextC, 'secondary.owner@acceptance.invalid', credentials);
-    for (const page of [owner, limited, secondary]) page.on('pageerror', (error) => pageErrors.push(error.message));
+    const noView = await login(contextD, 'visual.viewer@acceptance.invalid', credentials);
+    for (const page of [owner, limited, secondary, noView]) page.on('pageerror', (error) => pageErrors.push(error.message));
     owner.on('console', (message) => {
       if (message.type() === 'error') ownerConsoleErrors.push(message.text());
     });
 
     const created = await api(owner, '/tenant/automations/rules', { method: 'POST', body: {
-      name: marker, description: 'Acceptance BullMQ', category: 'general', trigger_type: 'manual_run',
+      name: `Deal sopra soglia · ${marker}`, description: 'Acceptance BullMQ', category: 'general', trigger_type: 'manual_run',
       conditions: [], actions: [{ type: 'noop' }], is_enabled: true, run_mode: 'manual', priority: 'medium',
     }});
     expect(created.ok, created.text).toBe(true); const ruleId = created.json.id;
@@ -148,35 +155,60 @@ test('Phase 4B is queued, append-only, PostgreSQL-authoritative and tenant-isola
     const limitedState = await api(limited, '/tenant/doflow/performance'); expect(limitedState.ok, limitedState.text).toBe(true);
     expect(limitedState.json.pointLedger.every((entry: any) => entry.userId === adjustmentBody.userId)).toBe(true);
     expect(limitedState.json.goals.every((item: any) => item.targetId === adjustmentBody.userId)).toBe(true);
+    expect(limitedState.json.pointPolicy).toBeNull(); expect(limitedState.json.policy).toBeNull(); expect(limitedState.json.adapters).toEqual([]);
+    const limitedRules = await api(limited, '/tenant/automations/rules'); expect(limitedRules.status, limitedRules.text).toBe(200); expect(limitedRules.json.items.some((rule: any) => String(rule.name).includes('Deal sopra soglia'))).toBe(true);
     expect((await api(limited, '/tenant/automations/rules', { method: 'POST', body: { name: 'forbidden' } })).status).toBe(403);
+    expect((await api(limited, `/tenant/automations/rules/${ruleId}`, { method: 'PATCH', body: { description: 'forbidden', optimistic_version: 2 } })).status).toBe(403);
+    expect((await api(limited, `/tenant/automations/rules/${ruleId}`, { method: 'DELETE' })).status).toBe(403);
+    expect((await api(limited, `/tenant/automations/rules/${ruleId}/disable`, { method: 'PATCH' })).status).toBe(403);
+    expect((await api(limited, `/tenant/automations/rules/${ruleId}/enable`, { method: 'PATCH' })).status).toBe(403);
+    expect((await api(limited, `/tenant/automations/rules/${ruleId}/run`, { method: 'POST', body: {}, key: randomUUID() })).status).toBe(403);
+    expect((await api(limited, `/tenant/automations/runs/${failedRun.json.id}/retry`, { method: 'POST', body: {}, key: randomUUID() })).status).toBe(403);
+    expect((await api(limited, '/tenant/doflow/performance/point-policy', { method: 'PATCH', body: { formula: policy, reason: 'forbidden' } })).status).toBe(403);
     expect((await api(limited, '/tenant/doflow/performance/point-ledger/adjustments', { method: 'POST', body: adjustmentBody, key: randomUUID() })).status).toBe(403);
+    expect((await api(noView, '/tenant/automations/rules')).status).toBe(403);
     expect((await api(secondary, '/tenant/doflow/performance')).status).toBe(403);
     const crossRule = await api(secondary, `/tenant/automations/rules/${ruleId}`); expect([403, 404]).toContain(crossRule.status);
 
     await openAutomationDashboard(owner, marker);
     await mkdir(actualDir, { recursive: true });
     await owner.screenshot({ path: path.join(actualDir, 'phase4b-automations-1440x900-light.png') });
-    await owner.goto('/automations/rules'); await expect(owner.getByRole('heading', { name: 'Regole automazione' })).toBeVisible(); await expect(owner.getByText(marker).first()).toBeVisible();
-    await owner.screenshot({ path: path.join(actualDir, 'phase4b-rules-1440x900-light.png') });
+    await owner.goto('/automations/rules'); await expect(owner.getByRole('heading', { name: 'Automazioni' })).toBeVisible(); await expect(owner.getByText(marker).first()).toBeVisible();
+    await owner.screenshot({ path: path.join(actualDir, 'phase4b-rules-1440x900-default.png') });
     await owner.goto(`/automations/rules/${ruleId}`); await expect(owner.getByRole('heading', { name: marker })).toBeVisible();
     await owner.screenshot({ path: path.join(actualDir, 'phase4b-rule-editor-1440x900-light.png') });
     await openAutomationDashboard(owner, marker);
     await owner.getByRole('tab', { name: 'Punti' }).click(); await expect(owner.getByText('Rettifica acceptance motivata').first()).toBeVisible();
     await owner.screenshot({ path: path.join(actualDir, 'phase4b-points-1440x900-light.png') });
-    await owner.getByRole('button', { name: 'Cambia tema' }).click(); await owner.getByRole('tab', { name: 'Classifiche' }).click(); await owner.getByRole('tab', { name: 'Sviluppatori' }).click();
+    await expect(owner.locator('[data-doflow-shell="daniele-design"][data-doflow-theme="default"]')).toHaveCount(1); await expect(owner.locator('html')).not.toHaveClass(/dark/); await owner.getByRole('tab', { name: 'Classifiche' }).click(); await owner.getByRole('tab', { name: 'Sviluppatori' }).click();
     await expect(owner.getByText('Calcolo server in corso…')).toBeHidden({ timeout: 30_000 }); await expect(owner.getByText(new RegExp(`${month}.*revocata`))).toBeVisible();
-    await owner.screenshot({ path: path.join(actualDir, 'phase4b-rankings-1440x900-dark.png') });
-    await owner.goto('/automations/runs'); await expect(owner.getByRole('heading', { name: 'Esecuzioni automazioni' })).toBeVisible(); await expect(owner.getByText('dead letter', { exact: false }).first()).toBeVisible();
-    await owner.screenshot({ path: path.join(actualDir, 'phase4b-runs-1440x900-dark.png') });
+    await owner.screenshot({ path: path.join(actualDir, 'phase4b-rankings-1440x900-default.png') });
+    await owner.goto('/automations/runs'); await expect(owner.getByRole('heading', { name: 'Monitoraggio' })).toBeVisible(); await expect(owner.getByText('dead letter', { exact: false }).first()).toBeVisible();
+    await owner.screenshot({ path: path.join(actualDir, 'phase4b-runs-1440x900-default.png') });
     await owner.goto(`/automations/runs/${failedRun.json.id}`); await expect(owner.getByRole('heading', { name: 'Dettaglio run' })).toBeVisible(); await expect(owner.getByRole('button', { name: 'Retry' })).toBeVisible();
-    await owner.screenshot({ path: path.join(actualDir, 'phase4b-run-error-retry-1440x900-dark.png') });
+    await owner.screenshot({ path: path.join(actualDir, 'phase4b-run-error-retry-1440x900-default.png') });
     await openAutomationDashboard(owner, marker);
     for (const viewport of [{ width: 768, height: 900 }, { width: 390, height: 900 }]) {
       await owner.setViewportSize(viewport); await owner.getByRole('tab', { name: 'Missione' }).click(); await expect(owner.getByText(`${marker} Mission`)).toBeVisible();
-      await owner.screenshot({ path: path.join(actualDir, `phase4b-mission-${viewport.width}x${viewport.height}-dark.png`) });
+      await owner.screenshot({ path: path.join(actualDir, `phase4b-mission-${viewport.width}x${viewport.height}-default.png`) });
     }
-    await limited.goto('/automations/rules'); await expect(limited.getByRole('heading', { name: 'Regole automazione' })).toBeVisible(); await expect(limited.getByText(marker).first()).toBeVisible({ timeout: 30_000 }); await expect(limited.getByRole('link', { name: 'Nuova regola' })).toHaveCount(0);
-    await limited.screenshot({ path: path.join(actualDir, 'phase4b-access-limited-1440x900-light.png') });
+    let limitedRulesGets = 0;
+    limited.on('request', (request) => {
+      if (request.method() === 'GET' && new URL(request.url()).pathname === '/api/tenant/automations/rules') limitedRulesGets += 1;
+    });
+    await limited.goto('/automations/rules'); await expect(limited.getByRole('heading', { name: 'Automazioni' })).toBeVisible(); await expect(limited.getByText('Deal sopra soglia', { exact: false }).first()).toBeVisible({ timeout: 30_000 }); await expect(limited.getByText(marker).first()).toBeVisible(); await expect(limited.getByRole('link', { name: 'Nuova automazione' })).toHaveCount(0); await expect(limited.getByRole('button', { name: /Pausa|Attiva|Esegui test/ })).toHaveCount(0); expect(limitedForbiddenGets, `Unexpected limited-user GET 403 responses: ${limitedForbiddenGets.join(', ')}`).toEqual([]); await expect(limited.locator('main[data-secondary-status]')).toHaveAttribute('data-secondary-status', 'ready'); await expect(limited.getByText('Non disponi dei permessi per caricare questo workspace.')).toHaveCount(0); expect(limitedRulesGets).toBeGreaterThan(0);
+    await limited.goto(`/automations/rules/${ruleId}`);
+    await expect(limited.getByRole('heading', { name: new RegExp(marker) })).toBeVisible();
+    await expect(limited.getByRole('button', { name: /Salva configurazione|Run|Retry/ })).toHaveCount(0);
+    await limited.getByRole('tab', { name: 'Configurazione' }).click();
+    const limitedConfiguration = limited.getByRole('tabpanel', { name: 'Configurazione' });
+    await expect(limitedConfiguration.locator('input').first()).toBeDisabled();
+    await expect(limitedConfiguration.locator('input:not([disabled]), textarea:not([disabled]), select:not([disabled])')).toHaveCount(0);
+    await limited.goto('/automations/runs'); await expect(limited.getByRole('heading', { name: 'Accesso non autorizzato' })).toBeVisible(); await expect(limited.getByRole('button', { name: 'Retry' })).toHaveCount(0); await limited.goBack(); await expect(limited.getByRole('heading', { name: new RegExp(marker) })).toBeVisible();
+    await noView.goto('about:blank');
+    const noViewRuleGets: string[] = []; noView.on('request', (request) => { const pathname = new URL(request.url()).pathname; if (request.method() === 'GET' && pathname.startsWith('/api/tenant/automations/rules')) noViewRuleGets.push(pathname); });
+    await noView.goto('/automations/rules'); await expect(noView.getByRole('heading', { name: 'Accesso non autorizzato' })).toBeVisible(); await expect(noView.getByRole('link', { name: 'Automazioni' })).toHaveCount(0); expect(noViewRuleGets, `Unexpected no-view rule requests: ${noViewRuleGets.join(', ')}`).toEqual([]);
+    await limited.screenshot({ path: path.join(actualDir, 'phase4b-access-limited-1440x900-default.png') });
 
     restart('redis'); restart('frontend'); restart('backend');
     fresh = await browser.newContext(); const ownerFresh = await login(fresh, credentials.email, credentials, true);
@@ -193,7 +225,7 @@ test('Phase 4B is queued, append-only, PostgreSQL-authoritative and tenant-isola
       (SELECT COUNT(*) FROM doflow.point_ledger WHERE id=$5) AS ledger,
       (SELECT COUNT(*) FROM doflow.ranking_snapshots WHERE id=$6) AS snapshots,
       (SELECT COUNT(*) FROM doflow.audit_log WHERE action IN ('point_policy_version_created','point_ledger_adjusted','ranking_consolidated')) AS audits`,
-      [`${marker}%`, ruleId, first.json.id, failedRun.json.id, adjustment.json.id, snapshot.json.id])).rows[0];
+      [`%${marker}%`, ruleId, first.json.id, failedRun.json.id, adjustment.json.id, snapshot.json.id])).rows[0];
     expect(Number(counts.rules)).toBe(2); expect(Number(counts.runs)).toBe(1); expect(Number(counts.versions)).toBe(2);
     expect(Number(counts.executions)).toBeGreaterThanOrEqual(2); expect(Number(counts.dead_letters)).toBe(1); expect(Number(counts.ledger)).toBe(1); expect(Number(counts.snapshots)).toBe(1); expect(Number(counts.audits)).toBeGreaterThanOrEqual(3);
     await mkdir(path.dirname(resultPath), { recursive: true });
@@ -207,6 +239,6 @@ test('Phase 4B is queued, append-only, PostgreSQL-authoritative and tenant-isola
     expect(expectedOwnerConsoleErrors.filter((message) => message.includes('status of 409 (Conflict)'))).toHaveLength(2);
     await writeFile(resultPath, JSON.stringify({ marker, contextA: 'owner/MFA/persistence', contextB: 'own-only/redacted/forbidden mutations', contextC: 'tenant isolated', restarts: ['redis','frontend','backend'], pageErrors, expectedOwnerConsoleErrors, unexpectedOwnerConsoleErrors, counts }, null, 2));
   } finally {
-    await contextA.close(); await contextB.close(); await contextC.close(); if (fresh) await fresh.close(); await db.end().catch(() => undefined);
+    await contextA.close(); await contextB.close(); await contextC.close(); await contextD.close(); if (fresh) await fresh.close(); await db.end().catch(() => undefined);
   }
 });

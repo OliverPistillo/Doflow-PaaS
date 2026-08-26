@@ -86,10 +86,12 @@ for (const token of tabTokens) {
 }
 
 const tenantLayout = read("apps/frontend/src/app/(tenant)/layout.tsx");
+const doflowShell = read("apps/frontend/src/components/layout/doflow-daniele-shell.tsx");
+if (!tenantLayout.includes("DoflowDanieleShell")) fail("Doflow replacement shell is not selected by tenant layout");
 for (const redirect of ["/leads", "/pipeline", "/projects", "/activities", "/quotes", "/contracts", "/orders", "/payments", "/invoices", "/notifications"]) {
-  if (!tenantLayout.includes(`[\"${redirect}\"`)) fail(`legacy Doflow redirect missing: ${redirect}`);
+  if (!doflowShell.includes(`[\"${redirect}\"`)) fail(`legacy Doflow redirect missing: ${redirect}`);
 }
-if (!tenantLayout.includes('pathname.startsWith("/commercial/site-proposals")')) fail("Builder is not exempted from legacy redirects");
+if (!doflowShell.includes('pathname.startsWith("/commercial/site-proposals")')) fail("Builder is not exempted from legacy redirects");
 
 const jwtStorage = read("apps/frontend/src/lib/jwt.ts");
 if (existsSync(path.join(root, "apps/frontend/src/lib/auth-storage.ts")) || /localStorage|sessionStorage|atob|parseJwt|getAuthToken/.test(jwtStorage)) {

@@ -1,0 +1,15 @@
+"use client"
+
+import Link from "next/link"
+import { FolderKanban, ListTodo, UsersRound } from "lucide-react"
+
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider"
+import { useAuthorizedCommercial } from "@/features/identity/use-authorized-commercial"
+
+export default function TeamSpacePage() {
+  const identity = useDoflowIdentity()
+  const { projects, activities } = useAuthorizedCommercial()
+  return <main className="w-full space-y-5 p-4 md:p-6" data-team-space-source="server"><header><h1 className="text-2xl font-semibold tracking-tight">Team Space</h1><p className="text-sm text-muted-foreground">Persone, lavoro e progetti nel perimetro autorizzato.</p></header><section className="grid gap-4 lg:grid-cols-3"><Card><CardHeader><CardTitle className="flex items-center gap-2"><UsersRound className="size-5" />Team</CardTitle><CardDescription>{identity.users.length} persone autorizzate</CardDescription></CardHeader><CardContent className="space-y-2">{identity.users.map((user) => <div key={user.id} className="flex items-center gap-3 rounded-lg border p-3"><span className="grid size-8 place-items-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{user.name.slice(0, 2).toUpperCase()}</span><div className="min-w-0"><p className="truncate text-sm font-medium">{user.name}</p><p className="truncate text-xs text-muted-foreground">{user.roles.join(" · ")}</p></div>{user.id === identity.currentUser.id ? <Badge variant="secondary" className="ml-auto">Tu</Badge> : null}</div>)}</CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2"><FolderKanban className="size-5" />Progetti condivisi</CardTitle><CardDescription>Dati Delivery Core autorizzati</CardDescription></CardHeader><CardContent className="space-y-2">{projects.slice(0, 8).map((project) => <Link key={project.id} href={`/dashboard/progetti/${project.id}`} className="flex items-center justify-between gap-3 rounded-lg border p-3 hover:bg-muted/40"><span className="truncate text-sm font-medium">{project.name}</span><Badge variant="outline">{project.status}</Badge></Link>)}{!projects.length ? <p className="text-sm text-muted-foreground">Nessun progetto condiviso.</p> : null}</CardContent></Card><Card><CardHeader><CardTitle className="flex items-center gap-2"><ListTodo className="size-5" />Attività del team</CardTitle><CardDescription>Assegnazioni visibili dal workspace</CardDescription></CardHeader><CardContent className="space-y-2">{activities.slice(0, 8).map(({ activity, customer }) => <Link key={activity.id} href={`/dashboard/attivita?activityId=${activity.id}`} className="block rounded-lg border p-3 hover:bg-muted/40"><p className="truncate text-sm font-medium">{activity.title}</p><p className="truncate text-xs text-muted-foreground">{customer.profile.company} · {activity.status}</p></Link>)}{!activities.length ? <p className="text-sm text-muted-foreground">Nessuna attività autorizzata.</p> : null}</CardContent></Card></section></main>
+}

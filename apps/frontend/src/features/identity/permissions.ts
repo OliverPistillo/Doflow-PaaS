@@ -85,14 +85,23 @@ export const doflowCapabilities = [
   "canReadNotifications",
   "canManageNotificationPreferences",
   "canReadAdministrativeAudit",
+  "canRunAutomations",
+  "canRetryAutomations",
+  "canViewAutomationErrors",
+  "canViewOwnPoints",
+  "canViewGlobalPoints",
+  "canManagePointPolicies",
+  "canViewRankings",
+  "canManageRankings",
+  "canManageGoals",
 ] as const
 export type DoflowCapability = (typeof doflowCapabilities)[number]
 
 const roleCapabilities: Record<DoflowRole, readonly DoflowCapability[]> = {
   administrator: doflowCapabilities,
-  commercial: ["canViewAssignedLeads", "canCreateLeads", "canEditAssignedLead", "canViewCustomers", "canEditCustomers", "canViewProjects", "canViewActivities", "canViewCommercialValues", "canInspectDuplicates", "canViewSales", "canManageOwnSales", "canViewOrders", "canManageOwnOrders", "canManagePayments", "canRecordPayments", "canRecordRefunds", "canGenerateProjectFromOrder", "canViewContracts", "canManageOwnContracts", "canViewRenewals", "canManageOwnRenewals", "canViewCampaigns", "canViewQuotes", "canManageOwnQuotes", "canReadComments", "canCreateComments", "canReplyComments", "canEditOwnComments", "canResolveThreads", "canMentionUsers", "canReactComments", "canAttachCommentFiles", "canReadTimeline", "canReadHistory", "canReadNotifications", "canManageNotificationPreferences"],
-  web_developer: ["canViewCustomers", "canViewProjects", "canViewAssignedProjects", "canViewActivities", "canManageAssignedActivities", "canManageProjectTasks", "canTrackProjectTime", "canSubmitProjectQa", "canUseBuilder", "canViewOrders", "canViewContracts", "canViewRenewals", "canReadComments", "canCreateComments", "canReplyComments", "canEditOwnComments", "canResolveThreads", "canMentionUsers", "canReactComments", "canAttachCommentFiles", "canReadTimeline", "canReadHistory", "canReadNotifications", "canManageNotificationPreferences"],
-  project_manager: ["canViewCustomers", "canViewProjects", "canViewAssignedProjects", "canCreateProject", "canEditProject", "canManageProjects", "canManageProjectMembers", "canManageProjectTasks", "canTrackProjectTime", "canViewTeamTime", "canSubmitProjectQa", "canSuperviseProject", "canManageAssignedActivities", "canViewOrders", "canViewContracts", "canViewRenewals", "canApproveProjectWork", "canPublishClientUpdate", "canPublishProject", "canDeliverProject", "canReopenProject", "canArchiveProject", "canViewGlobalWorkload", "canUseBuilder", "canViewAutomations", "canReadComments", "canCreateComments", "canReplyComments", "canEditOwnComments", "canModerateComments", "canResolveThreads", "canMentionUsers", "canReactComments", "canAttachCommentFiles", "canReadTimeline", "canReadHistory", "canReadNotifications", "canManageNotificationPreferences"],
+  commercial: ["canViewAssignedLeads", "canCreateLeads", "canEditAssignedLead", "canViewCustomers", "canEditCustomers", "canViewProjects", "canViewActivities", "canViewCommercialValues", "canInspectDuplicates", "canViewSales", "canManageOwnSales", "canViewOrders", "canManageOwnOrders", "canManagePayments", "canRecordPayments", "canRecordRefunds", "canGenerateProjectFromOrder", "canViewContracts", "canManageOwnContracts", "canViewRenewals", "canManageOwnRenewals", "canViewCampaigns", "canViewQuotes", "canManageOwnQuotes", "canViewOwnPoints", "canViewRankings", "canReadComments", "canCreateComments", "canReplyComments", "canEditOwnComments", "canResolveThreads", "canMentionUsers", "canReactComments", "canAttachCommentFiles", "canReadTimeline", "canReadHistory", "canReadNotifications", "canManageNotificationPreferences"],
+  web_developer: ["canViewCustomers", "canViewProjects", "canViewAssignedProjects", "canViewActivities", "canManageAssignedActivities", "canManageProjectTasks", "canTrackProjectTime", "canSubmitProjectQa", "canUseBuilder", "canViewOrders", "canViewContracts", "canViewRenewals", "canViewAutomations", "canViewOwnPoints", "canViewRankings", "canReadComments", "canCreateComments", "canReplyComments", "canEditOwnComments", "canResolveThreads", "canMentionUsers", "canReactComments", "canAttachCommentFiles", "canReadTimeline", "canReadHistory", "canReadNotifications", "canManageNotificationPreferences"],
+  project_manager: ["canViewCustomers", "canViewProjects", "canViewAssignedProjects", "canCreateProject", "canEditProject", "canManageProjects", "canManageProjectMembers", "canManageProjectTasks", "canTrackProjectTime", "canViewTeamTime", "canSubmitProjectQa", "canSuperviseProject", "canManageAssignedActivities", "canViewOrders", "canViewContracts", "canViewRenewals", "canApproveProjectWork", "canPublishClientUpdate", "canPublishProject", "canDeliverProject", "canReopenProject", "canArchiveProject", "canViewGlobalWorkload", "canUseBuilder", "canViewAutomations", "canRunAutomations", "canViewAutomationErrors", "canViewOwnPoints", "canViewGlobalPoints", "canViewRankings", "canReadComments", "canCreateComments", "canReplyComments", "canEditOwnComments", "canModerateComments", "canResolveThreads", "canMentionUsers", "canReactComments", "canAttachCommentFiles", "canReadTimeline", "canReadHistory", "canReadNotifications", "canManageNotificationPreferences"],
 }
 
 export type PermissionIdentity = { id: string; roles: readonly DoflowRole[]; capabilities?: readonly DoflowCapability[] }

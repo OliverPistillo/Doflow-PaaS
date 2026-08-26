@@ -13,7 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider";
+import { AccessDenied } from "@/features/identity/access-denied";
+import { useOptionalDoflowIdentity } from "@/features/identity/doflow-identity-provider";
+import { useAutomationCenterAccess } from "@/components/tenant-automation-center/automation-center-model";
 import {
   automationsApi,
   type AutomationActionLog,
@@ -61,10 +63,15 @@ type AutomationRuleFormState = {
 };
 
 function useAutomationPermissions() {
-  const identity = useDoflowIdentity();
+  const identity = useOptionalDoflowIdentity();
+  const access = useAutomationCenterAccess();
   return {
-    canManage: identity.hasCapability("canManageAutomations"),
-    canFinance: identity.hasCapability("canViewGlobalCommerceValues"),
+    canView: access.canViewRules,
+    canManage: access.canManageRules,
+    canRun: access.canRunRules,
+    canRetry: access.canRetryRuns,
+    canViewRuns: access.canViewRuns,
+    canFinance: identity ? identity.hasCapability("canViewGlobalCommerceValues") : true,
   };
 }
 
@@ -97,9 +104,9 @@ function StateBadge({ value, children }: { value?: string | null; children?: Rea
   return <Badge variant="outline" className={badgeClass(value)}>{children || value || "-"}</Badge>;
 }
 
-function SelectField({ value, options, placeholder, onChange }: { value?: string; options: Array<{ value: string; label: string }>; placeholder: string; onChange: (value: string) => void }) {
+function SelectField({ value, options, placeholder, onChange, disabled = false }: { value?: string; options: Array<{ value: string; label: string }>; placeholder: string; onChange: (value: string) => void; disabled?: boolean }) {
   return (
-    <Select value={value || "__all__"} onValueChange={(next) => onChange(next === "__all__" ? "" : next)}>
+    <Select value={value || "__all__"} onValueChange={(next) => onChange(next === "__all__" ? "" : next)} disabled={disabled}>
       <SelectTrigger><SelectValue placeholder={placeholder} /></SelectTrigger>
       <SelectContent>
         <SelectItem value="__all__">{placeholder}</SelectItem>
@@ -113,13 +120,14 @@ function JsonBlock({ value, canFinance = true }: { value: unknown; canFinance?: 
   return <pre className="max-h-80 overflow-auto rounded-lg bg-muted/50 p-3 text-xs">{compactJson(scrubFinancePayload(value, canFinance))}</pre>;
 }
 
-function useAutomationOptions() {
+function useAutomationOptions(enabled = true) {
   const [options, setOptions] = useState<AutomationOptions | null>(null);
   useEffect(() => {
+    if (!enabled) return;
     let active = true;
     automationsApi.options().then((data) => { if (active) setOptions(data); }).catch(() => undefined);
     return () => { active = false; };
-  }, []);
+  }, [enabled]);
   return options;
 }
 
@@ -150,7 +158,8 @@ export function AutomationsSummaryCards({ summary }: { summary?: AutomationSumma
 
 export function AutomationsOverviewPage() {
   const { toast } = useToast();
-  const options = useAutomationOptions();
+  const permissions = useAutomationPermissions();
+  const options = useAutomationOptions(permissions.canRun);
   const [summary, setSummary] = useState<AutomationSummary | null>(null);
   const [runs, setRuns] = useState<AutomationRun[]>([]);
   const [rules, setRules] = useState<AutomationRule[]>([]);
@@ -158,15 +167,16 @@ export function AutomationsOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { canFinance, canManage } = useAutomationPermissions();
+  const { canFinance, canManage, canRun, canView, canViewRuns } = permissions;
 
   const load = useCallback(async () => {
+    if (!canView) { setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
       const [summaryData, runsData, rulesData] = await Promise.all([
-        automationsApi.summary(),
-        automationsApi.runs({ limit: 5 }),
+        canViewRuns ? automationsApi.summary() : Promise.resolve(null),
+        canViewRuns ? automationsApi.runs({ limit: 5 }) : Promise.resolve({ items: [] as AutomationRun[] }),
         automationsApi.rules({ limit: 5, is_enabled: true }),
       ]);
       setSummary(summaryData);
@@ -177,11 +187,12 @@ export function AutomationsOverviewPage() {
     } finally {
       setLoading(false);
     }
-  }, [canFinance]);
+  }, [canFinance, canView, canViewRuns]);
 
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
 
   const runDue = async () => {
+    if (!canRun) return;
     if (!window.confirm("Eseguire ora le automazioni dovute?")) return;
     setRunning(true);
     try {
@@ -196,6 +207,7 @@ export function AutomationsOverviewPage() {
   };
 
   const runTrigger = async () => {
+    if (!canRun) return;
     setRunning(true);
     try {
       const result = await automationsApi.runTrigger(triggerType, {});
@@ -208,6 +220,7 @@ export function AutomationsOverviewPage() {
     }
   };
 
+  if (!canView) return <AccessDenied resource="alle regole di automazione" />;
   return (
     <div className="flex-1 space-y-5 p-4 md:p-6">
       <Header title="Automazioni" description="Motore interno tenant-scoped per regole, trigger, azioni sicure, run e dedupe.">
@@ -215,8 +228,8 @@ export function AutomationsOverviewPage() {
         <Button asChild variant="outline"><Link href="/automations/templates">Template</Link></Button>
       </Header>
       <ErrorBox error={error} />
-      {loading ? <Loading /> : <AutomationsSummaryCards summary={summary} />}
-      <Card>
+      {loading ? <Loading /> : canViewRuns ? <AutomationsSummaryCards summary={summary} /> : null}
+      {canRun ? <Card>
         <CardHeader>
           <CardTitle>Run manuali</CardTitle>
           <CardDescription>Avvio manuale controllato; trigger e schedulazioni sono accodati dal backend su BullMQ.</CardDescription>
@@ -231,7 +244,7 @@ export function AutomationsOverviewPage() {
             <Button variant="outline" onClick={runTrigger} disabled={running}><Zap className="mr-2 h-4 w-4" /> Esegui trigger</Button>
           </div>
         </CardContent>
-      </Card>
+      </Card> : null}
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>Regole abilitate</CardTitle><CardDescription>Prime regole attive restituite dal backend.</CardDescription></CardHeader>
@@ -239,7 +252,7 @@ export function AutomationsOverviewPage() {
         </Card>
         <Card>
           <CardHeader><CardTitle>Ultime esecuzioni</CardTitle><CardDescription>Storico run più recente.</CardDescription></CardHeader>
-          <CardContent>{runs.length ? <RunsTable rows={runs} compact /> : <Empty>Nessuna esecuzione registrata.</Empty>}</CardContent>
+          <CardContent>{canViewRuns ? (runs.length ? <RunsTable rows={runs} compact /> : <Empty>Nessuna esecuzione registrata.</Empty>) : <Empty>Il monitoraggio richiede una capability dedicata.</Empty>}</CardContent>
         </Card>
       </div>
     </div>
@@ -252,9 +265,10 @@ export function AutomationTemplatesPage() {
   const [selected, setSelected] = useState<AutomationTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { canManage } = useAutomationPermissions();
+  const { canManage, canView } = useAutomationPermissions();
 
   const load = useCallback(async () => {
+    if (!canView) { setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
@@ -265,7 +279,7 @@ export function AutomationTemplatesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canView]);
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
 
   const seed = async () => {
@@ -278,6 +292,7 @@ export function AutomationTemplatesPage() {
     }
   };
 
+  if (!canView) return <AccessDenied resource="ai template di automazione" />;
   return (
     <div className="flex-1 space-y-5 p-4 md:p-6">
       <Header title="Template automazioni" description="Template di sistema riusabili, read-only lato UI.">
@@ -320,14 +335,16 @@ export function AutomationTemplatesPage() {
 }
 
 export function AutomationRulesPage() {
-  const options = useAutomationOptions();
+  const permissions = useAutomationPermissions();
+  const options = useAutomationOptions(permissions.canView);
   const [rows, setRows] = useState<AutomationRule[]>([]);
   const [filters, setFilters] = useState<Filters>({ search: "", category: "", trigger_type: "", run_mode: "", priority: "", is_enabled: "" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { canFinance, canManage } = useAutomationPermissions();
+  const { canFinance, canManage, canRun, canView } = permissions;
 
   const load = useCallback(async () => {
+    if (!canView) { setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
@@ -338,9 +355,10 @@ export function AutomationRulesPage() {
     } finally {
       setLoading(false);
     }
-  }, [canFinance, filters]);
+  }, [canFinance, canView, filters]);
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
 
+  if (!canView) return <AccessDenied resource="alle regole di automazione" />;
   return (
     <div className="flex-1 space-y-5 p-4 md:p-6">
       <Header title="Regole automazione" description="Regole effettive del tenant, con enable/disable e run manuale.">
@@ -356,13 +374,15 @@ export function AutomationRulesPage() {
           <Button variant="outline" onClick={load}><RefreshCw className="mr-2 h-4 w-4" /> Filtra</Button>
         </CardContent>
       </Card>
-      {loading ? <Loading /> : <RulesTable rows={rows} onReload={load} />}
+      {loading ? <Loading /> : <RulesTable rows={rows} onReload={load} canManage={canManage} canRun={canRun} />}
     </div>
   );
 }
 
-function RulesTable({ rows, compact = false, onReload }: { rows: AutomationRule[]; compact?: boolean; onReload?: () => void }) {
-  const { canManage } = useAutomationPermissions();
+function RulesTable({ rows, compact = false, onReload, canManage: requestedCanManage, canRun: requestedCanRun }: { rows: AutomationRule[]; compact?: boolean; onReload?: () => void; canManage?: boolean; canRun?: boolean }) {
+  const permissions = useAutomationPermissions();
+  const canManage = requestedCanManage ?? permissions.canManage;
+  const canRun = requestedCanRun ?? permissions.canRun;
   if (!rows.length) return <Empty>Nessuna regola automazione presente.</Empty>;
   return (
     <div className="overflow-x-auto rounded-lg border">
@@ -382,7 +402,7 @@ function RulesTable({ rows, compact = false, onReload }: { rows: AutomationRule[
               <td className="px-4 py-3"><StateBadge value={row.priority}>{label(PRIORITY_LABELS, row.priority)}</StateBadge></td>
               <td className="px-4 py-3"><StateBadge value={row.is_enabled ? "success" : "skipped"}>{row.is_enabled ? "Abilitata" : "Disabilitata"}</StateBadge></td>
               <td className="px-4 py-3">{formatDateTime(row.last_run_at)}</td>
-              {compact ? null : <td className="px-4 py-3"><AutomationRuleActions rule={row} onReload={onReload} canManage={canManage} /></td>}
+              {compact ? null : <td className="px-4 py-3"><AutomationRuleActions rule={row} onReload={onReload} canManage={canManage} canRun={canRun} /></td>}
             </tr>
           ))}
         </tbody>
@@ -391,11 +411,12 @@ function RulesTable({ rows, compact = false, onReload }: { rows: AutomationRule[
   );
 }
 
-export function AutomationRuleActions({ rule, onReload, canManage: requestedCanManage }: { rule: AutomationRule; onReload?: () => void; canManage?: boolean }) {
+export function AutomationRuleActions({ rule, onReload, canManage: requestedCanManage, canRun: requestedCanRun }: { rule: AutomationRule; onReload?: () => void; canManage?: boolean; canRun?: boolean }) {
   const { toast } = useToast();
   const router = useRouter();
-  const { canManage: capabilityCanManage } = useAutomationPermissions();
+  const { canManage: capabilityCanManage, canRun: capabilityCanRun } = useAutomationPermissions();
   const canManage = requestedCanManage ?? capabilityCanManage;
+  const canRun = requestedCanRun ?? capabilityCanRun;
   const [busy, setBusy] = useState(false);
   const act = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true);
@@ -417,11 +438,11 @@ export function AutomationRuleActions({ rule, onReload, canManage: requestedCanM
       {canManage ? (
         <>
           {rule.is_enabled ? <Button size="sm" variant="outline" disabled={busy} onClick={() => act(() => automationsApi.disableRule(rule.id), "Regola disabilitata")}>Disable</Button> : <Button size="sm" variant="outline" disabled={busy} onClick={() => act(() => automationsApi.enableRule(rule.id), "Regola abilitata")}>Enable</Button>}
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => window.confirm("Eseguire ora questa automazione?") && act(() => automationsApi.runRule(rule.id), "Regola eseguita")}>Run</Button>
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => act(async () => downloadJson(`automation-rule-${rule.id}.json`, await automationsApi.exportRule(rule.id)), "Export creato")}><Download className="h-4 w-4" /></Button>
           <Button size="sm" variant="outline" disabled={busy} onClick={() => window.confirm("Eliminare questa regola?") && act(() => automationsApi.deleteRule(rule.id), "Regola eliminata")}><Trash2 className="h-4 w-4 text-destructive" /></Button>
         </>
       ) : null}
+      {canRun ? <Button size="sm" variant="outline" disabled={busy} onClick={() => window.confirm("Eseguire ora questa automazione?") && act(() => automationsApi.runRule(rule.id), "Regola eseguita")}>Run</Button> : null}
+      <Button size="sm" variant="outline" disabled={busy} onClick={() => act(async () => downloadJson(`automation-rule-${rule.id}.json`, await automationsApi.exportRule(rule.id)), "Export creato")} aria-label="Esporta regola"><Download className="h-4 w-4" /></Button>
     </div>
   );
 }
@@ -429,7 +450,8 @@ export function AutomationRuleActions({ rule, onReload, canManage: requestedCanM
 export function AutomationRuleFormPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const options = useAutomationOptions();
+  const { canManage } = useAutomationPermissions();
+  const options = useAutomationOptions(canManage);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -448,6 +470,7 @@ export function AutomationRuleFormPage() {
     max_runs_per_day: "50",
   });
   const save = async () => {
+    if (!canManage) return;
     setSaving(true);
     setError(null);
     try {
@@ -474,6 +497,7 @@ export function AutomationRuleFormPage() {
       setSaving(false);
     }
   };
+  if (!canManage) return <AccessDenied resource="alla gestione delle automazioni" />;
   return (
     <div className="flex-1 space-y-5 p-4 md:p-6">
       <Header title="Nuova regola" description="Crea una regola interna usando solo trigger, condizioni e azioni allowlist." />
@@ -484,52 +508,54 @@ export function AutomationRuleFormPage() {
   );
 }
 
-export function AutomationRuleForm({ form, setForm, options }: { form: AutomationRuleFormState; setForm: (update: (previous: AutomationRuleFormState) => AutomationRuleFormState) => void; options: AutomationOptions | null }) {
+export function AutomationRuleForm({ form, setForm, options, readOnly = false }: { form: AutomationRuleFormState; setForm: (update: (previous: AutomationRuleFormState) => AutomationRuleFormState) => void; options: AutomationOptions | null; readOnly?: boolean }) {
   const set = <Key extends keyof AutomationRuleFormState>(key: Key, value: AutomationRuleFormState[Key]) => setForm((prev) => ({ ...prev, [key]: value }));
   return (
     <Card>
       <CardContent className="grid gap-4 p-4 lg:grid-cols-2">
-        <Field label="name" value={form.name} onChange={(v) => set("name", v)} />
-        <Field label="description" value={form.description} onChange={(v) => set("description", v)} />
-        <SelectField value={form.category} options={optionList(options?.categories, CATEGORY_LABELS)} placeholder="Categoria" onChange={(v) => set("category", v || "general")} />
-        <SelectField value={form.trigger_type} options={optionList(options?.triggers, TRIGGER_LABELS)} placeholder="Trigger" onChange={(v) => set("trigger_type", v || "manual_run")} />
-        <SelectField value={form.run_mode} options={optionList(options?.runModes, RUN_MODE_LABELS)} placeholder="Run mode" onChange={(v) => set("run_mode", v || "manual")} />
-        <SelectField value={form.priority} options={optionList(options?.priorities, PRIORITY_LABELS)} placeholder="Priorità" onChange={(v) => set("priority", v || "medium")} />
-        <Field label="cooldown_minutes" type="number" value={form.cooldown_minutes} onChange={(v) => set("cooldown_minutes", v)} />
-        <Field label="max_runs_per_day" type="number" value={form.max_runs_per_day} onChange={(v) => set("max_runs_per_day", v)} />
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(form.is_enabled)} onChange={(e) => set("is_enabled", e.target.checked)} /> Abilita subito</label>
-        <JsonField label="trigger_config" value={form.trigger_config} onChange={(v) => set("trigger_config", v)} />
-        <JsonField label="conditions" value={form.conditions} onChange={(v) => set("conditions", v)} />
-        <JsonField label="actions" value={form.actions} onChange={(v) => set("actions", v)} />
-        <JsonField label="schedule_config" value={form.schedule_config} onChange={(v) => set("schedule_config", v)} />
+        <Field label="name" value={form.name} onChange={(v) => set("name", v)} disabled={readOnly} />
+        <Field label="description" value={form.description} onChange={(v) => set("description", v)} disabled={readOnly} />
+        <SelectField value={form.category} options={optionList(options?.categories, CATEGORY_LABELS)} placeholder="Categoria" onChange={(v) => set("category", v || "general")} disabled={readOnly} />
+        <SelectField value={form.trigger_type} options={optionList(options?.triggers, TRIGGER_LABELS)} placeholder="Trigger" onChange={(v) => set("trigger_type", v || "manual_run")} disabled={readOnly} />
+        <SelectField value={form.run_mode} options={optionList(options?.runModes, RUN_MODE_LABELS)} placeholder="Run mode" onChange={(v) => set("run_mode", v || "manual")} disabled={readOnly} />
+        <SelectField value={form.priority} options={optionList(options?.priorities, PRIORITY_LABELS)} placeholder="Priorità" onChange={(v) => set("priority", v || "medium")} disabled={readOnly} />
+        <Field label="cooldown_minutes" type="number" value={form.cooldown_minutes} onChange={(v) => set("cooldown_minutes", v)} disabled={readOnly} />
+        <Field label="max_runs_per_day" type="number" value={form.max_runs_per_day} onChange={(v) => set("max_runs_per_day", v)} disabled={readOnly} />
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={Boolean(form.is_enabled)} onChange={(e) => set("is_enabled", e.target.checked)} disabled={readOnly} /> Abilita subito</label>
+        <JsonField label="trigger_config" value={form.trigger_config} onChange={(v) => set("trigger_config", v)} disabled={readOnly} />
+        <JsonField label="conditions" value={form.conditions} onChange={(v) => set("conditions", v)} disabled={readOnly} />
+        <JsonField label="actions" value={form.actions} onChange={(v) => set("actions", v)} disabled={readOnly} />
+        <JsonField label="schedule_config" value={form.schedule_config} onChange={(v) => set("schedule_config", v)} disabled={readOnly} />
       </CardContent>
     </Card>
   );
 }
 
-function Field({ label: fieldLabel, value, onChange, type = "text" }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
-  return <div className="grid gap-2"><Label>{fieldLabel}</Label><Input type={type} value={value || ""} onChange={(e) => onChange(e.target.value)} /></div>;
+function Field({ label: fieldLabel, value, onChange, type = "text", disabled = false }: { label: string; value: string; onChange: (value: string) => void; type?: string; disabled?: boolean }) {
+  return <div className="grid gap-2"><Label>{fieldLabel}</Label><Input type={type} value={value || ""} onChange={(e) => onChange(e.target.value)} disabled={disabled} /></div>;
 }
 
-function JsonField({ label: fieldLabel, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return <div className="grid gap-2 lg:col-span-2"><Label>{fieldLabel}</Label><Textarea className="min-h-28 font-mono text-xs" value={value || ""} onChange={(e) => onChange(e.target.value)} /></div>;
+function JsonField({ label: fieldLabel, value, onChange, disabled = false }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean }) {
+  return <div className="grid gap-2 lg:col-span-2"><Label>{fieldLabel}</Label><Textarea className="min-h-28 font-mono text-xs" value={value || ""} onChange={(e) => onChange(e.target.value)} disabled={disabled} /></div>;
 }
 
 export function AutomationRuleDetailPage({ ruleId }: { ruleId: string }) {
   const { toast } = useToast();
-  const options = useAutomationOptions();
+  const permissions = useAutomationPermissions();
+  const options = useAutomationOptions(permissions.canView);
   const [rule, setRule] = useState<AutomationRule | null>(null);
   const [runs, setRuns] = useState<AutomationRun[]>([]);
   const [form, setForm] = useState<AutomationRuleFormState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { canFinance, canManage } = useAutomationPermissions();
+  const { canFinance, canManage, canRun, canView, canViewRuns } = permissions;
 
   const load = useCallback(async () => {
+    if (!canView) { setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
-      const [ruleData, runsData] = await Promise.all([automationsApi.rule(ruleId), automationsApi.ruleRuns(ruleId, { limit: 10 })]);
+      const [ruleData, runsData] = await Promise.all([automationsApi.rule(ruleId), canViewRuns ? automationsApi.ruleRuns(ruleId, { limit: 10 }) : Promise.resolve({ items: [] as AutomationRun[] })]);
       setRule(ruleData);
       setRuns(runsData.items || []);
       setForm({
@@ -552,11 +578,11 @@ export function AutomationRuleDetailPage({ ruleId }: { ruleId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [ruleId]);
+  }, [canView, canViewRuns, ruleId]);
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
 
   const save = async () => {
-    if (!form || !rule) return;
+    if (!canManage || !form || !rule) return;
     try {
       const updated = await automationsApi.updateRule(ruleId, {
         name: form.name,
@@ -582,6 +608,7 @@ export function AutomationRuleDetailPage({ ruleId }: { ruleId: string }) {
     }
   };
 
+  if (!canView) return <AccessDenied resource="alla regola di automazione" />;
   if (loading) return <div className="flex-1 p-4 md:p-6"><Loading /></div>;
   if (error || !rule || !form) return <div className="flex-1 p-4 md:p-6"><ErrorBox error={error || "Regola non trovata"} /></div>;
 
@@ -589,23 +616,23 @@ export function AutomationRuleDetailPage({ ruleId }: { ruleId: string }) {
     <div className="flex-1 space-y-5 p-4 md:p-6">
       <Header title={rule.name} description={`${label(CATEGORY_LABELS, rule.category)} · ${label(TRIGGER_LABELS, rule.trigger_type)}`}>
         <Button asChild variant="outline"><Link href="/automations/rules">Lista</Link></Button>
-        <AutomationRuleActions rule={rule} onReload={load} canManage={canManage} />
+        <AutomationRuleActions rule={rule} onReload={load} canManage={canManage} canRun={canRun} />
       </Header>
       <Tabs defaultValue="overview">
         <TabsList className="flex h-auto flex-wrap justify-start">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="config">Configurazione</TabsTrigger>
-          <TabsTrigger value="runs">Runs</TabsTrigger>
+          {canViewRuns ? <TabsTrigger value="runs">Runs</TabsTrigger> : null}
         </TabsList>
         <TabsContent value="overview" className="space-y-4">
           <Card><CardContent className="grid gap-4 p-4 md:grid-cols-3"><Info label="Enabled" value={rule.is_enabled ? "Sì" : "No"} /><Info label="Run mode" value={label(RUN_MODE_LABELS, rule.run_mode)} /><Info label="Priorità" value={label(PRIORITY_LABELS, rule.priority)} /><Info label="Cooldown" value={`${rule.cooldown_minutes || 0} min`} /><Info label="Max run/giorno" value={String(rule.max_runs_per_day || 0)} /><Info label="Next run" value={formatDateTime(rule.next_run_at)} /><Info label="Ultimo run" value={formatDateTime(rule.last_run_at)} /><Info label="Ultimo OK" value={formatDateTime(rule.last_success_at)} /><Info label="Ultimo errore" value={formatDateTime(rule.last_error_at)} /><Info label="Errore" value={rule.last_error_message || "-"} wide /></CardContent></Card>
         </TabsContent>
         <TabsContent value="config" className="space-y-4">
-          <AutomationRuleForm form={form} setForm={(update) => setForm((previous) => previous ? update(previous) : previous)} options={options} />
-          <div className="flex gap-2">{canManage ? <Button onClick={save}>Salva configurazione</Button> : null}<Button variant="outline" onClick={load}>Annulla modifiche</Button></div>
+          <AutomationRuleForm form={form} setForm={(update) => setForm((previous) => previous ? update(previous) : previous)} options={options} readOnly={!canManage} />
+          <div className="flex gap-2">{canManage ? <Button onClick={save}>Salva configurazione</Button> : null}<Button variant="outline" onClick={load}>{canManage ? "Annulla modifiche" : "Aggiorna"}</Button></div>
           {!canFinance && isFinanceAutomation(rule) ? <ErrorBox error="Payload finance oscurati per questo ruolo." /> : null}
         </TabsContent>
-        <TabsContent value="runs"><RunsTable rows={runs} /></TabsContent>
+        {canViewRuns ? <TabsContent value="runs"><RunsTable rows={runs} /></TabsContent> : null}
       </Tabs>
     </div>
   );
@@ -620,7 +647,9 @@ export function AutomationRunsPage() {
   const [filters, setFilters] = useState<Filters>({ status: "", trigger_type: "", rule_id: "" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { canViewRuns } = useAutomationPermissions();
   const load = useCallback(async () => {
+    if (!canViewRuns) { setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
@@ -631,8 +660,9 @@ export function AutomationRunsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [canViewRuns, filters]);
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
+  if (!canViewRuns) return <AccessDenied resource="al monitoraggio automazioni" />;
   return (
     <div className="flex-1 space-y-5 p-4 md:p-6">
       <Header title="Esecuzioni automazioni" description="Storico dei run e relativo esito." />
@@ -661,8 +691,9 @@ export function AutomationRunDetailPage({ runId }: { runId: string }) {
   const [actions, setActions] = useState<AutomationActionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { canFinance, canManage } = useAutomationPermissions();
+  const { canFinance, canRetry, canViewRuns } = useAutomationPermissions();
   const load = useCallback(async () => {
+    if (!canViewRuns) { setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
@@ -674,8 +705,9 @@ export function AutomationRunDetailPage({ runId }: { runId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [runId]);
+  }, [canViewRuns, runId]);
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
+  if (!canViewRuns) return <AccessDenied resource="al dettaglio esecuzione" />;
   if (loading) return <div className="flex-1 p-4 md:p-6"><Loading /></div>;
   if (error || !run) return <div className="flex-1 p-4 md:p-6"><ErrorBox error={error || "Run non trovato"} /></div>;
   return (
@@ -684,7 +716,7 @@ export function AutomationRunDetailPage({ runId }: { runId: string }) {
         <Button asChild variant="outline"><Link href="/automations/runs">Lista runs</Link></Button>
         {run.rule_id ? <Button asChild variant="outline"><Link href={`/automations/rules/${run.rule_id}`}>Apri rule</Link></Button> : null}
         <Button variant="outline" onClick={async () => downloadJson(`automation-run-${run.id}.json`, await automationsApi.exportRun(run.id))}><Download className="mr-2 h-4 w-4" /> Export JSON</Button>
-        {canManage && ["failed", "dead_letter"].includes(run.status) ? <Button onClick={async () => { try { const retry = await automationsApi.retryRun(run.id); toast({ title: "Retry accodato", description: `Run ${retry.id}` }); } catch (reason) { toast({ title: "Retry non riuscito", description: reason instanceof Error ? reason.message : "Errore", variant: "destructive" }); } }}><RefreshCw className="mr-2 size-4" />Retry</Button> : null}
+        {canRetry && ["failed", "dead_letter"].includes(run.status) ? <Button onClick={async () => { try { const retry = await automationsApi.retryRun(run.id); toast({ title: "Retry accodato", description: `Run ${retry.id}` }); } catch (reason) { toast({ title: "Retry non riuscito", description: reason instanceof Error ? reason.message : "Errore", variant: "destructive" }); } }}><RefreshCw className="mr-2 size-4" />Retry</Button> : null}
       </Header>
       <Card><CardContent className="grid gap-4 p-4 md:grid-cols-4"><Info label="Status" value={<StateBadge value={run.status}>{label(RUN_STATUS_LABELS, run.status)}</StateBadge>} /><Info label="Started" value={formatDateTime(run.started_at)} /><Info label="Finished" value={formatDateTime(run.finished_at)} /><Info label="Durata" value={formatMs(run.duration_ms)} /><Info label="Matched" value={String(run.matched_count || 0)} /><Info label="Actions" value={String(run.actions_count || 0)} /><Info label="Success/Failed" value={`${run.actions_success_count || 0}/${run.actions_failed_count || 0}`} /><Info label="Source" value={run.trigger_source || "-"} /><Info label="Versione regola" value={run.rule_version_id || "-"} /><Info label="Tentativo" value={String(run.attempt || 1)} /><Info label="Operation" value={run.operation_id || "-"} /><Info label="Correlation" value={run.correlation_id || "-"} /><Info label="Errore" value={run.error_message || run.skipped_reason || "-"} wide /></CardContent></Card>
       <div className="grid gap-4 lg:grid-cols-2"><Card><CardHeader><CardTitle>Input payload</CardTitle></CardHeader><CardContent><JsonBlock value={run.input_payload} canFinance={canFinance} /></CardContent></Card><Card><CardHeader><CardTitle>Result payload</CardTitle></CardHeader><CardContent><JsonBlock value={run.result_payload} canFinance={canFinance} /></CardContent></Card></div>
@@ -711,6 +743,7 @@ export function AutomationDedupePage() {
   const [error, setError] = useState<string | null>(null);
   const { canManage } = useAutomationPermissions();
   const load = useCallback(async () => {
+    if (!canManage) { setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
@@ -721,7 +754,7 @@ export function AutomationDedupePage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canManage]);
   useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
   const remove = async (id: string) => {
     try {
@@ -732,19 +765,22 @@ export function AutomationDedupePage() {
       toast({ title: "Eliminazione non riuscita", description: err instanceof Error ? err.message : "Errore", variant: "destructive" });
     }
   };
-  return <div className="flex-1 space-y-5 p-4 md:p-6"><Header title="Dedupe automazioni" description="Chiavi di deduplica e cooldown usate per evitare spam." /><ErrorBox error={error} />{loading ? <Loading /> : rows.length === 0 ? <Empty>Nessuna entry dedupe.</Empty> : <div className="grid gap-3">{rows.map((row) => <Card key={row.id}><CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between"><div className="min-w-0"><p className="truncate font-semibold">{row.dedupe_key}</p><p className="text-sm text-muted-foreground">{row.entity_type || "-"} · {row.entity_id || "-"} · hit {row.hit_count || 0}</p><p className="text-xs text-muted-foreground">Prima: {formatDateTime(row.first_seen_at)} · ultima: {formatDateTime(row.last_seen_at)} · exp: {formatDateTime(row.expires_at)}</p></div>{canManage ? <Button size="sm" variant="outline" onClick={() => remove(row.id)}><Trash2 className="mr-2 h-4 w-4" /> Elimina</Button> : null}</CardContent></Card>)}</div>}</div>;
+  if (!canManage) return <AccessDenied resource="alla deduplica automazioni" />;
+  return <div className="flex-1 space-y-5 p-4 md:p-6"><Header title="Dedupe automazioni" description="Chiavi di deduplica e cooldown usate per evitare spam." /><ErrorBox error={error} />{loading ? <Loading /> : rows.length === 0 ? <Empty>Nessuna entry dedupe.</Empty> : <div className="grid gap-3">{rows.map((row) => <Card key={row.id}><CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between"><div className="min-w-0"><p className="truncate font-semibold">{row.dedupe_key}</p><p className="text-sm text-muted-foreground">{row.entity_type || "-"} · {row.entity_id || "-"} · hit {row.hit_count || 0}</p><p className="text-xs text-muted-foreground">Prima: {formatDateTime(row.first_seen_at)} · ultima: {formatDateTime(row.last_seen_at)} · exp: {formatDateTime(row.expires_at)}</p></div><Button size="sm" variant="outline" onClick={() => remove(row.id)}><Trash2 className="mr-2 h-4 w-4" /> Elimina</Button></CardContent></Card>)}</div>}</div>;
 }
 
 export function AutomationActivityPage() {
   const [rows, setRows] = useState<AutomationActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { canFinance } = useAutomationPermissions();
+  const { canFinance, canViewRuns } = useAutomationPermissions();
   useEffect(() => {
+    if (!canViewRuns) return;
     let active = true;
     automationsApi.activity({ limit: 100 }).then((data) => { if (active) setRows(data.items || []); }).catch((err) => { if (active) setError(err instanceof Error ? err.message : "Errore caricamento activity"); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [canViewRuns]);
+  if (!canViewRuns) return <AccessDenied resource="all’attività automazioni" />;
   return <div className="flex-1 space-y-5 p-4 md:p-6"><Header title="Activity automazioni" description="Audit interno delle modifiche e delle azioni eseguite." /><ErrorBox error={error} />{loading ? <Loading /> : rows.length === 0 ? <Empty>Nessuna activity registrata.</Empty> : <div className="grid gap-3">{rows.map((row) => <Card key={row.id}><CardContent className="p-4"><div className="flex flex-wrap items-center justify-between gap-3"><p className="font-semibold">{row.action.replace(/_/g, " ")}</p><span className="text-sm text-muted-foreground">{formatDateTime(row.created_at)}</span></div><p className="mt-1 text-sm text-muted-foreground">Rule {row.rule_id || "-"} · Template {row.template_id || "-"}</p><JsonBlock value={row.metadata} canFinance={canFinance} /></CardContent></Card>)}</div>}</div>;
 }
 

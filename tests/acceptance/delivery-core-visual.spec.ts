@@ -10,7 +10,7 @@ const actualDir = path.join(root, 'docs', 'design-references', 'doflow-crm-proje
 type Credentials = { password: string };
 type AcceptanceResult = { projectId: string };
 type Viewport = { width: number; height: number; label: string };
-type Theme = 'light' | 'dark';
+type Theme = 'default';
 const canonicalProjectTabs = [
   { id: 'overview', label: 'Panoramica' },
   { id: 'activities', label: 'Attività' },
@@ -38,7 +38,12 @@ async function login(context: BrowserContext, email: string, credentials: Creden
 }
 
 async function setTheme(page: Page, theme: Theme) {
-  await page.evaluate((value) => localStorage.setItem('doflow_theme', value), theme);
+  void theme;
+  await page.evaluate(() => {
+    localStorage.removeItem('doflow_theme');
+    localStorage.removeItem('theme');
+    document.documentElement.classList.remove('dark');
+  });
 }
 
 async function navigate(page: Page, pathname: string) {
@@ -125,7 +130,7 @@ test('visual QA Delivery Core su viewport e temi richiesti', async ({ browser })
       await manager.setViewportSize(viewport);
       await viewer.setViewportSize(viewport);
 
-      for (const theme of ['light', 'dark'] as const) {
+      for (const theme of ['default'] as const) {
         await setTheme(manager, theme);
         await navigate(manager, '/dashboard/progetti');
         await expect(manager.getByRole('heading', { name: 'Progetti e Produzione' })).toBeVisible();
@@ -173,7 +178,7 @@ test('visual QA Delivery Core su viewport e temi richiesti', async ({ browser })
     }
 
     await manager.setViewportSize({ width: 1440, height: 900 });
-    await setTheme(manager, 'light');
+    await setTheme(manager, 'default');
     await navigate(manager, `/dashboard/progetti/${result.projectId}?tab=overview`);
     await assertCanonicalProjectTabs(manager);
     const overviewTab = manager.getByRole('tab', { name: 'Panoramica', exact: true });
@@ -269,7 +274,7 @@ test('visual QA del collegamento Builder-progetto', async ({ browser }) => {
   try {
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
-      for (const theme of ['light', 'dark'] as const) {
+      for (const theme of ['default'] as const) {
         await setTheme(page, theme);
         await navigate(page, '/commercial/site-proposals');
         await expect(page.getByRole('heading', { name: 'Proposte web' })).toBeVisible();

@@ -53,8 +53,8 @@ export class TenantAutomationsController {
   }
 
   @Post('rules/:ruleId/run')
-  runRule(@Param('ruleId') ruleId: string, @Body() body: Record<string, unknown>, @Headers('idempotency-key') key?: string) {
-    const context = this.service.requestContext('run');
+  async runRule(@Param('ruleId') ruleId: string, @Body() body: Record<string, unknown>, @Headers('idempotency-key') key?: string) {
+    const context = await this.service.requestContext('run');
     if (!isDoflowTenant(context.schema)) return this.service.runRuleFromRequest(ruleId, body || {});
     return this.engine.enqueueRule(context.schema, ruleId, context.user, {
       triggerSource: 'manual', payload: body || {}, idempotencyKey: key,
@@ -62,8 +62,8 @@ export class TenantAutomationsController {
   }
 
   @Post('runs/:runId/retry')
-  retry(@Param('runId') runId: string, @Headers('idempotency-key') key?: string) {
-    const context = this.service.requestContext('run');
+  async retry(@Param('runId') runId: string, @Headers('idempotency-key') key?: string) {
+    const context = await this.service.requestContext('retry');
     return this.engine.retryRun(context.schema, runId, context.user, key);
   }
 
@@ -93,22 +93,22 @@ export class TenantAutomationsController {
   }
 
   @Post('run-due')
-  runDue() {
-    const context = this.service.requestContext('run');
+  async runDue() {
+    const context = await this.service.requestContext('run');
     if (!isDoflowTenant(context.schema)) return this.service.runDueFromRequest();
     return this.engine.enqueueDue(context.schema, context.user);
   }
 
   @Post('run-trigger/:triggerType')
-  runTrigger(@Param('triggerType') triggerType: string, @Body() body: Record<string, unknown>, @Headers('idempotency-key') key?: string) {
-    const context = this.service.requestContext('run');
+  async runTrigger(@Param('triggerType') triggerType: string, @Body() body: Record<string, unknown>, @Headers('idempotency-key') key?: string) {
+    const context = await this.service.requestContext('run');
     if (!isDoflowTenant(context.schema)) return this.service.runTriggerFromRequest(triggerType, body || {});
     return this.engine.enqueueTrigger(context.schema, triggerType, context.user, body || {}, key);
   }
 
   @Get('health')
-  health() {
-    this.service.requestContext('read');
+  async health() {
+    await this.service.requestContext('monitor:read');
     return this.engine.health();
   }
 

@@ -12,6 +12,9 @@ const providerTypes = read(
   "apps/frontend/src/features/commercial/commercial-provider-types.ts",
 );
 const layout = read("apps/frontend/src/app/(tenant)/layout.tsx");
+const doflowShell = read(
+  "apps/frontend/src/components/layout/doflow-daniele-shell.tsx",
+);
 
 const bootstrap = provider.slice(
   provider.indexOf("  useEffect(() => {"),
@@ -19,16 +22,17 @@ const bootstrap = provider.slice(
 );
 
 test("the Doflow shell keeps main mounted while workspace data is pending", () => {
-  assert.match(layout, /function DoflowCommercialShell/);
-  assert.match(layout, /data-app-shell-ready="true"/);
+  assert.match(layout, /<DoflowDanieleShell>\{children\}<\/DoflowDanieleShell>/);
+  assert.match(doflowShell, /function DoflowWorkspace/);
+  assert.match(doflowShell, /data-app-shell-ready="true"/);
   assert.match(
-    layout,
+    doflowShell,
     /data-workspace-ready=\{workspaceReady \? "true" : "false"\}/,
   );
-  assert.match(layout, /data-workspace-status=\{workspaceStatus\}/);
-  assert.match(layout, /data-secondary-status=\{secondaryStatus\}/);
-  assert.match(layout, /inert=\{workspaceReady \? undefined : true\}/);
-  assert.match(layout, /aria-hidden=\{workspaceReady \? undefined : true\}/);
+  assert.match(doflowShell, /data-workspace-status=\{workspaceStatus\}/);
+  assert.match(doflowShell, /data-secondary-status=\{secondaryStatus\}/);
+  assert.match(doflowShell, /inert=\{workspaceReady \? undefined : true\}/);
+  assert.match(doflowShell, /aria-hidden=\{workspaceReady \? undefined : true\}/);
   assert.doesNotMatch(provider, /if \(!hasHydrated\)\s*return/);
 });
 
@@ -66,6 +70,14 @@ test("core readiness completes before secondary loading and never reapplies core
   );
   assert.match(bootstrap, /if \(applyCoreState\) \{[\s\S]*setProjects\(mappedProjects\)/);
   assert.match(bootstrap, /else \{[\s\S]*setLeads\(\(items\) =>/);
+});
+
+test("an inaccessible project detail cannot fail the entire authorized workspace", () => {
+  assert.match(bootstrap, /const loadDeliveryWorkspaces = async/);
+  assert.match(bootstrap, /return \[await deliveryApi\.workspace\(project\.id, signal\)\]/);
+  assert.match(bootstrap, /signal\.aborted \|\| isAbortError\(error\)/);
+  assert.match(bootstrap, /error instanceof ApiError && \[403, 404\]\.includes\(error\.status\)/);
+  assert.match(bootstrap, /return workspaces\.flat\(\)/);
 });
 
 test("core bootstrap requests only the bounded contexts authorized for the identity", () => {
@@ -122,16 +134,16 @@ test("optional authority failures use one named, abort-aware fallback boundary",
 });
 
 test("readiness errors remain controlled and retry does not reload the page", () => {
-  assert.match(layout, /workspaceError\?\.status === 401/);
-  assert.match(layout, /workspaceError\?\.status === 403/);
-  assert.match(layout, /router\.replace\(`\/login\?next=/);
-  assert.match(layout, /onClick=\{retryWorkspace\}/);
-  assert.match(layout, /Riprova caricamento/);
-  assert.match(layout, /secondaryStatus !== "ready"/);
-  assert.match(layout, /Caricamento dei dati secondari/);
-  assert.match(layout, /onClick=\{retrySecondary\}/);
-  assert.match(layout, /Riprova dati secondari/);
-  assert.doesNotMatch(layout, /window\.location\.reload|router\.refresh/);
+  assert.match(doflowShell, /workspaceError\?\.status === 401/);
+  assert.match(doflowShell, /workspaceError\?\.status === 403/);
+  assert.match(doflowShell, /router\.replace\(`\/login\?next=/);
+  assert.match(doflowShell, /onClick=\{retryWorkspace\}/);
+  assert.match(doflowShell, /Riprova caricamento/);
+  assert.match(doflowShell, /secondaryStatus !== "ready"/);
+  assert.match(doflowShell, /Caricamento dei dati secondari/);
+  assert.match(doflowShell, /onClick=\{retrySecondary\}/);
+  assert.match(doflowShell, /Riprova dati secondari/);
+  assert.doesNotMatch(doflowShell, /window\.location\.reload|router\.refresh/);
 });
 
 test("every provider bootstrap client accepts an AbortSignal", () => {

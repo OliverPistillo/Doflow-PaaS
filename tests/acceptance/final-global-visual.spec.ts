@@ -8,6 +8,7 @@ const root = path.resolve(__dirname, '../..');
 const credentialPath = path.join(root, '.visual-auth', 'acceptance-credentials.json');
 const runtimeConfigPath = path.join(root, '.visual-runtime', 'commercial-core-stack.json');
 const resultPath = path.join(root, '.visual-runtime', 'final-global-visual-result.json');
+const canonicalActualDir = path.join(root, 'docs', 'design-references', 'doflow-crm-projects', 'actual', 'full-daniele-design');
 const configuredActualDir = process.env.DOFLOW_FINAL_VISUAL_OUTPUT_DIR?.trim();
 const actualDir = configuredActualDir
   ? path.resolve(root, configuredActualDir)
@@ -21,16 +22,17 @@ const backendRequire = createRequire(path.join(root, 'apps/backend/package.json'
 const { Client: PgClient } = backendRequire('pg');
 
 type Credentials = { email: string; password: string; mfaSecret: string };
-type Theme = 'light' | 'dark';
+type Theme = 'default' | 'light' | 'dark';
 type Viewport = { label: string; width: number; height: number };
 type RouteEntry = { slug: string; path: string };
 
 const desktop: Viewport = { label: 'desktop-1440x900', width: 1440, height: 900 };
+const canonicalTarget: Viewport = { label: 'target-1348x888', width: 1348, height: 888 };
 const responsive: Viewport[] = [
   { label: 'mobile-390x900', width: 390, height: 900 },
   { label: 'tablet-768x900', width: 768, height: 900 },
 ];
-const themes: Theme[] = ['light', 'dark'];
+const themes: Theme[] = ['default'];
 const activeApiRequests = new WeakMap<Page, Set<Request>>();
 const lastApiActivity = new WeakMap<Page, number>();
 
@@ -123,11 +125,20 @@ async function loginWithMfa(context: BrowserContext, email: string, credentials:
 
 async function setTheme(page: Page, theme: Theme) {
   await page.evaluate((selected) => {
-    localStorage.setItem('doflow_theme', selected);
-    localStorage.setItem('theme', selected);
-    document.documentElement.classList.toggle('dark', selected === 'dark');
-    document.documentElement.classList.toggle('light', selected === 'light');
-    document.documentElement.style.colorScheme = selected;
+    const root = document.documentElement;
+    const canonicalDoflow = root.dataset.doflowTheme === 'default'
+      || root.dataset.doflowAuthHost === 'true';
+    if (canonicalDoflow) {
+      localStorage.removeItem('doflow_theme');
+      localStorage.removeItem('theme');
+      root.classList.remove('dark');
+      root.classList.add('light');
+      root.style.colorScheme = 'light';
+      return;
+    }
+    root.classList.toggle('dark', selected === 'dark');
+    root.classList.toggle('light', selected !== 'dark');
+    root.style.colorScheme = selected === 'dark' ? 'dark' : 'light';
   }, theme);
 }
 
@@ -216,6 +227,9 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
   const commerce = JSON.parse(await readFile(path.join(root, '.visual-runtime', 'commerce-cash-acceptance-result.json'), 'utf8'));
   const db = new PgClient({ connectionString: config.databaseUrl });
   await db.connect();
+  await db.query(`UPDATE doflow.users SET full_name = 'Daniele' WHERE email = $1`, [credentials.email]);
+  await db.query(`UPDATE public.users SET full_name = 'Daniele' WHERE email = $1`, [credentials.email]);
+  await db.query(`UPDATE doflow.team_members SET display_name = 'Daniele', updated_at = now() WHERE lower(email) = lower($1) AND deleted_at IS NULL`, [credentials.email]);
   const [leadRow] = (await db.query(`SELECT id::text FROM doflow.leads WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 1`)).rows;
   const [companyRow] = (await db.query(`SELECT id::text FROM doflow.companies WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 1`)).rows;
   await db.end();
@@ -244,6 +258,10 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
     { slug: 'documents', path: '/dashboard/documenti' },
     { slug: 'archive', path: '/dashboard/archivio' },
     { slug: 'notifications', path: '/dashboard/notifiche' },
+    { slug: 'team-space', path: '/dashboard/team-space' },
+    { slug: 'calendar', path: '/dashboard/calendario' },
+    { slug: 'support', path: '/dashboard/supporto' },
+    { slug: 'flow-arcade', path: '/dashboard/flow-arcade' },
     { slug: 'automations', path: '/dashboard/automazioni' },
     { slug: 'settings', path: '/dashboard/impostazioni' },
     { slug: 'builder', path: '/commercial/site-proposals' },
@@ -254,7 +272,8 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
   ];
   const critical = new Set([
     'dashboard', 'pipeline', 'lead-detail', 'customer-detail', 'project-detail', 'activities',
-    'order-detail', 'quotes', 'invoices', 'notifications', 'automations', 'builder',
+    'order-detail', 'quotes', 'invoices', 'notifications', 'team-space', 'calendar',
+    'support', 'flow-arcade', 'automations', 'builder',
   ]);
   const contexts: BrowserContext[] = [];
   const consoleErrors: string[] = [];
@@ -287,7 +306,10 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
     console.log(`[final-visual] captured ${screenshotCount}: ${slug}-${viewport.label}-${theme}`);
   };
 
-  await mkdir(actualDir, { recursive: true });
+  await Promise.all([
+    mkdir(actualDir, { recursive: true }),
+    mkdir(canonicalActualDir, { recursive: true }),
+  ]);
   try {
     const loginContext = await browser.newContext({ viewport: desktop });
     contexts.push(loginContext);
@@ -323,9 +345,31 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
         }
         await accessibilitySmoke(owner);
         accessibilityChecks += 1;
+        await expect(owner.locator('[data-doflow-shell="daniele-design"]')).toHaveCount(1);
+        await expect(owner.locator('[data-doflow-shell="daniele-design"][data-doflow-theme="default"]')).toHaveCount(1);
+        await expect(owner.locator('[data-doflow-ui-generation="replacement"]')).toHaveCount(1);
+        await expect(owner.locator('[data-sidebar-kind="tenant-legacy"]')).toHaveCount(0);
+        if (route.slug === 'builder') {
+          await expect(owner.locator('[data-builder-shell="daniele-design"]')).toHaveCount(1);
+        }
         await capture(owner, route.slug, desktop, theme);
       }
     }
+
+    await owner.setViewportSize(canonicalTarget);
+    await navigate(owner, '/dashboard', 'default');
+    await expect(owner.locator('[data-doflow-shell="daniele-design"]')).toHaveCount(1);
+    const canonicalHeader = owner.locator('[data-doflow-shell="daniele-design"] header').first();
+    const canonicalSidebar = owner.locator('[data-doflow-shell="daniele-design"] [data-sidebar="sidebar"]').first();
+    await expect(canonicalHeader).toHaveCSS('height', '64px');
+    await expect(canonicalSidebar).toHaveCSS('width', '248px');
+    await owner.screenshot({
+      path: path.join(canonicalActualDir, 'dashboard-target-1348x888-default.png'),
+      animations: 'disabled',
+      fullPage: false,
+      timeout: 60_000,
+    });
+    screenshotCount += 1;
 
     for (const viewport of responsive) {
       await owner.setViewportSize(viewport);
@@ -428,9 +472,11 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
     const result = {
       verdict: 'GLOBAL VISUAL GO',
       frontendUrl: 'http://localhost:3100',
-      reference: 'doflow-gestionale-reference@e6c3ef5920773afc14b3caff88cfe4027400c54b',
+      reference: 'doflow-gestionale-reference:daniele-design@b9a08eea2acaabf23ed56c75111f714c551374f8',
+      canonicalBaseline: 'TARGET — Reference Daniele.png (1348x888, default theme)',
+      canonicalScreenshot: 'docs/design-references/doflow-crm-projects/actual/full-daniele-design/dashboard-target-1348x888-default.png',
       canonicalRoutes: canonicalRoutes.length + 2,
-      desktopLightDarkRoutes: canonicalRoutes.length + 3,
+      desktopDefaultRoutes: canonicalRoutes.length + 3,
       criticalResponsiveRoutes: critical.size + 2,
       screenshotCount,
       accessibilityChecks,

@@ -1638,6 +1638,233 @@ body {
   .df-auth-page *, .df-auth-page *::before, .df-auth-page *::after { animation: none !important; transition: none !important; }
 }
 
+/* ========================================================================== */
+/* Doflow tenant — canonical Daniele Design (TARGET 1348x888).                */
+/* Scoped to the replacement shell so legacy tenants and Control Room retain  */
+/* their existing theme and layout.                                           */
+/* ========================================================================== */
+html[data-doflow-theme="default"] {
+  color-scheme: light;
+  --background: 228 50% 98%;
+  --foreground: 232 24% 13%;
+  --card: 0 0% 100%;
+  --card-foreground: 232 24% 13%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 232 24% 13%;
+  --primary: 222 91% 62%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 230 38% 96%;
+  --secondary-foreground: 232 26% 26%;
+  --muted: 228 36% 96%;
+  --muted-foreground: 229 10% 45%;
+  --accent: 248 55% 95%;
+  --accent-foreground: 247 55% 48%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 226 27% 90%;
+  --input: 226 27% 90%;
+  --ring: 248 73% 60%;
+  --radius: .625rem;
+  --radius-card: .875rem;
+  --radius-nav: .5625rem;
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 232 24% 17%;
+  --sidebar-primary: 222 91% 62%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 229 43% 97%;
+  --sidebar-accent-foreground: 247 55% 48%;
+  --sidebar-border: 226 27% 90%;
+  --sidebar-ring: 248 73% 60%;
+  --chart-1: 222 91% 62%;
+  --chart-2: 248 73% 60%;
+  --chart-3: 166 57% 42%;
+  --chart-4: 37 87% 58%;
+  --chart-5: 0 74% 58%;
+  --doflow-app-background: radial-gradient(circle at 85% 0%, rgb(57 116 255 / 8%), transparent 30%), radial-gradient(circle at 5% 85%, rgb(117 105 255 / 7%), transparent 32%), linear-gradient(135deg, #fff 0%, #f7f9ff 52%, #f8f5ff 100%);
+  --daniele-topbar: rgb(255 255 255 / 88%);
+  --doflow-sidebar-background: radial-gradient(circle at 15% 5%, rgb(57 116 255 / 5.5%), transparent 30%), linear-gradient(180deg, #fff 0%, #f9faff 58%, #f8f6ff 100%);
+  --doflow-sidebar-hover: rgb(57 116 255 / 4.5%);
+  --doflow-sidebar-active-gradient: linear-gradient(90deg, rgb(57 116 255 / 11%), rgb(117 105 255 / 13%));
+  --doflow-card-shadow: 0 12px 35px rgb(39 63 130 / 6%);
+  --doflow-active-shadow: 0 0 0 1px rgb(117 105 255 / 18%), 0 16px 45px rgb(57 116 255 / 8%);
+}
+
+[data-doflow-shell="daniele-design"] {
+  min-height: 100svh;
+  background: var(--doflow-app-background);
+  color: hsl(var(--foreground));
+}
+
+[data-doflow-shell="daniele-design"] [data-doflow-inset="true"] {
+  background-color: transparent;
+  background-image: var(--doflow-app-background);
+  background-attachment: fixed;
+}
+
+[data-doflow-shell="daniele-design"] [data-sidebar="sidebar"] {
+  border-right: 1px solid hsl(var(--sidebar-border));
+  background-color: hsl(var(--sidebar-background));
+  background-image: var(--doflow-sidebar-background);
+  box-shadow: none;
+}
+
+[data-doflow-shell="daniele-design"] [data-sidebar="content"] {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+[data-doflow-shell="daniele-design"] [data-sidebar="group-label"] {
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+}
+
+[data-doflow-shell="daniele-design"] [data-sidebar="menu-button"] {
+  height: 32px;
+  gap: 10px;
+  border-radius: 9px;
+  padding: 6px 8px;
+  color: hsl(var(--sidebar-foreground) / .84);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+[data-doflow-shell="daniele-design"] [data-sidebar="header"] [data-sidebar="menu-button"] {
+  height: 50px;
+}
+
+[data-doflow-shell="daniele-design"] [data-sidebar="footer"] [data-sidebar="menu-button"] {
+  height: 44px;
+}
+
+[data-doflow-shell="daniele-design"] [data-sidebar="menu-button"] > svg,
+[data-doflow-shell="daniele-design"] [data-sidebar="menu-sub-button"] > svg {
+  width: 16px;
+  height: 16px;
+  color: hsl(var(--muted-foreground));
+}
+
+[data-doflow-shell="daniele-design"] [data-sidebar="menu-button"]:hover,
+[data-doflow-shell="daniele-design"] [data-sidebar="menu-sub-button"]:hover {
+  background: var(--doflow-sidebar-hover);
+  color: hsl(var(--foreground));
+}
+
+[data-doflow-shell="daniele-design"] [data-sidebar="menu-button"][data-active="true"],
+[data-doflow-shell="daniele-design"] [data-sidebar="menu-sub-button"][data-active="true"] {
+  position: relative;
+  background: var(--doflow-sidebar-active-gradient) !important;
+  box-shadow: var(--doflow-active-shadow) !important;
+  color: hsl(var(--accent-foreground)) !important;
+  font-weight: 500;
+}
+
+[data-doflow-shell="daniele-design"] [data-sidebar="menu-button"][data-active="true"] > svg,
+[data-doflow-shell="daniele-design"] [data-sidebar="menu-sub-button"][data-active="true"] > svg {
+  color: hsl(var(--sidebar-primary)) !important;
+}
+
+[data-doflow-shell="daniele-design"] [data-sidebar="menu-button"][data-active="true"]::before,
+[data-doflow-shell="daniele-design"] [data-sidebar="menu-sub-button"][data-active="true"]::before {
+  position: absolute;
+  top: 18%;
+  bottom: 18%;
+  left: 0;
+  width: 2px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #3974ff, #7569ff);
+  content: "";
+}
+
+[data-doflow-shell="daniele-design"] [data-sidebar="menu-sub"] {
+  margin-top: 2px;
+  margin-bottom: 3px;
+}
+
+[data-doflow-shell="daniele-design"] [data-sidebar="menu-sub-button"] {
+  min-height: 28px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+[data-doflow-shell="daniele-design"] [data-slot="card"] {
+  border-radius: 14px;
+  box-shadow: var(--doflow-card-shadow);
+}
+
+[data-doflow-shell="daniele-design"] [data-slot="button"][data-variant="default"],
+[data-doflow-shell="daniele-design"] [data-slot="progress-indicator"] {
+  background-color: hsl(var(--primary));
+  background-image: linear-gradient(135deg, #3974ff 0%, #7569ff 100%);
+}
+
+[data-doflow-shell="daniele-design"] main.mx-auto,
+[data-doflow-shell="daniele-design"] main[class*="max-w-"] {
+  margin-right: 0;
+  margin-left: 0;
+  max-width: none;
+}
+
+[data-builder-shell="daniele-design"] {
+  width: 100%;
+  min-width: 0;
+  padding: 20px 24px 28px;
+}
+
+[data-builder-shell="daniele-design"] table {
+  border-color: hsl(var(--border));
+}
+
+[data-builder-shell="daniele-design"] :is(.text-slate-400, .text-slate-500, .text-slate-600, .text-slate-700) { color: hsl(var(--muted-foreground)) !important; }
+[data-builder-shell="daniele-design"] :is(.text-slate-800, .text-slate-900, .text-slate-950) { color: hsl(var(--foreground)) !important; }
+[data-builder-shell="daniele-design"] :is(.text-indigo-500, .text-indigo-600, .text-indigo-700) { color: hsl(var(--primary)) !important; }
+[data-builder-shell="daniele-design"] :is(.border-slate-200, .border-slate-300) { border-color: hsl(var(--border)) !important; }
+[data-builder-shell="daniele-design"] :is(.border-indigo-200, .border-indigo-300) { border-color: hsl(var(--primary) / .35) !important; }
+[data-builder-shell="daniele-design"] :is(.bg-slate-50, .bg-slate-100) { background-color: hsl(var(--muted)) !important; }
+[data-builder-shell="daniele-design"] :is(.bg-indigo-50, .bg-indigo-100) { background-color: hsl(var(--accent)) !important; }
+[data-builder-shell="daniele-design"] .bg-white { background-color: hsl(var(--card)) !important; }
+
+html[data-doflow-auth-host="true"] [data-doflow-auth="daniele-design"] {
+  --df-auth-text: #17203a;
+  --df-auth-muted: #667085;
+  --df-auth-muted-2: #98a2b3;
+  --df-auth-field: #fbfcff;
+  --df-auth-border: #dfe4f0;
+  --df-auth-border-strong: #8ba6ff;
+  color: #17203a;
+  background: radial-gradient(circle at 80% 5%, rgb(57 116 255 / 8%), transparent 30%), linear-gradient(135deg, #fff 0%, #f7f9ff 58%, #f8f5ff 100%);
+}
+
+html[data-doflow-auth-host="true"] [data-doflow-auth="daniele-design"] .doflow-auth-default-control { display: inline-flex; }
+html[data-doflow-auth-host="true"] [data-doflow-auth="daniele-design"] .tenant-auth-theme-control { display: none; }
+html[data-doflow-auth-host="true"] [data-doflow-auth="daniele-design"] .df-auth-label { color: #344054; font-weight: 600; }
+html[data-doflow-auth-host="true"] [data-doflow-auth="daniele-design"] .df-auth-input {
+  min-height: 46px;
+  border-color: var(--df-auth-border);
+  background: var(--df-auth-field);
+  color: var(--df-auth-text);
+  box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
+}
+html[data-doflow-auth-host="true"] [data-doflow-auth="daniele-design"] .df-auth-input::placeholder { color: var(--df-auth-muted-2); }
+html[data-doflow-auth-host="true"] [data-doflow-auth="daniele-design"] .df-auth-check-row,
+html[data-doflow-auth-host="true"] [data-doflow-auth="daniele-design"] .df-auth-foot,
+html[data-doflow-auth-host="true"] [data-doflow-auth="daniele-design"] .df-auth-divider { color: var(--df-auth-muted); }
+html[data-doflow-auth-host="true"] [data-doflow-auth="daniele-design"] .df-auth-divider::before,
+html[data-doflow-auth-host="true"] [data-doflow-auth="daniele-design"] .df-auth-divider::after { background: var(--df-auth-border); }
+html[data-doflow-auth-host="true"] [data-doflow-auth="daniele-design"] .df-auth-social {
+  border-color: var(--df-auth-border);
+  background: #fff;
+  color: var(--df-auth-text);
+}
+html[data-doflow-auth-host="true"] [data-doflow-auth="daniele-design"] .df-auth-social:hover { border-color: var(--df-auth-border-strong); background: #f8faff; }
+
+@media (max-width: 767px) {
+  [data-builder-shell="daniele-design"] { padding: 16px; }
+  [data-doflow-shell="daniele-design"] [data-sidebar="sidebar"][data-mobile="true"] {
+    width: min(88vw, 300px);
+  }
+}
+
 /* Login reference 2026 — scoped to /login; the shared auth shell remains unchanged. */
 .df-login-page {
   position: relative;

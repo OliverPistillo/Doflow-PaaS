@@ -264,14 +264,14 @@ export class TenantDoflowPerformanceService {
       : goals.filter((goal: any) => goal.target_type === 'user' && goal.target_id === actor.id);
     const mission = await this.mission(actor, access, visibleGoals.filter((goal: any) => goal.status === 'active'));
     return {
-      pointPolicy: policyRows[0] ? this.pointPolicy(policyRows[0].formula || {}) : null,
-      policy: policyRows[0] ? { id: policyRows[0].id, version: Number(policyRows[0].current_version), name: policyRows[0].name, formula: policyRows[0].formula } : null,
+      pointPolicy: access.canManagePolicy && policyRows[0] ? this.pointPolicy(policyRows[0].formula || {}) : null,
+      policy: access.canManagePolicy && policyRows[0] ? { id: policyRows[0].id, version: Number(policyRows[0].current_version), name: policyRows[0].name, formula: policyRows[0].formula } : null,
       pointLedger: ledgerRows.map((row: any) => this.mapLedger(row)),
       rankingConfigs: configs.map((row: any) => ({ role: row.role, metrics: row.metrics, formulaVersion: Number(row.formula_version), optimisticVersion: Number(row.optimistic_version) })),
       rankingSnapshots: this.effectiveSnapshots(snapshots, revisions, access, actor),
       goals: visibleGoals.map((row: any) => this.mapGoal(row)),
       mission,
-      adapters,
+      adapters: access.admin ? adapters : [],
       permissions: access,
     };
   }

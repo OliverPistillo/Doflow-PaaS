@@ -34,6 +34,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="it" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: "try{var h=location.hostname.toLowerCase();if(h==='localhost'||h==='127.0.0.1'||h==='app.doflow.it'||h==='doflow.it'||h==='doflow.doflow.it'){document.documentElement.dataset.doflowAuthHost='true'}}catch(e){}",
+          }}
+        />
+      </head>
       <body className={`${inter.variable} ${mono.variable} antialiased`}>
         <ThemeProvider
           attribute="class"

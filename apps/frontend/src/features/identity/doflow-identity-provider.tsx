@@ -385,3 +385,7 @@ export function useDoflowIdentity() {
   }
   return context
 }
+
+export function useOptionalDoflowIdentity() {
+  return useContext(IdentityContext)
+}

@@ -8,10 +8,11 @@ Verdetto macchina: `DOFLOW REPLACEMENT RELEASE CANDIDATE GO`.
 
 - repository: `OliverPistillo/Doflow-PaaS`;
 - branch: `main`;
-- SHA base della working tree: `961c7d0d1886742f9330fad81100a2634596cc02`;
+- SHA base della working tree frontend corrente: `2eb8f6a4dae4fb990d8bbc4c9da65fb04ba5f220`, identica a `origin/main`;
 - working tree intenzionalmente dirty e non staged;
-- reference read-only: `doflow-gestionale-reference`, branch `master`, SHA
-  `e6c3ef5920773afc14b3caff88cfe4027400c54b`;
+- reference read-only: `doflow-gestionale-reference`, branch di lavoro lasciato
+  su `master` a `e6c3ef5920773afc14b3caff88cfe4027400c54b`; baseline visuale letta da
+  `origin/daniele-design@b9a08eea2acaabf23ed56c75111f714c551374f8`;
 - perimetro visuale e funzionale replacement: tenant `doflow`;
 - secondo tenant sintetico: compatibilità e isolamento verificati;
 - Superadmin: scope sintetico `public/FULL`, shell separata;
@@ -31,7 +32,7 @@ del runbook sullo stesso artefatto.
 |---|---:|
 | Node.js | 20.19.6 |
 | pnpm | 10.24.0 |
-| Next.js | 16.3.1 |
+| Next.js | 16.3.2 |
 | React / React DOM | 19.2.8 / 19.2.8 |
 | Tailwind CSS | 4.3.3 |
 | shadcn | 4.18.0 |
@@ -42,7 +43,7 @@ del runbook sullo stesso artefatto.
 | PostgreSQL acceptance | 16-alpine |
 | Redis acceptance | 7-alpine |
 
-La build frontend genera 220 pagine statiche; la scansione route rileva 237
+La build frontend corrente genera 224 pagine; la scansione route rileva 241
 route applicative. Le 30 route della reference hanno tutte una destinazione,
 con due equivalenze deep-link intenzionali e 14 redirect legacy verificati.
 
@@ -320,3 +321,43 @@ L'autorizzazione Fase 5B.2 consente un solo commit release, push non forzato,
 autodeploy e cutover CLI controllato. Il runner deve chiudere a max 184/zero
 pending prima di `status`, `dry-run`, `apply` e `verify`. Nessuna credenziale è
 registrata nel manifest; la rotazione PostgreSQL resta un task post-cutover.
+
+## Addendum RC — Full Daniele Frontend Replacement
+
+Il frontend tenant `doflow` usa ora integralmente la generazione visuale
+Daniele. La baseline grafica precedente (`master/e6c3ef…`, screenshot Oliver e
+shell ibrida) è **SUPERATA**. La baseline canonica è:
+
+- `TARGET — Reference Daniele.png`, `1348×888`;
+- `origin/daniele-design@b9a08eea2acaabf23ed56c75111f714c551374f8`;
+- tema `default` tenant-only;
+- Builder preservato e integrato.
+
+Il replacement introduce una boundary esplicita: `DoflowDanieleShell` per il
+solo tenant `doflow`, `LegacyTenantShell` per gli altri tenant e Control Room
+separata per Superadmin. I marker runtime rendono il confine auditabile. Non
+sono stati modificati backend, schema, migrazioni, Redis, MinIO, CSRF,
+sessioni, capability o autorità server.
+
+Gate correnti sulla working tree:
+
+| Gate | Risultato |
+| --- | --- |
+| UI purity | GO; 227 moduli e 51 entry route; zero shell/store/fixture/Client Portal vietati |
+| Frontend | lint strict due volte 0 warning; type-check; 25/25 test; build Next 16.3.2 di 224 pagine |
+| Immagine frontend production | esatto Dockerfile; image `sha256:67be418009757114c9ab2760b149c5cd1b4c19ce8fbfe949ea883c294d6537c5`; 300 s, restart 0, 10/10 probe, route/asset 200, teardown PASS |
+| Backend regressione | 103/103 suite, 1127/1127 test; build PASS |
+| Migrazioni isolate | true pre-179 GO; max 184; zero pending; fault/restore/replay PASS |
+| Auth/security | opaque browser sessions; browser-auth/release/security audit PASS; 0 vulnerabilità su 1044 dipendenze |
+| E2E globale | Context A–E GO; CORS straniera senza 500; Builder e bounded context GO |
+| Visual | 75 screenshot; 4/4; `390×900`, `768×900`, `1348×888`, `1440×900`; GLOBAL VISUAL GO |
+| Health / teardown | 10/10; stack e credenziali acceptance rimossi |
+
+Screenshot canonico:
+`docs/design-references/doflow-crm-projects/actual/full-daniele-design/dashboard-target-1348x888-default.png`.
+Pixel diff:
+`docs/design-references/doflow-crm-projects/diff/full-daniele-design/dashboard-target-1348x888-pixel-diff.png`.
+
+Questo addendum documenta una working tree non staged. Non autorizza né
+registra commit, push, deploy o nuovo cutover; produzione e account reali non
+sono stati toccati in questa fase.

@@ -248,3 +248,68 @@ Il nuovo `GLOBAL VISUAL GO` è valido soltanto se l'orchestratore finale
 verifica route e Context E alle viewport previste, chiaro/scuro, senza errori
 console, `5xx` inattesi o loader workspace permanente. Il risultato conclusivo
 è registrato nell'evidence stability; questo addendum non lo anticipa.
+
+## Baseline canonica Full Daniele Design — 25 agosto 2026
+
+Questa sezione **SUPERSEDE come target grafico** il precedente visual gate
+basato su `master/e6c3ef…`, gli screenshot della shell ibrida e
+`ANTI-REFERENCE — Stato attuale Oliver.png`. La struttura funzionale a sette
+tab del dettaglio progetto resta invariata.
+
+Ordine corrente delle fonti:
+
+1. `TARGET — Reference Daniele.png`, `1348×888`, tema default;
+2. `origin/daniele-design@b9a08eea2acaabf23ed56c75111f714c551374f8`;
+3. reference funzionale storica `master@e6c3ef5920773afc14b3caff88cfe4027400c54b`;
+4. frontend corrente esclusivamente per adapter, API, auth e capability.
+
+Il confronto è stato eseguito realmente nello stack locale isolato su
+`http://localhost:3100`, backend `http://localhost:3401`, con identità e dati
+sintetici. Il gate usa tema `default` soltanto per il tenant `doflow` e ha
+verificato:
+
+- shell bianca, sidebar `248px` / rail `64px`, topbar `64px`, breadcrumb,
+  ricerca e azioni;
+- gruppi Workspace, Pausa, Sistema, Aiuto e tutorial e footer identità;
+- dashboard a due colonne, tab Agenzia/Personale/Collaboratore, card economica,
+  obiettivi e KPI inferiori;
+- Builder integrato nella stessa generazione visuale;
+- login, forgot/reset e MFA nella nuova presentazione, senza cambiare auth,
+  CSRF, sessioni o payload;
+- dettaglio progetto a sette tab;
+- altro tenant sulla shell compatibile e Control Room Superadmin separata;
+- mobile Sheet, tablet, desktop, tastiera, focus, Escape, dialog, select,
+  browser Back, refresh e deep link;
+- zero errori/warning console e zero `5xx` inattesi nel gate visuale.
+
+Artefatti canonici:
+
+- actual: `actual/full-daniele-design/dashboard-target-1348x888-default.png`;
+- pixel diff: `diff/full-daniele-design/dashboard-target-1348x888-pixel-diff.png`;
+- matrice completa: `actual/final-rc/` e result JSON runtime ignorato.
+
+Il diff grezzo, senza mascherare shell/card/tab/spaziature, misura `1348×888`,
+MAE RGB `11,296/255` (`4,43%`) e `9,98%` dei pixel oltre delta 16. Il residuo
+visibile deriva da greeting dipendente dall'ora, dati economici indisponibili
+mostrati onestamente, obiettivo sintetico, badge notifiche, testi dinamici e
+rendering font. Dopo l'iterazione finale il bordo inferiore delle card
+principali coincide con la quota del TARGET (circa `y=803`); non restano
+differenze critiche o maggiori di struttura, proporzione o flusso.
+
+Copertura conclusiva di `pnpm acceptance:final`:
+
+- 75 screenshot;
+- viewport `390×900`, `768×900`, `1348×888`, `1440×900`;
+- 4/4 test visuali;
+- Context A–E e `SUPERADMIN CONTEXT E GO`;
+- health 10/10;
+- teardown ufficiale senza residui.
+
+L'esatto Dockerfile frontend è stato inoltre costruito e osservato per
+`300000 ms`: cold start e tre restart controllati hanno risposto `200`, i
+10 probe sono verdi, il restart count finale è zero e container, immagine e
+porta dedicati sono stati rimossi.
+
+`GLOBAL VISUAL GO`
+
+`VISUAL GO`

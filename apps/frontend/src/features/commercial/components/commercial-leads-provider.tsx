@@ -276,6 +276,22 @@ export function CommercialLeadsProvider({
   const canReadProjects =
     identity.hasCapability("canViewProjects") ||
     identity.hasCapability("canViewAssignedProjects");
+  const canReadAutomationRules = identity.hasCapability("canViewAutomations");
+  const canReadAutomationRuns = identity.hasCapability("canViewAutomationErrors");
+  const canReadPayments = identity.hasCapability("canManagePayments");
+  const canReadSales = identity.hasCapability("canViewSales");
+  const canReadOrders = identity.hasCapability("canViewOrders");
+  const canReadCampaigns = identity.hasCapability("canViewCampaigns");
+  const canReadDocuments = canReadCustomers || canReadProjects;
+  const canReadPerformance =
+    identity.hasCapability("canViewOwnPoints") ||
+    identity.hasCapability("canViewGlobalPoints") ||
+    identity.hasCapability("canViewRankings");
+  const canReadDocumentRevenue =
+    identity.hasCapability("canViewQuotes") ||
+    identity.hasCapability("canViewContracts") ||
+    identity.hasCapability("canViewInvoices") ||
+    identity.hasCapability("canViewRenewals");
   const recurrenceGenerationLocks = useRef(new Map<string, string>());
   const contactsExportLocks = useRef(
     new Map<string, { batchId: string; exportedAt: string }>(),
@@ -390,63 +406,81 @@ export function CommercialLeadsProvider({
           return fallback;
         }
       };
-      const performanceState = captureSecondary(
-        () => performanceApi.state(secondarySignal),
-        emptyPerformanceState(),
-      );
+      const performanceState = canReadPerformance
+        ? captureSecondary(
+            () => performanceApi.state(secondarySignal),
+            emptyPerformanceState(),
+          )
+        : Promise.resolve(emptyPerformanceState());
       const values = await Promise.all([
-        captureSecondary(
-          () => automationsApi.rules({ limit: 500 }, secondarySignal),
-          { items: [] },
-        ),
-        captureSecondary(
-          () => automationsApi.runs({ limit: 500 }, secondarySignal),
-          { items: [] },
-        ),
-        captureSecondary(
-          () =>
-            apiFetch<ServerList<Record<string, unknown> & { id: string }>>(
-              "/tenant/doflow/commerce/payments",
-              { signal: secondarySignal },
-            ),
-          { items: [] },
-        ),
-        captureSecondary(
-          () => listDocuments({ limit: 500 }, secondarySignal),
-          { items: [] },
-        ),
-        captureSecondary(
-          () =>
-            apiFetch<ServerList<Record<string, unknown> & { id: string }>>(
-              "/tenant/doflow/commerce/services",
-              { signal: secondarySignal },
-            ),
-          { items: [] },
-        ),
-        captureSecondary(
-          () =>
-            apiFetch<ServerList<Record<string, unknown> & { id: string }>>(
-              "/tenant/doflow/commerce/sales",
-              { signal: secondarySignal },
-            ),
-          { items: [] },
-        ),
-        captureSecondary(
-          () =>
-            apiFetch<ServerList<Record<string, unknown> & { id: string }>>(
-              "/tenant/doflow/commerce/orders",
-              { signal: secondarySignal },
-            ),
-          { items: [] },
-        ),
-        captureSecondary(
-          () =>
-            apiFetch<ServerList<Record<string, unknown> & { id: string }>>(
-              "/tenant/doflow/commerce/campaigns",
-              { signal: secondarySignal },
-            ),
-          { items: [] },
-        ),
+        canReadAutomationRules
+          ? captureSecondary(
+              () => automationsApi.rules({ limit: 500 }, secondarySignal),
+              { items: [] },
+            )
+          : Promise.resolve({ items: [] }),
+        canReadAutomationRuns
+          ? captureSecondary(
+              () => automationsApi.runs({ limit: 500 }, secondarySignal),
+              { items: [] },
+            )
+          : Promise.resolve({ items: [] }),
+        canReadPayments
+          ? captureSecondary(
+              () =>
+                apiFetch<ServerList<Record<string, unknown> & { id: string }>>(
+                  "/tenant/doflow/commerce/payments",
+                  { signal: secondarySignal },
+                ),
+              { items: [] },
+            )
+          : Promise.resolve({ items: [] }),
+        canReadDocuments
+          ? captureSecondary(
+              () => listDocuments({ limit: 500 }, secondarySignal),
+              { items: [] },
+            )
+          : Promise.resolve({ items: [] }),
+        canReadSales
+          ? captureSecondary(
+              () =>
+                apiFetch<ServerList<Record<string, unknown> & { id: string }>>(
+                  "/tenant/doflow/commerce/services",
+                  { signal: secondarySignal },
+                ),
+              { items: [] },
+            )
+          : Promise.resolve({ items: [] }),
+        canReadSales
+          ? captureSecondary(
+              () =>
+                apiFetch<ServerList<Record<string, unknown> & { id: string }>>(
+                  "/tenant/doflow/commerce/sales",
+                  { signal: secondarySignal },
+                ),
+              { items: [] },
+            )
+          : Promise.resolve({ items: [] }),
+        canReadOrders
+          ? captureSecondary(
+              () =>
+                apiFetch<ServerList<Record<string, unknown> & { id: string }>>(
+                  "/tenant/doflow/commerce/orders",
+                  { signal: secondarySignal },
+                ),
+              { items: [] },
+            )
+          : Promise.resolve({ items: [] }),
+        canReadCampaigns
+          ? captureSecondary(
+              () =>
+                apiFetch<ServerList<Record<string, unknown> & { id: string }>>(
+                  "/tenant/doflow/commerce/campaigns",
+                  { signal: secondarySignal },
+                ),
+              { items: [] },
+            )
+          : Promise.resolve({ items: [] }),
         Promise.resolve<ServerList<Record<string, unknown> & { id: string }>>({
           items: [],
         }),
@@ -475,17 +509,26 @@ export function CommercialLeadsProvider({
             unit: goal.unit, starts_at: goal.startsAt, ends_at: goal.endsAt, status: goal.status,
             responsible_id: goal.responsibleId, notes: goal.notes, created_at: goal.createdAt, updated_at: goal.updatedAt })),
         })),
-        captureSecondary(
-          () => documentRevenueApi.state(secondarySignal),
-          {
-            quotes: [],
-            contracts: [],
-            invoices: [],
-            renewals: [],
-            customerFinance: [],
-            redacted: true,
-          },
-        ),
+        canReadDocumentRevenue
+          ? captureSecondary(
+              () => documentRevenueApi.state(secondarySignal),
+              {
+                quotes: [],
+                contracts: [],
+                invoices: [],
+                renewals: [],
+                customerFinance: [],
+                redacted: true,
+              },
+            )
+          : Promise.resolve({
+              quotes: [],
+              contracts: [],
+              invoices: [],
+              renewals: [],
+              customerFinance: [],
+              redacted: true,
+            }),
       ]);
       return { values, error: capturedError };
     };
@@ -497,12 +540,22 @@ export function CommercialLeadsProvider({
       secondary: SecondarySnapshot,
     ) => [...core, ...secondary] as const;
     type WorkspaceSnapshot = ReturnType<typeof combineWorkspaceSnapshot>;
-    const loadDeliveryWorkspaces = (projectPage: CoreSnapshot[5]) =>
-      Promise.all(
-        projectPage.items.map((project) =>
-          deliveryApi.workspace(project.id, signal),
-        ),
+    const loadDeliveryWorkspaces = async (projectPage: CoreSnapshot[5]) => {
+      const workspaces = await Promise.all(
+        projectPage.items.map(async (project) => {
+          try {
+            return [await deliveryApi.workspace(project.id, signal)];
+          } catch (error) {
+            if (signal.aborted || isAbortError(error)) throw error;
+            if (error instanceof ApiError && [403, 404].includes(error.status)) {
+              return [];
+            }
+            throw error;
+          }
+        }),
       );
+      return workspaces.flat();
+    };
     type DeliveryWorkspaces = Awaited<
       ReturnType<typeof loadDeliveryWorkspaces>
     >;
@@ -1608,9 +1661,18 @@ export function CommercialLeadsProvider({
     identity.hasHydrated,
     identity.users,
     canReadActivities,
+    canReadAutomationRules,
+    canReadAutomationRuns,
+    canReadCampaigns,
     canReadCustomers,
+    canReadDocumentRevenue,
+    canReadDocuments,
     canReadLeads,
+    canReadOrders,
+    canReadPayments,
+    canReadPerformance,
     canReadProjects,
+    canReadSales,
     setCustomers,
     setLeadActivities,
     setLeads,

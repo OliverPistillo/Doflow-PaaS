@@ -78,7 +78,7 @@ test('Document & Revenue visual QA autenticata', async ({ browser }) => {
     page.on('pageerror', (error) => pageErrors.push(error.message));
     await login(page, credentials);
 
-    for (const theme of ['light', 'dark'] as const) {
+    for (const theme of ['default'] as const) {
       for (const route of routes) {
         const summaryResponse = route.slug === 'fatture'
           ? page.waitForResponse(
@@ -90,11 +90,13 @@ test('Document & Revenue visual QA autenticata', async ({ browser }) => {
         await expect(page.getByRole('heading', { name: route.heading, exact: true })).toBeVisible();
         if (summaryResponse) expect((await summaryResponse).ok()).toBe(true);
         await page.waitForTimeout(750);
-        await page.evaluate((selectedTheme) => {
-          document.documentElement.classList.toggle('dark', selectedTheme === 'dark');
-          document.documentElement.style.colorScheme = selectedTheme;
-          localStorage.setItem('doflow_theme', selectedTheme);
-        }, theme);
+        await page.evaluate(() => {
+          document.documentElement.classList.remove('dark');
+          document.documentElement.style.colorScheme = 'light';
+          localStorage.removeItem('doflow_theme');
+          localStorage.removeItem('theme');
+        });
+        await expect(page.locator('[data-doflow-shell="daniele-design"][data-doflow-theme="default"]')).toHaveCount(1);
         await page.waitForTimeout(250);
         await page.screenshot({
           path: path.join(outputDirectory, `document-revenue-${route.slug}-${theme}-${viewport.name}.png`),

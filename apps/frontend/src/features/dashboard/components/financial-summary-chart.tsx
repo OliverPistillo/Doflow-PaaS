@@ -7,7 +7,7 @@ import type { OverviewMetric } from "@/features/dashboard/types"
 
 type FinancialMetric = "revenue" | "expenses" | "profit"
 const config = {
-  revenue: { label: "Ordinato", color: "#10b981" }, expenses: { label: "Rimborsato", color: "#ef4444" }, profit: { label: "Incassato netto", color: "#8b5cf6" },
+  revenue: { label: "Fatturato", color: "#2aaa91" }, expenses: { label: "Spese", color: "#ef4444" }, profit: { label: "Utile", color: "#7569ff" },
 } satisfies ChartConfig
 
 export function FinancialSummaryChart({ metrics, activeMetric }: { metrics: OverviewMetric[]; activeMetric: FinancialMetric }) {

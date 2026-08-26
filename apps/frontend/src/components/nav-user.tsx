@@ -1,10 +1,6 @@
 "use client"
 
-import {
-  ChevronsUpDown,
-  Settings,
-  LogOut,
-} from "lucide-react"
+import { ChevronsUpDown, Settings, LogOut } from "lucide-react"
 import Link from "next/link"
 
 import { UserAvatar } from "@/components/user-avatar"
@@ -42,7 +38,7 @@ export function NavUser() {
               <UserAvatar userId={user.id} name={user.name} className="h-8 w-8 rounded-lg" />
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
-                <span className="truncate text-xs">{user.email}</span>
+                <span className="flex items-center gap-1.5 truncate text-xs text-muted-foreground"><span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />Online</span>
               </div>
               <ChevronsUpDown className="ml-auto size-4" />
             </SidebarMenuButton>
