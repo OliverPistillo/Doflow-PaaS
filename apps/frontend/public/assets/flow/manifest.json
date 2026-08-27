@@ -1,0 +1,869 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "id": "flow-happy",
+      "name": "Happy",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-happy.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-laugh",
+      "name": "Laugh",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-laugh.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-cry",
+      "name": "Cry",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-cry.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-angry",
+      "name": "Angry",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-angry.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-sleepy",
+      "name": "Sleepy",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-sleepy.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-working",
+      "name": "Working",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-working.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-studying",
+      "name": "Studying",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-studying.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-approved",
+      "name": "Approved",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-approved.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-thinking",
+      "name": "Thinking",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-thinking.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-urgent",
+      "name": "Urgent",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-urgent.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-celebrate",
+      "name": "Celebrate",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-celebrate.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-daje",
+      "name": "Daje",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-daje.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-love",
+      "name": "Love",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-love.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-kiss",
+      "name": "Kiss",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-kiss.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-shy",
+      "name": "Shy",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-shy.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-shocked",
+      "name": "Shocked",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-shocked.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-skeptical",
+      "name": "Skeptical",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-skeptical.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-wink",
+      "name": "Wink",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-wink.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-proud",
+      "name": "Proud",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-proud.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-embarrassed",
+      "name": "Embarrassed",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-embarrassed.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-bored",
+      "name": "Bored",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-bored.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-scared",
+      "name": "Scared",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-scared.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-sick",
+      "name": "Sick",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-sick.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-meditate",
+      "name": "Meditate",
+      "category": "stickers/emotions",
+      "path": "/assets/flow/stickers/emotions/flow-meditate.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-phone-call",
+      "name": "Phone Call",
+      "category": "stickers/work",
+      "path": "/assets/flow/stickers/work/flow-phone-call.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-sales-presentation",
+      "name": "Sales Presentation",
+      "category": "stickers/work",
+      "path": "/assets/flow/stickers/work/flow-sales-presentation.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-contract-signed",
+      "name": "Contract Signed",
+      "category": "stickers/work",
+      "path": "/assets/flow/stickers/work/flow-contract-signed.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-payment-received",
+      "name": "Payment Received",
+      "category": "stickers/work",
+      "path": "/assets/flow/stickers/work/flow-payment-received.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-coding",
+      "name": "Coding",
+      "category": "stickers/work",
+      "path": "/assets/flow/stickers/work/flow-coding.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-bug-fix",
+      "name": "Bug Fix",
+      "category": "stickers/work",
+      "path": "/assets/flow/stickers/work/flow-bug-fix.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-project-planning",
+      "name": "Project Planning",
+      "category": "stickers/work",
+      "path": "/assets/flow/stickers/work/flow-project-planning.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-video-call",
+      "name": "Video Call",
+      "category": "stickers/work",
+      "path": "/assets/flow/stickers/work/flow-video-call.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-materials-received",
+      "name": "Materials Received",
+      "category": "stickers/work",
+      "path": "/assets/flow/stickers/work/flow-materials-received.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-deadline",
+      "name": "Deadline",
+      "category": "stickers/work",
+      "path": "/assets/flow/stickers/work/flow-deadline.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-coffee-break",
+      "name": "Coffee Break",
+      "category": "stickers/work",
+      "path": "/assets/flow/stickers/work/flow-coffee-break.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-exhausted",
+      "name": "Exhausted",
+      "category": "stickers/work",
+      "path": "/assets/flow/stickers/work/flow-exhausted.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-hello",
+      "name": "Hello",
+      "category": "stickers/communication",
+      "path": "/assets/flow/stickers/communication/flow-hello.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-goodbye",
+      "name": "Goodbye",
+      "category": "stickers/communication",
+      "path": "/assets/flow/stickers/communication/flow-goodbye.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-thanks",
+      "name": "Thanks",
+      "category": "stickers/communication",
+      "path": "/assets/flow/stickers/communication/flow-thanks.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-sorry",
+      "name": "Sorry",
+      "category": "stickers/communication",
+      "path": "/assets/flow/stickers/communication/flow-sorry.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-applause",
+      "name": "Applause",
+      "category": "stickers/communication",
+      "path": "/assets/flow/stickers/communication/flow-applause.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-high-five",
+      "name": "High Five",
+      "category": "stickers/communication",
+      "path": "/assets/flow/stickers/communication/flow-high-five.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-shush",
+      "name": "Shush",
+      "category": "stickers/communication",
+      "path": "/assets/flow/stickers/communication/flow-shush.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-listening",
+      "name": "Listening",
+      "category": "stickers/communication",
+      "path": "/assets/flow/stickers/communication/flow-listening.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-announcement",
+      "name": "Announcement",
+      "category": "stickers/communication",
+      "path": "/assets/flow/stickers/communication/flow-announcement.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-idea",
+      "name": "Idea",
+      "category": "stickers/communication",
+      "path": "/assets/flow/stickers/communication/flow-idea.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-cool",
+      "name": "Cool",
+      "category": "stickers/communication",
+      "path": "/assets/flow/stickers/communication/flow-cool.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-playful",
+      "name": "Playful",
+      "category": "stickers/communication",
+      "path": "/assets/flow/stickers/communication/flow-playful.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-new-lead",
+      "name": "New Lead",
+      "category": "stickers/crm",
+      "path": "/assets/flow/stickers/crm/flow-new-lead.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-qualified",
+      "name": "Qualified",
+      "category": "stickers/crm",
+      "path": "/assets/flow/stickers/crm/flow-qualified.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-negotiation",
+      "name": "Negotiation",
+      "category": "stickers/crm",
+      "path": "/assets/flow/stickers/crm/flow-negotiation.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-proposal-sent",
+      "name": "Proposal Sent",
+      "category": "stickers/crm",
+      "path": "/assets/flow/stickers/crm/flow-proposal-sent.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-follow-up",
+      "name": "Follow Up",
+      "category": "stickers/crm",
+      "path": "/assets/flow/stickers/crm/flow-follow-up.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-deal-won",
+      "name": "Deal Won",
+      "category": "stickers/crm",
+      "path": "/assets/flow/stickers/crm/flow-deal-won.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-deal-lost",
+      "name": "Deal Lost",
+      "category": "stickers/crm",
+      "path": "/assets/flow/stickers/crm/flow-deal-lost.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-client-onboarding",
+      "name": "Client Onboarding",
+      "category": "stickers/crm",
+      "path": "/assets/flow/stickers/crm/flow-client-onboarding.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-project-in-progress",
+      "name": "Project In Progress",
+      "category": "stickers/crm",
+      "path": "/assets/flow/stickers/crm/flow-project-in-progress.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-waiting-materials",
+      "name": "Waiting Materials",
+      "category": "stickers/crm",
+      "path": "/assets/flow/stickers/crm/flow-waiting-materials.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-project-delivered",
+      "name": "Project Delivered",
+      "category": "stickers/crm",
+      "path": "/assets/flow/stickers/crm/flow-project-delivered.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-ticket-solved",
+      "name": "Ticket Solved",
+      "category": "stickers/crm",
+      "path": "/assets/flow/stickers/crm/flow-ticket-solved.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-tour-welcome",
+      "name": "Tour Welcome",
+      "category": "onboarding",
+      "path": "/assets/flow/onboarding/flow-tour-welcome.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-tour-dashboard",
+      "name": "Tour Dashboard",
+      "category": "onboarding",
+      "path": "/assets/flow/onboarding/flow-tour-dashboard.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-tour-commercial",
+      "name": "Tour Commercial",
+      "category": "onboarding",
+      "path": "/assets/flow/onboarding/flow-tour-commercial.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-tour-client",
+      "name": "Tour Client",
+      "category": "onboarding",
+      "path": "/assets/flow/onboarding/flow-tour-client.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-tour-activities",
+      "name": "Tour Activities",
+      "category": "onboarding",
+      "path": "/assets/flow/onboarding/flow-tour-activities.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-tour-projects",
+      "name": "Tour Projects",
+      "category": "onboarding",
+      "path": "/assets/flow/onboarding/flow-tour-projects.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-tour-calendar",
+      "name": "Tour Calendar",
+      "category": "onboarding",
+      "path": "/assets/flow/onboarding/flow-tour-calendar.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-tour-team-space",
+      "name": "Tour Team Space",
+      "category": "onboarding",
+      "path": "/assets/flow/onboarding/flow-tour-team-space.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-tour-notifications",
+      "name": "Tour Notifications",
+      "category": "onboarding",
+      "path": "/assets/flow/onboarding/flow-tour-notifications.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-tour-search",
+      "name": "Tour Search",
+      "category": "onboarding",
+      "path": "/assets/flow/onboarding/flow-tour-search.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-tour-help",
+      "name": "Tour Help",
+      "category": "onboarding",
+      "path": "/assets/flow/onboarding/flow-tour-help.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-tour-finish",
+      "name": "Tour Finish",
+      "category": "onboarding",
+      "path": "/assets/flow/onboarding/flow-tour-finish.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-empty-leads",
+      "name": "Empty Leads",
+      "category": "empty-states",
+      "path": "/assets/flow/empty-states/flow-empty-leads.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-empty-clients",
+      "name": "Empty Clients",
+      "category": "empty-states",
+      "path": "/assets/flow/empty-states/flow-empty-clients.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-empty-activities",
+      "name": "Empty Activities",
+      "category": "empty-states",
+      "path": "/assets/flow/empty-states/flow-empty-activities.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-empty-projects",
+      "name": "Empty Projects",
+      "category": "empty-states",
+      "path": "/assets/flow/empty-states/flow-empty-projects.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-empty-calendar",
+      "name": "Empty Calendar",
+      "category": "empty-states",
+      "path": "/assets/flow/empty-states/flow-empty-calendar.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-empty-chat",
+      "name": "Empty Chat",
+      "category": "empty-states",
+      "path": "/assets/flow/empty-states/flow-empty-chat.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-empty-search",
+      "name": "Empty Search",
+      "category": "empty-states",
+      "path": "/assets/flow/empty-states/flow-empty-search.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-empty-notifications",
+      "name": "Empty Notifications",
+      "category": "empty-states",
+      "path": "/assets/flow/empty-states/flow-empty-notifications.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-empty-files",
+      "name": "Empty Files",
+      "category": "empty-states",
+      "path": "/assets/flow/empty-states/flow-empty-files.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-empty-payments",
+      "name": "Empty Payments",
+      "category": "empty-states",
+      "path": "/assets/flow/empty-states/flow-empty-payments.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-empty-support",
+      "name": "Empty Support",
+      "category": "empty-states",
+      "path": "/assets/flow/empty-states/flow-empty-support.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-all-done",
+      "name": "All Done",
+      "category": "empty-states",
+      "path": "/assets/flow/empty-states/flow-all-done.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-access-denied",
+      "name": "Access Denied",
+      "category": "system",
+      "path": "/assets/flow/system/flow-access-denied.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-page-not-found",
+      "name": "Page Not Found",
+      "category": "system",
+      "path": "/assets/flow/system/flow-page-not-found.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-offline",
+      "name": "Offline",
+      "category": "system",
+      "path": "/assets/flow/system/flow-offline.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-sync-error",
+      "name": "Sync Error",
+      "category": "system",
+      "path": "/assets/flow/system/flow-sync-error.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-integration-required",
+      "name": "Integration Required",
+      "category": "system",
+      "path": "/assets/flow/system/flow-integration-required.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-maintenance",
+      "name": "Maintenance",
+      "category": "system",
+      "path": "/assets/flow/system/flow-maintenance.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-warning",
+      "name": "Warning",
+      "category": "system",
+      "path": "/assets/flow/system/flow-warning.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-critical-error",
+      "name": "Critical Error",
+      "category": "system",
+      "path": "/assets/flow/system/flow-critical-error.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-secure-success",
+      "name": "Secure Success",
+      "category": "system",
+      "path": "/assets/flow/system/flow-secure-success.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-welcome-back",
+      "name": "Welcome Back",
+      "category": "system",
+      "path": "/assets/flow/system/flow-welcome-back.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-loading",
+      "name": "Loading",
+      "category": "system",
+      "path": "/assets/flow/system/flow-loading.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    },
+    {
+      "id": "flow-system-operational",
+      "name": "System Operational",
+      "category": "system",
+      "path": "/assets/flow/system/flow-system-operational.webp",
+      "width": 512,
+      "height": 512,
+      "format": "webp"
+    }
+  ]
+}

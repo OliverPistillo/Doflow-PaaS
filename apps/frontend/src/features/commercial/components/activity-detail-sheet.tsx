@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { CheckCircle2, MoreHorizontal, Pencil, Repeat2, X } from "lucide-react"
+import { CheckCircle2, MoreHorizontal, Pencil, Repeat2, Waypoints, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
@@ -17,16 +17,19 @@ import { Textarea } from "@/components/ui/textarea"
 import { customerActivityPriorities, customerActivityRecurrences, customerActivityStatuses, customerActivityTypes, getCanonicalCustomerActivities, resolveCanonicalCustomerActivityId, type CustomerActivity, useCommercialLeads } from "@/features/commercial/components/commercial-leads-provider"
 import { useCommercialTeam } from "@/features/commercial/use-commercial-team"
 import { RecordCollaborationPanel } from "@/features/commercial/components/record-collaboration-panel"
+import { CommercialTimeline } from "@/features/commercial/components/commercial-timeline"
 import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider"
+import { useFlowboards } from "@/features/flowboard/flowboard-provider"
 import { canManageActivity } from "@/features/identity/permissions"
 import { formatItalianDate, formatItalianDateTime } from "@/lib/date"
 
 const dateInput = (value?: string) => value?.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? ""
 
 export function ActivityDetailSheet({ clientId, activityId, open, onOpenChange }: { clientId: string; activityId: string | null; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const commercialTeam = useCommercialTeam()
   const store = useCommercialLeads()
   const identity = useDoflowIdentity()
-  const commercialTeam = useCommercialTeam()
+  const flowboards = useFlowboards()
   const customer = store.customers.find((item) => item.id === clientId)
   const canonicalId = activityId ? resolveCanonicalCustomerActivityId(customer, activityId) : null
   const activity = useMemo(() => canonicalId ? getCanonicalCustomerActivities(customer).find((item) => item.id === canonicalId) ?? null : null, [canonicalId, customer])
@@ -36,22 +39,23 @@ export function ActivityDetailSheet({ clientId, activityId, open, onOpenChange }
   if (!activity || !draft || !customer) return null
   const project = store.projects.find((item) => item.id === activity.projectId) ?? store.projects.find((item) => item.clientId === clientId && item.activityIds.includes(activity.id))
   const phase = project?.phases.find((item) => item.id === activity.phaseId || item.activityIds.includes(activity.id))
+  const linkedFlowboard = flowboards.boards.find((item) => !item.archivedAt && !item.isTemplate && item.nodes.some((node) => node.data.record?.type === "activity" && node.data.record.id === activity.id))
   const manageable = canManageActivity(identity.currentUser, activity, customer, project)
   const owner = commercialTeam.find((member) => member.id === activity.assigneeId)
   const collaborators = commercialTeam.filter((member) => activity.collaboratorIds.includes(member.id))
   const history = store.timelineEvents.filter((event) => event.activityId === activity.id)
   const dependencies = getCanonicalCustomerActivities(customer).filter((item) => activity.dependencyIds.includes(item.id))
-  const save = async () => {
+  const save = () => {
     if (!draft.title.trim()) return
-    const ok = await store.updateCustomerActivity(clientId, activity.id, { ...draft, completedAt: draft.status === "Completata" ? draft.completedAt ?? new Date().toISOString() : undefined })
+    const ok = store.updateCustomerActivity(clientId, activity.id, { ...draft, completedAt: draft.status === "Completata" ? draft.completedAt ?? new Date().toISOString() : undefined })
     if (ok) { toast.success("Attività aggiornata"); setEditing(false) }
   }
-  const toggleComplete = async () => {
-    const ok = activity.status === "Completata" ? await store.reopenCustomerActivity(clientId, activity.id) : await store.completeCustomerActivity(clientId, activity.id)
+  const toggleComplete = () => {
+    const ok = activity.status === "Completata" ? store.reopenCustomerActivity(clientId, activity.id) : store.completeCustomerActivity(clientId, activity.id)
     if (ok) toast.success(activity.status === "Completata" ? "Attività riaperta" : "Attività completata")
   }
-  const generateNext = async () => {
-    const nextId = await store.generateNextCustomerActivityRecurrence(clientId, activity.id)
+  const generateNext = () => {
+    const nextId = store.generateNextCustomerActivityRecurrence(clientId, activity.id)
     if (!nextId) toast.error("Imposta ricorrenza e scadenza prima di generare la successiva.")
     else toast.success(nextId === activity.nextRecurrenceId ? "Ricorrenza già generata" : "Prossima ricorrenza generata")
   }
@@ -71,11 +75,12 @@ export function ActivityDetailSheet({ clientId, activityId, open, onOpenChange }
       <Label className="sm:col-span-2">Categoria tecnica<Input value={draft.technicalCategory ?? ""} onChange={(event) => setDraft({ ...draft, technicalCategory: event.target.value || undefined })} /></Label>
       <div className="flex justify-end gap-2 sm:col-span-2"><Button variant="outline" onClick={() => { setDraft(activity); setEditing(false) }}>Annulla</Button><Button disabled={!draft.title.trim()} onClick={save}>Salva modifiche</Button></div>
     </CardContent></Card> : <>
+      {linkedFlowboard && <Button asChild size="sm" variant="outline"><Link href={`/dashboard/flowboard/${linkedFlowboard.id}?node=${activity.id}`}><Waypoints />Apri nel Flowboard</Link></Button>}
       <Card size="sm"><CardHeader><CardTitle className="text-base">Pianificazione</CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-2.5 text-sm"><p>Stato<br /><b>{activity.status}</b></p><p>Priorità<br /><b>{activity.priority}</b></p><p>Responsabile<br /><b>{owner?.name ?? activity.assigneeId}</b></p><p>Scadenza<br /><b>{formatItalianDate(activity.dueDate || activity.dueAt) || "Nessuna"}</b></p><p>Inizio<br /><b>{formatItalianDate(activity.startAt) || "Non impostata"}</b></p><p>Ricorrenza<br /><b>{activity.recurrence}</b></p>{collaborators.length > 0 && <p className="col-span-2">Collaboratori<br /><b>{collaborators.map((item) => item.name).join(", ")}</b></p>}{activity.blockedReason && <p className="col-span-2 text-red-600">Blocco<br /><b>{activity.blockedReason}</b></p>}</CardContent></Card>
       <Card size="sm"><CardHeader><CardTitle className="text-base">Collegamenti</CardTitle></CardHeader><CardContent className="space-y-1.5 text-sm"><p>Cliente<br /><b><Link className="text-primary hover:underline" href={`/dashboard/clienti/${customer.id}`}>{customer.profile.company}</Link></b></p><p>Lead<br /><b><Link className="text-primary hover:underline" href={`/dashboard/commercial/leads/${activity.leadId ?? customer.sourceLeadId}`}>Apri lead origine</Link></b></p><p>Progetto<br /><b>{project ? <Link className="text-primary hover:underline" href={`/dashboard/progetti/${project.id}`}>{project.name}</Link> : "Nessuno"}</b></p><p>Fase<br /><b>{phase?.name ?? "Nessuna"}</b></p><p>Origine<br /><b>{activity.origin}</b></p>{activity.technicalCategory && <p>Categoria tecnica<br /><b>{activity.technicalCategory}</b></p>}</CardContent></Card>
       {(activity.notes || dependencies.length > 0) && <Card size="sm"><CardHeader><CardTitle className="text-base">Note e dipendenze</CardTitle></CardHeader><CardContent className="space-y-1.5 text-sm">{activity.notes && <p className="whitespace-pre-wrap">{activity.notes}</p>}{dependencies.map((item) => <p key={item.id}>Dipende da: <b>{item.title}</b> · {item.status}</p>)}</CardContent></Card>}
       <Card size="sm"><CardHeader><CardTitle className="text-base">Informazioni</CardTitle></CardHeader><CardContent className="space-y-1.5 text-sm"><p>Creata il {formatItalianDateTime(activity.createdAt)} da {activity.createdBy}</p><p>Aggiornata il {formatItalianDateTime(activity.updatedAt)}</p>{activity.completedAt && <p>Completata il {formatItalianDateTime(activity.completedAt)}</p>}{activity.nextRecurrenceId && <p>Prossima ricorrenza già generata: <b>{activity.nextRecurrenceId}</b></p>}</CardContent></Card>
     </>}
-      <Card size="sm"><CardHeader className="flex-row items-start justify-between gap-2"><div><CardTitle className="text-base">Cronologia</CardTitle></div><RecordCollaborationPanel recordType="activity" recordId={activity.id} label={activity.title} compact /></CardHeader><CardContent className="space-y-2.5 text-sm">{history.length ? history.map((event) => <div key={event.id}><p className="font-medium">{event.title}</p><p className="text-muted-foreground">{event.detail}</p><p className="text-xs text-muted-foreground">{formatItalianDateTime(event.date)} · {event.author}</p></div>) : <p className="text-muted-foreground">Nessuna modifica registrata.</p>}</CardContent></Card>
+      <Card size="sm"><CardHeader className="flex-row items-start justify-between gap-2"><div><CardTitle className="text-base">Cronologia</CardTitle></div><RecordCollaborationPanel recordType="activity" recordId={activity.id} label={activity.title} compact /></CardHeader><CardContent><CommercialTimeline compact filters={false} items={history.map((event) => ({ id: event.id, title: event.title, description: event.detail, date: event.date, author: event.author, category: "Attività" }))} emptyText="Nessuna modifica registrata." /></CardContent></Card>
     </div></SheetContent></Sheet>
 }

@@ -63,6 +63,7 @@ export type OverviewMetric = {
   comparison: string
   token: "chart-1" | "chart-2" | "chart-3" | "chart-4" | "chart-5"
   series: { month: string; value: number }[]
+  previousSeries?: { month: string; value: number }[]
 }
 
 export type OverviewRangeData = {

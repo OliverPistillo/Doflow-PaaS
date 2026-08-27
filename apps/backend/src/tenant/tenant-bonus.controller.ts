@@ -18,6 +18,8 @@ export class TenantBonusController {
   @RequireTenantCapability('canManagePointPolicies')
   @Post('requests/:id/reject') reject(@Param('id') id: string, @Body() body: Record<string, unknown>, @Headers('idempotency-key') key?: string) { return this.service.decide(id, 'rejected', body || {}, key); }
   @RequireTenantCapability('canManagePointPolicies')
+  @Post('requests/:id/payout') payout(@Param('id') id: string, @Body() body: Record<string, unknown>, @Headers('idempotency-key') key?: string) { return this.service.payout(id, body || {}, key); }
+  @RequireTenantCapability('canManagePointPolicies')
   @Post('adjustments') adjustment(@Body() body: Record<string, unknown>, @Headers('idempotency-key') key?: string) { return this.service.adjustment(body || {}, key); }
   @RequireTenantCapability('canManagePointPolicies')
   @Post('policies/versions') policy(@Body() body: Record<string, unknown>, @Headers('idempotency-key') key?: string) { return this.service.policyVersion(body || {}, key); }

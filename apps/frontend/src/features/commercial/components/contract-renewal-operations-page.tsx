@@ -59,7 +59,7 @@ import {
   type CommercialRenewal,
 } from "@/features/commercial/commercial-commerce";
 import { useCommercialLeads } from "@/features/commercial/components/commercial-leads-provider";
-import { RecordCollaborationPanel } from "@/features/commercial/components/record-collaboration-panel";
+import { OpenInCalendarLink } from "@/features/commercial/components/open-in-calendar-link";
 import { useCommercialTeam } from "@/features/commercial/use-commercial-team";
 import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider";
 
@@ -67,6 +67,9 @@ export type ContractRenewalSection = "contratti" | "rinnovi";
 const money = new Intl.NumberFormat("it-IT", {
   style: "currency",
   currency: "EUR",
+  useGrouping: "always",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
 });
 const displayDate = (value?: string) =>
   value
@@ -228,6 +231,37 @@ export function ContractRenewalOperationsPage({
           </Button>
         )}
       </header>
+      {section === "contratti" ? (
+        <div className="flex justify-end">
+          <OpenInCalendarLink
+            date={
+              (
+                selectedContract ??
+                contracts.find((item) => item.signatureDueAt)
+              )?.signatureDueAt
+            }
+            eventId={
+              (
+                selectedContract ??
+                contracts.find((item) => item.signatureDueAt)
+              )?.id
+                ? `contract:${(selectedContract ?? contracts.find((item) => item.signatureDueAt))!.id}`
+                : undefined
+            }
+          />
+        </div>
+      ) : (
+        <div className="flex justify-end">
+          <OpenInCalendarLink
+            date={(selectedRenewal ?? renewals[0])?.nextDueAt}
+            eventId={
+              (selectedRenewal ?? renewals[0])?.id
+                ? `renewal:${(selectedRenewal ?? renewals[0])!.id}`
+                : undefined
+            }
+          />
+        </div>
+      )}
       <nav
         className="flex gap-1 overflow-x-auto rounded-xl border bg-card p-1"
         aria-label="Contratti e rinnovi"
@@ -545,12 +579,6 @@ function ContractTable({
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-1">
-                    <RecordCollaborationPanel
-                      recordType="contract"
-                      recordId={item.id}
-                      label={item.code}
-                      compact
-                    />
                     <Button
                       size="sm"
                       variant="outline"
@@ -661,12 +689,6 @@ function RenewalTable({
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-1">
-                    <RecordCollaborationPanel
-                      recordType="renewal"
-                      recordId={item.id}
-                      label={item.planName}
-                      compact
-                    />
                     <Button
                       size="sm"
                       variant="outline"
@@ -678,9 +700,7 @@ function RenewalTable({
                       <Button
                         size="sm"
                         onClick={async () => {
-                          const result = await store.generateRenewalOrder(
-                            item.id,
-                          );
+                          const result = await store.generateRenewalOrder(item.id);
                           result.ok
                             ? toast.success(
                                 result.existing
@@ -839,11 +859,11 @@ function ContractDetail({
                   variant="outline"
                   onClick={async () => {
                     if (await store.markContractSigned(live.id))
-                      toast.success("Firma registrata internamente.");
+                      toast.success("Firma registrata.");
                   }}
                 >
                   <FileCheck2 />
-                  Registra firma interna
+                  Marca firmato
                 </Button>
                 <Button
                   type="button"
@@ -943,7 +963,7 @@ function RenewalDetail({
             label="Stato"
             name="status"
             defaultValue={live.status}
-            options={renewalStatuses.filter((status) => status !== "Pagato")}
+            options={[...renewalStatuses]}
             disabled={!canManage}
           />
           <section className="space-y-2 sm:col-span-2">
@@ -1033,8 +1053,8 @@ function ContractSendDialog({
         <DialogHeader>
           <DialogTitle>Registra invio {contract.code}</DialogTitle>
           <DialogDescription>
-            Registra il tentativo nella Timeline. Gli adapter esterni non
-            configurati restituiscono un errore esplicito.
+            Il prototipo registra il tentativo e la Timeline, senza inviare
+            email o WhatsApp.
           </DialogDescription>
         </DialogHeader>
         <form action={submit} className="space-y-4">

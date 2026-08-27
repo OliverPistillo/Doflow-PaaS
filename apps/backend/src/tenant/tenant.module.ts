@@ -47,30 +47,7 @@ import { TenantCredentialsCryptoService } from './tenant-credentials-crypto.serv
 import { TenantCredentialsPermissionsService } from './tenant-credentials-permissions.service';
 import { TenantCredentialsSchedulerService } from './tenant-credentials-scheduler.service';
 import { TenantEffectivePermissionsService } from './tenant-effective-permissions.service';
-import { TenantSiteProposalsController } from './tenant-site-proposals.controller';
-import { TenantSiteProposalsService } from './tenant-site-proposals.service';
-import { TenantSiteProposalsCsvService } from './tenant-site-proposals-csv.service';
-import { TenantSiteProposalsTemplateService } from './tenant-site-proposals-template.service';
-import { TenantSiteProposalsArtifactService } from './tenant-site-proposals-artifact.service';
-import { TenantSiteProposalsDoflowGuard } from './tenant-site-proposals-doflow.guard';
 import { FileStorageService } from '../file-storage.service';
-import { TenantSiteProposalsWebsiteFetcherService } from './tenant-site-proposals-website-fetcher.service';
-import { TenantSiteProposalsWebsiteExtractorService } from './tenant-site-proposals-website-extractor.service';
-import { TenantSiteProposalsBrandService } from './tenant-site-proposals-brand.service';
-import { TenantSiteProposalsAiService } from './tenant-site-proposals-ai.service';
-import { TenantSiteProposalsPersonalizationService } from './tenant-site-proposals-personalization.service';
-import { TenantSiteProposalsImageService } from './tenant-site-proposals-image.service';
-import { SITE_PROPOSAL_PREPARATION_QUEUE } from './tenant-site-proposals.constants';
-import { TenantSiteProposalsThemePackageService } from './tenant-site-proposals-theme-package.service';
-import { TenantSiteProposalsThemeCompilerService } from './tenant-site-proposals-theme-compiler.service';
-import { TenantSiteProposalsThemeService } from './tenant-site-proposals-theme.service';
-import { TenantSiteProposalsGenerationCoreService } from './tenant-site-proposals-generation-core.service';
-import { TenantSiteProposalsPreparationCoreService } from './tenant-site-proposals-preparation-core.service';
-import { TenantSiteProposalsPreparationQueueService } from './tenant-site-proposals-preparation-queue.service';
-import { TenantSiteProposalsPreparationWorker } from './tenant-site-proposals-preparation.worker';
-import { TenantSiteProposalsThemeStorageCleanupService } from './tenant-site-proposals-theme-storage-cleanup.service';
-import { TenantSiteProposalsLogoGeneratorService } from './tenant-site-proposals-logo-generator.service';
-import { TenantSiteProposalsPreparationProgressService } from './tenant-site-proposals-preparation-progress.service';
 import { TenantDoflowWorkspaceController } from './tenant-doflow-workspace.controller';
 import { TenantDoflowWorkspaceService } from './tenant-doflow-workspace.service';
 import { TenantDoflowCommerceController } from './tenant-doflow-commerce.controller';
@@ -110,6 +87,9 @@ import { TenantCompanyIntelligenceService } from './tenant-company-intelligence.
 import { TenantUniversalScopeGuard } from './tenant-universal-scope.guard';
 import { TenantUniversalCapabilitiesService } from './tenant-universal-capabilities.service';
 import { TenantUniversalCapabilityGuard } from './tenant-universal-capability.guard';
+import { TenantBackendContractsController } from './tenant-backend-contracts.controller';
+import { TenantBackendContractsService } from './tenant-backend-contracts.service';
+import { TenantCalendarFeedController } from './tenant-calendar-feed.controller';
 
 import { Tenant } from '../superadmin/entities/tenant.entity';
 import { TenantSubscription } from '../superadmin/entities/tenant-subscription.entity';
@@ -123,7 +103,6 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     AuthModule,
     NotificationsModule,
     SalesIntelligenceModule,
-    BullModule.registerQueue({ name: SITE_PROPOSAL_PREPARATION_QUEUE }),
     BullModule.registerQueue({ name: DOFLOW_COLLABORATION_OUTBOX_QUEUE }),
     BullModule.registerQueue({ name: DOFLOW_AUTOMATION_PERFORMANCE_QUEUE }),
     TypeOrmModule.forFeature([
@@ -158,7 +137,6 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantCalendarController,
     TenantKnowledgeController,
     TenantCredentialsController,
-    TenantSiteProposalsController,
     TenantDoflowWorkspaceController,
     TenantDoflowCommerceController,
     TenantDoflowCollaborationController,
@@ -172,6 +150,8 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantPreferencesController,
     TenantReleasesController,
     TenantCompanyIntelligenceController,
+    TenantBackendContractsController,
+    TenantCalendarFeedController,
   ],
   providers: [
     TenantDashboardService,
@@ -198,28 +178,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantCredentialsPermissionsService,
     TenantCredentialsSchedulerService,
     TenantEffectivePermissionsService,
-    TenantSiteProposalsService,
-    TenantSiteProposalsCsvService,
-    TenantSiteProposalsTemplateService,
-    TenantSiteProposalsArtifactService,
-    TenantSiteProposalsDoflowGuard,
     FileStorageService,
-    TenantSiteProposalsWebsiteFetcherService,
-    TenantSiteProposalsWebsiteExtractorService,
-    TenantSiteProposalsBrandService,
-    TenantSiteProposalsImageService,
-    TenantSiteProposalsAiService,
-    TenantSiteProposalsPersonalizationService,
-    TenantSiteProposalsThemePackageService,
-    TenantSiteProposalsThemeCompilerService,
-    TenantSiteProposalsThemeService,
-    TenantSiteProposalsGenerationCoreService,
-    TenantSiteProposalsPreparationCoreService,
-    TenantSiteProposalsPreparationQueueService,
-    TenantSiteProposalsPreparationWorker,
-    TenantSiteProposalsThemeStorageCleanupService,
-      TenantSiteProposalsLogoGeneratorService,
-      TenantSiteProposalsPreparationProgressService,
       TenantDoflowWorkspaceService,
       TenantDoflowCommerceService,
       TenantDoflowCollaborationService,
@@ -238,6 +197,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
       TenantPreferencesService,
       TenantReleasesService,
       TenantCompanyIntelligenceService,
+      TenantBackendContractsService,
       TenantUniversalScopeGuard,
       TenantUniversalCapabilitiesService,
       TenantUniversalCapabilityGuard,

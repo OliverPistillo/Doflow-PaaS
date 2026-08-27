@@ -15,7 +15,7 @@ import {
 
 export const COLLABORATION_RECORD_TYPES = [
   'lead', 'customer', 'project', 'activity', 'order', 'quote', 'contract',
-  'invoice', 'renewal', 'document', 'builder', 'payment',
+  'invoice', 'renewal', 'document', 'support_ticket', 'payment',
 ] as const;
 
 class CommentAttachmentDto {

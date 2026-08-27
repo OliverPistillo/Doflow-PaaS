@@ -13,8 +13,7 @@ import { LeadDialog } from "@/features/commercial/components/commercial-dashboar
 import { CommercialPipelineBoard } from "@/features/commercial/components/commercial-pipeline-board"
 import { AccessDenied } from "@/features/identity/access-denied"
 import { useAuthorizedCommercial } from "@/features/identity/use-authorized-commercial"
-import { activeCommercialStages, filterCommercialLeadsByPeriod } from "@/features/commercial/commercial-analytics"
-import { pipelineStages } from "@/features/commercial/pipeline-stages"
+import { activeCommercialStages, filterCommercialLeadsByPeriod, pipelineStages } from "@/features/commercial/data/commercial-fixtures"
 import { useCommercialTeam } from "@/features/commercial/use-commercial-team"
 import type { CommercialPeriod, PipelineStage } from "@/features/commercial/types"
 
@@ -83,7 +82,7 @@ export function CommercialFullPipelinePage() {
 
   if (!identity.hasCapability("canViewAllLeads") && !identity.hasCapability("canViewAssignedLeads")) return <AccessDenied resource="alla pipeline commerciale" />
   return <main className="@container/pipeline mx-auto flex w-full min-w-0 max-w-none flex-1 flex-col gap-6 p-4 md:p-6">
-    <header className="flex flex-col gap-4 @5xl/pipeline:flex-row @5xl/pipeline:items-end @5xl/pipeline:justify-between">
+    <header data-flow-tour="flow-pipeline" className="flex flex-col gap-4 @5xl/pipeline:flex-row @5xl/pipeline:items-end @5xl/pipeline:justify-between">
       <div><h1 className="text-2xl font-semibold tracking-tight">Pipeline commerciale</h1><p className="text-sm text-muted-foreground">Gestisci le opportunità nelle fasi commerciali e aggiorna gli stati con il trascinamento.</p></div>
       <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={exportCsv}><Download />Esporta</Button><LeadDialog onCreate={addLead} /></div>
     </header>
@@ -98,6 +97,6 @@ export function CommercialFullPipelinePage() {
 
     <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground"><span>{visibleLeads.length} lead visualizzati</span><span className="hidden @lg/pipeline:inline">Trascina una card in una colonna oppure usa il menu “Sposta in”.</span></div>
 
-    <Card className="min-h-[min(680px,calc(100dvh-16rem))] min-w-0 flex-1 overflow-hidden"><CardContent className="h-full min-h-[min(680px,calc(100dvh-16rem))] p-0"><CommercialPipelineBoard visibleLeads={visibleLeads} dndContextId="commercial-full-pipeline" enhancedCards /></CardContent></Card>
+    <Card data-flow-tour="flow-pipeline-stages" className="min-h-[min(680px,calc(100dvh-16rem))] min-w-0 flex-1 overflow-hidden"><CardContent className="h-full min-h-[min(680px,calc(100dvh-16rem))] p-0"><CommercialPipelineBoard visibleLeads={visibleLeads} dndContextId="commercial-full-pipeline" enhancedCards /></CardContent></Card>
   </main>
 }

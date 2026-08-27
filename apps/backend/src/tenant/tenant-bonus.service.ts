@@ -101,6 +101,21 @@ export class TenantBonusService {
     if (!rows[0]) throw new BadRequestException('Utente non appartenente al tenant');
   }
 
+  private requestSelect(schema: string) {
+    return `SELECT r.*,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+        'id',h.id,'status',h.status,'actorId',h.actor_user_id,'reason',h.reason,'createdAt',h.created_at
+      ) ORDER BY h.created_at) FROM "${schema}".bonus_request_history h WHERE h.request_id=r.id),'[]'::jsonb) AS history,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+        'id',a.id,'approverId',a.approver_user_id,'decision',a.decision,'reason',a.reason,'createdAt',a.created_at
+      ) ORDER BY a.created_at) FROM "${schema}".bonus_approvals a WHERE a.request_id=r.id),'[]'::jsonb) AS approvals,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object(
+        'id',ba.id,'reference',ba.metadata->>'reference','paidBy',ba.actor_user_id,'paidAt',ba.created_at
+      ) ORDER BY ba.created_at) FROM "${schema}".bonus_audit ba
+        WHERE ba.target_id=r.id AND ba.action='bonus_paid'),'[]'::jsonb) AS payouts
+      FROM "${schema}".bonus_requests r`;
+  }
+
   async state(query: Record<string, unknown>) {
     rejectTenantOverride(query);
     const actor = await this.ensure();
@@ -128,7 +143,7 @@ export class TenantBonusService {
            ORDER BY l.effective_at DESC,l.created_at DESC LIMIT 500`,
           [requested],
         ),
-        this.dataSource.query(`SELECT * FROM "${actor.schema}".bonus_requests WHERE user_id=$1 ORDER BY created_at DESC LIMIT 200`, [requested]),
+        this.dataSource.query(`${this.requestSelect(actor.schema)} WHERE r.user_id=$1 ORDER BY r.created_at DESC LIMIT 200`, [requested]),
         this.dataSource.query(`SELECT * FROM "${actor.schema}".bonus_periods ORDER BY starts_at DESC LIMIT 100`),
         this.dataSource.query(
           `SELECT p.*,v.formula FROM "${actor.schema}".point_policies p
@@ -136,7 +151,7 @@ export class TenantBonusService {
            WHERE p.status='active' AND p.event_type='default' ORDER BY p.valid_from DESC LIMIT 1`,
         ),
         canViewGlobal
-          ? this.dataSource.query(`SELECT * FROM "${actor.schema}".bonus_requests WHERE status='pending' ORDER BY created_at ASC LIMIT 500`)
+          ? this.dataSource.query(`${this.requestSelect(actor.schema)} WHERE r.status IN ('pending','approved') ORDER BY r.created_at ASC LIMIT 500`)
           : Promise.resolve([]),
       ]);
       const totals = walletRows[0] || {};
@@ -169,7 +184,7 @@ export class TenantBonusService {
     const [wallet, ledger, requests, periods, policies, pendingRequests] = await Promise.all([
       this.dataSource.query(`SELECT * FROM "${actor.schema}".bonus_wallets WHERE user_id=$1`, [requested]),
       this.dataSource.query(`SELECT * FROM "${actor.schema}".bonus_ledger WHERE user_id=$1 ORDER BY created_at DESC LIMIT 500`, [requested]),
-      this.dataSource.query(`SELECT * FROM "${actor.schema}".bonus_requests WHERE user_id=$1 ORDER BY created_at DESC LIMIT 200`, [requested]),
+      this.dataSource.query(`${this.requestSelect(actor.schema)} WHERE r.user_id=$1 ORDER BY r.created_at DESC LIMIT 200`, [requested]),
       this.dataSource.query(`SELECT * FROM "${actor.schema}".bonus_periods ORDER BY starts_at DESC LIMIT 100`),
       this.dataSource.query(
         `SELECT p.*,v.rules FROM "${actor.schema}".bonus_policies p
@@ -177,7 +192,7 @@ export class TenantBonusService {
          WHERE p.status='active' ORDER BY p.created_at DESC LIMIT 1`,
       ),
       canViewGlobal
-        ? this.dataSource.query(`SELECT * FROM "${actor.schema}".bonus_requests WHERE status='pending' ORDER BY created_at ASC LIMIT 500`)
+        ? this.dataSource.query(`${this.requestSelect(actor.schema)} WHERE r.status IN ('pending','approved') ORDER BY r.created_at ASC LIMIT 500`)
         : Promise.resolve([]),
     ]);
     const ownReserved = requests
@@ -331,6 +346,50 @@ export class TenantBonusService {
         await manager.query(
           `INSERT INTO "${actor.schema}".bonus_audit (actor_user_id,action,target_id,metadata)
            VALUES ($1,$2,$3,$4::jsonb)`, [actor.id, `bonus_${decision}`, requestId, JSON.stringify({ reason })],
+        );
+        return updated[0];
+      },
+    ));
+  }
+
+  async payout(requestValue: string, body: Record<string, unknown>, key?: string) {
+    rejectActorOverride(body);
+    const actor = await this.ensure('canManagePointPolicies');
+    if (!key) throw new BadRequestException('Idempotency-Key obbligatoria');
+    const requestId = tenantUuid(requestValue, 'requestId');
+    const reference = boundedText(body.reference, 'reference', 300, true);
+    return this.dataSource.transaction((manager) => withTenantIdempotency(
+      manager,
+      actor.schema,
+      `bonus:payout:${requestId}`,
+      key,
+      { requestId, reference },
+      actor.id,
+      async () => {
+        const rows = await manager.query(
+          `SELECT * FROM "${actor.schema}".bonus_requests WHERE id=$1 FOR UPDATE`,
+          [requestId],
+        );
+        const request = rows[0];
+        if (!request) throw new NotFoundException('Richiesta Bonus non trovata');
+        if (String(request.user_id) === actor.id) throw new ForbiddenException('Non puoi liquidare una richiesta Bonus personale');
+        if (request.status === 'paid') return request;
+        if (request.status !== 'approved') throw new ConflictException('Solo una richiesta approvata puo essere liquidata');
+        const updated = await manager.query(
+          `UPDATE "${actor.schema}".bonus_requests
+           SET status='paid',updated_at=now() WHERE id=$1 AND status='approved' RETURNING *`,
+          [requestId],
+        );
+        if (!updated[0]) throw new ConflictException('Richiesta Bonus modificata da un altro utente');
+        await manager.query(
+          `INSERT INTO "${actor.schema}".bonus_request_history (request_id,status,actor_user_id,reason)
+           VALUES ($1,'paid',$2,$3)`,
+          [requestId, actor.id, `Liquidazione gestionale: ${reference}`],
+        );
+        await manager.query(
+          `INSERT INTO "${actor.schema}".bonus_audit (actor_user_id,action,target_id,metadata)
+           VALUES ($1,'bonus_paid',$2,$3::jsonb)`,
+          [actor.id, requestId, JSON.stringify({ reference, managementStateOnly: true })],
         );
         return updated[0];
       },

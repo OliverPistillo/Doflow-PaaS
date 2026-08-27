@@ -247,11 +247,48 @@ export class TenantDoflowWorkspaceService {
   async updatePreferences(body: Record<string, unknown>) {
     const user = this.user();
     await this.ensureIdentityTables();
+    const normalizeList = (value: unknown) => {
+      const source = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+      return {
+        sort: String(source.sort || 'updated-desc').slice(0, 64),
+        group: String(source.group || 'none').slice(0, 64),
+        groupOrder: source.groupOrder === 'desc' ? 'desc' : 'asc',
+        collapsedGroups: Array.isArray(source.collapsedGroups)
+          ? Array.from(new Set(source.collapsedGroups.map(String).filter((item) => /^[\w .:-]{1,100}$/.test(item)))).slice(0, 100)
+          : [],
+      };
+    };
+    const personalSource = body.personal && typeof body.personal === 'object'
+      ? body.personal as Record<string, unknown>
+      : {};
+    const notificationRules = personalSource.notificationRules && typeof personalSource.notificationRules === 'object'
+      ? Object.fromEntries(Object.entries(personalSource.notificationRules as Record<string, unknown>)
+          .filter(([key, value]) => key.length <= 100 && ['immediate', 'daily', 'off'].includes(String(value)))
+          .slice(0, 100)
+          .map(([key, value]) => [key, String(value)]))
+      : {};
     const allowed = {
       leadOpenMode: body.leadOpenMode === 'full' ? 'full' : 'quick',
       clientOpenMode: body.clientOpenMode === 'full' ? 'full' : 'quick',
-      leadList: { sort: String((body.leadList as any)?.sort || 'updated-desc').slice(0, 64), group: String((body.leadList as any)?.group || 'none').slice(0, 64) },
-      clientList: { sort: String((body.clientList as any)?.sort || 'updated-desc').slice(0, 64), group: String((body.clientList as any)?.group || 'none').slice(0, 64) },
+      leadList: normalizeList(body.leadList),
+      clientList: normalizeList(body.clientList),
+      agendaReminderMinutes: [0, 5, 15, 30, 60].includes(Number(body.agendaReminderMinutes)) ? Number(body.agendaReminderMinutes) : 15,
+      personal: {
+        language: personalSource.language === 'en' ? 'en' : 'it',
+        timeZone: String(personalSource.timeZone || 'Europe/Rome').slice(0, 100),
+        homePage: /^\/dashboard(?:\/[^?#]*)?$/.test(String(personalSource.homePage || '')) ? String(personalSource.homePage) : '/dashboard',
+        theme: ['system', 'light', 'dark'].includes(String(personalSource.theme)) ? String(personalSource.theme) : 'system',
+        density: personalSource.density === 'compact' ? 'compact' : 'comfortable',
+        dateFormat: ['dd/MM/yyyy', 'MM/dd/yyyy', 'yyyy-MM-dd'].includes(String(personalSource.dateFormat)) ? String(personalSource.dateFormat) : 'dd/MM/yyyy',
+        timeFormat: personalSource.timeFormat === '12h' ? '12h' : '24h',
+        weekStartsOn: personalSource.weekStartsOn === 'sunday' ? 'sunday' : 'monday',
+        calendarView: ['month', 'week', 'day', 'agenda'].includes(String(personalSource.calendarView)) ? String(personalSource.calendarView) : 'month',
+        commercialView: ['list', 'kanban', 'deadlines', 'appointments'].includes(String(personalSource.commercialView)) ? String(personalSource.commercialView) : 'list',
+        teamSpaceParticipantsOpen: personalSource.teamSpaceParticipantsOpen !== false,
+        reduceMotion: personalSource.reduceMotion === true,
+        notificationFrequency: ['immediate', 'daily', 'off'].includes(String(personalSource.notificationFrequency)) ? String(personalSource.notificationFrequency) : 'immediate',
+        notificationRules,
+      },
     };
     await this.dataSource.query(
       `INSERT INTO "${user.schema}".doflow_user_preferences (user_id, preferences, updated_at) VALUES ($1, $2::jsonb, now())

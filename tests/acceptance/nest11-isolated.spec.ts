@@ -68,7 +68,7 @@ async function login(email: string, password: string) {
   return context;
 }
 
-test('Nest 11 isolated HTTP, tenant, Builder, webhook and restart smoke', async ({ request }) => {
+test('Nest 11 isolated HTTP, tenant, removed Builder, webhook and restart smoke', async ({ request }) => {
   const config = JSON.parse(await readFile(runtimeConfigPath, 'utf8')) as RuntimeConfig;
   const credentials = JSON.parse(await readFile(credentialPath, 'utf8')) as Credentials;
   await backendHealth();
@@ -104,14 +104,14 @@ test('Nest 11 isolated HTTP, tenant, Builder, webhook and restart smoke', async 
 
   const manager = await login('visual.manager@acceptance.invalid', credentials.password);
   const builder = await manager.get('http://localhost:3401/api/tenant/commercial/site-proposals');
-  expect(builder.status()).toBe(200);
+  expect(builder.status()).toBe(404);
 
   const secondary = await login('secondary.owner@acceptance.invalid', credentials.password);
   const crossTenantBuilder = await secondary.get(
     'http://localhost:3401/api/tenant/commercial/site-proposals',
     { headers: { 'X-Doflow-Tenant-Id': 'doflow' } },
   );
-  expect(crossTenantBuilder.status()).toBe(403);
+  expect(crossTenantBuilder.status()).toBe(404);
 
   try {
     const timestamp = Math.floor(Date.now() / 1000);

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url"
 export const LEGACY_SUCCESS = "GLOBAL FRONTEND LEGACY VISUAL RESIDUE = 0 REACHABLE"
 export const SEMANTIC_SUCCESS = "UNIVERSAL UI SEMANTIC TOKEN COMPLIANCE = PASS"
 export const ARCADE_SUCCESS = "FLOW ARCADE FRONTEND REACHABILITY = 0"
+export const BUILDER_SUCCESS = "BUILDER FRONTEND REACHABILITY = 0"
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url))
 const REPOSITORY_ROOT = path.resolve(SCRIPT_DIR, "..")
@@ -35,7 +36,6 @@ const FORBIDDEN_FILES = [
 
 const SEMANTIC_SCOPE = [
   "app/(tenant)/dashboard/",
-  "app/(tenant)/commercial/site-proposals/",
   "app/superadmin/",
   "app/login/",
   "app/signup/",
@@ -52,7 +52,6 @@ const SEMANTIC_SCOPE = [
   "components/tenant-company-intelligence/",
   "components/tenant-flowboard/",
   "components/tenant-inbox/",
-  "components/tenant-site-proposals/",
   "components/ui/",
   "components/app-sidebar.tsx",
   "components/dashboard-header.tsx",
@@ -260,7 +259,7 @@ export function auditLegacyReachability(sourceRoot = FRONTEND_SOURCE) {
     { label: "ThemeSettingsDrawer is reachable", pattern: /\bThemeSettingsDrawer\b/g },
     { label: "roomy sidebar adapter is reachable", pattern: /\bRoomySidebar\w*\b|roomy-sidebar/gi },
     { label: "legacy tenant sidebar is reachable", pattern: /legacy-tenant-shell|tenant-sidebar-section/gi },
-    { label: "reachable legacy .df-* class", pattern: /["'`\s](df-[a-z0-9-]+)\b/gi },
+    { label: "reachable legacy .df-* class", pattern: /["'`\s](df-[a-z0-9-]+)\b/g },
     { label: "reachable legacy --df-* token", pattern: /--df-[a-z0-9-]+\b/gi },
     { label: "reachable legacy Superadmin visual wrapper", pattern: /["'`\s](?:dashboard-content|glass-card)\b/gi },
   ]
@@ -319,7 +318,6 @@ export function auditShellContracts(sourceRoot = FRONTEND_SOURCE) {
   const sidebar = source("components/ui/sidebar.tsx")
   const appSidebar = source("components/app-sidebar.tsx")
   const header = source("components/dashboard-header.tsx")
-  const builderGate = source("components/tenant-site-proposals/site-proposals-access-gate.tsx")
   const tenantNavigation = source("config/tenant-navigation.ts")
 
   if (!/import\(["']@\/components\/layout\/tenant-app-shell["']\)/.test(tenantLayout) || !/<TenantAppShell\s+session=\{session\}>/.test(tenantLayout)) findings.push("app/(tenant)/layout.tsx: every normal tenant must use TenantAppShell with its server session")
@@ -329,10 +327,8 @@ export function auditShellContracts(sourceRoot = FRONTEND_SOURCE) {
   if (!/PlatformAppShell/.test(platformLayout) || !/\/auth\/me/.test(platformLayout) || !/tenant\s*===\s*["']public["']/.test(platformLayout)) findings.push("app/superadmin/layout.tsx: PlatformAppShell must preserve the platform auth boundary")
   if (!/SidebarProvider/.test(platformShell) || !/SuperAdminSidebar/.test(platformShell)) findings.push("components/layout/platform-app-shell.tsx: platform shell must use the shared sidebar primitive")
   if (!/SIDEBAR_WIDTH\s*=\s*["']16rem["']/.test(sidebar) || !/SIDEBAR_WIDTH_MOBILE\s*=\s*["']18rem["']/.test(sidebar) || !/SIDEBAR_WIDTH_ICON\s*=\s*["']3rem["']/.test(sidebar)) findings.push("components/ui/sidebar.tsx: reference 4864782 16rem/18rem/3rem geometry changed")
-  const builderItems = [...appSidebar.matchAll(/title\s*:\s*["']Builder["']/g)]
-  if (builderItems.length !== 1 || !/title\s*:\s*["']Builder["'][^\n]*url\s*:\s*["']\/commercial\/site-proposals["'][^\n]*capability\s*:\s*["']canUseBuilder["']/.test(appSidebar)) findings.push("components/app-sidebar.tsx: Builder must remain one top-level canUseBuilder item")
+  if (/site-proposals|canUseBuilder|title\s*:\s*["']Builder["']/.test(appSidebar)) findings.push("components/app-sidebar.tsx: extracted Builder must remain absent")
   if (/SiteProposalDialog|data-flow-tour=["']flow-builder["']/.test(header)) findings.push("components/dashboard-header.tsx: reference 4864782 keeps Builder out of the header shortcuts")
-  if (!/hasCapability\(["']canUseBuilder["']\)/.test(builderGate)) findings.push("components/tenant-site-proposals/site-proposals-access-gate.tsx: Builder route gate must remain capability-gated")
   for (const [route, capability] of [
     ["/dashboard/inbox", "canReadNotifications"],
     ["/dashboard/team-space", "canViewProjects"],
@@ -365,15 +361,29 @@ export function auditArcadeReachability(sourceRoot = FRONTEND_SOURCE) {
   return findings.sort()
 }
 
+export function auditBuilderReachability(sourceRoot = FRONTEND_SOURCE) {
+  const findings = []
+  const pattern = /site-proposals|site-proposal|SiteProposal|SiteProposals|canUseBuilder|\/commercial\/site-proposals/g
+  for (const file of walkFiles(sourceRoot).filter((candidate) => CODE_EXTENSIONS.includes(path.extname(candidate).toLowerCase()))) {
+    if (/\.(?:spec|test)\.[^.]+$/i.test(file)) continue
+    const source = read(file)
+    pattern.lastIndex = 0
+    if (pattern.test(source)) findings.push(`${relativeTo(sourceRoot, file)}: extracted Builder surface remains`)
+  }
+  return findings.sort()
+}
+
 export function runAudit(sourceRoot = FRONTEND_SOURCE) {
   const legacy = auditLegacyReachability(sourceRoot)
   const semantic = auditSemanticTokens(sourceRoot)
   const contracts = auditShellContracts(sourceRoot)
   const arcade = auditArcadeReachability(sourceRoot)
+  const builder = auditBuilderReachability(sourceRoot)
   return {
     legacyFindings: [...new Set([...legacy.findings, ...contracts])].sort(),
     semanticFindings: semantic.findings,
     arcadeFindings: arcade,
+    builderFindings: builder,
     reachable: legacy.reachable,
   }
 }
@@ -383,14 +393,17 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   for (const item of result.legacyFindings) console.error(`[legacy] ${item}`)
   for (const item of result.semanticFindings) console.error(`[semantic] ${item}`)
   for (const item of result.arcadeFindings) console.error(`[arcade] ${item}`)
-  if (result.legacyFindings.length || result.semanticFindings.length || result.arcadeFindings.length) {
+  for (const item of result.builderFindings) console.error(`[builder] ${item}`)
+  if (result.legacyFindings.length || result.semanticFindings.length || result.arcadeFindings.length || result.builderFindings.length) {
     console.error(`GLOBAL FRONTEND LEGACY VISUAL RESIDUE = ${result.legacyFindings.length} REACHABLE`)
     console.error(`UNIVERSAL UI SEMANTIC TOKEN COMPLIANCE = ${result.semanticFindings.length ? "FAIL" : "PASS"}`)
     console.error(`FLOW ARCADE FRONTEND REACHABILITY = ${result.arcadeFindings.length}`)
+    console.error(`BUILDER FRONTEND REACHABILITY = ${result.builderFindings.length}`)
     process.exitCode = 1
   } else {
     console.log(LEGACY_SUCCESS)
     console.log(SEMANTIC_SUCCESS)
     console.log(ARCADE_SUCCESS)
+    console.log(BUILDER_SUCCESS)
   }
 }

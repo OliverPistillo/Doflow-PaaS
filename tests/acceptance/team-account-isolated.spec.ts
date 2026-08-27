@@ -275,7 +275,7 @@ test('Team e account completa il lifecycle tenant-safe su stack PostgreSQL/Redis
     expect(stagedAssignment.roles).toEqual(['web_developer']);
     expect(stagedAssignment.explicitCapabilities).toEqual(['canViewAllLeads']);
     expect(stagedAssignment.capabilities).toEqual(expect.arrayContaining([
-      'canViewAllLeads', 'canViewAutomations', 'canUseBuilder',
+      'canViewAllLeads', 'canViewAutomations',
     ]));
     const stagedAccess = await appFetch(userPage, '/tenant/team/me/module-permissions');
     expect(stagedAccess.status).toBe(200);
@@ -337,7 +337,8 @@ test('Team e account completa il lifecycle tenant-safe su stack PostgreSQL/Redis
     const assignment = identity.json.assignments.find((item: any) => item.userId === userId);
     expect(assignment.roles).toEqual(['web_developer']);
     expect(assignment.explicitCapabilities).toEqual(['canViewAllLeads']);
-    expect(assignment.capabilities).toEqual(expect.arrayContaining(['canViewAllLeads', 'canViewAutomations', 'canUseBuilder']));
+    expect(assignment.capabilities).toEqual(expect.arrayContaining(['canViewAllLeads', 'canViewAutomations']));
+    expect(assignment.capabilities).not.toContain('canUseBuilder');
 
     const permissionUpdate = await appFetch(ownerPage, `/tenant/team/members/${memberId}/module-permissions`, {
       method: 'PATCH',
@@ -423,7 +424,7 @@ test('Team e account completa il lifecycle tenant-safe su stack PostgreSQL/Redis
       method: 'POST', body: { skill_id: skills.json.items[0].id },
     })).status).toBe(404);
     expect((await appFetch(ownerPage, `/tenant/doflow/identity/users/${secondaryOwner.user_id}/capabilities`, {
-      method: 'PATCH', body: { capabilities: ['canUseBuilder'] },
+      method: 'PATCH', body: { capabilities: ['canViewAllLeads'] },
     })).status).toBe(404);
     expect((await appFetch(ownerPage, `/tenant/team/members/${secondaryOwner.id}`, {
       method: 'PATCH',

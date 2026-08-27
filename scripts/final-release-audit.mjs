@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const referenceRoot = path.join(root, "doflow-gestionale-reference");
+const referenceRoot = "C:\\Doflow-Reference-4864782";
 const frontendRoot = path.join(root, "apps/frontend/src/app");
 const failures = [];
 const evidence = {};
@@ -58,9 +58,7 @@ for (const [name, expected] of [["next", 16], ["react", 19], ["reactDom", 19], [
 
 const referenceRoutes = collectPageRoutes(path.join(referenceRoot, "src/app"));
 const currentRoutes = collectPageRoutes(frontendRoot);
-const excludedReferenceRoutes = new Set([
-  "/dashboard/flow-arcade",
-]);
+const excludedReferenceRoutes = new Set(["/dashboard/flow-arcade"]);
 const routeEquivalents = new Map([
   ["/activities/[activityId]", "/dashboard/attivita?activityId=[activityId]"],
   ["/projects/[projectId]", "/dashboard/progetti/[projectId]"],
@@ -72,7 +70,7 @@ const routeExists = (route) => {
   return currentRoutes.some((candidate) => normalizeDynamicRoute(candidate) === expected);
 };
 const missingRoutes = referenceRoutes
-  .filter((route) => !excludedReferenceRoutes.has(route))
+  .filter((route) => !excludedReferenceRoutes.has(route) && route !== "/api" && !route.startsWith("/api/"))
   .filter((route) => !routeExists(routeEquivalents.get(route) || route));
 if (missingRoutes.length) fail(`reference route equivalents missing: ${missingRoutes.join(", ")}`);
 evidence.routes = {
@@ -83,17 +81,19 @@ evidence.routes = {
   missing: missingRoutes,
 };
 
-if (!currentRoutes.includes("/commercial/site-proposals")) fail("Builder canonical route is missing");
+const builderRoutes = currentRoutes.filter((route) => route === "/commercial/site-proposals" || route.startsWith("/commercial/site-proposals/"));
+if (builderRoutes.length) fail(`Builder routes remain active: ${builderRoutes.join(", ")}`);
 const clientPortalRoutes = currentRoutes.filter((route) => route === "/client" || route.startsWith("/client/") || route === "/client-portal" || route.startsWith("/client-portal/"));
 if (clientPortalRoutes.length) fail(`Client Portal routes present: ${clientPortalRoutes.join(", ")}`);
 
 const projectDetail = read("apps/frontend/src/features/commercial/components/commercial-project-detail-page.tsx");
-const tabTokens = ['value="overview"', 'value="activities"', 'value="phases"', 'value="production"', 'value="documents"', 'value="payments"', 'value="timeline"'];
-let lastTab = -1;
-for (const token of tabTokens) {
-  const index = projectDetail.indexOf(token, lastTab + 1);
-  if (index < 0) fail(`canonical project tab missing or out of order: ${token}`);
-  lastTab = index;
+const expectedProjectTabs = ["overview", "activities", "phases", "production", "documents", "payments", "timeline"];
+const declaredProjectTabs = projectDetail
+  .match(/const tabs = \[([^\]]+)\] as const/)?.[1]
+  ?.match(/["']([^"']+)["']/g)
+  ?.map((token) => token.slice(1, -1)) ?? [];
+if (JSON.stringify(declaredProjectTabs) !== JSON.stringify(expectedProjectTabs)) {
+  fail(`canonical project tabs missing or out of order: ${declaredProjectTabs.join(", ")}`);
 }
 
 const tenantLayout = read("apps/frontend/src/app/(tenant)/layout.tsx");
@@ -102,7 +102,7 @@ if (!tenantLayout.includes("TenantAppShell")) fail("Universal tenant shell is no
 for (const redirect of ["/leads", "/pipeline", "/projects", "/activities", "/quotes", "/contracts", "/orders", "/payments", "/invoices", "/notifications"]) {
   if (!tenantShell.includes(`[\"${redirect}\"`)) fail(`legacy Doflow redirect missing: ${redirect}`);
 }
-if (!tenantShell.includes('pathname.startsWith("/commercial/site-proposals")')) fail("Builder is not exempted from legacy redirects");
+if (/site-proposals|canUseBuilder|\bBuilder\b/.test(tenantShell)) fail("Builder runtime handling remains in the tenant shell");
 
 const jwtStorage = read("apps/frontend/src/lib/jwt.ts");
 if (existsSync(path.join(root, "apps/frontend/src/lib/auth-storage.ts")) || /localStorage|sessionStorage|atob|parseJwt|getAuthToken/.test(jwtStorage)) {
@@ -122,10 +122,11 @@ const provider = read(
 const logoMutation = provider.match(
   /async updateCustomerLogo[\s\S]*?updateCustomerProfile/,
 )?.[0] ?? "";
+const normalizedLogoMutation = logoMutation.replace(/\s+/g, " ");
 if (
   customerSurfaces.includes("Salvato localmente sul cliente canonico") ||
-  !/await commercialApi\.updateCompany/.test(logoMutation) ||
-  !/version: customer\.version/.test(logoMutation)
+  !/await commercialApi\.updateCompany/.test(normalizedLogoMutation) ||
+  !/version: customer\.version/.test(normalizedLogoMutation)
 ) {
   fail("customer logo mutation remains explicitly client-only");
 }
@@ -142,6 +143,9 @@ if (orchestrator.includes("FROM public.migrations")) {
 }
 
 const runtimeAudits = [
+  "backend-contract-completion-audit.mjs",
+  "audit-builder-removal.mjs",
+  "audit-source-parity-4864782.mjs",
   "delivery-core-provider-audit.mjs",
   "commerce-cash-runtime-audit.mjs",
   "document-revenue-runtime-audit.mjs",

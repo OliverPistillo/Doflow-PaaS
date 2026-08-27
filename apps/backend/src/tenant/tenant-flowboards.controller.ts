@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { TenantFlowboardsService } from './tenant-flowboards.service';
 import { TenantUniversalScopeGuard } from './tenant-universal-scope.guard';
@@ -11,9 +11,13 @@ import { RequirePlan } from '../feature-access/feature-access.decorator';
 @RequirePlan('PRO')
 export class TenantFlowboardsController {
   constructor(private readonly service: TenantFlowboardsService) {}
+  private requiredKey(key?: string) { if (!String(key || '').trim()) throw new BadRequestException('Idempotency-Key obbligatoria'); return key; }
   @Get() list(@Query() query: Record<string, unknown>) { return this.service.list(query || {}); }
+  @Get('templates') templates() { return this.service.templates(); }
   @RequireTenantCapability('canCreateFlowboards')
   @Post() create(@Body() body: Record<string, unknown>, @Headers('idempotency-key') key?: string) { return this.service.create(body || {}, key); }
+  @RequireTenantCapability('canCreateFlowboards')
+  @Post(':id/duplicate') duplicate(@Param('id') id: string, @Body() body: Record<string, unknown>, @Headers('idempotency-key') key?: string) { return this.service.duplicate(id, body || {}, this.requiredKey(key)); }
   @Get(':id') get(@Param('id') id: string) { return this.service.get(id); }
   @RequireTenantCapability('canUpdateFlowboards')
   @Patch(':id') update(@Param('id') id: string, @Body() body: Record<string, unknown>, @Headers('idempotency-key') key?: string) { return this.service.update(id, body || {}, key); }

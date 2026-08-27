@@ -68,6 +68,11 @@ export const PRODUCTION_MIGRATIONS = [
     name: 'CreateUniversalTenantFeatures1850000000000',
     compiledFile: '1850000000000-CreateUniversalTenantFeatures.js',
   },
+  {
+    timestamp: 1860000000000,
+    name: 'CompleteBackendContracts1860000000000',
+    compiledFile: '1860000000000-CompleteBackendContracts.js',
+  },
 ] as const satisfies readonly ProductionMigrationDefinition[];
 
 export const PRODUCTION_MIGRATION_MAX =

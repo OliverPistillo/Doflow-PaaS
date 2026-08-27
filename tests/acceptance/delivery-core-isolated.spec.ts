@@ -301,19 +301,7 @@ test('Delivery Core resta PostgreSQL-authoritative fra utenti, restart e tenant 
     expect(workload.ok).toBe(true);
     expect(workload.json.items.some((item: any) => item.user_id === 'a0000000-0000-4000-8000-000000000003')).toBe(true);
 
-    // Builder: executor capability granted by the web_developer role; viewer denied.
-    expect((await appFetch(pageA, '/tenant/commercial/site-proposals?limit=1')).ok).toBe(true);
-    expect((await appFetch(pageDenied, '/tenant/commercial/site-proposals?limit=1')).status).toBe(403);
-    const proposalId = randomUUID();
-    await db.query(
-      `INSERT INTO doflow.site_proposals
-         (id,template_slug,template_version,status,display_name,source_data,site_config,commercial_analysis,created_by,updated_by)
-       VALUES ($1,'colsova','2.4.1','draft',$2,'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,$3,$3)`,
-      [proposalId, `Builder ${marker}`, 'a0000000-0000-4000-8000-000000000003'],
-    );
-    const builderLink = await appFetch(pageA, `/tenant/commercial/site-proposals/${proposalId}`, { method: 'PATCH', body: { projectId } });
-    expect(builderLink.ok, builderLink.text).toBe(true);
-    expect(builderLink.json.project_id).toBe(projectId);
+    expect((await appFetch(pageA, '/tenant/commercial/site-proposals?limit=1')).status).toBe(404);
 
     // Same-version writes from two authenticated sessions: exactly one wins.
     view = await workspace(pageA, projectId);
@@ -357,13 +345,12 @@ test('Delivery Core resta PostgreSQL-authoritative fra utenti, restart e tenant 
         (SELECT count(*)::int FROM doflow.project_comments WHERE project_id=$1) comments,
         (SELECT count(*)::int FROM doflow.delivery_idempotency WHERE status='completed' AND response::text LIKE $2) idempotency_rows,
         (SELECT count(*)::int FROM acceptance_secondary.projects WHERE id=$1) leaked_project,
-        (SELECT count(*)::int FROM acceptance_secondary.notifications WHERE entity_id=$1) leaked_notifications,
-        (SELECT project_id::text FROM doflow.site_proposals WHERE id=$3) builder_project_id`,
-      [projectId, `%${projectId}%`, proposalId],
+        (SELECT count(*)::int FROM acceptance_secondary.notifications WHERE entity_id=$1) leaked_notifications`,
+      [projectId, `%${projectId}%`],
     );
     expect(counts.rows[0]).toMatchObject({
       project_count: 1, active_tasks: 2, completed_timers: 1, publications: 1, comments: 1,
-      leaked_project: 0, leaked_notifications: 0, builder_project_id: projectId,
+      leaked_project: 0, leaked_notifications: 0,
     });
     expect(counts.rows[0].workflow_events).toBeGreaterThan(20);
     expect(counts.rows[0].audit_events).toBe(counts.rows[0].workflow_events);
@@ -376,7 +363,7 @@ test('Delivery Core resta PostgreSQL-authoritative fra utenti, restart e tenant 
       refresh: true, frontendRestart: true, backendRestartWithActiveTimer: true,
       projectIdempotent: true, timerIdempotent: true, qaIdempotent: true,
       optimisticConflict: true, selfApprovalDenied: true, crossTenantIsolated: true,
-      builderAuthorized: true, builderDenied: true, builderProjectLinked: true,
+      builderExtracted: true,
       localStorageAuthoritativeCollections: 0,
     }, null, 2));
   } finally {

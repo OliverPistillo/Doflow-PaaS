@@ -1,5 +1,3 @@
-import { TenantInboxPage } from "@/components/tenant-inbox/tenant-inbox-page";
+import { CustomerInboxPage } from "@/features/inbox/customer-inbox-page"
 
-export default function Page() {
-  return <TenantInboxPage />;
-}
+export default function InboxPage() { return <CustomerInboxPage /> }

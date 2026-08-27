@@ -79,8 +79,15 @@ test("browser never submits authoritative document prices, totals, numbers or si
     createInvoice,
     /lines:|taxableAmount|vatRate|vatAmount|total:|invoiceNumber|paidTotal/,
   );
-  assert.match(documentCycle, /assegnati dal server/i);
-  assert.match(contractRenewal, /firma interna/i);
+  assert.match(documentCycle, /await store\.(?:addQuote|addInvoice)/);
+  assert.match(contractRenewal, /await store\.markContractSigned\(live\.id\)/);
+  const signContract = provider.slice(
+    provider.indexOf("async markContractSigned("),
+    provider.indexOf("async createContractVersion(", provider.indexOf("async markContractSigned(")),
+  );
+  assert.match(signContract, /documentRevenueApi\.signContract/);
+  assert.match(signContract, /method: "internal_record"/);
+  assert.doesNotMatch(signContract, /signatureData|signatureImage|signedAt:/);
 });
 
 test("customer aggregation and canonical seven project tabs remain server-oriented", () => {

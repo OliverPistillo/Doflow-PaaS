@@ -9,7 +9,9 @@ import { AccessDenied } from "@/features/identity/access-denied"
 import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider"
 import { CommercialCampaignsPage } from "@/features/commercial/components/commercial-campaigns-page"
 import { CommercialDocumentCyclePage } from "@/features/commercial/components/commercial-document-cycle-page"
-import { AutomationPerformancePage } from "@/features/commercial/components/automation-performance-page"
+import { CommercialAutomationsPage } from "@/features/commercial/components/commercial-automations-page"
+import { CommercialSupportPage } from "@/features/commercial/components/commercial-support-page"
+import { CommercialCalendarPage } from "@/features/commercial/components/commercial-calendar-page"
 
 export function AuthorizedCommercialDashboard() {
   const identity = useDoflowIdentity()
@@ -57,5 +59,17 @@ export function AuthorizedDocumentCyclePage({ section }: { section: "quotes" | "
 
 export function AuthorizedAutomationsPage() {
   const identity = useDoflowIdentity(); if (!identity.hasCapability("canViewAutomations")) return <AccessDenied resource="alle automazioni" />
-  return <AutomationPerformancePage />
+  return <CommercialAutomationsPage />
+}
+
+export function AuthorizedSupportPage() {
+  const identity = useDoflowIdentity()
+  if (!identity.hasCapability("openSupportTicket")) return <AccessDenied resource="al supporto tecnico" />
+  return <CommercialSupportPage />
+}
+
+export function AuthorizedCalendarPage() {
+  const identity = useDoflowIdentity()
+  if (!identity.hasCapability("canViewActivities") && !identity.hasCapability("canViewProjects")) return <AccessDenied resource="al calendario operativo" />
+  return <CommercialCalendarPage />
 }

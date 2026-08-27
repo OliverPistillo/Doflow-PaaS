@@ -120,6 +120,8 @@ export type CollaborationPresence = {
   status: "online" | "away" | "busy" | "offline" | string;
   activity?: string | null;
   lastSeenAt?: string | null;
+  source?: "ws" | "http" | "manual" | string;
+  expiresAt?: string | null;
 };
 
 export type CollaborationCallStatus = {
@@ -300,7 +302,7 @@ export const collaborationApi = {
   async presence() {
     return pageFrom<CollaborationPresence>(await apiFetch("/tenant/collaboration/presence"));
   },
-  setPresence(body: { status: string; activity?: string }) {
+  setPresence(body: { status: string; activity?: string; duration?: "30m" | "1h" | "today" | "forever"; automaticStatus?: string }) {
     return apiFetch<CollaborationPresence>(
       "/tenant/collaboration/presence",
       mutationOptions("POST", body),
@@ -381,6 +383,16 @@ export type Flowboard = FlowboardSummary & {
   viewport?: { x: number; y: number; zoom: number };
   revision?: number;
   collaborators?: Array<{ userId: string; permission: "view" | "edit" }>;
+  projectId?: string;
+  mode?: "free" | "roadmap";
+  isTemplate?: boolean;
+  templateKey?: string;
+  createdAt?: string;
+  savedAt?: string;
+  archivedAt?: string;
+  deletedAt?: string;
+  comments?: FlowboardComment[];
+  versions?: Array<{ id: string; version: number; reason?: string; createdBy?: string; createdAt: string }>;
 };
 
 export type FlowboardComment = {
@@ -433,6 +445,14 @@ function normalizeFlowboard(value: unknown): Flowboard {
       ? row.viewport as Flowboard["viewport"]
       : { x: 0, y: 0, zoom: 1 },
     revision: Number(row.revision ?? row.optimisticVersion ?? row.optimistic_version ?? 1),
+    projectId: row.projectId || row.project_id ? String(row.projectId || row.project_id) : undefined,
+    mode: row.mode === "roadmap" ? "roadmap" : "free",
+    isTemplate: row.isTemplate === true || row.is_template === true,
+    templateKey: row.templateKey || row.template_key ? String(row.templateKey || row.template_key) : undefined,
+    createdAt: row.createdAt || row.created_at ? String(row.createdAt || row.created_at) : undefined,
+    savedAt: row.savedAt || row.saved_at || row.updatedAt || row.updated_at ? String(row.savedAt || row.saved_at || row.updatedAt || row.updated_at) : undefined,
+    archivedAt: row.archivedAt || row.archived_at ? String(row.archivedAt || row.archived_at) : undefined,
+    deletedAt: row.deletedAt || row.deleted_at ? String(row.deletedAt || row.deleted_at) : undefined,
     collaborators: Array.isArray(row.collaborators)
       ? row.collaborators.flatMap((value) => {
           if (!value || typeof value !== "object") return [];
@@ -443,15 +463,30 @@ function normalizeFlowboard(value: unknown): Flowboard {
         })
       : [],
     ...("comments" in row ? { comments: Array.isArray(row.comments) ? row.comments.map(normalizeFlowboardComment) : [] } : {}),
+    ...("versions" in row ? { versions: Array.isArray(row.versions) ? row.versions.flatMap((value) => {
+      if (!value || typeof value !== "object") return [];
+      const item = value as Record<string, unknown>;
+      return [{
+        id: String(item.id || ""),
+        version: Number(item.version || 0),
+        reason: item.reason ? String(item.reason) : undefined,
+        createdBy: item.createdBy || item.created_by ? String(item.createdBy || item.created_by) : undefined,
+        createdAt: String(item.createdAt || item.created_at || new Date(0).toISOString()),
+      }];
+    }) : [] } : {}),
   } as Flowboard;
 }
 
 export const flowboardApi = {
-  async list(params?: { cursor?: string; limit?: number; status?: string }) {
+  async list(params?: { cursor?: string; limit?: number; status?: string; archived?: boolean }) {
     const page = pageFrom<unknown>(await apiFetch("/tenant/flowboards" + query(params)));
     return { ...page, items: page.items.map(normalizeFlowboard) };
   },
-  async create(body: { name: string; description?: string; templateId?: string }) {
+  async templates() {
+    const page = pageFrom<unknown>(await apiFetch("/tenant/flowboards/templates"));
+    return { ...page, items: page.items.map(normalizeFlowboard) };
+  },
+  async create(body: { name: string; description?: string; templateId?: string; projectId?: string }) {
     return normalizeFlowboard(await apiFetch("/tenant/flowboards", mutationOptions("POST", body, featureMutationKey("flowboard"))));
   },
   async get(id: string) {
@@ -468,16 +503,34 @@ export const flowboardApi = {
       }, featureMutationKey("flowboard-save")),
     ));
   },
-  async update(id: string, body: { name?: string; description?: string; status?: string; collaborators?: Array<{ userId: string; permission: "view" | "edit" }>; revision?: number }) {
+  async update(id: string, body: { name?: string; description?: string; status?: string; projectId?: string; collaborators?: Array<{ userId: string; permission: "view" | "edit" }>; revision?: number }) {
     return normalizeFlowboard(await apiFetch(
       "/tenant/flowboards/" + encodeURIComponent(id),
       mutationOptions("PATCH", { ...body, optimisticVersion: body.revision }, featureMutationKey("flowboard-update")),
+    ));
+  },
+  async duplicate(id: string, body: { name?: string; projectId?: string; revision: number }) {
+    return normalizeFlowboard(await apiFetch(
+      "/tenant/flowboards/" + encodeURIComponent(id) + "/duplicate",
+      mutationOptions("POST", { ...body, optimisticVersion: body.revision }, featureMutationKey("flowboard-duplicate")),
     ));
   },
   archive(id: string) {
     return apiFetch<Flowboard>(
       "/tenant/flowboards/" + encodeURIComponent(id) + "/archive",
       mutationOptions("PATCH", {}),
+    );
+  },
+  restore(id: string) {
+    return apiFetch<Flowboard>(
+      "/tenant/flowboards/" + encodeURIComponent(id) + "/restore",
+      mutationOptions("PATCH", {}),
+    );
+  },
+  remove(id: string) {
+    return apiFetch<{ id?: string; deleted?: boolean }>(
+      "/tenant/flowboards/" + encodeURIComponent(id),
+      mutationOptions("DELETE"),
     );
   },
   async comments(id: string) {
@@ -494,6 +547,30 @@ export const flowboardApi = {
         parentCommentId: body.parentId,
       }, featureMutationKey("flowboard-comment")),
     ));
+  },
+  async updateComment(boardId: string, commentId: string, body: string) {
+    return normalizeFlowboardComment(await apiFetch(
+      "/tenant/flowboards/" + encodeURIComponent(boardId) + "/comments/" + encodeURIComponent(commentId),
+      mutationOptions("PATCH", { body }),
+    ));
+  },
+  deleteComment(boardId: string, commentId: string) {
+    return apiFetch<{ id?: string; deleted?: boolean }>(
+      "/tenant/flowboards/" + encodeURIComponent(boardId) + "/comments/" + encodeURIComponent(commentId),
+      mutationOptions("DELETE"),
+    );
+  },
+  version(boardId: string, name: string) {
+    return apiFetch<Record<string, unknown>>(
+      "/tenant/flowboards/" + encodeURIComponent(boardId) + "/versions",
+      mutationOptions("POST", { reason: name }, featureMutationKey("flowboard-version")),
+    );
+  },
+  restoreVersion(boardId: string, versionId: string, revision: number) {
+    return apiFetch<Record<string, unknown>>(
+      "/tenant/flowboards/" + encodeURIComponent(boardId) + "/versions/" + encodeURIComponent(versionId) + "/restore",
+      mutationOptions("POST", { optimisticVersion: revision }, featureMutationKey("flowboard-restore")),
+    );
   },
 };
 
@@ -524,6 +601,9 @@ export type BonusRequest = {
   createdAt: string;
   decidedAt?: string | null;
   decisionReason?: string | null;
+  history?: Array<{ id: string; status: string; actorId: string; reason?: string | null; createdAt: string }>;
+  approvals?: Array<{ id: string; approverId: string; decision: string; reason?: string | null; createdAt: string }>;
+  payouts?: Array<{ id: string; reference: string; paidBy: string; paidAt: string }>;
 };
 
 export type BonusPeriod = {
@@ -570,6 +650,9 @@ function normalizeBonusRequest(value: unknown): BonusRequest {
     decisionReason: item.decisionReason || item.decision_reason
       ? String(item.decisionReason || item.decision_reason)
       : undefined,
+    history: Array.isArray(item.history) ? item.history as BonusRequest["history"] : [],
+    approvals: Array.isArray(item.approvals) ? item.approvals as BonusRequest["approvals"] : [],
+    payouts: Array.isArray(item.payouts) ? item.payouts as BonusRequest["payouts"] : [],
   };
 }
 
@@ -645,8 +728,8 @@ function normalizeBonusDashboard(value: unknown): BonusDashboard {
 }
 
 export const bonusApi = {
-  async dashboard() {
-    return normalizeBonusDashboard(await apiFetch("/tenant/bonus"));
+  async dashboard(userId?: string) {
+    return normalizeBonusDashboard(await apiFetch("/tenant/bonus" + query({ userId })));
   },
   request(points: number, reason: string) {
     return apiFetch<BonusRequest>(
@@ -658,6 +741,12 @@ export const bonusApi = {
     return apiFetch<BonusRequest>(
       "/tenant/bonus/requests/" + encodeURIComponent(requestId) + "/" + decision,
       mutationOptions("POST", { reason }, featureMutationKey("bonus-decision")),
+    );
+  },
+  payout(requestId: string, reference: string, idempotencyKey?: string) {
+    return apiFetch<BonusRequest>(
+      "/tenant/bonus/requests/" + encodeURIComponent(requestId) + "/payout",
+      mutationOptions("POST", { reference }, idempotencyKey || featureMutationKey("bonus-payout")),
     );
   },
   adjustment(userId: string, points: number, reason: string) {
@@ -795,9 +884,15 @@ export type CompanyIntelligenceReport = {
   id: string;
   companyName?: string;
   requestedUrl: string;
+  finalUrl?: string;
+  leadId?: string;
+  customerId?: string;
+  deep?: boolean;
   status: string;
   createdAt: string;
+  updatedAt?: string;
   completedAt?: string | null;
+  aiAvailable?: boolean;
   summary?: string;
   industry?: string;
   employeeCount?: number;
@@ -837,8 +932,13 @@ export type CompanyIntelligenceReport = {
     confidence?: number;
   }>;
   opportunities?: Array<{ title: string; description?: string; priority?: string }>;
+  publicContacts?: { emails?: string[]; phones?: string[]; socials?: string[] };
+  pages?: string[];
+  strategy?: { approach?: string[]; questions?: string[]; avoidClaims?: string[]; firstMessage?: string; email?: string; followUp?: string };
   providers?: CompanyIntelligenceProviderState[];
   error?: string | null;
+  shares?: Array<{ userId: string; permission: "view" | "edit"; sharedAt: string; sharedBy: string }>;
+  competitors?: Array<{ id: string; requestedUrl: string; companyName?: string; status: string }>;
 };
 
 export const companyIntelligenceApi = {
@@ -866,6 +966,24 @@ export const companyIntelligenceApi = {
     return normalizeCompanyReport(await apiFetch(
       "/tenant/company-intelligence/" + encodeURIComponent(id),
     ));
+  },
+  share(id: string, targetUserId: string, permission: "view" | "edit") {
+    return apiFetch<Record<string, unknown>>(`/tenant/company-intelligence/${encodeURIComponent(id)}/shares`, mutationOptions("POST", { targetUserId, permission }, featureMutationKey("company-intelligence-share")));
+  },
+  revokeShare(id: string, targetUserId: string) {
+    return apiFetch<Record<string, unknown>>(`/tenant/company-intelligence/${encodeURIComponent(id)}/shares/${encodeURIComponent(targetUserId)}`, mutationOptions("DELETE"));
+  },
+  addCompetitor(id: string, requestedUrl: string, companyName?: string) {
+    return apiFetch<Record<string, unknown>>(`/tenant/company-intelligence/${encodeURIComponent(id)}/competitors`, mutationOptions("POST", { requestedUrl, companyName }, featureMutationKey("company-intelligence-competitor")));
+  },
+  removeCompetitor(id: string, competitorId: string) {
+    return apiFetch<Record<string, unknown>>(`/tenant/company-intelligence/${encodeURIComponent(id)}/competitors/${encodeURIComponent(competitorId)}`, mutationOptions("DELETE"));
+  },
+  exportReport(id: string) {
+    return apiFetch<{ filename: string; format: string; content: unknown }>(`/tenant/company-intelligence/${encodeURIComponent(id)}/export`, mutationOptions("POST", { format: "json" }, featureMutationKey("company-intelligence-export")));
+  },
+  remove(id: string) {
+    return apiFetch<{ id: string; deleted: boolean }>(`/tenant/company-intelligence/${encodeURIComponent(id)}`, mutationOptions("DELETE"));
   },
 };
 
@@ -909,13 +1027,33 @@ function normalizeCompanyReport(value: unknown): CompanyIntelligenceReport {
       }];
     })
     : undefined;
+  const shares = Array.isArray(row.shares) ? row.shares.flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const item = value as Record<string, unknown>;
+    const userId = String(item.userId || item.user_id || "");
+    return userId ? [{ userId, permission: item.permission === "edit" ? "edit" as const : "view" as const, sharedAt: String(item.sharedAt || item.created_at || ""), sharedBy: String(item.sharedBy || item.shared_by || "") }] : [];
+  }) : [];
+  const competitors = Array.isArray(row.competitors) ? row.competitors.flatMap((value) => {
+    if (!value || typeof value !== "object") return [];
+    const item = value as Record<string, unknown>;
+    const id = String(item.id || "");
+    return id ? [{ id, requestedUrl: String(item.requestedUrl || item.domain || ""), companyName: item.companyName || item.company_name ? String(item.companyName || item.company_name) : undefined, status: String(item.status || "pending") }] : [];
+  }) : [];
   return {
     id: String(row.id || ""),
     companyName: String(row.companyName || row.company_name || report.name || domain),
     requestedUrl: domain.startsWith("http") ? domain : "https://" + domain,
+    finalUrl: row.finalUrl || row.final_url || report.finalUrl
+      ? String(row.finalUrl || row.final_url || report.finalUrl)
+      : undefined,
+    leadId: row.leadId || row.lead_id ? String(row.leadId || row.lead_id) : undefined,
+    customerId: row.customerId || row.customer_id ? String(row.customerId || row.customer_id) : undefined,
+    deep: row.deep === true,
     status: String(row.status || "unknown"),
     createdAt: String(row.createdAt || row.created_at || new Date(0).toISOString()),
+    updatedAt: row.updatedAt || row.updated_at ? String(row.updatedAt || row.updated_at) : undefined,
     completedAt: row.completedAt || row.completed_at ? String(row.completedAt || row.completed_at) : undefined,
+    aiAvailable: row.aiAvailable === true || row.ai_available === true || providerConfigured,
     summary: typeof report.summary === "string"
       ? report.summary
       : typeof row.summary === "string"
@@ -947,7 +1085,16 @@ function normalizeCompanyReport(value: unknown): CompanyIntelligenceReport {
     opportunities: Array.isArray(report.opportunities)
       ? report.opportunities as CompanyIntelligenceReport["opportunities"]
       : undefined,
+    publicContacts: report.publicContacts && typeof report.publicContacts === "object"
+      ? report.publicContacts as CompanyIntelligenceReport["publicContacts"]
+      : undefined,
+    pages: strings(report.pages),
+    strategy: report.strategy && typeof report.strategy === "object"
+      ? report.strategy as CompanyIntelligenceReport["strategy"]
+      : undefined,
     providers: [{ provider, configured: providerConfigured, status: providerConfigured ? "ready" : "provider_unconfigured" }],
     error: row.error || row.error_code ? String(row.error || row.error_code) : undefined,
+    shares,
+    competitors,
   };
 }

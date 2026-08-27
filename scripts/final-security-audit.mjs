@@ -106,12 +106,11 @@ if (!collaboration.includes('ATTACHMENT_MIME_TYPES') || !collaboration.includes(
 }
 checks.uploadAllowlist = { mimeAllowlist: true, sizeLimit: true };
 
-const proposalController = read('apps/backend/src/tenant/tenant-site-proposals.controller.ts');
-const proposalCompiler = read('apps/backend/src/tenant/tenant-site-proposals-theme-compiler.service.ts');
-if (!proposalController.includes('Content-Security-Policy') || !proposalCompiler.includes("default-src 'none'")) {
-  fail('untrusted Builder preview CSP missing');
-}
-checks.cspReview = { untrustedBuilderArtifacts: 'restrictive CSP', applicationHeaders: 'cutover infrastructure verification retained' };
+const builderRuntimeHits = productionSourceFiles.filter((file) =>
+  /site-proposals|site-proposal|SiteProposal|SiteProposals|canUseBuilder|\/commercial\/site-proposals/.test(read(file)),
+);
+if (builderRuntimeHits.length) fail(`extracted Builder remains reachable: ${builderRuntimeHits.join(', ')}`);
+checks.builderRemoval = { activeRuntimeReferences: builderRuntimeHits.length };
 
 const fileStorage = read('apps/backend/src/file-storage.service.ts');
 const backupController = read('apps/backend/src/superadmin/backup.controller.ts');

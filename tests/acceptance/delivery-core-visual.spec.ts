@@ -264,25 +264,16 @@ test('visual QA Delivery Core su viewport e temi richiesti', async ({ browser })
   }
 });
 
-test('visual QA del collegamento Builder-progetto', async ({ browser }) => {
+test('Builder estratto: route 404 e voce di navigazione assente', async ({ browser }) => {
   const credentials = JSON.parse(await readFile(credentialPath, 'utf8')) as Credentials;
-  const result = JSON.parse(await readFile(resultPath, 'utf8')) as AcceptanceResult;
-  await mkdir(actualDir, { recursive: true });
   const context = await browser.newContext();
   const page = await login(context, 'visual.manager@acceptance.invalid', credentials);
 
   try {
-    for (const viewport of viewports) {
-      await page.setViewportSize(viewport);
-      for (const theme of ['default'] as const) {
-        await setTheme(page, theme);
-        await navigate(page, '/commercial/site-proposals');
-        await expect(page.getByRole('heading', { name: 'Proposte web' })).toBeVisible();
-        const projectLink = page.getByRole('link', { name: /Apri progetto/ }).first();
-        await expect(projectLink).toHaveAttribute('href', `/dashboard/progetti/${result.projectId}`);
-        await capture(page, 'builder-project-link', viewport, theme);
-      }
-    }
+    const response = await page.goto('/commercial/site-proposals', { waitUntil: 'domcontentloaded' });
+    expect(response?.status()).toBe(404);
+    await page.goto('/dashboard/progetti', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('link', { name: 'Builder', exact: true })).toHaveCount(0);
   } finally {
     await context.close();
   }

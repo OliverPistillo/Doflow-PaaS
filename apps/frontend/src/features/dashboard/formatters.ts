@@ -1,6 +1,6 @@
 const integerFormatter = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 0 })
 const compactCurrencyFormatter = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", notation: "compact", maximumFractionDigits: 0 })
-const currencyFormatter = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })
+const currencyFormatter = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", useGrouping: "always", maximumFractionDigits: 0 })
 const percentFormatter = new Intl.NumberFormat("it-IT", { style: "percent", maximumFractionDigits: 1 })
 
 export const formatCurrency = (value: number) => currencyFormatter.format(value)

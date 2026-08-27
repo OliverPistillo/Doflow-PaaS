@@ -1,7 +1,23 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  addDays,
+  addMonths,
+  addWeeks,
+  endOfWeek,
+  format,
+  isAfter,
+  isBefore,
+  isSameDay,
+  isSameMonth,
+  parseISO,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+} from "date-fns";
+import { it } from "date-fns/locale";
 import {
   AlertTriangle,
   CalendarDays,
@@ -9,707 +25,2145 @@ import {
   ChevronLeft,
   ChevronRight,
   CirclePlus,
+  ClipboardList,
   Clock3,
+  CreditCard,
   ExternalLink,
+  FileSignature,
+  FileText,
   FilterX,
-  Loader2,
-  Pencil,
+  Headphones,
+  MessageSquare,
+  PackageCheck,
   Search,
-  Trash2,
-} from "lucide-react"
-import { toast } from "sonner"
+  UserRoundCog,
+} from "lucide-react";
+import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Textarea } from "@/components/ui/textarea"
-import { useTenantAccess } from "@/contexts/TenantAccessContext"
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  EVENT_TYPE_LABELS,
-  PRIORITY_LABELS,
-  STATUS_LABELS,
-  canManageCalendar,
-  formatDateTime,
-  label,
-} from "@/components/tenant-calendar/calendar-utils"
-import { calendarTone, calendarToneClasses } from "@/components/tenant-work/calendar-presentation"
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
-  addLocalDays,
-  formatShortDate,
-  formatTime,
-  getMetadataText,
-  isSameLocalDay,
-  startOfLocalDay,
-  startOfWeek,
-  type WorkListResponse,
-  type WorkMilestone,
-  type WorkProject,
-  type WorkTask,
-} from "@/components/tenant-work/work-model"
-import { apiFetch } from "@/lib/api"
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+import { orderFinancialsFromServer } from "@/features/commercial/commercial-commerce";
+import { formatOperationalValue } from "@/features/commercial/commercial-formatters";
+import { ActivityFormDialog } from "@/features/commercial/components/activity-form-dialog";
+import { CalendarAppointmentDialog } from "@/features/commercial/components/calendar-appointment-dialog";
+import type {
+  CommercialAppointment,
+  CustomerActivity,
+} from "@/features/commercial/components/commercial-leads-provider";
+import { useCommercialTeam } from "@/features/commercial/use-commercial-team";
 import {
-  calendarApi,
-  type CalendarEvent,
-  type CalendarOptions,
-  type CalendarParams,
-} from "@/lib/tenant-calendar-api"
-import { teamApi, type TeamMember } from "@/lib/tenant-team-api"
-import { cn } from "@/lib/utils"
+  canEditLead,
+  canManageActivity,
+} from "@/features/identity/permissions";
+import { useAuthorizedCommercial } from "@/features/identity/use-authorized-commercial";
 
-type CalendarView = "month" | "week" | "day" | "agenda"
-type CalendarCategory = "all" | "operations" | "projects" | "commercial" | "administration" | "documents"
-type CalendarEditor = {
-  eventId?: string
-  title: string
-  description: string
-  eventType: string
-  status: string
-  priority: string
-  date: string
-  time: string
-  duration: string
-  allDay: boolean
-  assigneeId: string
+type CalendarView = "month" | "week" | "day" | "agenda";
+type EventKind =
+  | "activity"
+  | "appointment"
+  | "project"
+  | "delivery"
+  | "review"
+  | "contract"
+  | "quote"
+  | "payment"
+  | "renewal"
+  | "support"
+  | "materials";
+type CalendarEvent = {
+  id: string;
+  recordId: string;
+  title: string;
+  kind: EventKind;
+  start: string;
+  end?: string;
+  allDay?: boolean;
+  status: string;
+  priority?: string;
+  assigneeId?: string;
+  customerId?: string;
+  leadId?: string;
+  projectId?: string;
+  href: string;
+  editable?: boolean;
+  activity?: CustomerActivity;
+  activityCustomerId?: string;
+  appointment?: CommercialAppointment;
+};
+
+const KIND_LABELS: Record<EventKind, string> = {
+  activity: "Attività",
+  appointment: "Appuntamenti",
+  project: "Progetti",
+  delivery: "Consegne",
+  review: "Revisioni",
+  contract: "Contratti",
+  quote: "Preventivi",
+  payment: "Pagamenti",
+  renewal: "Rinnovi",
+  support: "Supporto",
+  materials: "Materiali",
+};
+const KIND_STYLES: Record<EventKind, string> = {
+  activity:
+    "border-violet-400/60 bg-violet-500/12 text-violet-800 dark:text-violet-200",
+  appointment: "border-sky-400/60 bg-sky-500/12 text-sky-800 dark:text-sky-200",
+  project:
+    "border-indigo-400/60 bg-indigo-500/12 text-indigo-800 dark:text-indigo-200",
+  delivery:
+    "border-indigo-400/60 bg-indigo-500/12 text-indigo-800 dark:text-indigo-200",
+  review:
+    "border-fuchsia-400/60 bg-fuchsia-500/12 text-fuchsia-800 dark:text-fuchsia-200",
+  contract:
+    "border-orange-400/60 bg-orange-500/12 text-orange-800 dark:text-orange-200",
+  quote:
+    "border-orange-400/60 bg-orange-500/12 text-orange-800 dark:text-orange-200",
+  payment:
+    "border-emerald-400/60 bg-emerald-500/12 text-emerald-800 dark:text-emerald-200",
+  renewal:
+    "border-yellow-400/70 bg-yellow-500/12 text-yellow-900 dark:text-yellow-200",
+  support: "border-red-400/60 bg-red-500/12 text-red-800 dark:text-red-200",
+  materials:
+    "border-cyan-400/60 bg-cyan-500/12 text-cyan-800 dark:text-cyan-200",
+};
+const CLOSED = new Set([
+  "Completata",
+  "Annullata",
+  "completed",
+  "cancelled",
+  "Risolto",
+  "Chiuso",
+  "Annullato",
+  "Firmato",
+  "Accettato",
+  "Pagato",
+  "Consegnato",
+  "delivered",
+  "completed",
+]);
+const dateKey = (value: string) => value.slice(0, 10);
+const safeDate = (value?: string) =>
+  value
+    ? parseISO(value.length === 10 ? `${value}T12:00:00` : value)
+    : undefined;
+const timeLabel = (value: string, allDay?: boolean) =>
+  allDay || value.length === 10
+    ? "Tutto il giorno"
+    : format(parseISO(value), "HH:mm");
+const eventIsOverdue = (event: CalendarEvent) =>
+  !CLOSED.has(event.status) &&
+  isBefore(safeDate(event.end ?? event.start)!, startOfDay(new Date()));
+
+function eventClass(event: CalendarEvent) {
+  if (["Annullata", "cancelled", "Annullato"].includes(event.status))
+    return "border-zinc-400/60 bg-zinc-500/10 text-zinc-600 dark:text-zinc-300";
+  if (CLOSED.has(event.status))
+    return "border-emerald-400/50 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200";
+  if (eventIsOverdue(event))
+    return "border-red-500/70 bg-red-500/15 text-red-800 dark:text-red-200";
+  return KIND_STYLES[event.kind];
 }
 
-const VIEW_VALUES = new Set<CalendarView>(["month", "week", "day", "agenda"])
-const CLOSED_STATUSES = new Set(["completed", "cancelled", "skipped"])
-const MANUAL_EVENT_TYPES = ["internal", "meeting", "call", "focus_time", "unavailable", "reminder"]
-
-const CATEGORY_DEFINITIONS: Array<{
-  id: Exclude<CalendarCategory, "all">
-  label: string
-  types: string[]
-}> = [
-  { id: "operations", label: "Operatività", types: ["internal", "meeting", "call", "focus_time", "unavailable", "reminder"] },
-  { id: "projects", label: "Progetti", types: ["task_due", "milestone_due", "project_deadline"] },
-  { id: "commercial", label: "Commerciale", types: ["commercial_activity_due", "quote_followup"] },
-  { id: "administration", label: "Amministrazione", types: ["invoice_due", "financial_deadline", "renewal_due", "recurring_service_due", "contract_due", "contract_signature", "contract_expiration"] },
-  { id: "documents", label: "Documenti", types: ["paperwork_due", "paperwork_item_due", "briefing_due", "document_reminder"] },
-]
-
-function validDate(value?: string | null) {
-  if (!value) return undefined
-  const date = new Date(value.length === 10 ? `${value}T12:00:00` : value)
-  return Number.isNaN(date.getTime()) ? undefined : date
-}
-
-function localDateInput(value?: string | Date | null) {
-  const date = value instanceof Date ? value : validDate(value)
-  if (!date) return ""
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
-}
-
-function localTimeInput(value?: string | Date | null) {
-  const date = value instanceof Date ? value : validDate(value)
-  if (!date) return "09:00"
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
-}
-
-function monthStart(value: Date) {
-  return new Date(value.getFullYear(), value.getMonth(), 1)
-}
-
-function addMonths(value: Date, amount: number) {
-  const next = monthStart(value)
-  next.setMonth(next.getMonth() + amount)
-  return next
-}
-
-function rangeFor(view: CalendarView, anchor: Date) {
-  if (view === "day") {
-    const start = startOfLocalDay(anchor)
-    return { start, end: addLocalDays(start, 1) }
-  }
-  if (view === "week") {
-    const start = startOfWeek(anchor)
-    return { start, end: addLocalDays(start, 7) }
-  }
-  if (view === "agenda") {
-    const start = monthStart(anchor)
-    return { start, end: addMonths(start, 1) }
-  }
-  const start = startOfWeek(monthStart(anchor))
-  return { start, end: addLocalDays(start, 42) }
-}
-
-function calendarTitle(view: CalendarView, anchor: Date) {
-  if (view === "day") {
-    return new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).format(anchor)
-  }
-  if (view === "week") {
-    const start = startOfWeek(anchor)
-    const end = addLocalDays(start, 6)
-    return `${formatShortDate(start)} – ${new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "short", year: "numeric" }).format(end)}`
-  }
-  return new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(anchor)
-}
-
-function categoryFor(event: CalendarEvent) {
-  return CATEGORY_DEFINITIONS.find((category) => category.types.includes(event.event_type))?.id ?? "operations"
-}
-
-function isOverdue(event: CalendarEvent, now = new Date()) {
-  const end = validDate(event.end_at || event.start_at)
-  return Boolean(end && end < startOfLocalDay(now) && !CLOSED_STATUSES.has(event.status))
-}
-
-function canEditManualEvent(event: CalendarEvent) {
-  return event.source_type === "manual" && !event.is_system_generated && !event.is_locked
-}
-
-type ProjectMilestone = WorkMilestone & { project_id: string }
-
-function projectIdForEvent(event: CalendarEvent, tasks: WorkTask[], milestones: ProjectMilestone[]) {
-  if (event.source_entity_type === "project") return event.source_entity_id || undefined
-  if (event.source_entity_type === "task") return tasks.find((task) => task.id === event.source_entity_id)?.project_id
-  if (event.source_entity_type === "milestone") return milestones.find((milestone) => milestone.id === event.source_entity_id)?.project_id
-  return getMetadataText(event.metadata, "project_id", "projectId")
-}
-
-function linkedRecordHref(event: CalendarEvent, tasks: WorkTask[], milestones: ProjectMilestone[]) {
-  const projectId = projectIdForEvent(event, tasks, milestones)
-  if (projectId) return `/dashboard/progetti/${projectId}`
-  const id = event.source_entity_id
-  if (!id) return undefined
-  if (event.source_entity_type === "lead" || event.source_entity_type === "opportunity") return `/dashboard/commercial/leads/${id}`
-  if (event.source_entity_type === "quote") return `/dashboard/preventivi/${id}/anteprima`
-  if (event.source_entity_type === "contract") return `/dashboard/contratti?contract=${id}`
-  if (event.source_entity_type === "commercial_activity") return `/dashboard/attivita?activityId=${id}`
-  if (["invoice", "payment", "deadline", "renewal", "recurring_service"].includes(String(event.source_entity_type))) return "/dashboard/pagamenti"
-  if (["paperwork_dossier", "paperwork_item", "document", "briefing"].includes(String(event.source_entity_type))) return "/dashboard/documenti"
-  return undefined
-}
-
-function editorFor(event?: CalendarEvent, date = new Date()): CalendarEditor {
-  const start = validDate(event?.start_at) ?? date
-  const end = validDate(event?.end_at)
-  const duration = end ? Math.max(15, Math.round((end.getTime() - start.getTime()) / 60_000)) : 60
-  return {
-    eventId: event?.id,
-    title: event?.title ?? "",
-    description: event?.description ?? "",
-    eventType: event?.event_type ?? "meeting",
-    status: event?.status ?? "scheduled",
-    priority: event?.priority ?? "medium",
-    date: localDateInput(start),
-    time: localTimeInput(start),
-    duration: String(duration),
-    allDay: Boolean(event?.all_day),
-    assigneeId: event?.assigned_to_user_id || "unassigned",
-  }
-}
-
-async function listCalendarRange(params: CalendarParams) {
-  const items: CalendarEvent[] = []
-  let offset = 0
-  let total = 1
-  while (offset < total && offset < 1_000) {
-    const page = await calendarApi.listCalendarEvents({ ...params, limit: 200, offset })
-    items.push(...(page.items || []))
-    total = Number(page.total ?? items.length)
-    if (!page.items?.length) break
-    offset += page.items.length
-  }
-  return items
-}
-
-function EventBadge({ event, compact = false }: { event: CalendarEvent; compact?: boolean }) {
-  const tone = calendarTone(event)
-  return (
-    <Badge variant="outline" className={cn("border", calendarToneClasses[tone].surface, compact && "text-[10px]")}>
-      {label(EVENT_TYPE_LABELS, event.event_type)}
-    </Badge>
-  )
-}
-
-function EventButton({ event, selected, editable, onOpen }: { event: CalendarEvent; selected: boolean; editable: boolean; onOpen: () => void }) {
-  const tone = calendarTone(event)
+function CalendarEventButton({
+  event,
+  selected,
+  onOpen,
+  onDragStart,
+}: {
+  event: CalendarEvent;
+  selected: boolean;
+  onOpen: () => void;
+  onDragStart: () => void;
+}) {
   return (
     <button
       type="button"
-      draggable={editable}
-      onDragStart={(drag) => {
-        drag.dataTransfer.effectAllowed = "move"
-        drag.dataTransfer.setData("text/calendar-event", event.id)
+      draggable={event.editable}
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", event.id);
+        onDragStart();
       }}
-      onClick={(click) => {
-        click.stopPropagation()
-        onOpen()
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
       }}
       className={cn(
-        "block w-full truncate rounded-md border px-2 py-1 text-left text-[11px] font-medium outline-none transition hover:brightness-[0.98] focus-visible:ring-2 focus-visible:ring-ring",
-        calendarToneClasses[tone].surface,
-        selected && "ring-2 ring-primary",
+        "group flex w-full min-w-0 items-center gap-1 rounded-md border px-1.5 py-1 text-left text-[11px] leading-tight outline-none transition hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring",
+        eventClass(event),
+        selected && "ring-2 ring-ring",
       )}
-      title={`${event.title} · ${event.all_day ? "Tutto il giorno" : formatTime(event.start_at)}`}
+      aria-label={`${event.title}, ${timeLabel(event.start, event.allDay)}${event.editable ? ", trascinabile" : ""}`}
     >
-      {!event.all_day ? <span className="mr-1 font-semibold">{formatTime(event.start_at)}</span> : null}
-      {event.title}
+      {event.editable && (
+        <span aria-hidden className="text-[9px] opacity-60">
+          ⠿
+        </span>
+      )}
+      <span className="shrink-0 font-semibold">
+        {event.allDay ? "" : timeLabel(event.start)}
+      </span>
+      <span className="line-clamp-2 min-w-0 flex-1">{event.title}</span>
+      <span
+        className="shrink-0 rounded border border-current/20 px-1 text-[9px] font-medium opacity-70"
+        title="Origine: DoFlow"
+        aria-label="Origine DoFlow"
+      >
+        D
+      </span>
     </button>
-  )
+  );
 }
 
 export function CommercialCalendarPage() {
-  const params = useSearchParams()
-  const router = useRouter()
-  const access = useTenantAccess()
-  const initialDate = validDate(params.get("date")) ?? new Date()
-  const initialView = params.get("view") as CalendarView | null
-  const [anchor, setAnchor] = React.useState(initialDate)
-  const [view, setView] = React.useState<CalendarView>(initialView && VIEW_VALUES.has(initialView) ? initialView : "month")
-  const [events, setEvents] = React.useState<CalendarEvent[]>([])
-  const [deadlines, setDeadlines] = React.useState<CalendarEvent[]>([])
-  const [options, setOptions] = React.useState<CalendarOptions>()
-  const [projects, setProjects] = React.useState<WorkProject[]>([])
-  const [tasks, setTasks] = React.useState<WorkTask[]>([])
-  const [milestones, setMilestones] = React.useState<ProjectMilestone[]>([])
-  const [members, setMembers] = React.useState<TeamMember[]>([])
-  const [loading, setLoading] = React.useState(true)
-  const [saving, setSaving] = React.useState(false)
-  const [error, setError] = React.useState("")
-  const [refreshKey, setRefreshKey] = React.useState(0)
-  const [query, setQuery] = React.useState("")
-  const [category, setCategory] = React.useState<CalendarCategory>("all")
-  const [eventType, setEventType] = React.useState("all")
-  const [status, setStatus] = React.useState("all")
-  const [priority, setPriority] = React.useState("all")
-  const [assigneeId, setAssigneeId] = React.useState(params.get("assignee") || "all")
-  const [projectId, setProjectId] = React.useState("all")
-  const [overdueOnly, setOverdueOnly] = React.useState(false)
-  const [openOnly, setOpenOnly] = React.useState(params.get("status") === "open")
-  const [selectedId, setSelectedId] = React.useState<string | undefined>(params.get("event") || undefined)
-  const [editor, setEditor] = React.useState<CalendarEditor>()
+  const commercialTeam = useCommercialTeam();
+  const { store, identity, leads, customers, projects, activities } =
+    useAuthorizedCommercial();
+  const router = useRouter();
+  const params = useSearchParams();
+  const today = startOfDay(new Date());
+  const initialDate = safeDate(params.get("date") ?? undefined) ?? today;
+  const [anchor, setAnchor] = useState(initialDate);
+  const [view, setView] = useState<CalendarView>(
+    (params.get("view") as CalendarView) || "month",
+  );
+  const [query, setQuery] = useState("");
+  const [assignee, setAssignee] = useState(params.get("assignee") ?? "all");
+  const [team, setTeam] = useState("all");
+  const [customerId, setCustomerId] = useState("all");
+  const [leadId, setLeadId] = useState("all");
+  const [projectId, setProjectId] = useState("all");
+  const [kind, setKind] = useState<EventKind | "all">("all");
+  const [status, setStatus] = useState("all");
+  const [priority, setPriority] = useState("all");
+  const [period, setPeriod] = useState(params.get("period") ?? "all");
+  const [mineOnly, setMineOnly] = useState(params.get("scope") === "mine");
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [openOnly, setOpenOnly] = useState(params.get("status") === "open");
+  const [createDate, setCreateDate] = useState<string>();
+  const [createTime, setCreateTime] = useState("09:00");
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [appointmentOpen, setAppointmentOpen] = useState(false);
+  const [createSubject, setCreateSubject] = useState("");
+  const [appointmentLeadId, setAppointmentLeadId] = useState("");
+  const draggingId = useRef<string | undefined>(undefined);
+  const [selectedEventId, setSelectedEventId] = useState<string | undefined>(
+    params.get("event") ?? undefined,
+  );
+  const [pendingMove, setPendingMove] = useState<{
+    eventId: string;
+    day: Date;
+  }>();
+  const [note, setNote] = useState("");
+  const [summaryCategory, setSummaryCategory] = useState<
+    | "todo"
+    | "support"
+    | "quote"
+    | "contract"
+    | "payment"
+    | "materials"
+    | "overdue"
+  >();
+  const [summaryPeriod, setSummaryPeriod] = useState<
+    "today" | "seven" | "visible"
+  >("visible");
+  const personalDeadlineOnly = params.get("source") === "personal-deadlines";
+  const canSeeEconomics = identity.hasCapability("canViewCommercialValues");
 
-  const canCreate = access.canCreate("calendar") && canManageCalendar()
-  const canUpdate = access.canUpdate("calendar") && canManageCalendar()
-  const canDelete = access.canDelete("calendar") && canManageCalendar()
-
-  React.useEffect(() => {
-    let active = true
-    Promise.allSettled([
-      calendarApi.getCalendarOptions(),
-      apiFetch<WorkListResponse<WorkProject>>("/tenant/projects?limit=100"),
-      apiFetch<WorkListResponse<WorkTask>>("/tenant/projects/tasks?limit=200"),
-      access.canView("team") ? teamApi.members({ limit: 200 }) : Promise.resolve({ items: [] as TeamMember[] }),
-    ]).then((results) => {
-      if (!active) return
-      if (results[0].status === "fulfilled") setOptions(results[0].value)
-      if (results[1].status === "fulfilled") {
-        const nextProjects = results[1].value.items || []
-        setProjects(nextProjects)
-        void Promise.all(nextProjects.map(async (project) => {
-          try {
-            const data = await apiFetch<WorkListResponse<WorkMilestone>>(`/tenant/projects/${project.id}/milestones`)
-            return (data.items || []).map((milestone) => ({ ...milestone, project_id: project.id }))
-          } catch {
-            return []
-          }
-        })).then((rows) => { if (active) setMilestones(rows.flat()) })
-      }
-      if (results[2].status === "fulfilled") setTasks(results[2].value.items || [])
-      if (results[3].status === "fulfilled") setMembers(results[3].value.items || [])
-    })
-    return () => { active = false }
-  }, [access])
-
-  React.useEffect(() => {
-    let active = true
-    const load = async () => {
-      setLoading(true)
-      setError("")
-      const range = rangeFor(view, anchor)
-      try {
-        const [nextEvents, nextDeadlines] = await Promise.all([
-          listCalendarRange({ start: range.start.toISOString(), end: range.end.toISOString(), include_cancelled: true }),
-          calendarApi.getCalendarDeadlines({
-            start: startOfLocalDay(new Date()).toISOString(),
-            end: addLocalDays(startOfLocalDay(new Date()), 60).toISOString(),
-            limit: 200,
-          }),
-        ])
-        if (!active) return
-        setEvents(nextEvents)
-        setDeadlines(nextDeadlines.items || [])
-      } catch (cause) {
-        if (active) setError(cause instanceof Error ? cause.message : "Calendario non disponibile.")
-      } finally {
-        if (active) setLoading(false)
-      }
+  const events = useMemo<CalendarEvent[]>(() => {
+    const result: CalendarEvent[] = [];
+    for (const { activity, customer } of activities) {
+      const start = activity.dueAt || activity.dueDate || activity.startAt;
+      if (!start || activity.archivedAt) continue;
+      const project = projects.find((item) => item.id === activity.projectId);
+      result.push({
+        id: `activity:${activity.id}`,
+        recordId: activity.id,
+        title: activity.title,
+        kind:
+          activity.type === "Consegna"
+            ? "delivery"
+            : activity.type === "QA/Test" ||
+                activity.type === "Approvazione cliente"
+              ? "review"
+              : "activity",
+        start,
+        end: activity.dueAt || undefined,
+        allDay: !activity.dueTime && start.length === 10,
+        status: activity.status,
+        priority: activity.priority,
+        assigneeId: activity.assigneeId,
+        customerId: customer.id,
+        leadId: activity.leadId,
+        projectId: activity.projectId,
+        href: `/dashboard/attivita?activityId=${activity.id}`,
+        editable: canManageActivity(
+          identity.currentUser,
+          activity,
+          customer,
+          project,
+        ),
+        activity,
+        activityCustomerId: customer.id,
+      });
     }
-    void load()
-    return () => { active = false }
-  }, [anchor, refreshKey, view])
+    for (const lead of leads.filter(
+      (item) => !item.archivedAt && item.nextActionAt,
+    ))
+      result.push({
+        id: `lead-action:${lead.id}`,
+        recordId: lead.id,
+        title: `${lead.nextAction} · ${lead.company}`,
+        kind: "activity",
+        start: lead.nextActionAt,
+        status: lead.stage,
+        assigneeId: lead.assigneeId,
+        leadId: lead.id,
+        customerId: lead.convertedClientId,
+        href: `/dashboard/commercial/leads/${lead.id}`,
+      });
+    for (const activity of store.leadActivities.filter(
+      (item) =>
+        !item.archivedAt && leads.some((lead) => lead.id === item.leadId),
+    )) {
+      const start = activity.startAt || activity.dueAt || activity.dueDate;
+      if (!start) continue;
+      result.push({
+        id: `lead-activity:${activity.id}`,
+        recordId: activity.id,
+        title: activity.title,
+        kind: "activity",
+        start,
+        end: activity.dueAt || undefined,
+        allDay: !activity.dueTime && start.length === 10,
+        status: activity.status,
+        priority: activity.priority,
+        assigneeId: activity.assigneeId,
+        leadId: activity.leadId,
+        href: `/dashboard/commercial/leads/${activity.leadId}`,
+      });
+    }
+    for (const appointment of store.appointments.filter(
+      (item) => !item.archivedAt,
+    )) {
+      const lead = leads.find((item) => item.id === appointment.leadId);
+      if (!lead) continue;
+      result.push({
+        id: `appointment:${appointment.id}`,
+        recordId: appointment.id,
+        title: appointment.title,
+        kind: "appointment",
+        start: appointment.startsAt,
+        end: appointment.endsAt,
+        status: appointment.status,
+        assigneeId: appointment.assigneeId,
+        customerId: appointment.customerId,
+        leadId: appointment.leadId,
+        href: `/dashboard/commercial/leads/${appointment.leadId}`,
+        editable: canEditLead(identity.currentUser, lead),
+        appointment,
+      });
+    }
+    for (const project of projects.filter((item) => !item.archivedAt)) {
+      if (project.dueDate)
+        result.push({
+          id: `project:${project.id}`,
+          recordId: project.id,
+          title: `Scadenza · ${project.name}`,
+          kind: "project",
+          start: project.dueDate,
+          allDay: true,
+          status: project.status,
+          priority: project.priority,
+          assigneeId: project.ownerId,
+          customerId: project.clientId,
+          leadId: project.sourceLeadId,
+          projectId: project.id,
+          href: `/dashboard/progetti/${project.id}`,
+        });
+      if (project.deliveredAt)
+        result.push({
+          id: `delivery:${project.id}`,
+          recordId: project.id,
+          title: `Consegna · ${project.name}`,
+          kind: "delivery",
+          start: project.deliveredAt,
+          status: "Consegnato",
+          assigneeId: project.ownerId,
+          customerId: project.clientId,
+          projectId: project.id,
+          href: `/dashboard/progetti/${project.id}`,
+        });
+      for (const phase of project.phases.filter((item) => item.dueDate))
+        result.push({
+          id: `phase:${project.id}:${phase.id}`,
+          recordId: phase.id,
+          title: `${phase.name} · ${project.name}`,
+          kind:
+            phase.name.toLowerCase().includes("revision") ||
+            phase.name.toLowerCase().includes("qa")
+              ? "review"
+              : "project",
+          start: phase.dueDate!,
+          allDay: true,
+          status: phase.status,
+          assigneeId: project.ownerId,
+          customerId: project.clientId,
+          projectId: project.id,
+          href: `/dashboard/progetti/${project.id}`,
+        });
+    }
+    for (const contract of store.contracts.filter(
+      (item) => !item.archivedAt && item.signatureDueAt,
+    ))
+      result.push({
+        id: `contract:${contract.id}`,
+        recordId: contract.id,
+        title: `Firma · ${contract.title}`,
+        kind: "contract",
+        start: contract.signatureDueAt!,
+        status: contract.status,
+        assigneeId: contract.salespersonId,
+        customerId: contract.customerId,
+        leadId: contract.leadId,
+        projectId: contract.projectId,
+        href: `/dashboard/contratti?contract=${contract.id}`,
+      });
+    for (const quote of store.quotes.filter(
+      (item) => !item.archivedAt && !item.replacedById,
+    ))
+      result.push({
+        id: `quote:${quote.id}`,
+        recordId: quote.id,
+        title: `Preventivo ${quote.code}`,
+        kind: "quote",
+        start: quote.validUntil,
+        allDay: true,
+        status: quote.status,
+        assigneeId: quote.salespersonId,
+        customerId: quote.customerId,
+        leadId: quote.leadId,
+        href: `/dashboard/preventivi/${quote.id}/anteprima`,
+      });
+    for (const order of store.orders.filter(
+      (item) =>
+        !item.archivedAt &&
+        item.dueDate &&
+        !["Annullato", "Rimborsato"].includes(item.administrativeStatus),
+    )) {
+      const financials = orderFinancialsFromServer(order);
+      if (financials.residual <= 0) continue;
+      result.push({
+        id: `payment:${order.id}`,
+        recordId: order.id,
+        title: `Pagamento atteso · ${order.code}${canSeeEconomics ? ` · ${financials.residual.toLocaleString("it-IT", { style: "currency", currency: "EUR" })}` : ""}`,
+        kind: "payment",
+        start: order.dueDate!,
+        allDay: true,
+        status: order.administrativeStatus,
+        assigneeId: order.salespersonId,
+        customerId: order.customerId,
+        projectId: order.projectId,
+        href: `/dashboard/ordini?order=${order.id}`,
+      });
+    }
+    for (const renewal of store.renewals.filter((item) => !item.archivedAt))
+      result.push({
+        id: `renewal:${renewal.id}`,
+        recordId: renewal.id,
+        title: `Rinnovo · ${renewal.planName}`,
+        kind: "renewal",
+        start: renewal.nextDueAt,
+        allDay: true,
+        status: renewal.status,
+        assigneeId: renewal.ownerId,
+        customerId: renewal.customerId,
+        projectId: renewal.projectId,
+        href: `/dashboard/rinnovi?renewal=${renewal.id}`,
+      });
+    for (const ticket of store.supportTickets.filter(
+      (item) => !item.archivedAt && item.dueAt,
+    ))
+      result.push({
+        id: `support:${ticket.id}`,
+        recordId: ticket.id,
+        title: `${ticket.code} · ${ticket.title}`,
+        kind: "support",
+        start: ticket.dueAt!,
+        status: ticket.status,
+        priority: ticket.priority,
+        assigneeId: ticket.assigneeId,
+        customerId: ticket.customerId,
+        projectId: ticket.projectId,
+        href: `/dashboard/supporto?ticket=${ticket.id}`,
+      });
+    for (const customer of customers)
+      for (const document of (customer.documents ?? []).filter(
+        (item) => !["Firmato", "Archiviato"].includes(item.status),
+      ))
+        result.push({
+          id: `materials:${document.id}`,
+          recordId: document.id,
+          title: `Materiale · ${document.name}`,
+          kind: "materials",
+          start: document.updatedAt || document.createdAt,
+          allDay: true,
+          status: document.status,
+          assigneeId: customer.profile.assigneeId,
+          customerId: customer.id,
+          projectId: document.projectId,
+          href: `/dashboard/clienti/${customer.id}`,
+        });
+    for (const approval of store.operationalApprovals.filter(
+      (item) =>
+        item.requestedAt && !["Sostituito", "Revocato"].includes(item.status),
+    )) {
+      const project =
+        projects.find((item) => item.id === approval.objectId) ??
+        projects.find((item) =>
+          item.phases.some((phase) => phase.id === approval.objectId),
+        );
+      if (!project && approval.objectType !== "activity") continue;
+      result.push({
+        id: `review:${approval.id}`,
+        recordId: approval.id,
+        title: `Revisione · ${project?.name ?? "attività operativa"}`,
+        kind: "review",
+        start: approval.requestedAt!,
+        status: approval.status,
+        assigneeId: approval.requiredApproverId,
+        customerId: project?.clientId,
+        projectId: project?.id,
+        href: project
+          ? `/dashboard/progetti/${project.id}`
+          : "/dashboard/attivita",
+      });
+    }
+    return result.sort((a, b) => a.start.localeCompare(b.start));
+  }, [
+    activities,
+    canSeeEconomics,
+    customers,
+    identity.currentUser,
+    leads,
+    projects,
+    store.appointments,
+    store.contracts,
+    store.leadActivities,
+    store.operationalApprovals,
+    store.orders,
+    store.quotes,
+    store.renewals,
+    store.supportTickets,
+  ]);
 
-  const selectedEvent = React.useMemo(() => events.find((event) => event.id === selectedId), [events, selectedId])
+  const filtered = useMemo(
+    () =>
+      events.filter((event) => {
+        const search = query.trim().toLowerCase();
+        if (
+          search &&
+          !`${event.title} ${KIND_LABELS[event.kind]}`
+            .toLowerCase()
+            .includes(search)
+        )
+          return false;
+        if (
+          (mineOnly || assignee === "current") &&
+          event.assigneeId !== identity.currentUserId
+        )
+          return false;
+        if (
+          assignee !== "all" &&
+          assignee !== "current" &&
+          event.assigneeId !== assignee
+        )
+          return false;
+        if (
+          team !== "all" &&
+          !identity.users
+            .find((user) => user.id === event.assigneeId)
+            ?.roles.some((role) => role.includes(team))
+        )
+          return false;
+        if (
+          (customerId !== "all" && event.customerId !== customerId) ||
+          (leadId !== "all" && event.leadId !== leadId) ||
+          (projectId !== "all" && event.projectId !== projectId)
+        )
+          return false;
+        if (
+          (kind !== "all" && event.kind !== kind) ||
+          (status !== "all" && event.status !== status) ||
+          (priority !== "all" && event.priority !== priority)
+        )
+          return false;
+        if (
+          personalDeadlineOnly &&
+          !(event.id.startsWith("activity:") || event.id.startsWith("project:"))
+        )
+          return false;
+        if (
+          (overdueOnly && !eventIsOverdue(event)) ||
+          (openOnly && CLOSED.has(event.status))
+        )
+          return false;
+        if (
+          summaryCategory === "todo" &&
+          (!["activity", "appointment"].includes(event.kind) ||
+            CLOSED.has(event.status))
+        )
+          return false;
+        if (
+          summaryCategory === "support" &&
+          (event.kind !== "support" || CLOSED.has(event.status))
+        )
+          return false;
+        if (
+          summaryCategory === "quote" &&
+          (event.kind !== "quote" || CLOSED.has(event.status))
+        )
+          return false;
+        if (
+          summaryCategory === "contract" &&
+          (event.kind !== "contract" || CLOSED.has(event.status))
+        )
+          return false;
+        if (
+          summaryCategory === "payment" &&
+          (event.kind !== "payment" || CLOSED.has(event.status))
+        )
+          return false;
+        if (
+          summaryCategory === "materials" &&
+          (event.kind !== "materials" || CLOSED.has(event.status))
+        )
+          return false;
+        if (summaryCategory === "overdue" && !eventIsOverdue(event))
+          return false;
+        const date = safeDate(event.start)!;
+        if (period === "today" && !isSameDay(date, today)) return false;
+        if (
+          period === "week" &&
+          (isBefore(date, startOfWeek(today, { weekStartsOn: 1 })) ||
+            isAfter(date, endOfWeek(today, { weekStartsOn: 1 })))
+        )
+          return false;
+        if (period === "month" && !isSameMonth(date, today)) return false;
+        if (
+          period === "upcoming" &&
+          (isBefore(date, today) || isAfter(date, addDays(today, 3)))
+        )
+          return false;
+        return true;
+      }),
+    [
+      assignee,
+      customerId,
+      events,
+      identity.currentUserId,
+      identity.users,
+      kind,
+      leadId,
+      mineOnly,
+      openOnly,
+      overdueOnly,
+      period,
+      personalDeadlineOnly,
+      priority,
+      projectId,
+      query,
+      status,
+      summaryCategory,
+      team,
+      today,
+    ],
+  );
 
-  const filtered = React.useMemo(() => events.filter((event) => {
-    const search = query.trim().toLowerCase()
-    if (search && !`${event.title} ${event.description || ""} ${label(EVENT_TYPE_LABELS, event.event_type)}`.toLowerCase().includes(search)) return false
-    if (category !== "all" && categoryFor(event) !== category) return false
-    if (eventType !== "all" && event.event_type !== eventType) return false
-    if (status !== "all" && event.status !== status) return false
-    if (priority !== "all" && event.priority !== priority) return false
-    if (assigneeId !== "all" && event.assigned_to_user_id !== assigneeId) return false
-    if (projectId !== "all" && projectIdForEvent(event, tasks, milestones) !== projectId) return false
-    if (overdueOnly && !isOverdue(event)) return false
-    if (openOnly && CLOSED_STATUSES.has(event.status)) return false
-    return true
-  }), [assigneeId, category, eventType, events, milestones, openOnly, overdueOnly, priority, projectId, query, status, tasks])
+  const selectedEvent = events.find((event) => event.id === selectedEventId);
 
-  const visibleDeadlines = React.useMemo(() => deadlines
-    .filter((event) => assigneeId === "all" || event.assigned_to_user_id === assigneeId)
-    .filter((event) => projectId === "all" || projectIdForEvent(event, tasks, milestones) === projectId)
-    .sort((left, right) => left.start_at.localeCompare(right.start_at))
-    .slice(0, 10), [assigneeId, deadlines, milestones, projectId, tasks])
-
-  const updateUrl = React.useCallback((next: { view?: CalendarView; date?: Date; eventId?: string | null }) => {
-    const search = new URLSearchParams(params.toString())
-    if (next.view) search.set("view", next.view)
-    if (next.date) search.set("date", localDateInput(next.date))
-    if (next.eventId === null) search.delete("event")
-    else if (next.eventId) search.set("event", next.eventId)
-    router.replace(`/dashboard/calendario?${search.toString()}`, { scroll: false })
-  }, [params, router])
-
-  const selectEvent = (event: CalendarEvent) => {
-    setSelectedId(event.id)
-    updateUrl({ eventId: event.id })
-  }
-
-  const closeEvent = () => {
-    setSelectedId(undefined)
-    updateUrl({ eventId: null })
-  }
-
-  const changeView = (next: CalendarView) => {
-    setView(next)
-    updateUrl({ view: next, date: anchor })
-  }
-
-  const moveAnchor = (direction: -1 | 1) => {
-    const next = view === "month" || view === "agenda"
-      ? addMonths(anchor, direction)
-      : addLocalDays(anchor, direction * (view === "week" ? 7 : 1))
-    setAnchor(next)
-    updateUrl({ date: next, view })
-  }
-
-  const openDay = (day: Date) => {
-    setAnchor(day)
-    setView("day")
-    setSelectedId(undefined)
-    updateUrl({ date: day, view: "day", eventId: null })
-  }
-
+  const shownDays = useMemo(
+    () =>
+      view === "month"
+        ? Array.from({ length: 42 }, (_, index) =>
+            addDays(
+              startOfWeek(startOfMonth(anchor), { weekStartsOn: 1 }),
+              index,
+            ),
+          )
+        : view === "week"
+          ? Array.from({ length: 7 }, (_, index) =>
+              addDays(startOfWeek(anchor, { weekStartsOn: 1 }), index),
+            )
+          : [anchor],
+    [anchor, view],
+  );
+  const summaryEvents = useMemo(() => {
+    const visibleStart = shownDays[0] ?? anchor;
+    const visibleEnd = shownDays.at(-1) ?? anchor;
+    return events.filter((event) => {
+      if (
+        (mineOnly || assignee === "current") &&
+        event.assigneeId !== identity.currentUserId
+      )
+        return false;
+      if (
+        assignee !== "all" &&
+        assignee !== "current" &&
+        event.assigneeId !== assignee
+      )
+        return false;
+      if (
+        team !== "all" &&
+        !identity.users
+          .find((user) => user.id === event.assigneeId)
+          ?.roles.some((role) => role.includes(team))
+      )
+        return false;
+      if (
+        (customerId !== "all" && event.customerId !== customerId) ||
+        (projectId !== "all" && event.projectId !== projectId)
+      )
+        return false;
+      const eventDate = safeDate(event.start)!;
+      if (summaryPeriod === "today") return isSameDay(eventDate, today);
+      if (summaryPeriod === "seven")
+        return (
+          !isBefore(eventDate, today) && !isAfter(eventDate, addDays(today, 7))
+        );
+      return (
+        !isBefore(eventDate, startOfDay(visibleStart)) &&
+        !isAfter(eventDate, addDays(startOfDay(visibleEnd), 1))
+      );
+    });
+  }, [
+    anchor,
+    assignee,
+    customerId,
+    events,
+    identity.currentUserId,
+    identity.users,
+    mineOnly,
+    projectId,
+    shownDays,
+    summaryPeriod,
+    team,
+    today,
+  ]);
+  const summaryCards = [
+    {
+      id: "todo" as const,
+      label: "Da fare",
+      icon: ClipboardList,
+      count: summaryEvents.filter(
+        (event) =>
+          ["activity", "appointment"].includes(event.kind) &&
+          !CLOSED.has(event.status),
+      ).length,
+      detail: "attività e appuntamenti aperti",
+      style:
+        "border-indigo-500/35 bg-indigo-500/5 text-indigo-700 dark:text-indigo-300",
+    },
+    {
+      id: "overdue" as const,
+      label: "Scaduti",
+      icon: AlertTriangle,
+      count: new Set(
+        summaryEvents
+          .filter(eventIsOverdue)
+          .map((event) => `${event.kind}:${event.recordId}`),
+      ).size,
+      detail: "pratiche oltre scadenza",
+      style: "border-red-500/45 bg-red-500/5 text-red-700 dark:text-red-300",
+    },
+    {
+      id: "support" as const,
+      label: "Supporto",
+      icon: Headphones,
+      count: new Set(
+        summaryEvents
+          .filter(
+            (event) => event.kind === "support" && !CLOSED.has(event.status),
+          )
+          .map((event) => event.recordId),
+      ).size,
+      detail: `${summaryEvents.filter((event) => event.kind === "support" && (event.priority === "Urgente" || eventIsOverdue(event))).length} urgenti o a rischio`,
+      style:
+        "border-orange-600/40 bg-orange-600/5 text-orange-800 dark:text-orange-300",
+    },
+    {
+      id: "quote" as const,
+      label: "Preventivi",
+      icon: FileText,
+      count: new Set(
+        summaryEvents
+          .filter(
+            (event) => event.kind === "quote" && !CLOSED.has(event.status),
+          )
+          .map((event) => event.recordId),
+      ).size,
+      detail: `${summaryEvents.filter((event) => event.kind === "quote" && eventIsOverdue(event)).length} scaduti`,
+      style:
+        "border-violet-500/35 bg-violet-500/5 text-violet-700 dark:text-violet-300",
+    },
+    {
+      id: "contract" as const,
+      label: "Contratti",
+      icon: FileSignature,
+      count: new Set(
+        summaryEvents
+          .filter(
+            (event) => event.kind === "contract" && !CLOSED.has(event.status),
+          )
+          .map((event) => event.recordId),
+      ).size,
+      detail: "invio, firma o verifica",
+      style:
+        "border-amber-500/45 bg-amber-500/5 text-amber-800 dark:text-amber-300",
+    },
+    {
+      id: "payment" as const,
+      label: "Pagamenti",
+      icon: CreditCard,
+      count: new Set(
+        summaryEvents
+          .filter(
+            (event) => event.kind === "payment" && !CLOSED.has(event.status),
+          )
+          .map((event) => event.recordId),
+      ).size,
+      detail: canSeeEconomics
+        ? "acconti e saldi attesi"
+        : "verifiche autorizzate",
+      style:
+        "border-emerald-500/40 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300",
+    },
+    {
+      id: "materials" as const,
+      label: "Materiali",
+      icon: PackageCheck,
+      count: new Set(
+        summaryEvents
+          .filter(
+            (event) => event.kind === "materials" && !CLOSED.has(event.status),
+          )
+          .map((event) => event.recordId),
+      ).size,
+      detail: "mancanti o da verificare",
+      style:
+        "border-cyan-500/40 bg-cyan-500/5 text-cyan-700 dark:text-cyan-300",
+    },
+  ];
+  const statuses = [...new Set(events.map((event) => event.status))].sort();
+  const priorities = [
+    ...new Set(
+      events.map((event) => event.priority).filter(Boolean) as string[],
+    ),
+  ].sort();
   const resetFilters = () => {
-    setQuery("")
-    setCategory("all")
-    setEventType("all")
-    setStatus("all")
-    setPriority("all")
-    setAssigneeId("all")
-    setProjectId("all")
-    setOverdueOnly(false)
-    setOpenOnly(false)
-  }
-
-  const refresh = () => setRefreshKey((value) => value + 1)
-
-  const saveEditor = async () => {
-    if (!editor?.title.trim() || !editor.date || saving) return
-    setSaving(true)
-    try {
-      const start = new Date(`${editor.date}T${editor.allDay ? "00:00" : editor.time}:00`)
-      if (Number.isNaN(start.getTime())) throw new Error("Data evento non valida")
-      const duration = Math.max(15, Number(editor.duration) || 60)
-      const body = {
-        title: editor.title.trim(),
-        description: editor.description.trim() || null,
-        event_type: editor.eventType,
-        status: editor.status,
-        priority: editor.priority,
-        start_at: start.toISOString(),
-        end_at: editor.allDay ? null : new Date(start.getTime() + duration * 60_000).toISOString(),
-        all_day: editor.allDay,
-        assigned_to_user_id: editor.assigneeId === "unassigned" ? "" : editor.assigneeId,
-        visibility: "team",
-        transparency: "busy",
-        source_type: "manual",
-        is_system_generated: false,
-        is_locked: false,
-      }
-      if (editor.eventId) await calendarApi.updateCalendarEvent(editor.eventId, body)
-      else await calendarApi.createCalendarEvent(body)
-      toast.success(editor.eventId ? "Evento aggiornato" : "Evento creato")
-      setEditor(undefined)
-      refresh()
-    } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Evento non salvato")
-    } finally {
-      setSaving(false)
+    setQuery("");
+    setAssignee("all");
+    setTeam("all");
+    setCustomerId("all");
+    setLeadId("all");
+    setProjectId("all");
+    setKind("all");
+    setStatus("all");
+    setPriority("all");
+    setPeriod("all");
+    setMineOnly(false);
+    setOverdueOnly(false);
+    setOpenOnly(false);
+    setSummaryCategory(undefined);
+    router.replace("/dashboard/calendario");
+  };
+  const openCreate = (day: Date, time = "09:00") => {
+    setCreateDate(format(day, "yyyy-MM-dd"));
+    setCreateTime(time);
+  };
+  const openDay = (day: Date) => {
+    setAnchor(startOfDay(day));
+    setView("day");
+    setSelectedEventId(undefined);
+  };
+  const navigate = (direction: -1 | 1) =>
+    setAnchor((current) =>
+      view === "month" || view === "agenda"
+        ? addMonths(current, direction)
+        : view === "week"
+          ? addWeeks(current, direction)
+          : addDays(current, direction),
+    );
+  const openEvent = (event: CalendarEvent) => setSelectedEventId(event.id);
+  const reschedule = async (eventId: string, day: Date) => {
+    const event = events.find((item) => item.id === eventId);
+    if (!event?.editable || draggingId.current === `saving:${eventId}`) return;
+    draggingId.current = `saving:${eventId}`;
+    const dayValue = format(day, "yyyy-MM-dd");
+    let ok = false;
+    if (event.appointment) {
+      const start = safeDate(event.appointment.startsAt)!;
+      const end = safeDate(event.appointment.endsAt)!;
+      const nextStart = new Date(`${dayValue}T${format(start, "HH:mm:ss")}`);
+      ok = await store.updateAppointment(event.appointment.id, {
+        startsAt: nextStart.toISOString(),
+        endsAt: new Date(
+          nextStart.getTime() + end.getTime() - start.getTime(),
+        ).toISOString(),
+      });
     }
-  }
-
-  const reschedule = async (event: CalendarEvent, day: string) => {
-    if (!canUpdate || !canEditManualEvent(event)) return
-    const currentStart = validDate(event.start_at)
-    if (!currentStart) return
-    const nextStart = new Date(`${day}T${localTimeInput(currentStart)}:00`)
-    const currentEnd = validDate(event.end_at)
-    const duration = currentEnd ? currentEnd.getTime() - currentStart.getTime() : 60 * 60_000
-    try {
-      await calendarApi.updateCalendarEvent(event.id, {
-        start_at: nextStart.toISOString(),
-        end_at: event.all_day ? null : new Date(nextStart.getTime() + duration).toISOString(),
-      })
-      toast.success("Evento riprogrammato")
-      refresh()
-    } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Riprogrammazione non riuscita")
+    if (event.activity && event.activityCustomerId) {
+      const time =
+        event.activity.dueTime ||
+        (event.activity.dueAt
+          ? format(safeDate(event.activity.dueAt)!, "HH:mm")
+          : "12:00");
+      ok = await store.updateCustomerActivity(
+        event.activityCustomerId,
+        event.activity.id,
+        { dueDate: dayValue, dueTime: time, dueAt: `${dayValue}T${time}:00` },
+      );
     }
-  }
-
-  const complete = async (event: CalendarEvent) => {
-    if (!canUpdate || !canEditManualEvent(event)) return
-    try {
-      await calendarApi.completeCalendarEvent(event.id)
-      toast.success("Evento completato")
-      refresh()
-    } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Evento non completato")
-    }
-  }
-
-  const remove = async (event: CalendarEvent) => {
-    if (!canDelete || !canEditManualEvent(event) || !window.confirm(`Eliminare “${event.title}”?`)) return
-    try {
-      await calendarApi.deleteCalendarEvent(event.id)
-      closeEvent()
-      refresh()
-      toast.success("Evento eliminato")
-    } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Evento non eliminato")
-    }
-  }
-
-  const dropOnDay = (drop: React.DragEvent, day: Date) => {
-    drop.preventDefault()
-    const event = events.find((item) => item.id === drop.dataTransfer.getData("text/calendar-event"))
-    if (event) void reschedule(event, localDateInput(day))
-  }
-
-  const renderDayColumn = (day: Date, monthMode = false) => {
-    const dayEvents = filtered.filter((event) => {
-      const start = validDate(event.start_at)
-      return start && isSameLocalDay(start, day)
-    })
-    const visible = monthMode ? dayEvents.slice(0, 4) : dayEvents
-    return (
-      <section
-        key={day.toISOString()}
-        onDragOver={(drag) => { if (canUpdate) drag.preventDefault() }}
-        onDrop={(drop) => dropOnDay(drop, day)}
-        className={cn(
-          "min-w-0 border-b border-l border-border p-2",
-          monthMode ? "min-h-32" : "min-h-80",
-          monthMode && day.getMonth() !== anchor.getMonth() && "bg-muted/30 text-muted-foreground",
-          isSameLocalDay(day, new Date()) && "bg-primary/5",
-        )}
-      >
-        <div className="mb-2 flex items-center justify-between gap-1">
-          <button type="button" className="text-xs font-semibold hover:text-primary" onClick={() => openDay(day)}>
-            {monthMode ? day.getDate() : new Intl.DateTimeFormat("it-IT", { weekday: "short", day: "2-digit", month: "short" }).format(day)}
-          </button>
-          {canCreate ? (
-            <button type="button" className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={`Crea evento il ${localDateInput(day)}`} onClick={() => setEditor(editorFor(undefined, day))}>
-              <CirclePlus className="size-3.5" />
-            </button>
-          ) : null}
-        </div>
-        <div className="space-y-1.5">
-          {visible.map((event) => <EventButton key={event.id} event={event} selected={selectedId === event.id} editable={canUpdate && canEditManualEvent(event)} onOpen={() => selectEvent(event)} />)}
-          {dayEvents.length > visible.length ? <button type="button" className="px-1 text-[10px] text-muted-foreground hover:text-foreground" onClick={() => openDay(day)}>+{dayEvents.length - visible.length} altri</button> : null}
-        </div>
-      </section>
+    toast[ok ? "success" : "error"](
+      ok
+        ? "Impegno riprogrammato"
+        : "Riprogrammazione non autorizzata o invariata",
+    );
+    window.setTimeout(() => {
+      draggingId.current = undefined;
+    }, 450);
+  };
+  const completeEvent = async (event: CalendarEvent) => {
+    let ok = false;
+    if (event.activity && event.activityCustomerId)
+      ok = await store.updateCustomerActivity(
+        event.activityCustomerId,
+        event.activity.id,
+        { status: "Completata" },
+      );
+    else if (event.appointment)
+      ok = await store.updateAppointment(event.appointment.id, {
+        status: "completed",
+      });
+    else if (event.kind === "support")
+      ok = await store.updateSupportTicket(
+        event.recordId,
+        { status: "Risolto" },
+        "Completato dal Calendario operativo",
+      );
+    toast[ok ? "success" : "error"](
+      ok
+        ? "Impegno completato"
+        : "Questo impegno non può essere completato dal Calendario",
+    );
+  };
+  const resizeAppointment = (event: CalendarEvent, minutes: number) => {
+    if (
+      !event.appointment ||
+      !event.editable ||
+      draggingId.current === `resize:${event.id}`
     )
-  }
-
-  const monthDays = React.useMemo(() => Array.from({ length: 42 }, (_, index) => addLocalDays(startOfWeek(monthStart(anchor)), index)), [anchor])
-  const weekDays = React.useMemo(() => Array.from({ length: 7 }, (_, index) => addLocalDays(startOfWeek(anchor), index)), [anchor])
-  const agendaGroups = React.useMemo(() => {
-    const groups = new Map<string, CalendarEvent[]>()
-    filtered.forEach((event) => {
-      const key = localDateInput(event.start_at)
-      groups.set(key, [...(groups.get(key) || []), event])
-    })
-    return Array.from(groups.entries()).sort(([left], [right]) => left.localeCompare(right))
-  }, [filtered])
+      return;
+    draggingId.current = `resize:${event.id}`;
+    const startsAt = safeDate(event.appointment.startsAt)!;
+    const ok = store.updateAppointment(event.appointment.id, {
+      endsAt: new Date(startsAt.getTime() + minutes * 60_000).toISOString(),
+    });
+    toast[ok ? "success" : "error"](
+      ok
+        ? "Durata appuntamento aggiornata"
+        : "Durata invariata o non autorizzata",
+    );
+    window.setTimeout(() => {
+      draggingId.current = undefined;
+    }, 450);
+  };
 
   return (
-    <main className="w-full space-y-5 p-4 md:p-6" data-calendar-source="server" data-calendar-views="month week day agenda">
+    <div
+      className="min-w-0 space-y-4 p-4 sm:p-6"
+      data-flow-tour="flow-calendar"
+    >
       <header className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><CalendarDays className="size-6 text-primary" />Calendario operativo</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Eventi e scadenze autorizzati dal backend del tenant. I record derivati restano in sola lettura.</p>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold">
+            <CalendarDays className="size-6 text-violet-600" />
+            Calendario operativo
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Un’unica agenda derivata dai record reali autorizzati. Nessun dato
+            viene duplicato.
+          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Tabs value={view} onValueChange={(value) => changeView(value as CalendarView)}>
-            <TabsList aria-label="Vista calendario" className="max-w-full overflow-x-auto">
-              <TabsTrigger value="month">Mese</TabsTrigger>
-              <TabsTrigger value="week">Settimana</TabsTrigger>
-              <TabsTrigger value="day">Giorno</TabsTrigger>
-              <TabsTrigger value="agenda">Agenda</TabsTrigger>
-            </TabsList>
-          </Tabs>
-          {canCreate ? <Button type="button" onClick={() => setEditor(editorFor(undefined, anchor))}><CirclePlus />Nuovo evento</Button> : null}
-        </div>
+        <Tabs
+          value={view}
+          onValueChange={(value) => setView(value as CalendarView)}
+        >
+          <TabsList aria-label="Vista calendario">
+            <TabsTrigger value="month">Mese</TabsTrigger>
+            <TabsTrigger value="week">Settimana</TabsTrigger>
+            <TabsTrigger value="day">Giorno</TabsTrigger>
+            <TabsTrigger value="agenda">Agenda</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </header>
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Riepilogo calendario">
-        {[
-          { label: "Nel periodo", value: events.length, action: () => { setCategory("all"); setOverdueOnly(false); setOpenOnly(false) } },
-          { label: "Aperti", value: events.filter((event) => !CLOSED_STATUSES.has(event.status)).length, action: () => setOpenOnly(true) },
-          { label: "Scaduti", value: events.filter((event) => isOverdue(event)).length, action: () => setOverdueOnly(true) },
-          { label: "Commerciale", value: events.filter((event) => categoryFor(event) === "commercial").length, action: () => setCategory("commercial") },
-          { label: "Prossime scadenze", value: deadlines.length, action: () => changeView("agenda") },
-        ].map((item) => (
-          <button key={item.label} type="button" onClick={item.action} className="rounded-xl border bg-card p-4 text-left transition hover:border-primary/40 hover:bg-muted/20">
-            <span className="text-xs font-medium text-muted-foreground">{item.label}</span>
-            <span className="mt-1 block text-2xl font-semibold tabular-nums">{item.value}</span>
-          </button>
-        ))}
-      </section>
-
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">Filtri</CardTitle><CardDescription>Ricerca e restringi la vista senza modificare i record.</CardDescription></CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-          <Label className="relative sm:col-span-2"><span className="sr-only">Cerca</span><Search className="absolute left-3 top-3 size-4 text-muted-foreground" /><Input className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cerca titolo o descrizione" /></Label>
-          <FilterSelect label="Categoria" value={category} onChange={(value) => setCategory(value as CalendarCategory)} options={[{ value: "all", label: "Tutte le categorie" }, ...CATEGORY_DEFINITIONS.map((item) => ({ value: item.id, label: item.label }))]} />
-          <FilterSelect label="Tipo evento" value={eventType} onChange={setEventType} options={[{ value: "all", label: "Tutti i tipi" }, ...(options?.event_types || []).map((value) => ({ value, label: label(EVENT_TYPE_LABELS, value) }))]} />
-          <FilterSelect label="Stato" value={status} onChange={setStatus} options={[{ value: "all", label: "Tutti gli stati" }, ...(options?.statuses || []).map((value) => ({ value, label: label(STATUS_LABELS, value) }))]} />
-          <FilterSelect label="Priorità" value={priority} onChange={setPriority} options={[{ value: "all", label: "Tutte le priorità" }, ...(options?.priorities || []).map((value) => ({ value, label: label(PRIORITY_LABELS, value) }))]} />
-          <FilterSelect label="Responsabile" value={assigneeId} onChange={setAssigneeId} options={[{ value: "all", label: "Tutto il team" }, ...members.filter((member) => member.user_id).map((member) => ({ value: String(member.user_id), label: member.display_name || member.email }))]} />
-          <FilterSelect label="Progetto" value={projectId} onChange={setProjectId} options={[{ value: "all", label: "Tutti i progetti" }, ...projects.map((project) => ({ value: project.id, label: project.name }))]} />
-          <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-4">
-            <Button type="button" size="sm" variant={openOnly ? "default" : "outline"} onClick={() => setOpenOnly((value) => !value)}>Solo aperti</Button>
-            <Button type="button" size="sm" variant={overdueOnly ? "destructive" : "outline"} onClick={() => setOverdueOnly((value) => !value)}><AlertTriangle />Solo scaduti</Button>
-            <Button type="button" size="sm" variant="ghost" onClick={resetFilters}><FilterX />Azzera filtri</Button>
+      <section aria-labelledby="calendar-summary-title" className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 id="calendar-summary-title" className="text-sm font-semibold">
+              Sintesi operativa
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Pratiche e impegni reali nel perimetro autorizzato.
+            </p>
           </div>
-        </CardContent>
-      </Card>
-
-      {error ? <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{error}</p> : null}
-
-      <section className="overflow-hidden rounded-2xl border bg-card">
-        <div className="flex flex-wrap items-center gap-2 border-b p-4">
-          <Button type="button" variant="outline" onClick={() => { const today = new Date(); setAnchor(today); updateUrl({ date: today, view }) }}>Oggi</Button>
-          <Button type="button" size="icon" variant="outline" onClick={() => moveAnchor(-1)} aria-label="Periodo precedente"><ChevronLeft /></Button>
-          <Button type="button" size="icon" variant="outline" onClick={() => moveAnchor(1)} aria-label="Periodo successivo"><ChevronRight /></Button>
-          <p className="min-w-0 flex-1 text-base font-semibold capitalize">{calendarTitle(view, anchor)}</p>
-          <Button type="button" variant="ghost" onClick={refresh} disabled={loading}>{loading ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : null}Aggiorna</Button>
-          <Badge variant="outline">{filtered.length} eventi</Badge>
+          <Select
+            value={summaryPeriod}
+            onValueChange={(value) =>
+              setSummaryPeriod(value as typeof summaryPeriod)
+            }
+          >
+            <SelectTrigger
+              className="w-44"
+              aria-label="Periodo sintesi operativa"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">Oggi</SelectItem>
+              <SelectItem value="seven">Prossimi 7 giorni</SelectItem>
+              <SelectItem value="visible">Periodo visibile</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-
-        {loading ? <div className="grid min-h-80 place-items-center text-sm text-muted-foreground"><Loader2 className="mb-2 size-6 animate-spin motion-reduce:animate-none" />Caricamento calendario…</div> : null}
-        {!loading && view === "month" ? (
-          <div className="overflow-x-auto"><div className="min-w-[840px]"><div className="grid grid-cols-7 border-b">{weekDays.map((day) => <div key={day.toISOString()} className="border-l px-3 py-2 text-center text-xs font-semibold uppercase text-muted-foreground first:border-l-0">{new Intl.DateTimeFormat("it-IT", { weekday: "short" }).format(day)}</div>)}</div><div className="grid grid-cols-7">{monthDays.map((day) => renderDayColumn(day, true))}</div></div></div>
-        ) : null}
-        {!loading && view === "week" ? <div className="grid min-w-0 gap-0 sm:grid-cols-2 xl:grid-cols-7">{weekDays.map((day) => renderDayColumn(day))}</div> : null}
-        {!loading && view === "day" ? <div className="p-3">{renderDayColumn(anchor)}</div> : null}
-        {!loading && view === "agenda" ? (
-          <div className="space-y-5 p-3 sm:p-5">
-            {agendaGroups.map(([day, items]) => <section key={day}><h2 className="mb-2 border-b pb-2 text-sm font-semibold capitalize">{new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "2-digit", month: "long" }).format(new Date(`${day}T12:00:00`))}</h2><div className="space-y-2">{items.map((event) => <AgendaRow key={event.id} event={event} selected={selectedId === event.id} editable={canUpdate && canEditManualEvent(event)} onOpen={() => selectEvent(event)} onReschedule={(date) => void reschedule(event, date)} />)}</div></section>)}
-            {!agendaGroups.length ? <p className="py-12 text-center text-sm text-muted-foreground">Nessun impegno con i filtri correnti.</p> : null}
-          </div>
-        ) : null}
+        <div className="grid min-w-0 grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+          {summaryCards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <button
+                key={card.id}
+                type="button"
+                aria-pressed={summaryCategory === card.id}
+                onClick={() =>
+                  setSummaryCategory((current) =>
+                    current === card.id ? undefined : card.id,
+                  )
+                }
+                className={cn(
+                  "min-w-0 rounded-lg border p-2.5 text-left outline-none transition hover:brightness-95 focus-visible:ring-2 focus-visible:ring-ring dark:hover:brightness-110",
+                  card.style,
+                  summaryCategory === card.id && "ring-2 ring-current",
+                )}
+              >
+                <span className="flex items-center gap-1.5 text-xs font-medium">
+                  <Icon className="size-3.5 shrink-0" />
+                  <span className="truncate">{card.label}</span>
+                </span>
+                <strong className="mt-0.5 block text-2xl tabular-nums">
+                  {card.count}
+                </strong>
+                <span className="line-clamp-1 text-[11px] text-muted-foreground">
+                  {card.detail}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {summaryCategory && (
+          <Badge variant="secondary" className="gap-1">
+            Filtro:{" "}
+            {summaryCards.find((card) => card.id === summaryCategory)?.label}
+            <button
+              type="button"
+              className="rounded px-1 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => setSummaryCategory(undefined)}
+              aria-label="Rimuovi filtro sintesi"
+            >
+              ×
+            </button>
+          </Badge>
+        )}
       </section>
-
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Clock3 className="size-4" />Prossime scadenze</CardTitle><CardDescription>Aggregazione backend di task, progetti, amministrazione, contratti e documenti autorizzati.</CardDescription></CardHeader>
-        <CardContent className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-          {visibleDeadlines.map((event) => <button key={event.id} type="button" className="flex min-w-0 items-start gap-3 rounded-xl border p-3 text-left hover:bg-muted/30" onClick={() => { setAnchor(validDate(event.start_at) || anchor); setView("agenda"); setSelectedId(event.id); updateUrl({ date: validDate(event.start_at), view: "agenda", eventId: event.id }) }}><Badge variant="outline" className="shrink-0 tabular-nums">{formatShortDate(event.start_at)}</Badge><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{event.title}</span><span className="mt-1 block text-xs text-muted-foreground">{label(EVENT_TYPE_LABELS, event.event_type)}</span></span></button>)}
-          {!visibleDeadlines.length ? <p className="col-span-full rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">Nessuna scadenza imminente.</p> : null}
+        <CardContent className="space-y-3 p-3 sm:p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label="Periodo precedente"
+              onClick={() => navigate(-1)}
+            >
+              <ChevronLeft />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAnchor(today)}
+            >
+              Oggi
+            </Button>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label="Periodo successivo"
+              onClick={() => navigate(1)}
+            >
+              <ChevronRight />
+            </Button>
+            <h2 className="min-w-0 flex-1 text-center text-base font-semibold capitalize sm:text-lg">
+              {view === "day"
+                ? format(anchor, "EEEE d MMMM yyyy", { locale: it })
+                : view === "week"
+                  ? `${format(shownDays[0], "d MMM", { locale: it })} – ${format(shownDays[6], "d MMM yyyy", { locale: it })}`
+                  : format(anchor, "MMMM yyyy", { locale: it })}
+            </h2>
+            <span className="rounded-full bg-muted px-2 py-1 text-xs">
+              {filtered.length} impegni
+            </span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+            <Label className="relative sm:col-span-2">
+              <span className="sr-only">Cerca</span>
+              <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Cerca impegni…"
+                className="pl-8"
+              />
+            </Label>
+            <FilterSelect
+              label="Responsabile"
+              value={assignee}
+              onChange={setAssignee}
+              options={[
+                { value: "all", label: "Tutti i responsabili" },
+                { value: "current", label: "Utente corrente" },
+                ...commercialTeam.map((member) => ({
+                  value: member.id,
+                  label: member.name,
+                })),
+              ]}
+            />
+            <FilterSelect
+              label="Team"
+              value={team}
+              onChange={setTeam}
+              options={[
+                { value: "all", label: "Tutti i team" },
+                { value: "commercial", label: "Commerciale" },
+                { value: "developer", label: "Sviluppo" },
+                { value: "project", label: "Project management" },
+                { value: "support", label: "Supporto" },
+              ]}
+            />
+            <FilterSelect
+              label="Cliente"
+              value={customerId}
+              onChange={setCustomerId}
+              options={[
+                { value: "all", label: "Tutti i clienti" },
+                ...customers.map((item) => ({
+                  value: item.id,
+                  label: item.profile.company,
+                })),
+              ]}
+            />
+            <FilterSelect
+              label="Lead"
+              value={leadId}
+              onChange={setLeadId}
+              options={[
+                { value: "all", label: "Tutti i lead" },
+                ...leads.map((item) => ({
+                  value: item.id,
+                  label: `${item.company} · ${item.firstName} ${item.lastName}`,
+                })),
+              ]}
+            />
+            <FilterSelect
+              label="Progetto"
+              value={projectId}
+              onChange={setProjectId}
+              options={[
+                { value: "all", label: "Tutti i progetti" },
+                ...projects.map((item) => ({
+                  value: item.id,
+                  label: item.name,
+                })),
+              ]}
+            />
+            <FilterSelect
+              label="Tipologia"
+              value={kind}
+              onChange={(value) => setKind(value as EventKind | "all")}
+              options={[
+                { value: "all", label: "Tutte le tipologie" },
+                ...Object.entries(KIND_LABELS).map(([value, label]) => ({
+                  value,
+                  label,
+                })),
+              ]}
+            />
+            <FilterSelect
+              label="Stato"
+              value={status}
+              onChange={setStatus}
+              options={[
+                { value: "all", label: "Tutti gli stati" },
+                ...statuses.map((value) => ({
+                  value,
+                  label: formatOperationalValue(value),
+                })),
+              ]}
+            />
+            <FilterSelect
+              label="Priorità"
+              value={priority}
+              onChange={setPriority}
+              options={[
+                { value: "all", label: "Tutte le priorità" },
+                ...priorities.map((value) => ({ value, label: value })),
+              ]}
+            />
+            <FilterSelect
+              label="Periodo"
+              value={period}
+              onChange={setPeriod}
+              options={[
+                { value: "all", label: "Periodo visibile" },
+                { value: "today", label: "Oggi" },
+                { value: "week", label: "Questa settimana" },
+                { value: "month", label: "Questo mese" },
+                { value: "upcoming", label: "Prossimi 3 giorni" },
+              ]}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+            <Check label="Solo miei" checked={mineOnly} set={setMineOnly} />
+            <Check
+              label="Solo scaduti"
+              checked={overdueOnly}
+              set={setOverdueOnly}
+            />
+            <Check
+              label="Solo non completati"
+              checked={openOnly}
+              set={setOpenOnly}
+            />
+            <Button variant="ghost" size="sm" onClick={resetFilters}>
+              <FilterX />
+              Azzera filtri
+            </Button>
+          </div>
         </CardContent>
       </Card>
-
-      <CalendarEventSheet
+      <div
+        className="flex flex-wrap gap-x-3 gap-y-1"
+        aria-label="Legenda calendario"
+      >
+        {Object.entries(KIND_LABELS).map(([value, label]) => (
+          <span
+            key={value}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+          >
+            <span
+              className={cn(
+                "size-2 rounded-full border",
+                KIND_STYLES[value as EventKind],
+              )}
+            />
+            {label}
+          </span>
+        ))}
+      </div>
+      {view === "agenda" ? (
+        <Agenda
+          events={filtered.filter((event) =>
+            isSameMonth(safeDate(event.start)!, anchor),
+          )}
+          selected={selectedEventId}
+          onOpen={openEvent}
+          onReschedule={(event, date) =>
+            setPendingMove({
+              eventId: event.id,
+              day: parseISO(`${date}T12:00:00`),
+            })
+          }
+          onResize={resizeAppointment}
+        />
+      ) : view === "day" ? (
+        <DaySchedule
+          day={anchor}
+          events={filtered.filter(
+            (event) => dateKey(event.start) === format(anchor, "yyyy-MM-dd"),
+          )}
+          selected={selectedEventId}
+          onOpen={openEvent}
+          onCreate={openCreate}
+          onDrop={(eventId, day) => setPendingMove({ eventId, day })}
+          onDragStart={(eventId) => {
+            draggingId.current = eventId;
+          }}
+        />
+      ) : (
+        <div className="max-w-full overflow-x-auto rounded-xl border bg-card">
+          <div
+            className={cn(
+              view === "month" ? "min-w-[760px]" : "min-w-[700px]",
+              "grid grid-cols-7",
+            )}
+          >
+            {shownDays.slice(0, 7).map((day) => (
+              <button
+                type="button"
+                key={`head-${dateKey(day.toISOString())}`}
+                onClick={() => openDay(day)}
+                className="border-b border-r p-2 text-center text-xs font-medium outline-none last:border-r-0 hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              >
+                {format(day, "EEE d", { locale: it })}
+              </button>
+            ))}
+            {shownDays.map((day) => {
+              const dayEvents = filtered.filter(
+                (event) => dateKey(event.start) === format(day, "yyyy-MM-dd"),
+              );
+              const visibleEvents =
+                view === "month" ? dayEvents.slice(0, 4) : dayEvents;
+              return (
+                <section
+                  key={day.toISOString()}
+                  data-calendar-date={format(day, "yyyy-MM-dd")}
+                  onClick={() => openDay(day)}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                  }}
+                  onDropCapture={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const eventId =
+                      e.dataTransfer.getData("text/plain") ||
+                      draggingId.current;
+                    if (eventId) setPendingMove({ eventId, day });
+                  }}
+                  className={cn(
+                    "min-w-0 border-b border-r p-1.5 last:border-r-0 hover:bg-muted/30",
+                    view === "month" ? "min-h-32" : "min-h-[440px]",
+                    !isSameMonth(day, anchor) &&
+                      view === "month" &&
+                      "bg-muted/25 text-muted-foreground",
+                  )}
+                  aria-label={`Apri il giorno ${format(day, "d MMMM yyyy", { locale: it })}`}
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openDay(day);
+                    }}
+                    className={cn(
+                      "mb-1 flex size-7 items-center justify-center rounded-full text-xs outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring",
+                      isSameDay(day, today) &&
+                        "bg-violet-600 font-semibold text-white",
+                    )}
+                  >
+                    {format(day, "d")}
+                  </button>
+                  <div className="space-y-1">
+                    {visibleEvents.map((event) => (
+                      <CalendarEventButton
+                        key={event.id}
+                        event={event}
+                        selected={selectedEventId === event.id}
+                        onOpen={() => openEvent(event)}
+                        onDragStart={() => {
+                          draggingId.current = event.id;
+                        }}
+                      />
+                    ))}
+                    {view === "month" &&
+                      dayEvents.length > visibleEvents.length && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="xs"
+                          className="w-full justify-start"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openDay(day);
+                          }}
+                        >
+                          + altri {dayEvents.length - visibleEvents.length}
+                        </Button>
+                      )}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {!filtered.length && (
+        <Card>
+          <CardHeader className="items-center text-center">
+            <CalendarDays className="size-10 text-muted-foreground" />
+            <CardTitle>Nessun impegno nel perimetro corrente</CardTitle>
+            <CardDescription>
+              Modifica i filtri oppure seleziona uno spazio del calendario per
+              pianificare un’attività o un appuntamento.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+      <EventDetailSheet
         event={selectedEvent}
-        tasks={tasks}
-        milestones={milestones}
-        canUpdate={canUpdate}
-        canDelete={canDelete}
-        onClose={closeEvent}
-        onEdit={(event) => setEditor(editorFor(event))}
-        onComplete={(event) => void complete(event)}
-        onDelete={(event) => void remove(event)}
+        open={Boolean(selectedEvent)}
+        onOpenChange={(open) => !open && setSelectedEventId(undefined)}
+        onComplete={completeEvent}
+        onOpenRecord={(event) => router.push(event.href)}
+        onReschedule={(event, day) =>
+          setPendingMove({ eventId: event.id, day })
+        }
+        onResize={resizeAppointment}
+        note={note}
+        setNote={setNote}
       />
-
-      <CalendarEventDialog
-        editor={editor}
-        setEditor={setEditor}
-        options={options}
-        members={members}
-        saving={saving}
-        onSave={() => void saveEditor()}
+      <Dialog
+        open={Boolean(pendingMove)}
+        onOpenChange={(open) => !open && setPendingMove(undefined)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {pendingMove &&
+              [
+                "contract",
+                "payment",
+                "renewal",
+                "delivery",
+                "review",
+                "support",
+              ].includes(
+                events.find((event) => event.id === pendingMove.eventId)
+                  ?.kind ?? "",
+              )
+                ? "Stai modificando una scadenza operativa"
+                : "Sposta impegno"}
+            </DialogTitle>
+            <DialogDescription>
+              {pendingMove
+                ? `${events.find((event) => event.id === pendingMove.eventId)?.title ?? "Impegno"} → ${format(pendingMove.day, "d MMMM yyyy", { locale: it })}. Il record sorgente verrà aggiornato senza creare copie.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setPendingMove(undefined)}>
+              Annulla
+            </Button>
+            <Button
+              onClick={() => {
+                if (!pendingMove) return;
+                reschedule(pendingMove.eventId, pendingMove.day);
+                setPendingMove(undefined);
+              }}
+            >
+              Conferma spostamento
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={Boolean(createDate) && !activityOpen && !appointmentOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCreateDate(undefined);
+            setCreateSubject("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cosa vuoi pianificare?</DialogTitle>
+            <DialogDescription>
+              {createDate
+                ? `${format(parseISO(`${createDate}T12:00:00`), "EEEE d MMMM yyyy", { locale: it })} · ${createTime}`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <Label>
+            Collega a
+            <Select value={createSubject} onValueChange={setCreateSubject}>
+              <SelectTrigger aria-label="Record collegato">
+                <SelectValue placeholder="Seleziona lead o cliente" />
+              </SelectTrigger>
+              <SelectContent>
+                {customers.length > 0 && (
+                  <>
+                    <SelectItem value="customer-heading" disabled>
+                      Clienti
+                    </SelectItem>
+                    {customers.map((item) => (
+                      <SelectItem key={item.id} value={`customer:${item.id}`}>
+                        {item.profile.company}
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
+                {leads.length > 0 && (
+                  <>
+                    <SelectItem value="lead-heading" disabled>
+                      Lead
+                    </SelectItem>
+                    {leads.map((item) => (
+                      <SelectItem key={item.id} value={`lead:${item.id}`}>
+                        {item.company} · {item.firstName} {item.lastName}
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
+              </SelectContent>
+            </Select>
+          </Label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Button
+              variant="outline"
+              className="h-auto justify-start py-3"
+              onClick={() => {
+                if (createSubject.startsWith("lead:"))
+                  setAppointmentLeadId(createSubject.slice(5));
+                setAppointmentOpen(true);
+              }}
+              disabled={!createSubject.startsWith("lead:")}
+            >
+              <Clock3 />
+              Appuntamento
+            </Button>
+            {["Attività", "Follow-up", "Promemoria", "Blocco di lavoro"].map(
+              (label) => (
+                <Button
+                  key={label}
+                  variant="outline"
+                  className="h-auto justify-start py-3"
+                  onClick={() => setActivityOpen(true)}
+                  disabled={!createSubject}
+                >
+                  <CirclePlus />
+                  {label}
+                </Button>
+              ),
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      {createDate && (
+        <ActivityFormDialog
+          key={`calendar-activity-${createDate}-${createTime}-${createSubject}`}
+          open={activityOpen}
+          onOpenChange={(open) => {
+            setActivityOpen(open);
+            if (!open) {
+              setCreateDate(undefined);
+              setCreateSubject("");
+            }
+          }}
+          defaultClientId={
+            createSubject.startsWith("customer:")
+              ? createSubject.slice(9)
+              : undefined
+          }
+          defaultLeadId={
+            createSubject.startsWith("lead:")
+              ? createSubject.slice(5)
+              : undefined
+          }
+          lockClient
+          defaultDueDate={createDate}
+          defaultDueTime={createTime}
+        />
+      )}
+      <CalendarAppointmentDialog
+        key={`calendar-appointment-${createDate ?? "none"}-${createTime}-${appointmentLeadId}`}
+        open={appointmentOpen}
+        onOpenChange={(open) => {
+          setAppointmentOpen(open);
+          if (!open) {
+            setCreateDate(undefined);
+            setAppointmentLeadId("");
+          }
+        }}
+        defaultDate={createDate}
+        defaultTime={createTime}
+        defaultLeadId={appointmentLeadId}
       />
-    </main>
-  )
-}
-
-function FilterSelect({ label: ariaLabel, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: Array<{ value: string; label: string }> }) {
-  return <Select value={value} onValueChange={onChange}><SelectTrigger aria-label={ariaLabel}><SelectValue /></SelectTrigger><SelectContent>{options.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select>
-}
-
-function AgendaRow({ event, selected, editable, onOpen, onReschedule }: { event: CalendarEvent; selected: boolean; editable: boolean; onOpen: () => void; onReschedule: (date: string) => void }) {
-  return (
-    <div className={cn("flex flex-wrap items-center gap-2 rounded-xl border p-3", selected && "ring-2 ring-primary")}>
-      <button type="button" className="min-w-0 flex-1 text-left" onClick={onOpen}>
-        <span className="flex flex-wrap items-center gap-2"><span className="font-medium">{event.title}</span><EventBadge event={event} compact /><Badge variant="secondary">{label(STATUS_LABELS, event.status)}</Badge></span>
-        <span className="mt-1 block text-xs text-muted-foreground">{event.all_day ? "Tutto il giorno" : formatDateTime(event.start_at)}{event.end_at ? ` – ${formatTime(event.end_at)}` : ""}</span>
-      </button>
-      {editable ? <Label><span className="sr-only">Riprogramma {event.title}</span><Input aria-label={`Riprogramma ${event.title}`} className="h-9 w-40" type="date" value={localDateInput(event.start_at)} onChange={(change) => onReschedule(change.target.value)} /></Label> : <Badge variant="outline">Sola lettura</Badge>}
     </div>
-  )
+  );
 }
 
-function CalendarEventSheet({ event, tasks, milestones, canUpdate, canDelete, onClose, onEdit, onComplete, onDelete }: { event?: CalendarEvent; tasks: WorkTask[]; milestones: ProjectMilestone[]; canUpdate: boolean; canDelete: boolean; onClose: () => void; onEdit: (event: CalendarEvent) => void; onComplete: (event: CalendarEvent) => void; onDelete: (event: CalendarEvent) => void }) {
-  const editable = Boolean(event && canEditManualEvent(event))
-  const href = event ? linkedRecordHref(event, tasks, milestones) : undefined
+function DaySchedule({
+  day,
+  events,
+  selected,
+  onOpen,
+  onCreate,
+  onDrop,
+  onDragStart,
+}: {
+  day: Date;
+  events: CalendarEvent[];
+  selected?: string;
+  onOpen: (event: CalendarEvent) => void;
+  onCreate: (day: Date, time?: string) => void;
+  onDrop: (eventId: string, day: Date) => void;
+  onDragStart: (eventId: string) => void;
+}) {
+  const allDay = events.filter((event) => event.allDay);
+  const hours = Array.from({ length: 12 }, (_, index) => index + 8);
   return (
-    <Sheet open={Boolean(event)} onOpenChange={(open) => { if (!open) onClose() }}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
-        {event ? <><SheetHeader className="text-left"><div className="flex flex-wrap gap-2"><EventBadge event={event} /><Badge variant="secondary">{label(STATUS_LABELS, event.status)}</Badge><Badge variant="outline">{label(PRIORITY_LABELS, event.priority)}</Badge></div><SheetTitle>{event.title}</SheetTitle><SheetDescription>{event.description || "Nessuna descrizione."}</SheetDescription></SheetHeader><div className="mt-5 space-y-5"><section className="grid gap-3 rounded-xl border p-4 text-sm sm:grid-cols-2"><Detail label="Inizio" value={event.all_day ? `${formatShortDate(event.start_at)} · tutto il giorno` : formatDateTime(event.start_at)} /><Detail label="Fine" value={event.end_at ? formatDateTime(event.end_at) : "Non definita"} /><Detail label="Origine" value={event.source_type === "manual" ? "Evento manuale" : "Record operativo derivato"} /><Detail label="Visibilità" value={event.visibility || "team"} /><Detail label="Responsabile" value={event.assigned_to_user_id || "Non assegnato"} /><Detail label="Categoria" value={CATEGORY_DEFINITIONS.find((item) => item.id === categoryFor(event))?.label || "Operatività"} /></section>{!editable ? <p className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">Questo evento è derivato da un record operativo: modifiche e completamento vanno eseguiti nel record sorgente.</p> : null}<div className="flex flex-wrap gap-2">{editable && canUpdate ? <Button type="button" onClick={() => onEdit(event)}><Pencil />Modifica</Button> : null}{editable && canUpdate && !CLOSED_STATUSES.has(event.status) ? <Button type="button" variant="outline" onClick={() => onComplete(event)}><CheckCircle2 />Completa</Button> : null}{href ? <Button asChild type="button" variant="outline"><a href={href}><ExternalLink />Apri record</a></Button> : null}{editable && canDelete ? <Button type="button" variant="destructive" onClick={() => onDelete(event)}><Trash2 />Elimina</Button> : null}</div></div></> : null}
+    <Card className="min-w-0 overflow-hidden">
+      <CardHeader className="border-b pb-3">
+        <CardTitle className="capitalize">
+          {format(day, "EEEE d MMMM yyyy", { locale: it })}
+        </CardTitle>
+        <CardDescription>
+          {events.length} impegni · seleziona uno slot libero per pianificare.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="p-0">
+        <section className="grid min-w-0 grid-cols-[72px_minmax(0,1fr)] border-b bg-muted/15">
+          <div className="border-r p-2 text-xs font-medium text-muted-foreground">
+            Tutto il giorno
+          </div>
+          <div className="space-y-1 p-2">
+            {allDay.map((event) => (
+              <CalendarEventButton
+                key={event.id}
+                event={event}
+                selected={selected === event.id}
+                onOpen={() => onOpen(event)}
+                onDragStart={() => onDragStart(event.id)}
+              />
+            ))}
+            {!allDay.length && (
+              <span className="text-xs text-muted-foreground">
+                Nessuna scadenza senza orario.
+              </span>
+            )}
+          </div>
+        </section>
+        <div>
+          {hours.map((hour) => {
+            const time = `${String(hour).padStart(2, "0")}:00`;
+            const slotEvents = events.filter(
+              (event) =>
+                !event.allDay && safeDate(event.start)?.getHours() === hour,
+            );
+            return (
+              <section
+                key={hour}
+                className="grid min-h-20 min-w-0 grid-cols-[72px_minmax(0,1fr)] border-b last:border-b-0"
+              >
+                <div className="border-r p-2 text-right text-xs text-muted-foreground">
+                  {time}
+                </div>
+                <button
+                  type="button"
+                  className="min-w-0 space-y-1 p-2 text-left outline-none hover:bg-muted/25 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  onClick={() => onCreate(day, time)}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(drop) => {
+                    drop.preventDefault();
+                    drop.stopPropagation();
+                    const eventId = drop.dataTransfer.getData("text/plain");
+                    if (eventId)
+                      onDrop(
+                        eventId,
+                        new Date(`${format(day, "yyyy-MM-dd")}T${time}:00`),
+                      );
+                  }}
+                  aria-label={`Pianifica alle ${time}`}
+                >
+                  {slotEvents.map((event) => (
+                    <CalendarEventButton
+                      key={event.id}
+                      event={event}
+                      selected={selected === event.id}
+                      onOpen={() => onOpen(event)}
+                      onDragStart={() => onDragStart(event.id)}
+                    />
+                  ))}
+                  {!slotEvents.length && (
+                    <span className="text-xs text-muted-foreground opacity-0 transition-opacity hover:opacity-100">
+                      Slot libero · pianifica
+                    </span>
+                  )}
+                </button>
+              </section>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EventDetailSheet({
+  event,
+  open,
+  onOpenChange,
+  onComplete,
+  onOpenRecord,
+  onReschedule,
+  onResize,
+  note,
+  setNote,
+}: {
+  event?: CalendarEvent;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onComplete: (event: CalendarEvent) => void;
+  onOpenRecord: (event: CalendarEvent) => void;
+  onReschedule: (event: CalendarEvent, day: Date) => void;
+  onResize: (event: CalendarEvent, minutes: number) => void;
+  note: string;
+  setNote: (value: string) => void;
+}) {
+  const { store, identity, leads, customers, projects } =
+    useAuthorizedCommercial();
+  if (!event) return null;
+  const lead = event.leadId
+    ? leads.find((item) => item.id === event.leadId)
+    : undefined;
+  const customer = event.customerId
+    ? customers.find((item) => item.id === event.customerId)
+    : undefined;
+  const project = event.projectId
+    ? projects.find((item) => item.id === event.projectId)
+    : undefined;
+  const ticket =
+    event.kind === "support"
+      ? store.supportTickets.find((item) => item.id === event.recordId)
+      : undefined;
+  const owner = identity.users.find((item) => item.id === event.assigneeId);
+  const duration =
+    event.end && safeDate(event.end) && safeDate(event.start)
+      ? Math.max(
+          0,
+          Math.round(
+            (safeDate(event.end)!.getTime() -
+              safeDate(event.start)!.getTime()) /
+              60_000,
+          ),
+        )
+      : undefined;
+  const audit = store.auditEvents
+    .filter(
+      (item) =>
+        item.recordId === event.recordId || item.recordId === event.projectId,
+    )
+    .slice(0, 5);
+  const addNote = () => {
+    const recordType =
+      event.kind === "support"
+        ? "support_ticket"
+        : event.kind === "activity"
+          ? "activity"
+          : ["project", "delivery", "review"].includes(event.kind)
+            ? "project"
+            : undefined;
+    const recordId =
+      recordType === "project" ? event.projectId : event.recordId;
+    if (!recordType || !recordId || !note.trim())
+      return toast.error(
+        "Le note collaborative non sono disponibili per questo tipo di impegno",
+      );
+    const id = store.addComment({ recordType, recordId, text: note.trim() });
+    if (!id) return toast.error("Nota non autorizzata");
+    setNote("");
+    toast.success("Nota interna aggiunta");
+  };
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        className="w-full overflow-y-auto sm:max-w-[560px]"
+        aria-describedby="calendar-event-description"
+      >
+        <SheetHeader className="text-left">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">{KIND_LABELS[event.kind]}</Badge>
+            <Badge className={eventClass(event)}>
+              {formatOperationalValue(event.status)}
+            </Badge>
+            {event.priority && (
+              <Badge variant="secondary">{event.priority}</Badge>
+            )}
+          </div>
+          <SheetTitle>Dettaglio impegno</SheetTitle>
+          <SheetDescription id="calendar-event-description">
+            {event.title}
+          </SheetDescription>
+        </SheetHeader>
+        <div className="mt-5 space-y-5">
+          <section className="grid gap-3 rounded-lg border p-3 text-sm sm:grid-cols-2">
+            <Detail
+              label="Data"
+              value={format(safeDate(event.start)!, "d MMMM yyyy", {
+                locale: it,
+              })}
+            />
+            <Detail
+              label="Orario"
+              value={
+                event.allDay
+                  ? "Tutto il giorno"
+                  : `${timeLabel(event.start)}${event.end ? ` – ${timeLabel(event.end)}` : ""}`
+              }
+            />
+            <Detail
+              label="Durata"
+              value={
+                duration
+                  ? `${duration} min`
+                  : event.allDay
+                    ? "Tutto il giorno"
+                    : "Non definita"
+              }
+            />
+            <Detail
+              label="Responsabile"
+              value={owner?.name ?? "Non assegnato"}
+            />
+            <Detail
+              label="Cliente"
+              value={
+                customer?.profile.company ||
+                [customer?.profile.firstName, customer?.profile.lastName]
+                  .filter(Boolean)
+                  .join(" ") ||
+                "Non collegato"
+              }
+            />
+            <Detail
+              label="Lead"
+              value={
+                lead
+                  ? `${lead.company} · ${lead.firstName} ${lead.lastName}`
+                  : "Non collegato"
+              }
+            />
+            <Detail label="Progetto" value={project?.name ?? "Non collegato"} />
+            <Detail label="Origine" value="DoFlow · record operativo" />
+            {ticket && (
+              <>
+                <Detail
+                  label="Ticket"
+                  value={`${ticket.code} · ${ticket.category}`}
+                />
+                <Detail
+                  label="SLA"
+                  value={`${ticket.slaHours} ore · ${ticket.status === "In attesa cliente" ? "sospeso in attesa cliente" : "attivo"}`}
+                />
+              </>
+            )}
+          </section>
+          {event.activity?.description && (
+            <section>
+              <h3 className="text-sm font-semibold">Descrizione</h3>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                {event.activity.description}
+              </p>
+            </section>
+          )}
+          <section className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              onClick={() => onComplete(event)}
+              disabled={CLOSED.has(event.status)}
+            >
+              <CheckCircle2 />
+              Segna completato
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onOpenRecord(event)}
+            >
+              <ExternalLink />
+              Apri record collegato
+            </Button>
+            {event.editable && (
+              <Label className="w-full sm:w-auto">
+                <span className="sr-only">Riprogramma</span>
+                <Input
+                  aria-label="Riprogramma impegno"
+                  type="date"
+                  value={dateKey(event.start)}
+                  onChange={(change) =>
+                    onReschedule(
+                      event,
+                      parseISO(`${change.target.value}T12:00:00`),
+                    )
+                  }
+                />
+              </Label>
+            )}
+            {event.appointment && event.editable && (
+              <Select
+                value={String(duration ?? 60)}
+                onValueChange={(value) => onResize(event, Number(value))}
+              >
+                <SelectTrigger className="w-32" aria-label="Durata">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[30, 60, 90, 120].map((minutes) => (
+                    <SelectItem key={minutes} value={String(minutes)}>
+                      {minutes < 120 ? `${minutes} min` : "2 ore"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </section>
+          <section className="space-y-2">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <MessageSquare className="size-4" />
+              Nota interna
+            </h3>
+            <Textarea
+              value={note}
+              onChange={(change) => setNote(change.target.value)}
+              placeholder="Aggiungi una nota visibile al team autorizzato"
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={addNote}
+              disabled={!note.trim()}
+            >
+              Aggiungi nota
+            </Button>
+          </section>
+          <section>
+            <h3 className="text-sm font-semibold">Timeline essenziale</h3>
+            <div className="mt-2 space-y-2">
+              {audit.map((item) => (
+                <div key={item.id} className="rounded-md border p-2 text-xs">
+                  <p className="font-medium">{item.action}</p>
+                  <p className="text-muted-foreground">
+                    {format(new Date(item.createdAt), "d MMM yyyy, HH:mm", {
+                      locale: it,
+                    })}
+                  </p>
+                </div>
+              ))}
+              {!audit.length && (
+                <p className="text-sm text-muted-foreground">
+                  Nessun aggiornamento storico per questo impegno.
+                </p>
+              )}
+            </div>
+          </section>
+          {ticket && (
+            <div className="rounded-lg border border-orange-500/30 bg-orange-500/5 p-3 text-sm">
+              <p className="flex items-center gap-2 font-medium">
+                <UserRoundCog className="size-4" />
+                Pratica Supporto
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                {ticket.priority} · {ticket.status} · prossima scadenza{" "}
+                {ticket.dueAt
+                  ? format(new Date(ticket.dueAt), "d MMM yyyy, HH:mm", {
+                      locale: it,
+                    })
+                  : "non definita"}
+              </p>
+            </div>
+          )}
+        </div>
       </SheetContent>
     </Sheet>
-  )
+  );
 }
 
-function Detail({ label: detailLabel, value }: { label: string; value: string }) {
-  return <div className="min-w-0"><p className="text-xs text-muted-foreground">{detailLabel}</p><p className="break-words font-medium">{value}</p></div>
-}
-
-function CalendarEventDialog({ editor, setEditor, options, members, saving, onSave }: { editor?: CalendarEditor; setEditor: React.Dispatch<React.SetStateAction<CalendarEditor | undefined>>; options?: CalendarOptions; members: TeamMember[]; saving: boolean; onSave: () => void }) {
-  const update = (patch: Partial<CalendarEditor>) => setEditor((current) => current ? { ...current, ...patch } : current)
-  const allowedTypes = (options?.event_types || MANUAL_EVENT_TYPES).filter((value) => MANUAL_EVENT_TYPES.includes(value))
+function Detail({ label, value }: { label: string; value: string }) {
   return (
-    <Dialog open={Boolean(editor)} onOpenChange={(open) => { if (!open) setEditor(undefined) }}>
-      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-xl">
-        {editor ? <><DialogHeader><DialogTitle>{editor.eventId ? "Modifica evento" : "Nuovo evento"}</DialogTitle><DialogDescription>Il salvataggio usa il calendario Nest tenant-scoped; identità e tenant non provengono dal form.</DialogDescription></DialogHeader><div className="grid gap-3 sm:grid-cols-2"><Label className="sm:col-span-2">Titolo<Input aria-label="Titolo evento" value={editor.title} onChange={(event) => update({ title: event.target.value })} /></Label><Label className="sm:col-span-2">Descrizione<Textarea aria-label="Descrizione evento" value={editor.description} onChange={(event) => update({ description: event.target.value })} /></Label><Label>Tipo<Select value={editor.eventType} onValueChange={(value) => update({ eventType: value })}><SelectTrigger aria-label="Tipo evento"><SelectValue /></SelectTrigger><SelectContent>{allowedTypes.map((value) => <SelectItem key={value} value={value}>{label(EVENT_TYPE_LABELS, value)}</SelectItem>)}</SelectContent></Select></Label><Label>Priorità<Select value={editor.priority} onValueChange={(value) => update({ priority: value })}><SelectTrigger aria-label="Priorità evento"><SelectValue /></SelectTrigger><SelectContent>{(options?.priorities || ["low", "medium", "high", "urgent"]).map((value) => <SelectItem key={value} value={value}>{label(PRIORITY_LABELS, value)}</SelectItem>)}</SelectContent></Select></Label><Label>Data<Input aria-label="Data evento" type="date" value={editor.date} onChange={(event) => update({ date: event.target.value })} /></Label><Label>Ora<Input aria-label="Ora evento" type="time" value={editor.time} disabled={editor.allDay} onChange={(event) => update({ time: event.target.value })} /></Label><Label>Durata<Select value={editor.duration} disabled={editor.allDay} onValueChange={(value) => update({ duration: value })}><SelectTrigger aria-label="Durata evento"><SelectValue /></SelectTrigger><SelectContent>{[30, 60, 90, 120].map((minutes) => <SelectItem key={minutes} value={String(minutes)}>{minutes < 120 ? `${minutes} minuti` : "2 ore"}</SelectItem>)}</SelectContent></Select></Label><Label>Responsabile<Select value={editor.assigneeId} onValueChange={(value) => update({ assigneeId: value })}><SelectTrigger aria-label="Responsabile evento"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unassigned">Non assegnato</SelectItem>{members.filter((member) => member.user_id).map((member) => <SelectItem key={member.id} value={String(member.user_id)}>{member.display_name || member.email}</SelectItem>)}</SelectContent></Select></Label><Label className="flex items-center gap-2 rounded-lg border p-3 sm:col-span-2"><input type="checkbox" checked={editor.allDay} onChange={(event) => update({ allDay: event.target.checked })} />Tutto il giorno</Label></div><DialogFooter><Button type="button" variant="outline" onClick={() => setEditor(undefined)}>Annulla</Button><Button type="button" disabled={saving || !editor.title.trim() || !editor.date} onClick={onSave}>{saving ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : null}Salva</Button></DialogFooter></> : null}
-      </DialogContent>
-    </Dialog>
-  )
+    <div className="min-w-0">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="break-words font-medium">{value}</p>
+    </div>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+}) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger aria-label={label} className="w-full">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+function Check({
+  label,
+  checked,
+  set,
+}: {
+  label: string;
+  checked: boolean;
+  set: (value: boolean) => void;
+}) {
+  return (
+    <Label className="flex cursor-pointer items-center gap-2 font-normal">
+      <Checkbox
+        checked={checked}
+        onCheckedChange={(value) => set(value === true)}
+      />
+      {label}
+    </Label>
+  );
+}
+function Agenda({
+  events,
+  selected,
+  onOpen,
+  onReschedule,
+  onResize,
+}: {
+  events: CalendarEvent[];
+  selected?: string;
+  onOpen: (event: CalendarEvent) => void;
+  onReschedule: (event: CalendarEvent, date: string) => void;
+  onResize: (event: CalendarEvent, minutes: number) => void;
+}) {
+  const groups = Object.entries(
+    Object.groupBy(events, (event) => dateKey(event.start)),
+  ).sort(([left], [right]) => left.localeCompare(right));
+  return (
+    <Card>
+      <CardContent className="space-y-5 p-3 sm:p-5">
+        {groups.map(([day, items]) => (
+          <section key={day}>
+            <h3 className="mb-2 border-b pb-2 text-sm font-semibold capitalize">
+              {format(parseISO(`${day}T12:00:00`), "EEEE d MMMM", {
+                locale: it,
+              })}
+            </h3>
+            <div className="space-y-2">
+              {items?.map((event) => (
+                <div
+                  key={event.id}
+                  className="flex flex-wrap items-center gap-2"
+                >
+                  <div className="min-w-48 flex-1">
+                    <CalendarEventButton
+                      event={event}
+                      selected={selected === event.id}
+                      onOpen={() => onOpen(event)}
+                      onDragStart={() => undefined}
+                    />
+                  </div>
+                  {event.editable && (
+                    <Label className="shrink-0">
+                      <span className="sr-only">Sposta {event.title} in</span>
+                      <Input
+                        aria-label={`Sposta ${event.title} in`}
+                        type="date"
+                        className="h-8 w-34 text-xs"
+                        value={dateKey(event.start)}
+                        onChange={(change) =>
+                          onReschedule(event, change.target.value)
+                        }
+                      />
+                    </Label>
+                  )}
+                  {event.appointment && event.editable && (
+                    <Select
+                      value={String(
+                        Math.round(
+                          (safeDate(event.appointment.endsAt)!.getTime() -
+                            safeDate(event.appointment.startsAt)!.getTime()) /
+                            60_000,
+                        ),
+                      )}
+                      onValueChange={(value) => onResize(event, Number(value))}
+                    >
+                      <SelectTrigger
+                        aria-label={`Durata ${event.title}`}
+                        className="h-8 w-28 text-xs"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="30">30 min</SelectItem>
+                        <SelectItem value="60">60 min</SelectItem>
+                        <SelectItem value="90">90 min</SelectItem>
+                        <SelectItem value="120">2 ore</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+        {!events.length && (
+          <div className="py-12 text-center text-sm text-muted-foreground">
+            Nessun impegno in agenda.
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 }

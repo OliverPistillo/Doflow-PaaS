@@ -1,10 +1,17 @@
 export const quoteStatuses = ["Bozza", "Inviato", "Visualizzato", "Accettato", "Rifiutato", "Scaduto", "Sostituito"] as const
 export type QuoteStatus = (typeof quoteStatuses)[number]
-export type QuoteLine = { id: string; serviceId?: string; description: string; quantity: number; unitPrice: number; discount: number }
+export type QuoteLine = {
+  id: string; serviceId?: string; title?: string; description: string; quantity: number; unitPrice: number; discount: number
+  oneTimePrice?: number; recurringPrice?: number; recurrence?: "monthly" | "quarterly" | "annual"; includedSnapshot?: string[]
+  deposit?: number; balance?: number; installments?: number
+}
+export type QuotePartySnapshot = { name: string; company: string; address?: string; email?: string; phone?: string; vatNumber?: string; taxCode?: string }
+export type QuoteSupplierSnapshot = { brandName: string; legalHolder: string; vatNumber: string; address: string; email: string; phone: string }
 export type CommercialQuote = {
   id: string; code: string; version: number; recordVersion?: number; status: QuoteStatus; leadId?: string; customerId?: string; salespersonId: string
   lines: QuoteLine[]; subtotal: number; discount: number; vatRate: number; vatAmount: number; total: number; validUntil: string
   conditions: string; notes?: string; createdAt: string; updatedAt: string; sentAt?: string; viewedAt?: string; acceptedAt?: string
+  recipientSnapshot?: QuotePartySnapshot; supplierSnapshot?: QuoteSupplierSnapshot; briefSnapshot?: string
   parentQuoteId?: string; replacedById?: string; archivedAt?: string
 }
 

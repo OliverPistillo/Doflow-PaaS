@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CopyPlus, Eye, Plus, Printer, RotateCcw } from "lucide-react";
+import { useState } from "react";
+import { CopyPlus, Plus, Printer, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -49,16 +49,15 @@ import {
   type InvoiceStatus,
   type QuoteStatus,
 } from "@/features/commercial/commercial-documents";
+import { CommercialSubjectCombobox } from "@/features/commercial/components/commercial-subject-combobox";
 import { useAuthorizedCommercial } from "@/features/identity/use-authorized-commercial";
-import { RecordCollaborationPanel } from "@/features/commercial/components/record-collaboration-panel";
-import {
-  documentRevenueApi,
-  type DocumentRevenueSummary,
-} from "@/lib/tenant-document-revenue-api";
 
 const euro = new Intl.NumberFormat("it-IT", {
   style: "currency",
   currency: "EUR",
+  useGrouping: "always",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
 });
 
 export function CommercialDocumentCyclePage({
@@ -71,51 +70,94 @@ export function CommercialDocumentCyclePage({
   const canCreate = quotes
     ? identity.hasCapability("canManageOwnQuotes")
     : identity.hasCapability("canManageInvoices");
+  const initialService = store.services[0];
+  const initialPlan = initialService?.billingPlans?.find((item) => item.active);
   const [open, setOpen] = useState(false);
   const [subjectId, setSubjectId] = useState("");
-  const [serviceId, setServiceId] = useState(store.services[0]?.id ?? "");
+  const [quoteLines, setQuoteLines] = useState([
+    {
+      id: "quote-line-1",
+      serviceId: initialService?.id ?? "",
+      planId: initialPlan?.id ?? "none",
+      quantity: 1,
+      discount: 0,
+    },
+  ]);
   const [orderId, setOrderId] = useState(store.orders[0]?.id ?? "");
+  const [vatRate, setVatRate] = useState("22");
   const [validUntil, setValidUntil] = useState(() => {
     const date = new Date();
     date.setDate(date.getDate() + 30);
     return date.toISOString().slice(0, 10);
   });
   const [notes, setNotes] = useState("");
-  const [summary, setSummary] = useState<DocumentRevenueSummary | null>(null);
-  useEffect(() => {
-    if (!quotes)
-      void documentRevenueApi
-        .summary()
-        .then(setSummary)
-        .catch(() => setSummary(null));
-  }, [quotes, store.invoices]);
   const create = async () => {
     if (quotes) {
       const lead = leads.find((item) => item.id === subjectId);
       const customer = customers.find((item) => item.id === subjectId);
-      const service = store.services.find((item) => item.id === serviceId);
-      if (!service || (!lead && !customer))
-        return toast.error("Seleziona destinatario e servizio.");
+      const profile = customer?.profile ?? lead;
+      const lines = quoteLines.flatMap((draft) => {
+        const service = store.services.find(
+          (item) => item.id === draft.serviceId,
+        );
+        if (!service) return [];
+        const plan = service.billingPlans?.find(
+          (item) => item.id === draft.planId && item.active,
+        );
+        return [
+          {
+            id: crypto.randomUUID(),
+            serviceId: service.id,
+            title: plan ? `${service.name} · ${plan.name}` : service.name,
+            description: plan?.description || service.description,
+            quantity: draft.quantity,
+            unitPrice: plan
+              ? plan.oneTimePrice + plan.recurringPrice
+              : service.price,
+            discount: draft.discount,
+            oneTimePrice: plan?.oneTimePrice ?? service.price,
+            recurringPrice:
+              plan?.recurringPrice ??
+              (service.renewal.enabled ? service.renewal.price : 0),
+            recurrence: plan?.recurrence ?? service.renewal.interval,
+            includedSnapshot: plan ? [...plan.included] : [],
+            deposit: service.deposit,
+            balance: service.balance,
+            installments: service.installments,
+          },
+        ];
+      });
+      if (!lines.length || !profile)
+        return toast.error("Seleziona destinatario e almeno un servizio.");
+      const request = profile.originalRequest;
+      const briefSnapshot = request
+        ? `Richiesta: ${request.projectType}. Obiettivi: ${request.objectives.join(", ")}. Tempistiche: ${request.timing}.`
+        : profile.formSubmission
+          ? `Richiesta: ${profile.formSubmission.projectType}. Obiettivi: ${profile.formSubmission.goals.join(", ")}. Tempistiche: ${profile.formSubmission.timing}.`
+          : `Esigenza raccolta: ${profile.service || lines.map((line) => line.title).join(", ")}.`;
       const id = await store.addQuote({
         status: "Bozza",
         leadId: lead?.id,
         customerId: customer?.id,
-        salespersonId: lead?.assigneeId ?? customer!.profile.assigneeId,
-        lines: [
-          {
-            id: crypto.randomUUID(),
-            serviceId: service.id,
-            description: service.name,
-            quantity: 1,
-            unitPrice: service.price,
-            discount: 0,
-          },
-        ],
+        salespersonId: profile.assigneeId,
+        lines,
         discount: 0,
-        vatRate: 0,
+        vatRate: Number(vatRate),
         validUntil,
-        conditions: "Validità e condizioni come indicate nel documento.",
+        conditions:
+          "Offerta valida fino alla data indicata. Tempi, revisioni, inclusioni ed esclusioni saranno confermati nel contratto successivo.",
         notes,
+        recipientSnapshot: {
+          name: `${profile.firstName} ${profile.lastName}`.trim(),
+          company: profile.company,
+          address: profile.location,
+          email: profile.email,
+          phone: profile.phone,
+          vatNumber: profile.vatNumber,
+          taxCode: profile.taxCode,
+        },
+        supplierSnapshot: { ...store.commerceSettings.supplierProfile },
+        briefSnapshot,
       });
       if (!id) return toast.error("Preventivo non creato.");
       toast.success("Preventivo creato");
@@ -127,10 +169,25 @@ export function CommercialDocumentCyclePage({
         status: "Bozza",
         customerId: order.customerId,
         orderId: order.id,
-        paymentIds: [],
-        refundIds: [],
-        lines: [],
-        vatRate: 0,
+        paymentIds: store.payments
+          .filter(
+            (item) => item.orderId === order.id && item.type !== "Rimborso",
+          )
+          .map((item) => item.id),
+        refundIds: store.payments
+          .filter(
+            (item) => item.orderId === order.id && item.type === "Rimborso",
+          )
+          .map((item) => item.id),
+        lines: order.items.map((item) => ({
+          id: crypto.randomUUID(),
+          serviceId: item.serviceId,
+          description: item.name,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          discount: item.discount,
+        })),
+        vatRate: Number(vatRate),
         dueAt: validUntil,
         notes,
       });
@@ -168,40 +225,36 @@ export function CommercialDocumentCyclePage({
           <CardHeader>
             <CardDescription>Totale documenti</CardDescription>
             <CardTitle>
-              {quotes
-                ? store.quotes.length
-                : (summary?.invoiceCount ?? store.invoices.length)}
+              {quotes ? store.quotes.length : store.invoices.length}
             </CardTitle>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader>
-            <CardDescription>
-              {quotes ? "Accettati" : "Note di credito"}
-            </CardDescription>
+            <CardDescription>{quotes ? "Accettati" : "Pagate"}</CardDescription>
             <CardTitle>
               {quotes
                 ? store.quotes.filter((item) => item.status === "Accettato")
                     .length
-                : summary?.redacted
-                  ? "—"
-                  : euro.format(summary?.creditNotes ?? 0)}
+                : store.invoices.filter((item) => item.status === "Pagata")
+                    .length}
             </CardTitle>
           </CardHeader>
         </Card>
         <Card>
           <CardHeader>
-            <CardDescription>
-              {quotes ? "Valore preventivi" : "Fatturato netto locale"}
-            </CardDescription>
+            <CardDescription>Valore</CardDescription>
             <CardTitle>
-              {quotes
-                ? euro.format(
-                    store.quotes.reduce((sum, item) => sum + item.total, 0),
-                  )
-                : summary?.redacted
-                  ? "—"
-                  : euro.format(summary?.netRevenue ?? 0)}
+              {euro.format(
+                (quotes ? store.quotes : store.invoices).reduce(
+                  (sum, item) =>
+                    sum +
+                    ("kind" in item && item.kind === "credit_note"
+                      ? -item.total
+                      : item.total),
+                  0,
+                ),
+              )}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -221,28 +274,21 @@ export function CommercialDocumentCyclePage({
           {quotes ? (
             <QuotesTable
               items={store.quotes}
-              onStatus={async (item, status) => {
-                if (await store.updateQuote(item.id, { status }))
-                  toast.success("Stato preventivo aggiornato");
-              }}
+              onStatus={(item, status) =>
+                store.updateQuote(item.id, { status })
+              }
               onVersion={async (item) => {
                 const result = await store.createQuoteVersion(item.id);
-                if (result.ok)
-                  toast.success(
-                    result.existing
-                      ? "Versione già presente"
-                      : "Nuova versione creata",
-                  );
+                if (result.ok) toast.success("Nuova versione creata");
                 else toast.error(result.message);
               }}
             />
           ) : (
             <InvoicesTable
               items={store.invoices}
-              onStatus={async (item, status) => {
-                if (await store.updateInvoice(item.id, { status }))
-                  toast.success("Stato documento aggiornato");
-              }}
+              onStatus={(item, status) =>
+                store.updateInvoice(item.id, { status })
+              }
               onCredit={async (item) => {
                 const result = await store.createCreditNote(
                   item.id,
@@ -273,52 +319,217 @@ export function CommercialDocumentCyclePage({
         </Card>
       )}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
               {quotes ? "Nuovo preventivo" : "Nuova fattura locale"}
             </DialogTitle>
             <DialogDescription>
-              Numeri, snapshot e totali vengono assegnati dal server.
+              I dati vengono salvati nello store commerciale esistente.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             {quotes ? (
               <>
                 <div className="space-y-1.5">
-                  <Label>Lead o cliente</Label>
-                  <Select value={subjectId} onValueChange={setSubjectId}>
-                    <SelectTrigger aria-label="Lead o cliente">
-                      <SelectValue placeholder="Seleziona…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {leads.map((lead) => (
-                        <SelectItem key={lead.id} value={lead.id}>
-                          Lead · {lead.company}
-                        </SelectItem>
-                      ))}
-                      {customers.map((customer) => (
-                        <SelectItem key={customer.id} value={customer.id}>
-                          Cliente · {customer.profile.company}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="document-subject">Lead o cliente</Label>
+                  <CommercialSubjectCombobox
+                    id="document-subject"
+                    leads={leads}
+                    customers={customers}
+                    value={subjectId}
+                    onValueChange={setSubjectId}
+                  />
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Servizio</Label>
-                  <Select value={serviceId} onValueChange={setServiceId}>
-                    <SelectTrigger aria-label="Servizio preventivo">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {store.services.map((service) => (
-                        <SelectItem key={service.id} value={service.id}>
-                          {service.name} · {euro.format(service.price)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Servizi</Label>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        const service = store.services[0];
+                        setQuoteLines((items) => [
+                          ...items,
+                          {
+                            id: crypto.randomUUID(),
+                            serviceId: service?.id ?? "",
+                            planId:
+                              service?.billingPlans?.find((item) => item.active)
+                                ?.id ?? "none",
+                            quantity: 1,
+                            discount: 0,
+                          },
+                        ]);
+                      }}
+                    >
+                      <Plus />
+                      Aggiungi servizio
+                    </Button>
+                  </div>
+                  {quoteLines.map((line, index) => {
+                    const service = store.services.find(
+                      (item) => item.id === line.serviceId,
+                    );
+                    return (
+                      <div
+                        key={line.id}
+                        className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_5rem_7rem_auto]"
+                      >
+                        <div className="space-y-1">
+                          <Label className="text-xs">
+                            Servizio {index + 1}
+                          </Label>
+                          <Select
+                            value={line.serviceId}
+                            onValueChange={(value) =>
+                              setQuoteLines((items) =>
+                                items.map((item) =>
+                                  item.id === line.id
+                                    ? {
+                                        ...item,
+                                        serviceId: value,
+                                        planId:
+                                          store.services
+                                            .find((entry) => entry.id === value)
+                                            ?.billingPlans?.find(
+                                              (entry) => entry.active,
+                                            )?.id ?? "none",
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          >
+                            <SelectTrigger
+                              aria-label={`Servizio preventivo ${index + 1}`}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {store.services
+                                .filter(
+                                  (item) =>
+                                    !item.archivedAt &&
+                                    item.status === "active",
+                                )
+                                .map((item) => (
+                                  <SelectItem key={item.id} value={item.id}>
+                                    {item.name} · {euro.format(item.price)}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Piano</Label>
+                          <Select
+                            value={line.planId}
+                            onValueChange={(value) =>
+                              setQuoteLines((items) =>
+                                items.map((item) =>
+                                  item.id === line.id
+                                    ? { ...item, planId: value }
+                                    : item,
+                                ),
+                              )
+                            }
+                          >
+                            <SelectTrigger
+                              aria-label={`Piano servizio ${index + 1}`}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Standard</SelectItem>
+                              {service?.billingPlans
+                                ?.filter((item) => item.active)
+                                .map((item) => (
+                                  <SelectItem key={item.id} value={item.id}>
+                                    {item.name}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label
+                            className="text-xs"
+                            htmlFor={`quote-quantity-${line.id}`}
+                          >
+                            Quantità
+                          </Label>
+                          <Input
+                            id={`quote-quantity-${line.id}`}
+                            type="number"
+                            min={1}
+                            value={line.quantity}
+                            onChange={(event) =>
+                              setQuoteLines((items) =>
+                                items.map((item) =>
+                                  item.id === line.id
+                                    ? {
+                                        ...item,
+                                        quantity: Math.max(
+                                          1,
+                                          Number(event.target.value),
+                                        ),
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label
+                            className="text-xs"
+                            htmlFor={`quote-discount-${line.id}`}
+                          >
+                            Sconto
+                          </Label>
+                          <Input
+                            id={`quote-discount-${line.id}`}
+                            type="number"
+                            min={0}
+                            value={line.discount}
+                            onChange={(event) =>
+                              setQuoteLines((items) =>
+                                items.map((item) =>
+                                  item.id === line.id
+                                    ? {
+                                        ...item,
+                                        discount: Math.max(
+                                          0,
+                                          Number(event.target.value),
+                                        ),
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            disabled={quoteLines.length === 1}
+                            aria-label={`Rimuovi servizio ${index + 1}`}
+                            onClick={() =>
+                              setQuoteLines((items) =>
+                                items.filter((item) => item.id !== line.id),
+                              )
+                            }
+                          >
+                            <Trash2 />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             ) : (
@@ -338,16 +549,28 @@ export function CommercialDocumentCyclePage({
                 </Select>
               </div>
             )}
-            <div className="space-y-1.5">
-              <Label htmlFor="document-due">
-                {quotes ? "Validità" : "Scadenza"}
-              </Label>
-              <Input
-                id="document-due"
-                type="date"
-                value={validUntil}
-                onChange={(event) => setValidUntil(event.target.value)}
-              />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="document-vat">IVA %</Label>
+                <Input
+                  id="document-vat"
+                  type="number"
+                  min={0}
+                  value={vatRate}
+                  onChange={(event) => setVatRate(event.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="document-due">
+                  {quotes ? "Validità" : "Scadenza"}
+                </Label>
+                <Input
+                  id="document-due"
+                  type="date"
+                  value={validUntil}
+                  onChange={(event) => setValidUntil(event.target.value)}
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="document-notes">Note</Label>
@@ -362,7 +585,7 @@ export function CommercialDocumentCyclePage({
             <Button variant="outline" onClick={() => setOpen(false)}>
               Annulla
             </Button>
-            <Button onClick={() => void create()}>Salva</Button>
+            <Button onClick={create}>Salva</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -376,8 +599,8 @@ function QuotesTable({
   onVersion,
 }: {
   items: CommercialQuote[];
-  onStatus: (item: CommercialQuote, status: QuoteStatus) => Promise<void>;
-  onVersion: (item: CommercialQuote) => Promise<void>;
+  onStatus: (item: CommercialQuote, status: QuoteStatus) => void;
+  onVersion: (item: CommercialQuote) => void;
 }) {
   return (
     <Table>
@@ -399,64 +622,39 @@ function QuotesTable({
             <TableCell>
               <Select
                 value={item.status}
-                disabled={[
-                  "Accettato",
-                  "Rifiutato",
-                  "Scaduto",
-                  "Sostituito",
-                ].includes(item.status)}
-                onValueChange={(value) =>
-                  void onStatus(item, value as QuoteStatus)
+                disabled={
+                  item.status === "Accettato" || item.status === "Sostituito"
                 }
+                onValueChange={(value) => onStatus(item, value as QuoteStatus)}
               >
                 <SelectTrigger className="w-36">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {quoteStatuses
-                    .filter(
-                      (status) => status !== "Bozza" && status !== "Sostituito",
-                    )
-                    .map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status}
-                      </SelectItem>
-                    ))}
+                  {quoteStatuses.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {status}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </TableCell>
             <TableCell>{item.validUntil}</TableCell>
             <TableCell>{euro.format(item.total)}</TableCell>
             <TableCell className="text-right">
-              <Button
-                asChild
-                size="icon-sm"
-                variant="ghost"
-                aria-label={`Anteprima ${item.code}`}
-              >
-                <Link href={`/dashboard/preventivi/${item.id}/anteprima`}>
-                  <Eye />
+              <Button asChild size="icon-sm" variant="ghost">
+                <Link
+                  href={`/dashboard/preventivi/${item.id}/anteprima`}
+                  aria-label={`Anteprima e stampa ${item.code}`}
+                >
+                  <Printer />
                 </Link>
-              </Button>
-              <RecordCollaborationPanel
-                recordType="quote"
-                recordId={item.id}
-                label={item.code}
-                compact
-              />
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label={`Stampa ${item.code}`}
-                onClick={() => window.print()}
-              >
-                <Printer />
               </Button>
               <Button
                 size="icon-sm"
                 variant="ghost"
                 aria-label={`Nuova versione ${item.code}`}
-                onClick={() => void onVersion(item)}
+                onClick={() => onVersion(item)}
               >
                 <CopyPlus />
               </Button>
@@ -483,8 +681,8 @@ function InvoicesTable({
   onCredit,
 }: {
   items: CommercialInvoice[];
-  onStatus: (item: CommercialInvoice, status: InvoiceStatus) => Promise<void>;
-  onCredit: (item: CommercialInvoice) => Promise<void>;
+  onStatus: (item: CommercialInvoice, status: InvoiceStatus) => void;
+  onCredit: (item: CommercialInvoice) => void;
 }) {
   return (
     <Table>
@@ -510,44 +708,25 @@ function InvoicesTable({
             <TableCell>
               <Select
                 value={item.status}
-                disabled={
-                  item.kind === "credit_note" ||
-                  ["Pagata", "Annullata", "Stornata"].includes(item.status)
-                }
                 onValueChange={(value) =>
-                  void onStatus(item, value as InvoiceStatus)
+                  onStatus(item, value as InvoiceStatus)
                 }
               >
                 <SelectTrigger className="w-44">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {invoiceStatuses
-                    .filter((status) =>
-                      [
-                        item.status,
-                        "Proforma",
-                        "Emessa esternamente",
-                        "Annullata",
-                      ].includes(status),
-                    )
-                    .map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status}
-                      </SelectItem>
-                    ))}
+                  {invoiceStatuses.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {status}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </TableCell>
             <TableCell>{item.dueAt}</TableCell>
             <TableCell>{euro.format(item.total)}</TableCell>
             <TableCell className="text-right">
-              <RecordCollaborationPanel
-                recordType="invoice"
-                recordId={item.id}
-                label={item.code}
-                compact
-              />
               <Button
                 size="icon-sm"
                 variant="ghost"
@@ -556,22 +735,16 @@ function InvoicesTable({
               >
                 <Printer />
               </Button>
-              {item.kind === "invoice" &&
-                [
-                  "Emessa esternamente",
-                  "Parzialmente pagata",
-                  "Pagata",
-                  "Scaduta",
-                ].includes(item.status) && (
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label={`Storna ${item.code}`}
-                    onClick={() => void onCredit(item)}
-                  >
-                    <RotateCcw />
-                  </Button>
-                )}
+              {item.kind === "invoice" && (
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={`Storna ${item.code}`}
+                  onClick={() => onCredit(item)}
+                >
+                  <RotateCcw />
+                </Button>
+              )}
             </TableCell>
           </TableRow>
         ))}

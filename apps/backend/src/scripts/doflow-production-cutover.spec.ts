@@ -22,11 +22,9 @@ describe('Doflow production cutover CLI safety', () => {
     expect(parseDoflowCutoverOptions(['status'])).toMatchObject({ mode: 'status', tenant: 'doflow' });
   });
 
-  it('rejects every different tenant and federicanerone explicitly', () => {
+  it('rejects every tenant outside the doflow allowlist', () => {
     expect(() => parseDoflowCutoverOptions(['dry-run', '--tenant=other']))
       .toThrow('CUTOVER_TENANT_FORBIDDEN');
-    expect(() => parseDoflowCutoverOptions(['apply', '--tenant=federicanerone']))
-      .toThrow('CUTOVER_TENANT_FEDERICANERONE_FORBIDDEN');
   });
 
   it('requires explicit tenant, exact confirmation and a safe backup reference for apply', () => {

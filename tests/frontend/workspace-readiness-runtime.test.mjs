@@ -23,16 +23,14 @@ const bootstrap = provider.slice(
 
 test("the Doflow shell keeps main mounted while workspace data is pending", () => {
   assert.match(layout, /<TenantAppShell session=\{session\}>\{children\}<\/TenantAppShell>/);
-  assert.match(tenantShell, /function DoflowWorkspace/);
-  assert.match(tenantShell, /data-app-shell-ready="true"/);
-  assert.match(
-    tenantShell,
-    /data-workspace-ready=\{workspaceReady \? "true" : "false"\}/,
+  assert.match(tenantShell, /function DoflowWorkspaceGate/);
+  assert.match(tenantShell, /if \(workspaceReady\) return <>\{children\}<\/>/);
+  assert.match(tenantShell, /role=\{loading \? "status" : "alert"\}/);
+  assert.match(tenantShell, /<DashboardShell>[\s\S]*<DoflowWorkspaceGate>/);
+  assert.ok(
+    tenantShell.indexOf("<DashboardShell>") <
+      tenantShell.indexOf("<DoflowWorkspaceGate>"),
   );
-  assert.match(tenantShell, /data-workspace-status=\{workspaceStatus\}/);
-  assert.match(tenantShell, /data-secondary-status=\{secondaryStatus\}/);
-  assert.match(tenantShell, /inert=\{workspaceReady \? undefined : true\}/);
-  assert.match(tenantShell, /aria-hidden=\{workspaceReady \? undefined : true\}/);
   assert.doesNotMatch(provider, /if \(!hasHydrated\)\s*return/);
 });
 
@@ -139,10 +137,7 @@ test("readiness errors remain controlled and retry does not reload the page", ()
   assert.match(tenantShell, /router\.replace\(`\/login\?next=/);
   assert.match(tenantShell, /onClick=\{retryWorkspace\}/);
   assert.match(tenantShell, /Riprova caricamento/);
-  assert.match(tenantShell, /secondaryStatus !== "ready"/);
-  assert.match(tenantShell, /Caricamento dei dati secondari/);
-  assert.match(tenantShell, /onClick=\{retrySecondary\}/);
-  assert.match(tenantShell, /Riprova dati secondari/);
+  assert.doesNotMatch(tenantShell, /data-secondary-status|Riprova dati secondari/);
   assert.doesNotMatch(tenantShell, /window\.location\.reload|router\.refresh/);
 });
 

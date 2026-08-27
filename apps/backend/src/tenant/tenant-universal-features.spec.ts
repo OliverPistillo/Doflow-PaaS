@@ -34,6 +34,9 @@ jest.mock('./tenant-universal-features-schema', () => ({
 jest.mock('./tenant-automation-performance-schema', () => ({
   ensureDoflowAutomationPerformanceTables: jest.fn().mockResolvedValue(undefined),
 }));
+jest.mock('./tenant-backend-contracts-schema', () => ({
+  ensureTenantBackendContractTables: jest.fn().mockResolvedValue(undefined),
+}));
 
 const USER_A = '11111111-1111-4111-8111-111111111111';
 const USER_B = '22222222-2222-4222-8222-222222222222';
@@ -581,6 +584,45 @@ describe('Universal tenant authority security', () => {
     expect(query.mock.calls[0][0]).toContain('"tenant_a".flowboards');
     expect(query.mock.calls[0][0]).not.toContain('tenant_b');
     await expect(service.list({ userId: USER_B })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('lists tenant templates explicitly and remaps graph identifiers when copying a Flowboard', async () => {
+    const query = jest.fn().mockResolvedValue([{ id: RECORD_B, is_template: true }]);
+    const service = new TenantFlowboardsService(
+      { query } as any,
+      request('tenant_a', 'employee'),
+      realtimeAuthority() as any,
+      capabilityAuthority() as any,
+    );
+
+    await expect(service.templates()).resolves.toEqual({ items: [{ id: RECORD_B, is_template: true }] });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls[0][0]).toContain('"tenant_a".flowboards');
+    expect(query.mock.calls[0][0]).toContain('b.is_template=true');
+    expect(query.mock.calls[0][0]).not.toContain('tenant_b');
+
+    const copied = (service as any).cloneGraph(
+      [{ id: 'source-parent' }, { id: 'source-child', parentId: 'source-parent' }],
+      [{ id: 'source-edge', source: 'source-parent', target: 'source-child' }],
+    );
+    expect(copied.nodes[0].id).not.toBe('source-parent');
+    expect(copied.nodes[1].id).not.toBe('source-child');
+    expect(copied.nodes[1].parentId).toBe(copied.nodes[0].id);
+    expect(copied.edges[0]).toMatchObject({ source: copied.nodes[0].id, target: copied.nodes[1].id });
+    expect(copied.edges[0].id).not.toBe('source-edge');
+  });
+
+  it('allows only tenant administrators to create Flowboard templates', async () => {
+    const transaction = jest.fn();
+    const service = new TenantFlowboardsService(
+      { query: jest.fn(), transaction } as any,
+      request('tenant_a', 'employee'),
+      realtimeAuthority() as any,
+      selectiveCapabilityAuthority('canCreateFlowboards') as any,
+    );
+    await expect(service.create({ name: 'Modello', isTemplate: true }, 'template-key'))
+      .rejects.toBeInstanceOf(ForbiddenException);
+    expect(transaction).not.toHaveBeenCalled();
   });
 
   it.each([

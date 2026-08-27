@@ -286,7 +286,8 @@ async function provisionDoflowCommerceTables(
       line_subtotal NUMERIC(18,2) NOT NULL DEFAULT 0,
       line_total NUMERIC NOT NULL,
       immutable_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      archived_at TIMESTAMPTZ
     )
   `);
   await addColumns(dataSource, safe, 'order_items', [
@@ -301,6 +302,7 @@ async function provisionDoflowCommerceTables(
     "extras_snapshot JSONB NOT NULL DEFAULT '[]'::jsonb",
     'line_subtotal NUMERIC(18,2) NOT NULL DEFAULT 0',
     'immutable_at TIMESTAMPTZ NOT NULL DEFAULT now()',
+    'archived_at TIMESTAMPTZ',
   ]);
 
   await dataSource.query(`

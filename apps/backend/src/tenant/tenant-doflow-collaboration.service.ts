@@ -49,11 +49,6 @@ const RECORDS = {
   invoice: { table: "invoices", capability: "canViewInvoices" },
   renewal: { table: "renewals", capability: "canViewRenewals" },
   document: { table: "documents", capability: "canViewProjects" },
-  builder: {
-    table: "site_proposals",
-    capability: "canUseBuilder",
-    owner: "created_by",
-  },
 } as const;
 const REACTIONS = new Set(["👍", "❤️", "🎉"]);
 const ATTACHMENT_MIME_TYPES = new Set([
@@ -180,8 +175,7 @@ export class TenantDoflowCollaborationService {
           !capabilities.has("canViewGlobalCommerceValues")) ||
         (recordType === "quote" &&
           capabilities.has("canManageOwnQuotes") &&
-          !capabilities.has("canViewAdministration")) ||
-        (recordType === "builder" && !capabilities.has("canManageProjects")));
+          !capabilities.has("canViewAdministration")));
     const ownerFilter = ownerRestricted ? ` AND ${ownerColumn} = $2` : "";
     const assignedProjectFilter =
       recordType === "project" &&
@@ -389,7 +383,6 @@ export class TenantDoflowCollaborationService {
       invoice: "/dashboard/fatture",
       renewal: "/dashboard/rinnovi",
       document: "/dashboard/documenti",
-      builder: `/commercial/site-proposals/${recordId}`,
     };
     const base = route[recordType] || "/dashboard";
     const separator = base.includes("?") ? "&" : "?";

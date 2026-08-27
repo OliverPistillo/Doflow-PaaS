@@ -970,7 +970,7 @@ export class TenantDoflowCommerceService {
         `SELECT * FROM "${schema}".orders WHERE deleted_at IS NULL ${all ? '' : 'AND salesperson_id = $1'} ORDER BY order_date DESC, created_at DESC`,
         all ? [] : [user.id],
       ),
-      this.dataSource.query(`SELECT * FROM "${schema}".order_items ORDER BY created_at`),
+      this.dataSource.query(`SELECT * FROM "${schema}".order_items WHERE archived_at IS NULL ORDER BY created_at`),
     ]);
     return {
       items: orders.map((order: any) => {
@@ -1248,7 +1248,7 @@ export class TenantDoflowCommerceService {
     if (!orders[0]) throw new NotFoundException('Ordine non trovato');
     const all = ['owner', 'admin'].includes(user.role) || await this.assertCanViewAll(user);
     if (!all && orders[0].salesperson_id !== user.id) throw new ForbiddenException('Ordine non autorizzato');
-    const items = await this.dataSource.query(`SELECT * FROM "${schema}".order_items WHERE order_id = $1 ORDER BY created_at`, [id]);
+    const items = await this.dataSource.query(`SELECT * FROM "${schema}".order_items WHERE order_id = $1 AND archived_at IS NULL ORDER BY created_at`, [id]);
     const result: any = { ...orders[0], items };
     if ((await this.canViewMoney(user)) &&
       ((await this.canViewGlobalMoney(user)) || orders[0].salesperson_id === user.id)) return result;
@@ -1277,15 +1277,92 @@ export class TenantDoflowCommerceService {
       const rows = await context.manager.query(`SELECT * FROM "${context.user.schema}".orders WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, [id]);
       const current = rows[0];
       if (!current) throw new NotFoundException('Ordine non trovato');
-      if (!(await this.assertCanViewAll(user)) && current.salesperson_id !== user.id) throw new ForbiddenException('Ordine non autorizzato');
-      if (body.items !== undefined) {
-        throw new BadRequestException('Le righe snapshot sono immutabili; crea un nuovo ordine');
-      }
+      const canAssign = ['owner', 'admin'].includes(user.role) || await this.assertCanViewAll(user);
+      if (!canAssign && current.salesperson_id !== user.id) throw new ForbiddenException('Ordine non autorizzato');
       for (const forbidden of ['total', 'subtotal', 'taxTotal', 'balance', 'paymentStatus', 'code', 'currency', 'projectId']) {
         if (body[forbidden] !== undefined) throw new BadRequestException(`${forbidden} è server-authoritative`);
       }
       const version = this.version(body.version);
       if (Number(current.version) !== version) throw new ConflictException('Conflitto di versione ordine');
+      const commercialFields = ['items', 'customerId', 'saleId', 'leadId', 'opportunityId', 'dealId', 'salespersonId', 'discount', 'deposit', 'installments', 'orderDate'];
+      const recalculating = commercialFields.some((field) => Object.prototype.hasOwnProperty.call(body, field));
+      if (recalculating && current.administrative_status !== 'Bozza') {
+        throw new ConflictException('Le condizioni economiche sono modificabili soltanto in Bozza');
+      }
+      if (recalculating && current.project_id) throw new ConflictException('Ordine già collegato a un progetto');
+      if (recalculating) {
+        const payments = await context.manager.query(
+          `SELECT 1 FROM "${context.user.schema}".payments WHERE order_id=$1 AND deleted_at IS NULL LIMIT 1`,
+          [id],
+        );
+        if (payments[0]) throw new ConflictException('Ordine con pagamenti registrati non ricalcolabile');
+      }
+
+      const companyId = body.customerId === undefined ? current.company_id : this.uuid(body.customerId, 'customerId');
+      const companies = await context.manager.query(
+        `SELECT id FROM "${context.user.schema}".companies WHERE id=$1 AND deleted_at IS NULL FOR SHARE`,
+        [companyId],
+      );
+      if (!companies[0]) throw new BadRequestException('Cliente non disponibile nel tenant');
+      const saleId = body.saleId === undefined ? current.sale_id : this.optionalUuid(body.saleId, 'saleId');
+      let sale: any = null;
+      if (saleId) {
+        const sales = await context.manager.query(
+          `SELECT * FROM "${context.user.schema}".sales WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`,
+          [saleId],
+        );
+        sale = sales[0];
+        if (!sale || (sale.company_id && sale.company_id !== companyId)) throw new BadRequestException('Vendita sorgente non coerente con il cliente');
+        if (sale.order_id && sale.order_id !== id) throw new ConflictException('Vendita già collegata a un altro ordine');
+      }
+      const leadId = body.leadId === undefined ? (sale?.lead_id || current.lead_id) : this.optionalUuid(body.leadId, 'leadId');
+      if (leadId) {
+        const leads = await context.manager.query(
+          `SELECT 1 FROM "${context.user.schema}".leads WHERE id=$1 AND deleted_at IS NULL`,
+          [leadId],
+        );
+        if (!leads[0]) throw new BadRequestException('Lead non disponibile nel tenant');
+      }
+      const opportunityId = body.opportunityId === undefined
+        ? (sale?.opportunity_id || current.opportunity_id)
+        : this.optionalUuid(body.opportunityId, 'opportunityId');
+      if (opportunityId) {
+        const opportunities = await context.manager.query(
+          `SELECT 1 FROM "${context.user.schema}".opportunities
+           WHERE id=$1 AND deleted_at IS NULL AND (company_id IS NULL OR company_id=$2)`,
+          [opportunityId, companyId],
+        );
+        if (!opportunities[0]) throw new BadRequestException('Opportunità non coerente con il cliente');
+      }
+      const salespersonId = body.salespersonId === undefined
+        ? current.salesperson_id
+        : canAssign ? this.uuid(body.salespersonId, 'salespersonId') : user.id;
+      const salesperson = await context.manager.query(
+        `SELECT 1 FROM "${context.user.schema}".users WHERE id=$1 AND COALESCE(is_active,true)=true`,
+        [salespersonId],
+      );
+      if (!salesperson[0]) throw new BadRequestException('Commerciale non disponibile nel tenant');
+
+      let calculated = {
+        subtotal: Number(current.subtotal || 0),
+        taxTotal: Number(current.tax_total || 0),
+        total: Number(current.total || 0) + Number(current.discount || 0),
+        currency: String(current.currency || 'EUR'),
+      };
+      const allowManualDiscount = await this.hasCapability(user, 'canManageCommerceRules');
+      if (body.items !== undefined) {
+        if (!Array.isArray(body.items) || !body.items.length) throw new BadRequestException('items obbligatori');
+        await context.manager.query(`UPDATE "${context.user.schema}".order_items SET archived_at=COALESCE(archived_at,now()) WHERE order_id=$1 AND archived_at IS NULL`, [id]);
+        calculated = await this.orderItems(context.manager, context.user.schema, id, body.items, allowManualDiscount);
+      }
+      const orderDiscountCents = this.cents(body.discount === undefined ? current.discount : body.discount, 'discount', 0);
+      if (orderDiscountCents > 0 && !allowManualDiscount) throw new ForbiddenException('Sconto ordine non autorizzato');
+      const grossTotalCents = this.cents(calculated.total, 'calculated.total');
+      if (orderDiscountCents > grossTotalCents) throw new BadRequestException('Sconto ordine superiore al totale');
+      const total = this.money(grossTotalCents - orderDiscountCents);
+      const deposit = this.number(body.deposit === undefined ? current.deposit : body.deposit, 'deposit', 0);
+      if (deposit > total) throw new BadRequestException('Acconto superiore al totale ordine');
+      const balance = this.money(this.cents(total, 'total') - this.cents(deposit, 'deposit'));
       const status = body.administrativeStatus === undefined
         ? current.administrative_status
         : this.enum(body.administrativeStatus, ['Bozza', 'Confermato', 'Acconto richiesto', 'Annullato'], 'administrativeStatus', 'Bozza');
@@ -1294,22 +1371,44 @@ export class TenantDoflowCommerceService {
       }
       const updated = await context.manager.query(
         `UPDATE "${context.user.schema}".orders SET
-          administrative_status = $2, due_date = $3, notes = $4,
-          confirmed_at = CASE WHEN $2 <> 'Bozza' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END,
-          cancelled_at = CASE WHEN $2 = 'Annullato' THEN now() ELSE cancelled_at END,
-          cancellation_reason = CASE WHEN $2 = 'Annullato' THEN $5 ELSE cancellation_reason END,
-          version = version + 1, updated_by = $6, updated_at = now()
-         WHERE id = $1 AND version = $7 AND deleted_at IS NULL RETURNING *`,
-        [id, status, body.dueDate === undefined ? current.due_date : body.dueDate || null,
+          company_id=$2,sale_id=$3,lead_id=$4,opportunity_id=$5,deal_id=$6,salesperson_id=$7,
+          currency=$8,discount=$9,subtotal=$10,tax_total=$11,total=$12,deposit=$13,balance=$14,residual=$15,
+          installments=$16,order_date=$17,administrative_status=$18,due_date=$19,notes=$20,
+          confirmed_at = CASE WHEN $18 <> 'Bozza' THEN COALESCE(confirmed_at, now()) ELSE confirmed_at END,
+          cancelled_at = CASE WHEN $18 = 'Annullato' THEN now() ELSE cancelled_at END,
+          cancellation_reason = CASE WHEN $18 = 'Annullato' THEN $21 ELSE cancellation_reason END,
+          version = version + 1, updated_by = $22, updated_at = now()
+         WHERE id = $1 AND version = $23 AND deleted_at IS NULL RETURNING *`,
+        [id, companyId, saleId, leadId, opportunityId,
+          body.dealId === undefined ? current.deal_id : this.text(body.dealId, 'dealId'), salespersonId,
+          calculated.currency, this.money(orderDiscountCents), calculated.subtotal, calculated.taxTotal, total,
+          deposit, balance, total,
+          body.installments === undefined ? current.installments : Math.max(1, Math.trunc(this.number(body.installments, 'installments', 1))),
+          body.orderDate === undefined ? current.order_date : this.text(body.orderDate, 'orderDate', true),
+          status, body.dueDate === undefined ? current.due_date : body.dueDate || null,
           body.notes === undefined ? current.notes : body.notes || null,
           body.cancellationReason || null, user.id, version],
       );
       if (!updated[0]) throw new ConflictException('Conflitto di versione ordine');
+      if (current.sale_id && current.sale_id !== saleId) {
+        await context.manager.query(
+          `UPDATE "${context.user.schema}".sales SET order_id=NULL,version=version+1,updated_by=$2,updated_at=now()
+           WHERE id=$1 AND order_id=$3`,
+          [current.sale_id, user.id, id],
+        );
+      }
+      if (saleId) {
+        await context.manager.query(
+          `UPDATE "${context.user.schema}".sales SET order_id=$1,company_id=$2,version=version+1,updated_by=$3,updated_at=now()
+           WHERE id=$4`,
+          [id, companyId, user.id, saleId],
+        );
+      }
       await this.businessEvent(context, {
         aggregateType: 'order', aggregateId: id,
         eventType: status === 'Annullato' ? 'commerce_order_cancelled' : 'commerce_order_updated',
         before: current, after: updated[0],
-        metadata: { status, reason: body.cancellationReason || null },
+        metadata: { status, recalculated: recalculating, reason: body.cancellationReason || null },
       });
       return { id };
     });
@@ -1916,7 +2015,7 @@ export class TenantDoflowCommerceService {
         `SELECT o.*, oi.service_name_snapshot AS service_name, s.project_template_type,
                 s.project_template_phases, c.name AS company_name
            FROM "${context.user.schema}".orders o
-           JOIN "${context.user.schema}".order_items oi ON oi.order_id = o.id
+           JOIN "${context.user.schema}".order_items oi ON oi.order_id = o.id AND oi.archived_at IS NULL
            JOIN "${context.user.schema}".services s ON s.id = oi.service_id
            JOIN "${context.user.schema}".companies c ON c.id = o.company_id
           WHERE o.id = $1 AND o.deleted_at IS NULL

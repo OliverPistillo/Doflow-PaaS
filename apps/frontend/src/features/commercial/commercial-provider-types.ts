@@ -1,4 +1,5 @@
 import type { ProductionProjectStatus } from "@/features/commercial/commercial-production";
+import type { GoalMetricId, GoalMetricType } from "@/features/commercial/commercial-goals";
 import type {
   CommerceSettings,
   CommercialContract,
@@ -16,7 +17,11 @@ import type {
   CommentAttachment,
   PointLedgerEntry,
   PointPolicy,
+  PointRedemption,
+  PointRewardType,
 } from "@/features/commercial/commercial-collaboration";
+import type { GuidedCall, GuidedCallCompletion, GuidedCallMessageStatus } from "@/features/commercial/commercial-guided-calls";
+import type { OperationalApproval, SupportStatus, SupportTicket, WebsiteWorkflowStatus } from "@/features/commercial/commercial-support";
 import type { CommercialCampaign } from "@/features/commercial/commercial-campaigns";
 import type {
   CommercialInvoice,
@@ -38,6 +43,7 @@ export type CommercialTimelineEvent = {
   leadId: string;
   activityId?: string;
   appointmentId?: string;
+  supportTicketId?: string;
   saleId?: string;
   orderId?: string;
   paymentId?: string;
@@ -107,6 +113,8 @@ export type CustomerCommunication = {
   channel: "WhatsApp" | "Email" | "Chiamata" | "Nota";
   title: string;
   body: string;
+  direction?: "incoming" | "outgoing" | "internal" | "system";
+  status?: string;
   occurredAt: string;
   projectId?: string;
   leadId?: string;
@@ -141,21 +149,32 @@ export const commercialGoalMetrics = [
   "revenue",
   "won_leads",
   "new_clients",
+  "new_leads",
+  "appointments",
+  "conversion_rate",
+  "sla_hours",
+  "score",
+  "sales_count",
+  "sales_value",
   "completed_projects",
   "completed_activities",
   "on_time_deliveries",
   "resolved_bugs",
   "renewals",
-] as const;
+] as const satisfies readonly GoalMetricId[];
 export type CommercialGoal = {
   id: string;
   title: string;
   description: string;
   targetType: "company" | "role" | "user";
   targetId?: string;
-  metric: (typeof commercialGoalMetrics)[number];
+  metric: GoalMetricId;
   targetValue: number;
-  unit: "number" | "currency" | "percentage";
+  unit: GoalMetricType | "number";
+  metricType?: GoalMetricType;
+  labelSingular?: string;
+  labelPlural?: string;
+  currency?: "EUR";
   startsAt: string;
   endsAt: string;
   status: "active" | "completed" | "paused" | "archived";
@@ -170,6 +189,7 @@ export type RankingRole =
   | "project_manager"
   | "support";
 export type RankingMetric =
+  | "operational_points"
   | "gross_collected"
   | "net_collected"
   | "paid_sales"
@@ -437,18 +457,21 @@ export type CommercialProject = {
   deliveredAt?: string;
   deliveredBy?: string;
   progress?: number;
+  websiteStatus?: WebsiteWorkflowStatus;
   archivedAt?: string;
 };
 export type ProjectTimeSession = {
   id: string;
   version?: number;
   projectId: string;
+  supportTicketId?: string;
   activityId?: string;
   userId: string;
   startedAt: string;
   endedAt?: string;
   durationMinutes?: number;
-  status: "active" | "completed";
+  status: "active" | "paused" | "completed";
+  resumedAt?: string;
   description?: string;
   manual: boolean;
   correctedAt?: string;
@@ -489,11 +512,6 @@ export type MergeDuplicateRecordsInput = {
     >
   >;
 };
-export type NotificationUserState = {
-  notificationId: string;
-  readAt?: string;
-  dismissedAt?: string;
-};
 export type ArchivedRecordType =
   | "lead"
   | "customer"
@@ -523,6 +541,32 @@ export type WorkspaceReadinessError = {
   message: string;
 };
 
+type CreateCommercialOrderInput = {
+  idempotencyKey?: string;
+  customerId: string;
+  saleId?: string;
+  leadId?: string;
+  opportunityId?: string;
+  dealId?: string;
+  salespersonId?: string;
+  items: Array<
+    Pick<CommercialOrderItem, "serviceId" | "quantity"> &
+      Partial<
+        Pick<
+          CommercialOrderItem,
+          "planId" | "discount" | "nextDueAt"
+        >
+      >
+  >;
+  discount?: number;
+  deposit?: number;
+  installments?: number;
+  administrativeStatus?: CommercialOrder["administrativeStatus"];
+  orderDate: string;
+  dueDate?: string;
+  notes?: string;
+};
+
 export type CommercialLeadsStore = {
   leads: CommercialLead[];
   leadActivities: CustomerActivity[];
@@ -534,6 +578,7 @@ export type CommercialLeadsStore = {
   timelineEvents: CommercialTimelineEvent[];
   goals: CommercialGoal[];
   appointments: CommercialAppointment[];
+  guidedCalls: GuidedCall[];
   rankingConfigs: RankingConfig[];
   rankingSnapshots: RankingSnapshot[];
   services: CommercialService[];
@@ -550,11 +595,14 @@ export type CommercialLeadsStore = {
   automationNotifications: AutomationNotification[];
   commerceSettings: CommerceSettings;
   timeSessions: ProjectTimeSession[];
+  supportTickets: SupportTicket[];
+  operationalApprovals: OperationalApproval[];
   order: Record<PipelineStage, string[]>;
   auditEvents: CommercialAuditEvent[];
   comments: CommercialComment[];
   pointLedger: PointLedgerEntry[];
   pointPolicy: PointPolicy;
+  pointRedemptions: PointRedemption[];
   ignoredDuplicatePairs: string[];
   duplicatesLastAnalyzedAt?: string;
   archivedRecords: ArchivedRecord[];
@@ -562,6 +610,8 @@ export type CommercialLeadsStore = {
   ignoreDuplicatePair: (leftId: string, rightId: string) => void;
   restoreDuplicatePair: (leftId: string, rightId: string) => void;
   markDuplicatesAnalyzed: () => void;
+  markRecordCommentsRead: (recordType: CollaborationRecordType, recordId: string) => void;
+  recordInboxLifecycle: (input: { conversationId: string; leadId?: string; customerId?: string; event: string; title: string; detail: string }) => boolean;
   recordAuditEvent: (
     input: Omit<
       CommercialAuditEvent,
@@ -592,6 +642,11 @@ export type CommercialLeadsStore = {
     input: Omit<PointLedgerEntry, "id" | "createdBy">,
   ) => Promise<string | null>;
   updatePointPolicy: (updates: Partial<PointPolicy>, reason?: string) => Promise<boolean>;
+  addManualPointAdjustment: (input: { userId: string; points: number; reason: string; recordType?: CollaborationRecordType; recordId?: string; attachment?: PointLedgerEntry["attachment"] }) => string | null;
+  reversePointEntry: (entryId: string, reason: string) => string | null;
+  requestPointRedemption: (input: { points: number; rewardType: PointRewardType; reason: string }) => { ok: true; id: string } | { ok: false; message: string };
+  decidePointRedemption: (id: string, approved: boolean, reason: string) => boolean;
+  deliverPointRedemption: (id: string) => boolean;
   addCampaign: (
     campaign: Omit<CommercialCampaign, "id" | "createdAt" | "updatedAt">,
   ) => string | null;
@@ -665,11 +720,16 @@ export type CommercialLeadsStore = {
   ) => boolean;
   archiveAppointment: (appointmentId: string) => boolean;
   deleteAppointment: (appointmentId: string) => boolean;
+  startGuidedCall: (leadId: string) => { ok: true; id: string; existing: boolean } | { ok: false; message: string };
+  updateGuidedCall: (callId: string, updates: Partial<GuidedCall>) => boolean;
+  prepareGuidedCallMessage: (callId: string, input: { channel: "WhatsApp" | "Email"; template: GuidedCall["messages"][number]["template"]; subject?: string; body: string; recipient: string }) => string | null;
+  updateGuidedCallMessageStatus: (callId: string, messageId: string, status: GuidedCallMessageStatus) => boolean;
+  completeGuidedCall: (callId: string, completion: GuidedCallCompletion) => { ok: true; existing: boolean; activityId?: string; appointmentId?: string } | { ok: false; message: string };
   updateRankingConfig: (
     role: RankingRole,
     metrics: RankingConfig["metrics"],
   ) => Promise<boolean>;
-  saveRankingSnapshot: (snapshot: RankingSnapshot) => Promise<boolean>;
+  saveRankingSnapshot: (snapshot: Pick<RankingSnapshot, "period" | "role" | "recalculationReason">) => Promise<boolean>;
   deleteRankingSnapshot: (snapshotId: string, reason?: string) => Promise<boolean>;
   addService: (
     service: Omit<CommercialService, "id" | "version" | "createdAt" | "updatedAt">,
@@ -687,12 +747,7 @@ export type CommercialLeadsStore = {
   ) => Promise<string | null>;
   updateSale: (saleId: string, updates: Partial<CommercialSale>) => Promise<boolean>;
   archiveSale: (saleId: string) => Promise<boolean>;
-  addOrder: (
-    order: Omit<
-      CommercialOrder,
-      "id" | "version" | "code" | "total" | "items" | "createdAt" | "updatedAt"
-    > & { items: Array<Pick<CommercialOrderItem, "serviceId" | "quantity"> & Partial<CommercialOrderItem>> },
-  ) => Promise<string | null>;
+  addOrder: (order: CreateCommercialOrderInput) => Promise<string | null>;
   updateOrder: (
     orderId: string,
     updates: Omit<Partial<CommercialOrder>, "items"> & { items?: Array<Pick<CommercialOrderItem, "serviceId" | "quantity"> & Partial<CommercialOrderItem>> },
@@ -781,6 +836,18 @@ export type CommercialLeadsStore = {
     | { ok: true; durationMinutes: number; existing: boolean }
     | { ok: false; message: string }>;
   archiveProjectTime: (sessionId: string) => Promise<boolean>;
+  startSupportTicketTime: (ticketId: string) => { ok: true; sessionId: string; existing: boolean } | { ok: false; message: string };
+  pauseSupportTicketTime: (sessionId: string) => { ok: true; durationMinutes: number; existing: boolean } | { ok: false; message: string };
+  resumeSupportTicketTime: (sessionId: string) => { ok: true; existing: boolean } | { ok: false; message: string };
+  updateTimeSession: (sessionId: string, minutes: number, reason: string) => boolean;
+  addSupportTicket: (ticket: Omit<SupportTicket, "id" | "code" | "requesterId" | "openedAt" | "updatedAt" | "attachmentMetadata"> & Partial<Pick<SupportTicket, "attachmentMetadata">>) => string | null;
+  updateSupportTicket: (ticketId: string, updates: Partial<SupportTicket>, reason?: string) => boolean;
+  moveSupportTicket: (ticketId: string, status: SupportStatus) => boolean;
+  reopenSupportTicket: (ticketId: string, reason: string) => boolean;
+  archiveSupportTicket: (ticketId: string) => boolean;
+  requestOperationalApproval: (input: Omit<OperationalApproval, "id" | "version" | "authorId" | "requesterId" | "status" | "requestedAt" | "createdAt" | "updatedAt">) => string | null;
+  decideOperationalApproval: (approvalId: string, approved: boolean, reason: string, adminOverride?: boolean) => boolean;
+  updateProjectWebsiteStatus: (projectId: string, status: WebsiteWorkflowStatus, reason?: string) => boolean;
   setProjectQaItem: (
     projectId: string,
     itemId: string,
@@ -991,10 +1058,12 @@ export type CommercialLeadsStore = {
   removeCustomerDocument: (clientId: string, documentId: string) => boolean;
   startCustomerOnboarding: (clientId: string) => Promise<string | null>;
   updateCustomerCare: (clientId: string, care: CustomerCare) => boolean;
+  updateCustomerFinance: (clientId: string, finance: CustomerFinance) => boolean;
   ensureCustomerCareActivity: (
     clientId: string,
     careOverride?: CustomerCare,
   ) => string | null;
+  syncCustomerActivityDependency: (input: { dependentActivityId: string; dependencyActivityId: string; action: "add" | "remove"; clientId: string }) => { ok: true; existing: boolean } | { ok: false; code: "NOT_FOUND" | "FORBIDDEN" | "SELF_DEPENDENCY" | "CYCLE"; message: string };
   mergeDuplicateRecords: (
     input: MergeDuplicateRecordsInput,
   ) => Promise<

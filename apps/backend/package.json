@@ -5,7 +5,7 @@
   "main": "dist/main.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/main.ts",
-    "build": "rimraf dist && tsc -p tsconfig.build.json && copyfiles -u 1 src/redis/scripts/*.lua dist && copyfiles -u 1 \"src/tenant/site-proposal-templates/**/*\" dist",
+    "build": "rimraf dist && tsc -p tsconfig.build.json && copyfiles -u 1 src/redis/scripts/*.lua dist",
     "start": "node dist/scripts/production-backend-entrypoint.js",
     "start:production": "node dist/scripts/production-backend-entrypoint.js",
     "typeorm": "tsx ./node_modules/typeorm/cli.js",
@@ -51,11 +51,9 @@
     "@types/ws": "^8.18.1",
     "archiver": "^7.0.1",
     "autoprefixer": "^10.4.24",
-    "axios": "^1.19.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.73.0",
     "bwip-js": "^4.8.0",
-    "cheerio": "^1.2.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
     "cron": "^4.4.0",
@@ -77,13 +75,11 @@
     "qrcode": "^1.5.4",
     "reflect-metadata": "0.2.2",
     "rxjs": "^7.8.1",
-    "sharp": "^0.35.3",
     "speakeasy": "^2.0.0",
     "stripe": "^22.2.1",
     "systeminformation": "^5.33.1",
     "typeorm": "^0.3.31",
-    "ws": "^8.21.3",
-    "yauzl": "^3.4.0"
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@nestjs/testing": "11.1.18",
@@ -101,7 +97,6 @@
     "@types/qrcode": "^1.5.6",
     "@types/speakeasy": "^2.0.10",
     "@types/systeminformation": "^3.54.1",
-    "@types/yauzl": "^3.4.0",
     "copyfiles": "^2.4.1",
     "jest": "^30.3.0",
     "rimraf": "^6.1.3",

@@ -8,10 +8,13 @@ const ID_RE = /^[0-9a-f-]{16,64}$/i;
 
 export type PresenceState = {
   userId: string;
-  status: 'online' | 'away' | 'busy' | 'dnd';
-  source: 'ws' | 'http';
+  status: 'online' | 'away' | 'busy' | 'offline' | 'do_not_disturb' | 'in_call' | 'in_meeting';
+  source: 'ws' | 'http' | 'manual';
   lastSeenAt: string;
+  expiresAt?: string;
 };
+
+type ManualPresence = Pick<PresenceState, 'userId' | 'status' | 'expiresAt'> & { source: 'manual' };
 
 @Injectable()
 export class PresenceRegistryService {
@@ -25,13 +28,77 @@ export class PresenceRegistryService {
     return { tenant, key: `presence:${tenant}:${userId}:${session}` };
   }
 
+  private manualKey(tenantValue: string, userId: string) {
+    const { tenant } = this.key(tenantValue, userId, 'manual');
+    return { tenant, key: `presence-manual:${tenant}:${userId}` };
+  }
+
+  private status(value: string): PresenceState['status'] {
+    return ['online', 'away', 'busy', 'offline', 'do_not_disturb', 'in_call', 'in_meeting'].includes(value)
+      ? value as PresenceState['status']
+      : value === 'dnd' ? 'do_not_disturb' : 'online';
+  }
+
+  private async manual(tenantValue: string, userId: string): Promise<ManualPresence | null> {
+    const { key } = this.manualKey(tenantValue, userId);
+    const raw = await this.redis.getClient().get(key);
+    if (!raw) return null;
+    try {
+      const value = JSON.parse(raw) as ManualPresence;
+      if (value.expiresAt && Date.parse(value.expiresAt) <= Date.now()) {
+        await this.redis.getClient().del(key);
+        return null;
+      }
+      return { userId, status: this.status(value.status), source: 'manual', expiresAt: value.expiresAt };
+    } catch {
+      await this.redis.getClient().del(key);
+      return null;
+    }
+  }
+
   async heartbeat(tenantValue: string, userId: string, sessionId: string, statusValue: string, source: 'ws' | 'http' = 'ws') {
     const { tenant, key } = this.key(tenantValue, userId, sessionId);
-    const status = ['online', 'away', 'busy', 'dnd'].includes(statusValue) ? statusValue as PresenceState['status'] : 'online';
-    const state: PresenceState = { userId, status, source, lastSeenAt: new Date().toISOString() };
+    const override = await this.manual(tenant, userId);
+    const state: PresenceState = {
+      userId,
+      status: override?.status ?? this.status(statusValue),
+      source: override ? 'manual' : source,
+      lastSeenAt: new Date().toISOString(),
+      ...(override?.expiresAt ? { expiresAt: override.expiresAt } : {}),
+    };
     await this.redis.getClient().set(key, JSON.stringify(state), 'EX', PRESENCE_TTL_SECONDS);
     await this.notifications.broadcastToTenant(tenant, { type: 'presence.updated', payload: state });
     return state;
+  }
+
+  async setManual(tenantValue: string, userId: string, statusValue: string, durationValue: string) {
+    const { tenant, key } = this.manualKey(tenantValue, userId);
+    const status = this.status(statusValue);
+    const duration = ['30m', '1h', 'today', 'forever'].includes(durationValue) ? durationValue : 'forever';
+    const now = new Date();
+    let ttl: number | undefined;
+    if (duration === '30m') ttl = 30 * 60;
+    if (duration === '1h') ttl = 60 * 60;
+    if (duration === 'today') {
+      const end = new Date(now);
+      end.setHours(24, 0, 0, 0);
+      ttl = Math.max(60, Math.ceil((end.getTime() - now.getTime()) / 1000));
+    }
+    const value: ManualPresence = {
+      userId,
+      status,
+      source: 'manual',
+      ...(ttl ? { expiresAt: new Date(now.getTime() + ttl * 1000).toISOString() } : {}),
+    };
+    if (ttl) await this.redis.getClient().set(key, JSON.stringify(value), 'EX', ttl);
+    else await this.redis.getClient().set(key, JSON.stringify(value));
+    return this.heartbeat(tenant, userId, 'http', status, 'http');
+  }
+
+  async clearManual(tenantValue: string, userId: string, automaticStatus = 'online') {
+    const { tenant, key } = this.manualKey(tenantValue, userId);
+    await this.redis.getClient().del(key);
+    return this.heartbeat(tenant, userId, 'http', automaticStatus, 'http');
   }
 
   private async keys(pattern: string) {

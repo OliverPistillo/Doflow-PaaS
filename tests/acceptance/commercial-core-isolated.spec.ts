@@ -92,6 +92,18 @@ async function login(context: BrowserContext, email: string, credentials: Creden
   expect(session?.httpOnly).toBe(true);
   expect(csrf?.httpOnly).toBe(false);
   expect(await page.evaluate(() => localStorage.getItem('doflow_token'))).toBeNull();
+  const flowPreferences = await appFetch(page, '/tenant/preferences', {
+    method: 'PATCH',
+    body: {
+      onboardingStatus: 'dismissed',
+      tutorialVersion: 2,
+      dismissedModules: ['commercial'],
+      suggestionsEnabled: false,
+      contextualMascotEnabled: false,
+    },
+  });
+  expect(flowPreferences.ok).toBe(true);
+  await dismissFlowOverlays(page, true);
   return { page, sessionValue: session!.value };
 }
 
@@ -127,6 +139,36 @@ async function assertNoAuthoritativeCommercialStorage(page: Page) {
   expect(await page.evaluate(() => localStorage.getItem('doflow_token'))).toBeNull();
 }
 
+async function dismissFlowOverlays(page: Page, waitForAppearance = false) {
+  const welcomeDialog = page.getByRole('dialog', { name: 'Benvenuto in DoFlow' });
+  const hintClose = page.getByRole('button', { name: 'Chiudi suggerimento Flow', exact: true });
+  let welcomeVisible = await welcomeDialog.isVisible().catch(() => false);
+  let hintVisible = await hintClose.isVisible().catch(() => false);
+
+  if (waitForAppearance && !welcomeVisible && !hintVisible) {
+    await Promise.race([
+      welcomeDialog.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined),
+      hintClose.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined),
+      page.waitForTimeout(3_000),
+    ]);
+    welcomeVisible = await welcomeDialog.isVisible().catch(() => false);
+    hintVisible = await hintClose.isVisible().catch(() => false);
+  }
+
+  if (welcomeVisible) {
+    await welcomeDialog.getByRole('button', { name: 'Esplora in autonomia', exact: true }).click();
+    await welcomeDialog.waitFor({ state: 'hidden' });
+    hintVisible = await hintClose.waitFor({ state: 'visible', timeout: 3_000 })
+      .then(() => true)
+      .catch(() => false);
+  }
+
+  if (hintVisible) {
+    await hintClose.click();
+    await hintClose.waitFor({ state: 'hidden' });
+  }
+}
+
 async function createLeadThroughUi(page: Page, input: {
   marker: string;
   company: string;
@@ -136,8 +178,10 @@ async function createLeadThroughUi(page: Page, input: {
   duplicate?: boolean;
 }) {
   await page.goto('/dashboard/commercial/leads');
-  await page.getByRole('button', { name: 'Nuovo lead', exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Nuovo lead', exact: true }).click();
+  await dismissFlowOverlays(page, true);
+  const newLeadButton = page.getByRole('button', { name: 'Nuovo lead', exact: true }).first();
+  await newLeadButton.waitFor();
+  await newLeadButton.click();
   await page.getByLabel('Nome *').fill(input.firstName);
   await page.getByLabel('Cognome').fill(input.lastName);
   await page.getByLabel('Azienda *').fill(input.company);
@@ -167,16 +211,21 @@ async function createLeadThroughUi(page: Page, input: {
 }
 
 async function editOpportunityThroughUi(page: Page, opportunityName: string) {
+  await dismissFlowOverlays(page, true);
   await page.getByRole('button', { name: 'Modifica', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: 'Modifica dati del lead' });
+  await expect(editor).toBeVisible();
   await page.locator('#lead-opportunityName').fill(opportunityName);
   await page.locator('#lead-location').fill('Milano');
   const responsePromise = page.waitForResponse((response) => /\/api\/tenant\/crm\/opportunities\/[0-9a-f-]+$/.test(response.url()) && response.request().method() === 'PATCH');
   await page.getByRole('button', { name: 'Salva modifiche' }).click();
   const response = await responsePromise;
   expect(response.ok()).toBe(true);
+  await expect(editor).toBeHidden();
 }
 
 async function selectOperationalValue(page: Page, label: string, option: string, endpoint: RegExp) {
+  await dismissFlowOverlays(page);
   const block = page.getByText(label, { exact: true }).first().locator('..');
   await block.getByRole('combobox').click();
   const responsePromise = page.waitForResponse(
@@ -239,6 +288,7 @@ test('Commercial Core usa PostgreSQL e Redis con sessioni e tenant realmente iso
     await expect(pageA.getByText(`Follow-up ${marker}`, { exact: true })).toBeVisible();
     await editOpportunityThroughUi(pageA, `Owner updated ${marker}`);
     await pageA.reload({ waitUntil: 'domcontentloaded' });
+    await dismissFlowOverlays(pageA);
     await pageA.getByRole('button', { name: 'Modifica', exact: true }).click();
     await expect(pageA.locator('#lead-opportunityName')).toHaveValue(`Owner updated ${marker}`);
     await pageA.getByRole('button', { name: 'Annulla', exact: true }).click();
@@ -257,10 +307,12 @@ test('Commercial Core usa PostgreSQL e Redis con sessioni e tenant realmente iso
     await expect(pageB.getByRole('heading', { name: company, exact: true }).first()).toBeVisible();
     await editOpportunityThroughUi(pageB, `Manager updated ${marker}`);
     await pageB.reload({ waitUntil: 'domcontentloaded' });
+    await dismissFlowOverlays(pageB);
     await pageB.getByRole('button', { name: 'Modifica', exact: true }).click();
     await expect(pageB.locator('#lead-opportunityName')).toHaveValue(`Manager updated ${marker}`);
     await pageB.getByRole('button', { name: 'Annulla', exact: true }).click();
     await pageA.reload({ waitUntil: 'domcontentloaded' });
+    await dismissFlowOverlays(pageA);
     await pageA.getByRole('button', { name: 'Modifica', exact: true }).click();
     await expect(pageA.locator('#lead-opportunityName')).toHaveValue(`Manager updated ${marker}`);
     await pageA.getByRole('button', { name: 'Annulla', exact: true }).click();
@@ -345,9 +397,10 @@ test('Commercial Core usa PostgreSQL e Redis con sessioni e tenant realmente iso
       if (await buttons.count()) await buttons.first().click();
     }
     await comparison.getByRole('button', { name: 'Continua con la fusione' }).click();
-    await pageA2.getByRole('button', { name: 'Continua con la fusione' }).click();
+    const mergeConfirmation = pageA2.getByRole('alertdialog');
+    await expect(mergeConfirmation.getByRole('heading', { name: 'Riepilogo finale della fusione' })).toBeVisible();
     const mergeResponsePromise = pageA2.waitForResponse((response) => response.url().endsWith('/api/tenant/commercial/duplicates/merge') && response.request().method() === 'POST');
-    await pageA2.getByRole('button', { name: 'Conferma fusione' }).click();
+    await mergeConfirmation.getByRole('button', { name: 'Conferma fusione' }).click();
     const mergeResponse = await mergeResponsePromise;
     expect(mergeResponse.ok()).toBe(true);
     const mergeRequest = mergeResponse.request();

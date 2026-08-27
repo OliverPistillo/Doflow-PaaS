@@ -1,26 +1,228 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { useMemo, useState } from "react"
-import { ArchiveRestore, ExternalLink, Search } from "lucide-react"
-import { toast } from "sonner"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useCommercialLeads, type ArchivedRecord, type ArchivedRecordType } from "@/features/commercial/components/commercial-leads-provider"
-import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider"
-import { AccessDenied } from "@/features/identity/access-denied"
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import { ArchiveRestore, ExternalLink, Search } from "lucide-react";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  useCommercialLeads,
+  type ArchivedRecord,
+  type ArchivedRecordType,
+} from "@/features/commercial/components/commercial-leads-provider";
+import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider";
+import { AccessDenied } from "@/features/identity/access-denied";
 
-const labels: Record<ArchivedRecordType, string> = { lead: "Lead", customer: "Cliente", activity: "Attività", project: "Progetto", contact: "Contatto", contract: "Contratto", document: "Documento", order: "Ordine", service: "Servizio" }
-const dateTime = new Intl.DateTimeFormat("it-IT", { dateStyle: "medium", timeStyle: "short" })
+const labels: Record<ArchivedRecordType, string> = {
+  lead: "Lead",
+  customer: "Cliente",
+  activity: "Attività",
+  project: "Progetto",
+  contact: "Contatto",
+  contract: "Contratto",
+  document: "Documento",
+  order: "Ordine",
+  service: "Servizio",
+};
+const dateTime = new Intl.DateTimeFormat("it-IT", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
 
 export function CommercialArchivePage() {
-  const store = useCommercialLeads(); const identity = useDoflowIdentity(); const [query, setQuery] = useState(""); const [type, setType] = useState<"all" | ArchivedRecordType>("all"); const [sort, setSort] = useState<"desc" | "asc" | "name">("desc"); const [candidate, setCandidate] = useState<ArchivedRecord>()
-  const records = useMemo(() => store.archivedRecords.filter((record) => (type === "all" || record.type === type) && (!query || `${record.label} ${record.id} ${record.reason ?? ""}`.toLowerCase().includes(query.toLowerCase()))).sort((left, right) => sort === "name" ? left.label.localeCompare(right.label) : left.archivedAt.localeCompare(right.archivedAt) * (sort === "desc" ? -1 : 1)), [query, sort, store.archivedRecords, type])
-  if (!identity.hasCapability("canManageArchive")) return <AccessDenied resource="all’archivio operativo" />
-  const restore = async () => { if (!candidate) return; const ok = await store.restoreArchivedRecord(candidate.type, candidate.id); if (ok) toast.success("Record ripristinato"); else toast.error("Ripristino non consentito"); setCandidate(undefined) }
-  return <main className="mx-auto w-full max-w-7xl space-y-5 p-4 md:p-6"><header><h1 className="text-2xl font-semibold">Archivio</h1><p className="text-sm text-muted-foreground">Record conservati tramite soft-delete. Nessuna eliminazione definitiva.</p></header><Card><CardContent className="flex flex-wrap gap-2 p-3"><div className="relative min-w-56 flex-1"><Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" /><Input className="pl-8" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cerca nome, ID o motivo" /></div><Select value={type} onValueChange={(value) => setType(value as "all" | ArchivedRecordType)}><SelectTrigger aria-label="Tipo record" className="w-44"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tutte le categorie</SelectItem>{Object.entries(labels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select><Select value={sort} onValueChange={(value) => setSort(value as typeof sort)}><SelectTrigger aria-label="Ordina archivio" className="w-44"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="desc">Più recenti</SelectItem><SelectItem value="asc">Meno recenti</SelectItem><SelectItem value="name">Nome A–Z</SelectItem></SelectContent></Select></CardContent></Card><Card><CardContent className="divide-y p-0">{records.map((record) => <div key={`${record.type}:${record.id}`} className="grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><b className="truncate">{record.label}</b><Badge variant="secondary">{labels[record.type]}</Badge>{record.mergedIntoId && <Badge variant="outline">Fuso</Badge>}</div><p className="mt-1 text-xs text-muted-foreground">{dateTime.format(new Date(record.archivedAt))} · {record.archivedBy ? identity.users.find((user) => user.id === record.archivedBy)?.name ?? record.archivedBy : "Autore non disponibile"}</p><p className="text-sm text-muted-foreground">{record.reason || "Nessun motivo registrato"}</p>{record.mergedIntoId && <p className="text-xs text-muted-foreground">Record principale: {record.mergedIntoId}</p>}</div><div className="flex gap-2">{record.primaryHref && <Button asChild size="sm" variant="outline"><Link href={record.primaryHref}><ExternalLink />Apri principale</Link></Button>}<Button size="sm" disabled={!record.restorable} onClick={() => setCandidate(record)}><ArchiveRestore />{record.restorable ? "Ripristina" : "Non ripristinabile"}</Button></div></div>)}{!records.length && <CardHeader><CardTitle>Nessun record</CardTitle><CardDescription>L’archivio non contiene elementi per questi filtri.</CardDescription></CardHeader>}</CardContent></Card><AlertDialog open={Boolean(candidate)} onOpenChange={(open) => { if (!open) setCandidate(undefined) }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Ripristinare il record?</AlertDialogTitle><AlertDialogDescription>{candidate?.label} tornerà nelle viste operative. L’azione è idempotente e verrà registrata nella Timeline.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Annulla</AlertDialogCancel><AlertDialogAction onClick={restore}>Ripristina</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></main>
+  const store = useCommercialLeads();
+  const identity = useDoflowIdentity();
+  const [query, setQuery] = useState("");
+  const [type, setType] = useState<"all" | ArchivedRecordType>("all");
+  const [sort, setSort] = useState<"desc" | "asc" | "name">("desc");
+  const [candidate, setCandidate] = useState<ArchivedRecord>();
+  const records = useMemo(
+    () =>
+      store.archivedRecords
+        .filter(
+          (record) =>
+            (type === "all" || record.type === type) &&
+            (!query ||
+              `${record.label} ${record.id} ${record.reason ?? ""}`
+                .toLowerCase()
+                .includes(query.toLowerCase())),
+        )
+        .sort((left, right) =>
+          sort === "name"
+            ? left.label.localeCompare(right.label)
+            : left.archivedAt.localeCompare(right.archivedAt) *
+              (sort === "desc" ? -1 : 1),
+        ),
+    [query, sort, store.archivedRecords, type],
+  );
+  if (!identity.hasCapability("canManageArchive"))
+    return <AccessDenied resource="all’archivio operativo" />;
+  const restore = async () => {
+    if (!candidate) return;
+    const ok = await store.restoreArchivedRecord(candidate.type, candidate.id);
+    if (ok) toast.success("Record ripristinato");
+    else toast.error("Ripristino non consentito");
+    setCandidate(undefined);
+  };
+  return (
+    <main className="mx-auto w-full max-w-7xl space-y-5 p-4 md:p-6">
+      <header>
+        <h1 className="text-2xl font-semibold">Archivio</h1>
+        <p className="text-sm text-muted-foreground">
+          Record conservati tramite soft-delete. Nessuna eliminazione
+          definitiva.
+        </p>
+      </header>
+      <Card>
+        <CardContent className="flex flex-wrap gap-2 p-3">
+          <div className="relative min-w-56 flex-1">
+            <Search className="absolute left-2 top-2.5 size-4 text-muted-foreground" />
+            <Input
+              className="pl-8"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Cerca nome, ID o motivo"
+            />
+          </div>
+          <Select
+            value={type}
+            onValueChange={(value) =>
+              setType(value as "all" | ArchivedRecordType)
+            }
+          >
+            <SelectTrigger aria-label="Tipo record" className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tutte le categorie</SelectItem>
+              {Object.entries(labels).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={sort}
+            onValueChange={(value) => setSort(value as typeof sort)}
+          >
+            <SelectTrigger aria-label="Ordina archivio" className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desc">Più recenti</SelectItem>
+              <SelectItem value="asc">Meno recenti</SelectItem>
+              <SelectItem value="name">Nome A–Z</SelectItem>
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="divide-y p-0">
+          {records.map((record) => (
+            <div
+              key={`${record.type}:${record.id}`}
+              className="grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+            >
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <b className="truncate">{record.label}</b>
+                  <Badge variant="secondary">{labels[record.type]}</Badge>
+                  {record.mergedIntoId && <Badge variant="outline">Fuso</Badge>}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {dateTime.format(new Date(record.archivedAt))} ·{" "}
+                  {record.archivedBy
+                    ? (identity.users.find(
+                        (user) => user.id === record.archivedBy,
+                      )?.name ?? record.archivedBy)
+                    : "Autore non disponibile"}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {record.reason || "Nessun motivo registrato"}
+                </p>
+                {record.mergedIntoId && (
+                  <p className="text-xs text-muted-foreground">
+                    Record principale: {record.mergedIntoId}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                {record.primaryHref && (
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={record.primaryHref}>
+                      <ExternalLink />
+                      Apri principale
+                    </Link>
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  disabled={!record.restorable}
+                  onClick={() => setCandidate(record)}
+                >
+                  <ArchiveRestore />
+                  {record.restorable ? "Ripristina" : "Non ripristinabile"}
+                </Button>
+              </div>
+            </div>
+          ))}
+          {!records.length && (
+            <CardHeader>
+              <CardTitle>Nessun record</CardTitle>
+              <CardDescription>
+                L’archivio non contiene elementi per questi filtri.
+              </CardDescription>
+            </CardHeader>
+          )}
+        </CardContent>
+      </Card>
+      <AlertDialog
+        open={Boolean(candidate)}
+        onOpenChange={(open) => {
+          if (!open) setCandidate(undefined);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ripristinare il record?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {candidate?.label} tornerà nelle viste operative. L’azione è
+              idempotente e verrà registrata nella Timeline.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annulla</AlertDialogCancel>
+            <AlertDialogAction onClick={restore}>Ripristina</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </main>
+  );
 }

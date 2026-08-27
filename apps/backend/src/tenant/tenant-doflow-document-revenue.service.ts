@@ -1338,7 +1338,7 @@ export class TenantDoflowDocumentRevenueService {
       if (existing[0]) return { id: existing[0].id, existing: true };
       const items = await context.manager.query(
         `SELECT * FROM "${context.user.schema}".order_items
-          WHERE order_id = $1 ORDER BY created_at FOR SHARE`,
+          WHERE order_id = $1 AND archived_at IS NULL ORDER BY created_at FOR SHARE`,
         [orderId],
       );
       const id = randomUUID();
@@ -1853,7 +1853,7 @@ export class TenantDoflowDocumentRevenueService {
       if (existing[0]) return { id: existing[0].id, existing: true };
       const items = await context.manager.query(
         `SELECT * FROM "${context.user.schema}".order_items
-          WHERE order_id = $1 ORDER BY created_at FOR SHARE`,
+          WHERE order_id = $1 AND archived_at IS NULL ORDER BY created_at FOR SHARE`,
         [orderId],
       );
       if (!items.length) throw new BadRequestException('Ordine senza righe');
@@ -2157,7 +2157,7 @@ export class TenantDoflowDocumentRevenueService {
         `SELECT o.*, oi.*, o.id AS source_order_id, oi.id AS source_item_id
            FROM "${context.user.schema}".orders o
            JOIN "${context.user.schema}".order_items oi ON oi.order_id = o.id
-          WHERE o.id = $1 AND oi.id = $2 AND o.deleted_at IS NULL
+          WHERE o.id = $1 AND oi.id = $2 AND oi.archived_at IS NULL AND o.deleted_at IS NULL
           FOR UPDATE OF o`,
         [orderId, itemId],
       );
@@ -2401,7 +2401,7 @@ export class TenantDoflowDocumentRevenueService {
       }
       const sourceItemRows = await context.manager.query(
         `SELECT * FROM "${context.user.schema}".order_items
-          WHERE id = $1 FOR SHARE`,
+          WHERE id = $1 AND archived_at IS NULL FOR SHARE`,
         [renewal.source_order_item_id],
       );
       const sourceItem = sourceItemRows[0];

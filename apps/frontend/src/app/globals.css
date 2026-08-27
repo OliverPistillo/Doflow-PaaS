@@ -2,6 +2,7 @@
 @config "../../tailwind.config.ts";
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "./doflow-reference.css";
 
 @layer base {
 
@@ -1396,20 +1397,6 @@ html.dark[data-tenant-ui="universal"] {
   margin-right: 0;
   margin-left: 0;
   max-width: none;
-}
-
-[data-builder-shell="universal"] {
-  width: 100%;
-  min-width: 0;
-  padding: 20px 24px 28px;
-}
-
-[data-builder-shell="universal"] table {
-  border-color: hsl(var(--border));
-}
-
-@media (max-width: 767px) {
-  [data-builder-shell="universal"] { padding: 16px; }
 }
 
 /* Login reference 2026 — scoped to /login; the shared auth shell remains unchanged. */

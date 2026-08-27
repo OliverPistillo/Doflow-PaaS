@@ -25,7 +25,7 @@ export function commercePaymentStatusLabel(value?: string | null) {
 
 export type ServicePromotion = { id: string; name: string; kind: "percentage" | "fixed"; value: number; active: boolean; validFrom?: string; validUntil?: string; combinable?: boolean }
 export type ServiceExtra = { id: string; name: string; price: number; active: boolean; version?: number }
-export type ServiceProjectTemplate = { name: string; projectType: "website" | "ecommerce" | "landing" | "branding" | "marketing" | "maintenance" | "consulting" | "other"; phases: string[] }
+export type ServiceProjectTemplate = { name: string; projectType: "website" | "ecommerce" | "landing" | "branding" | "marketing" | "maintenance" | "consulting" | "software" | "saas" | "other"; phases: string[] }
 export type ServiceBillingPlan = {
   id: string
   name: string
@@ -242,11 +242,69 @@ export type CommercialRenewal = {
 export type CommerceSettings = {
   requireSignedContractForProject: boolean
   requireDepositForProject: boolean
+  supplierProfile: {
+    brandName: string
+    legalHolder: string
+    vatNumber: string
+    address: string
+    email: string
+    phone: string
+    legalName?: string
+    taxCode?: string
+    postalCode?: string
+    city?: string
+    province?: string
+    country?: string
+    certifiedEmail?: string
+    sdiCode?: string
+    website?: string
+    logoUrl?: string
+  }
+  currency?: "EUR"
+  defaultVatRate?: number
+  documentSettings?: { quotePrefix: string; quoteValidityDays: number; paymentTerms: string; bankDetails: string; defaultNotes: string }
+  salesSettings?: { defaultDepositPercent: number; enabledPaymentMethods: string[]; renewalReminderDays: number }
 }
 
 export const defaultCommerceSettings: CommerceSettings = {
   requireSignedContractForProject: true,
   requireDepositForProject: true,
+  supplierProfile: { brandName: "DoFlow", legalHolder: "", vatNumber: "", address: "", email: "", phone: "", legalName: "", taxCode: "", postalCode: "", city: "", province: "", country: "Italia", certifiedEmail: "", sdiCode: "", website: "" },
+  currency: "EUR",
+  defaultVatRate: 22,
+  documentSettings: { quotePrefix: "DF-PREV", quoteValidityDays: 30, paymentTerms: "Bonifico entro la scadenza indicata", bankDetails: "", defaultNotes: "" },
+  salesSettings: { defaultDepositPercent: 50, enabledPaymentMethods: ["Bonifico", "Carta", "Contanti", "PayPal"], renewalReminderDays: 30 },
+}
+
+export function normalizeCommerceSettings(settings?: Partial<CommerceSettings>): CommerceSettings {
+  return { ...defaultCommerceSettings, ...settings, supplierProfile: { ...defaultCommerceSettings.supplierProfile, ...(settings?.supplierProfile ?? {}) }, documentSettings: { ...defaultCommerceSettings.documentSettings!, ...(settings?.documentSettings ?? {}) }, salesSettings: { ...defaultCommerceSettings.salesSettings!, ...(settings?.salesSettings ?? {}) } }
+}
+
+export function calculateServicePlanTotal(service: CommercialService, plan?: ServiceBillingPlan) {
+  return service.price + (plan?.recurringPrice ?? 0)
+}
+
+export function serviceRequiresAnnualPlan(service: CommercialService) {
+  return Boolean(service.billingPlans?.some((plan) => plan.active && plan.renewal === "required"))
+}
+
+/** Proiezione read-only dei valori canonici già calcolati e restituiti dal backend. */
+export function orderFinancialsFromServer(order: CommercialOrder) {
+  const cancelled = order.administrativeStatus === "Annullato"
+  const sold = cancelled ? 0 : Math.max(0, order.total)
+  const grossCollected = Math.max(0, order.grossCollected ?? 0)
+  const refunded = Math.max(0, order.refundedTotal ?? 0)
+  const netCollected = Math.max(0, order.netCollected ?? 0)
+  const residual = cancelled ? 0 : Math.max(0, order.residual ?? 0)
+  const invoiced = Math.max(0, Math.min(order.invoicedAmount ?? 0, sold))
+  const status = cancelled ? "Annullato" : commercePaymentStatusLabel(order.paymentStatus)
+  return { paid: netCollected, grossCollected, refunded, netCollected, invoiced, sold, residual, toInvoice: Math.max(0, sold - invoiced), status }
+}
+
+export function refundableAmount(payment: CommercialPayment, payments: CommercialPayment[]) {
+  if (payment.type === "Rimborso" || payment.status !== "Confermato" || payment.archivedAt) return 0
+  const refunded = payments.filter((item) => !item.archivedAt && item.status === "Confermato" && item.type === "Rimborso" && item.originalPaymentId === payment.id).reduce((sum, item) => sum + Math.abs(item.amount), 0)
+  return Math.max(0, Math.abs(payment.amount) - refunded)
 }
 
 /** Effimero: serve soltanto a comporre il draft; lo snapshot autorevole nasce nel backend. */

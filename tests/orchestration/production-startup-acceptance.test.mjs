@@ -27,7 +27,7 @@ test("production startup acceptance builds the exact backend Dockerfile and comp
   ]) {
     assert.match(orchestrator, new RegExp(compiled.replaceAll(".", "\\.")));
   }
-  for (const migration of ["1714752000000", "1790000000000", "1800000000000", "1810000000000", "1820000000000", "1830000000000", "1840000000000", "1850000000000"]) {
+  for (const migration of ["1714752000000", "1790000000000", "1800000000000", "1810000000000", "1820000000000", "1830000000000", "1840000000000", "1850000000000", "1860000000000"]) {
     assert.match(orchestrator, new RegExp(migration));
   }
 });
@@ -36,6 +36,7 @@ test("all five production startup scenarios and atomic evidence are permanent", 
   const orchestrator = await source("scripts/production-startup-acceptance.mjs");
   for (const scenario of [
     "scenarioBaseline",
+    "scenarioPre186",
     "scenarioRestart",
     "scenarioConcurrent",
     "scenarioFailure",
@@ -52,6 +53,10 @@ test("all five production startup scenarios and atomic evidence are permanent", 
   assert.match(orchestrator, /bakedSecrets/);
   assert.match(orchestrator, /CreateBucketCommand/);
   assert.match(orchestrator, /HeadBucketCommand/);
+  assert.match(orchestrator, /migrate-to-185/);
+  assert.match(orchestrator, /contractTables/);
+  assert.match(orchestrator, /additiveColumns/);
+  assert.match(orchestrator, /contractIndexes/);
   for (const event of ["lock_wait", "lock_acquired", "lock_released", "complete"]) {
     assert.match(orchestrator, new RegExp(`\\"${event}\\"`));
   }

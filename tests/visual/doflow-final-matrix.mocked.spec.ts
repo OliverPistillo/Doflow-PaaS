@@ -45,7 +45,6 @@ const ownerCapabilities = [
   "canManageArchive",
   "canViewCampaigns",
   "canInspectDuplicates",
-  "canUseBuilder",
   "canViewAutomations",
   "canViewAutomationErrors",
   "canReadNotifications",
@@ -214,7 +213,7 @@ const teamOptions = {
   sensitiveFieldsVisible: true,
 }
 
-type FixtureOptions = { canUseBuilder?: boolean }
+type FixtureOptions = Record<string, never>
 type FixtureObservation = {
   blocked: Array<{ method: string; url: string }>
   apiPaths: string[]
@@ -229,11 +228,9 @@ function list(items: unknown[] = [], limit = 500) {
   return { items, total: items.length, limit, offset: 0 }
 }
 
-function fixtureBody(url: URL, options: FixtureOptions) {
+function fixtureBody(url: URL, _options: FixtureOptions) {
   const pathName = url.pathname
-  const capabilities = options.canUseBuilder === false
-    ? ownerCapabilities.filter((capability) => capability !== "canUseBuilder")
-    : [...ownerCapabilities]
+  const capabilities = [...ownerCapabilities]
 
   if (pathName === "/api/auth/me") {
     return {
@@ -272,6 +269,21 @@ function fixtureBody(url: URL, options: FixtureOptions) {
           explicitCapabilities: ["canViewCampaigns"],
         },
       ],
+    }
+  }
+  if (pathName === "/api/tenant/preferences") {
+    return {
+      onboardingStatus: "completed",
+      activeTourId: null,
+      tourStep: 0,
+      completedTourIds: ["main"],
+      dismissedTourIds: [],
+      suggestionsEnabled: true,
+      animationsEnabled: true,
+      reducedMotion: false,
+      illustratedEmptyStates: true,
+      contextualAssistant: true,
+      seenReleaseVersion: "0",
     }
   }
   if (pathName === "/api/tenant/team/members") return list([ownerMember, activeMember, invitedMember])
@@ -421,20 +433,19 @@ function fixtureBody(url: URL, options: FixtureOptions) {
   }
   if (pathName === "/api/tenant/collaboration/conversations") {
     return list([
-      { id: "conversation-general", title: "Generale", kind: "team", unreadCount: 0, participants: [{ userId: USER_ID }, { userId: ACTIVE_USER_ID }], lastMessage: { id: "message-1", conversationId: "conversation-general", authorId: USER_ID, body: "Allineamento operativo completato.", createdAt: "2026-08-27T08:30:00.000Z" } },
+      { id: "conversation-general", title: "Generale", kind: "team", unreadCount: 0, participants: [{ userId: USER_ID }, { userId: ACTIVE_USER_ID }], lastMessage: { id: "message-conversation-general", conversationId: "conversation-general", authorId: USER_ID, body: "Allineamento operativo completato.", createdAt: "2026-08-27T08:30:00.000Z" } },
       { id: "conversation-production", title: "Produzione", kind: "group", unreadCount: 0, participants: [{ userId: USER_ID }, { userId: ACTIVE_USER_ID }], lastMessage: null },
     ])
   }
   if (pathName === "/api/tenant/collaboration/calls/status") return { enabled: false }
   if (pathName === "/api/tenant/collaboration/presence") return list([])
   if (/\/api\/tenant\/collaboration\/conversations\/[^/]+\/messages$/.test(pathName)) {
-    return { items: [{ id: "message-1", conversationId: "conversation-general", authorId: USER_ID, authorName: ownerMember.display_name, body: "Allineamento operativo completato.", createdAt: "2026-08-27T08:30:00.000Z" }], nextCursor: null }
+    const conversationId = pathName.split("/").at(-2) || "conversation-general"
+    return { items: [{ id: `message-${conversationId}`, conversationId, authorId: USER_ID, authorName: ownerMember.display_name, body: conversationId === "conversation-general" ? "Allineamento operativo completato." : "Pianificazione produzione aggiornata.", createdAt: "2026-08-27T08:30:00.000Z" }], nextCursor: null }
   }
   if (/\/api\/tenant\/collaboration\/conversations\/[^/]+$/.test(pathName)) {
     return { id: pathName.split("/").at(-1), title: pathName.endsWith("production") ? "Produzione" : "Generale", kind: "team", participants: [{ userId: USER_ID }, { userId: ACTIVE_USER_ID }] }
   }
-  if (pathName === "/api/tenant/commercial/site-proposals/templates") return []
-  if (pathName === "/api/tenant/commercial/site-proposals") return list([], Number(url.searchParams.get("limit") || 25))
   if (pathName === "/api/tenant/crm/pipeline") return { model: "visual-fixture", stages: [{ stage: "qualified", label: "Qualificato", count: 1, totalValue: 2500, items: [opportunity] }] }
   if (pathName === "/api/tenant/doflow/commerce/economics/summary") {
     return {
@@ -554,10 +565,14 @@ function visibleSidebar(page: Page) {
 }
 
 async function waitForDoflowShell(page: Page) {
-  await expect(page.locator("html")).toHaveAttribute("data-tenant-ui", "universal")
-  await expect(page.locator('[data-app-ui-generation="universal-v1"]')).toBeVisible()
-  await expect(page.locator('[data-app-shell-ready="true"][data-workspace-ready="true"]')).toBeVisible()
-  await expect(page.locator('[data-app-shell-ready="true"]')).toHaveAttribute("data-secondary-status", "ready")
+  await expect(page.locator("html")).toHaveAttribute("data-tenant-ui", "doflow-reference")
+  await expect(page.locator('[data-slot="sidebar-wrapper"]')).toBeVisible()
+  await expect(page.locator('[data-slot="sidebar-inset"]')).toBeVisible()
+  await expect(page.locator('[data-slot="sidebar-inset"] > header')).toBeVisible()
+  if ((page.viewportSize()?.width || 0) < 768) await expect(visibleSidebar(page)).toHaveCount(0)
+  else await expect(visibleSidebar(page)).toBeVisible()
+  await expect(page.getByText("Sincronizzazione workspace", { exact: true })).toHaveCount(0)
+  await expect(page.getByText("Workspace non disponibile", { exact: true })).toHaveCount(0)
   await expect(page.locator('[data-sidebar-kind="tenant-legacy"]')).toHaveCount(0)
 }
 
@@ -568,8 +583,53 @@ async function assertTheme(page: Page, theme: "light" | "dark") {
 }
 
 async function assertNoDocumentOverflow(page: Page) {
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
-  expect(overflow).toBeLessThanOrEqual(1)
+  const metrics = await page.evaluate(() => {
+    const offenders = [...document.querySelectorAll<HTMLElement>("body *")]
+      .map((element) => {
+        const rect = element.getBoundingClientRect()
+        return {
+          tag: element.tagName.toLowerCase(),
+          className: typeof element.className === "string" ? element.className.slice(0, 180) : "",
+          text: (element.textContent || "").trim().replace(/\s+/g, " ").slice(0, 80),
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+          width: Math.round(rect.width),
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+        }
+      })
+      .filter((item) => item.right > window.innerWidth + 1 || item.left < -1)
+      .sort((left, right) => right.right - left.right)
+      .slice(0, 8)
+    const farthest = [...document.querySelectorAll<HTMLElement>("body *")]
+      .sort((left, right) => right.getBoundingClientRect().right - left.getBoundingClientRect().right)[0]
+    const ancestors: Array<Record<string, unknown>> = []
+    let current: HTMLElement | null = farthest
+    while (current && ancestors.length < 12) {
+      const rect = current.getBoundingClientRect()
+      const style = getComputedStyle(current)
+      ancestors.push({
+        tag: current.tagName.toLowerCase(),
+        slot: current.dataset.slot || current.dataset.sidebar || "",
+        className: typeof current.className === "string" ? current.className.slice(0, 180) : "",
+        left: Math.round(rect.left),
+        right: Math.round(rect.right),
+        width: Math.round(rect.width),
+        minWidth: style.minWidth,
+        overflowX: style.overflowX,
+        display: style.display,
+      })
+      current = current.parentElement
+    }
+    return {
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+      viewportWidth: window.innerWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      offenders,
+      ancestors,
+    }
+  })
+  expect(metrics.overflow, `Overflow orizzontale su ${page.url()}: ${JSON.stringify(metrics)}`).toBeLessThanOrEqual(1)
 }
 
 async function assertInviteOverflowContained(page: Page, dialog: Locator) {
@@ -622,15 +682,20 @@ async function assertSidebarWidth(page: Page, expected: number) {
 
 async function collapseSidebar(page: Page) {
   const root = page.locator('[data-slot="sidebar"][data-state]').first()
-  await page.getByRole("button", { name: "Comprimi sidebar" }).click()
+  await page.locator('[data-slot="sidebar-trigger"]').click()
   await expect(root).toHaveAttribute("data-state", "collapsed")
   await assertSidebarWidth(page, 48)
 }
 
 async function openTeamAccount(page: Page) {
-  const tab = page.getByRole("tab", { name: "Team e account" })
-  await expect(tab).toBeVisible()
-  await tab.click()
+  if ((page.viewportSize()?.width || 0) < 768) {
+    await page.locator('[data-slot="sidebar-trigger"]').click()
+    await expect(visibleSidebar(page).getByRole("link", { name: "Team e account", exact: true })).toBeVisible()
+    await page.keyboard.press("Escape")
+    await expect(visibleSidebar(page)).toHaveCount(0)
+  } else {
+    await expect(visibleSidebar(page).getByRole("link", { name: "Team e account", exact: true })).toBeVisible()
+  }
   await expect(page).toHaveURL(/\/dashboard\/team-space\?tab=team-accounts$/)
   await expect(page.locator('[data-team-account-admin="server"]')).toBeVisible()
   const activeMemberButton = page.getByRole("button", { name: /Membro operativo/ })
@@ -682,18 +747,6 @@ async function gotoSurface(page: Page, surface: Surface) {
   await page.goto(surface.route, { waitUntil: "domcontentloaded" })
   await waitForDoflowShell(page)
   if (surface.teamAccount) await openTeamAccount(page)
-  if (surface.slug === "builder") {
-    await expect(page.locator('[data-builder-shell="universal"]')).toBeVisible()
-    await expect(page.getByRole("heading", { name: "Proposte web" })).toBeVisible()
-    if (await page.evaluate(() => window.innerWidth < 768)) {
-      await page.locator('[data-slot="sidebar-trigger"]').click()
-      await expect(visibleSidebar(page).getByRole("link", { name: "Builder", exact: true })).toHaveAttribute("data-active", "true")
-      await page.keyboard.press("Escape")
-      await expect(visibleSidebar(page)).toHaveCount(0)
-    } else {
-      await expect(visibleSidebar(page).getByRole("link", { name: "Builder", exact: true })).toHaveAttribute("data-active", "true")
-    }
-  }
   if (surface.slug === "automazioni") {
     await expect(page.getByRole("heading", { name: "Automazioni", exact: true })).toBeVisible()
   }
@@ -729,7 +782,6 @@ const surfaces: Surface[] = [
   { slug: "project-detail", route: `/dashboard/progetti/${PROJECT_ID}?tab=overview` },
   { slug: "activities", route: "/dashboard/attivita" },
   { slug: "calendar", route: "/dashboard/calendario" },
-  { slug: "builder", route: "/commercial/site-proposals" },
   { slug: "team-space", route: "/dashboard/team-space" },
   { slug: "inbox", route: "/dashboard/inbox" },
   { slug: "company-intelligence", route: "/dashboard/company-intelligence" },
@@ -790,9 +842,9 @@ async function shellGeometry(page: Page, variant: MatrixVariant, surface: Surfac
       inset: sample('[data-slot="sidebar-inset"]'),
       header: sample('[data-slot="sidebar-inset"] > header'),
       search: sampleVisible('[aria-label="Apri ricerca globale"]'),
-      main: sample('[data-app-shell-ready="true"]'),
-      heading: sample('[data-app-shell-ready="true"] h1'),
-      firstCard: sample('[data-app-shell-ready="true"] [data-slot="card"]'),
+      main: sample('[data-slot="sidebar-inset"] > :not(header)'),
+      heading: sample('[data-slot="sidebar-inset"] h1'),
+      firstCard: sample('[data-slot="sidebar-inset"] [data-slot="card"]'),
     }
   }, { variantSlug: variant.slug, surfaceSlug: surface.slug })
 
@@ -899,6 +951,7 @@ async function newFixturePage(browser: Browser, variant: MatrixVariant, options:
     timezoneId: "Europe/Rome",
   })
   await context.addInitScript((theme) => {
+    ;(window as Window & { __DOFLOW_VISUAL_READ_ONLY__?: boolean }).__DOFLOW_VISUAL_READ_ONLY__ = true
     if (!localStorage.getItem("doflow_theme")) localStorage.setItem("doflow_theme", theme)
   }, variant.theme)
   const page = await context.newPage()
@@ -1011,7 +1064,7 @@ test("matrice visuale Doflow finale con API localhost deterministiche", async ({
   )
 })
 
-test("tema persistente, sidebar canonica e routing Builder", async ({ browser }) => {
+test("tema persistente, sidebar canonica e Team Space senza chiamate", async ({ browser }) => {
   test.setTimeout(300_000)
   const variant: MatrixVariant = { slug: "behavior", width: 1440, height: 900, theme: "light", sidebar: "expanded" }
   const { context, page, observation } = await newFixturePage(browser, variant)
@@ -1020,37 +1073,18 @@ test("tema persistente, sidebar canonica e routing Builder", async ({ browser })
     await assertTheme(page, "light")
     await expect(page.getByRole("button", { name: "Bonus e punti" })).toBeVisible()
     await expect(page.getByRole("button", { name: /Apri Team Space/ })).toBeVisible()
-    await expect(page.getByRole("button", { name: "Apri agenda" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Apri la tua agenda" })).toBeVisible()
     await expect(page.getByRole("button", { name: "Apri notifiche" })).toBeVisible()
-    await page.getByRole("button", { name: "Attiva tema scuro" }).click()
+    await page.getByRole("button", { name: "Cambia tema" }).click()
     await assertTheme(page, "dark")
     await page.reload({ waitUntil: "domcontentloaded" })
     await waitForDoflowShell(page)
     await assertTheme(page, "dark")
-
-    const builder = visibleSidebar(page).getByRole("link", { name: "Builder", exact: true })
-    await expect(builder.locator("xpath=ancestor::*[@data-slot='sidebar-menu-sub']")).toHaveCount(0)
-    await builder.click()
-    await expect(page).toHaveURL(/\/commercial\/site-proposals$/)
-    await waitForDoflowShell(page)
-    await expect(page.locator('[data-builder-shell="universal"]')).toBeVisible()
-    await page.reload({ waitUntil: "domcontentloaded" })
-    await waitForDoflowShell(page)
-    await assertTheme(page, "dark")
-    await page.goBack({ waitUntil: "domcontentloaded" })
-    await expect(page).toHaveURL(/\/dashboard$/)
-    await waitForDoflowShell(page)
-    await page.goForward({ waitUntil: "domcontentloaded" })
-    await expect(page).toHaveURL(/\/commercial\/site-proposals$/)
-    await waitForDoflowShell(page)
 
     await collapseSidebar(page)
-    const collapsedBuilder = visibleSidebar(page).getByRole("link", { name: "Builder", exact: true })
-    await collapsedBuilder.hover()
-    await expect(page.getByRole("tooltip", { name: "Builder" })).toBeVisible()
     await assertNoDocumentOverflow(page)
 
-    await page.getByRole("button", { name: "Attiva tema chiaro" }).click()
+    await page.getByRole("button", { name: "Cambia tema" }).click()
     await assertTheme(page, "light")
     await page.reload({ waitUntil: "domcontentloaded" })
     await waitForDoflowShell(page)
@@ -1066,19 +1100,17 @@ test("tema persistente, sidebar canonica e routing Builder", async ({ browser })
   }
 })
 
-test("Builder è nascosto e non carica API privilegiate senza canUseBuilder", async ({ browser }) => {
+test("Builder estratto: assente dalla navigazione, route 404 e zero API", async ({ browser }) => {
   test.setTimeout(180_000)
-  const variant: MatrixVariant = { slug: "builder-denied", width: 1440, height: 900, theme: "light", sidebar: "expanded" }
-  const { context, page, observation } = await newFixturePage(browser, variant, { canUseBuilder: false })
+  const variant: MatrixVariant = { slug: "builder-removed", width: 1440, height: 900, theme: "light", sidebar: "expanded" }
+  const { context, page, observation } = await newFixturePage(browser, variant)
   try {
     await gotoSurface(page, surfaces[0])
     await expect(visibleSidebar(page).getByRole("link", { name: "Builder", exact: true })).toHaveCount(0)
     await expect(page.getByRole("link", { name: "Apri Builder" })).toHaveCount(0)
 
-    await page.goto("/commercial/site-proposals", { waitUntil: "domcontentloaded" })
-    await waitForDoflowShell(page)
-    await expect(page.locator('[data-builder-shell="universal"]')).toBeVisible()
-    await expect(page.getByRole("heading", { name: "Modulo non disponibile" })).toBeVisible()
+    const response = await page.request.get(`${frontendOrigin}/commercial/site-proposals`)
+    expect(response.status()).toBe(404)
     expect(observation.apiPaths.some((pathName) => pathName.startsWith("/api/tenant/commercial/site-proposals"))).toBe(false)
   } finally {
     await closeFixtureContext(context, observation)

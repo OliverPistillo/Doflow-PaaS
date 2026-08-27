@@ -1,6 +1,6 @@
-import { QuotePreviewPage } from "@/features/commercial/components/quote-preview-page"
+import { QuotePreviewPage } from "@/features/commercial/components/quote-document"
 
-export default async function QuotePreviewRoute({ params }: { params: Promise<{ quoteId: string }> }) {
-  const { quoteId } = await params
+export default async function QuotePreviewRoute(props: { params: Promise<{ quoteId: string }> }) {
+  const { quoteId } = await props.params
   return <QuotePreviewPage quoteId={quoteId} />
 }

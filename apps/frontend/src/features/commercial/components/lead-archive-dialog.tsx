@@ -1,5 +1,6 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { useRef, useState } from "react"
 import { Archive } from "lucide-react"
 import { toast } from "sonner"
@@ -12,18 +13,23 @@ import { useCommercialLeads } from "@/features/commercial/components/commercial-
 import type { CommercialLead } from "@/features/commercial/types"
 
 export function LeadArchiveDialog({ lead, open, onOpenChange, onArchived }: { lead?: CommercialLead; open: boolean; onOpenChange: (open: boolean) => void; onArchived?: () => void }) {
+  const router = useRouter()
   const { archiveLead } = useCommercialLeads()
   const [reason, setReason] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
   const saving = useRef(false)
   const changeOpen = (next: boolean) => { if (saving.current) return; if (!next) setReason(""); onOpenChange(next) }
   const confirm = () => {
     if (!lead || saving.current) return
     saving.current = true
+    setIsSaving(true)
     const archived = archiveLead(lead.id, reason)
-    if (!archived) { saving.current = false; toast.error("Impossibile archiviare il lead."); return }
-    onOpenChange(false)
-    toast.success("Lead archiviato")
-    onArchived?.()
+    if (!archived) { saving.current = false; setIsSaving(false); toast.error("Impossibile archiviare il lead."); return }
+    window.setTimeout(() => {
+      toast.success("Lead archiviato", { duration: 8000, action: { label: "Apri Archivio", onClick: () => router.push("/dashboard/archivio") } })
+      onOpenChange(false)
+      onArchived?.()
+    }, 250)
   }
-  return <Dialog open={open} onOpenChange={changeOpen}><DialogContent><DialogHeader><DialogTitle>Archiviare {lead?.company}?</DialogTitle><DialogDescription>Il record non verrà eliminato. Sarà rimosso dalle viste operative e resterà conservato nello storico.</DialogDescription></DialogHeader><div className="grid gap-2"><Label htmlFor="lead-archive-reason">Motivo (facoltativo)</Label><Textarea id="lead-archive-reason" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Perché il lead viene archiviato?" /></div><DialogFooter><Button variant="outline" onClick={() => changeOpen(false)}>Annulla</Button><Button variant="destructive" onClick={confirm}><Archive />Conferma archiviazione</Button></DialogFooter></DialogContent></Dialog>
+  return <Dialog open={open} onOpenChange={changeOpen}><DialogContent aria-busy={isSaving}><DialogHeader><DialogTitle>Archiviare questo lead?</DialogTitle><DialogDescription>Il record resterà recuperabile dalla sezione Archivio.</DialogDescription></DialogHeader><div className="grid gap-2"><Label htmlFor="lead-archive-reason">Motivo (facoltativo)</Label><Textarea id="lead-archive-reason" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Perché il lead viene archiviato?" disabled={isSaving} /></div><DialogFooter><Button variant="outline" onClick={() => changeOpen(false)} disabled={isSaving}>Annulla</Button><Button variant="destructive" onClick={confirm} disabled={isSaving}><Archive />Conferma archiviazione</Button></DialogFooter></DialogContent></Dialog>
 }

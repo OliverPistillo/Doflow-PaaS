@@ -72,7 +72,6 @@ export function parseDoflowCutoverOptions(argv: string[]): DoflowCutoverOptions 
   }
   const tenantArg = argv.find((arg) => arg.startsWith('--tenant='));
   const tenantValue = (tenantArg?.slice('--tenant='.length) || 'doflow').trim().toLowerCase();
-  if (tenantValue === 'federicanerone') throw new DoflowCutoverError('CUTOVER_TENANT_FEDERICANERONE_FORBIDDEN');
   if (tenantValue !== 'doflow') throw new DoflowCutoverError('CUTOVER_TENANT_FORBIDDEN');
   return {
     mode,

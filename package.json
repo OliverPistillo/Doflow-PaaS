@@ -67,7 +67,10 @@
     "audit:browser-auth": "node scripts/browser-auth-authority-audit.mjs",
     "audit:release-candidate": "node scripts/final-release-audit.mjs",
     "audit:security:final": "node scripts/final-security-audit.mjs",
+    "audit:backend-contracts": "node scripts/backend-contract-completion-audit.mjs",
     "audit:doflow-ui-purity": "node scripts/audit-doflow-ui-purity.mjs",
+    "audit:builder-removal": "node scripts/audit-builder-removal.mjs",
+    "audit:source-parity": "node scripts/audit-source-parity-4864782.mjs",
     "audit:universal-ui-purity": "node scripts/audit-doflow-ui-purity.mjs",
     "test:doflow-ui-purity": "node --test tests/frontend/doflow-ui-purity.test.mjs",
     "test:universal-ui-purity": "node --test tests/frontend/doflow-ui-purity.test.mjs"
@@ -105,8 +108,7 @@
     },
     "onlyBuiltDependencies": [
       "@nestjs/core",
-      "msgpackr-extract",
-      "sharp"
+      "msgpackr-extract"
     ]
   },
   "volta": {

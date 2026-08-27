@@ -26,11 +26,13 @@ import {
   defaultPointPolicy,
   type CollaborationRecordType,
   type CommercialAuditEvent,
-  type CommercialAuditOrigin,
   type CommercialComment,
   type PointLedgerEntry,
   type PointPolicy,
+  type PointRedemption,
 } from "@/features/commercial/commercial-collaboration";
+import type { GuidedCall } from "@/features/commercial/commercial-guided-calls";
+import type { OperationalApproval, SupportTicket } from "@/features/commercial/commercial-support";
 import type { CommercialCampaign } from "@/features/commercial/commercial-campaigns";
 import {
   type CommercialInvoice,
@@ -82,6 +84,7 @@ import {
 import { commerceApi } from "@/lib/tenant-commerce-api";
 import { documentRevenueApi } from "@/lib/tenant-document-revenue-api";
 import { collaborationApi } from "@/lib/tenant-collaboration-api";
+import { backendContractsApi } from "@/lib/tenant-backend-contracts-api";
 import {
   performanceApi,
   type PerformanceState,
@@ -228,6 +231,7 @@ export function CommercialLeadsProvider({
   >([]);
   const [goals, setGoals] = useState<CommercialGoal[]>([]);
   const [appointments, setAppointments] = useState<CommercialAppointment[]>([]);
+  const [guidedCalls, setGuidedCalls] = useState<GuidedCall[]>([]);
   const [rankingConfigs, setRankingConfigs] = useState<RankingConfig[]>([]);
   const [rankingSnapshots, setRankingSnapshots] = useState<RankingSnapshot[]>(
     [],
@@ -250,11 +254,14 @@ export function CommercialLeadsProvider({
     defaultCommerceSettings,
   );
   const [timeSessions, setTimeSessions] = useState<ProjectTimeSession[]>([]);
+  const [supportTickets] = useState<SupportTicket[]>([]);
+  const [operationalApprovals] = useState<OperationalApproval[]>([]);
   const [auditEvents, setAuditEvents] = useState<CommercialAuditEvent[]>([]);
   const [comments, setComments] = useState<CommercialComment[]>([]);
   const [pointLedger, setPointLedger] = useState<PointLedgerEntry[]>([]);
   const [pointPolicy, setPointPolicy] =
     useState<PointPolicy>(defaultPointPolicy);
+  const [pointRedemptions] = useState<PointRedemption[]>([]);
   const [workspaceStatus, setWorkspaceStatus] =
     useState<WorkspaceReadinessStatus>("loading");
   const [workspaceError, setWorkspaceError] =
@@ -283,6 +290,8 @@ export function CommercialLeadsProvider({
   const canReadOrders = identity.hasCapability("canViewOrders");
   const canReadCampaigns = identity.hasCapability("canViewCampaigns");
   const canReadDocuments = canReadCustomers || canReadProjects;
+  const canReadContractCommerceSettings = canReadOrders || identity.hasCapability("canViewCommercialValues");
+  const canManageGuidedCalls = identity.hasCapability("canAssignLeads");
   const canReadPerformance =
     identity.hasCapability("canViewOwnPoints") ||
     identity.hasCapability("canViewGlobalPoints") ||
@@ -293,9 +302,6 @@ export function CommercialLeadsProvider({
     identity.hasCapability("canViewInvoices") ||
     identity.hasCapability("canViewRenewals");
   const recurrenceGenerationLocks = useRef(new Map<string, string>());
-  const contactsExportLocks = useRef(
-    new Map<string, { batchId: string; exportedAt: string }>(),
-  );
   const activityMoveLocks = useRef(new Map<string, string>());
   const leadArchiveLocks = useRef(new Set<string>());
 
@@ -678,6 +684,8 @@ export function CommercialLeadsProvider({
                 channel,
                 title: textValue(communication.title),
                 body: textValue(communication.body),
+                direction: (["incoming", "outgoing", "internal", "system"].includes(textValue(communication.direction).toLowerCase()) ? textValue(communication.direction).toLowerCase() : undefined) as CustomerCommunication["direction"],
+                status: textValue(communication.status) || undefined,
                 occurredAt: dateValue(communication.occurred_at, createdAt),
                 leadId: textValue(communication.lead_id) || undefined,
                 createdAt,
@@ -1342,6 +1350,7 @@ export function CommercialLeadsProvider({
           );
           if (pointPage.policy) {
             setPointPolicy({
+              ...defaultPointPolicy,
               onTimeBase: numericValue(pointPage.policy.on_time_base),
               earlyPerDay: numericValue(pointPage.policy.early_per_day),
               earlyMaximum: numericValue(pointPage.policy.early_maximum),
@@ -1679,6 +1688,47 @@ export function CommercialLeadsProvider({
     setOrder,
     workspaceAttempt,
   ]);
+  useEffect(() => {
+    if (!identity.hasHydrated || workspaceStatus !== "ready") return;
+    let cancelled = false;
+    void Promise.allSettled([
+      canReadCustomers ? backendContractsApi.customer.state() : Promise.resolve(null),
+      canManageGuidedCalls ? backendContractsApi.guidedCalls.list() : Promise.resolve(null),
+      canReadContractCommerceSettings ? backendContractsApi.commerceSettings.get() : Promise.resolve(null),
+    ]).then(([customerResult, guidedResult, settingsResult]) => {
+      if (cancelled) return;
+      if (customerResult.status === "fulfilled" && customerResult.value) {
+        const careRows = Array.isArray(customerResult.value.care) ? customerResult.value.care : [];
+        const financeRows = Array.isArray(customerResult.value.finance) ? customerResult.value.finance : [];
+        const documentRows = Array.isArray(customerResult.value.documents) ? customerResult.value.documents : [];
+        const careByCompany = new Map(careRows.map((row) => [textValue(row.company_id), row]));
+        const financeByCompany = new Map(financeRows.map((row) => [textValue(row.company_id), row]));
+        const documentsByCompany = new Map<string, CustomerDocument[]>();
+        for (const row of documentRows) {
+          const companyId = textValue(row.company_id); if (!companyId) continue;
+          const createdAt = dateValue(row.created_at); const document: CustomerDocument = { id: textValue(row.id), name: textValue(row.title), status: (textValue(row.category) || "Da ricevere") as CustomerDocument["status"], notes: textValue(row.description) || undefined, projectId: textValue(row.relation_type) === "project" ? textValue(row.relation_id) || undefined : undefined, createdAt, updatedAt: dateValue(row.updated_at, createdAt), ...(row.optimistic_version ? { optimisticVersion: numericValue(row.optimistic_version) } : {}) } as CustomerDocument;
+          documentsByCompany.set(companyId, [...(documentsByCompany.get(companyId) ?? []), document]);
+        }
+        setCustomers((items) => items.map((customer) => {
+          const care = careByCompany.get(customer.id); const finance = financeByCompany.get(customer.id); const metadataDocuments = documentsByCompany.get(customer.id) ?? [];
+          const mergedDocuments = uniqueById([...(customer.documents ?? []).filter((document) => !metadataDocuments.some((metadata) => metadata.id === document.id)), ...metadataDocuments]);
+          return { ...customer, documents: mergedDocuments, care: care ? { mode: (textValue(care.mode) || "Nessuna") as NonNullable<CommercialCustomer["care"]>["mode"], nextDueAt: textValue(care.next_due_at) || undefined, assigneeId: textValue(care.owner_user_id), recurrenceMonths: care.cadence_days ? Math.max(1, Math.round(numericValue(care.cadence_days) / 30)) : undefined, optimisticVersion: numericValue(care.optimistic_version) || 1 } : customer.care, finance: finance ? { total: numericValue(finance.total_cents) / 100, deposit: numericValue(finance.deposit_cents) / 100, paid: numericValue(finance.paid_cents) / 100, invoiced: numericValue(finance.invoiced_cents) / 100, optimisticVersion: numericValue(finance.optimistic_version) || 1 } : customer.finance } as CommercialCustomer;
+        }));
+      }
+      if (guidedResult.status === "fulfilled" && Array.isArray(guidedResult.value?.items)) {
+        const messageStatus = { prepared: "Bozza", external_opened: "Da inviare", manually_confirmed: "Consegnato", not_sent: "Fallito", sent: "Inviato", replied: "Risposto", no_reply: "Da inviare", follow_up: "Da inviare" } as const;
+        setGuidedCalls(guidedResult.value.items.map((row) => {
+          const workflow = row.workflow && typeof row.workflow === "object" ? row.workflow as Record<string, unknown> : {}; const completion = row.completion && typeof row.completion === "object" ? row.completion as Record<string, unknown> : {}; const messages = Array.isArray(row.messages) ? row.messages : [];
+          return { id: textValue(row.id), leadId: textValue(row.lead_id), status: textValue(row.status) === "completed" ? "completed" : "draft", currentPhase: numericValue(workflow.currentPhase), operatorId: textValue(workflow.operatorId || row.created_by), primarySellerId: textValue(workflow.primarySellerId || row.created_by), participants: Array.isArray(workflow.participants) ? workflow.participants as GuidedCall["participants"] : [], startedAt: dateValue(row.started_at || row.created_at), updatedAt: dateValue(row.updated_at || row.created_at), completedAt: row.completed_at ? dateValue(row.completed_at) : undefined, answers: row.script_answers && typeof row.script_answers === "object" ? row.script_answers as GuidedCall["answers"] : {}, messages: messages.map((value) => { const message = value as Record<string, unknown>; const metadata = message.metadata && typeof message.metadata === "object" ? message.metadata as Record<string, unknown> : {}; const channel = textValue(message.channel) === "Email" ? "Email" : "WhatsApp"; return { id: textValue(message.id), channel, template: (textValue(metadata.template) || (channel === "Email" ? "initial-email" : "initial-working-hours")) as GuidedCall["messages"][number]["template"], subject: textValue(metadata.subject) || undefined, body: textValue(message.body), recipient: textValue(metadata.recipient), operatorId: textValue(message.created_by), status: messageStatus[textValue(message.status) as keyof typeof messageStatus] ?? "Bozza", createdAt: dateValue(message.created_at), updatedAt: dateValue(message.updated_at || message.created_at) } }), ...workflow, ...completion, optimisticVersion: numericValue(row.optimistic_version) || 1 } as GuidedCall;
+        }));
+      }
+      if (settingsResult.status === "fulfilled" && settingsResult.value) {
+        const row = settingsResult.value;
+        setCommerceSettings({ ...defaultCommerceSettings, requireSignedContractForProject: row.require_signed_contract !== false, requireDepositForProject: row.require_deposit === true, supplierProfile: { ...defaultCommerceSettings.supplierProfile, brandName: textValue(row.supplier_brand_name || row.supplier_name), legalHolder: textValue(row.supplier_legal_holder), legalName: textValue(row.supplier_name), vatNumber: textValue(row.supplier_vat_number), taxCode: textValue(row.supplier_tax_code), address: textValue(row.supplier_address), email: textValue(row.supplier_email), phone: textValue(row.supplier_phone), postalCode: textValue(row.supplier_postal_code), city: textValue(row.supplier_city), province: textValue(row.supplier_province), country: textValue(row.supplier_country), certifiedEmail: textValue(row.supplier_certified_email), sdiCode: textValue(row.supplier_sdi_code), website: textValue(row.supplier_website), logoUrl: textValue(row.supplier_logo_url) }, currency: "EUR", defaultVatRate: numericValue(row.default_vat_rate) || 22, documentSettings: { quotePrefix: textValue(row.order_prefix) || defaultCommerceSettings.documentSettings!.quotePrefix, quoteValidityDays: numericValue(row.quote_validity_days) || 30, paymentTerms: textValue(row.payment_terms), bankDetails: textValue(row.bank_details), defaultNotes: textValue(row.default_notes) }, salesSettings: { defaultDepositPercent: numericValue(row.default_deposit_percent), enabledPaymentMethods: Array.isArray(row.enabled_payment_methods) ? row.enabled_payment_methods.map(String) : [], renewalReminderDays: numericValue(row.renewal_reminder_days) || 30 }, optimisticVersion: numericValue(row.optimistic_version) || 1 } as CommerceSettings);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [canManageGuidedCalls, canReadContractCommerceSettings, canReadCustomers, identity.hasHydrated, secondaryStatus, setCustomers, workspaceStatus]);
   const permissionScope = useMemo(
     () => ({ leads, customers, projects }),
     [customers, leads, projects],
@@ -2213,24 +2263,6 @@ export function CommercialLeadsProvider({
     services,
   ]);
 
-  const appendAuditChanges = useCallback(
-    (
-      recordType: CollaborationRecordType,
-      recordId: string,
-      before: object,
-      updates: object,
-      origin: CommercialAuditOrigin = "manual",
-      reason?: string,
-      sensitiveFields: string[] = [],
-    ) => {
-      // Audit, History and point movements are emitted by the backend transaction/outbox.
-      // This compatibility callback intentionally keeps no client-side authority.
-      void recordType; void recordId; void before; void updates; void origin; void reason; void sensitiveFields;
-      return [];
-    },
-    [],
-  );
-
   const applyDeliveryWorkspace = useCallback(
     (workspace: DeliveryWorkspace) => {
       const project = mapDeliveryProject(workspace);
@@ -2304,6 +2336,7 @@ export function CommercialLeadsProvider({
       timelineEvents: visibleTimelineEvents,
       goals,
       appointments: visibleAppointments,
+      guidedCalls,
       rankingConfigs,
       rankingSnapshots: visibleRankingSnapshots,
       services: visibleServices,
@@ -2320,11 +2353,14 @@ export function CommercialLeadsProvider({
       automationNotifications: visibleAutomationNotifications,
       commerceSettings,
       timeSessions: visibleTimeSessions,
+      supportTickets,
+      operationalApprovals,
       order: visibleOrder,
       auditEvents: visibleAuditEvents,
       comments: visibleComments,
       pointLedger: visiblePointLedger,
       pointPolicy,
+      pointRedemptions,
       ignoredDuplicatePairs,
       duplicatesLastAnalyzedAt,
       archivedRecords,
@@ -2682,6 +2718,8 @@ export function CommercialLeadsProvider({
             ),
           );
       },
+      markRecordCommentsRead() {},
+      recordInboxLifecycle() { return false; },
       recordAuditEvent(input) {
         // Audit tecnico e Timeline sono prodotti esclusivamente dai servizi backend.
         // Il composition layer non sintetizza più eventi autorevoli nel browser.
@@ -2982,6 +3020,19 @@ export function CommercialLeadsProvider({
           return false;
         }
       },
+      addManualPointAdjustment() {
+        toast.error("Adeguamento punti non disponibile nel contratto compatibility corrente");
+        return null;
+      },
+      reversePointEntry() {
+        toast.error("Storno punti non disponibile nel contratto compatibility corrente");
+        return null;
+      },
+      requestPointRedemption() {
+        return { ok: false as const, message: "Conversione punti non disponibile nel contratto compatibility corrente" };
+      },
+      decidePointRedemption() { return false; },
+      deliverPointRedemption() { return false; },
       addCampaign(input) {
         if (
           !identity.currentUser.roles.includes("administrator") ||
@@ -3719,6 +3770,42 @@ export function CommercialLeadsProvider({
           });
         return true;
       },
+      startGuidedCall(leadId) {
+        const lead = leads.find((item) => item.id === leadId);
+        if (!lead || !identity.hasCapability("canAssignLeads")) return { ok: false as const, message: "Lead non trovato o operazione non autorizzata" };
+        const existing = guidedCalls.find((item) => item.leadId === leadId && item.status === "draft");
+        if (existing) return { ok: true as const, id: existing.id, existing: true };
+        const id = crypto.randomUUID();
+        const now = new Date().toISOString();
+        const call: GuidedCall = { id, leadId, status: "draft", currentPhase: 0, operatorId: identity.currentUser.id, primarySellerId: lead.assigneeId, participants: [], startedAt: now, updatedAt: now, answers: {}, messages: [] };
+        setGuidedCalls((items) => [...items, call]);
+        void backendContractsApi.guidedCalls.create({ id, leadId, title: lead.company || `${lead.firstName} ${lead.lastName}`.trim(), scriptAnswers: {} }).catch((error) => { setGuidedCalls((items) => items.filter((item) => item.id !== id)); toast.error(error instanceof Error ? error.message : "Chiamata guidata non avviata"); });
+        return { ok: true as const, id, existing: false };
+      },
+      updateGuidedCall(callId, updates) {
+        const current = guidedCalls.find((item) => item.id === callId); if (!current) return false; const { answers, ...workflow } = updates; const workflowPayload: Record<string, unknown> = { ...workflow }; for (const key of ["linkedAppointmentId", "previousCallId"] as const) if (key in updates && updates[key] === undefined) workflowPayload[key] = null;
+        setGuidedCalls((items) => items.map((item) => item.id === callId ? { ...item, ...updates, updatedAt: new Date().toISOString() } : item));
+        void backendContractsApi.guidedCalls.update(callId, { title: updates.summary ?? current.summary ?? "Chiamata guidata", scriptAnswers: answers ?? current.answers, workflow: workflowPayload, notes: updates.summary ?? current.summary, optimisticVersion: (current as GuidedCall & { optimisticVersion?: number }).optimisticVersion ?? 1 }).then((saved) => setGuidedCalls((items) => items.map((item) => item.id === callId ? { ...item, optimisticVersion: Number(saved.optimistic_version ?? 1) } as GuidedCall : item))).catch((error) => { setGuidedCalls((items) => items.map((item) => item.id === callId ? current : item)); toast.error(error instanceof Error ? error.message : "Chiamata guidata non aggiornata") });
+        return true;
+      },
+      prepareGuidedCallMessage(callId, input) {
+        const current = guidedCalls.find((item) => item.id === callId); if (!current) return null; const id = crypto.randomUUID(); const now = new Date().toISOString();
+        const message = { id, channel: input.channel, template: input.template, subject: input.subject, body: input.body, recipient: input.recipient, operatorId: identity.currentUser.id, status: "Bozza" as const, createdAt: now, updatedAt: now };
+        setGuidedCalls((items) => items.map((item) => item.id === callId ? { ...item, messages: [...item.messages, message], updatedAt: now } : item));
+        void backendContractsApi.guidedCalls.message(callId, { id, channel: input.channel, template: input.template, subject: input.subject, body: input.body, recipient: input.recipient }).catch((error) => toast.error(error instanceof Error ? error.message : "Messaggio non preparato")); return id;
+      },
+      updateGuidedCallMessageStatus(callId, messageId, status) {
+        const map = { Bozza: "prepared", "Da inviare": "prepared", Inviato: "sent", Consegnato: "manually_confirmed", Letto: "manually_confirmed", Risposto: "replied", Fallito: "not_sent" } as const;
+        if (!guidedCalls.some((item) => item.id === callId && item.messages.some((message) => message.id === messageId))) return false;
+        setGuidedCalls((items) => items.map((item) => item.id === callId ? { ...item, messages: item.messages.map((message) => message.id === messageId ? { ...message, status, updatedAt: new Date().toISOString() } : message) } : item));
+        void backendContractsApi.guidedCalls.messageStatus(callId, messageId, map[status]).catch((error) => toast.error(error instanceof Error ? error.message : "Stato messaggio non aggiornato")); return true;
+      },
+      completeGuidedCall(callId, completion) {
+        const current = guidedCalls.find((item) => item.id === callId); if (!current) return { ok: false as const, message: "Chiamata guidata non trovata" };
+        const now = new Date().toISOString(); setGuidedCalls((items) => items.map((item) => item.id === callId ? { ...item, ...completion, status: "completed", completedAt: now, updatedAt: now } : item));
+        void backendContractsApi.guidedCalls.complete(callId, { ...completion, optimisticVersion: (current as GuidedCall & { optimisticVersion?: number }).optimisticVersion ?? 1 }).then((saved) => { const persisted = (saved.completion && typeof saved.completion === "object" ? saved.completion : {}) as Partial<GuidedCall>; setGuidedCalls((items) => items.map((item) => item.id === callId ? { ...item, ...persisted, optimisticVersion: Number(saved.optimistic_version ?? 1) } as GuidedCall : item)) }).catch((error) => { setGuidedCalls((items) => items.map((item) => item.id === callId ? current : item)); toast.error(error instanceof Error ? error.message : "Chiamata guidata non completata") });
+        return { ok: true as const, existing: false };
+      },
       async updateRankingConfig(role, metrics) {
         if (
           !identity.hasCapability("canManageRoles") ||
@@ -3928,8 +4015,30 @@ export function CommercialLeadsProvider({
       async addOrder(input) {
         if (!identity.hasCapability("canManageOwnOrders")) return null;
         try {
+          const orderPayload = {
+            customerId: input.customerId,
+            saleId: input.saleId,
+            leadId: input.leadId,
+            opportunityId: input.opportunityId,
+            dealId: input.dealId,
+            salespersonId: input.salespersonId,
+            items: input.items.map((item) => ({
+              serviceId: item.serviceId,
+              planId: item.planId,
+              quantity: item.quantity,
+              discount: item.discount,
+              nextDueAt: item.nextDueAt,
+            })),
+            discount: input.discount,
+            deposit: input.deposit,
+            installments: input.installments,
+            administrativeStatus: input.administrativeStatus,
+            orderDate: input.orderDate,
+            dueDate: input.dueDate,
+            notes: input.notes,
+          };
           const saved = await commerceApi.createOrder(
-            input,
+            orderPayload,
             input.idempotencyKey,
           );
           setOrders((items) => [
@@ -3962,6 +4071,23 @@ export function CommercialLeadsProvider({
         try {
           const saved = await commerceApi.updateOrder(orderId, {
             version: current.version,
+            ...(updates.customerId !== undefined ? { customerId: updates.customerId } : {}),
+            ...(Object.prototype.hasOwnProperty.call(updates, "saleId") ? { saleId: updates.saleId ?? null } : {}),
+            ...(Object.prototype.hasOwnProperty.call(updates, "leadId") ? { leadId: updates.leadId ?? null } : {}),
+            ...(Object.prototype.hasOwnProperty.call(updates, "opportunityId") ? { opportunityId: updates.opportunityId ?? null } : {}),
+            ...(Object.prototype.hasOwnProperty.call(updates, "dealId") ? { dealId: updates.dealId ?? null } : {}),
+            ...(updates.salespersonId !== undefined ? { salespersonId: updates.salespersonId } : {}),
+            ...(updates.items !== undefined ? { items: updates.items.map((item) => ({
+              serviceId: item.serviceId,
+              planId: item.planId,
+              quantity: item.quantity,
+              discount: item.discount,
+              nextDueAt: item.nextDueAt,
+            })) } : {}),
+            ...(updates.discount !== undefined ? { discount: updates.discount } : {}),
+            ...(updates.deposit !== undefined ? { deposit: updates.deposit } : {}),
+            ...(updates.installments !== undefined ? { installments: updates.installments } : {}),
+            ...(updates.orderDate !== undefined ? { orderDate: updates.orderDate } : {}),
             administrativeStatus: updates.administrativeStatus,
             dueDate: updates.dueDate,
             notes: updates.notes,
@@ -4146,7 +4272,12 @@ export function CommercialLeadsProvider({
           !hasMeaningfulChanges(commerceSettings, updates)
         )
           return false;
-        setCommerceSettings((current) => ({ ...current, ...updates }));
+        const next = { ...commerceSettings, ...updates, supplierProfile: { ...commerceSettings.supplierProfile, ...(updates.supplierProfile ?? {}) }, documentSettings: { ...commerceSettings.documentSettings!, ...(updates.documentSettings ?? {}) }, salesSettings: { ...commerceSettings.salesSettings!, ...(updates.salesSettings ?? {}) } };
+        setCommerceSettings(next);
+        void backendContractsApi.commerceSettings
+          .update({ optimisticVersion: (commerceSettings as CommerceSettings & { optimisticVersion?: number }).optimisticVersion ?? 1, requireDeposit: next.requireDepositForProject, requireSignedContract: next.requireSignedContractForProject, defaultDepositPercent: next.salesSettings?.defaultDepositPercent, defaultVatRate: next.defaultVatRate, defaultCurrency: next.currency ?? "EUR", supplierName: next.supplierProfile.legalName || next.supplierProfile.brandName, supplierBrandName: next.supplierProfile.brandName, supplierLegalHolder: next.supplierProfile.legalHolder, supplierVatNumber: next.supplierProfile.vatNumber, supplierTaxCode: next.supplierProfile.taxCode, supplierAddress: next.supplierProfile.address, supplierEmail: next.supplierProfile.email, supplierPhone: next.supplierProfile.phone, supplierPostalCode: next.supplierProfile.postalCode, supplierCity: next.supplierProfile.city, supplierProvince: next.supplierProfile.province, supplierCountry: next.supplierProfile.country, supplierCertifiedEmail: next.supplierProfile.certifiedEmail, supplierSdiCode: next.supplierProfile.sdiCode, supplierWebsite: next.supplierProfile.website, supplierLogoUrl: next.supplierProfile.logoUrl, orderPrefix: next.documentSettings?.quotePrefix, quoteValidityDays: next.documentSettings?.quoteValidityDays, paymentTerms: next.documentSettings?.paymentTerms, bankDetails: next.documentSettings?.bankDetails, defaultNotes: next.documentSettings?.defaultNotes, enabledPaymentMethods: next.salesSettings?.enabledPaymentMethods, renewalReminderDays: next.salesSettings?.renewalReminderDays })
+          .then((saved) => setCommerceSettings((current) => ({ ...current, optimisticVersion: Number(saved.optimistic_version ?? 1) } as CommerceSettings)))
+          .catch((error) => { setCommerceSettings(commerceSettings); toast.error(error instanceof Error ? error.message : "Impostazioni commercio non salvate"); });
         return true;
       },
       async generateContract(orderId) {
@@ -4725,71 +4856,14 @@ export function CommercialLeadsProvider({
             ok: false,
             message: "Nessun lead esportabile nel perimetro autorizzato.",
           };
-        const lockKey = uniqueIds.join("|");
-        const locked = contactsExportLocks.current.get(lockKey);
-        if (locked)
-          return {
-            ok: true,
-            ...locked,
-            existing: true,
-            leads: selected.map((lead) => ({
-              ...lead,
-              exportedToContactsAt: locked.exportedAt,
-              exportedToContactsBy: identity.currentUser.id,
-              exportBatchId: locked.batchId,
-            })),
-          };
-        const alreadyBatch = selected.every(
-          (lead) =>
-            lead.exportBatchId &&
-            lead.exportBatchId === selected[0].exportBatchId,
-        );
-        if (alreadyBatch) {
-          const result = {
-            batchId: selected[0].exportBatchId!,
-            exportedAt: selected[0].exportedToContactsAt!,
-          };
-          contactsExportLocks.current.set(lockKey, result);
-          return { ok: true, ...result, existing: true, leads: selected };
-        }
         const exportedAt = new Date().toISOString();
         const batchId = `contacts-${exportedAt.slice(0, 10)}-${crypto.randomUUID()}`;
-        contactsExportLocks.current.set(lockKey, { batchId, exportedAt });
-        setLeads((items) =>
-          items.map((lead) =>
-            uniqueIds.includes(lead.id)
-              ? {
-                  ...lead,
-                  exportedToContactsAt: exportedAt,
-                  exportedToContactsBy: identity.currentUser.id,
-                  exportBatchId: batchId,
-                }
-              : lead,
-          ),
-        );
-        setTimelineEvents((items) => [
-          ...selected.map((lead): CommercialTimelineEvent => ({
-            id: `contacts-export:${batchId}:${lead.id}`,
-            leadId: lead.id,
-            kind: "status",
-            title: "Esportato in Google Contatti",
-            detail: `Batch ${batchId} preparato per ${lead.firstName} ${lead.lastName}.`,
-            date: exportedAt,
-            author: identity.currentUser.name,
-          })),
-          ...items,
-        ]);
         return {
           ok: true,
           batchId,
           exportedAt,
           existing: false,
-          leads: selected.map((lead) => ({
-            ...lead,
-            exportedToContactsAt: exportedAt,
-            exportedToContactsBy: identity.currentUser.id,
-            exportBatchId: batchId,
-          })),
+          leads: selected,
         };
       },
       async updateLead(leadId, updates, options) {
@@ -6884,6 +6958,8 @@ export function CommercialLeadsProvider({
             channel: record.channel.toLowerCase(),
             title: record.title,
             body: record.body,
+            direction: record.direction,
+            status: record.status,
             occurredAt: record.occurredAt,
             leadId: record.leadId,
           })
@@ -7077,40 +7153,9 @@ export function CommercialLeadsProvider({
           !canViewCustomer(identity.currentUser, customer, permissionScope)
         )
           return null;
-        const now = new Date().toISOString();
-        const record: CustomerDocument = {
-          ...input,
-          id: crypto.randomUUID(),
-          createdAt: now,
-          updatedAt: now,
-        };
-        setCustomers((items) =>
-          items.map((item) =>
-            item.id === clientId
-              ? { ...item, documents: [...(item.documents ?? []), record] }
-              : item,
-          ),
-        );
-        appendAuditChanges(
-          "document",
-          record.id,
-          {},
-          { name: record.name, status: record.status },
-          "manual",
-        );
-        setTimelineEvents((items) => [
-          {
-            id: `document-created:${record.id}`,
-            leadId: customer.sourceLeadId,
-            kind: "status",
-            title: `Documento ${record.status.toLowerCase()}`,
-            detail: record.name,
-            date: now,
-            author: identity.currentUser.name,
-          },
-          ...items,
-        ]);
-        return record.id;
+        const id = crypto.randomUUID(); const now = new Date().toISOString(); const document = { ...input, id, createdAt: now, updatedAt: now };
+        setCustomers((items) => items.map((item) => item.id === clientId ? { ...item, documents: [...(item.documents ?? []), document] } : item));
+        void backendContractsApi.customer.addDocument(clientId, { id, title: input.name, category: input.status, description: input.notes, relationType: input.projectId ? "project" : undefined, relationId: input.projectId }).then((saved) => setCustomers((items) => items.map((item) => item.id === clientId ? { ...item, documents: item.documents?.map((entry) => entry.id === id ? { ...entry, optimisticVersion: Number(saved.optimistic_version ?? 1) } as CustomerDocument : entry) } : item))).catch((error) => { setCustomers((items) => items.map((item) => item.id === clientId ? { ...item, documents: item.documents?.filter((entry) => entry.id !== id) } : item)); toast.error(error instanceof Error ? error.message : "Documento non salvato"); }); return id;
       },
       updateCustomerDocument(clientId, documentId, updates) {
         const customer = customers.find((item) => item.id === clientId);
@@ -7125,42 +7170,9 @@ export function CommercialLeadsProvider({
           !hasMeaningfulChanges(current, updates)
         )
           return false;
-        const now = new Date().toISOString();
-        const next = { ...current, ...updates, id: current.id, updatedAt: now };
-        setCustomers((items) =>
-          items.map((item) =>
-            item.id === clientId
-              ? {
-                  ...item,
-                  documents: item.documents?.map((entry) =>
-                    entry.id === documentId ? next : entry,
-                  ),
-                }
-              : item,
-          ),
-        );
-        appendAuditChanges("document", documentId, current, updates, "manual");
-        const changedStatus =
-          updates.status && updates.status !== current.status;
-        setTimelineEvents((items) => [
-          {
-            id: changedStatus
-              ? `document-status:${documentId}:${current.status}:${updates.status}`
-              : `document-updated:${documentId}:${now}`,
-            leadId: customer.sourceLeadId,
-            kind: "status",
-            title: changedStatus
-              ? `Documento ${updates.status!.toLowerCase()}`
-              : "Documento aggiornato",
-            detail: changedStatus
-              ? `${next.name} · ${current.status} → ${updates.status}`
-              : next.name,
-            date: now,
-            author: identity.currentUser.name,
-          },
-          ...items,
-        ]);
-        return true;
+        setCustomers((items) => items.map((item) => item.id === clientId ? { ...item, documents: item.documents?.map((entry) => entry.id === documentId ? { ...entry, ...updates, updatedAt: new Date().toISOString() } : entry) } : item));
+        const projectId = "projectId" in updates ? updates.projectId : current.projectId;
+        void backendContractsApi.customer.updateDocument(clientId, documentId, { title: updates.name ?? current.name, category: updates.status ?? current.status, description: updates.notes ?? current.notes, relationType: projectId ? "project" : null, relationId: projectId ?? null, optimisticVersion: (current as CustomerDocument & { optimisticVersion?: number }).optimisticVersion ?? 1 }).then((saved) => setCustomers((items) => items.map((item) => item.id === clientId ? { ...item, documents: item.documents?.map((entry) => entry.id === documentId ? { ...entry, optimisticVersion: Number(saved.optimistic_version ?? 1) } as CustomerDocument : entry) } : item))).catch((error) => toast.error(error instanceof Error ? error.message : "Documento non aggiornato")); return true;
       },
       removeCustomerDocument(clientId, documentId) {
         const customer = customers.find((item) => item.id === clientId);
@@ -7174,41 +7186,8 @@ export function CommercialLeadsProvider({
           !canViewCustomer(identity.currentUser, customer, permissionScope)
         )
           return false;
-        const now = new Date().toISOString();
-        setCustomers((items) =>
-          items.map((item) =>
-            item.id === clientId
-              ? {
-                  ...item,
-                  documents: item.documents?.map((entry) =>
-                    entry.id === documentId
-                      ? { ...entry, archivedAt: now, updatedAt: now }
-                      : entry,
-                  ),
-                }
-              : item,
-          ),
-        );
-        appendAuditChanges(
-          "document",
-          documentId,
-          current,
-          { status: "Archiviato", archivedAt: now },
-          "manual",
-        );
-        setTimelineEvents((items) => [
-          {
-            id: `document-archived:${documentId}`,
-            leadId: customer.sourceLeadId,
-            kind: "status",
-            title: "Documento archiviato",
-            detail: current.name,
-            date: now,
-            author: identity.currentUser.name,
-          },
-          ...items,
-        ]);
-        return true;
+        setCustomers((items) => items.map((item) => item.id === clientId ? { ...item, documents: item.documents?.map((entry) => entry.id === documentId ? { ...entry, archivedAt: new Date().toISOString() } : entry) } : item));
+        void backendContractsApi.customer.removeDocument(clientId, documentId).catch((error) => toast.error(error instanceof Error ? error.message : "Documento non archiviato")); return true;
       },
       async startCustomerOnboarding(clientId) {
         const customer = customers.find((item) => item.id === clientId);
@@ -7362,6 +7341,30 @@ export function CommercialLeadsProvider({
           return false;
         }
       },
+      startSupportTicketTime() {
+        return { ok: false as const, message: "Timer supporto non disponibile: contratto persistente assente" };
+      },
+      pauseSupportTicketTime() {
+        return { ok: false as const, message: "Timer supporto non disponibile: contratto persistente assente" };
+      },
+      resumeSupportTicketTime() {
+        return { ok: false as const, message: "Timer supporto non disponibile: contratto persistente assente" };
+      },
+      updateTimeSession() { return false; },
+      addSupportTicket() {
+        toast.error("Supporto operativo non disponibile: contratto persistente assente");
+        return null;
+      },
+      updateSupportTicket() { return false; },
+      moveSupportTicket() { return false; },
+      reopenSupportTicket() { return false; },
+      archiveSupportTicket() { return false; },
+      requestOperationalApproval() {
+        toast.error("Approvazione operativa non disponibile: contratto persistente assente");
+        return null;
+      },
+      decideOperationalApproval() { return false; },
+      updateProjectWebsiteStatus() { return false; },
       async setProjectQaItem(projectId, itemId, completed) {
         try {
           const workspace = await deliveryApi.workspace(projectId);
@@ -7424,21 +7427,23 @@ export function CommercialLeadsProvider({
       },
       updateCustomerCare(clientId, care) {
         const customer = customers.find((item) => item.id === clientId);
-        if (!customer) return false;
-        const status =
-          care.mode === "Assistenza"
-            ? "Assistenza"
-            : care.mode === "Rinnovo"
-              ? "Rinnovo"
-              : customer.deliveredAt
-                ? "Consegnato"
-                : customer.status;
-        setCustomers((items) =>
-          items.map((item) =>
-            item.id === clientId ? { ...item, care, status } : item,
-          ),
-        );
-        return true;
+        if (
+          !customer ||
+          !canViewCustomer(identity.currentUser, customer, permissionScope)
+        )
+          return false;
+        setCustomers((items) => items.map((item) => item.id === clientId ? { ...item, care } : item));
+        void backendContractsApi.customer.updateCare(clientId, { mode: care.mode, cadenceDays: care.recurrenceMonths ? care.recurrenceMonths * 30 : undefined, ownerUserId: care.assigneeId, nextDueAt: care.nextDueAt, optimisticVersion: (care as typeof care & { optimisticVersion?: number }).optimisticVersion ?? 0 }).then((saved) => setCustomers((items) => items.map((item) => item.id === clientId ? { ...item, care: { ...care, optimisticVersion: Number(saved.optimistic_version ?? 1) } } : item))).catch((error) => toast.error(error instanceof Error ? error.message : "Assistenza cliente non aggiornata")); return true;
+      },
+      updateCustomerFinance(clientId, finance) {
+        const customer = customers.find((item) => item.id === clientId);
+        if (!customer || !canViewCustomer(identity.currentUser, customer, permissionScope)) return false;
+        const previousFinance = customer.finance;
+        setCustomers((items) => items.map((item) => item.id === clientId ? { ...item, finance } : item));
+        void backendContractsApi.customer.updateFinance(clientId, { totalCents: Math.round(finance.total * 100), depositCents: Math.round(finance.deposit * 100), paidCents: Math.round(finance.paid * 100), invoicedCents: Math.round(finance.invoiced * 100), currency: "EUR", optimisticVersion: (finance as typeof finance & { optimisticVersion?: number }).optimisticVersion ?? 1 }).then((saved) => setCustomers((items) => items.map((item) => item.id === clientId ? { ...item, finance: { ...finance, optimisticVersion: Number(saved.optimistic_version ?? 1) } } : item))).catch((error) => { setCustomers((items) => items.map((item) => item.id === clientId ? { ...item, finance: previousFinance } : item)); toast.error(error instanceof Error ? error.message : "Dati economici cliente non aggiornati") }); return true;
+      },
+      syncCustomerActivityDependency() {
+        return { ok: false as const, code: "FORBIDDEN" as const, message: "Sincronizzazione dipendenze non disponibile nel contratto compatibility corrente" };
       },
       ensureCustomerCareActivity(clientId, careOverride) {
         const customer = customers.find((item) => item.id === clientId);
@@ -7462,16 +7467,6 @@ export function CommercialLeadsProvider({
           dueAt: care.nextDueAt,
         });
         if (typeof id !== "string") return null;
-        setCustomers((items) =>
-          items.map((item) =>
-            item.id === clientId
-              ? {
-                  ...item,
-                  care: { ...care, lastGeneratedDueAt: care.nextDueAt },
-                }
-              : item,
-          ),
-        );
         return id;
       },
       async mergeDuplicateRecords({ primaryId, secondaryId, fields }) {
@@ -8121,7 +8116,6 @@ export function CommercialLeadsProvider({
       },
     }),
     [
-      appendAuditChanges,
       applyDeliveryWorkspace,
       appointments,
       archivedRecords,
@@ -8135,6 +8129,7 @@ export function CommercialLeadsProvider({
       customers,
       duplicatesLastAnalyzedAt,
       goals,
+      guidedCalls,
       hasHydrated,
       identity,
       ignoredDuplicatePairs,
@@ -8143,9 +8138,11 @@ export function CommercialLeadsProvider({
       leads,
       order,
       orders,
+      operationalApprovals,
       payments,
       permissionScope,
       pointPolicy,
+      pointRedemptions,
       projects,
       quotes,
       rankingConfigs,
@@ -8160,6 +8157,7 @@ export function CommercialLeadsProvider({
       secondaryError,
       secondaryStatus,
       services,
+      supportTickets,
       setCustomers,
       setDuplicatesLastAnalyzedAt,
       setIgnoredDuplicatePairs,

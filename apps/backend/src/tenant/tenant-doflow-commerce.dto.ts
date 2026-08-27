@@ -166,6 +166,17 @@ export class CreateCommerceOrderDto {
 }
 
 export class UpdateCommerceOrderDto extends CommerceVersionDto {
+  @IsOptional() @IsUUID() customerId?: string;
+  @IsOptional() @IsUUID() saleId?: string | null;
+  @IsOptional() @IsUUID() leadId?: string | null;
+  @IsOptional() @IsUUID() opportunityId?: string | null;
+  @IsOptional() @IsString() @MaxLength(300) dealId?: string | null;
+  @IsOptional() @IsUUID() salespersonId?: string;
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => CommerceOrderItemDto) items?: CommerceOrderItemDto[];
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) discount?: number;
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) deposit?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) installments?: number;
+  @IsOptional() @IsDateString() orderDate?: string;
   @IsOptional() @IsIn(['Bozza', 'Confermato', 'Acconto richiesto', 'Annullato']) administrativeStatus?: string;
   @IsOptional() @IsDateString() dueDate?: string;
   @IsOptional() @IsString() @MaxLength(10_000) notes?: string;

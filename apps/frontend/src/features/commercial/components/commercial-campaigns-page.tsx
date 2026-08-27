@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { campaignAdapters, campaignChannels, calculateCampaignMetrics, type CampaignChannel, type CommercialCampaign } from "@/features/commercial/commercial-campaigns"
 import { useAuthorizedCommercial } from "@/features/identity/use-authorized-commercial"
 
-const euro = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })
+const euro = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", useGrouping: "always", maximumFractionDigits: 0 })
 const number = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 1 })
 type Form = { name: string; channel: CampaignChannel; account: string; status: CommercialCampaign["status"]; startsAt: string; endsAt: string; spend: string; impressions: string; clicks: string }
 const emptyForm = (): Form => ({ name: "", channel: "Meta Ads", account: "", status: "draft", startsAt: new Date().toISOString().slice(0, 10), endsAt: "", spend: "0", impressions: "0", clicks: "0" })

@@ -13,6 +13,7 @@ import { CreateCommerceCashCoreAuthority1810000000000 } from '../migrations/1810
 import { CreateDocumentRevenueCoreAuthority1820000000000 } from '../migrations/1820000000000-CreateDocumentRevenueCoreAuthority';
 import { CreateCollaborationNotificationsRealtimeAuthority1830000000000 } from '../migrations/1830000000000-CreateCollaborationNotificationsRealtimeAuthority';
 import { CreateAutomationPerformanceAuthority1840000000000 } from '../migrations/1840000000000-CreateAutomationPerformanceAuthority';
+import { CreateUniversalTenantFeatures1850000000000 } from '../migrations/1850000000000-CreateUniversalTenantFeatures';
 
 type MigrationConstructor = new () => MigrationInterface;
 
@@ -31,6 +32,11 @@ export const AUTHORITY_MIGRATIONS: MigrationConstructor[] = [
   CreateDocumentRevenueCoreAuthority1820000000000,
   CreateCollaborationNotificationsRealtimeAuthority1830000000000,
   CreateAutomationPerformanceAuthority1840000000000,
+];
+
+export const PRE_186_MIGRATIONS: MigrationConstructor[] = [
+  ...AUTHORITY_MIGRATIONS,
+  CreateUniversalTenantFeatures1850000000000,
 ];
 
 export const BASELINE_MAX = 1780000000000;
@@ -1131,6 +1137,8 @@ async function main() {
     await writeOutput({ command, applied, evidence: await captureEvidence() });
   } else if (command === 'migrate') {
     await writeOutput({ command, applied: await runMigrationSet(AUTHORITY_MIGRATIONS), evidence: await captureEvidence() });
+  } else if (command === 'migrate-to-185') {
+    await writeOutput({ command, applied: await runMigrationSet(PRE_186_MIGRATIONS), evidence: await captureEvidence() });
   } else if (command === 'migrate-again') {
     await writeOutput({ command, applied: await runMigrationSet([...BASELINE_MIGRATIONS, ...AUTHORITY_MIGRATIONS]), evidence: await captureEvidence() });
   } else if (command === 'capture') {

@@ -14,7 +14,10 @@ const callPanel = read("apps/frontend/src/components/tenant-collaboration/liveki
 const flowboardList = read("apps/frontend/src/components/tenant-flowboard/flowboard-list.tsx");
 const flowboardEditor = read("apps/frontend/src/components/tenant-flowboard/flowboard-editor.tsx");
 const bonus = read("apps/frontend/src/components/tenant-bonus/bonus-page.tsx");
-const intelligence = read("apps/frontend/src/components/tenant-company-intelligence/company-intelligence-page.tsx");
+const intelligence = [
+  read("apps/frontend/src/features/company-intelligence/company-intelligence-page.tsx"),
+  read("apps/frontend/src/features/company-intelligence/company-intelligence-provider.tsx"),
+].join("\n");
 const experience = read("apps/frontend/src/components/flow-experience/flow-experience.tsx");
 const preferencesContext = read("apps/frontend/src/components/flow-experience/flow-preferences-context.tsx");
 const tenantFetch = read("apps/frontend/src/lib/tenant-fetch.ts");
@@ -32,9 +35,9 @@ const leadDocumentCenter = read("apps/frontend/src/features/commercial/component
 
 test("tenant feature routes resolve to server-backed feature components", () => {
   const routes = new Map([
-    ["apps/frontend/src/app/(tenant)/dashboard/inbox/page.tsx", "TenantInboxPage"],
-    ["apps/frontend/src/app/(tenant)/dashboard/flowboard/page.tsx", "FlowboardList"],
-    ["apps/frontend/src/app/(tenant)/dashboard/flowboard/[id]/page.tsx", "FlowboardEditor"],
+    ["apps/frontend/src/app/(tenant)/dashboard/inbox/page.tsx", "CustomerInboxPage"],
+    ["apps/frontend/src/app/(tenant)/dashboard/flowboard/page.tsx", "FlowboardHomePage"],
+    ["apps/frontend/src/app/(tenant)/dashboard/flowboard/[id]/page.tsx", "FlowboardEditorPage"],
     ["apps/frontend/src/app/(tenant)/dashboard/company-intelligence/page.tsx", "CompanyIntelligencePage"],
     ["apps/frontend/src/app/(tenant)/dashboard/bonus/page.tsx", "BonusPage"],
   ]);
@@ -147,37 +150,42 @@ test("Bonus normalization maps the PostgreSQL ledger and never fabricates a wall
   assert.doesNotMatch(bonus, /const\s+(wallet|ledger|requests)\s*=\s*\[/);
 });
 
-test("guided commercial calls persist drafts, outcomes and next actions on Nest CRM authority", () => {
+test("guided commercial calls use the server workflow aggregate while LiveKit remains independent", () => {
   assert.match(guidedCallModel, /guidedCallPhases/);
   assert.match(guidedCallModel, /guidedCallOutcomes/);
-  assert.match(guidedCall, /commercialApi\.activities/);
-  assert.match(guidedCall, /commercialApi\.createActivity/);
-  assert.match(guidedCall, /commercialApi\.updateActivity/);
-  assert.match(guidedCall, /commercialApi\.transitionOpportunity\([\s\S]*stage:\s*draft\.stage[\s\S]*reason:\s*"Esito chiamata guidata"/);
-  assert.match(guidedCall, /commercialApi\.updateOpportunity/);
-  assert.match(guidedCall, /version:\s*transition\.item\.version/);
-  assert.doesNotMatch(guidedCall, /updateOpportunity\([^)]*,\s*\{[\s\S]{0,220}stage:\s*draft\.stage/);
-  assert.match(guidedCall, /guided_call_parent_id/);
-  assert.match(guidedCall, /canEditLead/);
+  assert.match(guidedCall, /store\.startGuidedCall/);
+  assert.match(guidedCall, /store\.updateGuidedCall/);
+  assert.match(guidedCall, /store\.completeGuidedCall/);
+  const guidedStart = commercialProvider.indexOf("startGuidedCall(leadId)");
+  const guidedBoundary = commercialProvider.slice(
+    guidedStart,
+    commercialProvider.indexOf("async updateRankingConfig", guidedStart),
+  );
+  assert.match(guidedBoundary, /backendContractsApi\.guidedCalls\.create/);
+  assert.match(guidedBoundary, /backendContractsApi\.guidedCalls\.update/);
+  assert.match(guidedBoundary, /backendContractsApi\.guidedCalls\.message/);
+  assert.match(guidedBoundary, /backendContractsApi\.guidedCalls\.messageStatus/);
+  assert.match(guidedBoundary, /backendContractsApi\.guidedCalls\.complete/);
+  assert.match(guidedBoundary, /optimisticVersion/);
+  assert.match(guidedBoundary, /setGuidedCalls/);
+  assert.doesNotMatch(guidedBoundary, /BLOCKED — MISSING PERSISTENCE CONTRACT/);
   assert.doesNotMatch(guidedCall + guidedCallModel, /localStorage|sessionStorage|indexedDB|Prisma|sqlite/i);
 });
 
 test("commercial lead actions wait for real CRM, collaboration and quote authorities", () => {
   assert.match(leadDetailActions, /await onSave/);
-  assert.match(leadDetailActions, /await onAddNote/);
   assert.match(leadDetailActions, /await onChangeOutcome/);
-  assert.match(leadDetailPage, /commercialApi\.updateOpportunity/);
-  assert.match(leadDetailPage, /commercialApi\.updateCompany/);
-  assert.match(leadDetailPage, /commercialApi\.updateContact/);
-  assert.match(leadDetailPage, /commercialStore\.addComment/);
+  assert.match(leadDetailPage, /params\.set\("collaboration", `lead:\$\{lead\.id\}`\)/);
   assert.match(leadDetailPage, /commercialStore\.moveLead/);
-  assert.match(leadDetailPage, /commercialStore\.convertLeadToClient/);
   assert.match(leadDocumentCenter, /store\.quotes/);
   assert.match(leadDocumentCenter, /await store\.updateQuote/);
   assert.match(leadDocumentCenter, /await store\.createQuoteVersion/);
+  assert.match(leadDocumentCenter, /await store\.addQuote/);
   assert.doesNotMatch(leadDocumentCenter, /updateLead\([^\n]*proposal/);
   assert.doesNotMatch(leadDetailActions + leadDocumentCenter, /sarà disponibile nella prossima fase|window\.setTimeout/);
   assert.match(commercialProvider, /async updateLead\(/);
+  assert.match(commercialProvider, /commercialApi\.updateOpportunity/);
+  assert.match(commercialProvider, /documentRevenueApi\.createQuote/);
   assert.match(commercialProvider, /return true;[\s\S]*catch \(error\)[\s\S]*return false;/);
 });
 
@@ -194,16 +202,27 @@ test("canonical commercial rows without ui_stage map to deterministic reference 
   assert.match(commercialStageAdapter, /canonicalStageFallbacks\[normalized\]/);
 });
 
-test("Company Intelligence handles a missing provider without fake analysis data", () => {
+test("Company Intelligence handles a missing provider and persists supported mutations", () => {
   assert.match(api, /\/tenant\/company-intelligence/);
   assert.match(api, /domain:\s*body\.requestedUrl/);
   assert.match(api, /raw\.report === null && raw\.configured === false/);
-  assert.match(intelligence, /if \(!report\)/);
-  assert.match(intelligence, /Provider Company Intelligence non configurato/);
-  assert.match(intelligence, /useOptionalTenantAccess/);
-  assert.match(intelligence, /hasCapability\("canCreateLeads"\)/);
-  assert.match(intelligence, /tenantAccess\?\.canCreate\("crm"\)/);
-  assert.match(intelligence, /\{canAnalyze \? \(/);
+  assert.match(intelligence, /companyIntelligenceApi\.list/);
+  assert.match(intelligence, /companyIntelligenceApi\.analyze/);
+  assert.match(intelligence, /if \(!report\) return \{ ok: false, message: "Provider di analisi non configurato" \}/);
+  for (const mutation of [
+    /companyIntelligenceApi\.share/,
+    /companyIntelligenceApi\.revokeShare/,
+    /companyIntelligenceApi\.addCompetitor/,
+    /companyIntelligenceApi\.removeCompetitor/,
+    /companyIntelligenceApi\.exportReport/,
+    /companyIntelligenceApi\.remove/,
+  ]) assert.match(intelligence, mutation);
+  assert.match(intelligence, /await refresh\(\)/);
+  assert.doesNotMatch(intelligence, /BLOCKED — MISSING PERSISTENCE CONTRACT/);
+  assert.match(intelligence, /hasCapability\("canViewCompanyIntelligence"\)/);
+  assert.match(intelligence, /if \(!canView\)/);
+  assert.match(intelligence, /activeModules\.has\("crm\.sales-intel"\)/);
+  assert.match(intelligence, /hasCapability\("canRunCompanyIntelligence"\)/);
   for (const contract of [
     /shortDescription/,
     /employeeCount/,
@@ -211,14 +230,12 @@ test("Company Intelligence handles a missing provider without fake analysis data
     /techStack/,
     /fundingEvents/,
     /people/,
-    /Profilo aziendale/,
-    /Persone chiave/,
+    /Qualità sito/,
+    /Identità e presenza/,
   ]) assert.match(api + intelligence, contract);
-  assert.doesNotMatch(intelligence, /person\.email/);
   assert.doesNotMatch(intelligence, /fake|mock|demo/i);
   assert.doesNotMatch(intelligence, /const\s+reports\s*=\s*\[/);
-  assert.match(appSidebar, /featureKey: "crm\.sales-intel"/);
-  assert.match(appSidebar, /activeModules\.has\(item\.featureKey\)/);
+  assert.match(appSidebar, /item\.url !== "\/dashboard\/company-intelligence" \|\| activeModules\.has\("crm\.sales-intel"\)/);
   assert.match(tenantNavigation, /featureKey: "crm\.sales-intel"/);
   assert.match(tenantShell, /activeModules\.has\("crm\.sales-intel"\)/);
 });

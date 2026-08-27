@@ -1,5 +1,5 @@
-import { BonusPage } from "@/components/tenant-bonus/bonus-page";
+import { BonusPage } from "@/features/bonus/bonus-page"
 
 export default function Page() {
-  return <BonusPage />;
+  return <BonusPage />
 }

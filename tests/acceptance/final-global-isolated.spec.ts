@@ -359,7 +359,7 @@ test('release candidate globale integra i Context A/B/C/D e tutte le authority p
     await expect(owner.getByRole('heading', { level: 1 })).toBeVisible();
     operations += 1;
     contextARequestPhase = 'workspace-readiness-routes';
-    for (const route of ['/dashboard/preventivi', '/dashboard/contratti', '/dashboard/fatture', '/dashboard/automazioni', '/commercial/site-proposals']) {
+    for (const route of ['/dashboard/preventivi', '/dashboard/contratti', '/dashboard/fatture', '/dashboard/automazioni']) {
       await checkpoint('workspaceReadiness', 'running', {
         currentRoute: route,
         routesCompleted: workspaceReadiness.length,

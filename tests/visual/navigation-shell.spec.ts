@@ -1,11 +1,7 @@
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import path from 'node:path';
 
-import {
-  DOFLOW_TENANT_NAVIGATION,
-  moduleKeyForTenantPath,
-  navigationVisibilityMatchesTenant,
-} from '../../apps/frontend/src/config/tenant-navigation';
+import { DOFLOW_TENANT_NAVIGATION } from '../../apps/frontend/src/config/tenant-navigation';
 import { isProtectedPlatformTenant } from '../../apps/frontend/src/lib/platform-tenant-protection';
 
 const frontendOrigin = process.env.DOFLOW_VISUAL_FRONTEND_URL || 'http://localhost:3100';
@@ -123,32 +119,6 @@ async function expectActiveLink(page: Page, label: string) {
     .not.toBe('rgba(0, 0, 0, 0)');
 }
 
-async function expectBuilderOrder(page: Page) {
-  const sidebar = visibleSidebar(page);
-  const controls = [
-    sidebar.getByRole('button', { name: 'Commerciale', exact: true }),
-    sidebar.getByRole('link', { name: 'Builder', exact: true }),
-    sidebar.getByRole('button', { name: 'Progetti', exact: true }),
-  ];
-  for (const control of controls) await expect(control).toBeVisible();
-  const topPositions = await Promise.all(controls.map((control) => (
-    control.evaluate((element) => element.getBoundingClientRect().top)
-  )));
-  expect(topPositions[0]).toBeLessThan(topPositions[1]);
-  expect(topPositions[1]).toBeLessThan(topPositions[2]);
-}
-
-async function expectBuilderActive(page: Page) {
-  const sidebar = visibleSidebar(page);
-  const builder = sidebar.getByRole('link', { name: 'Builder', exact: true });
-  const commercial = sidebar.getByRole('button', { name: 'Commerciale', exact: true });
-  await expect(builder).toHaveAttribute('aria-current', 'page');
-  await expect(builder).toHaveAttribute('data-active', 'true');
-  await expect(commercial).not.toHaveAttribute('data-active', 'true');
-  await expect.poll(async () => builder.evaluate((element) => getComputedStyle(element).backgroundImage))
-    .toContain('gradient');
-}
-
 async function expectHiddenNavigation(page: Page) {
   const sidebar = visibleSidebar(page);
   for (const label of hiddenNavigationLabels) {
@@ -218,25 +188,8 @@ test.afterEach(async ({ page }) => {
   expect(entries, 'Il gate ha bloccato richieste mutative o accessi API diretti.').toEqual([]);
 });
 
-test('modello Builder: Doflow-only, ordine, ruoli, capability e route esistenti', () => {
-  const labels = DOFLOW_TENANT_NAVIGATION.map((section) => section.label);
-  expect(labels.slice(0, 4)).toEqual(['Panoramica', 'Commerciale', 'Builder', 'Progetti']);
-
-  const builder = DOFLOW_TENANT_NAVIGATION.find((section) => section.id === 'builder');
-  expect(builder).toMatchObject({
-    label: 'Builder',
-    href: '/commercial/site-proposals',
-    moduleKey: 'crm',
-    visibility: 'doflow',
-  });
-  expect(builder?.roles).toEqual(expect.arrayContaining(['owner', 'admin', 'superadmin', 'manager']));
-  expect(navigationVisibilityMatchesTenant(builder?.visibility, true)).toBe(true);
-  expect(navigationVisibilityMatchesTenant(builder?.visibility, false)).toBe(false);
-
-  const commerciale = DOFLOW_TENANT_NAVIGATION.find((section) => section.id === 'commerciale');
-  expect(commerciale?.activeHrefs || []).not.toContain('/commercial/site-proposals');
-  expect(commerciale?.inactiveHrefs).toContain('/commercial/site-proposals');
-  for (const route of builderRoutes) expect(moduleKeyForTenantPath(route)).toBe('crm');
+test('modello navigazione: Builder estratto e assente', () => {
+  expect(JSON.stringify(DOFLOW_TENANT_NAVIGATION)).not.toMatch(/site-proposals|canUseBuilder|Builder/);
 });
 
 test('protezione tenant piattaforma: Doflow non eliminabile e tenant ordinari invariati', () => {
@@ -257,21 +210,15 @@ test('desktop commerciale: ordine, active state e screenshot privacy-safe', asyn
   await privacySafeScreenshot(page, 'navigation-commercial-desktop.png');
 });
 
-test('desktop Builder: top-level, tutte le sottoroute attive e screenshot privacy-safe', async ({ page }) => {
-  test.setTimeout(300_000);
-  await page.setViewportSize({ width: 1675, height: 939 });
-
+test('Builder estratto: route e sottoroute restituiscono 404', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   for (const route of builderRoutes) {
-    await gotoAndExpect(page, route);
-    await expectBuilderOrder(page);
-    await expectBuilderActive(page);
+    const response = await page.goto(route, { waitUntil: 'domcontentloaded' });
+    expect(response?.status()).toBe(404);
   }
-
-  await gotoAndExpect(page, '/commercial/site-proposals');
-  await assertWhiteDoflowShell(page);
-  await expectBuilderOrder(page);
-  await expectBuilderActive(page);
-  await privacySafeScreenshot(page, 'builder-sidebar-desktop.png');
+  await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+  await waitForShell(page);
+  await expect(visibleSidebar(page).getByRole('link', { name: 'Builder', exact: true })).toHaveCount(0);
 });
 
 test('desktop progetti: tutte le route e active state', async ({ page }) => {
@@ -367,15 +314,6 @@ test('tablet: apertura, chiusura, scroll, progetti e impostazioni raggiungibili'
   await privacySafeScreenshot(page, 'navigation-tablet.png');
 });
 
-test('tablet Builder: ordine, active state e screenshot privacy-safe', async ({ page }) => {
-  await page.setViewportSize({ width: 1024, height: 768 });
-  await gotoAndExpect(page, '/commercial/site-proposals');
-  await assertWhiteDoflowShell(page);
-  await expectBuilderOrder(page);
-  await expectBuilderActive(page);
-  await privacySafeScreenshot(page, 'builder-sidebar-tablet.png');
-});
-
 test('mobile: drawer, chiusura, scroll e impostazioni raggiungibili', async ({ page }) => {
   test.setTimeout(300_000);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -402,28 +340,4 @@ test('mobile: drawer, chiusura, scroll e impostazioni raggiungibili', async ({ p
   await expectActiveLink(page, 'Sicurezza e accessi');
   await expectHiddenNavigation(page);
   await privacySafeScreenshot(page, 'navigation-mobile.png');
-});
-
-test('mobile Builder: voce raggiungibile, tappabile, attiva e screenshot privacy-safe', async ({ page }) => {
-  test.setTimeout(180_000);
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/projects', { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('.doflow-topbar')).toBeVisible();
-  await assertDoflowSession(page);
-  await page.locator('[data-sidebar="trigger"]').click();
-  await expect(visibleSidebar(page)).toBeVisible();
-  await expectBuilderOrder(page);
-
-  const builder = visibleSidebar(page).getByRole('link', { name: 'Builder', exact: true });
-  await expect(builder).toBeVisible();
-  await builder.click();
-  await expect(page).toHaveURL(/\/commercial\/site-proposals$/);
-  await expect(page.locator('.doflow-topbar')).toBeVisible();
-
-  await page.locator('[data-sidebar="trigger"]').click();
-  await expect(visibleSidebar(page)).toBeVisible();
-  await expect(visibleSidebar(page)).toHaveCSS('background-color', 'rgb(255, 255, 255)');
-  await expectBuilderOrder(page);
-  await expectBuilderActive(page);
-  await privacySafeScreenshot(page, 'builder-sidebar-mobile.png');
 });

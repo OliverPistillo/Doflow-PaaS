@@ -1,7 +1,5 @@
-import { Suspense } from "react"
+import { AuthorizedCalendarPage } from "@/features/identity/authorized-pages"
 
-import { CommercialCalendarPage } from "@/features/commercial/components/commercial-calendar-page"
-
-export default function DoflowCalendarPage() {
-  return <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Caricamento calendario…</div>}><CommercialCalendarPage /></Suspense>
+export default function Page() {
+  return <AuthorizedCalendarPage />
 }

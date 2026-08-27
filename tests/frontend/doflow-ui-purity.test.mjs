@@ -6,9 +6,11 @@ import test from "node:test"
 
 import {
   ARCADE_SUCCESS,
+  BUILDER_SUCCESS,
   LEGACY_SUCCESS,
   SEMANTIC_SUCCESS,
   auditArcadeReachability,
+  auditBuilderReachability,
   auditLegacyReachability,
   auditSemanticTokens,
   auditShellContracts,
@@ -20,13 +22,13 @@ import {
 const repositoryRoot = path.resolve(import.meta.dirname, "..", "..")
 const frontendSource = path.join(repositoryRoot, "apps", "frontend", "src")
 
-test("global route graph roots auth, tenant, Builder and platform surfaces", () => {
+test("global route graph roots auth, tenant and platform surfaces", () => {
   const entries = discoverEntries(frontendSource).map((file) => path.relative(frontendSource, file).replaceAll("\\", "/"))
   assert.ok(entries.includes("app/layout.tsx"))
   assert.ok(entries.includes("app/(tenant)/layout.tsx"))
   assert.ok(entries.includes("app/superadmin/layout.tsx"))
   assert.ok(entries.includes("app/login/page.tsx"))
-  assert.ok(entries.includes("app/(tenant)/commercial/site-proposals/page.tsx"))
+  assert.ok(!entries.some((entry) => entry.includes("site-proposals")))
 
   const reachable = new Set([...traceReachableGraph(frontendSource)].map((file) => path.relative(frontendSource, file).replaceAll("\\", "/")))
   assert.ok(reachable.has("components/layout/tenant-app-shell.tsx"))
@@ -49,13 +51,18 @@ test("graph traversal follows re-exports, dynamic imports and CSS imports", (con
   assert.deepEqual(visited, new Set(["entry.tsx", "styles.css", "barrel.ts", "dynamic.ts", "nested/reachable.css", "nested/value.ts"]))
 })
 
-test("universal shell contracts preserve tenant access, platform authorization and Builder capability", () => {
+test("universal shell contracts preserve tenant access and platform authorization", () => {
   assert.deepEqual(auditShellContracts(frontendSource), [])
 })
 
 test("excluded arcade surface has zero frontend reachability", () => {
   assert.deepEqual(auditArcadeReachability(frontendSource), [])
   assert.equal(ARCADE_SUCCESS, "FLOW ARCADE FRONTEND REACHABILITY = 0")
+})
+
+test("extracted Builder surface has zero frontend reachability", () => {
+  assert.deepEqual(auditBuilderReachability(frontendSource), [])
+  assert.equal(BUILDER_SUCCESS, "BUILDER FRONTEND REACHABILITY = 0")
 })
 
 test("reachable legacy visuals and structural colors are rejected", () => {
@@ -70,4 +77,5 @@ test("combined purity gate is green", () => {
   assert.deepEqual(result.legacyFindings, [])
   assert.deepEqual(result.semanticFindings, [])
   assert.deepEqual(result.arcadeFindings, [])
+  assert.deepEqual(result.builderFindings, [])
 })

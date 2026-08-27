@@ -16,7 +16,7 @@ import {
   buildInviteConfiguration,
   updateInviteRole,
 } from "../../apps/frontend/src/components/team-space/team-invite-policy"
-import { inputClassNames } from "../../apps/frontend/src/components/ui/input"
+import { Input } from "../../apps/frontend/src/components/ui/input"
 import { loadAllTeamMembers } from "../../apps/frontend/src/components/team-space/team-member-pagination"
 
 test("saving profile or capacity does not create overrides or revoke role defaults", () => {
@@ -109,7 +109,7 @@ test("invite staging keeps inherited capabilities out of explicit grants", () =>
     tenantRole: "user",
     identity: {
       roles: ["web_developer"],
-      capabilities: ["canUseBuilder", "canViewAllLeads"],
+      capabilities: ["canViewProjects", "canViewAllLeads"],
     },
     modulePermissionState: createModulePermissionDraftState(),
     skillIds: ["skill-a", "skill-a", "skill-b"],
@@ -147,7 +147,7 @@ test("invite staging sends only dirty module overrides and never impossible gran
 
 test("selecting an invite role removes capabilities that become inherited", () => {
   const next = updateInviteRole(
-    { roles: [], capabilities: ["canUseBuilder", "canViewAllLeads"] },
+    { roles: [], capabilities: ["canViewProjects", "canViewAllLeads"] },
     "web_developer",
     true,
   )
@@ -170,9 +170,11 @@ test("selecting an invite role removes capabilities that become inherited", () =
 })
 
 test("legacy input defaults preserve explicit consumer geometry utilities", () => {
-  const classes = inputClassNames(
-    "h-9 rounded-md bg-background px-3 py-2 text-sm leading-5 font-normal shadow-none",
-  )
+  const rendered = Input({
+    className: "h-9 rounded-md bg-background px-3 py-2 text-sm leading-5 font-normal shadow-none",
+    type: "text",
+  })
+  const classes = String(rendered.props.className)
   for (const expected of [
     "h-9",
     "rounded-md",
@@ -247,25 +249,33 @@ test("Team admin and sidebar fail closed on unverified or filtered access", () =
     new URL("../../apps/frontend/src/components/app-sidebar.tsx", import.meta.url),
     "utf8",
   )
-  assert.match(sidebarSource, /const allowed = item\.items\s*\? Boolean\(children\?\.length\)/)
+  assert.match(sidebarSource, /const children = item\.items\?\.filter\(\(child\) => !child\.capability \|\| hasCapability\(child\.capability\)\)/)
+  assert.match(sidebarSource, /const featureAllowed = item\.url !== "\/dashboard\/company-intelligence" \|\| activeModules\.has\("crm\.sales-intel"\)/)
+  assert.match(sidebarSource, /const allowed = featureAllowed && \(!item\.capability \|\| hasCapability\(item\.capability\) \|\| Boolean\(children\?\.length\)\)/)
   assert.doesNotMatch(sidebarSource, /const allowed = !item\.capability \|\| hasCapability\(item\.capability\) \|\| Boolean\(children\?\.length\)/)
 
   const teamPageSource = readFileSync(
     new URL("../../apps/frontend/src/app/(tenant)/dashboard/team-space/page.tsx", import.meta.url),
     "utf8",
   )
+  const teamRouteSource = readFileSync(
+    new URL("../../apps/frontend/src/features/chat/team-space-route.tsx", import.meta.url),
+    "utf8",
+  )
+  const teamSidebarSource = readFileSync(
+    new URL("../../apps/frontend/src/features/chat/team-space-sidebar.tsx", import.meta.url),
+    "utf8",
+  )
   const identitySource = readFileSync(
     new URL("../../apps/frontend/src/features/identity/doflow-identity-provider.tsx", import.meta.url),
     "utf8",
   )
-  const settingsSource = readFileSync(
-    new URL("../../apps/frontend/src/features/commercial/components/commercial-settings-page.tsx", import.meta.url),
-    "utf8",
-  )
-  assert.match(teamPageSource, /const requestedTab = searchParams\.get\("tab"\)/)
-  assert.match(teamPageSource, /const activeTab = requestedTab === "team-accounts" && canAdministerAccounts/)
-  assert.match(teamPageSource, /<Tabs value=\{activeTab\} onValueChange=\{changeTab\}/)
-  assert.match(settingsSource, /href="\/dashboard\/team-space\?tab=team-accounts"/)
+  assert.match(teamPageSource, /return <TeamSpaceRoute \/>/)
+  assert.match(teamRouteSource, /const requestedTab = searchParams\.get\("tab"\)/)
+  assert.match(teamRouteSource, /const activeTab = requestedTab === "team-accounts" && canAdministerAccounts \? "team-accounts" : "chat"/)
+  assert.match(teamRouteSource, /if \(activeTab === "team-accounts"\)/)
+  assert.match(teamRouteSource, /<DoflowTeamAccountAdmin \/>/)
+  assert.match(teamSidebarSource, /canAdministerAccounts \? <Button[^>]*>.*href="\/dashboard\/team-space\?tab=team-accounts"/s)
   assert.match(identitySource, /error instanceof ApiError && error\.status === 403/)
   assert.match(identitySource, /if \(error instanceof ApiError && error\.status === 403\) return \{ items: \[\] \}/)
   assert.doesNotMatch(identitySource, /teamApi\.members\([^)]*\)\.catch\(\(\) =>/)

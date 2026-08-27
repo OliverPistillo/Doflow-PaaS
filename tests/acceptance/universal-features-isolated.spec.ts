@@ -664,39 +664,15 @@ test("universal UI and final feature port is server-backed, scoped and non-destr
     expect(arcade.status()).toBe(404);
     await expect(owner.locator('a[href*="flow-arcade"]')).toHaveCount(0);
 
-    const editorContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-    contexts.push(editorContext);
-    await enforceLocalBrowserNetwork(editorContext, externalNetworkViolations);
-    const editor = await login(
-      editorContext,
-      "visual.editor@acceptance.invalid",
-      credentials,
-      { target: "/commercial/site-proposals" },
-    );
-    observe(editor, pageErrors, serverErrors);
-    await waitForUniversalShell(editor, true);
     expect(
-      (await appFetch(editor, "/tenant/commercial/site-proposals?limit=1")).status,
-    ).toBe(200);
-    await expect(editor.locator('[data-builder-shell="universal"]')).toBeVisible();
-    await expect(editor.getByRole("heading", { name: "Proposte web", exact: true })).toBeVisible();
-    await screenshot(editor, "universal-builder-capability-1440x900.png", screenshotPaths);
-
-    const viewerContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-    contexts.push(viewerContext);
-    await enforceLocalBrowserNetwork(viewerContext, externalNetworkViolations);
-    const viewer = await login(
-      viewerContext,
-      "visual.viewer@acceptance.invalid",
-      credentials,
-      { target: "/commercial/site-proposals" },
+      (await appFetch(owner, "/tenant/commercial/site-proposals?limit=1")).status,
+    ).toBe(404);
+    const builderRoute = await ownerContext.request.get(
+      "http://localhost:3100/commercial/site-proposals",
+      { maxRedirects: 0 },
     );
-    observe(viewer, pageErrors, serverErrors);
-    await waitForUniversalShell(viewer, true);
-    expect(
-      (await appFetch(viewer, "/tenant/commercial/site-proposals?limit=1")).status,
-    ).toBe(403);
-    await expect(viewer.getByRole("heading", { name: "Modulo non disponibile", exact: true })).toBeVisible();
+    expect(builderRoute.status()).toBe(404);
+    await expect(owner.locator('a[href="/commercial/site-proposals"]')).toHaveCount(0);
 
     const secondaryContext = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     contexts.push(secondaryContext);
@@ -814,7 +790,7 @@ test("universal UI and final feature port is server-backed, scoped and non-destr
             dbSync: false,
           },
           shell: { doflow: true, futureTenant: true, platform: true },
-          builder: { allowedCapability: true, deniedWithoutCapability: true },
+          builder: { extracted: true, frontendReachability: 0, backendReachability: 0 },
           teamSpace: {
             serverBacked: true,
             conversationId,

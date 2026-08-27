@@ -1,0 +1,241 @@
+/* Tenant-scoped compatibility layer for the authenticated 4864782 frontend.
+   Values and component treatments are sourced from the reference globals;
+   the selector keeps existing generic tenants and D3CC801 pre-auth UI intact. */
+
+html[data-tenant-ui="doflow-reference"] {
+  color-scheme: light;
+  --background: 228 50% 98%;
+  --foreground: 232 24% 13%;
+  --card: 0 0% 100% / 92%;
+  --card-foreground: 232 24% 13%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 232 24% 13%;
+  --primary: 222 72% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 230 38% 96%;
+  --secondary-foreground: 232 26% 26%;
+  --muted: 228 36% 96%;
+  --muted-foreground: 229 10% 45%;
+  --accent: 248 55% 95%;
+  --accent-foreground: 247 55% 48%;
+  --destructive: 0 65% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 226 27% 90%;
+  --input: 226 27% 90%;
+  --ring: 248 73% 60%;
+  --chart-1: 222 91% 62%;
+  --chart-2: 248 73% 60%;
+  --chart-3: 166 57% 42%;
+  --chart-4: 37 87% 58%;
+  --chart-5: 0 74% 58%;
+  --chart-inactive: 226 27% 90%;
+  --radius: .625rem;
+  --sidebar-background: 0 0% 100% / 94%;
+  --sidebar-foreground: 232 24% 13%;
+  --sidebar-primary: 222 72% 50%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 229 43% 97%;
+  --sidebar-accent-foreground: 247 55% 48%;
+  --sidebar-border: 226 27% 90%;
+  --sidebar-ring: 248 73% 60%;
+  --doflow-app-background: radial-gradient(circle at 85% 0%, rgb(57 116 255 / 8%), transparent 30%), radial-gradient(circle at 5% 85%, rgb(117 105 255 / 7%), transparent 32%), linear-gradient(135deg, #fff 0%, #f7f9ff 52%, #f8f5ff 100%);
+  --doflow-topbar: rgb(255 255 255 / 88%);
+  --doflow-sidebar-background: radial-gradient(circle at 15% 5%, rgb(57 116 255 / 5.5%), transparent 30%), linear-gradient(180deg, #fff 0%, #f9faff 58%, #f8f6ff 100%);
+  --doflow-sidebar-hover: rgb(57 116 255 / 4.5%);
+  --doflow-sidebar-active-gradient: linear-gradient(90deg, rgb(57 116 255 / 11%), rgb(117 105 255 / 13%));
+  --doflow-sidebar-muted: hsl(229 10% 45%);
+  --doflow-sidebar-icon: hsl(229 12% 48%);
+  --doflow-card-shadow: 0 12px 35px rgb(39 63 130 / 6%);
+  --doflow-active-shadow: 0 0 0 1px rgb(117 105 255 / 18%), 0 16px 45px rgb(57 116 255 / 8%);
+}
+
+html.dark[data-tenant-ui="doflow-reference"] {
+  color-scheme: dark;
+  --background: 232 58% 5%;
+  --foreground: 230 40% 98%;
+  --card: 232 40% 10% / 88%;
+  --card-foreground: 230 40% 98%;
+  --popover: 232 35% 13%;
+  --popover-foreground: 230 40% 98%;
+  --primary: 222 85% 70%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 231 30% 14% / 82%;
+  --secondary-foreground: 228 28% 90%;
+  --muted: 231 30% 10%;
+  --muted-foreground: 229 17% 68%;
+  --accent: 233 32% 17%;
+  --accent-foreground: 250 60% 75%;
+  --destructive: 0 82% 72%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 225 30% 22% / 12%;
+  --input: 225 30% 22% / 12%;
+  --ring: 248 73% 60%;
+  --chart-1: 222 85% 65%;
+  --chart-2: 248 73% 68%;
+  --chart-3: 156 50% 56%;
+  --chart-4: 39 88% 64%;
+  --chart-5: 0 76% 66%;
+  --chart-inactive: 230 10% 28%;
+  --sidebar-background: 233 55% 6% / 96%;
+  --sidebar-foreground: 230 40% 98%;
+  --sidebar-primary: 222 85% 70%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 0 0% 100% / 6%;
+  --sidebar-accent-foreground: 250 60% 78%;
+  --sidebar-border: 225 30% 22% / 12%;
+  --sidebar-ring: 248 73% 60%;
+  --doflow-app-background: radial-gradient(circle at 82% 5%, rgb(57 116 255 / 12%), transparent 30%), radial-gradient(circle at 18% 90%, rgb(117 105 255 / 10%), transparent 34%), linear-gradient(135deg, #050713 0%, #070a19 48%, #0b0820 100%);
+  --doflow-topbar: hsl(233 55% 6% / 88%);
+  --doflow-sidebar-background: radial-gradient(circle at 20% 10%, rgb(57 116 255 / 8%), transparent 34%), linear-gradient(180deg, #060916 0%, #080b1c 55%, #0b0920 100%);
+  --doflow-sidebar-hover: rgb(126 171 255 / 5.5%);
+  --doflow-sidebar-active-gradient: linear-gradient(90deg, rgb(57 116 255 / 16%), rgb(117 105 255 / 18%));
+  --doflow-sidebar-muted: hsl(229 17% 68%);
+  --doflow-sidebar-icon: hsl(229 17% 72%);
+  --doflow-card-shadow: 0 16px 45px rgb(0 0 0 / 18%);
+  --doflow-active-shadow: 0 0 0 1px rgb(117 105 255 / 18%), 0 16px 45px rgb(57 116 255 / 8%);
+}
+
+html[data-tenant-ui="doflow-reference"] body,
+html[data-tenant-ui="doflow-reference"] [data-slot="sidebar-inset"] {
+  background-color: transparent;
+  background-image: var(--doflow-app-background);
+  background-attachment: fixed;
+}
+
+html[data-tenant-ui="doflow-reference"] [data-slot="card"] {
+  box-shadow: var(--doflow-card-shadow);
+}
+
+html[data-tenant-ui="doflow-reference"] [data-slot="button"][data-variant="default"],
+html[data-tenant-ui="doflow-reference"] [data-slot="progress-indicator"] {
+  background-color: hsl(var(--primary));
+  background-image: linear-gradient(135deg, #3974ff 0%, #7569ff 100%);
+}
+
+html[data-tenant-ui="doflow-reference"] [data-slot="sidebar-inner"],
+html[data-tenant-ui="doflow-reference"] [data-sidebar="sidebar"][data-mobile="true"] {
+  background-color: hsl(var(--sidebar-background));
+  background-image: var(--doflow-sidebar-background);
+}
+
+html[data-tenant-ui="doflow-reference"] [data-sidebar="sidebar"][data-mobile="true"] {
+  width: min(var(--sidebar-width), 100vw);
+  max-width: min(var(--sidebar-width), 100vw);
+}
+
+html[data-tenant-ui="doflow-reference"] [data-slot="sidebar-inset"] [data-slot="tabs"],
+html[data-tenant-ui="doflow-reference"] [data-slot="sidebar-inset"] [data-slot="tabs-content"],
+html[data-tenant-ui="doflow-reference"] [data-slot="sidebar-inset"] [data-slot="tabs-content"] > [data-slot="card"] {
+  min-width: 0;
+}
+
+html[data-tenant-ui="doflow-reference"] [data-slot="sidebar-inset"] [data-slot="tabs"][data-orientation="horizontal"] {
+  flex-direction: column;
+}
+
+html[data-tenant-ui="doflow-reference"] [data-slot="sidebar-inset"] [data-slot="tabs-content"] {
+  width: 100%;
+  max-width: 100%;
+}
+
+html[data-tenant-ui="doflow-reference"] [data-slot="sidebar-inner"] {
+  border-right: 1px solid hsl(var(--sidebar-border));
+}
+
+html[data-tenant-ui="doflow-reference"] [data-slot="sidebar-group-label"] {
+  color: var(--doflow-sidebar-muted);
+}
+
+html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-button"] > svg {
+  color: var(--doflow-sidebar-icon);
+}
+
+html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-button"]:hover,
+html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-sub-button"]:hover {
+  background-color: var(--doflow-sidebar-hover);
+  background-image: none;
+}
+
+html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-button"][data-active="true"],
+html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-sub-button"][data-active="true"] {
+  position: relative;
+  background-image: var(--doflow-sidebar-active-gradient);
+  box-shadow: var(--doflow-active-shadow);
+  color: hsl(var(--sidebar-accent-foreground));
+}
+
+html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-button"][data-active="true"] > svg {
+  color: hsl(var(--sidebar-primary));
+}
+
+html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-button"][data-active="true"]::before,
+html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-sub-button"][data-active="true"]::before {
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  left: 0;
+  width: 2px;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #3974ff, #7569ff);
+  content: "";
+  pointer-events: none;
+}
+
+@keyframes flow-confetti-fall {
+  0% { opacity: 0; translate: 0 -1rem; }
+  12% { opacity: 1; }
+  100% { opacity: 0; translate: 0 24rem; rotate: 420deg; }
+}
+
+.flow-confetti {
+  top: -.75rem;
+  animation: flow-confetti-fall 1.8s ease-out both;
+}
+
+@keyframes flow-summary-accent {
+  0%, 100% { border-color: var(--border); box-shadow: none; }
+  45% { border-color: color-mix(in oklab, hsl(var(--primary)) 58%, hsl(var(--border))); box-shadow: 0 0 0 3px color-mix(in oklab, hsl(var(--primary)) 12%, transparent); }
+}
+
+.flow-customer-summary-cards[data-flow-tour-active="true"] > * {
+  animation: flow-summary-accent 900ms ease-out both;
+}
+
+.flow-customer-summary-cards[data-flow-tour-active="true"] > :nth-child(2) { animation-delay: 90ms; }
+.flow-customer-summary-cards[data-flow-tour-active="true"] > :nth-child(3) { animation-delay: 180ms; }
+.flow-customer-summary-cards[data-flow-tour-active="true"] > :nth-child(4) { animation-delay: 270ms; }
+.flow-customer-summary-cards[data-flow-tour-active="true"] > :nth-child(5) { animation-delay: 360ms; }
+.flow-customer-summary-cards[data-flow-tour-reduced-motion="true"] > * { animation: none; }
+
+[data-flow-coachmark] {
+  width: min(420px, calc(100vw - 32px)) !important;
+  max-height: calc(100dvh - 2rem) !important;
+  pointer-events: auto !important;
+}
+
+body.flow-tour-exit-confirming .flow-tour-layer,
+body.flow-tour-exit-confirming .flow-tour-coachmark {
+  display: none !important;
+}
+
+body.flow-tour-exit-confirming [data-flow-tour-active="true"] {
+  z-index: auto !important;
+  pointer-events: none !important;
+}
+
+[data-flow-coachmark] > div {
+  overflow-x: visible !important;
+  overflow-y: visible !important;
+}
+
+@media (max-height: 500px) {
+  [data-flow-coachmark] > div {
+    max-height: calc(100dvh - 1rem);
+    overflow-y: auto !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-confetti { display: none; }
+  .flow-customer-summary-cards[data-flow-tour-active="true"] > * { animation: none; }
+}

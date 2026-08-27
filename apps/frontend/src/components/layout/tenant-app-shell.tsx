@@ -4,8 +4,8 @@ import * as React from "react"
 import { LoaderCircle } from "lucide-react"
 import { usePathname, useRouter } from "next/navigation"
 
-import { AppSidebar } from "@/components/app-sidebar"
-import { DashboardHeader } from "@/components/dashboard-header"
+import { DashboardShell } from "@/components/dashboard-shell"
+import { GenericTenantSidebar } from "@/components/generic-tenant-sidebar"
 import { FlowExperiencePreferencesProvider } from "@/components/flow-experience/flow-preferences-context"
 import { UserNav } from "@/components/layout/user-nav"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -16,10 +16,17 @@ import { DOFLOW_TENANT_NAVIGATION, moduleKeyForTenantPath, navigationVisibilityM
 import { PlanProvider, usePlan } from "@/contexts/PlanContext"
 import { TenantAccessProvider, useTenantAccess } from "@/contexts/TenantAccessContext"
 import { CommercialLeadsProvider, useCommercialLeads } from "@/features/commercial/components/commercial-leads-provider"
+import { BonusProvider } from "@/features/bonus/bonus-provider"
+import { TeamChatProvider } from "@/features/chat/team-chat-provider"
+import { CompanyIntelligenceProvider } from "@/features/company-intelligence/company-intelligence-provider"
+import { FlowExperienceProvider } from "@/features/flow/flow-experience-provider"
+import { FlowboardProvider } from "@/features/flowboard/flowboard-provider"
 import { DoflowExperienceProvider } from "@/features/identity/doflow-experience-context"
 import { AccessDenied } from "@/features/identity/access-denied"
 import { DoflowIdentityProvider, useDoflowIdentity } from "@/features/identity/doflow-identity-provider"
+import { DoflowPresenceProvider } from "@/features/identity/doflow-presence-provider"
 import { IdentitySessionGuard } from "@/features/identity/identity-session-guard"
+import { CustomerInboxProvider } from "@/features/inbox/customer-inbox-provider"
 
 export type TenantShellSession = {
   id: string
@@ -91,30 +98,29 @@ const LEGACY_DOFLOW_ROUTE_REDIRECTS: Array<[string, string]> = [
 ]
 
 function legacyDoflowDestination(pathname: string) {
-  if (pathname.startsWith("/commercial/site-proposals")) return null
   const match = LEGACY_DOFLOW_ROUTE_REDIRECTS.find(
     ([source]) => pathname === source || pathname.startsWith(`${source}/`),
   )
   return match ? `${match[1]}${pathname.slice(match[0].length)}` : null
 }
 
-function UniversalThemeBoundary({ children }: { children: React.ReactNode }) {
+function UniversalThemeBoundary({ children, isDoflow }: { children: React.ReactNode; isDoflow: boolean }) {
   React.useLayoutEffect(() => {
     const root = document.documentElement
     const previousTheme = root.getAttribute("data-tenant-ui")
-    root.setAttribute("data-tenant-ui", "universal")
+    root.setAttribute("data-tenant-ui", isDoflow ? "doflow-reference" : "universal")
     return () => {
       if (previousTheme === null) root.removeAttribute("data-tenant-ui")
       else root.setAttribute("data-tenant-ui", previousTheme)
     }
-  }, [])
+  }, [isDoflow])
   return <>{children}</>
 }
 
-function DoflowWorkspace({ children }: { children: React.ReactNode }) {
+function DoflowWorkspaceGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { workspaceStatus, workspaceError, secondaryStatus, secondaryError, retryWorkspace, retrySecondary } = useCommercialLeads()
+  const { workspaceStatus, workspaceError, retryWorkspace } = useCommercialLeads()
   const workspaceReady = workspaceStatus === "ready"
   const loading = workspaceStatus === "loading"
 
@@ -124,37 +130,16 @@ function DoflowWorkspace({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, router, workspaceError?.status, workspaceStatus])
 
+  if (workspaceReady) return <>{children}</>
   return (
-    <SidebarProvider data-app-ui-generation="universal-v1" className="universal-app-shell">
-      <AppSidebar data-sidebar-kind="tenant" />
-      <SidebarInset as="div" data-app-inset="true">
-        <DashboardHeader />
-        <main className="relative min-w-0 flex-1 overflow-y-auto" data-app-shell-ready="true" data-workspace-ready={workspaceReady ? "true" : "false"} data-workspace-status={workspaceStatus} data-secondary-status={secondaryStatus} aria-busy={loading}>
-          <div className="min-h-full" aria-hidden={workspaceReady ? undefined : true} inert={workspaceReady ? undefined : true}>
-            {workspaceReady && secondaryStatus !== "ready" ? (
-              <section className="mx-5 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/35 bg-amber-50/90 px-4 py-3 text-sm dark:bg-amber-950/30" role={secondaryStatus === "loading" ? "status" : "alert"} aria-live={secondaryStatus === "loading" ? "polite" : "assertive"}>
-                <div className="flex items-center gap-2">
-                  {secondaryStatus === "loading" ? <LoaderCircle className="size-4 animate-spin text-amber-700 dark:text-amber-300" aria-hidden="true" /> : null}
-                  <p>{secondaryStatus === "loading" ? "Caricamento dei dati secondari…" : secondaryError?.message || "Alcuni dati secondari non sono disponibili."}</p>
-                </div>
-                {secondaryStatus === "error" ? <Button type="button" variant="outline" size="sm" onClick={retrySecondary}>Riprova dati secondari</Button> : null}
-              </section>
-            ) : null}
-            <DoflowRouteCapabilityGate pathname={pathname}>{children}</DoflowRouteCapabilityGate>
-          </div>
-          {!workspaceReady ? (
-            <section className="absolute inset-0 z-10 grid min-h-full place-items-center bg-background/95 px-6" role={loading ? "status" : "alert"} aria-live={loading ? "polite" : "assertive"}>
-              <div className="flex max-w-sm flex-col items-center gap-3 rounded-xl border bg-card p-6 text-center shadow-sm">
-                {loading ? <LoaderCircle className="size-6 animate-spin text-primary" aria-hidden="true" /> : null}
-                <p className="font-medium">{loading ? "Sincronizzazione workspace" : workspaceError?.status === 403 ? "Accesso al workspace non consentito" : "Workspace non disponibile"}</p>
-                <p className="text-sm text-muted-foreground">{loading ? "Caricamento dei dati autorizzati dal server…" : workspaceError?.message || "Il caricamento non è riuscito."}</p>
-                {!loading ? <Button type="button" variant="outline" size="sm" onClick={retryWorkspace}>Riprova caricamento</Button> : null}
-              </div>
-            </section>
-          ) : null}
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+    <main className="grid min-h-screen place-items-center bg-background px-6" role={loading ? "status" : "alert"} aria-live={loading ? "polite" : "assertive"}>
+      <div className="flex max-w-sm flex-col items-center gap-3 rounded-xl border bg-card p-6 text-center shadow-sm">
+        {loading ? <LoaderCircle className="size-6 animate-spin text-primary" aria-hidden="true" /> : null}
+        <p className="font-medium">{loading ? "Sincronizzazione workspace" : workspaceError?.status === 403 ? "Accesso al workspace non consentito" : "Workspace non disponibile"}</p>
+        <p className="text-sm text-muted-foreground">{loading ? "Caricamento dei dati autorizzati dal server…" : workspaceError?.message || "Il caricamento non è riuscito."}</p>
+        {!loading ? <Button type="button" variant="outline" size="sm" onClick={retryWorkspace}>Riprova caricamento</Button> : null}
+      </div>
+    </main>
   )
 }
 
@@ -237,8 +222,8 @@ function GenericTenantWorkspace({ children, session }: { children: React.ReactNo
 
   return (
     <SidebarProvider data-app-ui-generation="universal-v1" className="universal-app-shell">
-      <AppSidebar navigationGroups={navigationGroups} tenantName={tenantName} tenantSlug={tenantSlug} data-sidebar-kind="tenant" footer={<div className="flex items-center gap-2 px-1"><UserNav /><div className="min-w-0 group-data-[collapsible=icon]:hidden"><p className="truncate text-sm font-medium">{session.email || "Account"}</p><p className="truncate text-xs capitalize text-muted-foreground">{role}</p></div></div>} />
-      <SidebarInset as="div" data-app-inset="true">
+      <GenericTenantSidebar navigationGroups={navigationGroups} tenantName={tenantName} tenantSlug={tenantSlug} data-sidebar-kind="tenant" footer={<div className="flex items-center gap-2 px-1"><UserNav /><div className="min-w-0 group-data-[collapsible=icon]:hidden"><p className="truncate text-sm font-medium">{session.email || "Account"}</p><p className="truncate text-xs capitalize text-muted-foreground">{role}</p></div></div>} />
+      <SidebarInset data-app-inset="true">
         <header className="sticky top-0 z-30 flex min-h-16 shrink-0 items-center gap-2 border-b bg-[var(--doflow-topbar)] px-2 backdrop-blur-xl transition-[width,height] ease-linear sm:px-4 group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
           <SidebarTrigger className="-ml-1 shrink-0" />
           <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{tenantName}</p></div>
@@ -267,7 +252,7 @@ export function TenantAppShell({ children, session }: { children: React.ReactNod
   if (destination) return <div className="grid min-h-screen place-items-center bg-background text-sm text-muted-foreground">Apertura del workspace…</div>
 
   return (
-    <UniversalThemeBoundary>
+    <UniversalThemeBoundary isDoflow={isDoflow}>
       <FlowExperiencePreferencesProvider>
         <PlanProvider>
           <TenantAccessProvider>
@@ -276,7 +261,25 @@ export function TenantAppShell({ children, session }: { children: React.ReactNod
                 <DoflowIdentityProvider>
                   <IdentitySessionGuard>
                     <CommercialLeadsProvider>
-                      <DoflowWorkspace>{children}</DoflowWorkspace>
+                      <BonusProvider>
+                        <DoflowPresenceProvider>
+                          <TeamChatProvider>
+                            <CustomerInboxProvider>
+                              <FlowboardProvider>
+                                <CompanyIntelligenceProvider>
+                                  <FlowExperienceProvider>
+                                    <DashboardShell>
+                                      <DoflowWorkspaceGate>
+                                        <DoflowRouteCapabilityGate pathname={pathname}>{children}</DoflowRouteCapabilityGate>
+                                      </DoflowWorkspaceGate>
+                                    </DashboardShell>
+                                  </FlowExperienceProvider>
+                                </CompanyIntelligenceProvider>
+                              </FlowboardProvider>
+                            </CustomerInboxProvider>
+                          </TeamChatProvider>
+                        </DoflowPresenceProvider>
+                      </BonusProvider>
                     </CommercialLeadsProvider>
                   </IdentitySessionGuard>
                 </DoflowIdentityProvider>

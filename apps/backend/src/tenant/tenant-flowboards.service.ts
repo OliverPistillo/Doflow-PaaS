@@ -1,11 +1,13 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
+import { randomUUID } from 'node:crypto';
 import { DataSource, EntityManager } from 'typeorm';
 import { NotificationsService } from '../realtime/notifications.service';
 import { TenantUniversalCapabilitiesService, TenantUniversalCapability } from './tenant-universal-capabilities.service';
 import { boundedText, isTenantAdministrator, rejectActorOverride, tenantActor, TenantActor, tenantUuid } from './tenant-universal-context';
 import { ensureTenantUniversalFeatureTables } from './tenant-universal-features-schema';
 import { withTenantIdempotency } from './tenant-universal-idempotency';
+import { ensureTenantBackendContractTables } from './tenant-backend-contracts-schema';
 
 @Injectable()
 export class TenantFlowboardsService {
@@ -19,7 +21,21 @@ export class TenantFlowboardsService {
   private async ensure(capability: TenantUniversalCapability = 'canViewProjects', actor = this.actor()) {
     await this.capabilities.require(actor, capability);
     await ensureTenantUniversalFeatureTables(this.dataSource, actor.schema);
+    await ensureTenantBackendContractTables(this.dataSource, actor.schema);
     return actor;
+  }
+
+  private async projectId(manager: DataSource | EntityManager, actor: TenantActor, value: unknown) {
+    if (value === undefined || value === null || value === '') return null;
+    const id = tenantUuid(value, 'projectId');
+    const privileged = isTenantAdministrator(actor) || actor.role === 'manager';
+    const rows = await manager.query(
+      `SELECT p.id FROM "${actor.schema}".projects p WHERE p.id=$1 AND p.deleted_at IS NULL AND
+       ($3::boolean OR p.project_manager_id=$2 OR EXISTS (SELECT 1 FROM "${actor.schema}".project_members pm WHERE pm.project_id=p.id AND pm.user_id=$2 AND pm.deleted_at IS NULL) OR EXISTS (SELECT 1 FROM "${actor.schema}".tasks t WHERE t.project_id=p.id AND t.assignee_id=$2 AND t.deleted_at IS NULL))`,
+      [id, actor.id, privileged],
+    );
+    if (!rows[0]) throw new NotFoundException('Progetto non trovato');
+    return id;
   }
 
   private graph(value: unknown, label: string, max: number) {
@@ -27,6 +43,36 @@ export class TenantFlowboardsService {
     const encoded = JSON.stringify(value);
     if (Buffer.byteLength(encoded) > 2_000_000) throw new BadRequestException(`${label} troppo grande`);
     return value;
+  }
+
+  private cloneGraph(nodesValue: unknown, edgesValue: unknown) {
+    const nodes = this.graph(nodesValue ?? [], 'nodes', 5_000) as Array<Record<string, unknown>>;
+    const edges = this.graph(edgesValue ?? [], 'edges', 10_000) as Array<Record<string, unknown>>;
+    const nodeIds = new Map<string, string>();
+    for (const node of nodes) {
+      const sourceId = typeof node?.id === 'string' ? node.id : '';
+      if (sourceId) nodeIds.set(sourceId, randomUUID());
+    }
+    const clonedNodes = nodes.map((node) => {
+      const sourceId = typeof node?.id === 'string' ? node.id : '';
+      const parentId = typeof node?.parentId === 'string' ? node.parentId : undefined;
+      return {
+        ...structuredClone(node),
+        id: nodeIds.get(sourceId) ?? randomUUID(),
+        ...(parentId ? { parentId: nodeIds.get(parentId) ?? parentId } : {}),
+      };
+    });
+    const clonedEdges = edges.map((edge) => {
+      const source = typeof edge?.source === 'string' ? edge.source : '';
+      const target = typeof edge?.target === 'string' ? edge.target : '';
+      return {
+        ...structuredClone(edge),
+        id: randomUUID(),
+        source: nodeIds.get(source) ?? source,
+        target: nodeIds.get(target) ?? target,
+      };
+    });
+    return { nodes: clonedNodes, edges: clonedEdges };
   }
 
   private async access(manager: DataSource | EntityManager, actor: TenantActor, id: string, write = false) {
@@ -39,8 +85,9 @@ export class TenantFlowboardsService {
     const board = rows[0];
     if (!board) throw new NotFoundException('Flowboard non trovata');
     const owner = String(board.owner_user_id) === actor.id;
-    const view = owner || Boolean(board.collaborator_permission) || isTenantAdministrator(actor);
-    const edit = owner || board.collaborator_permission === 'edit' || isTenantAdministrator(actor);
+    const template = board.is_template === true;
+    const view = template || owner || Boolean(board.collaborator_permission) || isTenantAdministrator(actor);
+    const edit = !template && (owner || board.collaborator_permission === 'edit' || isTenantAdministrator(actor));
     if (!view || (write && !edit)) throw new ForbiddenException('Accesso Flowboard non autorizzato');
     return { board, owner, edit };
   }
@@ -119,8 +166,21 @@ export class TenantFlowboardsService {
        FROM "${actor.schema}".flowboards b
        LEFT JOIN "${actor.schema}".flowboard_collaborators fc ON fc.board_id=b.id AND fc.user_id=$1
        WHERE b.deleted_at IS NULL AND ($2::boolean OR b.archived_at IS NULL)
-         AND (b.owner_user_id=$1 OR fc.user_id=$1 OR $3::boolean)
+         AND (b.is_template=true OR b.owner_user_id=$1 OR fc.user_id=$1 OR $3::boolean)
        ORDER BY b.updated_at DESC,b.id DESC LIMIT 200`, [actor.id, includeArchived, isTenantAdministrator(actor)],
+    );
+    return { items: rows };
+  }
+
+  async templates() {
+    const actor = await this.ensure();
+    await ensureTenantBackendContractTables(this.dataSource, actor.schema);
+    const rows = await this.dataSource.query(
+      `SELECT b.*,CASE WHEN b.owner_user_id=$1 THEN 'owner' ELSE 'viewer' END AS permission
+       FROM "${actor.schema}".flowboards b
+       WHERE b.is_template=true AND b.deleted_at IS NULL AND b.archived_at IS NULL
+       ORDER BY b.template_key NULLS LAST,b.name,b.id LIMIT 100`,
+      [actor.id],
     );
     return { items: rows };
   }
@@ -128,21 +188,35 @@ export class TenantFlowboardsService {
   async create(body: Record<string, unknown>, key?: string) {
     rejectActorOverride(body);
     const actor = await this.ensure('canCreateFlowboards');
+    await ensureTenantBackendContractTables(this.dataSource, actor.schema);
     const name = boundedText(body.name, 'name', 160, true);
     const description = boundedText(body.description, 'description', 2_000);
     const collaborators = this.collaboratorInput(body.collaborators) || [];
-    const created = await this.dataSource.transaction((manager) => withTenantIdempotency(
-      manager, actor.schema, `flowboard:create:${actor.id}`, key, { name, description, collaborators }, actor.id,
+    const isTemplate = body.isTemplate === true;
+    if (isTemplate && !isTenantAdministrator(actor)) throw new ForbiddenException('Solo un amministratore può creare modelli Flowboard');
+    const templateKey = isTemplate ? boundedText(body.templateKey, 'templateKey', 80) || null : null;
+    const created = await this.dataSource.transaction(async (manager) => {
+      const projectId = await this.projectId(manager, actor, body.projectId ?? body.project_id);
+      const templateId = body.templateId && body.templateId !== 'template-blank' ? tenantUuid(body.templateId, 'templateId') : null;
+      return withTenantIdempotency(
+      manager, actor.schema, `flowboard:create:${actor.id}`, key, { name, description, collaborators, projectId, templateId, isTemplate, templateKey }, actor.id,
       async () => {
+        let template: any = null;
+        if (templateId) {
+          const rows = await manager.query(`SELECT * FROM "${actor.schema}".flowboards WHERE id=$1 AND is_template=true AND deleted_at IS NULL AND archived_at IS NULL`, [templateId]);
+          if (!rows[0]) throw new NotFoundException('Template Flowboard non trovato');
+          template = rows[0];
+        }
+        const graph = this.cloneGraph(template?.nodes ?? [], template?.edges ?? []);
         const rows = await manager.query(
-          `INSERT INTO "${actor.schema}".flowboards (owner_user_id,name,description)
-           VALUES ($1,$2,$3) RETURNING *`, [actor.id, name, description || null],
+          `INSERT INTO "${actor.schema}".flowboards (owner_user_id,name,description,nodes,edges,viewport,project_id,is_template,template_key)
+           VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6::jsonb,$7,$8,$9) RETURNING *`, [actor.id, name, description || template?.description || null, JSON.stringify(graph.nodes), JSON.stringify(graph.edges), JSON.stringify(template?.viewport || {}), projectId, isTemplate, templateKey],
         );
         await this.replaceCollaborators(manager, actor, rows[0].id, collaborators);
         await this.audit(manager, actor, rows[0].id, 'flowboard_created', { collaborators });
         return rows[0];
       },
-    ));
+    ); });
     await this.publishBoard(actor, created.id, 'flowboard.created');
     return created;
   }
@@ -162,6 +236,7 @@ export class TenantFlowboardsService {
   async update(idValue: string, body: Record<string, unknown>, key?: string) {
     rejectActorOverride(body);
     const actor = await this.ensure('canUpdateFlowboards');
+    await ensureTenantBackendContractTables(this.dataSource, actor.schema);
     const id = tenantUuid(idValue, 'boardId');
     const expectedVersion = Number(body.optimisticVersion ?? body.optimistic_version);
     if (!Number.isInteger(expectedVersion) || expectedVersion < 1) throw new BadRequestException('optimisticVersion obbligatoria');
@@ -172,12 +247,13 @@ export class TenantFlowboardsService {
       const name = body.name === undefined ? board.name : boundedText(body.name, 'name', 160, true);
       const description = body.description === undefined ? board.description : boundedText(body.description, 'description', 2_000);
       const status = body.status === undefined ? board.status : boundedText(body.status, 'status', 40, true);
-      return withTenantIdempotency(manager, actor.schema, `flowboard:update:${id}`, key, { name, description, status, collaborators, expectedVersion }, actor.id, async () => {
+      const projectId = body.projectId === undefined && body.project_id === undefined ? board.project_id : await this.projectId(manager, actor, body.projectId ?? body.project_id);
+      return withTenantIdempotency(manager, actor.schema, `flowboard:update:${id}`, key, { name, description, status, collaborators, expectedVersion, projectId }, actor.id, async () => {
         const rows = await manager.query(
-          `UPDATE "${actor.schema}".flowboards SET name=$2,description=$3,status=$4,updated_at=now(),
+          `UPDATE "${actor.schema}".flowboards SET name=$2,description=$3,status=$4,project_id=$6,updated_at=now(),
            optimistic_version=optimistic_version+1
            WHERE id=$1 AND deleted_at IS NULL AND optimistic_version=$5 RETURNING *`,
-          [id, name, description || null, status, expectedVersion],
+          [id, name, description || null, status, expectedVersion, projectId],
         );
         if (!rows[0]) throw new ConflictException('Flowboard modificata da un altro utente');
         if (collaborators) await this.replaceCollaborators(manager, actor, id, collaborators);
@@ -186,6 +262,29 @@ export class TenantFlowboardsService {
       });
     });
     await this.publishBoard(actor, id, 'flowboard.updated');
+    return result;
+  }
+
+  async duplicate(idValue: string, body: Record<string, unknown>, key?: string) {
+    rejectActorOverride(body);
+    const actor = await this.ensure('canCreateFlowboards');
+    await ensureTenantBackendContractTables(this.dataSource, actor.schema);
+    const id = tenantUuid(idValue, 'boardId');
+    const expectedVersion = Number(body.optimisticVersion ?? body.optimistic_version);
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 1) throw new BadRequestException('optimisticVersion obbligatoria');
+    const result = await this.dataSource.transaction(async (manager) => {
+      const { board } = await this.access(manager, actor, id);
+      if (Number(board.optimistic_version) !== expectedVersion) throw new ConflictException('Flowboard modificata da un altro utente');
+      const projectId = body.projectId === undefined ? board.project_id : await this.projectId(manager, actor, body.projectId);
+      const name = boundedText(body.name ?? `${board.name} (copia)`, 'name', 160, true);
+      return withTenantIdempotency(manager, actor.schema, `flowboard:duplicate:${id}`, key, { name, projectId, expectedVersion }, actor.id, async () => {
+        const graph = this.cloneGraph(board.nodes, board.edges);
+        const rows = await manager.query(`INSERT INTO "${actor.schema}".flowboards (owner_user_id,name,description,status,nodes,edges,viewport,project_id,is_template,template_key) VALUES ($1,$2,$3,'active',$4::jsonb,$5::jsonb,$6::jsonb,$7,false,NULL) RETURNING *`, [actor.id,name,board.description,JSON.stringify(graph.nodes),JSON.stringify(graph.edges),JSON.stringify(board.viewport||{}),projectId]);
+        await this.audit(manager, actor, rows[0].id, 'flowboard_duplicated', { sourceBoardId: id });
+        return rows[0];
+      });
+    });
+    await this.publishBoard(actor, result.id, 'flowboard.duplicated', { sourceBoardId: id });
     return result;
   }
 

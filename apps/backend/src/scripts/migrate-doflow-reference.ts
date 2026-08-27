@@ -18,7 +18,6 @@ import { ensureTenantAutomationsTables } from '../tenant/tenant-automations-sche
 import { ensureTenantCalendarTables } from '../tenant/tenant-calendar-schema';
 import { ensureTenantKnowledgeTables } from '../tenant/tenant-knowledge-schema';
 import { ensureTenantCredentialsTables } from '../tenant/tenant-credentials-schema';
-import { ensureDoflowSiteProposalTables } from '../tenant/tenant-site-proposals-schema';
 import { ensureDoflowRecordOperationsTables } from '../tenant/tenant-record-operations-schema';
 import { ensureDoflowTimelineSchema } from '../tenant/tenant-timeline-schema';
 import { ensureDoflowWorkspaceTables } from '../tenant/tenant-doflow-workspace.service';
@@ -289,7 +288,6 @@ async function applyCanonicalSchema(runner: QueryRunner, schema: string) {
   await ensureTenantCalendarTables(transactionalDataSource, schema);
   await ensureTenantKnowledgeTables(transactionalDataSource, schema);
   await ensureTenantCredentialsTables(transactionalDataSource, schema);
-  await ensureDoflowSiteProposalTables(runner, schema);
   await ensureDoflowRecordOperationsTables(transactionalDataSource, schema);
   await ensureDoflowTimelineSchema(transactionalDataSource, schema);
   await ensureDoflowWorkspaceTables(transactionalDataSource, schema);

@@ -100,9 +100,21 @@ async function login(
   return page;
 }
 async function assertDefaultTheme(page: Page) {
-  await expect(page.locator('html[data-tenant-ui="universal"] [data-app-ui-generation="universal-v1"]')).toHaveCount(1);
+  const welcomeDialog = page.getByRole("dialog", { name: "Benvenuto in DoFlow" });
+  const themeToggle = page.getByRole("button", { name: "Cambia tema", exact: true });
+  let welcomeVisible = await welcomeDialog.isVisible().catch(() => false);
+  if (!welcomeVisible && !(await themeToggle.isVisible().catch(() => false))) {
+    welcomeVisible = await welcomeDialog.waitFor({ state: "visible", timeout: 2_000 })
+      .then(() => true)
+      .catch(() => false);
+  }
+  if (welcomeVisible) {
+    await welcomeDialog.getByRole("button", { name: "Esplora in autonomia", exact: true }).click();
+    await welcomeDialog.waitFor({ state: "hidden" });
+  }
+  await expect(page.locator("html")).toHaveAttribute("data-tenant-ui", "doflow-reference");
   await expect(page.locator("html")).not.toHaveClass(/dark/);
-  await expect(page.getByRole("button", { name: "Attiva tema scuro", exact: true })).toBeVisible();
+  await expect(themeToggle).toBeVisible();
   await page.waitForTimeout(500);
 }
 async function appFetch(
@@ -865,11 +877,11 @@ test("Phase 4A collaboration, notifications and realtime are PostgreSQL-authorit
     await mkdir(actualDir, { recursive: true });
     await limited.setViewportSize({ width: 1440, height: 900 });
     await limited.goto(notification.link_url);
-    await expect(
-      limited.locator('main[data-app-shell-ready="true"]').first(),
-    ).toHaveAttribute("data-workspace-ready", "true", { timeout: 20_000 });
-    await expect(limited.getByText("Attività e collaborazione")).toBeVisible();
-    await expect(limited.locator(`#comment-${created.json.id}`)).toBeVisible();
+    const collaborationDialog = limited.getByRole("dialog", {
+      name: "Attività e collaborazione",
+    });
+    await expect(collaborationDialog).toBeVisible({ timeout: 20_000 });
+    await expect(collaborationDialog.locator(`#comment-${created.json.id}`)).toBeVisible();
     await limited.screenshot({
       path: path.join(actualDir, "phase4a-collaboration-project-1440x900.png"),
     });

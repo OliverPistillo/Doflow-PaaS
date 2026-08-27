@@ -366,6 +366,18 @@ test("prior run evidence is archived instead of ambiguously overwritten", async 
   });
 });
 
+test("an empty prior-run archive is removed portably", async () => {
+  await withTemporaryDirectory(async (directory) => {
+    const missing = path.join(directory, "missing-result.json");
+    const archive = path.join(directory, "runs", "first", "previous");
+
+    const archived = await archiveAcceptanceEvidence([missing], archive);
+
+    assert.deepEqual(archived, []);
+    await assert.rejects(readdir(archive), { code: "ENOENT" });
+  });
+});
+
 test("Context E has a standalone command and no global-result read dependency", async () => {
   const [packageSource, specSource, orchestratorSource, globalConfig, superadminConfig] = await Promise.all([
     readFile(path.join(root, "package.json"), "utf8"),

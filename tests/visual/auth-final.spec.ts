@@ -55,7 +55,7 @@ test('auth desktop: login Doflow coerente e accessibile', async ({ page }) => {
   expect(formBox?.x).toBeGreaterThanOrEqual(145);
   expect(formBox?.x).toBeLessThanOrEqual(180);
   await authScreenshot(page, 'auth-login-reference-desktop.png');
-  await expect(page.getByRole('button', { name: 'Attiva tema scuro' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Attiva tema scuro' })).toHaveCount(0);
   await expect(page.locator('html')).not.toHaveClass(/dark/);
 });
 

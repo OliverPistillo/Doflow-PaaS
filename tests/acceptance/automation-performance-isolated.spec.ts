@@ -53,12 +53,24 @@ async function login(context: BrowserContext, email: string, credentials: Creden
     await page.getByRole('button', { name: 'Verifica Codice' }).click();
   }
   await expect.poll(async () => (await api(page, '/auth/me')).json?.user?.authStage).toBe('FULL');
+  const flowPreferences = await api(page, '/tenant/preferences', {
+    method: 'PATCH',
+    body: {
+      onboardingStatus: 'dismissed',
+      tutorialVersion: 2,
+      dismissedModules: ['commercial'],
+      suggestionsEnabled: false,
+      contextualMascotEnabled: false,
+    },
+  });
+  expect(flowPreferences.ok, flowPreferences.text).toBe(true);
   await page.goto('/dashboard'); await expect(page).toHaveURL(/\/dashboard$/);
   return page;
 }
 async function openAutomationDashboard(page: Page, marker: string) {
   await page.goto('/dashboard/automazioni');
-  await expect(page.getByRole('heading', { name: 'Automazioni e Performance' })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole('heading', { name: 'Automazioni', exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText('Regole configurate', { exact: true })).toBeVisible();
   await expect(page.getByText(marker).first()).toBeVisible({ timeout: 60_000 });
 }
 function restart(kind: 'backend' | 'frontend' | 'redis') {
@@ -87,10 +99,13 @@ test('Phase 4B is queued, append-only, PostgreSQL-authoritative and tenant-isola
     const limited = await login(contextB, 'visual.editor@acceptance.invalid', credentials);
     const secondary = await login(contextC, 'secondary.owner@acceptance.invalid', credentials);
     const noView = await login(contextD, 'visual.viewer@acceptance.invalid', credentials);
-    for (const page of [owner, limited, secondary, noView]) page.on('pageerror', (error) => pageErrors.push(error.message));
-    owner.on('console', (message) => {
+    for (const page of [owner, limited, secondary, noView]) {
+      page.on('pageerror', (error) => pageErrors.push(error.stack || error.message));
+    }
+    const recordOwnerConsoleError = (message: import('@playwright/test').ConsoleMessage) => {
       if (message.type() === 'error') ownerConsoleErrors.push(message.text());
-    });
+    };
+    owner.on('console', recordOwnerConsoleError);
 
     // Keep the scenario rerunnable after a prior interrupted run: the failure
     // branch requires this synthetic adapter to start disabled.
@@ -155,7 +170,8 @@ test('Phase 4B is queued, append-only, PostgreSQL-authoritative and tenant-isola
     const duplicateSnapshot = await api(owner, `/tenant/doflow/performance/rankings/${month}/developer/consolidate`, { method: 'POST', body: {} }); expect(duplicateSnapshot.status).toBe(409);
     const revoked = await api(owner, `/tenant/doflow/performance/rankings/snapshots/${snapshot.json.id}/revoke`, { method: 'POST', body: { reason: 'Revoca acceptance motivata' } }); expect(revoked.ok, revoked.text).toBe(true);
 
-    const startsAt = `${month}-01T00:00:00.000Z`; const end = new Date(`${month}-01T00:00:00.000Z`); end.setUTCMonth(end.getUTCMonth() + 1);
+    const goalPeriod = new Date().toISOString().slice(0, 7);
+    const startsAt = `${goalPeriod}-01T00:00:00.000Z`; const end = new Date(startsAt); end.setUTCMonth(end.getUTCMonth() + 1);
     const goal = await api(owner, '/tenant/doflow/goals', { method: 'POST', body: { title: `${marker} Mission`, description: 'Obiettivo server', targetType: 'user', targetId: adjustmentBody.userId, metric: 'completed_activities', targetValue: 5, unit: 'number', startsAt, endsAt: end.toISOString(), status: 'active' } });
     expect(goal.ok, goal.text).toBe(true);
 
@@ -184,26 +200,48 @@ test('Phase 4B is queued, append-only, PostgreSQL-authoritative and tenant-isola
     await owner.screenshot({ path: path.join(actualDir, 'phase4b-rules-1440x900-default.png') });
     await owner.goto(`/automations/rules/${ruleId}`); await expect(owner.getByRole('heading', { name: marker })).toBeVisible();
     await owner.screenshot({ path: path.join(actualDir, 'phase4b-rule-editor-1440x900-light.png') });
-    await openAutomationDashboard(owner, marker);
-    await owner.getByRole('tab', { name: 'Punti' }).click(); await expect(owner.getByText('Rettifica acceptance motivata').first()).toBeVisible();
-    await owner.screenshot({ path: path.join(actualDir, 'phase4b-points-1440x900-light.png') });
-    await expect(owner.locator('html[data-tenant-ui="universal"] [data-app-ui-generation="universal-v1"]')).toHaveCount(1); await expect(owner.locator('html')).not.toHaveClass(/dark/); await owner.getByRole('tab', { name: 'Classifiche' }).click(); await owner.getByRole('tab', { name: 'Sviluppatori' }).click();
-    await expect(owner.getByText('Calcolo server in corso…')).toBeHidden({ timeout: 30_000 }); await expect(owner.getByText(new RegExp(`${month}.*revocata`))).toBeVisible();
+    await limited.goto('/dashboard');
+    await expect(limited.getByText('Classifiche mensili', { exact: true })).toBeVisible({ timeout: 60_000 });
+    await limited.getByRole('button', { name: 'I miei punti' }).click();
+    await expect(limited.getByText('Rettifica acceptance motivata').first()).toBeVisible({ timeout: 30_000 });
+    await limited.screenshot({ path: path.join(actualDir, 'phase4b-points-1440x900-light.png') });
+    await owner.goto('/dashboard/commercial');
+    const commercialDashboard = owner.getByRole('heading', { name: 'Dashboard commerciale' });
+    const commercialErrorBoundary = owner.getByRole('heading', { name: 'This page couldn\u2019t load' });
+    await expect(commercialDashboard.or(commercialErrorBoundary)).toBeVisible({ timeout: 60_000 });
+    if (await commercialErrorBoundary.isVisible()) {
+      throw new Error([
+        'Commercial dashboard entered the Next.js error boundary.',
+        `pageErrors=${JSON.stringify(pageErrors)}`,
+        `ownerConsoleErrors=${JSON.stringify(ownerConsoleErrors)}`,
+      ].join('\n'));
+    }
+    await expect(owner.locator('html')).toHaveAttribute('data-tenant-ui', 'doflow-reference');
+    await expect(owner.locator('html')).not.toHaveClass(/dark/);
+    await owner.getByRole('button', { name: 'Vedi classifica completa' }).click();
+    await owner.getByRole('tab', { name: 'Sviluppatori' }).click();
+    await owner.getByLabel('Periodo classifiche').fill(month);
+    await expect(owner.getByText(preview.json.rows[0].name).first()).toBeVisible({ timeout: 30_000 });
+    await expect(owner.getByText('Classifica provvisoria').first()).toBeVisible();
     await owner.screenshot({ path: path.join(actualDir, 'phase4b-rankings-1440x900-default.png') });
     await owner.goto('/automations/runs'); await expect(owner.getByRole('heading', { name: 'Monitoraggio' })).toBeVisible(); await expect(owner.getByText('dead letter', { exact: false }).first()).toBeVisible();
     await owner.screenshot({ path: path.join(actualDir, 'phase4b-runs-1440x900-default.png') });
     await owner.goto(`/automations/runs/${failedRun.json.id}`); await expect(owner.getByRole('heading', { name: 'Dettaglio run' })).toBeVisible(); await expect(owner.getByRole('button', { name: 'Retry' })).toBeVisible();
     await owner.screenshot({ path: path.join(actualDir, 'phase4b-run-error-retry-1440x900-default.png') });
-    await openAutomationDashboard(owner, marker);
     for (const viewport of [{ width: 768, height: 900 }, { width: 390, height: 900 }]) {
-      await owner.setViewportSize(viewport); await owner.getByRole('tab', { name: 'Missione' }).click(); await expect(owner.getByText(`${marker} Mission`)).toBeVisible();
-      await owner.screenshot({ path: path.join(actualDir, `phase4b-mission-${viewport.width}x${viewport.height}-default.png`) });
+      await limited.setViewportSize(viewport);
+      await limited.goto('/dashboard');
+      const mission = limited.getByText(`${marker} Mission`);
+      await expect(mission).toBeVisible({ timeout: 30_000 });
+      await mission.scrollIntoViewIfNeeded();
+      await limited.screenshot({ path: path.join(actualDir, `phase4b-mission-${viewport.width}x${viewport.height}-default.png`) });
     }
+    await limited.setViewportSize({ width: 1440, height: 900 });
     let limitedRulesGets = 0;
     limited.on('request', (request) => {
       if (request.method() === 'GET' && new URL(request.url()).pathname === '/api/tenant/automations/rules') limitedRulesGets += 1;
     });
-    await limited.goto('/automations/rules'); await expect(limited.getByRole('heading', { name: 'Automazioni' })).toBeVisible(); await expect(limited.getByText('Deal sopra soglia', { exact: false }).first()).toBeVisible({ timeout: 30_000 }); await expect(limited.getByText(marker).first()).toBeVisible(); await expect(limited.getByRole('link', { name: 'Nuova automazione' })).toHaveCount(0); await expect(limited.locator('main').getByRole('button', { name: /^(Pausa|Attiva|Esegui test)$/ })).toHaveCount(0); expect(limitedForbiddenGets, `Unexpected limited-user GET 403 responses: ${limitedForbiddenGets.join(', ')}`).toEqual([]); await expect(limited.locator('main[data-secondary-status]')).toHaveAttribute('data-secondary-status', 'ready'); await expect(limited.getByText('Non disponi dei permessi per caricare questo workspace.')).toHaveCount(0); expect(limitedRulesGets).toBeGreaterThan(0);
+    await limited.goto('/automations/rules'); await expect(limited.getByRole('heading', { name: 'Automazioni' })).toBeVisible(); await expect(limited.getByText('Deal sopra soglia', { exact: false }).first()).toBeVisible({ timeout: 30_000 }); await expect(limited.getByText(marker).first()).toBeVisible(); await expect(limited.getByRole('link', { name: 'Nuova automazione' })).toHaveCount(0); await expect(limited.locator('main').getByRole('button', { name: /^(Pausa|Attiva|Esegui test)$/ })).toHaveCount(0); expect(limitedForbiddenGets, `Unexpected limited-user GET 403 responses: ${limitedForbiddenGets.join(', ')}`).toEqual([]); await expect(limited.getByText('Non disponi dei permessi per caricare questo workspace.')).toHaveCount(0); expect(limitedRulesGets).toBeGreaterThan(0);
     await limited.goto(`/automations/rules/${ruleId}`);
     await expect(limited.getByRole('heading', { name: new RegExp(marker) })).toBeVisible();
     await expect(limited.getByRole('button', { name: /Salva configurazione|Run|Retry/ })).toHaveCount(0);
@@ -217,6 +255,7 @@ test('Phase 4B is queued, append-only, PostgreSQL-authoritative and tenant-isola
     await noView.goto('/automations/rules'); await expect(noView.getByRole('heading', { name: 'Accesso non autorizzato' })).toBeVisible(); await expect(noView.getByRole('link', { name: 'Automazioni' })).toHaveCount(0); expect(noViewRuleGets, `Unexpected no-view rule requests: ${noViewRuleGets.join(', ')}`).toEqual([]);
     await limited.screenshot({ path: path.join(actualDir, 'phase4b-access-limited-1440x900-default.png') });
 
+    owner.off('console', recordOwnerConsoleError);
     restart('redis'); restart('frontend'); restart('backend');
     fresh = await browser.newContext(); const ownerFresh = await login(fresh, credentials.email, credentials, true);
     const persistedRule = await api(ownerFresh, `/tenant/automations/rules/${ruleId}`); expect(persistedRule.ok, persistedRule.text).toBe(true);

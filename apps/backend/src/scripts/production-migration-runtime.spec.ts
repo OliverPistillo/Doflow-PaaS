@@ -104,7 +104,10 @@ describe('production migration runtime', () => {
     ])).toThrow(expect.objectContaining({ code: 'MIGRATION_HISTORY_INCOMPATIBLE' }));
     expect(() => validateProductionMigrationHistory([
       ...prefix,
-      { timestamp: 1860000000000, name: 'UnknownFuture1860000000000' },
+      {
+        timestamp: PRODUCTION_MIGRATIONS[PRODUCTION_MIGRATIONS.length - 1].timestamp + 1,
+        name: 'UnknownFutureMigration',
+      },
     ])).toThrow(expect.objectContaining({ code: 'MIGRATION_HISTORY_FUTURE' }));
     expect(() => validateProductionMigrationHistory([
       { timestamp: prefix[0].timestamp, name: 'WrongName1714752000000' },

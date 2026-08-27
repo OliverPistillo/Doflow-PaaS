@@ -1,5 +1,3 @@
-import { FlowboardList } from "@/components/tenant-flowboard/flowboard-list";
+import { FlowboardHomePage } from "@/features/flowboard/flowboard-home-page"
 
-export default function Page() {
-  return <FlowboardList />;
-}
+export default function FlowboardPage() { return <FlowboardHomePage /> }

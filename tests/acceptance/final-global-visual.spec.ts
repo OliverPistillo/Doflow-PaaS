@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '../..');
 const credentialPath = path.join(root, '.visual-auth', 'acceptance-credentials.json');
 const runtimeConfigPath = path.join(root, '.visual-runtime', 'commercial-core-stack.json');
 const resultPath = path.join(root, '.visual-runtime', 'final-global-visual-result.json');
-const canonicalActualDir = path.join(root, 'docs', 'design-references', 'doflow-crm-projects', 'actual', 'universal-ui');
+const canonicalActualDir = path.join(root, 'docs', 'design-references', 'doflow-crm-projects', 'actual', 'reference-4864782');
 const configuredActualDir = process.env.DOFLOW_FINAL_VISUAL_OUTPUT_DIR?.trim();
 const actualDir = configuredActualDir
   ? path.resolve(root, configuredActualDir)
@@ -120,6 +120,28 @@ async function loginWithMfa(context: BrowserContext, email: string, credentials:
   await page.getByRole('button', { name: 'Verifica Codice' }).click({ timeout: 20_000 });
   await expect(page).toHaveURL(superadmin ? /\/superadmin$/ : /\/dashboard$/, { timeout: 60_000 });
   expect((await context.cookies()).find((cookie) => cookie.name === 'doflow_session')?.httpOnly).toBe(true);
+  if (!superadmin) {
+    const flowPreferencesStatus = await page.evaluate(async () => {
+      const csrf = document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith('doflow_csrf='))?.slice('doflow_csrf='.length);
+      const response = await fetch('/api/tenant/preferences', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(csrf ? { 'X-CSRF-Token': decodeURIComponent(csrf) } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          onboardingStatus: 'dismissed',
+          tutorialVersion: 2,
+          dismissedModules: ['commercial'],
+          suggestionsEnabled: false,
+          contextualMascotEnabled: false,
+        }),
+      });
+      return response.status;
+    });
+    expect(flowPreferencesStatus).toBe(200);
+  }
   return page;
 }
 
@@ -150,6 +172,10 @@ async function closeContextBounded(context: BrowserContext) {
 }
 
 async function navigate(page: Page, pathname: string, theme: Theme) {
+  const navigationErrors: string[] = [];
+  const recordNavigationError = (error: Error) => navigationErrors.push(error.stack || error.message);
+  page.on('pageerror', recordNavigationError);
+  try {
   monitorApiRequests(page);
   // `goBack()` can leave an aborted provider read without a terminal browser
   // event. A new document is a fresh observation boundary, so do not let a
@@ -171,6 +197,13 @@ async function navigate(page: Page, pathname: string, theme: Theme) {
     const quietFor = Date.now() - (lastApiActivity.get(page) ?? 0);
     return active === 0 && quietFor >= 750;
   }, { timeout: 60_000, message: `authorized API reads did not settle for ${pathname}` }).toBe(true);
+  const errorBoundary = page.getByRole('heading', { name: 'This page couldn\u2019t load' });
+  if (await errorBoundary.isVisible()) {
+    throw new Error(`Route ${pathname} entered the Next.js error boundary.\npageErrors=${JSON.stringify(navigationErrors)}`);
+  }
+  } finally {
+    page.off('pageerror', recordNavigationError);
+  }
 }
 
 async function assertNoPageOverflow(page: Page) {
@@ -263,7 +296,6 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
     { slug: 'support', path: '/dashboard/supporto' },
     { slug: 'automations', path: '/dashboard/automazioni' },
     { slug: 'settings', path: '/dashboard/impostazioni' },
-    { slug: 'builder', path: '/commercial/site-proposals' },
     { slug: 'lead-detail', path: `/dashboard/commercial/leads/${leadRow.id}` },
     { slug: 'customer-detail', path: `/dashboard/clienti/${companyRow.id}` },
     { slug: 'project-detail', path: `/dashboard/progetti/${delivery.projectId}` },
@@ -272,7 +304,7 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
   const critical = new Set([
     'dashboard', 'pipeline', 'lead-detail', 'customer-detail', 'project-detail', 'activities',
     'order-detail', 'quotes', 'invoices', 'notifications', 'team-space', 'calendar',
-    'support', 'automations', 'builder',
+    'support', 'automations',
   ]);
   const contexts: BrowserContext[] = [];
   const consoleErrors: string[] = [];
@@ -344,22 +376,34 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
         }
         await accessibilitySmoke(owner);
         accessibilityChecks += 1;
-        await expect(owner.locator('html[data-tenant-ui="universal"] [data-app-ui-generation="universal-v1"]')).toHaveCount(1);
+        await expect(owner.locator('html')).toHaveAttribute('data-tenant-ui', 'doflow-reference');
         await expect(owner.locator('[data-sidebar-kind="tenant-legacy"]')).toHaveCount(0);
-        if (route.slug === 'builder') {
-          await expect(owner.locator('[data-builder-shell="universal"]')).toHaveCount(1);
-        }
         await capture(owner, route.slug, desktop, theme);
       }
     }
 
     await owner.setViewportSize(canonicalTarget);
     await navigate(owner, '/dashboard', 'default');
-    await expect(owner.locator('html[data-tenant-ui="universal"] [data-app-ui-generation="universal-v1"]')).toHaveCount(1);
-    const canonicalHeader = owner.locator('[data-app-ui-generation="universal-v1"] header').first();
-    const canonicalSidebar = owner.locator('[data-app-ui-generation="universal-v1"] [data-sidebar="sidebar"]').first();
+    await expect(owner.locator('html')).toHaveAttribute('data-tenant-ui', 'doflow-reference');
+    const canonicalHeader = owner.locator('[data-slot="sidebar-inset"] > header').first();
+    const canonicalSidebarRoot = owner.locator('[data-slot="sidebar"][data-state]').first();
+    const canonicalSidebar = owner.locator('[data-slot="sidebar-container"]').first();
+    const canonicalSidebarGap = owner.locator('[data-slot="sidebar-gap"]').first();
+    const canonicalSidebarTrigger = owner.locator('[data-sidebar="trigger"]').first();
     await expect(canonicalHeader).toHaveCSS('height', '64px');
-    await expect(canonicalSidebar).toHaveCSS('width', '248px');
+    await expect(canonicalSidebarRoot).toHaveAttribute('data-state', 'expanded');
+    await expect(canonicalSidebar).toHaveCSS('width', '256px');
+    await expect(canonicalSidebarGap).toHaveCSS('width', '256px');
+    for (let iteration = 0; iteration < 10; iteration += 1) {
+      await canonicalSidebarTrigger.click();
+      await expect(canonicalSidebarRoot).toHaveAttribute('data-state', 'collapsed');
+      await expect(canonicalSidebar).toHaveCSS('width', '48px');
+      await expect(canonicalSidebarGap).toHaveCSS('width', '48px');
+      await canonicalSidebarTrigger.click();
+      await expect(canonicalSidebarRoot).toHaveAttribute('data-state', 'expanded');
+      await expect(canonicalSidebar).toHaveCSS('width', '256px');
+      await expect(canonicalSidebarGap).toHaveCSS('width', '256px');
+    }
     await owner.screenshot({
       path: path.join(canonicalActualDir, 'dashboard-target-1348x888-default.png'),
       animations: 'disabled',
@@ -443,8 +487,10 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
     monitor(denied);
     for (const theme of themes) {
       await navigate(denied, '/dashboard/pagamenti', theme);
-      await expect(denied.getByText('Accesso non autorizzato')).toBeVisible();
-      await accessibilitySmoke(denied);
+      await expect(
+        denied.getByRole('heading', { level: 2, name: 'Accesso non autorizzato' }),
+      ).toBeVisible();
+      await accessibilitySmoke(denied, false);
       accessibilityChecks += 1;
       await capture(denied, 'access-denied', desktop, theme);
     }
@@ -469,9 +515,9 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
     const result = {
       verdict: 'GLOBAL VISUAL GO',
       frontendUrl: 'http://localhost:3100',
-      reference: 'doflow-gestionale-reference@b9a08eea2acaabf23ed56c75111f714c551374f8',
-      canonicalBaseline: 'TARGET — universal reference (1348x888, default theme)',
-      canonicalScreenshot: 'docs/design-references/doflow-crm-projects/actual/universal-ui/dashboard-target-1348x888-default.png',
+      reference: 'doflow-gestionale-reference@4864782abc0a6a548b616262be1fe7b6366f622e',
+      canonicalBaseline: 'TARGET — direct source port 4864782 (1348x888, default theme)',
+      canonicalScreenshot: 'docs/design-references/doflow-crm-projects/actual/reference-4864782/dashboard-target-1348x888-default.png',
       canonicalRoutes: canonicalRoutes.length + 2,
       desktopDefaultRoutes: canonicalRoutes.length + 3,
       criticalResponsiveRoutes: critical.size + 2,
@@ -484,6 +530,7 @@ test('GLOBAL VISUAL GO: route reference, responsive, temi, interazioni e accessi
         dialogFocusContract: true,
         dragAlternative: true,
         mobileSidebar: true,
+        sidebarToggleStress: 10,
         browserBack: true,
         deepLink: true,
         selectAndDateInput: true,

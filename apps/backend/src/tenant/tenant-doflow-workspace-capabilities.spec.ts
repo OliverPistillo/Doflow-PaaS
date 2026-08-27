@@ -20,10 +20,10 @@ describe('Doflow automation capability payload', () => {
     const query = jest.fn(async (sql: string) => {
       if (sql.includes('doflow_user_preferences') && sql.includes('WHERE user_id')) return [];
       if (sql.includes('doflow_user_roles') && sql.includes('WHERE user_id')) return [{ role: 'web_developer' }];
-      if (sql.includes('doflow_user_capabilities') && sql.includes('WHERE user_id')) return [{ capability: 'canUseBuilder' }];
+      if (sql.includes('doflow_user_capabilities') && sql.includes('WHERE user_id')) return [{ capability: 'canManageGoals' }];
       if (sql.includes('SELECT id, role') && sql.includes('.users')) return [{ id: userId, role: 'editor' }];
       if (sql.includes('SELECT user_id, role')) return [{ user_id: userId, role: 'web_developer' }];
-      if (sql.includes('SELECT user_id, capability')) return [{ user_id: userId, capability: 'canUseBuilder' }];
+      if (sql.includes('SELECT user_id, capability')) return [{ user_id: userId, capability: 'canManageGoals' }];
       return [];
     });
     const service = new TenantDoflowWorkspaceService(
@@ -35,15 +35,15 @@ describe('Doflow automation capability payload', () => {
     const identity = await service.identity();
 
     expect(identity.capabilities).toContain('canViewAutomations');
-    expect(identity.capabilities).toContain('canUseBuilder');
+    expect(identity.capabilities).toContain('canManageGoals');
     expect(identity.capabilities).not.toContain('canManageAutomations');
     expect(identity.capabilities).not.toContain('canRunAutomations');
-    expect(identity.explicitCapabilities).toEqual(['canUseBuilder']);
+    expect(identity.explicitCapabilities).toEqual(['canManageGoals']);
     expect(identity.assignments).toContainEqual(expect.objectContaining({
       userId,
       roles: ['web_developer'],
-      capabilities: expect.arrayContaining(['canViewAutomations', 'canUseBuilder']),
-      explicitCapabilities: ['canUseBuilder'],
+      capabilities: expect.arrayContaining(['canViewAutomations', 'canManageGoals']),
+      explicitCapabilities: ['canManageGoals'],
     }));
   });
 
@@ -64,7 +64,7 @@ describe('Doflow automation capability payload', () => {
 
     const operation = kind === 'roles'
       ? service.updateRoles(userId, { roles: ['web_developer'] })
-      : service.updateCapabilities(userId, { capabilities: ['canUseBuilder'] });
+      : service.updateCapabilities(userId, { capabilities: ['canManageGoals'] });
     await expect(operation).rejects.toBeInstanceOf(ForbiddenException);
     expect(query.mock.calls.some(([sql]) => String(sql).startsWith('DELETE'))).toBe(false);
   });

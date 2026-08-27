@@ -1,4 +1,5 @@
 import type { CommercialProject, CommercialProjectPhase, CustomerActivity } from "@/features/commercial/components/commercial-leads-provider"
+import { Archive, Ban, CheckCircle2, CircleDot, Clock3, Headphones, PauseCircle, PlayCircle, Rocket, SearchCheck, ShieldAlert, Sparkles, UploadCloud, type LucideIcon } from "lucide-react"
 
 export const productionProjectStatuses = ["not_started", "onboarding", "in_progress", "blocked", "qa_internal", "internal_review", "ready_client", "client_review", "changes_requested", "ready_publish", "published", "delivered", "support", "suspended", "cancelled"] as const
 export type ProductionProjectStatus = (typeof productionProjectStatuses)[number]
@@ -6,6 +7,41 @@ export type ProductionProjectStatus = (typeof productionProjectStatuses)[number]
 export const productionProjectStatusLabels: Record<ProductionProjectStatus, string> = {
   not_started: "Da avviare", onboarding: "Onboarding", in_progress: "In lavorazione", blocked: "Bloccato", qa_internal: "QA interno", internal_review: "Revisione interna", ready_client: "Pronto per il cliente", client_review: "Revisione cliente", changes_requested: "Modifiche richieste", ready_publish: "Pronto alla pubblicazione", published: "Pubblicato", delivered: "Consegnato", support: "Assistenza", suspended: "Sospeso", cancelled: "Annullato",
 }
+
+export const projectStatuses = [...productionProjectStatuses, "waiting_client", "review", "completed", "archived"] as const satisfies readonly CommercialProject["status"][]
+
+export type ProjectStatusVisual = {
+  label: string
+  icon: LucideIcon
+  badgeClass: string
+  progressClass: string
+  columnClass: string
+}
+
+export const projectStatusVisuals: Record<CommercialProject["status"], ProjectStatusVisual> = {
+  not_started: { label: "Da avviare", icon: CircleDot, badgeClass: "border-slate-400/40 bg-slate-500/10 text-slate-700 dark:text-slate-300", progressClass: "bg-slate-500", columnClass: "border-slate-400/35 bg-slate-500/5" },
+  onboarding: { label: "Onboarding", icon: Rocket, badgeClass: "border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-300", progressClass: "bg-sky-500", columnClass: "border-sky-500/30 bg-sky-500/5" },
+  in_progress: { label: "In lavorazione", icon: PlayCircle, badgeClass: "border-blue-500/35 bg-blue-500/10 text-blue-700 dark:text-blue-300", progressClass: "bg-blue-500", columnClass: "border-blue-500/30 bg-blue-500/5" },
+  blocked: { label: "Bloccato", icon: ShieldAlert, badgeClass: "border-orange-500/35 bg-orange-500/10 text-orange-700 dark:text-orange-300", progressClass: "bg-orange-500", columnClass: "border-orange-500/30 bg-orange-500/5" },
+  qa_internal: { label: "QA interno", icon: SearchCheck, badgeClass: "border-cyan-500/35 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300", progressClass: "bg-cyan-500", columnClass: "border-cyan-500/30 bg-cyan-500/5" },
+  internal_review: { label: "Revisione interna", icon: SearchCheck, badgeClass: "border-violet-500/35 bg-violet-500/10 text-violet-700 dark:text-violet-300", progressClass: "bg-violet-500", columnClass: "border-violet-500/30 bg-violet-500/5" },
+  ready_client: { label: "Pronto per il cliente", icon: Sparkles, badgeClass: "border-indigo-500/35 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300", progressClass: "bg-indigo-500", columnClass: "border-indigo-500/30 bg-indigo-500/5" },
+  client_review: { label: "Revisione cliente", icon: SearchCheck, badgeClass: "border-purple-500/35 bg-purple-500/10 text-purple-700 dark:text-purple-300", progressClass: "bg-purple-500", columnClass: "border-purple-500/30 bg-purple-500/5" },
+  changes_requested: { label: "Modifiche richieste", icon: ShieldAlert, badgeClass: "border-rose-500/35 bg-rose-500/10 text-rose-700 dark:text-rose-300", progressClass: "bg-rose-500", columnClass: "border-rose-500/30 bg-rose-500/5" },
+  ready_publish: { label: "Pronto alla pubblicazione", icon: UploadCloud, badgeClass: "border-indigo-500/35 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300", progressClass: "bg-indigo-500", columnClass: "border-indigo-500/30 bg-indigo-500/5" },
+  published: { label: "Pubblicato", icon: UploadCloud, badgeClass: "border-teal-500/35 bg-teal-500/10 text-teal-700 dark:text-teal-300", progressClass: "bg-teal-500", columnClass: "border-teal-500/30 bg-teal-500/5" },
+  delivered: { label: "Consegnato", icon: CheckCircle2, badgeClass: "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300", progressClass: "bg-emerald-500", columnClass: "border-emerald-500/30 bg-emerald-500/5" },
+  support: { label: "Assistenza", icon: Headphones, badgeClass: "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300", progressClass: "bg-amber-500", columnClass: "border-amber-500/30 bg-amber-500/5" },
+  suspended: { label: "Sospeso", icon: PauseCircle, badgeClass: "border-orange-500/35 bg-orange-500/10 text-orange-700 dark:text-orange-300", progressClass: "bg-orange-500", columnClass: "border-orange-500/30 bg-orange-500/5" },
+  cancelled: { label: "Annullato", icon: Ban, badgeClass: "border-slate-400/40 bg-slate-500/10 text-slate-700 dark:text-slate-300", progressClass: "bg-slate-500", columnClass: "border-slate-400/35 bg-slate-500/5" },
+  waiting_client: { label: "In attesa cliente", icon: Clock3, badgeClass: "border-orange-500/35 bg-orange-500/10 text-orange-700 dark:text-orange-300", progressClass: "bg-orange-500", columnClass: "border-orange-500/30 bg-orange-500/5" },
+  review: { label: "In revisione", icon: SearchCheck, badgeClass: "border-violet-500/35 bg-violet-500/10 text-violet-700 dark:text-violet-300", progressClass: "bg-violet-500", columnClass: "border-violet-500/30 bg-violet-500/5" },
+  completed: { label: "Completato", icon: CheckCircle2, badgeClass: "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300", progressClass: "bg-emerald-500", columnClass: "border-emerald-500/30 bg-emerald-500/5" },
+  archived: { label: "Archiviato", icon: Archive, badgeClass: "border-slate-400/40 bg-slate-500/10 text-slate-700 dark:text-slate-300", progressClass: "bg-slate-500", columnClass: "border-slate-400/35 bg-slate-500/5" },
+}
+
+export function getProjectStatusVisual(status: CommercialProject["status"]): ProjectStatusVisual { return projectStatusVisuals[status] }
+export function getProjectDisplayProgress(project: CommercialProject, calculated: number) { return project.status === "delivered" || project.status === "completed" ? 100 : calculated }
 
 export type ProjectTemplateDefinition = { name: string; phases: Array<{ name: string; estimatedMinutes: number; weight: number; role: "developer" | "project_manager"; visibility: "internal" | "client"; milestone?: boolean; checklist?: string[] }> }
 

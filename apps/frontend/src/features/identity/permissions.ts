@@ -1,5 +1,6 @@
 import type { CommercialCustomer, CommercialProject, CustomerActivity } from "@/features/commercial/components/commercial-leads-provider"
 import type { CommercialLead } from "@/features/commercial/types"
+import type { SupportTicket } from "@/features/commercial/commercial-support"
 
 export const doflowRoles = ["administrator", "commercial", "web_developer", "project_manager"] as const
 export type DoflowRole = (typeof doflowRoles)[number]
@@ -70,7 +71,6 @@ export const doflowCapabilities = [
   "canReopenProject",
   "canArchiveProject",
   "canViewGlobalWorkload",
-  "canUseBuilder",
   "canReadComments",
   "canCreateComments",
   "canReplyComments",
@@ -97,11 +97,46 @@ export const doflowCapabilities = [
 ] as const
 export type DoflowCapability = (typeof doflowCapabilities)[number]
 
+export type ReferenceCapability =
+  | "canViewCompanyIntelligence"
+  | "canRunCompanyIntelligence"
+  | "canViewFlowboards"
+  | "canViewCustomerInbox"
+  | "manageGuidedCalls"
+  | "manageTeamDuties"
+  | "developWebsites"
+  | "developSoftware"
+  | "openSupportTicket"
+  | "workSupportTicket"
+  | "assignSupportTicket"
+  | "manageSupport"
+  | "approveDeliverable"
+  | "managePointRules"
+
+export function referenceCapabilityAllowed(
+  capabilities: ReadonlySet<DoflowCapability>,
+  capability: ReferenceCapability,
+) {
+  if (capability === "canViewCompanyIntelligence") return capabilities.has("canViewAssignedLeads") || capabilities.has("canViewAllLeads")
+  if (capability === "canRunCompanyIntelligence") return capabilities.has("canCreateLeads")
+  if (capability === "canViewFlowboards") return capabilities.has("canViewProjects")
+  if (capability === "canViewCustomerInbox") return capabilities.has("canReadNotifications")
+  if (capability === "manageGuidedCalls") return capabilities.has("canAssignLeads")
+  if (capability === "developWebsites" || capability === "developSoftware") return capabilities.has("canEditProject") || capabilities.has("canManageProjects")
+  if (capability === "openSupportTicket") return capabilities.has("canReadNotifications")
+  if (capability === "workSupportTicket") return capabilities.has("canManageAssignedActivities")
+  if (capability === "assignSupportTicket" || capability === "manageSupport") return capabilities.has("canManageProjects")
+  if (capability === "approveDeliverable") return capabilities.has("canApproveProjectWork")
+  if (capability === "managePointRules") return capabilities.has("canManagePointPolicies")
+  if (capability === "manageTeamDuties") return capabilities.has("canManageRoles")
+  return false
+}
+
 const roleCapabilities: Record<DoflowRole, readonly DoflowCapability[]> = {
   administrator: doflowCapabilities,
   commercial: ["canViewAssignedLeads", "canCreateLeads", "canEditAssignedLead", "canViewCustomers", "canEditCustomers", "canViewProjects", "canViewActivities", "canViewCommercialValues", "canInspectDuplicates", "canViewSales", "canManageOwnSales", "canViewOrders", "canManageOwnOrders", "canManagePayments", "canRecordPayments", "canRecordRefunds", "canGenerateProjectFromOrder", "canViewContracts", "canManageOwnContracts", "canViewRenewals", "canManageOwnRenewals", "canViewCampaigns", "canViewQuotes", "canManageOwnQuotes", "canViewOwnPoints", "canViewRankings", "canReadComments", "canCreateComments", "canReplyComments", "canEditOwnComments", "canResolveThreads", "canMentionUsers", "canReactComments", "canAttachCommentFiles", "canReadTimeline", "canReadHistory", "canReadNotifications", "canManageNotificationPreferences"],
-  web_developer: ["canViewCustomers", "canViewProjects", "canViewAssignedProjects", "canViewActivities", "canManageAssignedActivities", "canManageProjectTasks", "canTrackProjectTime", "canSubmitProjectQa", "canUseBuilder", "canViewOrders", "canViewContracts", "canViewRenewals", "canViewAutomations", "canViewOwnPoints", "canViewRankings", "canReadComments", "canCreateComments", "canReplyComments", "canEditOwnComments", "canResolveThreads", "canMentionUsers", "canReactComments", "canAttachCommentFiles", "canReadTimeline", "canReadHistory", "canReadNotifications", "canManageNotificationPreferences"],
-  project_manager: ["canViewCustomers", "canViewProjects", "canViewAssignedProjects", "canCreateProject", "canEditProject", "canManageProjects", "canManageProjectMembers", "canManageProjectTasks", "canTrackProjectTime", "canViewTeamTime", "canSubmitProjectQa", "canSuperviseProject", "canManageAssignedActivities", "canViewOrders", "canViewContracts", "canViewRenewals", "canApproveProjectWork", "canPublishClientUpdate", "canPublishProject", "canDeliverProject", "canReopenProject", "canArchiveProject", "canViewGlobalWorkload", "canUseBuilder", "canViewAutomations", "canRunAutomations", "canViewAutomationErrors", "canViewOwnPoints", "canViewGlobalPoints", "canViewRankings", "canReadComments", "canCreateComments", "canReplyComments", "canEditOwnComments", "canModerateComments", "canResolveThreads", "canMentionUsers", "canReactComments", "canAttachCommentFiles", "canReadTimeline", "canReadHistory", "canReadNotifications", "canManageNotificationPreferences"],
+  web_developer: ["canViewCustomers", "canViewProjects", "canViewAssignedProjects", "canViewActivities", "canManageAssignedActivities", "canManageProjectTasks", "canTrackProjectTime", "canSubmitProjectQa", "canViewOrders", "canViewContracts", "canViewRenewals", "canViewAutomations", "canViewOwnPoints", "canViewRankings", "canReadComments", "canCreateComments", "canReplyComments", "canEditOwnComments", "canResolveThreads", "canMentionUsers", "canReactComments", "canAttachCommentFiles", "canReadTimeline", "canReadHistory", "canReadNotifications", "canManageNotificationPreferences"],
+  project_manager: ["canViewCustomers", "canViewProjects", "canViewAssignedProjects", "canCreateProject", "canEditProject", "canManageProjects", "canManageProjectMembers", "canManageProjectTasks", "canTrackProjectTime", "canViewTeamTime", "canSubmitProjectQa", "canSuperviseProject", "canManageAssignedActivities", "canViewOrders", "canViewContracts", "canViewRenewals", "canApproveProjectWork", "canPublishClientUpdate", "canPublishProject", "canDeliverProject", "canReopenProject", "canArchiveProject", "canViewGlobalWorkload", "canViewAutomations", "canRunAutomations", "canViewAutomationErrors", "canViewOwnPoints", "canViewGlobalPoints", "canViewRankings", "canReadComments", "canCreateComments", "canReplyComments", "canEditOwnComments", "canModerateComments", "canResolveThreads", "canMentionUsers", "canReactComments", "canAttachCommentFiles", "canReadTimeline", "canReadHistory", "canReadNotifications", "canManageNotificationPreferences"],
 }
 
 export type PermissionIdentity = { id: string; roles: readonly DoflowRole[]; capabilities?: readonly DoflowCapability[] }
@@ -111,8 +146,9 @@ export function capabilitiesForRoles(roles: readonly DoflowRole[]) {
   return new Set(roles.flatMap((role) => roleCapabilities[role]))
 }
 
-export function hasCapability(identity: PermissionIdentity, capability: DoflowCapability) {
-  return capabilitiesForRoles(identity.roles).has(capability) || Boolean(identity.capabilities?.includes(capability))
+export function hasCapability(identity: PermissionIdentity, capability: DoflowCapability | ReferenceCapability) {
+  const effective = new Set([...capabilitiesForRoles(identity.roles), ...(identity.capabilities ?? [])])
+  return effective.has(capability as DoflowCapability) || referenceCapabilityAllowed(effective, capability as ReferenceCapability)
 }
 
 export function canViewLead(identity: PermissionIdentity, lead: CommercialLead) {
@@ -176,6 +212,11 @@ export function canManageActivity(identity: PermissionIdentity, activity: Custom
 export function canMergeDuplicateRecords(identity: PermissionIdentity, records: CommercialLead[]) {
   if (!hasCapability(identity, "canMergeDuplicates")) return false
   return identity.roles.includes("administrator") || records.every((record) => canEditLead(identity, record))
+}
+
+export function canWorkSupportTicket(identity: PermissionIdentity, ticket: SupportTicket) {
+  if (hasCapability(identity, "manageSupport")) return true
+  return hasCapability(identity, "workSupportTicket") && (ticket.assigneeId === identity.id || ticket.collaboratorIds.includes(identity.id))
 }
 
 function getCustomerActivities(customer: CommercialCustomer) {

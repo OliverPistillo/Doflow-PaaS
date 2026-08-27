@@ -1,672 +1,88 @@
-"use client";
+"use client"
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import {
-  AtSign,
-  Check,
-  CornerDownRight,
-  History,
-  MessageCircle,
-  Paperclip,
-  Pencil,
-  RotateCcw,
-  Send,
-  Smile,
-  Trash2,
-  X,
-} from "lucide-react";
-import { toast } from "sonner";
+import { useEffect, useMemo, useRef, useState } from "react"
+import { useSearchParams } from "next/navigation"
+import { formatDistanceToNow } from "date-fns"
+import { it } from "date-fns/locale"
+import { Archive, AtSign, BadgeCheck, Check, ChevronDown, ChevronRight, CircleDollarSign, CornerDownRight, FileText, History, Link2, MessageCircle, MoreHorizontal, Paperclip, RefreshCcw, RotateCcw, Search, Send, Settings2, Smile, Trash2, UserRoundCheck, X } from "lucide-react"
+import { toast } from "sonner"
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import type {
-  CollaborationRecordType,
-  CommercialComment,
-  CommentAttachment,
-} from "@/features/commercial/commercial-collaboration";
-import { useCommercialLeads } from "@/features/commercial/components/commercial-leads-provider";
-import { DocumentStatusBadge } from "@/features/commercial/document-status";
-import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider";
-import { formatItalianDateTime } from "@/lib/date";
-import { archiveDocument, uploadDocument } from "@/lib/tenant-documents-api";
-import { collaborationApi } from "@/lib/tenant-collaboration-api";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { auditActionLabel, presentAuditChange, presentAuditEvent, type AuditPresentationLookup } from "@/features/commercial/commercial-audit-presentation"
+import type { CollaborationRecordType, CommercialAuditActionType, CommercialAuditEvent, CommercialComment, CommentAttachment } from "@/features/commercial/commercial-collaboration"
+import { useCommercialLeads } from "@/features/commercial/components/commercial-leads-provider"
+import { DocumentStatusBadge } from "@/features/commercial/document-status"
+import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider"
+import { formatItalianDateTime } from "@/lib/date"
+import { archiveDocument, uploadDocument } from "@/lib/tenant-documents-api"
 
-type Props = {
-  recordType: CollaborationRecordType;
-  recordId: string;
-  label: string;
-  compact?: boolean;
-};
+type Props = { recordType: CollaborationRecordType; recordId: string; label: string; compact?: boolean; triggerVariant?: "default" | "list" }
+type CommentFilter = "all" | "open" | "resolved" | "attachments" | "mentions" | "unread"
+type RevisionFilter = "all" | "changes" | "states" | "assignments" | "approvals" | "documents" | "payments" | "system"
 
-export function RecordCollaborationPanel({
-  recordType,
-  recordId,
-  label,
-  compact,
-}: Props) {
-  const store = useCommercialLeads();
-  const identity = useDoflowIdentity();
-  const searchParams = useSearchParams();
-  const deepLinkOpen =
-    searchParams.get("collaboration") === `${recordType}:${recordId}`;
-  const deepLinkCommentId = deepLinkOpen ? searchParams.get("commentId") : null;
-  const [text, setText] = useState("");
-  const [mentions, setMentions] = useState<string[]>([]);
-  const [attachments, setAttachments] = useState<CommentAttachment[]>([]);
-  const [attachmentBusy, setAttachmentBusy] = useState(false);
-  const [submitBusy, setSubmitBusy] = useState(false);
-  const [replyTo, setReplyTo] = useState<string>();
-  const [editingId, setEditingId] = useState<string>();
-  const [filter, setFilter] = useState<
-    "all" | "record" | "attachments" | "resolved"
-  >("record");
-  const inputRef = useRef<HTMLInputElement>(null);
-  const submitBusyRef = useRef(false);
-  const loadCommentsRef = useRef(store.loadComments);
-  const comments = useMemo(
-    () =>
-      store.comments.filter(
-        (comment) =>
-          comment.recordType === recordType && comment.recordId === recordId,
-      ),
-    [recordId, recordType, store.comments],
-  );
-  const history = useMemo(
-    () =>
-      store.auditEvents
-        .filter(
-          (event) =>
-            event.recordType === recordType && event.recordId === recordId,
-        )
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [recordId, recordType, store.auditEvents],
-  );
-  const allowedUserIds = useMemo(() => {
-    const ids = new Set([identity.currentUserId]);
-    identity.users
-      .filter((user) => user.roles.includes("administrator"))
-      .forEach((user) => ids.add(user.id));
-    const lead = store.leads.find((item) => item.id === recordId);
-    if (lead) ids.add(lead.assigneeId);
-    const customer = store.customers.find((item) => item.id === recordId);
-    if (customer) ids.add(customer.profile.assigneeId);
-    const activity = [
-      ...store.leadActivities,
-      ...store.customers.flatMap((item) => [
-        ...(item.activities ?? []),
-        ...(item.onboardingActivity ? [item.onboardingActivity] : []),
-      ]),
-    ].find((item) => item.id === recordId);
-    if (activity) {
-      ids.add(activity.assigneeId);
-      activity.collaboratorIds.forEach((id) => ids.add(id));
-    }
-    const project = store.projects.find(
-      (item) => item.id === recordId || item.id === activity?.projectId,
-    );
-    if (project)
-      [
-        project.ownerId,
-        ...project.memberIds,
-        ...(project.supervisorIds ?? []),
-      ].forEach((id) => ids.add(id));
-    return ids;
-  }, [
-    identity.currentUserId,
-    identity.users,
-    recordId,
-    store.customers,
-    store.leadActivities,
-    store.leads,
-    store.projects,
-  ]);
-  const mentionUsers = identity.users.filter((user) =>
-    allowedUserIds.has(user.id),
-  );
-  useEffect(() => {
-    loadCommentsRef.current = store.loadComments;
-  }, [store.loadComments]);
-  useEffect(() => {
-    void loadCommentsRef.current(recordType, recordId).catch(() => undefined);
-  }, [recordId, recordType]);
-  useEffect(() => {
-    if (!deepLinkCommentId) return;
-    const frame = window.requestAnimationFrame(() =>
-      document
-        .getElementById(`comment-${deepLinkCommentId}`)
-        ?.scrollIntoView({ block: "center" }),
-    );
-    return () => window.cancelAnimationFrame(frame);
-  }, [deepLinkCommentId]);
-  const attach = async (file?: File) => {
-    if (!file) return;
-    if (file.size > 5_000_000) {
-      toast.error("L’allegato non può superare 5 MB");
-      return;
-    }
-    setAttachmentBusy(true);
-    try {
-      const entityType = (
-        {
-          lead: "opportunity",
-          customer: "company",
-          activity: "task",
-          project: "project",
-          quote: "quote",
-          contract: "contract",
-          order: "order",
-          payment: "payment",
-          invoice: "invoice",
-          renewal: "renewal",
-          document: "document",
-          builder: "site_proposal",
-        } as Record<string, string>
-      )[recordType];
-      const form = new FormData();
-      form.append("file", file);
-      form.append("title", file.name);
-      form.append("category", "generic");
-      form.append("visibility", "internal");
-      form.append("relation_type", "attachment");
-      form.append(
-        "metadata",
-        JSON.stringify({ collaborationPending: true, recordType, recordId }),
-      );
-      if (entityType) {
-        form.append("entity_type", entityType);
-        form.append("entity_id", recordId);
-      }
-      const document = await uploadDocument(form);
-      setAttachments((items) => [
-        ...items,
-        {
-          id: crypto.randomUUID(),
-          name: document.original_filename,
-          mimeType: document.mime_type || "application/octet-stream",
-          size: Number(document.size_bytes || file.size),
-          reference: `document:${document.id}`,
-        },
-      ]);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Allegato non caricato",
-      );
-    } finally {
-      setAttachmentBusy(false);
-      if (inputRef.current) inputRef.current.value = "";
-    }
-  };
-  const removeAttachment = (attachment: CommentAttachment) => {
-    setAttachments((items) =>
-      items.filter((item) => item.id !== attachment.id),
-    );
-    const documentId = attachment.reference?.startsWith("document:")
-      ? attachment.reference.slice("document:".length)
-      : "";
-    if (documentId) void archiveDocument(documentId).catch(() => undefined);
-  };
-  const resetComposer = () => {
-    setText("");
-    setMentions([]);
-    setAttachments([]);
-    setReplyTo(undefined);
-    setEditingId(undefined);
-  };
-  const submit = async () => {
-    if (submitBusyRef.current) return;
-    submitBusyRef.current = true;
-    setSubmitBusy(true);
-    try {
-      if (editingId) {
-        if (await store.updateComment(editingId, text, mentions)) {
-          toast.success("Commento aggiornato");
-          resetComposer();
-        }
-        return;
-      }
-      const id = await store.addComment({
-        recordType,
-        recordId,
-        text,
-        parentCommentId: replyTo,
-        mentionUserIds: mentions,
-        attachments,
-      });
-      if (!id) return toast.error("Commento non salvato");
-      toast.success(replyTo ? "Risposta pubblicata" : "Commento pubblicato");
-      resetComposer();
-    } finally {
-      submitBusyRef.current = false;
-      setSubmitBusy(false);
-    }
-  };
-  const visible = comments.filter((comment) =>
-    filter === "resolved"
-      ? Boolean(comment.resolvedAt)
-      : filter === "attachments"
-        ? comment.attachments.length > 0
-        : true,
-  );
-  return (
-    <Sheet defaultOpen={deepLinkOpen}>
-      <SheetTrigger asChild>
-        <Button
-          size="sm"
-          variant="outline"
-          aria-label={`Apri collaborazione per ${label}`}
-        >
-          <MessageCircle />
-          {compact
-            ? comments.filter((item) => !item.deletedAt).length
-            : `Commenti ${comments.filter((item) => !item.deletedAt).length || ""}`}
-        </Button>
-      </SheetTrigger>
-      <SheetContent className="flex h-dvh w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[560px]">
-        <SheetHeader className="border-b px-5 py-4 text-left">
-          <SheetTitle>Attività e collaborazione</SheetTitle>
-          <SheetDescription className="truncate">{label}</SheetDescription>
-        </SheetHeader>
-        <Tabs defaultValue="comments" className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mx-5 mt-3 grid grid-cols-2">
-            <TabsTrigger value="comments">
-              <MessageCircle />
-              Commenti
-            </TabsTrigger>
-            <TabsTrigger value="history">
-              <History />
-              Revisioni
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent
-            value="comments"
-            className="flex min-h-0 flex-1 flex-col"
-          >
-            <div className="flex gap-1 overflow-x-auto px-5 py-2">
-              {(
-                [
-                  ["record", "Commenti del record"],
-                  ["all", "Tutti"],
-                  ["attachments", "Con allegati"],
-                  ["resolved", "Risolti"],
-                ] as const
-              ).map(([id, title]) => (
-                <Button
-                  key={id}
-                  size="sm"
-                  variant={filter === id ? "secondary" : "ghost"}
-                  onClick={() => setFilter(id)}
-                >
-                  {title}
-                </Button>
-              ))}
-            </div>
-            <ScrollArea className="min-h-0 flex-1 px-5">
-              <div className="space-y-3 py-2">
-                {visible
-                  .filter((item) => !item.parentCommentId)
-                  .map((comment) => (
-                    <CommentThread
-                      key={comment.id}
-                      comment={comment}
-                      replies={visible.filter(
-                        (item) => item.parentCommentId === comment.id,
-                      )}
-                      highlightedId={deepLinkCommentId ?? undefined}
-                      onReply={(id) => {
-                        setReplyTo(id);
-                        setEditingId(undefined);
-                        setText("");
-                      }}
-                      onEdit={(item) => {
-                        setEditingId(item.id);
-                        setReplyTo(undefined);
-                        setText(item.text);
-                        setMentions(item.mentionUserIds);
-                      }}
-                    />
-                  ))}
-                {!visible.length && (
-                  <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                    Nessun commento per questo filtro.
-                  </p>
-                )}
-              </div>
-            </ScrollArea>
-            <div className="shrink-0 border-t bg-background p-4">
-              <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-                <span>
-                  {editingId
-                    ? "Modifica commento"
-                    : replyTo
-                      ? "Risposta al commento"
-                      : "Nuovo commento"}
-                </span>
-                {(editingId || replyTo) && (
-                  <Button size="xs" variant="ghost" onClick={resetComposer}>
-                    <X />
-                    Annulla
-                  </Button>
-                )}
-              </div>
-              <Textarea
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                placeholder="Scrivi un commento o menziona un collega…"
-                className="min-h-20"
-              />
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button size="sm" variant="outline">
-                      <AtSign />
-                      Menziona{mentions.length ? ` ${mentions.length}` : ""}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="start" className="w-64 space-y-2">
-                    <p className="text-sm font-medium">
-                      Collaboratori autorizzati
-                    </p>
-                    {mentionUsers.map((user) => (
-                      <Label
-                        key={user.id}
-                        className="flex items-center gap-2 rounded p-1.5 hover:bg-muted"
-                      >
-                        <Checkbox
-                          checked={mentions.includes(user.id)}
-                          onCheckedChange={(checked) =>
-                            setMentions((items) =>
-                              checked
-                                ? [...items, user.id]
-                                : items.filter((id) => id !== user.id),
-                            )
-                          }
-                        />
-                        {user.name}
-                      </Label>
-                    ))}
-                  </PopoverContent>
-                </Popover>
-                <input
-                  ref={inputRef}
-                  type="file"
-                  className="hidden"
-                  onChange={(event) => void attach(event.target.files?.[0])}
-                />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={attachmentBusy}
-                  onClick={() => inputRef.current?.click()}
-                >
-                  <Paperclip />
-                  {attachmentBusy ? "Caricamento…" : "Allegato"}
-                </Button>
-                <div className="min-w-0 flex-1" />{" "}
-                <Button
-                  size="sm"
-                  disabled={!text.trim() || attachmentBusy || submitBusy}
-                  onClick={() => void submit()}
-                >
-                  <Send />
-                  {submitBusy ? "Salvataggio…" : editingId ? "Salva" : "Pubblica"}
-                </Button>
-              </div>
-              {attachments.map((attachment) => (
-                <Badge
-                  key={attachment.id}
-                  variant="secondary"
-                  className="mt-2 mr-1"
-                >
-                  <Paperclip />
-                  {attachment.name}
-                  <button
-                    aria-label={`Rimuovi ${attachment.name}`}
-                    onClick={() => removeAttachment(attachment)}
-                  >
-                    <X />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-          </TabsContent>
-          <TabsContent value="history" className="min-h-0 flex-1">
-            <ScrollArea className="h-full px-5">
-              <div className="space-y-3 py-4">
-                {history.map((event) => (
-                  <div key={event.id} className="rounded-lg border p-3">
-                    <div className="flex gap-3">
-                      <Avatar>
-                        <AvatarImage src={event.authorAvatarUrl} />
-                        <AvatarFallback>
-                          {event.authorName.slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <div className="font-medium">
-                          {event.recordType === "document" &&
-                          event.field === "status" ? (
-                            <span className="flex flex-wrap items-center gap-2">
-                              <span>Stato:</span>
-                              <DocumentStatusBadge
-                                status={event.previousValue ?? "—"}
-                              />
-                              <span aria-hidden>→</span>
-                              <DocumentStatusBadge
-                                status={event.nextValue ?? "—"}
-                              />
-                            </span>
-                          ) : event.field ? (
-                            `${event.field}: ${event.previousValue ?? "—"} → ${event.nextValue ?? "—"}`
-                          ) : (
-                            event.action
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {event.authorName} ·{" "}
-                          {formatItalianDateTime(event.createdAt)} ·{" "}
-                          {event.origin}
-                        </p>
-                        {event.reason && (
-                          <p className="mt-1 text-sm">Motivo: {event.reason}</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {!history.length && (
-                  <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                    Nessuna revisione strutturata registrata.
-                  </p>
-                )}
-              </div>
-            </ScrollArea>
-          </TabsContent>
-        </Tabs>
-      </SheetContent>
-    </Sheet>
-  );
+const emojis = ["👍", "❤️", "🎉", "✅", "👀", "🚀"]
+const revisionTypes: Record<RevisionFilter, CommercialAuditActionType[]> = { all: [], changes: ["field_change"], states: ["status_change", "archive", "restore"], assignments: ["assignment"], approvals: ["approval", "rejection"], documents: ["attachment"], payments: ["payment", "refund"], system: ["system", "merge", "create", "soft_delete", "points"] }
+function initials(name: string) { return name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase() }
+function relativeTime(value: string) { return formatDistanceToNow(new Date(value), { addSuffix: true, locale: it }) }
+
+export function RecordCollaborationPanel({ recordType, recordId, label, compact, triggerVariant = "default" }: Props) {
+  const store = useCommercialLeads(); const identity = useDoflowIdentity(); const searchParams = useSearchParams()
+  const deepLinkOpen = searchParams.get("collaboration") === `${recordType}:${recordId}`; const deepLinkCommentId = deepLinkOpen ? searchParams.get("commentId") : null
+  const [open, setOpen] = useState(deepLinkOpen); const [tab, setTab] = useState(deepLinkOpen ? "comments" : "activity")
+  const [text, setText] = useState(""); const [mentions, setMentions] = useState<string[]>([]); const [attachments, setAttachments] = useState<CommentAttachment[]>([]); const [editingId, setEditingId] = useState<string>()
+  const [commentFilter, setCommentFilter] = useState<CommentFilter>("all"); const [commentOrder, setCommentOrder] = useState<"newest" | "oldest">("newest")
+  const [revisionFilter, setRevisionFilter] = useState<RevisionFilter>("all"); const [revisionSearch, setRevisionSearch] = useState(""); const [mentionOpen, setMentionOpen] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null); const textareaRef = useRef<HTMLTextAreaElement>(null); const loadCommentsRef = useRef(store.loadComments)
+  const comments = useMemo(() => store.comments.filter((comment) => comment.recordType === recordType && comment.recordId === recordId), [recordId, recordType, store.comments])
+  const history = useMemo(() => store.auditEvents.filter((event) => event.recordType === recordType && event.recordId === recordId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [recordId, recordType, store.auditEvents])
+  const lookup = useMemo<AuditPresentationLookup>(() => ({ users: identity.users.map(({ id, name }) => ({ id, name })), records: [...store.leads.map((item) => ({ id: item.id, label: item.company })), ...store.customers.map((item) => ({ id: item.id, label: item.profile.company })), ...store.projects.map((item) => ({ id: item.id, label: item.name })), ...store.leadActivities.map((item) => ({ id: item.id, label: item.title })), ...store.services.map((item) => ({ id: item.id, label: item.name }))] }), [identity.users, store.customers, store.leadActivities, store.leads, store.projects, store.services])
+  const allowedUserIds = useMemo(() => { const ids = new Set([identity.currentUserId]); identity.users.filter((user) => user.roles.includes("administrator")).forEach((user) => ids.add(user.id)); const lead = store.leads.find((item) => item.id === recordId); if (lead) ids.add(lead.assigneeId); const customer = store.customers.find((item) => item.id === recordId); if (customer) ids.add(customer.profile.assigneeId); const activity = [...store.leadActivities, ...store.customers.flatMap((item) => [...(item.activities ?? []), ...(item.onboardingActivity ? [item.onboardingActivity] : [])])].find((item) => item.id === recordId); if (activity) { ids.add(activity.assigneeId); activity.collaboratorIds.forEach((id) => ids.add(id)) } const project = store.projects.find((item) => item.id === recordId || item.id === activity?.projectId); if (project) [project.ownerId, ...project.memberIds, ...(project.supervisorIds ?? [])].forEach((id) => ids.add(id)); return ids }, [identity.currentUserId, identity.users, recordId, store.customers, store.leadActivities, store.leads, store.projects])
+  const mentionUsers = identity.users.filter((user) => allowedUserIds.has(user.id)); const openCount = comments.filter((comment) => !comment.deletedAt && !comment.resolvedAt && !comment.parentCommentId).length
+  const unreadCount = comments.filter((comment) => !comment.deletedAt && comment.authorId !== identity.currentUserId && !(comment.readByUserIds ?? [comment.authorId]).includes(identity.currentUserId)).length
+  const visibleComments = useMemo(() => comments.filter((comment) => { if (commentFilter === "open") return !comment.resolvedAt; if (commentFilter === "resolved") return Boolean(comment.resolvedAt); if (commentFilter === "attachments") return comment.attachments.length > 0; if (commentFilter === "mentions") return comment.mentionUserIds.includes(identity.currentUserId); if (commentFilter === "unread") return comment.authorId !== identity.currentUserId && !(comment.readByUserIds ?? [comment.authorId]).includes(identity.currentUserId); return true }).sort((a, b) => commentOrder === "newest" ? b.createdAt.localeCompare(a.createdAt) : a.createdAt.localeCompare(b.createdAt)), [commentFilter, commentOrder, comments, identity.currentUserId])
+  const visibleHistory = useMemo(() => history.filter((event) => { const presented = presentAuditEvent(event, lookup); if (!presented.changes.length && event.action === "Campo aggiornato") return false; const matchesType = revisionFilter === "all" || revisionTypes[revisionFilter].includes(presented.type) || revisionFilter === "documents" && event.recordType === "document"; const query = revisionSearch.trim().toLocaleLowerCase("it"); return matchesType && (!query || `${presented.actor} ${presented.sentence} ${presented.changes.map((change) => presentAuditChange(change, lookup).label).join(" ")}`.toLocaleLowerCase("it").includes(query)) }), [history, lookup, revisionFilter, revisionSearch])
+  const relatedTimeline = useMemo(() => { const customer = store.customers.find((item) => item.id === recordId); const project = store.projects.find((item) => item.id === recordId); return store.timelineEvents.filter((event) => recordType === "lead" ? event.leadId === recordId : recordType === "customer" ? event.customerId === recordId || event.leadId === customer?.sourceLeadId : recordType === "activity" ? event.activityId === recordId : recordType === "project" ? event.leadId === project?.sourceLeadId && `${event.title} ${event.detail}`.includes(project?.name ?? "\0") : recordType === "support_ticket" ? event.supportTicketId === recordId : recordType === "contract" ? event.contractId === recordId : recordType === "order" ? event.orderId === recordId : recordType === "payment" ? event.paymentId === recordId : recordType === "renewal" ? event.renewalId === recordId : false) }, [recordId, recordType, store.customers, store.projects, store.timelineEvents])
+  const activityFeed = useMemo(() => [...history.filter((event) => presentAuditEvent(event, lookup).changes.length || event.action !== "Campo aggiornato").map((event) => ({ id: `audit:${event.id}`, date: event.createdAt, kind: "audit" as const, event })), ...comments.filter((comment) => !comment.deletedAt).map((comment) => ({ id: `comment:${comment.id}`, date: comment.createdAt, kind: "comment" as const, comment })), ...store.pointLedger.filter((entry) => entry.recordType === recordType && entry.recordId === recordId).map((entry) => ({ id: `point:${entry.id}`, date: entry.occurredAt, kind: "point" as const, entry })), ...relatedTimeline.map((event) => ({ id: `timeline:${event.id}`, date: event.date, kind: "timeline" as const, timeline: event }))].sort((a, b) => b.date.localeCompare(a.date)), [comments, history, lookup, recordId, recordType, relatedTimeline, store.pointLedger])
+
+  useEffect(() => { loadCommentsRef.current = store.loadComments }, [store.loadComments])
+  useEffect(() => { void loadCommentsRef.current(recordType, recordId).catch(() => undefined) }, [recordId, recordType])
+  useEffect(() => { if (!deepLinkOpen) return; const timer = window.setTimeout(() => { setOpen(true); setTab("comments") }, 0); return () => window.clearTimeout(timer) }, [deepLinkOpen])
+  useEffect(() => { if (!deepLinkCommentId || !open) return; const frame = requestAnimationFrame(() => document.getElementById(`comment-${deepLinkCommentId}`)?.scrollIntoView({ block: "center" })); return () => cancelAnimationFrame(frame) }, [deepLinkCommentId, open])
+  useEffect(() => { const element = textareaRef.current; if (!element) return; element.style.height = "auto"; element.style.height = `${Math.min(element.scrollHeight, 180)}px` }, [text])
+  const resetComposer = () => { setText(""); setMentions([]); setAttachments([]); setEditingId(undefined); setMentionOpen(false) }
+  const attach = async (file?: File) => { if (!file) return; if (file.size > 5_000_000) { toast.error("L’allegato non può superare 5 MB"); return } try { const entityType = ({ lead: "opportunity", customer: "company", activity: "task", project: "project", quote: "quote", contract: "contract", order: "order", payment: "payment", invoice: "invoice", renewal: "renewal", document: "document" } as Record<string, string>)[recordType]; const form = new FormData(); form.append("file", file); form.append("title", file.name); form.append("category", "generic"); form.append("visibility", "internal"); form.append("relation_type", "attachment"); form.append("metadata", JSON.stringify({ collaborationPending: true, recordType, recordId })); if (entityType) { form.append("entity_type", entityType); form.append("entity_id", recordId) } const document = await uploadDocument(form); setAttachments((items) => [...items, { id: crypto.randomUUID(), name: document.original_filename, mimeType: document.mime_type || "application/octet-stream", size: Number(document.size_bytes || file.size), reference: `document:${document.id}` }]) } catch (error) { toast.error(error instanceof Error ? error.message : "Allegato non caricato") } finally { if (inputRef.current) inputRef.current.value = "" } }
+  const removeAttachment = (attachment: CommentAttachment) => { setAttachments((items) => items.filter((item) => item.id !== attachment.id)); const documentId = attachment.reference?.startsWith("document:") ? attachment.reference.slice("document:".length) : ""; if (documentId) void archiveDocument(documentId).catch(() => undefined) }
+  const submit = async () => { if (!text.trim() && !attachments.length) return; if (editingId) { if (await store.updateComment(editingId, text, mentions)) { toast.success("Commento aggiornato"); resetComposer() } return } const id = await store.addComment({ recordType, recordId, text: text || "Allegato condiviso", mentionUserIds: mentions, attachments }); if (!id) return toast.error("Commento non salvato"); toast.success("Commento pubblicato"); resetComposer() }
+  const selectMention = (userId: string) => { const user = identity.users.find((item) => item.id === userId); if (!user) return; setMentions((items) => Array.from(new Set([...items, userId]))); setText((value) => `${value.replace(/@[^\s@]*$/, "")}@${user.name} `); setMentionOpen(false); textareaRef.current?.focus() }
+  const trigger = <Button type="button" size={triggerVariant === "list" ? "icon-sm" : "sm"} variant={triggerVariant === "list" ? "ghost" : "outline"} className={triggerVariant === "list" ? "relative shrink-0" : undefined} aria-label={`Apri commenti per ${label}. ${openCount} aperti${unreadCount ? `, ${unreadCount} non letti` : ""}`} onClick={(event) => event.stopPropagation()}><MessageCircle />{triggerVariant === "list" ? <>{openCount > 0 && <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] font-semibold leading-4 text-primary-foreground">{openCount > 99 ? "99+" : openCount}</span>}{unreadCount > 0 && <span aria-label={`${unreadCount} commenti non letti`} className="absolute bottom-0.5 right-0.5 size-2 rounded-full bg-red-500 ring-2 ring-background" />}</> : compact ? openCount || null : <>Commenti{openCount ? ` ${openCount}` : ""}</>}</Button>
+  return <Sheet open={open} onOpenChange={(next) => { setOpen(next); if (next) store.markRecordCommentsRead(recordType, recordId) }}><Tooltip><TooltipTrigger asChild><SheetTrigger asChild>{trigger}</SheetTrigger></TooltipTrigger><TooltipContent>Apri commenti</TooltipContent></Tooltip><SheetContent className="flex h-dvh w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[540px]"><SheetHeader className="shrink-0 border-b px-4 py-3 pr-12 text-left sm:px-5"><SheetTitle>Attività e collaborazione</SheetTitle><SheetDescription className="truncate">{label}</SheetDescription></SheetHeader><Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col"><TabsList className="mx-4 mt-3 grid grid-cols-3 sm:mx-5"><TabsTrigger value="activity"><RefreshCcw />Tutta l’attività</TabsTrigger><TabsTrigger value="comments"><MessageCircle />Commenti</TabsTrigger><TabsTrigger value="history"><History />Revisioni</TabsTrigger></TabsList>
+    <TabsContent value="activity" className="min-h-0 flex-1"><ScrollArea className="h-full px-4 sm:px-5"><div className="relative space-y-3 py-4 before:absolute before:inset-y-5 before:left-4 before:w-px before:bg-border">{activityFeed.map((item) => <div key={item.id} className="relative pl-10">{item.kind === "audit" ? <AuditCard event={item.event} lookup={lookup} compact /> : item.kind === "comment" ? <FeedComment comment={item.comment} /> : item.kind === "timeline" ? <div className="rounded-lg border bg-card p-3 text-sm"><Badge variant="outline">Sistema</Badge><p className="mt-1 font-medium">{item.timeline.title}</p><p className="text-muted-foreground">{item.timeline.detail}</p><p className="mt-1 text-xs text-muted-foreground">{item.timeline.author} · {formatItalianDateTime(item.timeline.date)}</p></div> : <div className="rounded-lg border bg-card p-3 text-sm"><Badge variant={item.entry.points >= 0 ? "default" : "destructive"}>{item.entry.points >= 0 ? "+" : ""}{item.entry.points} punti</Badge><p className="mt-1">{item.entry.reason}</p><p className="mt-1 text-xs text-muted-foreground">{formatItalianDateTime(item.entry.occurredAt)}</p></div>}</div>)}{!activityFeed.length && <EmptyState text="Nessuna attività registrata per questo record." />}</div></ScrollArea></TabsContent>
+    <TabsContent value="comments" className="flex min-h-0 flex-1 flex-col"><CommentToolbar filter={commentFilter} setFilter={setCommentFilter} order={commentOrder} setOrder={setCommentOrder} /><ScrollArea className="min-h-0 flex-1 px-4 sm:px-5"><div className="space-y-3 py-3">{visibleComments.filter((item) => !item.parentCommentId).map((comment) => <CommentThread key={comment.id} comment={comment} replies={comments.filter((item) => item.parentCommentId === comment.id && !item.deletedAt)} highlightedId={deepLinkCommentId ?? undefined} mentionUsers={mentionUsers} />)}{!visibleComments.filter((item) => !item.parentCommentId).length && <EmptyState text="Nessun commento per questo filtro." />}</div></ScrollArea><Composer text={text} setText={setText} editingId={editingId} reset={resetComposer} submit={submit} textareaRef={textareaRef} mentionOpen={mentionOpen} setMentionOpen={setMentionOpen} mentionUsers={mentionUsers} selectMention={selectMention} attachments={attachments} setAttachments={setAttachments} inputRef={inputRef} attach={attach} removeAttachment={removeAttachment} /></TabsContent>
+    <TabsContent value="history" className="flex min-h-0 flex-1 flex-col"><RevisionToolbar filter={revisionFilter} setFilter={setRevisionFilter} search={revisionSearch} setSearch={setRevisionSearch} /><ScrollArea className="min-h-0 flex-1 px-4 sm:px-5"><div className="space-y-3 py-4">{visibleHistory.map((event) => <AuditCard key={event.id} event={event} lookup={lookup} />)}{!visibleHistory.length && <EmptyState text="Nessuna revisione per questo filtro." />}</div></ScrollArea></TabsContent></Tabs><span className="sr-only" aria-live="polite">{openCount} commenti aperti, {unreadCount} non letti.</span></SheetContent></Sheet>
 }
 
-function CommentThread({
-  comment,
-  replies,
-  highlightedId,
-  onReply,
-  onEdit,
-}: {
-  comment: CommercialComment;
-  replies: CommercialComment[];
-  highlightedId?: string;
-  onReply: (id: string) => void;
-  onEdit: (comment: CommercialComment) => void;
-}) {
-  const store = useCommercialLeads();
-  const identity = useDoflowIdentity();
-  const openAttachment = async (attachmentId: string) => {
-    try {
-      const access = await collaborationApi.attachmentAccess(attachmentId);
-      window.location.assign(access.url);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Allegato non disponibile");
-    }
-  };
-  const render = (item: CommercialComment, nested = false) => (
-    <div
-      id={`comment-${item.id}`}
-      key={item.id}
-      className={`${nested ? "ml-7 border-l pl-3" : "rounded-lg border p-3"} ${item.id === highlightedId ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
-    >
-      <div className="flex items-start gap-2">
-        <Avatar size="sm">
-          <AvatarImage
-            src={
-              identity.users.find((user) => user.id === item.authorId)
-                ?.avatarUrl
-            }
-          />
-          <AvatarFallback>
-            {identity.users
-              .find((user) => user.id === item.authorId)
-              ?.name.slice(0, 2)
-              .toUpperCase() ?? "?"}
-          </AvatarFallback>
-        </Avatar>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1">
-            <b className="text-sm">
-              {identity.users.find((user) => user.id === item.authorId)?.name ??
-                "Utente"}
-            </b>
-            {item.resolvedAt && (
-              <Badge variant="secondary">
-                <Check />
-                Risolto
-              </Badge>
-            )}
-            <span className="text-xs text-muted-foreground">
-              {formatItalianDateTime(item.createdAt)}
-            </span>
-          </div>
-          {item.deletedAt ? (
-            <p className="text-sm italic text-muted-foreground">
-              Commento eliminato
-            </p>
-          ) : (
-            <>
-              <p className="mt-1 whitespace-pre-wrap text-sm">{item.text}</p>
-              {item.attachments.map((attachment) => {
-                return attachment.id ? (
-                  <Badge
-                    key={attachment.id}
-                    variant="outline"
-                    className="mt-2 mr-1"
-                  >
-                    <button type="button" onClick={() => void openAttachment(attachment.id)}>
-                      <Paperclip />
-                      {attachment.name}
-                    </button>
-                  </Badge>
-                ) : (
-                  <Badge
-                    key={attachment.id}
-                    variant="outline"
-                    className="mt-2 mr-1"
-                  >
-                    <Paperclip />
-                    {attachment.name}
-                  </Badge>
-                );
-              })}
-              <div className="mt-2 flex flex-wrap gap-1">
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  onClick={() => onReply(item.id)}
-                >
-                  <CornerDownRight />
-                  Rispondi
-                </Button>
-                {item.authorId === identity.currentUserId ||
-                identity.currentUser.roles.includes("administrator") ? (
-                  <>
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      onClick={() => onEdit(item)}
-                    >
-                      <Pencil />
-                      Modifica
-                    </Button>
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      onClick={() => void store.deleteComment(item.id)}
-                    >
-                      <Trash2 />
-                      Elimina
-                    </Button>
-                  </>
-                ) : null}
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  onClick={() => void store.resolveComment(item.id, !item.resolvedAt)}
-                >
-                  {item.resolvedAt ? <RotateCcw /> : <Check />}
-                  {item.resolvedAt ? "Riapri" : "Risolvi"}
-                </Button>
-                {["👍", "❤️", "🎉"].map((emoji) => (
-                  <Button
-                    key={emoji}
-                    size="xs"
-                    variant={
-                      item.reactions.some(
-                        (reaction) =>
-                          reaction.emoji === emoji &&
-                          reaction.userIds.includes(identity.currentUserId),
-                      )
-                        ? "secondary"
-                        : "ghost"
-                    }
-                    onClick={() => void store.toggleCommentReaction(item.id, emoji)}
-                  >
-                    <Smile className="sr-only" />
-                    {emoji}
-                    {item.reactions.find((reaction) => reaction.emoji === emoji)
-                      ?.userIds.length || ""}
-                  </Button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-  return (
-    <div className="space-y-2">
-      {render(comment)}
-      {replies.map((reply) => render(reply, true))}
-    </div>
-  );
-}
+function CommentToolbar({ filter, setFilter, order, setOrder }: { filter: CommentFilter; setFilter: (value: CommentFilter) => void; order: "newest" | "oldest"; setOrder: (value: "newest" | "oldest") => void }) { return <div className="flex shrink-0 gap-2 border-b px-4 py-2 sm:px-5"><Select value={filter} onValueChange={(value) => setFilter(value as CommentFilter)}><SelectTrigger size="sm" className="min-w-0 flex-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tutti i commenti</SelectItem><SelectItem value="open">Commenti aperti</SelectItem><SelectItem value="resolved">Risolti</SelectItem><SelectItem value="attachments">Con allegati</SelectItem><SelectItem value="mentions">Menzioni per me</SelectItem><SelectItem value="unread">Non letti</SelectItem></SelectContent></Select><Select value={order} onValueChange={(value) => setOrder(value as "newest" | "oldest")}><SelectTrigger size="sm" className="w-[138px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Più recenti</SelectItem><SelectItem value="oldest">Meno recenti</SelectItem></SelectContent></Select></div> }
+function RevisionToolbar({ filter, setFilter, search, setSearch }: { filter: RevisionFilter; setFilter: (value: RevisionFilter) => void; search: string; setSearch: (value: string) => void }) { return <div className="flex shrink-0 gap-2 border-b px-4 py-2 sm:px-5"><Select value={filter} onValueChange={(value) => setFilter(value as RevisionFilter)}><SelectTrigger size="sm" className="w-[145px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tutte</SelectItem><SelectItem value="changes">Modifiche</SelectItem><SelectItem value="states">Stati</SelectItem><SelectItem value="assignments">Assegnazioni</SelectItem><SelectItem value="approvals">Approvazioni</SelectItem><SelectItem value="documents">Documenti</SelectItem><SelectItem value="payments">Pagamenti</SelectItem><SelectItem value="system">Sistema</SelectItem></SelectContent></Select><div className="relative min-w-0 flex-1"><Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cerca autore o modifica" className="h-8 pl-8" /></div></div> }
+
+function Composer({ text, setText, editingId, reset, submit, textareaRef, mentionOpen, setMentionOpen, mentionUsers, selectMention, attachments, inputRef, attach, removeAttachment }: { text: string; setText: (value: string) => void; editingId?: string; reset: () => void; submit: () => void; textareaRef: React.RefObject<HTMLTextAreaElement | null>; mentionOpen: boolean; setMentionOpen: (value: boolean) => void; mentionUsers: ReturnType<typeof useDoflowIdentity>["users"]; selectMention: (id: string) => void; attachments: CommentAttachment[]; setAttachments: React.Dispatch<React.SetStateAction<CommentAttachment[]>>; inputRef: React.RefObject<HTMLInputElement | null>; attach: (file?: File) => Promise<void>; removeAttachment: (attachment: CommentAttachment) => void }) { return <div className="shrink-0 border-t bg-background p-3 sm:p-4"><div className="mb-1 flex items-center justify-between text-xs text-muted-foreground"><span>{editingId ? "Modifica commento" : "Nuovo commento"}</span>{editingId && <Button size="xs" variant="ghost" onClick={reset}><X />Annulla</Button>}</div><Textarea ref={textareaRef} value={text} onChange={(event) => { setText(event.target.value); setMentionOpen(/@[^\s@]*$/.test(event.target.value)) }} onKeyDown={(event) => { if (event.key === "Escape") reset(); if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); submit() } }} placeholder="Scrivi un commento o usa @ per menzionare…" className="min-h-11 max-h-[180px] resize-none" /><div className="mt-2 flex items-center gap-1.5"><Popover open={mentionOpen} onOpenChange={setMentionOpen}><PopoverTrigger asChild><Button size="icon-sm" variant="ghost" aria-label="Menziona un collaboratore"><AtSign /></Button></PopoverTrigger><PopoverContent align="start" className="w-72 p-2"><p className="px-2 pb-1 text-xs font-medium text-muted-foreground">Collaboratori autorizzati</p>{mentionUsers.map((user) => <button key={user.id} className="flex w-full items-center gap-2 rounded-md p-2 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => selectMention(user.id)}><Avatar size="sm"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{initials(user.name)}</AvatarFallback></Avatar><span className="min-w-0 flex-1"><b className="block truncate">{user.name}</b><small className="block truncate text-muted-foreground">{user.roles.join(" · ")}</small></span></button>)}</PopoverContent></Popover><input ref={inputRef} type="file" className="hidden" onChange={(event) => void attach(event.target.files?.[0])} /><Button size="icon-sm" variant="ghost" aria-label="Aggiungi allegato" onClick={() => inputRef.current?.click()}><Paperclip /></Button><EmojiPicker onSelect={(emoji) => setText(text + emoji)} /><span className="min-w-0 flex-1 text-right text-[11px] text-muted-foreground max-sm:hidden">Ctrl/⌘ + Invio</span><Button size="sm" disabled={!text.trim() && !attachments.length} onClick={submit}><Send />Pubblica</Button></div>{attachments.map((attachment) => <AttachmentCard key={attachment.id} attachment={attachment} removable onRemove={() => removeAttachment(attachment)} />)}</div> }
+
+function AuditCard({ event, lookup, compact = false }: { event: CommercialAuditEvent; lookup: AuditPresentationLookup; compact?: boolean }) { const presented = presentAuditEvent(event, lookup); const Icon = ({ status_change: RefreshCcw, assignment: UserRoundCheck, archive: Archive, restore: RotateCcw, approval: BadgeCheck, rejection: X, attachment: FileText, payment: CircleDollarSign, refund: CircleDollarSign, system: Settings2 } as Partial<Record<CommercialAuditActionType, typeof History>>)[presented.type] ?? History; const tone = presented.type === "approval" || presented.type === "restore" ? "text-emerald-600 bg-emerald-500/10" : presented.type === "rejection" || presented.type === "archive" || presented.type === "refund" ? "text-red-600 bg-red-500/10" : presented.type === "assignment" ? "text-blue-600 bg-blue-500/10" : "text-violet-600 bg-violet-500/10"; return <article className="rounded-lg border bg-card p-3"><div className="flex items-start gap-3"><span className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-full ${tone}`}><Icon className="size-4" /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><Badge variant="outline" className="text-[10px]">{auditActionLabel(presented.type)}</Badge><span className="text-xs text-muted-foreground">{formatItalianDateTime(event.createdAt)}</span></div><p className="mt-1 text-sm font-medium leading-snug">{presented.sentence}</p>{!compact && presented.changes.length > 0 && <div className="mt-3 space-y-2">{presented.changes.map((change) => { const row = presentAuditChange(change, lookup); return <ChangeRow key={change.field} event={event} field={change.field} {...row} /> })}</div>}{event.reason && presented.type !== "rejection" && <p className="mt-2 rounded-md bg-muted px-2 py-1.5 text-xs"><b>Motivo:</b> {event.reason}</p>}</div></div></article> }
+function ChangeRow({ event, field, before, after, label, long }: { event: CommercialAuditEvent; field: string; before: string; after: string; label: string; long: boolean }) { const [expanded, setExpanded] = useState(false); return <div className="rounded-md bg-muted/50 p-2"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p><div className={`mt-1 grid gap-1 text-xs sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center ${long && !expanded ? "max-h-20 overflow-hidden" : ""}`}><span className="min-w-0 break-words rounded bg-red-500/10 px-2 py-1 text-red-700 line-through dark:text-red-300">{event.recordType === "document" && field === "status" ? <DocumentStatusBadge status={before} /> : before}</span><span aria-hidden className="text-center text-muted-foreground">→</span><span className="min-w-0 break-words rounded bg-emerald-500/10 px-2 py-1 text-emerald-700 dark:text-emerald-300">{event.recordType === "document" && field === "status" ? <DocumentStatusBadge status={after} /> : after}</span></div>{long && <Button size="xs" variant="ghost" className="mt-1" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>{expanded ? "Riduci" : "Mostra tutto"}</Button>}</div> }
+
+function CommentThread({ comment, replies, highlightedId, mentionUsers }: { comment: CommercialComment; replies: CommercialComment[]; highlightedId?: string; mentionUsers: ReturnType<typeof useDoflowIdentity>["users"] }) { const store = useCommercialLeads(); const [expanded, setExpanded] = useState(!comment.resolvedAt || Boolean(highlightedId)); const [replying, setReplying] = useState(false); const [reply, setReply] = useState(""); const submitReply = async () => { const id = await store.addComment({ recordType: comment.recordType, recordId: comment.recordId, parentCommentId: comment.id, text: reply, mentionUserIds: mentionUsers.filter((user) => reply.includes(`@${user.name}`)).map((user) => user.id), attachments: [] }); if (!id) return toast.error("Risposta non salvata"); setReply(""); setReplying(false); setExpanded(true); toast.success("Risposta pubblicata") }; return <article id={`comment-${comment.id}`} className={`group rounded-lg border bg-card p-3 transition ${comment.id === highlightedId ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""} ${comment.resolvedAt ? "bg-emerald-500/[0.035]" : ""}`}><CommentBody comment={comment} onReply={() => setReplying(true)} />{replies.length > 0 && <Button size="xs" variant="ghost" className="mt-2" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>{expanded ? <ChevronDown /> : <ChevronRight />}{expanded ? "Nascondi risposte" : `Mostra ${replies.length} ${replies.length === 1 ? "risposta" : "risposte"}`}</Button>}{expanded && replies.length > 0 && <div className="ml-3 mt-2 space-y-2 border-l pl-3 sm:ml-6">{replies.map((item) => <CommentBody key={item.id} comment={item} onReply={() => setReplying(true)} />)}</div>}{replying && <div className="ml-3 mt-3 border-l pl-3 sm:ml-6"><Textarea autoFocus value={reply} onChange={(event) => setReply(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") { setReplying(false); setReply("") } if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) void submitReply() }} placeholder="Scrivi una risposta…" className="min-h-16 resize-none" /><div className="mt-2 flex justify-end gap-2"><Button size="sm" variant="ghost" onClick={() => { setReplying(false); setReply("") }}>Annulla</Button><Button size="sm" disabled={!reply.trim()} onClick={() => void submitReply()}><Send />Rispondi</Button></div></div>}</article> }
+function CommentBody({ comment, onReply }: { comment: CommercialComment; onReply: () => void }) { const store = useCommercialLeads(); const identity = useDoflowIdentity(); const author = identity.users.find((user) => user.id === comment.authorId); const canEdit = comment.authorId === identity.currentUserId; const canDelete = canEdit || identity.currentUser.roles.includes("administrator"); const [editing, setEditing] = useState(false); const [editText, setEditText] = useState(comment.text); const copyLink = async () => { const url = new URL(window.location.href); url.searchParams.set("collaboration", `${comment.recordType}:${comment.recordId}`); url.searchParams.set("commentId", comment.id); await navigator.clipboard.writeText(url.toString()); toast.success("Link al commento copiato") }; const saveEdit = async () => { if (await store.updateComment(comment.id, editText, comment.mentionUserIds)) { setEditing(false); toast.success("Commento aggiornato") } }; return <div className="flex items-start gap-2"><Avatar size="sm"><AvatarImage src={author?.avatarUrl} /><AvatarFallback>{initials(author?.name ?? "Utente")}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5"><b className="truncate text-sm">{author?.name ?? "Utente"}</b>{comment.resolvedAt && <Tooltip><TooltipTrigger asChild><Badge className="h-5 bg-emerald-600 px-1.5 text-[10px]"><Check />Risolto</Badge></TooltipTrigger><TooltipContent>{formatItalianDateTime(comment.resolvedAt)}</TooltipContent></Tooltip>}<Tooltip><TooltipTrigger asChild><time className="shrink-0 text-xs text-muted-foreground" dateTime={comment.createdAt}>{relativeTime(comment.createdAt)}</time></TooltipTrigger><TooltipContent>{formatItalianDateTime(comment.createdAt)}</TooltipContent></Tooltip><div className="ml-auto flex shrink-0 items-center opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 max-sm:opacity-100"><EmojiPicker onSelect={(emoji) => void store.toggleCommentReaction(comment.id, emoji)} /><Button size="icon-xs" variant="ghost" aria-label="Rispondi" onClick={onReply}><CornerDownRight /></Button><Button size="icon-xs" variant="ghost" aria-label={comment.resolvedAt ? "Riapri commento" : "Risolvi commento"} onClick={() => void store.resolveComment(comment.id, !comment.resolvedAt).then((ok) => { if (ok) toast.success(comment.resolvedAt ? "Commento riaperto" : "Commento risolto") })}>{comment.resolvedAt ? <RotateCcw /> : <Check />}</Button><DropdownMenu><DropdownMenuTrigger asChild><Button size="icon-xs" variant="ghost" aria-label="Altre azioni commento"><MoreHorizontal /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">{canEdit && <DropdownMenuItem onSelect={() => { setEditText(comment.text); setEditing(true) }}>Modifica</DropdownMenuItem>}{canDelete && <DropdownMenuItem variant="destructive" onSelect={() => void store.deleteComment(comment.id)}><Trash2 />Elimina</DropdownMenuItem>}<DropdownMenuItem onSelect={copyLink}><Link2 />Copia link</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div></div>{comment.deletedAt ? <p className="mt-1 text-sm italic text-muted-foreground">Commento eliminato</p> : editing ? <div className="mt-2"><Textarea autoFocus value={editText} onChange={(event) => setEditText(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") setEditing(false); if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) void saveEdit() }} className="min-h-16 resize-none" /><div className="mt-2 flex justify-end gap-2"><Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Annulla</Button><Button size="sm" disabled={!editText.trim() || editText === comment.text} onClick={() => void saveEdit()}>Salva</Button></div></div> : <><p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed">{comment.text}</p>{comment.attachments.map((attachment) => <AttachmentCard key={attachment.id} attachment={attachment} author={author?.name} date={comment.createdAt} />)}{comment.reactions.length > 0 && <div className="mt-2 flex flex-wrap gap-1">{comment.reactions.map((reaction) => <Tooltip key={reaction.emoji}><TooltipTrigger asChild><Button size="xs" variant={reaction.userIds.includes(identity.currentUserId) ? "secondary" : "outline"} onClick={() => void store.toggleCommentReaction(comment.id, reaction.emoji)}>{reaction.emoji} {reaction.userIds.length}</Button></TooltipTrigger><TooltipContent>{reaction.userIds.map((id) => identity.users.find((user) => user.id === id)?.name ?? "Utente").join(", ")}</TooltipContent></Tooltip>)}</div>}</>}</div></div> }
+function EmojiPicker({ onSelect }: { onSelect: (emoji: string) => void }) { return <Popover><PopoverTrigger asChild><Button size="icon-xs" variant="ghost" aria-label="Aggiungi reazione"><Smile /></Button></PopoverTrigger><PopoverContent align="end" className="flex w-auto gap-1 p-2">{emojis.map((emoji) => <button key={emoji} className="grid size-8 place-items-center rounded hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onSelect(emoji)} aria-label={`Reagisci con ${emoji}`}>{emoji}</button>)}</PopoverContent></Popover> }
+function AttachmentCard({ attachment, author, date, removable, onRemove }: { attachment: CommentAttachment; author?: string; date?: string; removable?: boolean; onRemove?: () => void }) { return <div className="mt-2 flex min-w-0 items-center gap-2 rounded-md border bg-muted/30 p-2 text-xs"><FileText className="size-4 shrink-0" /><span className="min-w-0 flex-1"><b className="block truncate">{attachment.name}</b><span className="text-muted-foreground">{attachment.mimeType} · {(attachment.size / 1024).toLocaleString("it-IT", { maximumFractionDigits: 1 })} KB{author ? ` · ${author}` : ""}{date ? ` · ${formatItalianDateTime(date)}` : ""} · {attachment.reference ? "Disponibile" : "Solo metadati"}</span></span>{removable && <Button size="icon-xs" variant="ghost" aria-label={`Rimuovi ${attachment.name}`} onClick={onRemove}><X /></Button>}</div> }
+function FeedComment({ comment }: { comment: CommercialComment }) { const identity = useDoflowIdentity(); const author = identity.users.find((user) => user.id === comment.authorId); return <div className="rounded-lg border bg-card p-3"><div className="flex items-center gap-2"><Avatar size="sm"><AvatarImage src={author?.avatarUrl} /><AvatarFallback>{initials(author?.name ?? "Utente")}</AvatarFallback></Avatar><b className="text-sm">{author?.name ?? "Utente"}</b><span className="text-xs text-muted-foreground">{relativeTime(comment.createdAt)}</span>{comment.parentCommentId && <Badge variant="outline">Risposta</Badge>}</div><p className="mt-2 whitespace-pre-wrap break-words text-sm">{comment.text}</p></div> }
+function EmptyState({ text }: { text: string }) { return <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">{text}</p> }

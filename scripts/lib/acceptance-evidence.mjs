@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { mkdir, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, readdir, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const REDACTED = "[REDACTED]";
@@ -294,7 +294,7 @@ export async function archiveAcceptanceEvidence(paths, archiveDirectory) {
     }
   }
   if ((await readdir(archiveDirectory)).length === 0) {
-    await rm(archiveDirectory, { force: true });
+    await rmdir(archiveDirectory);
   }
   return archived;
 }

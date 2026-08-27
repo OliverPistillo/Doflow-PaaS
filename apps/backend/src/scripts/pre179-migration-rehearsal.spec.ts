@@ -3,6 +3,7 @@ import {
   BASELINE_MAX,
   BASELINE_MIGRATIONS,
   FINAL_MAX,
+  PRE_186_MIGRATIONS,
   POST_178_FORBIDDEN_TABLES,
   createFrozenLegacySchema,
   stableStringify,
@@ -32,6 +33,18 @@ describe('true pre-179 migration rehearsal contract', () => {
       'CreateAutomationPerformanceAuthority1840000000000',
     ]);
     expect(FINAL_MAX).toBe(1840000000000);
+  });
+
+  it('exposes an exact populated 185 baseline for the migration 186 rehearsal', () => {
+    expect(PRE_186_MIGRATIONS.map((Migration) => String(new Migration().name))).toEqual([
+      'CreateCommercialCoreAuthority1790000000000',
+      'CreateDeliveryCoreAuthority1800000000000',
+      'CreateCommerceCashCoreAuthority1810000000000',
+      'CreateDocumentRevenueCoreAuthority1820000000000',
+      'CreateCollaborationNotificationsRealtimeAuthority1830000000000',
+      'CreateAutomationPerformanceAuthority1840000000000',
+      'CreateUniversalTenantFeatures1850000000000',
+    ]);
   });
 
   it('keeps authority-only table DDL out of the frozen fixture', () => {
