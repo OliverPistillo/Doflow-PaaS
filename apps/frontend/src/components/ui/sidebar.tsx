@@ -27,7 +27,7 @@ import {
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "15.5rem"
+const SIDEBAR_WIDTH = "16rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
@@ -333,12 +333,11 @@ const SidebarRail = React.forwardRef<
       onClick={toggleSidebar}
       title="Toggle Sidebar"
       className={cn(
-        "absolute inset-y-0 right-0 z-10 hidden w-2 transition-colors ease-linear sm:flex",
-        "hover:bg-sidebar-accent/20",
-        "after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] after:-translate-x-1/2 after:bg-sidebar-border",
+        "absolute inset-y-0 right-0 z-20 hidden w-4 translate-x-1/2 transition-all ease-linear sm:flex",
+        "after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] after:-translate-x-1/2 hover:after:bg-sidebar-border",
         "[[data-side=left]_&]:cursor-w-resize [[data-side=right]_&]:cursor-e-resize",
         "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
-        "group-data-[collapsible=offcanvas]:w-0 group-data-[collapsible=offcanvas]:after:hidden",
+        "group-data-[collapsible=offcanvas]:w-0 group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:hidden",
         className
       )}
       {...props}
@@ -376,7 +375,7 @@ const SidebarInput = React.forwardRef<
       data-sidebar="input"
       data-slot="sidebar-input"
       className={cn(
-        "h-9 w-full bg-background shadow-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+        "h-8 w-full bg-background shadow-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
         className
       )}
       {...props}
@@ -705,7 +704,7 @@ const SidebarMenuBadge = React.forwardRef<
     data-sidebar="menu-badge"
     data-slot="sidebar-menu-badge"
     className={cn(
-      "absolute right-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1",
+      "absolute right-1 flex h-5 min-w-5 items-center justify-center rounded-md px-1",
       "text-xs font-medium tabular-nums text-sidebar-foreground",
       "select-none pointer-events-none",
       "peer-hover/menu-button:text-sidebar-accent-foreground",

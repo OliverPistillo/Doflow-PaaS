@@ -1,9 +1,10 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import {
   Archive,
-  BrainCircuit,
   CalendarDays,
   CircleHelp,
   ContactRound,
@@ -16,18 +17,28 @@ import {
   MessageSquareText,
   PanelsTopLeft,
   ReceiptText,
+  ScanSearch,
   Settings,
-  Trophy,
-  Workflow,
   Zap,
 } from "lucide-react"
 
 import { NavMain, type NavigationGroup, type NavigationItem } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
 import { TeamSwitcher } from "@/components/team-switcher"
-import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail } from "@/components/ui/sidebar"
+import { TeamSpaceSidebarContent, TeamSpaceSidebarFooter, TeamSpaceSidebarHeader } from "@/components/tenant-collaboration/team-space-sidebar"
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarRail,
+} from "@/components/ui/sidebar"
 import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider"
 import { usePlan } from "@/contexts/PlanContext"
+import { getTenantNotificationSummary } from "@/lib/tenant-notifications-api"
 
 const groups: NavigationGroup[] = [
   {
@@ -36,9 +47,6 @@ const groups: NavigationGroup[] = [
       { title: "Panoramica", url: "/dashboard", icon: LayoutDashboard },
       { title: "Inbox", url: "/dashboard/inbox", icon: Inbox, capability: "canReadNotifications" },
       { title: "Team Space", url: "/dashboard/team-space", icon: MessageSquareText, capability: "canViewProjects" },
-      { title: "Flowboard", url: "/dashboard/flowboard", icon: Workflow, capability: "canViewProjects" },
-      { title: "Company Intelligence", url: "/dashboard/company-intelligence", icon: BrainCircuit, capability: "canViewAssignedLeads", featureKey: "crm.sales-intel" },
-      { title: "Bonus", url: "/dashboard/bonus", icon: Trophy, capability: "canViewOwnPoints" },
       {
         title: "Commerciale",
         url: "/dashboard/commercial",
@@ -49,6 +57,7 @@ const groups: NavigationGroup[] = [
           { title: "Tutti i lead", url: "/dashboard/commercial/leads", capability: "canViewAssignedLeads" },
           { title: "Pipeline", url: "/dashboard/commercial/pipeline", capability: "canViewAssignedLeads" },
           { title: "Campagne", url: "/dashboard/campagne", capability: "canViewCampaigns" },
+          { title: "Analisi azienda", url: "/dashboard/company-intelligence", icon: ScanSearch, capability: "canViewAssignedLeads", featureKey: "crm.sales-intel" },
           { title: "Duplicati", url: "/dashboard/duplicati", capability: "canInspectDuplicates" },
         ],
       },
@@ -61,6 +70,7 @@ const groups: NavigationGroup[] = [
         items: [
           { title: "Attività", url: "/dashboard/attivita", capability: "canViewActivities" },
           { title: "Progetti", url: "/dashboard/progetti", capability: "canViewProjects" },
+          { title: "Flowboard", url: "/dashboard/flowboard", capability: "canViewProjects" },
           { title: "Scadenze", url: "/dashboard/scadenze", capability: "canViewProjects" },
         ],
       },
@@ -100,11 +110,6 @@ const groups: NavigationGroup[] = [
       { title: "Impostazioni", url: "/dashboard/impostazioni", icon: Settings },
     ],
   },
-  {
-    label: "",
-    separated: true,
-    items: [{ title: "Aiuto e tutorial", url: "/dashboard/supporto?view=tutorial", icon: CircleHelp }],
-  },
 ]
 
 function filterItem(
@@ -131,6 +136,18 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   footer?: React.ReactNode
 }
 
+function HelpMenu() {
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <SidebarMenuButton asChild tooltip="Aiuto e tutorial">
+          <Link href="/dashboard/supporto?view=tutorial"><CircleHelp /><span>Aiuto e tutorial</span></Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  )
+}
+
 function AppSidebarFrame({
   navigationGroups,
   tenantName,
@@ -138,16 +155,18 @@ function AppSidebarFrame({
   footer,
   ...props
 }: AppSidebarProps & { navigationGroups: NavigationGroup[] }) {
+  const pathname = usePathname()
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader className="px-2 pb-1 pt-3">
         <TeamSwitcher name={tenantName} slug={tenantSlug} />
       </SidebarHeader>
       <SidebarContent className="gap-0 pb-1">
-        <NavMain groups={navigationGroups} />
+        <NavMain key={pathname} groups={navigationGroups} />
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border/70 px-2 py-2">
-        {footer ?? <NavUser />}
+        {footer ?? <><HelpMenu /><NavUser /></>}
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
@@ -155,15 +174,46 @@ function AppSidebarFrame({
 }
 
 function DoflowAppSidebar(props: Omit<AppSidebarProps, "navigationGroups">) {
+  const pathname = usePathname()
   const { hasCapability } = useDoflowIdentity()
   const { activeModules } = usePlan()
+  const [unreadCount, setUnreadCount] = React.useState(0)
+  const teamSpace = pathname === "/dashboard/team-space"
+
+  React.useEffect(() => {
+    if (!hasCapability("canReadNotifications")) return
+    let active = true
+    const timer = window.setTimeout(() => {
+      void getTenantNotificationSummary().then((summary) => {
+        if (active) setUnreadCount(summary.unreadNotifications)
+      }).catch(() => {
+        if (active) setUnreadCount(0)
+      })
+    }, 0)
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+    }
+  }, [hasCapability])
+
   const visibleGroups = groups.map((group) => ({
     ...group,
     items: group.items.flatMap((item) => {
       const filtered = filterItem(item, hasCapability, activeModules)
-      return filtered ? [filtered] : []
+      return filtered ? [{ ...filtered, badge: filtered.url === "/dashboard/inbox" && unreadCount > 0 ? unreadCount : filtered.badge }] : []
     }),
   }))
+
+  if (teamSpace) {
+    return (
+      <Sidebar collapsible="icon" {...props}>
+        <SidebarHeader><TeamSpaceSidebarHeader /></SidebarHeader>
+        <SidebarContent data-flow-tour="flow-sidebar"><TeamSpaceSidebarContent /></SidebarContent>
+        <SidebarFooter className="border-t border-sidebar-border/70 px-2 py-2"><TeamSpaceSidebarFooter /></SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
+    )
+  }
 
   return <AppSidebarFrame navigationGroups={visibleGroups} {...props} />
 }

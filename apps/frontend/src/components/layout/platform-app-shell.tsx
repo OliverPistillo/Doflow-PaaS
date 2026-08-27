@@ -50,7 +50,7 @@ function pageTitle(pathname: string) {
 function PlatformHeader() {
   const pathname = usePathname()
   return (
-    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-3 border-b bg-background/90 px-4 backdrop-blur-xl sm:px-6">
+    <header className="sticky top-0 z-40 flex min-h-16 shrink-0 items-center gap-2 border-b bg-[var(--doflow-topbar)] px-2 backdrop-blur-xl transition-[width,height] ease-linear sm:px-4 group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
       <SidebarTrigger className="-ml-1 shrink-0" />
       <h1 className="min-w-0 flex-1 truncate text-base font-semibold sm:text-lg">{pageTitle(pathname)}</h1>
       <div className="hidden min-w-0 max-w-sm flex-1 sm:block"><SearchTriggerButton context="superadmin" /></div>

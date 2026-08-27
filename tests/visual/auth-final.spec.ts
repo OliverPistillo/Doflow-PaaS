@@ -21,6 +21,7 @@ async function authScreenshot(page: Page, filename: string, extraMasks: Locator[
   await page.screenshot({
     path: path.join(actualDir, filename),
     animations: 'disabled',
+    caret: 'initial',
     fullPage: true,
     mask: [page.locator('input'), ...extraMasks],
     maskColor: '#E2E8F0',
@@ -54,7 +55,7 @@ test('auth desktop: login Doflow coerente e accessibile', async ({ page }) => {
   expect(formBox?.x).toBeGreaterThanOrEqual(145);
   expect(formBox?.x).toBeLessThanOrEqual(180);
   await authScreenshot(page, 'auth-login-reference-desktop.png');
-  await expect(page.getByRole('button', { name: 'Tema predefinito Doflow' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Attiva tema scuro' })).toBeVisible();
   await expect(page.locator('html')).not.toHaveClass(/dark/);
 });
 
@@ -105,8 +106,8 @@ test('auth errore: credenziali invalide mostrano un messaggio generico', async (
   await page.getByLabel('Email').fill('visual@example.test');
   await page.getByLabel('Password', { exact: true }).fill('password-errata');
   await page.getByRole('button', { name: 'Accedi', exact: true }).click();
-  await expect(page.locator('.df-auth-error')).toContainText('Credenziali non valide');
-  await expect(page.locator('.df-auth-error')).not.toContainText('dettaglio interno');
+  await expect(page.locator('.auth-error')).toContainText('Credenziali non valide');
+  await expect(page.locator('.auth-error')).not.toContainText('dettaglio interno');
   await authScreenshot(page, 'auth-login-invalid.png');
 });
 

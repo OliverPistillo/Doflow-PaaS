@@ -126,7 +126,7 @@ function DoflowWorkspace({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider data-app-ui-generation="universal-v1" className="universal-app-shell">
-      <AppSidebar data-sidebar-kind="tenant" style={{ borderRightWidth: 0 }} />
+      <AppSidebar data-sidebar-kind="tenant" />
       <SidebarInset as="div" data-app-inset="true">
         <DashboardHeader />
         <main className="relative min-w-0 flex-1 overflow-y-auto" data-app-shell-ready="true" data-workspace-ready={workspaceReady ? "true" : "false"} data-workspace-status={workspaceStatus} data-secondary-status={secondaryStatus} aria-busy={loading}>
@@ -239,7 +239,7 @@ function GenericTenantWorkspace({ children, session }: { children: React.ReactNo
     <SidebarProvider data-app-ui-generation="universal-v1" className="universal-app-shell">
       <AppSidebar navigationGroups={navigationGroups} tenantName={tenantName} tenantSlug={tenantSlug} data-sidebar-kind="tenant" footer={<div className="flex items-center gap-2 px-1"><UserNav /><div className="min-w-0 group-data-[collapsible=icon]:hidden"><p className="truncate text-sm font-medium">{session.email || "Account"}</p><p className="truncate text-xs capitalize text-muted-foreground">{role}</p></div></div>} />
       <SidebarInset as="div" data-app-inset="true">
-        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b bg-background/90 px-4 backdrop-blur-xl lg:px-6">
+        <header className="sticky top-0 z-30 flex min-h-16 shrink-0 items-center gap-2 border-b bg-[var(--doflow-topbar)] px-2 backdrop-blur-xl transition-[width,height] ease-linear sm:px-4 group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
           <SidebarTrigger className="-ml-1 shrink-0" />
           <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{tenantName}</p></div>
           <div className="hidden min-w-0 max-w-sm flex-1 sm:block"><SearchTriggerButton context="tenant" /></div>

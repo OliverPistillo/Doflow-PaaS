@@ -14,6 +14,7 @@ export function ThemeToggle() {
   return <Tooltip><TooltipTrigger asChild><Button
       variant="ghost"
       size="icon"
+      suppressHydrationWarning
       onClick={() => setTheme(isDark ? "light" : "dark")}
       aria-label={isDark ? "Attiva tema chiaro" : "Attiva tema scuro"}
       className="mr-4 shrink-0"

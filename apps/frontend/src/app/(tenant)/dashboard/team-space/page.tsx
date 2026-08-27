@@ -62,6 +62,16 @@ function TeamSpaceContent() {
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
   }
 
+  if (activeTab === "chat") {
+    return (
+      <main className="min-w-0 p-2 sm:p-4" data-team-space-source="server" data-flow-tour="flow-team-space-call">
+        <div className="mx-auto max-w-[1600px]">
+          <TeamSpaceCollaboration sidebarMode />
+        </div>
+      </main>
+    )
+  }
+
   return (
     <main className="w-full space-y-5 p-4 md:p-6" data-team-space-source="server">
       <header className="flex items-start justify-between gap-4" data-flow-tour="team-space-header">
@@ -78,9 +88,7 @@ function TeamSpaceContent() {
 
       <Tabs value={activeTab} onValueChange={changeTab} className="space-y-4">
         <TabsList className="h-auto flex-wrap justify-start" data-flow-tour="team-space-tabs">
-          <TabsTrigger value="chat" className="gap-2">
-            <MessageCircle className="size-4" />Chat
-          </TabsTrigger>
+          <TabsTrigger value="chat" className="gap-2"><MessageCircle className="size-4" />Chat</TabsTrigger>
           <TabsTrigger value="presence" className="gap-2">
             <Activity className="size-4" />Presenze
           </TabsTrigger>
@@ -93,10 +101,6 @@ function TeamSpaceContent() {
             </TabsTrigger>
           ) : null}
         </TabsList>
-
-        <TabsContent value="chat" className="mt-0">
-          <TeamSpaceCollaboration />
-        </TabsContent>
 
         <TabsContent value="presence" className="mt-0">
           <TeamSpacePresence />

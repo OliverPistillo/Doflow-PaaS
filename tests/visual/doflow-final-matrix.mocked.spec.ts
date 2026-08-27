@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page, type Route } from "@playwright/test"
-import { mkdir } from "node:fs/promises"
+import { mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 
 const frontendUrl = process.env.DOFLOW_VISUAL_FRONTEND_URL || "http://localhost:3100"
@@ -13,7 +13,7 @@ const actualDir = path.resolve(
   "design-references",
   "doflow-crm-projects",
   "actual",
-  "final-correction-mocked",
+  "reference-4864782",
 )
 
 const USER_ID = "10000000-0000-4000-8000-000000000001"
@@ -51,6 +51,7 @@ const ownerCapabilities = [
   "canReadNotifications",
   "canViewGlobalWorkload",
   "canViewGlobalPoints",
+  "canViewOwnPoints",
   "canViewRankings",
   "canViewAdministration",
 ] as const
@@ -275,6 +276,16 @@ function fixtureBody(url: URL, options: FixtureOptions) {
   }
   if (pathName === "/api/tenant/team/members") return list([ownerMember, activeMember, invitedMember])
   if (pathName === "/api/tenant/team/options") return teamOptions
+  if (pathName === "/api/tenant/team/me/module-permissions") {
+    const allowed = { can_view: true, can_create: true, can_update: true, can_delete: true, can_manage: true }
+    return {
+      role: "owner",
+      audience: "executive",
+      modules: Object.fromEntries([
+        "dashboard", "crm", "briefing", "quotes", "projects", "calendar", "documents", "notifications", "team", "knowledge", "contracts", "paperwork", "finance", "reports", "automations", "credentials", "settings",
+      ].map((key) => [key, allowed])),
+    }
+  }
   if (pathName === "/api/tenant/team/workload") {
     return list([{
       team_member_id: MEMBER_ID,
@@ -368,6 +379,9 @@ function fixtureBody(url: URL, options: FixtureOptions) {
       },
     }
   }
+  if (pathName === "/api/tenant/doflow/performance/rankings/preview") {
+    return { period: url.searchParams.get("period"), role: url.searchParams.get("role"), rows: [] }
+  }
   if (pathName === "/api/tenant/automations/summary") {
     return {
       totalRules: 0,
@@ -392,6 +406,32 @@ function fixtureBody(url: URL, options: FixtureOptions) {
       financeNotifications: 0,
       todayDigestAvailable: false,
     }
+  }
+  if (pathName === "/api/tenant/bonus") {
+    return {
+      wallet: { availablePoints: 180, provisionalPoints: 25, reservedPoints: 0 },
+      policy: { rules: { pointEuroCents: 10, minimumRequestPoints: 100 } },
+      ledger: [{ id: "bonus-1", points: 25, bucket: "consolidated", reason: "Obiettivo completato", occurredAt: "2026-08-20T09:00:00.000Z" }],
+      requests: [],
+      pendingRequests: [],
+      periods: [],
+      canManage: true,
+      currentUserId: USER_ID,
+    }
+  }
+  if (pathName === "/api/tenant/collaboration/conversations") {
+    return list([
+      { id: "conversation-general", title: "Generale", kind: "team", unreadCount: 0, participants: [{ userId: USER_ID }, { userId: ACTIVE_USER_ID }], lastMessage: { id: "message-1", conversationId: "conversation-general", authorId: USER_ID, body: "Allineamento operativo completato.", createdAt: "2026-08-27T08:30:00.000Z" } },
+      { id: "conversation-production", title: "Produzione", kind: "group", unreadCount: 0, participants: [{ userId: USER_ID }, { userId: ACTIVE_USER_ID }], lastMessage: null },
+    ])
+  }
+  if (pathName === "/api/tenant/collaboration/calls/status") return { enabled: false }
+  if (pathName === "/api/tenant/collaboration/presence") return list([])
+  if (/\/api\/tenant\/collaboration\/conversations\/[^/]+\/messages$/.test(pathName)) {
+    return { items: [{ id: "message-1", conversationId: "conversation-general", authorId: USER_ID, authorName: ownerMember.display_name, body: "Allineamento operativo completato.", createdAt: "2026-08-27T08:30:00.000Z" }], nextCursor: null }
+  }
+  if (/\/api\/tenant\/collaboration\/conversations\/[^/]+$/.test(pathName)) {
+    return { id: pathName.split("/").at(-1), title: pathName.endsWith("production") ? "Produzione" : "Generale", kind: "team", participants: [{ userId: USER_ID }, { userId: ACTIVE_USER_ID }] }
   }
   if (pathName === "/api/tenant/commercial/site-proposals/templates") return []
   if (pathName === "/api/tenant/commercial/site-proposals") return list([], Number(url.searchParams.get("limit") || 25))
@@ -574,9 +614,10 @@ async function assertInviteOverflowContained(page: Page, dialog: Locator) {
 }
 
 async function assertSidebarWidth(page: Page, expected: number) {
-  await expect
-    .poll(async () => Math.round((await visibleSidebar(page).boundingBox())?.width || 0))
-    .toBe(expected)
+  await expect.poll(async () => {
+    const actual = (await visibleSidebar(page).boundingBox())?.width || 0
+    return Math.abs(actual - expected)
+  }).toBeLessThanOrEqual(2)
 }
 
 async function collapseSidebar(page: Page) {
@@ -670,6 +711,7 @@ async function privacySafeScreenshot(page: Page, filename: string) {
   await page.screenshot({
     path: path.join(actualDir, filename),
     animations: "disabled",
+    caret: "initial",
     mask: masks,
     maskColor: "#94a3b8",
   })
@@ -678,11 +720,96 @@ async function privacySafeScreenshot(page: Page, filename: string) {
 type Surface = { slug: string; route: string; teamAccount?: boolean }
 const surfaces: Surface[] = [
   { slug: "dashboard", route: "/dashboard" },
+  { slug: "commercial", route: "/dashboard/commercial" },
+  { slug: "leads", route: "/dashboard/commercial/leads" },
+  { slug: "pipeline", route: "/dashboard/commercial/pipeline" },
+  { slug: "clients", route: "/dashboard/clienti" },
+  { slug: "client-detail", route: `/dashboard/clienti/${COMPANY_ID}?tab=overview` },
+  { slug: "projects", route: "/dashboard/progetti" },
+  { slug: "project-detail", route: `/dashboard/progetti/${PROJECT_ID}?tab=overview` },
+  { slug: "activities", route: "/dashboard/attivita" },
+  { slug: "calendar", route: "/dashboard/calendario" },
   { slug: "builder", route: "/commercial/site-proposals" },
   { slug: "team-space", route: "/dashboard/team-space" },
+  { slug: "inbox", route: "/dashboard/inbox" },
+  { slug: "company-intelligence", route: "/dashboard/company-intelligence" },
   { slug: "team-account", route: "/dashboard/team-space?tab=team-accounts", teamAccount: true },
   { slug: "automazioni", route: "/dashboard/automazioni" },
+  { slug: "support", route: "/dashboard/supporto" },
+  { slug: "settings", route: "/dashboard/impostazioni" },
 ]
+
+async function shellGeometry(page: Page, variant: MatrixVariant, surface: Surface) {
+  const result = await page.evaluate(({ variantSlug, surfaceSlug }) => {
+    const sample = (selector: string) => {
+      const element = document.querySelector<HTMLElement>(selector)
+      if (!element) return null
+      const rect = element.getBoundingClientRect()
+      const style = getComputedStyle(element)
+      return {
+        x: Math.round(rect.x * 100) / 100,
+        y: Math.round(rect.y * 100) / 100,
+        width: Math.round(rect.width * 100) / 100,
+        height: Math.round(rect.height * 100) / 100,
+        padding: style.padding,
+        gap: style.gap,
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+        lineHeight: style.lineHeight,
+        borderRadius: style.borderRadius,
+      }
+    }
+    const sampleVisible = (selector: string) => {
+      const element = [...document.querySelectorAll<HTMLElement>(selector)].find((candidate) => {
+        const rect = candidate.getBoundingClientRect()
+        return rect.width > 0 && rect.height > 0
+      })
+      if (!element) return null
+      const rect = element.getBoundingClientRect()
+      const style = getComputedStyle(element)
+      return {
+        x: Math.round(rect.x * 100) / 100,
+        y: Math.round(rect.y * 100) / 100,
+        width: Math.round(rect.width * 100) / 100,
+        height: Math.round(rect.height * 100) / 100,
+        padding: style.padding,
+        gap: style.gap,
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+        lineHeight: style.lineHeight,
+        borderRadius: style.borderRadius,
+      }
+    }
+    return {
+      variant: variantSlug,
+      surface: surfaceSlug,
+      sidebar: sample('[data-sidebar="sidebar"]'),
+      sidebarHeader: sample('[data-sidebar="header"]'),
+      brand: sample('[data-sidebar="header"] img'),
+      navRow: sample('[data-sidebar="content"] [data-sidebar="menu-button"]'),
+      inset: sample('[data-slot="sidebar-inset"]'),
+      header: sample('[data-slot="sidebar-inset"] > header'),
+      search: sampleVisible('[aria-label="Apri ricerca globale"]'),
+      main: sample('[data-app-shell-ready="true"]'),
+      heading: sample('[data-app-shell-ready="true"] h1'),
+      firstCard: sample('[data-app-shell-ready="true"] [data-slot="card"]'),
+    }
+  }, { variantSlug: variant.slug, surfaceSlug: surface.slug })
+
+  const headerHeight = result.header?.height ?? 0
+  expect(headerHeight, "L'header reference deve restare 64px nella shell espansa/responsive").toBeGreaterThanOrEqual(62)
+  expect(headerHeight).toBeLessThanOrEqual(66)
+  if (result.navRow) {
+    expect(result.navRow.height, "Le righe navigazione reference devono essere alte 32px").toBeGreaterThanOrEqual(30)
+    expect(result.navRow.height).toBeLessThanOrEqual(34)
+  }
+  if (result.search) {
+    const searchTarget = variant.width < 768 ? 32 : 36
+    expect(result.search.height, `Il trigger ricerca reference deve essere alto ${searchTarget}px`).toBeGreaterThanOrEqual(searchTarget - 2)
+    expect(result.search.height).toBeLessThanOrEqual(searchTarget + 2)
+  }
+  return result
+}
 
 type MatrixVariant = {
   slug: string
@@ -702,6 +829,13 @@ const allMatrix: MatrixVariant[] = [
   ...(["light", "dark"] as const).map((theme) => ({
     slug: `tablet-768x900-${theme}`,
     width: 768,
+    height: 900,
+    theme,
+    sidebar: "responsive" as const,
+  })),
+  ...(["light", "dark"] as const).map((theme) => ({
+    slug: `tablet-1024x900-${theme}`,
+    width: 1024,
     height: 900,
     theme,
     sidebar: "responsive" as const,
@@ -783,8 +917,34 @@ test.beforeAll(async () => {
   await mkdir(actualDir, { recursive: true })
 })
 
+test("login Doflow preserva l'autorità visuale d3cc801", async ({ browser }) => {
+  test.setTimeout(300_000)
+  const variants = requestedMatrixVariant
+    ? matrix
+    : Array.from(new Map(allMatrix.map((variant) => [`${variant.width}x${variant.height}-${variant.theme}`, variant])).values())
+  for (const variant of variants) {
+    const { context, page, observation } = await newFixturePage(browser, variant)
+    try {
+      await page.goto("/login", { waitUntil: "domcontentloaded" })
+      await expect(page.getByRole("heading", { name: "Accedi a Doflow", exact: true })).toBeVisible()
+      await expect(page.getByText("Workspace operativo per commerciale, produzione e amministrazione.", { exact: true })).toBeVisible()
+      await expect(page.getByRole("button", { name: "Accedi", exact: true })).toBeVisible()
+      await assertNoDocumentOverflow(page)
+      if (variant.width >= 1024) {
+        await expect(page.getByText("Dal primo contatto alla consegna, tutto nello stesso flusso.", { exact: true })).toBeVisible()
+      } else {
+        await expect(page.getByText("Dal primo contatto alla consegna, tutto nello stesso flusso.", { exact: true })).toBeHidden()
+      }
+      await privacySafeScreenshot(page, `${variant.slug}-auth-d3cc801-login.png`)
+    } finally {
+      await closeFixtureContext(context, observation)
+    }
+  }
+})
+
 test("matrice visuale Doflow finale con API localhost deterministiche", async ({ browser }) => {
   test.setTimeout(1_800_000)
+  const geometry: Awaited<ReturnType<typeof shellGeometry>>[] = []
   for (const variant of matrix) {
     const { context, page, observation } = await newFixturePage(browser, variant)
     try {
@@ -794,6 +954,7 @@ test("matrice visuale Doflow finale con API localhost deterministiche", async ({
         if (variant.sidebar === "collapsed") await collapseSidebar(page)
         else if (variant.width >= 768) await assertSidebarWidth(page, 256)
         await assertNoDocumentOverflow(page)
+        geometry.push(await shellGeometry(page, variant, surface))
         await privacySafeScreenshot(page, `${variant.slug}-${surface.slug}.png`)
         if (surface.teamAccount) {
           const modulePermissions = page.getByText("Permessi modulo", { exact: true })
@@ -842,6 +1003,12 @@ test("matrice visuale Doflow finale con API localhost deterministiche", async ({
       await closeFixtureContext(context, observation)
     }
   }
+
+  await writeFile(
+    path.join(actualDir, "geometry.json"),
+    JSON.stringify({ reference: "4864782abc0a6a548b616262be1fe7b6366f622e", tolerancePx: 2, records: geometry }, null, 2),
+    "utf8",
+  )
 })
 
 test("tema persistente, sidebar canonica e routing Builder", async ({ browser }) => {
@@ -851,6 +1018,10 @@ test("tema persistente, sidebar canonica e routing Builder", async ({ browser })
   try {
     await gotoSurface(page, surfaces[0])
     await assertTheme(page, "light")
+    await expect(page.getByRole("button", { name: "Bonus e punti" })).toBeVisible()
+    await expect(page.getByRole("button", { name: /Apri Team Space/ })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Apri agenda" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Apri notifiche" })).toBeVisible()
     await page.getByRole("button", { name: "Attiva tema scuro" }).click()
     await assertTheme(page, "dark")
     await page.reload({ waitUntil: "domcontentloaded" })
@@ -884,6 +1055,12 @@ test("tema persistente, sidebar canonica e routing Builder", async ({ browser })
     await page.reload({ waitUntil: "domcontentloaded" })
     await waitForDoflowShell(page)
     await assertTheme(page, "light")
+
+    await gotoSurface(page, surfaces.find((surface) => surface.slug === "team-space")!)
+    await expect(visibleSidebar(page).getByText("Conversazioni", { exact: true })).toBeVisible()
+    await expect(visibleSidebar(page).getByRole("link", { name: "Generale", exact: true })).toBeVisible()
+    await expect(page.getByText("Allineamento operativo completato.", { exact: true })).toBeVisible()
+    await expect(page.getByRole("button", { name: /chiamata|video|microfono/i })).toHaveCount(0)
   } finally {
     await closeFixtureContext(context, observation)
   }

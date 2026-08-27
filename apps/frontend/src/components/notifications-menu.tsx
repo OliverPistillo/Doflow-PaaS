@@ -25,9 +25,14 @@ function LoadingNotifications() {
   return <div className="space-y-3 p-3" aria-label="Caricamento notifiche"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-5/6" /><Skeleton className="h-10 w-4/5" /></div>
 }
 
-export function NotificationsMenu() {
+export function NotificationsMenu({ open: controlledOpen, onOpenChange }: { open?: boolean; onOpenChange?: (open: boolean) => void } = {}) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = controlledOpen ?? internalOpen
+  const setOpen = (value: boolean) => {
+    if (controlledOpen === undefined) setInternalOpen(value)
+    onOpenChange?.(value)
+  }
   const { notifications, summary, loading, markRead, markAllRead } = useDoflowNotifications()
   const unread = summary.unreadNotifications
   const recent = notifications.filter((item) => !item.archived).slice(0, 5)

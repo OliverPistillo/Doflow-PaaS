@@ -16,24 +16,24 @@ export function TeamSwitcher({ name = "Doflow", slug = "doflow" }: TeamSwitcherP
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <SidebarMenuButton asChild size="lg" tooltip={name} className="h-[50px] px-1 hover:bg-transparent data-[active=true]:bg-transparent">
+        <SidebarMenuButton asChild size="lg" tooltip={`Vai alla Panoramica di ${name}`} className="transition-none">
           <Link href="/dashboard" aria-label={`Vai alla Panoramica di ${name}`}>
             {isDoflow ? (
               <>
-                <span className="hidden size-8 shrink-0 items-center justify-center group-data-[collapsible=icon]:flex">
-                  <Image src="/icon-192.png" alt="Doflow" width={30} height={30} className="size-8 object-contain" />
+                <span className="hidden size-9 shrink-0 items-center justify-center group-data-[collapsible=icon]:flex">
+                  <Image src="/icon-192.png" alt="Doflow" width={28} height={28} className="size-7 object-contain" />
                 </span>
-                <span className="flex min-w-0 items-center group-data-[collapsible=icon]:hidden">
-                  <Image src="/logo_doflow_nero.png" alt="Doflow" width={120} height={24} className="object-contain dark:hidden" loading="eager" />
-                  <Image src="/logo_doflow_bianco.png" alt="" aria-hidden="true" width={120} height={24} className="hidden object-contain dark:block" loading="eager" />
+                <span className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                  <Image src="/logo_doflow_nero.png" alt="Doflow" width={120} height={24} className="h-auto w-[120px] object-contain dark:hidden" priority />
+                  <Image src="/logo_doflow_bianco.png" alt="" aria-hidden="true" width={120} height={24} className="hidden h-auto w-[120px] object-contain dark:block" priority />
                 </span>
               </>
             ) : (
               <>
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <Building2 className="size-4" aria-hidden="true" />
                 </span>
-                <span className="min-w-0 truncate font-semibold group-data-[collapsible=icon]:hidden">{name}</span>
+                <span className="min-w-0 flex-1 truncate font-semibold group-data-[collapsible=icon]:hidden">{name}</span>
               </>
             )}
           </Link>

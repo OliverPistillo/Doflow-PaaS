@@ -328,10 +328,10 @@ export function auditShellContracts(sourceRoot = FRONTEND_SOURCE) {
   if (!/isDoflow/.test(tenantShell) || !/DoflowIdentityProvider/.test(tenantShell)) findings.push("components/layout/tenant-app-shell.tsx: Doflow extensions must stay explicit and isolated")
   if (!/PlatformAppShell/.test(platformLayout) || !/\/auth\/me/.test(platformLayout) || !/tenant\s*===\s*["']public["']/.test(platformLayout)) findings.push("app/superadmin/layout.tsx: PlatformAppShell must preserve the platform auth boundary")
   if (!/SidebarProvider/.test(platformShell) || !/SuperAdminSidebar/.test(platformShell)) findings.push("components/layout/platform-app-shell.tsx: platform shell must use the shared sidebar primitive")
-  if (!/SIDEBAR_WIDTH\s*=\s*["']15\.5rem["']/.test(sidebar) || !/SIDEBAR_WIDTH_MOBILE\s*=\s*["']18rem["']/.test(sidebar) || !/SIDEBAR_WIDTH_ICON\s*=\s*["']3rem["']/.test(sidebar)) findings.push("components/ui/sidebar.tsx: canonical 15.5rem/18rem/3rem geometry changed")
+  if (!/SIDEBAR_WIDTH\s*=\s*["']16rem["']/.test(sidebar) || !/SIDEBAR_WIDTH_MOBILE\s*=\s*["']18rem["']/.test(sidebar) || !/SIDEBAR_WIDTH_ICON\s*=\s*["']3rem["']/.test(sidebar)) findings.push("components/ui/sidebar.tsx: reference 4864782 16rem/18rem/3rem geometry changed")
   const builderItems = [...appSidebar.matchAll(/title\s*:\s*["']Builder["']/g)]
   if (builderItems.length !== 1 || !/title\s*:\s*["']Builder["'][^\n]*url\s*:\s*["']\/commercial\/site-proposals["'][^\n]*capability\s*:\s*["']canUseBuilder["']/.test(appSidebar)) findings.push("components/app-sidebar.tsx: Builder must remain one top-level canUseBuilder item")
-  if (!/hasCapability\(["']canUseBuilder["']\)/.test(header)) findings.push("components/dashboard-header.tsx: Builder shortcut must remain capability-gated")
+  if (/SiteProposalDialog|data-flow-tour=["']flow-builder["']/.test(header)) findings.push("components/dashboard-header.tsx: reference 4864782 keeps Builder out of the header shortcuts")
   if (!/hasCapability\(["']canUseBuilder["']\)/.test(builderGate)) findings.push("components/tenant-site-proposals/site-proposals-access-gate.tsx: Builder route gate must remain capability-gated")
   for (const [route, capability] of [
     ["/dashboard/inbox", "canReadNotifications"],

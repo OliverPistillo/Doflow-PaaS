@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import {
   AtSign,
   ChevronLeft,
@@ -75,10 +76,12 @@ function messageAssets(message: CollaborationMessage) {
   });
 }
 
-export function TeamSpaceCollaboration() {
+export function TeamSpaceCollaboration({ sidebarMode = false }: { sidebarMode?: boolean } = {}) {
   const identity = useDoflowIdentity();
+  const searchParams = useSearchParams();
+  const linkedChannel = searchParams.get("channel");
   const [conversations, setConversations] = React.useState<CollaborationConversation[]>([]);
-  const [selectedId, setSelectedId] = React.useState<string>();
+  const [fallbackSelectedId, setSelectedId] = React.useState<string | undefined>(linkedChannel ?? undefined);
   const [messages, setMessages] = React.useState<CollaborationMessage[]>([]);
   const [messageCursor, setMessageCursor] = React.useState<string | null>();
   const [loadingConversations, setLoadingConversations] = React.useState(true);
@@ -96,7 +99,19 @@ export function TeamSpaceCollaboration() {
   const [newParticipants, setNewParticipants] = React.useState<string[]>([]);
   const [callStatus, setCallStatus] = React.useState<CollaborationCallStatus>({ enabled: false });
 
+  const selectedId = linkedChannel && conversations.some((item) => item.id === linkedChannel)
+    ? linkedChannel
+    : fallbackSelectedId;
   const selected = conversations.find((item) => item.id === selectedId);
+
+  const selectConversation = React.useCallback((conversationId?: string) => {
+    setSelectedId(conversationId);
+    if (!conversationId) return;
+    const params = new URLSearchParams(window.location.search);
+    params.delete("tab");
+    params.set("channel", conversationId);
+    window.history.replaceState(null, "", window.location.pathname + "?" + params.toString());
+  }, []);
 
   const loadConversations = React.useCallback(async () => {
     setLoadingConversations(true);
@@ -226,7 +241,7 @@ export function TeamSpaceCollaboration() {
         participantIds: newParticipants,
       });
       setConversations((current) => [item, ...current.filter((entry) => entry.id !== item.id)]);
-      setSelectedId(item.id);
+      selectConversation(item.id);
       setNewTitle("");
       setNewParticipants([]);
       setShowCreate(false);
@@ -265,9 +280,9 @@ export function TeamSpaceCollaboration() {
   };
 
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="grid min-h-[36rem] p-0 lg:grid-cols-[18rem_minmax(0,1fr)]">
-        <aside className={"border-r " + (selectedId ? "hidden lg:flex" : "flex") + " flex-col"}>
+    <Card className={"overflow-hidden " + (sidebarMode ? "h-[calc(100dvh-5rem)] min-h-[35rem] rounded-xl" : "")}>
+      <CardContent className={"grid h-full min-h-[36rem] p-0 " + (sidebarMode ? "grid-cols-1" : "lg:grid-cols-[18rem_minmax(0,1fr)]")}>
+        <aside className={(sidebarMode ? "hidden" : "border-r " + (selectedId ? "hidden lg:flex" : "flex")) + " flex-col"}>
           <div className="flex items-center justify-between gap-2 p-3">
             <div>
               <p className="font-semibold">Conversazioni</p>
@@ -322,7 +337,7 @@ export function TeamSpaceCollaboration() {
                 <button
                   key={conversation.id}
                   type="button"
-                  onClick={() => setSelectedId(conversation.id)}
+                  onClick={() => selectConversation(conversation.id)}
                   className={"flex w-full items-start gap-3 rounded-xl p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring "
                     + (selectedId === conversation.id ? "bg-accent text-accent-foreground" : "hover:bg-muted")}
                 >
@@ -344,7 +359,7 @@ export function TeamSpaceCollaboration() {
           </ScrollArea>
         </aside>
 
-        <section className={"min-w-0 " + (!selectedId ? "hidden lg:flex" : "flex") + " flex-col"}>
+        <section className={"min-w-0 " + (!selectedId && !sidebarMode ? "hidden lg:flex" : "flex") + " flex-col"}>
           {!selected ? (
             <div className="grid flex-1 place-items-center p-8 text-center text-muted-foreground">
               <div>
@@ -355,7 +370,7 @@ export function TeamSpaceCollaboration() {
           ) : (
             <>
               <header className="flex min-h-16 items-center gap-2 border-b px-3 sm:px-4">
-                <Button type="button" size="icon-sm" variant="ghost" className="lg:hidden" onClick={() => setSelectedId(undefined)} aria-label="Torna alle conversazioni">
+                <Button type="button" size="icon-sm" variant="ghost" className={sidebarMode ? "hidden" : "lg:hidden"} onClick={() => setSelectedId(undefined)} aria-label="Torna alle conversazioni">
                   <ChevronLeft className="size-4" />
                 </Button>
                 <div className="min-w-0 flex-1">
