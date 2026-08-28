@@ -40,11 +40,12 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20.19.6
-          cache: pnpm
 
       - name: Enable the repository pnpm version
         shell: pwsh
-        run: corepack enable
+        run: |
+          corepack enable
+          pnpm --version
 
       - name: Install locked dependencies
         shell: pwsh
@@ -79,13 +80,14 @@ jobs:
     name: Check explicit release enable gate
     needs: validate
     runs-on: windows-latest
+    environment: desktop-release
     permissions:
       contents: read
     outputs:
       enabled: ${{ steps.gate.outputs.enabled }}
     steps:
       - id: gate
-        name: Read repository release gate
+        name: Read environment release gate
         shell: pwsh
         env:
           DESKTOP_RELEASE_ENABLED: ${{ vars.DESKTOP_RELEASE_ENABLED }}
@@ -113,13 +115,16 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 20.19.6
-          cache: pnpm
 
-      - name: Enable pnpm and install locked dependencies
+      - name: Enable the repository pnpm version
         shell: pwsh
         run: |
           corepack enable
-          pnpm install --frozen-lockfile
+          pnpm --version
+
+      - name: Install locked dependencies
+        shell: pwsh
+        run: pnpm install --frozen-lockfile
 
       - name: Validate signing configuration without printing it
         shell: pwsh

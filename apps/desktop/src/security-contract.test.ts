@@ -76,12 +76,26 @@ describe("automatic Desktop versioning", () => {
 
 describe("Desktop release workflow", () => {
   const workflow = readFileSync(resolve(desktopRoot, "../../.github/workflows/desktop-release.yml"), "utf8");
+  const validateJob = workflow.slice(workflow.indexOf("  validate:"), workflow.indexOf("  release-gate:"));
+  const releaseGateJob = workflow.slice(workflow.indexOf("  release-gate:"), workflow.indexOf("  release:"));
+  const releaseJob = workflow.slice(workflow.indexOf("  release:"));
 
   it("validates on main while publication remains explicitly gated", () => {
     expect(workflow).toContain("branches: [main]");
-    expect(workflow).toContain("DESKTOP_RELEASE_ENABLED");
-    expect(workflow).toContain("if: needs.release-gate.outputs.enabled == 'true' && github.ref == 'refs/heads/main'");
-    expect(workflow).toContain("environment: desktop-release");
+    expect(releaseGateJob).toContain("environment: desktop-release");
+    expect(releaseGateJob).toContain("DESKTOP_RELEASE_ENABLED: ${{ vars.DESKTOP_RELEASE_ENABLED }}");
+    expect(releaseJob).toContain("if: needs.release-gate.outputs.enabled == 'true' && github.ref == 'refs/heads/main'");
+    expect(releaseJob).toContain("environment: desktop-release");
+  });
+
+  it("bootstraps the repository pnpm version before every Windows dependency install", () => {
+    for (const job of [validateJob, releaseJob]) {
+      expect(job).not.toContain("cache: pnpm");
+      expect(job.indexOf("actions/setup-node@")).toBeGreaterThan(-1);
+      expect(job.indexOf("corepack enable")).toBeGreaterThan(job.indexOf("actions/setup-node@"));
+      expect(job.indexOf("pnpm --version")).toBeGreaterThan(job.indexOf("corepack enable"));
+      expect(job.indexOf("pnpm install --frozen-lockfile")).toBeGreaterThan(job.indexOf("pnpm --version"));
+    }
   });
 
   it("builds the triggering SHA and validates signed draft artifacts before publishing", () => {
