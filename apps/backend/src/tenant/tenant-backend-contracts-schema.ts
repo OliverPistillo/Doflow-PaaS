@@ -3,11 +3,46 @@ import { safeSchema } from '../common/schema.utils';
 
 type Queryable = { query(sql: string, parameters?: unknown[]): Promise<any> };
 
+type ConditionalStatement = Readonly<{
+  sql: string;
+  requiresExistingTable: string;
+}>;
+
+type ProvisioningStatement = string | ConditionalStatement;
+
+function whenTableExists(
+  requiresExistingTable: string,
+  sql: string,
+): ConditionalStatement {
+  return { requiresExistingTable, sql };
+}
+
+async function tableExists(
+  target: Queryable,
+  schemaValue: string,
+  tableValue: string,
+): Promise<boolean> {
+  const schema = safeSchema(schemaValue, 'tableExists.schema');
+  const table = safeSchema(tableValue, 'tableExists.table');
+  const rows = await target.query(
+    `SELECT EXISTS (
+      SELECT 1
+      FROM pg_catalog.pg_class c
+      JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = $1
+        AND c.relname = $2
+        AND c.relkind IN ('r', 'p')
+    ) AS exists`,
+    [schema, table],
+  );
+  return Array.isArray(rows) && rows[0]?.exists === true;
+}
+
 async function provision(target: Queryable, schemaValue: string) {
   const s = safeSchema(schemaValue, 'ensureTenantBackendContractTables');
   if (s === 'public') throw new Error('Backend contract tables cannot be provisioned in public');
   await target.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
-  const statements = [
+  const statements: ProvisioningStatement[] = [
     `CREATE TABLE IF NOT EXISTS "${s}".calendar_integration_preferences (
       user_id UUID PRIMARY KEY, enabled_categories TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
       ics_token_hash TEXT, ics_token_suffix TEXT, token_created_at TIMESTAMPTZ,
@@ -35,12 +70,18 @@ async function provision(target: Queryable, schemaValue: string) {
     `CREATE TABLE IF NOT EXISTS "${s}".company_intelligence_exports (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), report_id UUID NOT NULL, actor_user_id UUID NOT NULL,
       format TEXT NOT NULL CHECK (format IN ('json','csv')), created_at TIMESTAMPTZ NOT NULL DEFAULT now())`,
-    `ALTER TABLE "${s}".company_intelligence_reports ADD COLUMN IF NOT EXISTS optimistic_version INTEGER NOT NULL DEFAULT 1`,
-    `ALTER TABLE "${s}".flowboards ADD COLUMN IF NOT EXISTS project_id UUID`,
-    `ALTER TABLE "${s}".flowboards ADD COLUMN IF NOT EXISTS is_template BOOLEAN NOT NULL DEFAULT false`,
-    `ALTER TABLE "${s}".flowboards ADD COLUMN IF NOT EXISTS template_key TEXT`,
-    `CREATE INDEX IF NOT EXISTS idx_flowboards_project ON "${s}".flowboards(project_id) WHERE deleted_at IS NULL`,
-    `CREATE INDEX IF NOT EXISTS idx_flowboards_template ON "${s}".flowboards(is_template) WHERE deleted_at IS NULL`,
+    whenTableExists('company_intelligence_reports',
+      `ALTER TABLE "${s}".company_intelligence_reports ADD COLUMN IF NOT EXISTS optimistic_version INTEGER NOT NULL DEFAULT 1`),
+    whenTableExists('flowboards',
+      `ALTER TABLE "${s}".flowboards ADD COLUMN IF NOT EXISTS project_id UUID`),
+    whenTableExists('flowboards',
+      `ALTER TABLE "${s}".flowboards ADD COLUMN IF NOT EXISTS is_template BOOLEAN NOT NULL DEFAULT false`),
+    whenTableExists('flowboards',
+      `ALTER TABLE "${s}".flowboards ADD COLUMN IF NOT EXISTS template_key TEXT`),
+    whenTableExists('flowboards',
+      `CREATE INDEX IF NOT EXISTS idx_flowboards_project ON "${s}".flowboards(project_id) WHERE deleted_at IS NULL`),
+    whenTableExists('flowboards',
+      `CREATE INDEX IF NOT EXISTS idx_flowboards_template ON "${s}".flowboards(is_template) WHERE deleted_at IS NULL`),
     `CREATE TABLE IF NOT EXISTS "${s}".customer_inbox_conversations (
       company_id UUID PRIMARY KEY, status TEXT NOT NULL DEFAULT 'open', priority TEXT NOT NULL DEFAULT 'normal',
       assigned_to_id UUID, supervisor_id UUID, due_at TIMESTAMPTZ, category TEXT,
@@ -57,11 +98,16 @@ async function provision(target: Queryable, schemaValue: string) {
     `CREATE TABLE IF NOT EXISTS "${s}".customer_inbox_receipts (
       company_id UUID NOT NULL, user_id UUID NOT NULL, read_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       PRIMARY KEY(company_id,user_id))`,
-    `ALTER TABLE "${s}".commercial_communications ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ`,
-    `ALTER TABLE "${s}".commercial_communications ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ`,
-    `ALTER TABLE "${s}".commercial_communications ADD COLUMN IF NOT EXISTS idempotency_key TEXT`,
-    `ALTER TABLE IF EXISTS "${s}".order_items ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS uq_commercial_communications_idempotency ON "${s}".commercial_communications(idempotency_key) WHERE idempotency_key IS NOT NULL`,
+    whenTableExists('commercial_communications',
+      `ALTER TABLE "${s}".commercial_communications ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ`),
+    whenTableExists('commercial_communications',
+      `ALTER TABLE "${s}".commercial_communications ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ`),
+    whenTableExists('commercial_communications',
+      `ALTER TABLE "${s}".commercial_communications ADD COLUMN IF NOT EXISTS idempotency_key TEXT`),
+    whenTableExists('order_items',
+      `ALTER TABLE "${s}".order_items ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ`),
+    whenTableExists('commercial_communications',
+      `CREATE UNIQUE INDEX IF NOT EXISTS uq_commercial_communications_idempotency ON "${s}".commercial_communications(idempotency_key) WHERE idempotency_key IS NOT NULL`),
     `CREATE TABLE IF NOT EXISTS "${s}".commerce_settings (
       singleton BOOLEAN PRIMARY KEY DEFAULT true CHECK (singleton), auto_number_orders BOOLEAN NOT NULL DEFAULT true,
       require_deposit BOOLEAN NOT NULL DEFAULT false, require_signed_contract BOOLEAN NOT NULL DEFAULT true,
@@ -160,7 +206,22 @@ async function provision(target: Queryable, schemaValue: string) {
       duty_id UUID NOT NULL, user_id UUID NOT NULL, version INTEGER NOT NULL,
       read_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY(duty_id,user_id,version))`,
   ];
-  for (const statement of statements) await target.query(statement);
+  const existingTables = new Map<string, boolean>();
+  for (const statement of statements) {
+    if (typeof statement === 'string') {
+      await target.query(statement);
+      continue;
+    }
+    if (!existingTables.has(statement.requiresExistingTable)) {
+      existingTables.set(
+        statement.requiresExistingTable,
+        await tableExists(target, s, statement.requiresExistingTable),
+      );
+    }
+    if (existingTables.get(statement.requiresExistingTable)) {
+      await target.query(statement.sql);
+    }
+  }
 }
 
 export async function ensureTenantBackendContractTables(target: Queryable, schema: string) {

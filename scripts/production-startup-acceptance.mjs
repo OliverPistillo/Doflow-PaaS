@@ -443,7 +443,11 @@ function cloneEmptyTenantAt185(database) {
     DECLARE source_table record;
     BEGIN
       FOR source_table IN
-        SELECT tablename FROM pg_tables WHERE schemaname='acceptance_secondary' ORDER BY tablename
+        SELECT tablename
+        FROM pg_tables
+        WHERE schemaname='acceptance_secondary'
+          AND tablename <> 'commercial_communications'
+        ORDER BY tablename
       LOOP
         EXECUTE format(
           'CREATE TABLE acceptance_empty.%I (LIKE acceptance_secondary.%I INCLUDING ALL)',
@@ -477,22 +481,48 @@ function cloneEmptyTenantAt185(database) {
        + (SELECT COUNT(*) FROM acceptance_empty.opportunities)
        + (SELECT COUNT(*) FROM acceptance_empty.projects)`,
   )[0] || 0);
-  if (registryCount !== 3 || clonedTableCount === 0 || keyBusinessRows !== 0) {
+  const missingCommercialCommunications = Number(psqlLines(
+    database,
+    "SELECT COUNT(*)::int FROM information_schema.tables WHERE table_schema='acceptance_empty' AND table_name='commercial_communications'",
+  )[0] || 0) === 0;
+  if (registryCount !== 3 || clonedTableCount === 0 || keyBusinessRows !== 0 || !missingCommercialCommunications) {
     throw new Error("The empty 185-compatible tenant fixture is not isolated or empty.");
   }
-  return { registryCount, clonedTableCount, keyBusinessRows };
+  return {
+    registryCount,
+    clonedTableCount,
+    keyBusinessRows,
+    omittedPreExistingOptionalTables: ["commercial_communications"],
+  };
 }
 
 function contractArtifactEvidence(database, schema) {
   if (!contractTenantSchemas.includes(schema)) throw new Error(`Unexpected acceptance schema ${schema}.`);
-  const hasOrderItems = Number(psqlLines(
+  const preExistingOptionalTables = [
+    "company_intelligence_reports",
+    "flowboards",
+    "commercial_communications",
+    "order_items",
+  ];
+  const existingOptionalTables = new Set(psqlLines(
     database,
-    `SELECT COUNT(*)::int FROM information_schema.tables
-     WHERE table_schema='${schema}' AND table_name='order_items'`,
-  )[0] || 0) === 1;
-  const applicableAdditiveColumns = hasOrderItems
-    ? additiveColumns
-    : additiveColumns.filter((column) => column !== "order_items.archived_at");
+    `SELECT table_name FROM information_schema.tables
+     WHERE table_schema='${schema}'
+       AND table_type='BASE TABLE'
+       AND table_name IN (${sqlLiteralList(preExistingOptionalTables)})
+     ORDER BY table_name`,
+  ));
+  const applicableAdditiveColumns = additiveColumns.filter((column) =>
+    existingOptionalTables.has(column.split(".", 1)[0]));
+  const applicableIndexes = contractIndexes.filter((index) => {
+    if (["idx_flowboards_project", "idx_flowboards_template"].includes(index)) {
+      return existingOptionalTables.has("flowboards");
+    }
+    if (index === "uq_commercial_communications_idempotency") {
+      return existingOptionalTables.has("commercial_communications");
+    }
+    return true;
+  });
   const tableRows = psqlLines(
     database,
     `SELECT table_name FROM information_schema.tables
@@ -510,7 +540,7 @@ function contractArtifactEvidence(database, schema) {
   const indexRows = psqlLines(
     database,
     `SELECT indexname || '|' || indexdef FROM pg_indexes
-     WHERE schemaname='${schema}' AND indexname IN (${sqlLiteralList(contractIndexes)})
+     WHERE schemaname='${schema}' AND indexname IN (${sqlLiteralList(applicableIndexes)})
      ORDER BY indexname`,
   );
   const metadataKeys = [
@@ -567,7 +597,7 @@ function contractArtifactEvidence(database, schema) {
   if (JSON.stringify(columns) !== JSON.stringify([...applicableAdditiveColumns].sort())) {
     throw new Error(`Migration 186 additive column set is incomplete in ${schema}.`);
   }
-  if (JSON.stringify(indexes) !== JSON.stringify([...contractIndexes].sort())) {
+  if (JSON.stringify(indexes) !== JSON.stringify([...applicableIndexes].sort())) {
     throw new Error(`Migration 186 index set is incomplete in ${schema}.`);
   }
   const metadata = new Map(metadataRows.map((row) => {
@@ -627,7 +657,10 @@ function contractArtifactEvidence(database, schema) {
     schema,
     tables: tables.length,
     additiveColumns: columns.length,
-    conditionalOrderItemsColumn: hasOrderItems ? "present" : "not-applicable",
+    preExistingOptionalTables: preExistingOptionalTables.map((table) => ({
+      table,
+      status: existingOptionalTables.has(table) ? "present" : "not-applicable",
+    })),
     indexes: indexes.length,
     constraintsVerified: true,
     defaultsAndNullabilityVerified: true,
@@ -999,6 +1032,7 @@ async function scenarioPre186(config) {
   return {
     cases: {
       emptyBootstrapCompatible: true,
+      heterogeneousMissingCommercialCommunications: true,
       populatedAt185: true,
       multiTenant: contractTenantSchemas.length,
       secondStartupNoOp: true,

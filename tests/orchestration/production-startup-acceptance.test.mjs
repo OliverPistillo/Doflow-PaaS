@@ -57,6 +57,9 @@ test("all five production startup scenarios and atomic evidence are permanent", 
   assert.match(orchestrator, /contractTables/);
   assert.match(orchestrator, /additiveColumns/);
   assert.match(orchestrator, /contractIndexes/);
+  assert.match(orchestrator, /tablename <> 'commercial_communications'/);
+  assert.match(orchestrator, /heterogeneousMissingCommercialCommunications: true/);
+  assert.match(orchestrator, /preExistingOptionalTables/);
   for (const event of ["lock_wait", "lock_acquired", "lock_released", "complete"]) {
     assert.match(orchestrator, new RegExp(`\\"${event}\\"`));
   }
