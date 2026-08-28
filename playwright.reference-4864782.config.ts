@@ -1,8 +1,11 @@
 import { defineConfig } from "@playwright/test"
 
+const desktopPolish = process.env.DOFLOW_DESKTOP_POLISH === "1"
+
 export default defineConfig({
   testDir: "./tests/visual",
-  testMatch: ["doflow-final-matrix.mocked.spec.ts", "auth-final.spec.ts"],
+  testMatch: desktopPolish ? ["doflow-final-matrix.mocked.spec.ts"] : ["doflow-final-matrix.mocked.spec.ts", "auth-final.spec.ts"],
+  grepInvert: desktopPolish ? /login Doflow/ : undefined,
   timeout: 1_800_000,
   expect: { timeout: 30_000 },
   fullyParallel: false,

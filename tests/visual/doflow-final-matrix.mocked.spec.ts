@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page, type Route } from "@playwright/test"
+import { readdirSync } from "node:fs"
 import { mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 
@@ -26,6 +27,9 @@ const CONTACT_ID = "22222222-2222-4222-8222-222222222222"
 const OPPORTUNITY_ID = "33333333-3333-4333-8333-333333333333"
 const PROJECT_ID = "44444444-4444-4444-8444-444444444444"
 const TASK_ID = "55555555-5555-4555-8555-555555555555"
+const FLOWBOARD_ID = "66666666-6666-4666-8666-666666666666"
+const ORDER_ID = "77777777-7777-4777-8777-777777777777"
+const QUOTE_ID = "88888888-8888-4888-8888-888888888888"
 
 const ownerCapabilities = [
   "canViewAllLeads",
@@ -770,26 +774,53 @@ async function privacySafeScreenshot(page: Page, filename: string) {
   })
 }
 
-type Surface = { slug: string; route: string; teamAccount?: boolean }
-const surfaces: Surface[] = [
-  { slug: "dashboard", route: "/dashboard" },
-  { slug: "commercial", route: "/dashboard/commercial" },
-  { slug: "leads", route: "/dashboard/commercial/leads" },
-  { slug: "pipeline", route: "/dashboard/commercial/pipeline" },
-  { slug: "clients", route: "/dashboard/clienti" },
-  { slug: "client-detail", route: `/dashboard/clienti/${COMPANY_ID}?tab=overview` },
-  { slug: "projects", route: "/dashboard/progetti" },
-  { slug: "project-detail", route: `/dashboard/progetti/${PROJECT_ID}?tab=overview` },
-  { slug: "activities", route: "/dashboard/attivita" },
-  { slug: "calendar", route: "/dashboard/calendario" },
-  { slug: "team-space", route: "/dashboard/team-space" },
-  { slug: "inbox", route: "/dashboard/inbox" },
-  { slug: "company-intelligence", route: "/dashboard/company-intelligence" },
-  { slug: "team-account", route: "/dashboard/team-space?tab=team-accounts", teamAccount: true },
-  { slug: "automazioni", route: "/dashboard/automazioni" },
-  { slug: "support", route: "/dashboard/supporto" },
-  { slug: "settings", route: "/dashboard/impostazioni" },
-]
+type Surface = { slug: string; route: string; pattern: string; teamAccount?: boolean }
+
+const dashboardRouteRoot = path.resolve("apps", "frontend", "src", "app", "(tenant)", "dashboard")
+const dynamicRouteExamples = new Map([
+  ["/dashboard/clienti/[clientId]", `/dashboard/clienti/${COMPANY_ID}?tab=overview`],
+  ["/dashboard/commercial/leads/[leadId]", `/dashboard/commercial/leads/${OPPORTUNITY_ID}`],
+  ["/dashboard/flowboard/[id]", `/dashboard/flowboard/${FLOWBOARD_ID}`],
+  ["/dashboard/ordini/[id]", `/dashboard/ordini/${ORDER_ID}`],
+  ["/dashboard/preventivi/[quoteId]/anteprima", `/dashboard/preventivi/${QUOTE_ID}/anteprima`],
+  ["/dashboard/progetti/[projectId]", `/dashboard/progetti/${PROJECT_ID}?tab=overview`],
+])
+
+function pageFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = path.join(directory, entry.name)
+    if (entry.isDirectory()) return pageFiles(entryPath)
+    return entry.isFile() && entry.name === "page.tsx" ? [entryPath] : []
+  })
+}
+
+function routePattern(pageFile: string) {
+  const segments = path.relative(dashboardRouteRoot, pageFile).split(path.sep).slice(0, -1)
+  return `/dashboard${segments.length ? `/${segments.join("/")}` : ""}`
+}
+
+function routeSlug(pattern: string) {
+  return pattern === "/dashboard"
+    ? "dashboard"
+    : pattern.slice("/dashboard/".length).replace(/\[|\]/g, "").replace(/\//g, "-")
+}
+
+const routeSurfaces: Surface[] = pageFiles(dashboardRouteRoot)
+  .map(routePattern)
+  .sort()
+  .map((pattern) => {
+    const route = dynamicRouteExamples.get(pattern) ?? pattern
+    if (route.includes("[")) throw new Error(`Missing read-only example for dynamic tenant route ${pattern}`)
+    return { slug: routeSlug(pattern), route, pattern }
+  })
+
+const teamAccountSurface: Surface = {
+  slug: "team-account",
+  route: "/dashboard/team-space?tab=team-accounts",
+  pattern: "/dashboard/team-space?tab=team-accounts",
+  teamAccount: true,
+}
+const surfaces = [...routeSurfaces, teamAccountSurface]
 
 async function shellGeometry(page: Page, variant: MatrixVariant, surface: Surface) {
   const result = await page.evaluate(({ variantSlug, surfaceSlug }) => {
@@ -800,6 +831,7 @@ async function shellGeometry(page: Page, variant: MatrixVariant, surface: Surfac
       const style = getComputedStyle(element)
       return {
         x: Math.round(rect.x * 100) / 100,
+        right: Math.round(rect.right * 100) / 100,
         y: Math.round(rect.y * 100) / 100,
         width: Math.round(rect.width * 100) / 100,
         height: Math.round(rect.height * 100) / 100,
@@ -821,6 +853,7 @@ async function shellGeometry(page: Page, variant: MatrixVariant, surface: Surfac
       const style = getComputedStyle(element)
       return {
         x: Math.round(rect.x * 100) / 100,
+        right: Math.round(rect.right * 100) / 100,
         y: Math.round(rect.y * 100) / 100,
         width: Math.round(rect.width * 100) / 100,
         height: Math.round(rect.height * 100) / 100,
@@ -842,7 +875,8 @@ async function shellGeometry(page: Page, variant: MatrixVariant, surface: Surfac
       inset: sample('[data-slot="sidebar-inset"]'),
       header: sample('[data-slot="sidebar-inset"] > header'),
       search: sampleVisible('[aria-label="Apri ricerca globale"]'),
-      main: sample('[data-slot="sidebar-inset"] > :not(header)'),
+      main: sample('[data-doflow-page-frame]'),
+      pageRoot: sampleVisible('[data-doflow-page-frame] > main, [data-doflow-page-frame] > div'),
       heading: sample('[data-slot="sidebar-inset"] h1'),
       firstCard: sample('[data-slot="sidebar-inset"] [data-slot="card"]'),
     }
@@ -970,6 +1004,72 @@ test.beforeAll(async () => {
   await mkdir(actualDir, { recursive: true })
 })
 
+test("inventario desktop tenant deriva dall'intero route tree corrente", () => {
+  expect(routeSurfaces).toHaveLength(37)
+  expect(new Set(routeSurfaces.map((surface) => surface.pattern)).size).toBe(routeSurfaces.length)
+  expect(routeSurfaces.every((surface) => surface.route.startsWith("/dashboard"))).toBe(true)
+  expect(routeSurfaces.some((surface) => /builder|arcade|client-portal/.test(surface.route))).toBe(false)
+  console.log(`TOTAL TENANT DESKTOP PAGE SURFACES = ${routeSurfaces.length}`)
+  console.log(`CHECKED = ${routeSurfaces.length}; SKIPPED = 0; UNEXPLAINED SKIPPED PAGES = 0`)
+})
+
+test("desktop sidebar: stati puliti, gerarchia nested, help collapsed e stress 10 toggle", async ({ browser }) => {
+  test.setTimeout(300_000)
+  for (const theme of ["light", "dark"] as const) {
+    const variant: MatrixVariant = { slug: `sidebar-polish-${theme}`, width: 1440, height: 900, theme, sidebar: "expanded" }
+    const { context, page, observation } = await newFixturePage(browser, variant)
+    try {
+      await gotoSurface(page, routeSurfaces.find((surface) => surface.pattern === "/dashboard")!)
+      await assertTheme(page, theme)
+      await assertSidebarWidth(page, 256)
+
+      const inactive = visibleSidebar(page).locator('[data-sidebar="menu-button"][data-active="false"], [data-sidebar="menu-sub-button"][data-active="false"]')
+      expect(await inactive.count()).toBeGreaterThan(0)
+      const inactiveStyles = await inactive.evaluateAll((elements) => elements.map((element) => {
+        const style = getComputedStyle(element)
+        return { backgroundColor: style.backgroundColor, backgroundImage: style.backgroundImage, boxShadow: style.boxShadow }
+      }))
+      expect(inactiveStyles.every((style) => style.backgroundColor === "rgba(0, 0, 0, 0)" && style.backgroundImage === "none" && style.boxShadow === "none")).toBe(true)
+
+      const activeDashboard = visibleSidebar(page).locator('[data-sidebar="menu-button"][data-active="true"]:visible')
+      await expect(activeDashboard).toHaveCount(1)
+      const activeStyle = await activeDashboard.evaluate((element) => {
+        const style = getComputedStyle(element)
+        return { backgroundImage: style.backgroundImage, color: style.color }
+      })
+      expect(activeStyle.backgroundImage).toContain("linear-gradient")
+      expect(activeStyle.color).toBe("rgb(255, 255, 255)")
+      await privacySafeScreenshot(page, `global-desktop-polish-1440x900-${theme}-expanded.png`)
+
+      const toggleCount = theme === "light" ? 10 : 1
+      const sidebarRoot = page.locator('[data-slot="sidebar"][data-state]').first()
+      for (let iteration = 0; iteration < toggleCount; iteration += 1) {
+        await page.locator('[data-slot="sidebar-trigger"]').click()
+        await expect(sidebarRoot).toHaveAttribute("data-state", "collapsed")
+        await assertSidebarWidth(page, 48)
+        const help = visibleSidebar(page).getByRole("button", { name: "Aiuto e tutorial", exact: true })
+        await expect(help).toBeVisible()
+        await expect(help.locator("span")).toHaveCount(0)
+        expect((await help.boundingBox())?.width).toBe(32)
+        if (iteration === 0) await privacySafeScreenshot(page, `global-desktop-polish-1440x900-${theme}-collapsed.png`)
+        await page.locator('[data-slot="sidebar-trigger"]').click()
+        await expect(sidebarRoot).toHaveAttribute("data-state", "expanded")
+        await assertSidebarWidth(page, 256)
+        await expect(visibleSidebar(page).getByRole("button", { name: "Aiuto e tutorial", exact: true }).getByText("Aiuto e tutorial", { exact: true })).toBeVisible()
+      }
+
+      await gotoSurface(page, routeSurfaces.find((surface) => surface.pattern === "/dashboard/commercial/pipeline")!)
+      const nestedActive = visibleSidebar(page).locator('[data-sidebar="menu-button"][data-active="true"]:visible, [data-sidebar="menu-sub-button"][data-active="true"]:visible')
+      await expect(nestedActive).toHaveCount(1)
+      await expect(nestedActive).toHaveAttribute("aria-current", "page")
+      await expect(visibleSidebar(page).getByRole("link", { name: "Commerciale", exact: true })).toHaveAttribute("data-active", "false")
+      await assertNoDocumentOverflow(page)
+    } finally {
+      await closeFixtureContext(context, observation)
+    }
+  }
+})
+
 test("login Doflow preserva l'autorità visuale d3cc801", async ({ browser }) => {
   test.setTimeout(300_000)
   const variants = requestedMatrixVariant
@@ -998,6 +1098,7 @@ test("login Doflow preserva l'autorità visuale d3cc801", async ({ browser }) =>
 test("matrice visuale Doflow finale con API localhost deterministiche", async ({ browser }) => {
   test.setTimeout(1_800_000)
   const geometry: Awaited<ReturnType<typeof shellGeometry>>[] = []
+  const dashboardFrames = new Map<string, NonNullable<Awaited<ReturnType<typeof shellGeometry>>["main"]>>()
   for (const variant of matrix) {
     const { context, page, observation } = await newFixturePage(browser, variant)
     try {
@@ -1007,7 +1108,22 @@ test("matrice visuale Doflow finale con API localhost deterministiche", async ({
         if (variant.sidebar === "collapsed") await collapseSidebar(page)
         else if (variant.width >= 768) await assertSidebarWidth(page, 256)
         await assertNoDocumentOverflow(page)
-        geometry.push(await shellGeometry(page, variant, surface))
+        const record = await shellGeometry(page, variant, surface)
+        geometry.push(record)
+        expect(record.main, `Frame esterno assente su ${surface.pattern}`).not.toBeNull()
+        expect(record.pageRoot, `Root pagina assente su ${surface.pattern}`).not.toBeNull()
+        if (surface.pattern === "/dashboard") {
+          dashboardFrames.set(variant.slug, record.main!)
+        } else {
+          const authority = dashboardFrames.get(variant.slug)
+          expect(authority, `Authority Dashboard non misurata per ${variant.slug}`).toBeDefined()
+          for (const key of ["x", "right", "width"] as const) {
+            expect(Math.abs(record.main![key] - authority![key]), `${surface.pattern}: ${key} del frame esterno`).toBeLessThanOrEqual(0.5)
+          }
+        }
+        for (const key of ["x", "right", "width"] as const) {
+          expect(Math.abs(record.pageRoot![key] - record.main![key]), `${surface.pattern}: ${key} del root pagina`).toBeLessThanOrEqual(0.5)
+        }
         await privacySafeScreenshot(page, `${variant.slug}-${surface.slug}.png`)
         if (surface.teamAccount) {
           const modulePermissions = page.getByText("Permessi modulo", { exact: true })
@@ -1059,7 +1175,7 @@ test("matrice visuale Doflow finale con API localhost deterministiche", async ({
 
   await writeFile(
     path.join(actualDir, "geometry.json"),
-    JSON.stringify({ reference: "4864782abc0a6a548b616262be1fe7b6366f622e", tolerancePx: 2, records: geometry }, null, 2),
+    JSON.stringify({ reference: "dashboard-current-main", inventorySource: "apps/frontend/src/app/(tenant)/dashboard/**/page.tsx", routeCount: routeSurfaces.length, checked: routeSurfaces.length, skipped: 0, tolerancePx: 0.5, records: geometry }, null, 2),
     "utf8",
   )
 })

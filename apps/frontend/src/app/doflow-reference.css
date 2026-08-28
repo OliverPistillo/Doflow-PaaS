@@ -42,11 +42,11 @@ html[data-tenant-ui="doflow-reference"] {
   --doflow-topbar: rgb(255 255 255 / 88%);
   --doflow-sidebar-background: radial-gradient(circle at 15% 5%, rgb(57 116 255 / 5.5%), transparent 30%), linear-gradient(180deg, #fff 0%, #f9faff 58%, #f8f6ff 100%);
   --doflow-sidebar-hover: rgb(57 116 255 / 4.5%);
-  --doflow-sidebar-active-gradient: linear-gradient(90deg, rgb(57 116 255 / 11%), rgb(117 105 255 / 13%));
+  --doflow-sidebar-active-gradient: linear-gradient(135deg, #3974ff 0%, #7569ff 100%);
   --doflow-sidebar-muted: hsl(229 10% 45%);
   --doflow-sidebar-icon: hsl(229 12% 48%);
   --doflow-card-shadow: 0 12px 35px rgb(39 63 130 / 6%);
-  --doflow-active-shadow: 0 0 0 1px rgb(117 105 255 / 18%), 0 16px 45px rgb(57 116 255 / 8%);
+  --doflow-active-shadow: 0 6px 18px rgb(57 76 190 / 18%);
 }
 
 html.dark[data-tenant-ui="doflow-reference"] {
@@ -88,11 +88,31 @@ html.dark[data-tenant-ui="doflow-reference"] {
   --doflow-topbar: hsl(233 55% 6% / 88%);
   --doflow-sidebar-background: radial-gradient(circle at 20% 10%, rgb(57 116 255 / 8%), transparent 34%), linear-gradient(180deg, #060916 0%, #080b1c 55%, #0b0920 100%);
   --doflow-sidebar-hover: rgb(126 171 255 / 5.5%);
-  --doflow-sidebar-active-gradient: linear-gradient(90deg, rgb(57 116 255 / 16%), rgb(117 105 255 / 18%));
+  --doflow-sidebar-active-gradient: linear-gradient(135deg, #315fce 0%, #6d3fbd 100%);
   --doflow-sidebar-muted: hsl(229 17% 68%);
   --doflow-sidebar-icon: hsl(229 17% 72%);
   --doflow-card-shadow: 0 16px 45px rgb(0 0 0 / 18%);
-  --doflow-active-shadow: 0 0 0 1px rgb(117 105 255 / 18%), 0 16px 45px rgb(57 116 255 / 8%);
+  --doflow-active-shadow: 0 8px 22px rgb(0 0 0 / 28%);
+}
+
+html[data-tenant-ui="doflow-reference"] .doflow-page-frame {
+  width: 100%;
+  max-width: 80rem;
+  min-width: 0;
+  margin-inline: auto;
+}
+
+html[data-tenant-ui="doflow-reference"] .doflow-page-frame > :is(main, div) {
+  width: 100%;
+  max-width: 80rem !important;
+  min-width: 0;
+  margin-inline: auto !important;
+}
+
+@media (min-width: 768px) {
+  html[data-tenant-ui="doflow-reference"] {
+    scrollbar-gutter: stable;
+  }
 }
 
 html[data-tenant-ui="doflow-reference"] body,
@@ -150,6 +170,13 @@ html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-button"] > svg {
   color: var(--doflow-sidebar-icon);
 }
 
+html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-button"][data-active="false"],
+html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-sub-button"][data-active="false"] {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+}
+
 html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-button"]:hover,
 html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-sub-button"]:hover {
   background-color: var(--doflow-sidebar-hover);
@@ -159,26 +186,20 @@ html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-sub-button"]:hover {
 html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-button"][data-active="true"],
 html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-sub-button"][data-active="true"] {
   position: relative;
+  background-color: #3974ff;
   background-image: var(--doflow-sidebar-active-gradient);
   box-shadow: var(--doflow-active-shadow);
-  color: hsl(var(--sidebar-accent-foreground));
+  color: white;
 }
 
-html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-button"][data-active="true"] > svg {
-  color: hsl(var(--sidebar-primary));
+html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-button"][data-active="true"] > svg,
+html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-sub-button"][data-active="true"] > svg {
+  color: white;
 }
 
 html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-button"][data-active="true"]::before,
 html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-sub-button"][data-active="true"]::before {
-  position: absolute;
-  top: 20%;
-  bottom: 20%;
-  left: 0;
-  width: 2px;
-  border-radius: 9999px;
-  background: linear-gradient(180deg, #3974ff, #7569ff);
-  content: "";
-  pointer-events: none;
+  content: none;
 }
 
 @keyframes flow-confetti-fall {
