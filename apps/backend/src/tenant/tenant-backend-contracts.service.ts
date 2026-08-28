@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { createHash, randomBytes } from 'node:crypto';
 import { DataSource, EntityManager } from 'typeorm';
@@ -8,6 +8,7 @@ import { ensureTenantUniversalFeatureTables } from './tenant-universal-features-
 import { withTenantIdempotency } from './tenant-universal-idempotency';
 import { ensureTenantBackendContractTables } from './tenant-backend-contracts-schema';
 import { safeSchema } from '../common/schema.utils';
+import { TenantCustomerInboxMailService } from './tenant-customer-inbox-mail.service';
 
 export type InboxStateFilters = {
   search: string;
@@ -30,7 +31,7 @@ export const DEFAULT_INBOX_STATE_FILTERS: Readonly<InboxStateFilters> = Object.f
 const inboxFilterOptions = {
   status: ['all', 'Da gestire', 'In lavorazione', 'In attesa cliente', 'Risolta', 'Archiviata'],
   priority: ['all', 'Bassa', 'Normale', 'Alta', 'Urgente'],
-  channel: ['all', 'whatsapp', 'email', 'site', 'portal', 'support', 'call', 'sms'],
+  channel: ['all', 'whatsapp', 'email', 'site', 'support', 'call', 'sms'],
   scope: ['all', 'mine'],
 } as const;
 
@@ -60,6 +61,7 @@ export class TenantBackendContractsService {
     private readonly dataSource: DataSource,
     private readonly access: TenantCommercialAccessService,
     @Inject(REQUEST) private readonly request: any,
+    @Optional() private readonly inboxMail?: TenantCustomerInboxMailService,
   ) {}
 
   private async actor(...capabilities: string[]) {
@@ -326,17 +328,22 @@ export class TenantBackendContractsService {
 
   async inboxState() {
     const actor = await this.actor('canReadNotifications');
-    const [conversations, drafts, receipts, filters] = await Promise.all([
+    const [conversations, drafts, receipts, filters, adapters] = await Promise.all([
       this.dataSource.query(`SELECT * FROM "${actor.schema}".customer_inbox_conversations ORDER BY updated_at DESC LIMIT 500`),
       this.dataSource.query(`SELECT company_id,body,optimistic_version FROM "${actor.schema}".customer_inbox_drafts WHERE user_id=$1`, [actor.id]),
       this.dataSource.query(`SELECT company_id,read_at FROM "${actor.schema}".customer_inbox_receipts WHERE user_id=$1`, [actor.id]),
       this.dataSource.query(`SELECT filters FROM "${actor.schema}".customer_inbox_user_state WHERE user_id=$1`, [actor.id]),
+      this.inboxMail?.status(actor.schema) ?? Promise.resolve({
+        email: { outboundConfigured: false, inboundConfigured: false, lastSuccessfulSync: null, errorCode: null },
+        whatsapp: { mode: 'web_handoff' as const },
+      }),
     ]);
     return {
       conversations,
       drafts,
       receipts,
       filters: normalizeInboxStateFilters(filters[0]?.filters),
+      adapters,
     };
   }
   async updateInboxConversation(companyValue: string, body: Record<string, unknown>, key?: string) {
@@ -366,6 +373,7 @@ export class TenantBackendContractsService {
     }));
   }
   async scheduleInboxMessage(companyValue:string,body:Record<string,unknown>,key?:string){rejectActorOverride(body);const actor=await this.actor('canReadNotifications');const companyId=await this.company(actor,companyValue);if(body.internal!==true)throw new BadRequestException('Solo note interne pianificate sono supportate senza provider esterno');const text=boundedText(body.text??body.body,'body',20000,true);const scheduled=new Date(String(body.scheduledAt||''));if(Number.isNaN(scheduled.getTime())||scheduled.getTime()<=Date.now())throw new BadRequestException('scheduledAt deve essere futura');const requestedId=body.id?tenantUuid(body.id,'messageId'):null;const channel=boundedText(body.channel??'Nota','channel',30,true);return this.dataSource.transaction((manager)=>withTenantIdempotency(manager,actor.schema,`inbox-message:${companyId}`,key,{requestedId,text,scheduled:scheduled.toISOString(),channel},actor.id,async()=>{const rows=await manager.query(`INSERT INTO "${actor.schema}".commercial_communications (id,company_id,channel,direction,title,body,status,occurred_at,scheduled_at,idempotency_key,created_by,updated_by) VALUES (COALESCE($1,uuid_generate_v4()),$2,$3,'internal','Nota Inbox pianificata',$4,'scheduled',$5,$5,$6,$7,$7) RETURNING *`,[requestedId,companyId,channel,text,scheduled.toISOString(),key||null,actor.id]);return rows[0];}));}
+  async sendInboxEmail(companyValue:string,body:Record<string,unknown>,key:string){rejectActorOverride(body);const actor=await this.actor('canReadNotifications','canEditCustomers');const companyId=await this.company(actor,companyValue);if(!this.inboxMail)throw new BadRequestException('Adapter email non disponibile');return this.inboxMail.sendEmail({schema:actor.schema,actorId:actor.id,companyId,text:boundedText(body.text??body.body,'body',20000,true),subject:boundedText(body.subject,'subject',240)||undefined,idempotencyKey:key});}
   async saveInboxDraft(companyValue:string,body:Record<string,unknown>){rejectActorOverride(body);const actor=await this.actor('canReadNotifications');const companyId=await this.company(actor,companyValue);const text=boundedText(body.text??body.body,'draft',20000);const rows=await this.dataSource.query(`INSERT INTO "${actor.schema}".customer_inbox_drafts (company_id,user_id,body) VALUES ($1,$2,$3) ON CONFLICT (company_id,user_id) DO UPDATE SET body=$3,optimistic_version="${actor.schema}".customer_inbox_drafts.optimistic_version+1,updated_at=now() RETURNING *`,[companyId,actor.id,text]);return rows[0];}
   async markInboxRead(companyValue:string){const actor=await this.actor('canReadNotifications');const companyId=await this.company(actor,companyValue);const rows=await this.dataSource.query(`INSERT INTO "${actor.schema}".customer_inbox_receipts (company_id,user_id) VALUES ($1,$2) ON CONFLICT (company_id,user_id) DO UPDATE SET read_at=now() RETURNING *`,[companyId,actor.id]);return rows[0];}
   async saveInboxFilters(body:Record<string,unknown>){rejectActorOverride(body);const actor=await this.actor('canReadNotifications');const filters=this.object(body.filters??body,'filters',20000);const rows=await this.dataSource.query(`INSERT INTO "${actor.schema}".customer_inbox_user_state (user_id,filters) VALUES ($1,$2::jsonb) ON CONFLICT (user_id) DO UPDATE SET filters=$2::jsonb,updated_at=now() RETURNING *`,[actor.id,JSON.stringify(filters)]);return rows[0];}

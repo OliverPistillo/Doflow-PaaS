@@ -26,7 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
-import { emptyInboxFilters, inboxChannelConnected, inboxChannelLabels, inboxChannels, inboxPriorities, inboxStatuses, inboxTemplates, renderInboxTemplate, type InboxChannel, type InboxConversation, type InboxFilters } from "@/features/inbox/customer-inbox"
+import { emptyInboxFilters, inboxChannelLabels, inboxChannels, inboxPriorities, inboxStatuses, inboxTemplates, renderInboxTemplate, type InboxChannel, type InboxConversation, type InboxFilters } from "@/features/inbox/customer-inbox"
 import { useCustomerInbox } from "@/features/inbox/customer-inbox-provider"
 
 const dateTime = new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
@@ -50,6 +50,7 @@ export function CustomerInboxPage() {
   const [templateId, setTemplateId] = useState("")
   const [localDrafts, setLocalDrafts] = useState<Record<string, string>>({})
   const [internal, setInternal] = useState(false)
+  const [replyChannel, setReplyChannel] = useState<"email" | "whatsapp">("email")
   const [sending, setSending] = useState(false)
   const [renderedAt] = useState(() => Date.now())
   const draftSaveTimer = useRef<number | null>(null)
@@ -59,13 +60,13 @@ export function CustomerInboxPage() {
 
   useEffect(() => {
     if (!selected) return
-    const timer = window.setTimeout(() => void inbox.markRead(selected.id), 0)
+    const timer = window.setTimeout(() => void inbox.markRead(selected.id, true), 0)
     return () => window.clearTimeout(timer)
   }, [selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!identity.hasCapability("canViewCustomerInbox")) return <AccessDenied resource="all’Inbox clienti" />
 
-  const filters = inbox.filters ?? emptyInboxFilters
+  const filters = { ...emptyInboxFilters, ...(inbox.filters ?? {}) }
   const filtered = inbox.conversations.filter((conversation) => {
     const query = filters.search.toLocaleLowerCase("it-IT")
     const text = [conversation.contactName, conversation.company, conversation.email, conversation.phone, conversation.tags.join(" ")].filter(Boolean).join(" ").toLocaleLowerCase("it-IT")
@@ -75,8 +76,8 @@ export function CustomerInboxPage() {
   const chooseConversation = (conversation: InboxConversation) => { setSelectedId(conversation.id); setMobileConversation(true); void inbox.markRead(conversation.id, true) }
   const send = async () => {
     if (!selected || !draft.trim() || sending) return
-    setSending(true); const result = await inbox.send({ conversationId: selected.id, text: draft, channel: selected.channel, internal }); setSending(false)
-    if (result.ok) { setLocalDrafts((current) => ({ ...current, [selected.id]: "" })); toast.success(internal ? "Nota interna aggiunta" : "Messaggio inviato") }
+    setSending(true); const result = await inbox.send({ conversationId: selected.id, text: draft, channel: internal ? selected.channel : replyChannel, internal, idempotencyKey: crypto.randomUUID() }); setSending(false)
+    if (result.ok) { if (!result.preserveDraft) { setLocalDrafts((current) => ({ ...current, [selected.id]: "" })); void inbox.saveDraft(selected.id, "") } toast.success(result.message ?? (internal ? "Nota interna aggiunta" : "Messaggio inviato")) }
     else toast.error(result.message ?? "Operazione non disponibile")
   }
   const scheduleDraftSave = (value: string) => { if (!selected) return; setLocalDrafts((current) => ({ ...current, [selected.id]: value })); if (draftSaveTimer.current) window.clearTimeout(draftSaveTimer.current); draftSaveTimer.current = window.setTimeout(() => void inbox.saveDraft(selected.id, value), 500) }
@@ -110,6 +111,10 @@ export function CustomerInboxPage() {
   const openCount = inbox.conversations.filter((item) => !["Risolta", "Archiviata"].includes(item.status)).length
   const overdueCount = inbox.conversations.filter((item) => item.dueAt && Date.parse(item.dueAt) < renderedAt && !["Risolta", "Archiviata"].includes(item.status)).length
   const waitingCount = inbox.conversations.filter((item) => item.status === "In attesa cliente").length
+  const externalAvailable = Boolean(selected && (replyChannel === "email" ? selected.email && inbox.adapters.email.outboundConfigured : selected.phone && inbox.adapters.whatsapp.mode === "web_handoff"))
+  const channelNotice = replyChannel === "email"
+    ? !selected?.email ? "Il cliente non ha un indirizzo email disponibile." : !inbox.adapters.email.outboundConfigured ? "Email non configurata per questo tenant. Usa una nota interna oppure configura SMTP." : "Email collegata via SMTP."
+    : !selected?.phone ? "Il cliente non ha un numero WhatsApp disponibile." : "Apre WhatsApp Web in una nuova scheda; l’invio deve essere completato manualmente."
 
   const conversationPanel = selected ? <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background" aria-label={`Conversazione con ${selected.contactName}`}>
     <header className="flex shrink-0 items-center gap-2 border-b px-3 py-2.5 sm:px-4">
@@ -125,10 +130,10 @@ export function CustomerInboxPage() {
     </div></ScrollArea>
     <div className="shrink-0 border-t bg-background p-3 sm:p-4">
       <div className="mx-auto max-w-3xl space-y-2">
-        {!internal && !inboxChannelConnected[selected.channel] && <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950 dark:text-amber-100">Canale non ancora collegato. Usa una nota interna oppure configura l’adapter di produzione.</div>}
-        <div className="flex flex-wrap items-center gap-1.5"><Button size="sm" variant={internal ? "default" : "outline"} onClick={() => setInternal((value) => !value)}><AtSign />{internal ? "Nota interna" : "Risposta cliente"}</Button><Select value={templateId || "none"} onValueChange={(value) => { setTemplateId(value === "none" ? "" : value); if (value !== "none") setTemplateOpen(true) }}><SelectTrigger className="h-8 w-[170px]" aria-label="Template risposta"><SelectValue placeholder="Template" /></SelectTrigger><SelectContent><SelectItem value="none">Nessun template</SelectItem>{inboxTemplates.map((item) => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}</SelectContent></Select><Button size="icon" variant="ghost" aria-label="Aggiungi emoji" onClick={() => scheduleDraftSave(`${draft} 🙂`)}><Smile /></Button><Button size="icon" variant="ghost" aria-label="Allega file" onClick={() => toast.info("Storage allegati non configurato")}><Paperclip /></Button></div>
+        {!internal && <div className={cn("rounded-md border px-3 py-2 text-xs", externalAvailable ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100" : "border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-100")}>{channelNotice}</div>}
+        <div className="flex flex-wrap items-center gap-1.5"><Button size="sm" variant={internal ? "default" : "outline"} onClick={() => setInternal((value) => !value)}><AtSign />{internal ? "Nota interna" : "Risposta cliente"}</Button>{!internal && <Select value={replyChannel} onValueChange={(value) => setReplyChannel(value as "email" | "whatsapp")}><SelectTrigger className="h-8 w-[140px]" aria-label="Canale risposta"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="email">Email</SelectItem><SelectItem value="whatsapp">WhatsApp Web</SelectItem></SelectContent></Select>}<Select value={templateId || "none"} onValueChange={(value) => { setTemplateId(value === "none" ? "" : value); if (value !== "none") setTemplateOpen(true) }}><SelectTrigger className="h-8 w-[170px]" aria-label="Template risposta"><SelectValue placeholder="Template" /></SelectTrigger><SelectContent><SelectItem value="none">Nessun template</SelectItem>{inboxTemplates.map((item) => <SelectItem key={item.id} value={item.id}>{item.label}</SelectItem>)}</SelectContent></Select><Button size="icon" variant="ghost" aria-label="Aggiungi emoji" onClick={() => scheduleDraftSave(`${draft} 🙂`)}><Smile /></Button><Button size="icon" variant="ghost" aria-label="Allega file" onClick={() => toast.info("Storage allegati non configurato")}><Paperclip /></Button></div>
         <Textarea aria-label="Messaggio Inbox" value={draft} onChange={(event) => scheduleDraftSave(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send() } }} placeholder={internal ? "Scrivi una nota visibile solo al team…" : "Scrivi una risposta…"} className="min-h-20 resize-none" />
-        <div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground">Invio: Enter · nuova riga: Shift+Enter</span><Button size="sm" disabled={!draft.trim() || sending || (!internal && !inboxChannelConnected[selected.channel])} onClick={() => void send()}><Send />{sending ? "Invio…" : internal ? "Aggiungi nota" : "Invia"}</Button></div>
+        <div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground">Invio: Enter · nuova riga: Shift+Enter</span><Button size="sm" disabled={!draft.trim() || sending || (!internal && !externalAvailable)} onClick={() => void send()}><Send />{sending ? "Invio…" : internal ? "Aggiungi nota" : replyChannel === "whatsapp" ? "Apri WhatsApp Web" : "Invia email"}</Button></div>
       </div>
     </div>
   </section> : <Empty className="min-h-72"><EmptyHeader><EmptyMedia variant="icon"><Inbox /></EmptyMedia><EmptyTitle>Seleziona una conversazione</EmptyTitle><EmptyDescription>Apri un contatto dalla lista per vedere i messaggi e il contesto CRM.</EmptyDescription></EmptyHeader></Empty>

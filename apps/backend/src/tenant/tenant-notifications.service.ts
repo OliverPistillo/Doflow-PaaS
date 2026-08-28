@@ -182,6 +182,7 @@ export class TenantNotificationsService {
       type: event,
       eventId: `${event}:${notificationId || 'all'}:${Date.now()}`,
       notificationId: notificationId || null,
+      newNotifications: summary.newNotifications,
       unreadNotifications: summary.unreadNotifications,
     }, this.getSchema(req));
   }
@@ -296,6 +297,7 @@ export class TenantNotificationsService {
     const user = this.getUser(req);
     if (!this.canRead(user.role)) {
       return {
+        newNotifications: 0,
         unreadNotifications: 0,
         urgentNotifications: 0,
         taskOverdueNotifications: 0,
@@ -314,7 +316,17 @@ export class TenantNotificationsService {
       [...params, ...extraParams],
     ))[0]?.count || 0);
     const userUuid = this.userIdOrNull(user.id);
+    const preferenceRows = userUuid ? await this.dataSource.query(
+      `SELECT last_seen_at FROM "${schema}".notification_preferences
+       WHERE user_id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [userUuid],
+    ) : [];
+    const lastSeenAt = preferenceRows[0]?.last_seen_at || null;
     return {
+      newNotifications: await count(
+        `created_at > COALESCE($${params.length + 1}::timestamptz, '-infinity'::timestamptz)`,
+        [lastSeenAt],
+      ),
       unreadNotifications: await count(`status = 'unread'`),
       urgentNotifications: await count(`status = 'unread' AND priority = 'urgent'`),
       taskOverdueNotifications: await count(`status = 'unread' AND type = 'task_overdue'`),
@@ -324,6 +336,36 @@ export class TenantNotificationsService {
         : 0,
       todayDigestAvailable: await this.hasTodayDigest(schema, user),
     };
+  }
+
+  async markSeen(req: RequestLike) {
+    const schema = this.getSchema(req);
+    const user = this.getUser(req);
+    const userId = this.userIdOrNull(user.id);
+    if (!userId) throw new BadRequestException('Utente UUID richiesto per lo stato notifiche.');
+    await this.ensureSchema(schema);
+    const visibility = this.visibilityWhere(user, 1);
+    const watermarkRows = await this.dataSource.query(
+      `SELECT MAX(created_at) AS watermark FROM "${schema}".notifications
+       WHERE deleted_at IS NULL AND ${visibility.sql}`,
+      visibility.params,
+    );
+    const watermark = watermarkRows[0]?.watermark || null;
+    const rows = await this.dataSource.query(
+      `INSERT INTO "${schema}".notification_preferences (user_id, last_seen_at, created_at, updated_at)
+       VALUES ($1, $2, now(), now())
+       ON CONFLICT (user_id) WHERE deleted_at IS NULL DO UPDATE
+       SET last_seen_at = CASE
+         WHEN EXCLUDED.last_seen_at IS NULL THEN "${schema}".notification_preferences.last_seen_at
+         WHEN "${schema}".notification_preferences.last_seen_at IS NULL THEN EXCLUDED.last_seen_at
+         ELSE GREATEST("${schema}".notification_preferences.last_seen_at, EXCLUDED.last_seen_at)
+       END,
+       updated_at = now()
+       RETURNING last_seen_at`,
+      [userId, watermark],
+    );
+    await this.publishState(req, 'notification.seen');
+    return { lastSeenAt: rows[0]?.last_seen_at || null, newNotifications: 0 };
   }
 
   private async hasTodayDigest(schema: string, user: AuthUser): Promise<boolean> {

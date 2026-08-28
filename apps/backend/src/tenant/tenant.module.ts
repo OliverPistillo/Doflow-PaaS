@@ -89,6 +89,7 @@ import { TenantUniversalCapabilitiesService } from './tenant-universal-capabilit
 import { TenantUniversalCapabilityGuard } from './tenant-universal-capability.guard';
 import { TenantBackendContractsController } from './tenant-backend-contracts.controller';
 import { TenantBackendContractsService } from './tenant-backend-contracts.service';
+import { TenantCustomerInboxMailService } from './tenant-customer-inbox-mail.service';
 import { TenantCalendarFeedController } from './tenant-calendar-feed.controller';
 
 import { Tenant } from '../superadmin/entities/tenant.entity';
@@ -198,6 +199,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
       TenantReleasesService,
       TenantCompanyIntelligenceService,
       TenantBackendContractsService,
+      TenantCustomerInboxMailService,
       TenantUniversalScopeGuard,
       TenantUniversalCapabilitiesService,
       TenantUniversalCapabilityGuard,

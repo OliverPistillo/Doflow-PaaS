@@ -97,16 +97,22 @@ html.dark[data-tenant-ui="doflow-reference"] {
 
 html[data-tenant-ui="doflow-reference"] .doflow-page-frame {
   width: 100%;
-  max-width: 80rem;
+  max-width: 120rem;
   min-width: 0;
   margin-inline: auto;
 }
 
 html[data-tenant-ui="doflow-reference"] .doflow-page-frame > :is(main, div) {
   width: 100%;
-  max-width: 80rem !important;
+  max-width: 120rem !important;
   min-width: 0;
   margin-inline: auto !important;
+}
+
+@media (min-width: 1800px) {
+  html[data-tenant-ui="doflow-reference"] .doflow-page-frame {
+    width: 94%;
+  }
 }
 
 @media (min-width: 768px) {

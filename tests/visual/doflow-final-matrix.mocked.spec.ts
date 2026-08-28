@@ -415,12 +415,25 @@ function fixtureBody(url: URL, _options: FixtureOptions) {
   }
   if (pathName === "/api/tenant/notifications/summary") {
     return {
+      newNotifications: 0,
       unreadNotifications: 0,
       urgentNotifications: 0,
       taskOverdueNotifications: 0,
       assignedTaskNotifications: 0,
       financeNotifications: 0,
       todayDigestAvailable: false,
+    }
+  }
+  if (pathName === "/api/tenant/backend-contracts/inbox/state") {
+    return {
+      conversations: [],
+      drafts: [],
+      receipts: [],
+      filters: {},
+      adapters: {
+        email: { outboundConfigured: false, inboundConfigured: false, lastSuccessfulSync: null, errorCode: null },
+        whatsapp: { mode: "web_handoff" },
+      },
     }
   }
   if (pathName === "/api/tenant/bonus") {
@@ -546,6 +559,14 @@ async function installLocalReadOnlyFixture(page: Page, options: FixtureOptions =
     }
 
     observation.apiPaths.push(url.pathname)
+    if (method === "POST" && /^\/api\/tenant\/backend-contracts\/inbox\/conversations\/[^/]+\/read$/.test(url.pathname)) {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true, readAt: "2026-08-28T09:00:00.000Z" }) })
+      return
+    }
+    if (method === "PATCH" && url.pathname === "/api/tenant/notifications/seen") {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ lastSeenAt: "2026-08-28T09:00:00.000Z", newNotifications: 0 }) })
+      return
+    }
     if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
       observation.blocked.push({ method, url: request.url() })
       await route.abort("blockedbyclient")
@@ -906,6 +927,7 @@ type MatrixVariant = {
 }
 
 const allMatrix: MatrixVariant[] = [
+  { slug: "desktop-1920x1080-light-expanded", width: 1920, height: 1080, theme: "light", sidebar: "expanded" },
   ...(["light", "dark"] as const).flatMap((theme) =>
     (["expanded", "collapsed"] as const).flatMap((sidebar) => [
       { slug: `desktop-1440x900-${theme}-${sidebar}`, width: 1440, height: 900, theme, sidebar },
@@ -1011,6 +1033,34 @@ test("inventario desktop tenant deriva dall'intero route tree corrente", () => {
   expect(routeSurfaces.some((surface) => /builder|arcade|client-portal/.test(surface.route))).toBe(false)
   console.log(`TOTAL TENANT DESKTOP PAGE SURFACES = ${routeSurfaces.length}`)
   console.log(`CHECKED = ${routeSurfaces.length}; SKIPPED = 0; UNEXPLAINED SKIPPED PAGES = 0`)
+})
+
+test("workspace wide desktop resta fluido con cap large-desktop ragionevole", async ({ browser }) => {
+  test.setTimeout(300_000)
+  const measurements: Array<{ width: number; frame: number; inset: number }> = []
+  for (const width of [1366, 1440, 1536, 1600, 1920, 2560]) {
+    const height = width === 1366 ? 768 : width === 1536 ? 864 : width === 1920 ? 1080 : width === 2560 ? 1440 : 900
+    const variant: MatrixVariant = { slug: `wide-dashboard-${width}`, width, height, theme: "light", sidebar: "expanded" }
+    const { context, page, observation } = await newFixturePage(browser, variant)
+    try {
+      await gotoSurface(page, routeSurfaces.find((surface) => surface.pattern === "/dashboard")!)
+      await assertNoDocumentOverflow(page)
+      const dimensions = await page.evaluate(() => ({
+        frame: document.querySelector<HTMLElement>(".doflow-page-frame")?.getBoundingClientRect().width || 0,
+        inset: document.querySelector<HTMLElement>('[data-slot="sidebar-inset"]')?.getBoundingClientRect().width || 0,
+      }))
+      measurements.push({ width, ...dimensions })
+      if (width === 1920) expect(dimensions.frame / dimensions.inset).toBeGreaterThanOrEqual(0.9)
+      if (width === 2560) await privacySafeScreenshot(page, "wide-dashboard-2560x1440-light-expanded.png")
+    } finally {
+      await closeFixtureContext(context, observation)
+    }
+  }
+  const byWidth = new Map(measurements.map((measurement) => [measurement.width, measurement]))
+  expect(byWidth.get(1536)!.frame).toBeGreaterThan(byWidth.get(1440)!.frame)
+  expect(byWidth.get(1600)!.frame).toBeGreaterThan(byWidth.get(1536)!.frame)
+  expect(byWidth.get(1920)!.frame).toBeGreaterThan(byWidth.get(1440)!.frame * 1.25)
+  expect(byWidth.get(2560)!.frame).toBeGreaterThan(byWidth.get(1920)!.frame)
 })
 
 test("desktop sidebar: stati puliti, gerarchia nested, help collapsed e stress 10 toggle", async ({ browser }) => {

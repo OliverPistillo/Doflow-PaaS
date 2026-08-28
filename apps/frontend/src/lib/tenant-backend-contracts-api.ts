@@ -35,6 +35,11 @@ export const backendContractsApi = {
     state: () => apiFetch<Record<string, unknown>>("/tenant/backend-contracts/inbox/state"),
     update: (id: string, body: Record<string, unknown>) => apiFetch<Record<string, unknown>>(`/tenant/backend-contracts/inbox/conversations/${path(id)}`, json("PATCH", body, true)),
     schedule: (id: string, body: Record<string, unknown>) => apiFetch<Record<string, unknown>>(`/tenant/backend-contracts/inbox/conversations/${path(id)}/messages`, json("POST", body, true)),
+    email: (id: string, text: string, idempotencyKey: string, subject?: string) => apiFetch<Record<string, unknown>>(`/tenant/backend-contracts/inbox/conversations/${path(id)}/email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify({ text, subject }),
+    }),
     draft: (id: string, text: string) => apiFetch<Record<string, unknown>>(`/tenant/backend-contracts/inbox/conversations/${path(id)}/draft`, json("PUT", { text })),
     read: (id: string) => apiFetch<Record<string, unknown>>(`/tenant/backend-contracts/inbox/conversations/${path(id)}/read`, json("POST")),
     filters: (filters: Record<string, unknown>) => apiFetch<Record<string, unknown>>("/tenant/backend-contracts/inbox/filters", json("PUT", { filters })),

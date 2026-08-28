@@ -18,6 +18,33 @@ export class MailService {
 
   constructor(@Inject(DOFLOW_MAIL_TRANSPORT) private readonly mailerService: Pick<Transporter, 'sendMail'>) {}
 
+  isConfigured(): boolean {
+    return this.currentMailConfig().ready;
+  }
+
+  async sendMailRequired(params: {
+    to: string;
+    subject: string;
+    text: string;
+    purpose?: string;
+  }): Promise<void> {
+    const config = this.currentMailConfig();
+    if (!config.ready) throw new Error('SMTP_NOT_CONFIGURED');
+    try {
+      await this.mailerService.sendMail({
+        to: params.to,
+        subject: params.subject,
+        text: params.text,
+        from: process.env.MAIL_FROM_NAME
+          ? `"${process.env.MAIL_FROM_NAME}" <${process.env.MAIL_USER}>`
+          : process.env.MAIL_USER,
+      });
+    } catch (error) {
+      this.logger.error(this.formatMailError(params.purpose || 'Email', params.to, error, config));
+      throw new Error('SMTP_SEND_FAILED');
+    }
+  }
+
   /**
    * Metodo GENERICO pubblico per inviare email.
    * Usato da TenantsService e altri servizi.

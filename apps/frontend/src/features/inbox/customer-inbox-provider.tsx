@@ -6,6 +6,8 @@ import { useCommercialLeads } from "@/features/commercial/components/commercial-
 import type { CustomerCommunication } from "@/features/commercial/commercial-provider-types"
 import {
   emptyInboxFilters,
+  buildWhatsAppWebUrl,
+  countUnreadInboxMessages,
   type InboxChannel,
   type InboxConversation,
   type InboxFilters,
@@ -15,13 +17,13 @@ import {
 import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider"
 import { backendContractsApi } from "@/lib/tenant-backend-contracts-api"
 
-type InboxResult = { ok: boolean; message?: string; id?: string; existing?: boolean }
+type InboxResult = { ok: boolean; message?: string; id?: string; existing?: boolean; preserveDraft?: boolean }
 type InboxContextValue = InboxSnapshot & {
   connected: boolean
   unreadCount: number
   unreadFor: (conversationId: string) => number
   refresh: () => Promise<void>
-  send: (input: { conversationId: string; text: string; channel: InboxChannel; internal?: boolean; clientId?: string; replyToMessageId?: string; scheduledAt?: string }) => Promise<InboxResult>
+  send: (input: { conversationId: string; text: string; channel: InboxChannel; internal?: boolean; clientId?: string; replyToMessageId?: string; scheduledAt?: string; idempotencyKey?: string }) => Promise<InboxResult>
   updateConversation: (conversationId: string, updates: Partial<Pick<InboxConversation, "status" | "priority" | "assignedToId" | "supervisorId" | "collaboratorIds" | "dueAt" | "category" | "tags" | "linkedRecords" | "candidateMatches">> & { archive?: boolean }) => Promise<InboxResult>
   markRead: (conversationId: string, persist?: boolean) => Promise<boolean>
   saveDraft: (conversationId: string, text: string) => Promise<boolean>
@@ -29,7 +31,7 @@ type InboxContextValue = InboxSnapshot & {
   createDemoInbound: (input: { contactName: string; company?: string; email?: string; phone?: string; channel: InboxChannel; text: string; assignedToId?: string; linkedRecords?: InboxRecordLink[]; candidateMatches?: InboxConversation["candidateMatches"]; clientId?: string }) => Promise<InboxResult>
 }
 
-const emptySnapshot: InboxSnapshot = { conversations: [], messages: [], receipts: [], drafts: {}, filters: emptyInboxFilters, transport: "server-postgresql", productionReady: true }
+const emptySnapshot: InboxSnapshot = { conversations: [], messages: [], receipts: [], drafts: {}, filters: emptyInboxFilters, adapters: { email: { outboundConfigured: false, inboundConfigured: false, lastSuccessfulSync: null, errorCode: null }, whatsapp: { mode: "web_handoff" } }, transport: "server-postgresql", productionReady: true }
 const InboxContext = createContext<InboxContextValue | null>(null)
 
 function channelOf(value?: CustomerCommunication["channel"]): InboxChannel {
@@ -106,27 +108,46 @@ export function CustomerInboxProvider({ children }: { children: React.ReactNode 
         sender: item.direction === "incoming" ? customer.profile.company || `${customer.profile.firstName} ${customer.profile.lastName}`.trim() : identity.currentUser.name,
         text: item.body,
         attachments: [],
-        status: item.status === "external_opened" ? "external_opened" as const : "recorded" as const,
+        status: (["scheduled", "sent", "delivered", "read", "failed", "external_opened"] as const).includes(item.status as never) ? item.status as "scheduled" | "sent" | "delivered" | "read" | "failed" | "external_opened" : "recorded" as const,
         createdAt: item.occurredAt,
       })),
     )
     const drafts = Object.fromEntries((Array.isArray(authority.drafts) ? authority.drafts as Record<string, unknown>[] : []).map((row) => [String(row.company_id || ""), String(row.body || "")]))
     const receipts = (Array.isArray(authority.receipts) ? authority.receipts as Record<string, unknown>[] : []).map((row) => ({ conversationId: String(row.company_id || ""), userId: identity.currentUserId, readAt: String(row.read_at || "") }))
     const filters = authority.filters && typeof authority.filters === "object" ? authority.filters as InboxFilters : emptyInboxFilters
-    setSnapshot((current) => ({ ...current, conversations, messages, drafts, receipts, filters }))
+    const adapters = authority.adapters && typeof authority.adapters === "object" ? authority.adapters as InboxSnapshot["adapters"] : emptySnapshot.adapters
+    setSnapshot((current) => ({ ...current, conversations, messages, drafts, receipts, filters, adapters }))
     setConnected(commercial.hasHydrated && commercial.workspaceStatus === "ready")
   }, [commercial.customers, commercial.hasHydrated, commercial.workspaceStatus, identity.currentUser.name, identity.currentUserId])
 
   useEffect(() => { const timer = window.setTimeout(() => void refresh(), 0); return () => window.clearTimeout(timer) }, [refresh])
 
   const send: InboxContextValue["send"] = useCallback(async (input) => {
-    if (!input.internal) return { ok: false, message: "Canale esterno non collegato: nessun invio è stato registrato" }
+    const customer = commercial.customers.find((item) => item.id === input.conversationId)
+    if (!customer) return { ok: false, message: "Cliente non trovato" }
+    if (!input.internal && input.channel === "email") {
+      if (!snapshot.adapters.email.outboundConfigured) return { ok: false, message: "Email non configurata per questo tenant" }
+      try {
+        const response = await backendContractsApi.inbox.email(input.conversationId, input.text, input.idempotencyKey || crypto.randomUUID())
+        await refresh()
+        const item = response.item as Record<string, unknown> | undefined
+        return { ok: true, id: item?.id ? String(item.id) : undefined, existing: response.existing === true }
+      } catch (cause) {
+        return { ok: false, message: cause instanceof Error ? cause.message : "Invio email non riuscito" }
+      }
+    }
+    if (!input.internal && input.channel === "whatsapp") {
+      const url = buildWhatsAppWebUrl(customer.profile.phone, input.text)
+      if (!url) return { ok: false, message: "Il cliente non ha un numero WhatsApp valido" }
+      const opened = window.open(url, "_blank", "noopener,noreferrer")
+      if (!opened) return { ok: false, message: "Il browser ha bloccato l’apertura di WhatsApp Web" }
+      return { ok: true, preserveDraft: true, message: "WhatsApp Web aperto. Completa l'invio nella nuova scheda." }
+    }
+    if (!input.internal) return { ok: false, message: "Canale esterno non disponibile: nessun invio è stato registrato" }
     if (input.scheduledAt) {
       try { const id = crypto.randomUUID(); await backendContractsApi.inbox.schedule(input.conversationId, { id, text: input.text, channel: communicationChannel(input.channel, true), internal: true, scheduledAt: input.scheduledAt }); await refresh(); return { ok: true, id } }
       catch (cause) { return { ok: false, message: cause instanceof Error ? cause.message : "Pianificazione non riuscita" } }
     }
-    const customer = commercial.customers.find((item) => item.id === input.conversationId)
-    if (!customer) return { ok: false, message: "Cliente non trovato" }
     const id = commercial.addCustomerCommunication(customer.id, {
       channel: communicationChannel(input.channel, true),
       title: "Nota Inbox",
@@ -139,7 +160,7 @@ export function CustomerInboxProvider({ children }: { children: React.ReactNode 
     if (!id) return { ok: false, message: "Nota non registrata" }
     await refresh()
     return { ok: true, id }
-  }, [commercial, refresh])
+  }, [commercial, refresh, snapshot.adapters.email.outboundConfigured])
   const updateConversation: InboxContextValue["updateConversation"] = useCallback(async (conversationId, updates) => {
     const current = snapshot.conversations.find((item) => item.id === conversationId) as (InboxConversation & { optimisticVersion?: number }) | undefined
     try { await backendContractsApi.inbox.update(conversationId, { ...updates, optimisticVersion: current?.optimisticVersion ?? 0 } as Record<string, unknown>); await refresh(); return { ok: true, id: conversationId } }
@@ -147,10 +168,14 @@ export function CustomerInboxProvider({ children }: { children: React.ReactNode 
   }, [refresh, snapshot.conversations])
   const markRead = useCallback(async (conversationId: string, persist = false) => {
     const readAt = new Date().toISOString()
+    const previous = snapshot.receipts.find((item) => item.conversationId === conversationId && item.userId === identity.currentUserId)
     setSnapshot((current) => ({ ...current, receipts: [...current.receipts.filter((item) => !(item.conversationId === conversationId && item.userId === identity.currentUserId)), { conversationId, userId: identity.currentUserId, readAt }] }))
     if (!persist) return true
-    try { await backendContractsApi.inbox.read(conversationId); return true } catch { return false }
-  }, [identity.currentUserId])
+    try { await backendContractsApi.inbox.read(conversationId); return true } catch {
+      setSnapshot((current) => ({ ...current, receipts: [...current.receipts.filter((item) => !(item.conversationId === conversationId && item.userId === identity.currentUserId)), ...(previous ? [previous] : [])] }))
+      return false
+    }
+  }, [identity.currentUserId, snapshot.receipts])
   const saveDraft = useCallback(async (conversationId: string, text: string) => {
     setSnapshot((current) => ({ ...current, drafts: { ...current.drafts, [conversationId]: text } }))
     try { await backendContractsApi.inbox.draft(conversationId, text); return true } catch { return false }
@@ -160,11 +185,14 @@ export function CustomerInboxProvider({ children }: { children: React.ReactNode 
     try { await backendContractsApi.inbox.filters(filters as unknown as Record<string, unknown>); return true } catch { return false }
   }, [])
   const createDemoInbound = useCallback(async (): Promise<InboxResult> => ({ ok: false, message: "Modalità demo rimossa" }), [])
-  const unreadFor = useCallback(() => 0, [])
+  const unreadFor = useCallback((conversationId: string) => {
+    return countUnreadInboxMessages(snapshot.messages, snapshot.receipts, conversationId, identity.currentUserId)
+  }, [identity.currentUserId, snapshot.messages, snapshot.receipts])
+  const unreadCount = snapshot.conversations.reduce((total, conversation) => total + unreadFor(conversation.id), 0)
   const value = useMemo<InboxContextValue>(() => ({
     ...snapshot,
     connected,
-    unreadCount: 0,
+    unreadCount,
     unreadFor,
     refresh,
     send,
@@ -173,7 +201,7 @@ export function CustomerInboxProvider({ children }: { children: React.ReactNode 
     saveDraft,
     setFilters,
     createDemoInbound,
-  }), [connected, createDemoInbound, markRead, refresh, saveDraft, send, setFilters, snapshot, unreadFor, updateConversation])
+  }), [connected, createDemoInbound, markRead, refresh, saveDraft, send, setFilters, snapshot, unreadCount, unreadFor, updateConversation])
   return <InboxContext.Provider value={value}>{children}</InboxContext.Provider>
 }
 

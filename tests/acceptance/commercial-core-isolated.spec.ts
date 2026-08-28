@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { createHmac, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -242,6 +242,21 @@ async function selectOperationalValue(page: Page, label: string, option: string,
   return response;
 }
 
+async function dragCenterTo(page: Page, source: Locator, target: Locator) {
+  await source.scrollIntoViewIfNeeded();
+  await target.scrollIntoViewIfNeeded();
+  const sourceBox = await source.boundingBox();
+  const targetBox = await target.boundingBox();
+  if (!sourceBox || !targetBox) throw new Error('Pipeline drag target is not measurable.');
+  const sourcePoint = { x: sourceBox.x + sourceBox.width / 2, y: sourceBox.y + Math.min(40, sourceBox.height / 2) };
+  const targetPoint = { x: targetBox.x + targetBox.width / 2, y: targetBox.y + Math.min(72, targetBox.height / 2) };
+  await page.mouse.move(sourcePoint.x, sourcePoint.y);
+  await page.mouse.down();
+  await page.mouse.move(sourcePoint.x + 12, sourcePoint.y + 12, { steps: 4 });
+  await page.mouse.move(targetPoint.x, targetPoint.y, { steps: 18 });
+  await page.mouse.up();
+}
+
 function restart(service: 'frontend' | 'backend') {
   const result = spawnSync(process.execPath, [path.join(root, 'scripts/commercial-core-isolated-stack.mjs'), `restart-${service}`], {
     cwd: root,
@@ -299,6 +314,68 @@ test('Commercial Core usa PostgreSQL e Redis con sessioni e tenant realmente iso
     await pageA.reload({ waitUntil: 'domcontentloaded' });
     await expect(pageA.getByText('Visual Manager', { exact: true }).first()).toBeVisible();
     await expect(pageA.getByText('Qualificato', { exact: true }).first()).toBeVisible();
+
+    const pipelineMarker = `${marker}-PIPE`;
+    const pipelineCompany = `Pipeline ${pipelineMarker}`;
+    const pipelineLead = await createLeadThroughUi(pageA, {
+      marker: pipelineMarker,
+      company: pipelineCompany,
+      email: `pipeline.${marker.toLowerCase()}@example.invalid`,
+      firstName: 'Pipeline',
+      lastName: marker,
+    });
+    await pageA.goto('/dashboard/commercial/pipeline');
+    await dismissFlowOverlays(pageA, true);
+    const pipelineCard = () => pageA.locator(`[data-commercial-deal="${pipelineLead.id}"]`);
+    const pipelineMutations: string[] = [];
+    const observePipelineMutation = (request: { method(): string; url(): string }) => {
+      if (request.method() === 'PATCH' && /\/api\/tenant\/commercial\/pipeline\//.test(request.url())) pipelineMutations.push(request.url());
+    };
+    pageA.on('request', observePipelineMutation);
+    await pipelineCard().getByRole('button', { name: `Azioni ${pipelineCompany}` }).click();
+    await expect(pageA.getByRole('menuitem', { name: 'Apri scheda', exact: true })).toBeVisible();
+    expect(pipelineMutations).toEqual([]);
+    await pageA.keyboard.press('Escape');
+
+    const crossColumnResponse = pageA.waitForResponse(
+      (response) => response.url().endsWith(`/api/tenant/commercial/pipeline/${pipelineLead.id}/transition`) && response.request().method() === 'PATCH',
+      { timeout: 30_000 },
+    );
+    await dragCenterTo(pageA, pipelineCard(), pageA.locator('[data-commercial-stage="proposal"]'));
+    expect((await crossColumnResponse).ok()).toBe(true);
+    await pageA.reload({ waitUntil: 'domcontentloaded' });
+    await dismissFlowOverlays(pageA);
+    await expect(pageA.locator('[data-commercial-stage="proposal"]', { has: pipelineCard() })).toBeVisible();
+
+    await pipelineCard().getByRole('button', { name: `Azioni ${pipelineCompany}` }).click();
+    await pageA.getByRole('menuitem', { name: 'Sposta in', exact: true }).hover();
+    const menuMoveResponse = pageA.waitForResponse(
+      (response) => response.url().endsWith(`/api/tenant/commercial/pipeline/${pipelineLead.id}/transition`) && response.request().method() === 'PATCH',
+      { timeout: 30_000 },
+    );
+    await pageA.getByRole('menuitem', { name: 'Qualificato', exact: true }).click();
+    expect((await menuMoveResponse).ok()).toBe(true);
+    await pageA.reload({ waitUntil: 'domcontentloaded' });
+    await dismissFlowOverlays(pageA);
+    const qualified = pageA.locator('[data-commercial-stage="qualified"]');
+    await expect(qualified.locator(`[data-commercial-deal="${lead.id}"]`)).toBeVisible();
+    await expect(qualified.locator(`[data-commercial-deal="${pipelineLead.id}"]`)).toBeVisible();
+    const orderBefore = await qualified.locator('[data-commercial-deal]').evaluateAll((cards) => cards.map((card) => card.getAttribute('data-commercial-deal')));
+    const pipelineWasBeforeLead = orderBefore.indexOf(pipelineLead.id) < orderBefore.indexOf(lead.id);
+    const reorderResponse = pageA.waitForResponse(
+      (response) => response.url().endsWith('/api/tenant/commercial/pipeline/reorder') && response.request().method() === 'PATCH',
+      { timeout: 30_000 },
+    );
+    await dragCenterTo(pageA, qualified.locator(`[data-commercial-deal="${pipelineLead.id}"]`), qualified.locator(`[data-commercial-deal="${lead.id}"]`));
+    expect((await reorderResponse).ok()).toBe(true);
+    await pageA.reload({ waitUntil: 'domcontentloaded' });
+    await dismissFlowOverlays(pageA);
+    const orderAfter = await pageA.locator('[data-commercial-stage="qualified"] [data-commercial-deal]').evaluateAll((cards) => cards.map((card) => card.getAttribute('data-commercial-deal')));
+    expect(orderAfter).not.toEqual(orderBefore);
+    expect(orderAfter.indexOf(pipelineLead.id) < orderAfter.indexOf(lead.id)).toBe(!pipelineWasBeforeLead);
+    pageA.off('request', observePipelineMutation);
+    await pageA.goto(detailPath);
+    await expect(pageA.getByRole('heading', { name: company, exact: true }).first()).toBeVisible();
 
     const managerLogin = await login(contextB, 'visual.manager@acceptance.invalid', credentials);
     const pageB = managerLogin.page;

@@ -8,6 +8,7 @@ import {
   markAllTenantNotificationsRead,
   markTenantNotificationRead,
   markTenantNotificationUnread,
+  markTenantNotificationsSeen,
   type NotificationSummary,
   type TenantNotification,
 } from '@/lib/tenant-notifications-api';
@@ -15,6 +16,7 @@ import { mapTenantNotifications } from '@/lib/doflow-notifications';
 import { useNotifications, type RealtimeEvent } from '@/hooks/useNotifications';
 
 const EMPTY_SUMMARY: NotificationSummary = {
+  newNotifications: 0,
   unreadNotifications: 0,
   urgentNotifications: 0,
   taskOverdueNotifications: 0,
@@ -82,9 +84,20 @@ export function useDoflowNotifications() {
     (current) => current.map((item) => item.status === 'unread' ? { ...item, status: 'read' } : item),
     markAllTenantNotificationsRead,
   ), [optimistic]);
+  const markSeen = useCallback(async () => {
+    const previous = summary;
+    setSummary((current) => ({ ...current, newNotifications: 0 }));
+    try {
+      await markTenantNotificationsSeen();
+      await reload();
+    } catch (cause) {
+      setSummary(previous);
+      setError(cause instanceof Error ? cause.message : 'Stato notifiche non aggiornato');
+    }
+  }, [reload, summary]);
 
   return {
     notifications: mapTenantNotifications(records), summary, loading, error, reload,
-    markRead, archive, markAllRead, connected: realtime.connected, realtimeError: realtime.error,
+    markRead, archive, markAllRead, markSeen, connected: realtime.connected, realtimeError: realtime.error,
   };
 }

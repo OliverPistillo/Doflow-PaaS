@@ -15,3 +15,7 @@ export type FlowPreferences = {
   firstCompletedAt?: string
   updatedAt: string
 }
+
+export function shouldAutoOpenFlowWelcome(status: FlowPreferences["onboardingStatus"]) {
+  return status === "not_started"
+}

@@ -75,4 +75,35 @@ describe('TenantNotificationsService', () => {
 
     expect(summary.financeNotifications).toBe(0);
   });
+
+  it('counts new notifications after the persisted seen watermark independently from unread', async () => {
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT last_seen_at')) return [{ last_seen_at: '2026-08-28T08:00:00.000Z' }];
+      if (sql.includes('notification_digests')) return [];
+      if (sql.includes('created_at > COALESCE')) return [{ count: 3 }];
+      if (sql.includes("status = 'unread'")) return [{ count: 11 }];
+      if (sql.includes('COUNT(*)')) return [{ count: 0 }];
+      return [];
+    });
+    const { service } = makeService(query);
+    const summary = await service.summary({ user: { sub: '22222222-2222-4222-8222-222222222222', role: 'manager', tenantId: 'doflow' } });
+    expect(summary.newNotifications).toBe(3);
+    expect(summary.unreadNotifications).toBe(11);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('created_at > COALESCE'), expect.arrayContaining(['2026-08-28T08:00:00.000Z']));
+  });
+
+  it('marks only the maximum visible notification as seen so a concurrent newer row stays new', async () => {
+    const watermark = '2026-08-28T08:01:00.000Z';
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('SELECT MAX(created_at)')) return [{ watermark }];
+      if (sql.includes('INSERT INTO "doflow".notification_preferences')) return [{ last_seen_at: watermark }];
+      return [];
+    });
+    const { service } = makeService(query);
+    jest.spyOn(service as any, 'publishState').mockResolvedValue(undefined);
+    await expect(service.markSeen({ user: { sub: '22222222-2222-4222-8222-222222222222', role: 'manager', tenantId: 'doflow' } }))
+      .resolves.toEqual({ lastSeenAt: watermark, newNotifications: 0 });
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('MAX(created_at)'), expect.any(Array));
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('GREATEST'), ['22222222-2222-4222-8222-222222222222', watermark]);
+  });
 });

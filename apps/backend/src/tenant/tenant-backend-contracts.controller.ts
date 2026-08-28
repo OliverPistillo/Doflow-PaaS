@@ -7,7 +7,7 @@ import { TenantBackendContractsService } from './tenant-backend-contracts.servic
 @UseGuards(JwtAuthGuard, TenantUniversalScopeGuard)
 export class TenantBackendContractsController {
   constructor(private readonly service: TenantBackendContractsService) {}
-  private requiredKey(key?: string) { if (!String(key || '').trim()) throw new BadRequestException('Idempotency-Key obbligatoria'); return key; }
+  private requiredKey(key?: string) { if (!String(key || '').trim()) throw new BadRequestException('Idempotency-Key obbligatoria'); return String(key).trim(); }
 
   @Get('calendar-integrations') calendarIntegrations() { return this.service.calendarIntegrations(); }
   @Patch('calendar-integrations') updateCalendarIntegrations(@Body() body: Record<string, unknown>) { return this.service.updateCalendarIntegrations(body || {}); }
@@ -32,6 +32,7 @@ export class TenantBackendContractsController {
   @Get('inbox/state') inboxState() { return this.service.inboxState(); }
   @Patch('inbox/conversations/:companyId') updateInboxConversation(@Param('companyId') companyId: string, @Body() body: Record<string, unknown>, @Headers('idempotency-key') key?: string) { return this.service.updateInboxConversation(companyId, body || {}, this.requiredKey(key)); }
   @Post('inbox/conversations/:companyId/messages') scheduleInboxMessage(@Param('companyId') companyId: string, @Body() body: Record<string, unknown>, @Headers('idempotency-key') key?: string) { return this.service.scheduleInboxMessage(companyId, body || {}, this.requiredKey(key)); }
+  @Post('inbox/conversations/:companyId/email') sendInboxEmail(@Param('companyId') companyId: string, @Body() body: Record<string, unknown>, @Headers('idempotency-key') key?: string) { return this.service.sendInboxEmail(companyId, body || {}, this.requiredKey(key)); }
   @Put('inbox/conversations/:companyId/draft') saveInboxDraft(@Param('companyId') companyId: string, @Body() body: Record<string, unknown>) { return this.service.saveInboxDraft(companyId, body || {}); }
   @Post('inbox/conversations/:companyId/read') markInboxRead(@Param('companyId') companyId: string) { return this.service.markInboxRead(companyId); }
   @Put('inbox/filters') saveInboxFilters(@Body() body: Record<string, unknown>) { return this.service.saveInboxFilters(body || {}); }

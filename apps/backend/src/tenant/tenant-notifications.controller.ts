@@ -25,6 +25,11 @@ export class TenantNotificationsController {
     return this.service.markAllRead(req);
   }
 
+  @Patch('seen')
+  markSeen(@Req() req: any) {
+    return this.service.markSeen(req);
+  }
+
   @Get('preferences')
   preferences(@Req() req: any) {
     return this.service.getPreferences(req);

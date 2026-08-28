@@ -73,6 +73,11 @@ export const PRODUCTION_MIGRATIONS = [
     name: 'CompleteBackendContracts1860000000000',
     compiledFile: '1860000000000-CompleteBackendContracts.js',
   },
+  {
+    timestamp: 1870000000000,
+    name: 'AddCustomerInboxMailAndNotificationSeen1870000000000',
+    compiledFile: '1870000000000-AddCustomerInboxMailAndNotificationSeen.js',
+  },
 ] as const satisfies readonly ProductionMigrationDefinition[];
 
 export const PRODUCTION_MIGRATION_MAX =

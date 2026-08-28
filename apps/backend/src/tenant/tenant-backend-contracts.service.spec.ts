@@ -49,6 +49,10 @@ describe('TenantBackendContractsService Inbox state contract', () => {
       drafts: [],
       receipts: [],
       filters: DEFAULT_INBOX_STATE_FILTERS,
+      adapters: {
+        email: { outboundConfigured: false, inboundConfigured: false, lastSuccessfulSync: null, errorCode: null },
+        whatsapp: { mode: 'web_handoff' },
+      },
     });
     expect(access.require).toHaveBeenCalledWith(actor, 'canReadNotifications');
   });
@@ -81,5 +85,20 @@ describe('TenantBackendContractsService Inbox state contract', () => {
       injected: 'ignored',
     })).toEqual(DEFAULT_INBOX_STATE_FILTERS);
     expect(normalizeInboxStateFilters(null)).toEqual(DEFAULT_INBOX_STATE_FILTERS);
+  });
+
+  it('persists conversation receipts with a tenant user composite key', async () => {
+    const companyId = '11111111-1111-4111-8111-111111111111';
+    const query = jest.fn(async (sql: string) => {
+      if (sql.includes('FROM "doflow".companies')) return [{ id: companyId }];
+      if (sql.includes('customer_inbox_receipts')) return [{ company_id: companyId, user_id: actor.id }];
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+    const access = { current: jest.fn().mockResolvedValue(actor), require: jest.fn() };
+    const service = new TenantBackendContractsService({ query } as unknown as DataSource, access as unknown as TenantCommercialAccessService, {});
+
+    await expect(service.markInboxRead(companyId)).resolves.toMatchObject({ company_id: companyId, user_id: actor.id });
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('(company_id,user_id)'), [companyId, actor.id]);
+    expect(access.require).toHaveBeenCalledWith(actor, 'canReadNotifications');
   });
 });

@@ -141,6 +141,7 @@ async function provisionTenantNotificationsTables(ds: DataSource, schema: string
     CREATE TABLE IF NOT EXISTS "${s}".notification_preferences (
       id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
       user_id UUID NOT NULL,
+      last_seen_at TIMESTAMPTZ,
       muted_types TEXT[],
       muted_priorities TEXT[],
       daily_digest_enabled BOOLEAN NOT NULL DEFAULT true,
@@ -150,6 +151,9 @@ async function provisionTenantNotificationsTables(ds: DataSource, schema: string
       deleted_at TIMESTAMPTZ
     )
   `);
+  await addColumns(ds, s, 'notification_preferences', [
+    'last_seen_at TIMESTAMPTZ',
+  ]);
 
   await ds.query(`
     CREATE TABLE IF NOT EXISTS "${s}".notification_digests (

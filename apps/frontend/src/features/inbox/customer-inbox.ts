@@ -1,4 +1,4 @@
-export const inboxChannels = ["whatsapp", "email", "site", "portal", "support", "call", "sms"] as const
+export const inboxChannels = ["whatsapp", "email", "site", "support", "call", "sms"] as const
 export type InboxChannel = (typeof inboxChannels)[number]
 export const inboxStatuses = ["Da gestire", "In lavorazione", "In attesa cliente", "Risolta", "Archiviata"] as const
 export type InboxStatus = (typeof inboxStatuses)[number]
@@ -52,12 +52,12 @@ export type InboxMessage = {
   createdAt: string
 }
 export type InboxReceipt = { conversationId: string; userId: string; readAt: string }
-export type InboxSnapshot = { conversations: InboxConversation[]; messages: InboxMessage[]; receipts: InboxReceipt[]; drafts: Record<string, string>; filters: InboxFilters; transport: "server-postgresql"; productionReady: true }
+export type InboxAdapterStatus = { email: { outboundConfigured: boolean; inboundConfigured: boolean; lastSuccessfulSync: string | null; errorCode: string | null }; whatsapp: { mode: "web_handoff" } }
+export type InboxSnapshot = { conversations: InboxConversation[]; messages: InboxMessage[]; receipts: InboxReceipt[]; drafts: Record<string, string>; filters: InboxFilters; adapters: InboxAdapterStatus; transport: "server-postgresql"; productionReady: true }
 export type InboxFilters = { search: string; status: "all" | InboxStatus; priority: "all" | InboxPriority; channel: "all" | InboxChannel; scope: "all" | "mine"; unreadOnly: boolean }
 
 export const emptyInboxFilters: InboxFilters = { search: "", status: "all", priority: "all", channel: "all", scope: "all", unreadOnly: false }
-export const inboxChannelLabels: Record<InboxChannel, string> = { whatsapp: "WhatsApp", email: "Email", site: "Sito", portal: "Portale", support: "Supporto", call: "Chiamata", sms: "SMS" }
-export const inboxChannelConnected: Record<InboxChannel, boolean> = { whatsapp: false, email: false, site: false, portal: false, support: false, call: false, sms: false }
+export const inboxChannelLabels: Record<InboxChannel, string> = { whatsapp: "WhatsApp", email: "Email", site: "Sito", support: "Supporto", call: "Chiamata", sms: "SMS" }
 
 export const inboxTemplates = [
   { id: "first-response", label: "Prima risposta", text: "Ciao {{nome}}, grazie per averci contattato. Come possiamo aiutarti?" },
@@ -76,11 +76,24 @@ export const inboxTemplates = [
 
 export function normalizeInboxEmail(value?: string) { return value?.trim().toLocaleLowerCase("it-IT") ?? "" }
 export function normalizeInboxPhone(value?: string) {
-  const digits = (value ?? "").replace(/\D/g, "")
+  const raw = (value ?? "").trim()
+  const digits = raw.replace(/\D/g, "")
   if (!digits) return ""
-  if (digits.startsWith("0039")) return digits.slice(4)
-  if (digits.startsWith("39") && digits.length > 10) return digits.slice(2)
-  return digits
+  if (raw.startsWith("+")) return digits
+  if (digits.startsWith("00")) return digits.slice(2)
+  if (digits.startsWith("39") && digits.length > 10) return digits
+  return `39${digits}`
+}
+
+export function buildWhatsAppWebUrl(phoneValue: string | undefined, text: string) {
+  const phone = normalizeInboxPhone(phoneValue)
+  return phone ? `https://web.whatsapp.com/send?phone=${encodeURIComponent(phone)}&text=${encodeURIComponent(text)}` : ""
+}
+
+export function countUnreadInboxMessages(messages: InboxMessage[], receipts: InboxReceipt[], conversationId: string, userId: string) {
+  const receipt = receipts.find((item) => item.conversationId === conversationId && item.userId === userId)
+  const readAt = receipt ? Date.parse(receipt.readAt) : 0
+  return messages.filter((message) => message.conversationId === conversationId && message.direction === "incoming" && Date.parse(message.createdAt) > readAt).length
 }
 
 export function renderInboxTemplate(text: string, conversation: InboxConversation) {

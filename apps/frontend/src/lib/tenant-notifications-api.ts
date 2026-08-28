@@ -31,6 +31,7 @@ export type TenantNotification = {
 };
 
 export type NotificationSummary = {
+  newNotifications: number;
   unreadNotifications: number;
   urgentNotifications: number;
   taskOverdueNotifications: number;
@@ -143,6 +144,10 @@ export function deleteTenantNotification(id: string) {
 
 export function markAllTenantNotificationsRead() {
   return apiFetch<{ updated: number }>("/tenant/notifications/mark-all-read", { method: "PATCH" });
+}
+
+export function markTenantNotificationsSeen() {
+  return apiFetch<{ lastSeenAt: string | null; newNotifications: number }>("/tenant/notifications/seen", { method: "PATCH" });
 }
 
 export function listNotificationRules() {

@@ -80,7 +80,7 @@ function RoleDashboard({ user, collaboratorView = false }: { user: DoflowIdentit
   }
   const personalGoals = authorized.store.goals.filter((goal) => goal.status === "active" && goal.startsAt < monthTo && goal.endsAt >= monthFrom && (goal.targetType === "user" && goal.targetId === user.id || goal.targetType === "role" && Boolean(goal.targetId && user.roles.includes(goal.targetId as typeof user.roles[number])))).map((goal) => ({ goal, current: personalGoalValue(goal.metric) }))
 
-  return <main className="@container/main mx-auto w-full max-w-7xl space-y-6 p-4 md:p-6">
+  return <main className="@container/main mx-auto w-full max-w-none space-y-6 p-4 md:p-6">
     <header>{collaboratorView ? <div className="flex min-w-0 items-center gap-3"><UserAvatar userId={user.id} name={user.name} className="size-11" /><div className="min-w-0"><h1 className="truncate text-2xl font-semibold tracking-tight">Dashboard di {user.name}</h1><p className="text-sm text-muted-foreground">KPI, obiettivi e lavoro nel perimetro autorizzato.</p></div></div> : <DashboardGreeting name={user.name} timeZone={authorized.identity.personalPreferences.timeZone} />}<div className="mt-2 flex flex-wrap items-center gap-1"><Badge variant="outline">{collaboratorView ? "Vista collaboratore autorizzata" : "Dashboard personale autorizzata"}</Badge>{user.roles.map((role) => <Badge key={role} variant="secondary">{roleLabels[role]}</Badge>)}<RankingWinnerBadges userId={user.id} /></div></header>
     <section className="grid auto-rows-fr gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {commercial && <Metric label="Lead assegnati" value={leads.length} detail={`${won} conversioni vinte`} icon={UsersRound} href={ownView && (authorized.identity.hasCapability("canViewAllLeads") || authorized.identity.hasCapability("canViewAssignedLeads")) ? "/dashboard/commercial/leads?scope=mine" : undefined} />}
@@ -133,11 +133,11 @@ export function RoleAwareDashboard() {
 
   if (!administrator) return <RoleDashboard user={identity.currentUser} />
   return <div className="min-w-0">
-    <div className="mx-auto w-full max-w-7xl px-4 pt-4 md:px-6 md:pt-6" aria-label="Ambito dashboard amministratore">
+    <div className="mx-auto w-full max-w-none px-4 pt-4 md:px-6 md:pt-6" aria-label="Ambito dashboard amministratore">
       <div className="flex min-w-0 items-center gap-2 overflow-x-auto pb-1">
-        <Button size="sm" className="shrink-0" variant={view === "agency" ? "default" : "outline"} onClick={() => setView("agency")}>Agenzia</Button>
-        <Button size="sm" className="shrink-0" variant={view === "personal" ? "default" : "outline"} onClick={() => setView("personal")}>Personale</Button>
-        <Button size="sm" className="shrink-0" variant={view === "collaborator" ? "default" : "outline"} onClick={() => setView("collaborator")}>Collaboratore</Button>
+        <Button size="sm" className="shrink-0 rounded-lg" variant={view === "agency" ? "default" : "outline"} onClick={() => setView("agency")}>Agenzia</Button>
+        <Button size="sm" className="shrink-0 rounded-lg" variant={view === "personal" ? "default" : "outline"} onClick={() => setView("personal")}>Personale</Button>
+        <Button size="sm" className="shrink-0 rounded-lg" variant={view === "collaborator" ? "default" : "outline"} onClick={() => setView("collaborator")}>Collaboratore</Button>
         <Badge variant="outline" className="ml-auto hidden shrink-0 sm:inline-flex"><BriefcaseBusiness className="mr-1 size-3" />Dati filtrati per capacità</Badge>
       </div>
       {view === "collaborator" && <div className="mt-3 flex min-w-0 flex-col gap-3 rounded-xl border bg-muted/25 p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -148,6 +148,6 @@ export function RoleAwareDashboard() {
         </Popover>
       </div>}
     </div>
-    {view === "agency" ? <DashboardOverview /> : view === "personal" ? <RoleDashboard user={identity.currentUser} /> : selectedUser ? <RoleDashboard user={selectedUser} collaboratorView /> : <div className="mx-auto w-full max-w-7xl px-4 py-8 md:px-6"><Card className="border-dashed"><CardContent className="flex min-h-44 flex-col items-center justify-center gap-2 text-center"><UserRoundSearch className="size-8 text-muted-foreground" /><CardTitle className="text-base">Seleziona un collaboratore</CardTitle><CardDescription>I KPI e gli obiettivi verranno mostrati soltanto dopo una scelta esplicita.</CardDescription></CardContent></Card></div>}
+    {view === "agency" ? <DashboardOverview /> : view === "personal" ? <RoleDashboard user={identity.currentUser} /> : selectedUser ? <RoleDashboard user={selectedUser} collaboratorView /> : <div className="mx-auto w-full max-w-none px-4 py-8 md:px-6"><Card className="border-dashed"><CardContent className="flex min-h-44 flex-col items-center justify-center gap-2 text-center"><UserRoundSearch className="size-8 text-muted-foreground" /><CardTitle className="text-base">Seleziona un collaboratore</CardTitle><CardDescription>I KPI e gli obiettivi verranno mostrati soltanto dopo una scelta esplicita.</CardDescription></CardContent></Card></div>}
   </div>
 }
