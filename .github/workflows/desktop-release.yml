@@ -41,11 +41,13 @@ jobs:
         with:
           node-version: 20.19.6
 
-      - name: Enable the repository pnpm version
+      - name: Enable Corepack
         shell: pwsh
-        run: |
-          corepack enable
-          pnpm --version
+        run: corepack enable
+
+      - name: Verify the repository pnpm version
+        shell: pwsh
+        run: pnpm --version
 
       - name: Install locked dependencies
         shell: pwsh
@@ -55,26 +57,40 @@ jobs:
         shell: pwsh
         run: rustup target add x86_64-pc-windows-msvc
 
-      - name: Validate Desktop TypeScript, UI tests, and Vite bundle
+      - name: Validate Desktop TypeScript
         shell: pwsh
-        run: |
-          pnpm -C apps/desktop type-check
-          pnpm -C apps/desktop test
-          pnpm -C apps/desktop build
+        run: pnpm -C apps/desktop type-check
 
-      - name: Validate Rust formatting, lint, and tests
+      - name: Run Desktop UI tests
+        shell: pwsh
+        run: pnpm -C apps/desktop test
+
+      - name: Build Desktop Vite bundle
+        shell: pwsh
+        run: pnpm -C apps/desktop build
+
+      - name: Validate Rust formatting
         shell: pwsh
         working-directory: apps/desktop/src-tauri
-        run: |
-          cargo fmt --all -- --check
-          cargo clippy --target x86_64-pc-windows-msvc --all-targets -- -D warnings
-          cargo test --target x86_64-pc-windows-msvc
+        run: cargo fmt --all -- --check
 
-      - name: Verify touched cloud contracts still build
+      - name: Run Rust Clippy
         shell: pwsh
-        run: |
-          pnpm -C apps/frontend type-check
-          pnpm -C apps/backend build
+        working-directory: apps/desktop/src-tauri
+        run: cargo clippy --target x86_64-pc-windows-msvc --all-targets -- -D warnings
+
+      - name: Run Rust tests
+        shell: pwsh
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --target x86_64-pc-windows-msvc
+
+      - name: Verify frontend Desktop contract still type-checks
+        shell: pwsh
+        run: pnpm -C apps/frontend type-check
+
+      - name: Verify backend Desktop contract still builds
+        shell: pwsh
+        run: pnpm -C apps/backend build
 
   release-gate:
     name: Check explicit release enable gate
@@ -116,11 +132,13 @@ jobs:
         with:
           node-version: 20.19.6
 
-      - name: Enable the repository pnpm version
+      - name: Enable Corepack
         shell: pwsh
-        run: |
-          corepack enable
-          pnpm --version
+        run: corepack enable
+
+      - name: Verify the repository pnpm version
+        shell: pwsh
+        run: pnpm --version
 
       - name: Install locked dependencies
         shell: pwsh
@@ -152,7 +170,11 @@ jobs:
           DOFLOW_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_SIGNING_PUBLIC_KEY }}
         run: |
           git fetch origin --tags --force
-          if (git rev-parse --verify --quiet "refs/tags/$env:DESKTOP_TAG") { throw "Desktop tag already exists; refusing to overwrite it" }
+          if ($LASTEXITCODE -ne 0) { throw "unable to fetch Desktop release tags" }
+          git rev-parse --verify --quiet "refs/tags/$env:DESKTOP_TAG"
+          $tagLookupExitCode = $LASTEXITCODE
+          if ($tagLookupExitCode -eq 0) { throw "Desktop tag already exists; refusing to overwrite it" }
+          if ($tagLookupExitCode -ne 1) { throw "unable to verify whether the Desktop tag exists" }
           @{
             version = $env:DESKTOP_VERSION
             plugins = @{
@@ -189,9 +211,14 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path desktop-release-assets | Out-Null
           gh release download $env:DESKTOP_TAG --dir desktop-release-assets
+          if ($LASTEXITCODE -ne 0) { throw "unable to download Desktop release artifacts" }
           node apps/desktop/scripts/validate-release-assets.mjs desktop-release-assets $env:DESKTOP_VERSION
+          if ($LASTEXITCODE -ne 0) { throw "Desktop release artifact validation failed" }
           git fetch origin "refs/tags/$env:DESKTOP_TAG:refs/tags/$env:DESKTOP_TAG"
-          $tagCommit = (git rev-list -n 1 $env:DESKTOP_TAG).Trim()
+          if ($LASTEXITCODE -ne 0) { throw "unable to fetch the Desktop release tag" }
+          $tagCommit = git rev-list -n 1 $env:DESKTOP_TAG
+          if ($LASTEXITCODE -ne 0) { throw "unable to resolve the Desktop release tag" }
+          $tagCommit = "$tagCommit".Trim()
           if ($tagCommit -ne "$env:GITHUB_SHA") { throw "Desktop release tag does not target the triggering main SHA" }
 
       - name: Attach release policy and publish only the validated draft
@@ -204,4 +231,6 @@ jobs:
           if ($policy.schemaVersion -ne 1 -or $policy.channel -ne "stable" -or -not $policy.minimumSupportedVersion) { throw "Desktop release policy is invalid" }
           Copy-Item apps/desktop/release-policy.json desktop-policy.json
           gh release upload $env:DESKTOP_TAG desktop-policy.json --clobber
+          if ($LASTEXITCODE -ne 0) { throw "unable to upload the Desktop release policy" }
           gh release edit $env:DESKTOP_TAG --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw "unable to publish the validated Desktop release" }

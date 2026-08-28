@@ -5,6 +5,27 @@ import { describe, expect, it } from "vitest";
 
 const desktopRoot = resolve(import.meta.dirname, "..");
 
+function assertWebViewStartupContract(source: string) {
+  const visibleIndex = source.indexOf(".visible(true)");
+  const alwaysOnBottomIndex = source.indexOf(".always_on_bottom(true)");
+  const buildIndex = source.indexOf(".build()");
+  const hideIndex = source.indexOf(".hide()");
+
+  expect(visibleIndex).toBeGreaterThan(-1);
+  expect(alwaysOnBottomIndex).toBeGreaterThan(visibleIndex);
+  expect(buildIndex).toBeGreaterThan(alwaysOnBottomIndex);
+  expect(hideIndex).toBeGreaterThan(buildIndex);
+  expect(source).not.toContain(".user_agent(");
+}
+
+function workflowStep(job: string, name: string) {
+  const marker = `      - name: ${name}`;
+  const start = job.indexOf(marker);
+  if (start === -1) throw new Error(`Workflow step is missing: ${name}`);
+  const next = job.indexOf("\n      - name:", start + marker.length);
+  return job.slice(start, next === -1 ? job.length : next);
+}
+
 describe("remote WebView security contract", () => {
   it("grants only the six versioned Desktop bridge commands to app.doflow.it", () => {
     const capability = JSON.parse(
@@ -51,10 +72,10 @@ describe("remote WebView startup regression", () => {
   });
 
   it("initializes WebView2 before hiding and does not replace its browser user agent", () => {
-    expect(webviewSource).toContain(".visible(true)");
-    expect(webviewSource).toContain(".always_on_bottom(true)");
-    expect(webviewSource).toContain("window\n            .hide()");
-    expect(webviewSource).not.toContain(".user_agent(");
+    const lfSource = webviewSource.replace(/\r\n/g, "\n");
+    const crlfSource = lfSource.replace(/\n/g, "\r\n");
+    assertWebViewStartupContract(lfSource);
+    assertWebViewStartupContract(crlfSource);
   });
 
   it("signals only the actually loaded login route as a needs-auth fallback", () => {
@@ -96,6 +117,54 @@ describe("Desktop release workflow", () => {
       expect(job.indexOf("pnpm --version")).toBeGreaterThan(job.indexOf("corepack enable"));
       expect(job.indexOf("pnpm install --frozen-lockfile")).toBeGreaterThan(job.indexOf("pnpm --version"));
     }
+  });
+
+  it("uses an independent workflow step for every validation gate", () => {
+    const gates = [
+      ["Validate Desktop TypeScript", "pnpm -C apps/desktop type-check"],
+      ["Run Desktop UI tests", "pnpm -C apps/desktop test"],
+      ["Build Desktop Vite bundle", "pnpm -C apps/desktop build"],
+      ["Validate Rust formatting", "cargo fmt --all -- --check"],
+      ["Run Rust Clippy", "cargo clippy --target x86_64-pc-windows-msvc --all-targets -- -D warnings"],
+      ["Run Rust tests", "cargo test --target x86_64-pc-windows-msvc"],
+      ["Verify frontend Desktop contract still type-checks", "pnpm -C apps/frontend type-check"],
+      ["Verify backend Desktop contract still builds", "pnpm -C apps/backend build"],
+    ];
+
+    for (const [name, command] of gates) {
+      expect(workflowStep(validateJob, name)).toContain(`run: ${command}`);
+    }
+  });
+
+  it("checks every critical native command before the release workflow continues", () => {
+    const tagStep = workflowStep(releaseJob, "Reject an existing or raced tag and prepare version override");
+    expect(tagStep.indexOf('if ($LASTEXITCODE -ne 0) { throw "unable to fetch Desktop release tags" }')).toBeGreaterThan(tagStep.indexOf("git fetch origin --tags --force"));
+    expect(tagStep.indexOf("$tagLookupExitCode = $LASTEXITCODE")).toBeGreaterThan(tagStep.indexOf("git rev-parse --verify --quiet"));
+    expect(tagStep).toContain("if ($tagLookupExitCode -ne 1)");
+
+    const artifactStep = workflowStep(releaseJob, "Download and validate every draft release artifact");
+    const downloadGuard = artifactStep.indexOf('throw "unable to download Desktop release artifacts"');
+    const validation = artifactStep.indexOf("validate-release-assets.mjs");
+    const validationGuard = artifactStep.indexOf('throw "Desktop release artifact validation failed"');
+    const fetchTag = artifactStep.indexOf('git fetch origin "refs/tags/$env:DESKTOP_TAG');
+    const fetchTagGuard = artifactStep.indexOf('throw "unable to fetch the Desktop release tag"');
+    const revList = artifactStep.indexOf("git rev-list -n 1");
+    const revListGuard = artifactStep.indexOf('throw "unable to resolve the Desktop release tag"');
+    expect(downloadGuard).toBeGreaterThan(artifactStep.indexOf("gh release download"));
+    expect(validation).toBeGreaterThan(downloadGuard);
+    expect(validationGuard).toBeGreaterThan(validation);
+    expect(fetchTag).toBeGreaterThan(validationGuard);
+    expect(fetchTagGuard).toBeGreaterThan(fetchTag);
+    expect(revList).toBeGreaterThan(fetchTagGuard);
+    expect(revListGuard).toBeGreaterThan(revList);
+
+    const publishStep = workflowStep(releaseJob, "Attach release policy and publish only the validated draft");
+    const uploadGuard = publishStep.indexOf('throw "unable to upload the Desktop release policy"');
+    const publish = publishStep.indexOf("gh release edit");
+    const publishGuard = publishStep.indexOf('throw "unable to publish the validated Desktop release"');
+    expect(uploadGuard).toBeGreaterThan(publishStep.indexOf("gh release upload"));
+    expect(publish).toBeGreaterThan(uploadGuard);
+    expect(publishGuard).toBeGreaterThan(publish);
   });
 
   it("builds the triggering SHA and validates signed draft artifacts before publishing", () => {
