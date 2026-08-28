@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   archiveTenantNotification,
   getTenantNotificationSummary,
@@ -30,20 +30,25 @@ export function useDoflowNotifications() {
   const [summary, setSummary] = useState<NotificationSummary>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const reloadSequence = useRef(0);
+  const markSeenPending = useRef(false);
 
   const reload = useCallback(async () => {
+    const requestId = ++reloadSequence.current;
     try {
       const [list, nextSummary] = await Promise.all([
         listTenantNotifications({ limit: 100, sortBy: 'created_at', sortDir: 'desc' }),
         getTenantNotificationSummary(),
       ]);
+      if (requestId !== reloadSequence.current) return;
       setRecords(list.items || []);
-      setSummary(nextSummary);
+      if (!markSeenPending.current) setSummary(nextSummary);
       setError(null);
     } catch (cause) {
+      if (requestId !== reloadSequence.current) return;
       setError(cause instanceof Error ? cause.message : 'Notifiche non disponibili');
     } finally {
-      setLoading(false);
+      if (requestId === reloadSequence.current) setLoading(false);
     }
   }, []);
 
@@ -85,15 +90,22 @@ export function useDoflowNotifications() {
     markAllTenantNotificationsRead,
   ), [optimistic]);
   const markSeen = useCallback(async () => {
+    if (markSeenPending.current) return;
+    markSeenPending.current = true;
+    reloadSequence.current += 1;
     const previous = summary;
     setSummary((current) => ({ ...current, newNotifications: 0 }));
     try {
       await markTenantNotificationsSeen();
-      await reload();
     } catch (cause) {
+      markSeenPending.current = false;
+      reloadSequence.current += 1;
       setSummary(previous);
       setError(cause instanceof Error ? cause.message : 'Stato notifiche non aggiornato');
+      return;
     }
+    markSeenPending.current = false;
+    await reload();
   }, [reload, summary]);
 
   return {

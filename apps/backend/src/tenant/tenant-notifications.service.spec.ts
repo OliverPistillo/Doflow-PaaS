@@ -77,8 +77,7 @@ describe('TenantNotificationsService', () => {
   });
 
   it('counts new notifications after the persisted seen watermark independently from unread', async () => {
-    const query = jest.fn(async (sql: string) => {
-      if (sql.includes('SELECT last_seen_at')) return [{ last_seen_at: '2026-08-28T08:00:00.000Z' }];
+    const query = jest.fn(async (sql: string, _params?: unknown[]) => {
       if (sql.includes('notification_digests')) return [];
       if (sql.includes('created_at > COALESCE')) return [{ count: 3 }];
       if (sql.includes("status = 'unread'")) return [{ count: 11 }];
@@ -89,21 +88,32 @@ describe('TenantNotificationsService', () => {
     const summary = await service.summary({ user: { sub: '22222222-2222-4222-8222-222222222222', role: 'manager', tenantId: 'doflow' } });
     expect(summary.newNotifications).toBe(3);
     expect(summary.unreadNotifications).toBe(11);
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('created_at > COALESCE'), expect.arrayContaining(['2026-08-28T08:00:00.000Z']));
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('SELECT preference.last_seen_at'),
+      expect.arrayContaining(['22222222-2222-4222-8222-222222222222']),
+    );
   });
 
-  it('marks only the maximum visible notification as seen so a concurrent newer row stays new', async () => {
-    const watermark = '2026-08-28T08:01:00.000Z';
-    const query = jest.fn(async (sql: string) => {
-      if (sql.includes('SELECT MAX(created_at)')) return [{ watermark }];
-      if (sql.includes('INSERT INTO "doflow".notification_preferences')) return [{ last_seen_at: watermark }];
+  it('persists the maximum visible notification inside PostgreSQL without a Date roundtrip', async () => {
+    const watermark = '2026-08-28T08:01:00.123456Z';
+    const query = jest.fn(async (sql: string, _params?: unknown[]) => {
+      if (sql.includes('INSERT INTO "doflow".notification_preferences')) return [[{ last_seen_at: watermark }], 1];
       return [];
     });
     const { service } = makeService(query);
     jest.spyOn(service as any, 'publishState').mockResolvedValue(undefined);
     await expect(service.markSeen({ user: { sub: '22222222-2222-4222-8222-222222222222', role: 'manager', tenantId: 'doflow' } }))
       .resolves.toEqual({ lastSeenAt: watermark, newNotifications: 0 });
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('MAX(created_at)'), expect.any(Array));
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('GREATEST'), ['22222222-2222-4222-8222-222222222222', watermark]);
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringMatching(/WITH visible_watermark[\s\S]*MAX\(created_at\)[\s\S]*INSERT INTO "doflow"\.notification_preferences[\s\S]*GREATEST/),
+      [
+        '22222222-2222-4222-8222-222222222222',
+        '22222222-2222-4222-8222-222222222222',
+        'manager',
+        expect.arrayContaining(['invoice_overdue']),
+      ],
+    );
+    expect(query.mock.calls[0][1]).not.toEqual(expect.arrayContaining([expect.any(Date)]));
   });
 });

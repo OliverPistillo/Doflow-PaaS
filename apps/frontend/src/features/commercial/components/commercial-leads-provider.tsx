@@ -11,7 +11,10 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import { pipelineStages } from "@/features/commercial/pipeline-stages";
+import {
+  normalizePipelineStage,
+  pipelineStages,
+} from "@/features/commercial/pipeline-stages";
 import {
   defaultCommerceSettings,
   type CommerceSettings,
@@ -4674,15 +4677,31 @@ export function CommercialLeadsProvider({
           reason: options?.reason,
           note: options?.note,
         });
+        const persistedVersion = Number(response.item?.version);
+        if (
+          !response.item ||
+          Array.isArray(response.item) ||
+          response.item.id !== leadId ||
+          !Number.isInteger(persistedVersion) ||
+          persistedVersion < 1
+        ) {
+          throw new Error("Risposta transizione lead non valida: ricarica la pagina");
+        }
+        const persistedStage = normalizePipelineStage(
+          response.item.ui_stage || response.item.stage,
+        );
         setLeads((items) =>
           items.map((item) =>
             item.id === leadId
               ? {
                   ...item,
-                  stage: toStatus,
-                  status: toStatus,
-                  version: response.item.version,
-                  lastContact: dateValue(response.item.updated_at),
+                  stage: persistedStage,
+                  status: persistedStage,
+                  version: persistedVersion,
+                  lastContact: dateValue(
+                    response.item.updated_at,
+                    item.lastContact,
+                  ),
                 }
               : item,
           ),
@@ -4690,8 +4709,8 @@ export function CommercialLeadsProvider({
         setOrder((current) => ({
           ...current,
           [previousStage]: current[previousStage].filter((id) => id !== leadId),
-          [toStatus]: [
-            ...current[toStatus].filter((id) => id !== leadId),
+          [persistedStage]: [
+            ...current[persistedStage].filter((id) => id !== leadId),
             leadId,
           ],
         }));

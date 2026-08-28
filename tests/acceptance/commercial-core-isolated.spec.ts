@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Locator, type Page, type Route } from '@playwright/test';
 import { createHmac, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -288,6 +288,156 @@ test('Commercial Core usa PostgreSQL e Redis con sessioni e tenant realmente iso
 
     const ownerLogin = await login(contextA, credentials.email, credentials, true);
     const pageA = ownerLogin.page;
+    const notificationActor = (await db.query(
+      'SELECT id::text, lower(role) AS role FROM public.users WHERE lower(email) = lower($1) LIMIT 1',
+      [credentials.email],
+    )).rows[0];
+    expect(notificationActor?.id).toBeTruthy();
+    const initialNotificationSummary = await appFetch(pageA, '/tenant/notifications/summary');
+    expect(initialNotificationSummary.ok).toBe(true);
+    const initialUnread = Number(initialNotificationSummary.json.unreadNotifications || 0);
+    await db.query(
+      `WITH watermark AS (
+         SELECT MAX(created_at) AS value
+         FROM doflow.notifications
+         WHERE deleted_at IS NULL
+           AND (recipient_user_id = $1 OR lower(coalesce(recipient_role, '')) = $2)
+       )
+       INSERT INTO doflow.notification_preferences (user_id, last_seen_at, created_at, updated_at)
+       SELECT $1, watermark.value, now(), now() FROM watermark
+       ON CONFLICT (user_id) WHERE deleted_at IS NULL DO UPDATE
+       SET last_seen_at = EXCLUDED.last_seen_at, updated_at = now()`,
+      [notificationActor.id, notificationActor.role],
+    );
+    const otherDoflowUser = (await db.query(
+      `SELECT id::text FROM public.users
+       WHERE lower(email) = 'visual.manager@acceptance.invalid'
+       LIMIT 1`,
+    )).rows[0];
+    expect(otherDoflowUser?.id).toBeTruthy();
+    const isolationSentinel = '2000-01-01T00:00:00.123456Z';
+    for (const schema of ['doflow', 'acceptance_secondary']) {
+      await db.query(
+        `INSERT INTO "${schema}".notification_preferences (user_id, last_seen_at, created_at, updated_at)
+         VALUES ($1, $2::timestamptz, now(), now())
+         ON CONFLICT (user_id) WHERE deleted_at IS NULL DO UPDATE
+         SET last_seen_at = EXCLUDED.last_seen_at, updated_at = now()`,
+        [otherDoflowUser.id, isolationSentinel],
+      );
+    }
+    const notificationIds = Array.from({ length: 5 }, () => randomUUID());
+    await db.query(
+      `WITH base AS (
+         SELECT date_trunc('second', clock_timestamp()) + interval '0.123450 seconds' AS value
+       )
+       INSERT INTO doflow.notifications (
+         id, recipient_user_id, title, type, priority, status, fingerprint, created_at, updated_at
+       )
+       SELECT ids.id, $2, 'Synthetic notification', 'hotfix_acceptance', 'medium', 'unread',
+              $3 || ':' || ids.ordinality, base.value + ids.ordinality * interval '1 microsecond',
+              base.value + ids.ordinality * interval '1 microsecond'
+       FROM unnest($1::uuid[]) WITH ORDINALITY AS ids(id, ordinality)
+       CROSS JOIN base`,
+      [notificationIds, notificationActor.id, `hotfix:${marker}:initial`],
+    );
+    const fiveNotificationSummary = await appFetch(pageA, '/tenant/notifications/summary');
+    expect(fiveNotificationSummary.ok).toBe(true);
+    expect(fiveNotificationSummary.json.newNotifications).toBe(5);
+    expect(fiveNotificationSummary.json.unreadNotifications).toBe(initialUnread + 5);
+    const firstSeen = await appFetch(pageA, '/tenant/notifications/seen', { method: 'PATCH' });
+    expect(firstSeen.ok).toBe(true);
+    const afterFirstSeen = await appFetch(pageA, '/tenant/notifications/summary');
+    expect(afterFirstSeen.json.newNotifications).toBe(0);
+    expect(afterFirstSeen.json.unreadNotifications).toBe(initialUnread + 5);
+    const precisionAudit = (await db.query(
+      `SELECT preference.last_seen_at = visible.maximum AS exact,
+              to_char(preference.last_seen_at, 'YYYY-MM-DD HH24:MI:SS.US') AS seen,
+              to_char(visible.maximum, 'YYYY-MM-DD HH24:MI:SS.US') AS maximum
+       FROM doflow.notification_preferences preference
+       CROSS JOIN LATERAL (
+         SELECT MAX(created_at) AS maximum
+         FROM doflow.notifications
+         WHERE recipient_user_id = $1 AND deleted_at IS NULL
+       ) visible
+       WHERE preference.user_id = $1 AND preference.deleted_at IS NULL`,
+      [notificationActor.id],
+    )).rows[0];
+    expect(precisionAudit).toMatchObject({ exact: true });
+    expect(precisionAudit.seen).toBe(precisionAudit.maximum);
+    const markOneRead = await appFetch(pageA, `/tenant/notifications/${notificationIds[0]}/read`, { method: 'PATCH' });
+    expect(markOneRead.ok).toBe(true);
+    const afterOneRead = await appFetch(pageA, '/tenant/notifications/summary');
+    expect(afterOneRead.json.newNotifications).toBe(0);
+    expect(afterOneRead.json.unreadNotifications).toBe(initialUnread + 4);
+    const laterNotificationId = randomUUID();
+    await db.query(
+      `INSERT INTO doflow.notifications (
+         id, recipient_user_id, title, type, priority, status, fingerprint, created_at, updated_at
+       )
+       SELECT $1, $2, 'Synthetic later notification', 'hotfix_acceptance', 'medium', 'unread', $3,
+              last_seen_at + interval '1 microsecond', last_seen_at + interval '1 microsecond'
+       FROM doflow.notification_preferences
+       WHERE user_id = $2 AND deleted_at IS NULL`,
+      [laterNotificationId, notificationActor.id, `hotfix:${marker}:later`],
+    );
+    const afterConcurrentInsert = await appFetch(pageA, '/tenant/notifications/summary');
+    expect(afterConcurrentInsert.json.newNotifications).toBe(1);
+    const secondSeen = await appFetch(pageA, '/tenant/notifications/seen', { method: 'PATCH' });
+    expect(secondSeen.ok).toBe(true);
+    expect((await appFetch(pageA, '/tenant/notifications/summary')).json.newNotifications).toBe(0);
+    const isolationRows = await db.query(
+      `SELECT
+         (SELECT last_seen_at::text FROM doflow.notification_preferences WHERE user_id = $1 AND deleted_at IS NULL) AS user_b,
+         (SELECT last_seen_at::text FROM acceptance_secondary.notification_preferences WHERE user_id = $1 AND deleted_at IS NULL) AS tenant_b`,
+      [otherDoflowUser.id],
+    );
+    expect(new Date(isolationRows.rows[0].user_b).toISOString()).toBe('2000-01-01T00:00:00.123Z');
+    expect(new Date(isolationRows.rows[0].tenant_b).toISOString()).toBe('2000-01-01T00:00:00.123Z');
+
+    const staleNotificationId = randomUUID();
+    await db.query(
+      `INSERT INTO doflow.notifications (
+         id, recipient_user_id, title, type, priority, status, fingerprint, created_at, updated_at
+       )
+       SELECT $1, $2, 'Synthetic stale response notification', 'hotfix_acceptance', 'medium', 'unread', $3,
+              last_seen_at + interval '1 microsecond', last_seen_at + interval '1 microsecond'
+       FROM doflow.notification_preferences
+       WHERE user_id = $2 AND deleted_at IS NULL`,
+      [staleNotificationId, notificationActor.id, `hotfix:${marker}:stale`],
+    );
+    let releaseStaleSummary!: () => void;
+    let staleSummaryStarted!: () => void;
+    const staleSummaryRelease = new Promise<void>((resolve) => { releaseStaleSummary = resolve; });
+    const staleSummaryRequest = new Promise<void>((resolve) => { staleSummaryStarted = resolve; });
+    let heldSummary = false;
+    const holdStaleSummary = async (route: Route) => {
+      if (heldSummary) return route.continue();
+      heldSummary = true;
+      const response = await route.fetch();
+      staleSummaryStarted();
+      await staleSummaryRelease;
+      await route.fulfill({ response });
+    };
+    await pageA.route('**/api/tenant/notifications/summary*', holdStaleSummary);
+    await pageA.reload({ waitUntil: 'domcontentloaded' });
+    await staleSummaryRequest;
+    const seenResponse = pageA.waitForResponse(
+      (response) => response.url().includes('/api/tenant/notifications/seen') && response.request().method() === 'PATCH',
+    );
+    const notificationBell = pageA.getByRole('button', { name: 'Apri notifiche' });
+    await notificationBell.click();
+    expect((await seenResponse).ok()).toBe(true);
+    releaseStaleSummary();
+    await pageA.waitForTimeout(300);
+    await pageA.unroute('**/api/tenant/notifications/summary*', holdStaleSummary);
+    await expect(notificationBell).not.toContainText('1');
+    expect((await appFetch(pageA, '/tenant/notifications/summary')).json.newNotifications).toBe(0);
+    await notificationBell.click();
+    await notificationBell.click();
+    await expect(notificationBell).not.toContainText('1');
+    await pageA.reload({ waitUntil: 'domcontentloaded' });
+    await expect(pageA.getByRole('button', { name: 'Apri notifiche' })).not.toContainText('1');
+
     const lead = await createLeadThroughUi(pageA, {
       marker,
       company,
@@ -328,8 +478,13 @@ test('Commercial Core usa PostgreSQL e Redis con sessioni e tenant realmente iso
     await dismissFlowOverlays(pageA, true);
     const pipelineCard = () => pageA.locator(`[data-commercial-deal="${pipelineLead.id}"]`);
     const pipelineMutations: string[] = [];
+    const pipelineDestructiveMutations: string[] = [];
     const observePipelineMutation = (request: { method(): string; url(): string }) => {
       if (request.method() === 'PATCH' && /\/api\/tenant\/commercial\/pipeline\//.test(request.url())) pipelineMutations.push(request.url());
+      if (
+        /\/api\/tenant\/commercial\/archive\//.test(request.url()) ||
+        (request.method() === 'DELETE' && /\/api\/tenant\/crm\/opportunities\//.test(request.url()))
+      ) pipelineDestructiveMutations.push(request.url());
     };
     pageA.on('request', observePipelineMutation);
     await pipelineCard().getByRole('button', { name: `Azioni ${pipelineCompany}` }).click();
@@ -342,7 +497,17 @@ test('Commercial Core usa PostgreSQL e Redis con sessioni e tenant realmente iso
       { timeout: 30_000 },
     );
     await dragCenterTo(pageA, pipelineCard(), pageA.locator('[data-commercial-stage="proposal"]'));
-    expect((await crossColumnResponse).ok()).toBe(true);
+    const completedCrossColumnResponse = await crossColumnResponse;
+    expect(completedCrossColumnResponse.ok()).toBe(true);
+    const completedCrossColumnBody = await completedCrossColumnResponse.json();
+    expect({
+      stage: completedCrossColumnBody.item.stage,
+      uiStage: completedCrossColumnBody.item.ui_stage,
+      itemKeys: Object.keys(completedCrossColumnBody.item).sort(),
+    }).toEqual(expect.objectContaining({ stage: 'quote', uiStage: 'proposal' }));
+    await expect(pageA.locator('[data-commercial-stage="new"]', { has: pipelineCard() })).toHaveCount(0);
+    await expect(pageA.locator('[data-commercial-stage="proposal"]', { has: pipelineCard() })).toHaveCount(1);
+    await expect(pageA.locator(`[data-commercial-stage] [data-commercial-deal="${pipelineLead.id}"]`)).toHaveCount(1);
     await pageA.reload({ waitUntil: 'domcontentloaded' });
     await dismissFlowOverlays(pageA);
     await expect(pageA.locator('[data-commercial-stage="proposal"]', { has: pipelineCard() })).toBeVisible();
@@ -373,6 +538,86 @@ test('Commercial Core usa PostgreSQL e Redis con sessioni e tenant realmente iso
     const orderAfter = await pageA.locator('[data-commercial-stage="qualified"] [data-commercial-deal]').evaluateAll((cards) => cards.map((card) => card.getAttribute('data-commercial-deal')));
     expect(orderAfter).not.toEqual(orderBefore);
     expect(orderAfter.indexOf(pipelineLead.id) < orderAfter.indexOf(lead.id)).toBe(!pipelineWasBeforeLead);
+
+    const failureMarker = `${marker}-FAIL`;
+    const failureCompany = `Pipeline failure ${failureMarker}`;
+    const failureLead = await createLeadThroughUi(pageA, {
+      marker: failureMarker,
+      company: failureCompany,
+      email: `pipeline.failure.${marker.toLowerCase()}@example.invalid`,
+      firstName: 'Failure',
+      lastName: marker,
+    });
+    await pageA.goto('/dashboard/commercial/pipeline');
+    await dismissFlowOverlays(pageA, true);
+    const failureCard = () => pageA.locator(`[data-commercial-deal="${failureLead.id}"]`);
+    let failedMoveAttempts = 0;
+    let releaseFailedMove!: () => void;
+    let failedMoveStarted!: () => void;
+    const failedMoveRelease = new Promise<void>((resolve) => { releaseFailedMove = resolve; });
+    const failedMoveRequest = new Promise<void>((resolve) => { failedMoveStarted = resolve; });
+    const failTransition = async (route: Route) => {
+      failedMoveAttempts += 1;
+      failedMoveStarted();
+      await failedMoveRelease;
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'Synthetic transition failure' }) });
+    };
+    await pageA.route(`**/api/tenant/commercial/pipeline/${failureLead.id}/transition`, failTransition);
+    await failureCard().getByRole('button', { name: `Azioni ${failureCompany}` }).click();
+    await pageA.getByRole('menuitem', { name: 'Sposta in', exact: true }).hover();
+    await pageA.getByRole('menuitem', { name: 'Qualificato', exact: true }).click();
+    await failedMoveRequest;
+    await expect(failureCard().getByRole('button', { name: `Azioni ${failureCompany}` })).toBeDisabled();
+    releaseFailedMove();
+    await pageA.waitForTimeout(200);
+    await pageA.unroute(`**/api/tenant/commercial/pipeline/${failureLead.id}/transition`, failTransition);
+    expect(failedMoveAttempts).toBe(1);
+    await expect(pageA.locator('[data-commercial-stage="new"]', { has: failureCard() })).toHaveCount(1);
+    await expect(pageA.locator(`[data-commercial-stage] [data-commercial-deal="${failureLead.id}"]`)).toHaveCount(1);
+
+    await failureCard().getByRole('button', { name: `Azioni ${failureCompany}` }).click();
+    await pageA.getByRole('menuitem', { name: 'Sposta in', exact: true }).hover();
+    await pageA.getByRole('menuitem', { name: 'Non idoneo', exact: true }).click();
+    await expect(pageA.getByRole('dialog')).toBeVisible();
+    await expect(pageA.locator('[data-commercial-stage="new"]', { has: failureCard() })).toHaveCount(1);
+    await pageA.locator('#move-reason').fill('Synthetic negative-stage acceptance');
+    const negativeResponse = pageA.waitForResponse(
+      (response) => response.url().endsWith(`/api/tenant/commercial/pipeline/${failureLead.id}/transition`) && response.request().method() === 'PATCH',
+    );
+    await pageA.getByRole('dialog').getByRole('button', { name: 'Conferma', exact: true }).click();
+    expect((await negativeResponse).ok()).toBe(true);
+    await expect(pageA.locator('[data-commercial-stage="unqualified"]', { has: failureCard() })).toHaveCount(1);
+    await expect(pageA.locator(`[data-commercial-stage] [data-commercial-deal="${failureLead.id}"]`)).toHaveCount(1);
+
+    const wonMarker = `${marker}-WON`;
+    const wonCompany = `Pipeline won ${wonMarker}`;
+    const wonLead = await createLeadThroughUi(pageA, {
+      marker: wonMarker,
+      company: wonCompany,
+      email: `pipeline.won.${marker.toLowerCase()}@example.invalid`,
+      firstName: 'Won',
+      lastName: marker,
+    });
+    await pageA.goto('/dashboard/commercial/pipeline');
+    await dismissFlowOverlays(pageA, true);
+    const wonCard = () => pageA.locator(`[data-commercial-deal="${wonLead.id}"]`);
+    await wonCard().getByRole('button', { name: `Azioni ${wonCompany}` }).click();
+    await pageA.getByRole('menuitem', { name: 'Sposta in', exact: true }).hover();
+    await pageA.getByRole('menuitem', { name: 'Vinto', exact: true }).click();
+    await expect(pageA.getByRole('dialog')).toBeVisible();
+    await expect(pageA.locator('[data-commercial-stage="new"]', { has: wonCard() })).toHaveCount(1);
+    const wonResponse = pageA.waitForResponse(
+      (response) => response.url().endsWith(`/api/tenant/commercial/leads/${wonLead.id}/convert`) && response.request().method() === 'POST',
+      { timeout: 30_000 },
+    );
+    await pageA.getByRole('dialog').getByRole('button', { name: 'Conferma e crea cliente', exact: true }).click();
+    expect((await wonResponse).ok()).toBe(true);
+    await expect(pageA.locator('[data-commercial-stage="won"]', { has: wonCard() })).toHaveCount(1);
+    await expect(pageA.locator(`[data-commercial-stage] [data-commercial-deal="${wonLead.id}"]`)).toHaveCount(1);
+    await pageA.reload({ waitUntil: 'domcontentloaded' });
+    await dismissFlowOverlays(pageA);
+    await expect(pageA.locator('[data-commercial-stage="won"]', { has: wonCard() })).toHaveCount(1);
+    expect(pipelineDestructiveMutations).toEqual([]);
     pageA.off('request', observePipelineMutation);
     await pageA.goto(detailPath);
     await expect(pageA.getByRole('heading', { name: company, exact: true }).first()).toBeVisible();

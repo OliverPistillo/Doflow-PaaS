@@ -100,7 +100,7 @@ describe('TenantCommercialCoreService', () => {
     const query = jest.fn(async (sql: string, _params?: unknown[]) => {
       if (sql.includes('FROM "doflow".commercial_idempotency')) return [];
       if (sql.includes('FROM "doflow".opportunities') && sql.includes('FOR UPDATE')) return [opportunity];
-      if (sql.includes('UPDATE "doflow".opportunities')) return [{ ...opportunity, stage: 'quote', ui_stage: 'proposal', version: 4 }];
+      if (sql.includes('UPDATE "doflow".opportunities')) return [[{ ...opportunity, stage: 'quote', ui_stage: 'proposal', version: 4 }], 1];
       return [];
     });
     const ds = transactionalDataSource(query);

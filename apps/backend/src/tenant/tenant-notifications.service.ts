@@ -316,17 +316,19 @@ export class TenantNotificationsService {
       [...params, ...extraParams],
     ))[0]?.count || 0);
     const userUuid = this.userIdOrNull(user.id);
-    const preferenceRows = userUuid ? await this.dataSource.query(
-      `SELECT last_seen_at FROM "${schema}".notification_preferences
-       WHERE user_id = $1 AND deleted_at IS NULL LIMIT 1`,
-      [userUuid],
-    ) : [];
-    const lastSeenAt = preferenceRows[0]?.last_seen_at || null;
     return {
-      newNotifications: await count(
-        `created_at > COALESCE($${params.length + 1}::timestamptz, '-infinity'::timestamptz)`,
-        [lastSeenAt],
-      ),
+      newNotifications: userUuid
+        ? await count(
+          `created_at > COALESCE((
+             SELECT preference.last_seen_at
+             FROM "${schema}".notification_preferences preference
+             WHERE preference.user_id = $${params.length + 1}
+               AND preference.deleted_at IS NULL
+             LIMIT 1
+           ), '-infinity'::timestamptz)`,
+          [userUuid],
+        )
+        : await count(`created_at > '-infinity'::timestamptz`),
       unreadNotifications: await count(`status = 'unread'`),
       urgentNotifications: await count(`status = 'unread' AND priority = 'urgent'`),
       taskOverdueNotifications: await count(`status = 'unread' AND type = 'task_overdue'`),
@@ -344,16 +346,16 @@ export class TenantNotificationsService {
     const userId = this.userIdOrNull(user.id);
     if (!userId) throw new BadRequestException('Utente UUID richiesto per lo stato notifiche.');
     await this.ensureSchema(schema);
-    const visibility = this.visibilityWhere(user, 1);
-    const watermarkRows = await this.dataSource.query(
-      `SELECT MAX(created_at) AS watermark FROM "${schema}".notifications
-       WHERE deleted_at IS NULL AND ${visibility.sql}`,
-      visibility.params,
-    );
-    const watermark = watermarkRows[0]?.watermark || null;
-    const rows = await this.dataSource.query(
-      `INSERT INTO "${schema}".notification_preferences (user_id, last_seen_at, created_at, updated_at)
-       VALUES ($1, $2, now(), now())
+    const visibility = this.visibilityWhere(user, 2);
+    const rows = this.returnedRows(await this.dataSource.query(
+      `WITH visible_watermark AS (
+         SELECT MAX(created_at) AS watermark
+         FROM "${schema}".notifications
+         WHERE deleted_at IS NULL AND ${visibility.sql}
+       )
+       INSERT INTO "${schema}".notification_preferences (user_id, last_seen_at, created_at, updated_at)
+       SELECT $1, visible_watermark.watermark, now(), now()
+       FROM visible_watermark
        ON CONFLICT (user_id) WHERE deleted_at IS NULL DO UPDATE
        SET last_seen_at = CASE
          WHEN EXCLUDED.last_seen_at IS NULL THEN "${schema}".notification_preferences.last_seen_at
@@ -362,8 +364,8 @@ export class TenantNotificationsService {
        END,
        updated_at = now()
        RETURNING last_seen_at`,
-      [userId, watermark],
-    );
+      [userId, ...visibility.params],
+    ));
     await this.publishState(req, 'notification.seen');
     return { lastSeenAt: rows[0]?.last_seen_at || null, newNotifications: 0 };
   }

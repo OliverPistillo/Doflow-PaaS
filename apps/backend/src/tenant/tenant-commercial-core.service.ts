@@ -62,6 +62,10 @@ export class TenantCommercialCoreService {
     return createHash('sha256').update(JSON.stringify(value)).digest('hex');
   }
 
+  private returnedRows(result: any): any[] {
+    return Array.isArray(result?.[0]) ? result[0] : result;
+  }
+
   private actorId(actor: CommercialActor) {
     return UUID_RE.test(actor.id) ? actor.id : null;
   }
@@ -426,14 +430,14 @@ export class TenantCommercialCoreService {
           return { item: current, unchanged: true, correlationId: context.correlationId };
         }
 
-        const updated = await manager.query(
+        const updated = this.returnedRows(await manager.query(
           `UPDATE "${actor.schema}".opportunities
            SET stage = $1, ui_stage = $2, probability = CASE WHEN $1 = 'closed_won' THEN 100 ELSE probability END,
                version = version + 1, updated_by = $3, updated_at = now()
            WHERE id = $4 AND version = $5 AND deleted_at IS NULL
            RETURNING *`,
           [normalized.canonical, normalized.ui, this.actorId(actor), id, expectedVersion],
-        );
+        ));
         if (!updated[0]) throw new ConflictException('Conflitto di versione');
         await this.recordOperation(
           context,
