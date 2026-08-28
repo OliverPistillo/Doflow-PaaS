@@ -15,6 +15,7 @@ const inviteId = '44444444-4444-4444-8444-444444444444';
 type FixtureOptions = {
   actorRole?: string;
   memberRole?: string;
+  accountRole?: string;
   memberStatus?: string;
   memberExists?: boolean;
   accountExists?: boolean;
@@ -37,7 +38,7 @@ function fixture(options: FixtureOptions = {}) {
   const account = {
     id: accountId,
     email: member.email,
-    role: options.memberRole || 'user',
+    role: options.accountRole || options.memberRole || 'user',
     is_active: options.memberStatus !== 'suspended' && options.memberStatus !== 'inactive',
   };
   const managerCalls: Array<{ sql: string; params?: unknown[] }> = [];
@@ -165,6 +166,14 @@ describe('TenantTeamService secure lifecycle', () => {
     await expect(permissions.service.updateModulePermissions(memberId, {
       permissions: [{ module_key: 'projects', can_view: true }],
     })).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('usa il ruolo account autorevole quando team_members e disallineato', async () => {
+    const removal = fixture({ memberRole: 'user', accountRole: 'owner' });
+    await expect(removal.service.deleteMember(memberId)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(removal.dataSource.transaction).toHaveBeenCalledTimes(1);
+    expect(removal.managerCalls.some((call) => call.sql.includes('SET deleted_at = now()'))).toBe(false);
+    expect(removal.webSessions.revokeUserSessions).not.toHaveBeenCalled();
   });
 
   it.each([

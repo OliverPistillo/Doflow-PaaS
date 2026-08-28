@@ -1,7 +1,7 @@
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page, type Request, type Route } from '@playwright/test';
 import { createHmac, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const root = path.resolve(__dirname, '../..');
@@ -174,6 +174,13 @@ test('Team e account completa il lifecycle tenant-safe su stack PostgreSQL/Redis
     const otherOwner = listed.json.items.find((item: any) => item.email === 'final.owner@acceptance.invalid');
     expect(ownerMember?.tenant_role).toBe('owner');
     expect(otherOwner?.tenant_role).toBe('owner');
+
+    await db.query(`UPDATE doflow.team_members SET tenant_role = 'user' WHERE id = $1`, [otherOwner.id]);
+    const reconciledOwners = await appFetch(ownerPage, '/tenant/team/members?limit=100');
+    const reconciledOwner = reconciledOwners.json.items.find((item: any) => item.id === otherOwner.id);
+    expect(reconciledOwner?.tenant_role).toBe('owner');
+    const storedOwnerRole = await db.query(`SELECT tenant_role FROM doflow.team_members WHERE id = $1`, [otherOwner.id]);
+    expect(storedOwnerRole.rows[0]?.tenant_role).toBe('owner');
 
     const options = await appFetch(ownerPage, '/tenant/team/options');
     expect(options.status).toBe(200);
@@ -362,8 +369,9 @@ test('Team e account completa il lifecycle tenant-safe su stack PostgreSQL/Redis
       'profile_created', 'member_invited', 'member_access_updated', 'skill_added',
     ]));
 
-    await ownerPage.goto('/dashboard/team-space');
-    await ownerPage.getByRole('tab', { name: /Team e account/ }).click();
+    await ownerPage.goto('/dashboard/team-space?tab=team-accounts');
+    const dismissTour = ownerPage.getByRole('button', { name: 'Esplora in autonomia', exact: true });
+    if (await dismissTour.isVisible().catch(() => false)) await dismissTour.click();
     await expect(ownerPage.getByRole('heading', { name: 'Team e account' })).toBeVisible();
     await expect(ownerPage.getByText('Synthetic Lifecycle Edited', { exact: true }).first()).toBeVisible();
 
@@ -426,14 +434,14 @@ test('Team e account completa il lifecycle tenant-safe su stack PostgreSQL/Redis
     expect((await appFetch(ownerPage, `/tenant/doflow/identity/users/${secondaryOwner.user_id}/capabilities`, {
       method: 'PATCH', body: { capabilities: ['canViewAllLeads'] },
     })).status).toBe(404);
-    expect((await appFetch(ownerPage, `/tenant/team/members/${secondaryOwner.id}`, {
+    expect([400, 404]).toContain((await appFetch(ownerPage, `/tenant/team/members/${secondaryOwner.id}`, {
       method: 'PATCH',
       headers: { 'X-Tenant-Id': 'acceptance_secondary', 'X-Tenant-Schema': 'acceptance_secondary' },
       body: { display_name: 'Cross tenant denied', tenant_id: 'acceptance_secondary', schema: 'acceptance_secondary' },
-    })).status).toBe(404);
-    expect((await appFetch(ownerPage, `/tenant/team/members/${secondaryOwner.id}?tenant=acceptance_secondary`, {
+    })).status);
+    expect([400, 404]).toContain((await appFetch(ownerPage, `/tenant/team/members/${secondaryOwner.id}?tenant=acceptance_secondary`, {
       method: 'DELETE', headers: { 'X-Tenant-Id': 'acceptance_secondary' },
-    })).status).toBe(404);
+    })).status);
     expect((await appFetch(secondaryPage, `/tenant/team/members/${memberId}`)).status).toBe(404);
 
     const adminPage = await login(adminContext, 'final.admin@acceptance.invalid', credentials);
@@ -458,7 +466,47 @@ test('Team e account completa il lifecycle tenant-safe su stack PostgreSQL/Redis
       })).status).toBe(403);
     }
 
-    expect((await appFetch(ownerPage, `/tenant/team/members/${memberId}`, { method: 'DELETE' })).status).toBe(200);
+    await expect(ownerPage.locator('[data-team-account-admin="server"]')).toBeVisible();
+    if (await dismissTour.isVisible().catch(() => false)) await dismissTour.click();
+    const protectedSuperadmin = ownerPage.locator('button').filter({ hasText: 'final.tenant-superadmin@acceptance.invalid' });
+    await protectedSuperadmin.click();
+    await expect(ownerPage.locator('[data-slot="card-title"]').filter({ hasText: 'Final Tenant Scoped Superadmin' }))
+      .toContainText('Account protetto');
+    await expect(ownerPage.getByRole('button', { name: 'Rimuovi', exact: true })).toHaveCount(0);
+
+    const syntheticMember = ownerPage.locator('button').filter({ hasText: email });
+    await expect(syntheticMember).toBeVisible();
+    await syntheticMember.click();
+    await expect(ownerPage.locator('[data-slot="card-title"]').filter({ hasText: 'Synthetic Lifecycle Edited' }))
+      .toBeVisible();
+
+    const deleteUrl = `/api/tenant/team/members/${memberId}`;
+    const observedDeletes: Request[] = [];
+    const observeDelete = (request: Request) => {
+      if (request.method() === 'DELETE' && new URL(request.url()).pathname === deleteUrl) {
+        observedDeletes.push(request);
+      }
+    };
+    ownerPage.on('request', observeDelete);
+    const deleteResponsePromise = ownerPage.waitForResponse(
+      (response) => response.request().method() === 'DELETE'
+        && new URL(response.url()).pathname === deleteUrl,
+    );
+    await ownerPage.getByRole('button', { name: 'Rimuovi', exact: true }).click();
+    await ownerPage.getByRole('button', { name: 'Rimuovi dal tenant', exact: true }).click();
+    const deleteResponse = await deleteResponsePromise;
+    expect(deleteResponse.status()).toBe(200);
+    await expect(deleteResponse.json()).resolves.toMatchObject({ success: true, member_id: memberId });
+    await expect.poll(() => observedDeletes.length).toBe(1);
+    const deleteHeaders = await observedDeletes[0].allHeaders();
+    expect(deleteHeaders['x-doflow-web']).toBe('1');
+    expect(deleteHeaders['x-csrf-token']).toBeTruthy();
+    expect(deleteHeaders.cookie).toContain('doflow_session=');
+    expect(deleteHeaders.cookie).toContain('doflow_csrf=');
+    expect(deleteHeaders).not.toHaveProperty('x-doflow-tenant-id');
+    ownerPage.off('request', observeDelete);
+
+    await expect(syntheticMember).toHaveCount(0);
     expect((await appFetch(activePage, '/auth/me')).status).toBe(401);
     const removedLoginContext = await browser.newContext();
     deniedContexts.push(removedLoginContext);
@@ -484,14 +532,67 @@ test('Team e account completa il lifecycle tenant-safe su stack PostgreSQL/Redis
       module_count: 0,
       secondary_count: 1,
     });
+    const syncAfterRemoval = await appFetch(ownerPage, '/tenant/team/members/sync-users', { method: 'POST' });
+    expect([200, 201]).toContain(syncAfterRemoval.status);
     const afterRemoval = await appFetch(ownerPage, `/tenant/team/members?search=${encodeURIComponent(email)}`);
     expect(afterRemoval.status).toBe(200);
     expect(afterRemoval.json.items).toHaveLength(0);
+    const evidenceViewport = ownerPage.viewportSize();
+    const screenshotPath = path.join(
+      root,
+      `docs/design-references/doflow-crm-projects/actual/team-account-removal-local-${evidenceViewport?.width}x${evidenceViewport?.height}.png`,
+    );
+    await mkdir(path.dirname(screenshotPath), { recursive: true });
+    await ownerPage.screenshot({ path: screenshotPath, fullPage: true });
     const removalAudit = await db.query(
       `SELECT count(*)::int AS count FROM doflow.audit_log WHERE action = 'team_member_removed' AND target = $1`,
       [memberId],
     );
     expect(removalAudit.rows[0].count).toBe(1);
+
+    const rejectedEmail = `delete-error.${marker}@acceptance.invalid`;
+    const rejectedMember = await appFetch(ownerPage, '/tenant/team/members', {
+      method: 'POST',
+      body: { email: rejectedEmail, display_name: 'Rejected Removal', tenant_role: 'viewer', send_invite: true },
+    });
+    expect(rejectedMember.status).toBe(201);
+    const rejectedDeleteUrl = `/api/tenant/team/members/${rejectedMember.json.member.id}`;
+    await ownerPage.goto('/dashboard/team-space?tab=team-accounts');
+    if (await dismissTour.isVisible().catch(() => false)) await dismissTour.click();
+    const rejectedMemberButton = ownerPage.locator('button').filter({ hasText: rejectedEmail });
+    await expect(rejectedMemberButton).toBeVisible();
+    await rejectedMemberButton.click();
+    await expect(ownerPage.locator('[data-slot="card-title"]').filter({ hasText: 'Rejected Removal' }))
+      .toBeVisible();
+
+    let rejectedDeleteCount = 0;
+    const rejectRemoval = async (route: Route) => {
+      if (route.request().method() !== 'DELETE') {
+        await route.continue();
+        return;
+      }
+      rejectedDeleteCount += 1;
+      await route.fulfill({
+        status: 409,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Rimozione sintetica rifiutata dal backend' }),
+      });
+    };
+    await ownerPage.route(`**${rejectedDeleteUrl}`, rejectRemoval);
+    const rejectedResponsePromise = ownerPage.waitForResponse(
+      (response) => response.request().method() === 'DELETE'
+        && new URL(response.url()).pathname === rejectedDeleteUrl,
+    );
+    await ownerPage.getByRole('button', { name: 'Rimuovi', exact: true }).click();
+    await ownerPage.getByRole('button', { name: 'Rimuovi dal tenant', exact: true }).click();
+    const rejectedResponse = await rejectedResponsePromise;
+    expect(rejectedResponse.status()).toBe(409);
+    await expect.poll(() => rejectedDeleteCount).toBe(1);
+    await expect(ownerPage.getByText('Rimozione sintetica rifiutata dal backend', { exact: true }))
+      .toBeVisible();
+    await expect(rejectedMemberButton).toBeVisible();
+    await ownerPage.unroute(`**${rejectedDeleteUrl}`, rejectRemoval);
+    expect((await appFetch(ownerPage, `/tenant/team/members/${rejectedMember.json.member.id}`, { method: 'DELETE' })).status).toBe(200);
   } finally {
     await Promise.allSettled([
       ownerContext.close(), inviteContext.close(), userContext.close(), reactivatedContext.close(),

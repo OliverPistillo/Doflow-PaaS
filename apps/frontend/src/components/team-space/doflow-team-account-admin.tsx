@@ -113,6 +113,8 @@ const DEFAULT_INVITE: InviteDraft = {
 
 const TECHNICAL_ROLE_LABELS: Record<string, string> = {
   owner: "Owner",
+  superadmin: "Superadmin",
+  ceo: "CEO",
   admin: "Admin",
   manager: "Manager",
   editor: "Editor",
@@ -142,6 +144,10 @@ const AVAILABILITY_LABELS: Record<string, string> = {
 
 function normalize(value?: string | null) {
   return String(value || "").trim().toLowerCase().replace("super_admin", "superadmin")
+}
+
+function isProtectedTenantRole(value?: string | null) {
+  return ["owner", "superadmin", "ceo"].includes(normalize(value))
 }
 
 function label(labels: Record<string, string>, value?: string | null) {
@@ -269,7 +275,9 @@ export function DoflowTeamAccountAdmin() {
 
   const selected = members.find((member) => member.id === selectedId) || null
   const selectedIdentity = identityForMember(identity.users, selected)
-  const protectedOwner = normalize(selected?.tenant_role) === "owner"
+  const selectedTenantRole = normalize(selected?.tenant_role)
+  const selectedIsOwner = selectedTenantRole === "owner"
+  const protectedOwner = isProtectedTenantRole(selected?.tenant_role)
   const selectedHasCeoLabel = normalize(selected?.operational_role) === "ceo_label"
   const identityWritable = Boolean(
     selectedIdentity && selected?.user_id && normalize(selected.status) === "active",
@@ -535,8 +543,15 @@ export function DoflowTeamAccountAdmin() {
           : "Profilo Team e invito pendente rimossi dal tenant",
       )
     } catch (reason) {
-      await reloadTeamAndIdentity()
-      setError(reason instanceof Error ? reason.message : "Membership non rimossa.")
+      const message = reason instanceof Error ? reason.message : "Membership non rimossa."
+      setError(message)
+      toast.error(message)
+      const teamLoaded = await load(selected.id)
+      setError(
+        teamLoaded
+          ? message
+          : `${message} Non è stato possibile riallineare l’elenco Team con il server.`,
+      )
     } finally {
       setBusy(false)
     }
@@ -641,7 +656,7 @@ export function DoflowTeamAccountAdmin() {
                   <div>
                     <CardTitle className="flex flex-wrap items-center gap-2">
                       {selected.display_name}
-                      {protectedOwner ? <Badge variant="outline">Owner</Badge> : null}
+                      {selectedIsOwner ? <Badge variant="outline">Owner</Badge> : null}
                       {selectedHasCeoLabel ? <Badge variant="secondary">CEO</Badge> : null}
                       {protectedOwner ? <Badge className="gap-1"><ShieldCheck className="size-3" />Account protetto</Badge> : null}
                     </CardTitle>
@@ -685,7 +700,7 @@ export function DoflowTeamAccountAdmin() {
                     <Select value={draft.tenantRole} onValueChange={(tenantRole) => setDraft((current) => current ? { ...current, tenantRole } : current)} disabled={protectedOwner || busy}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {protectedOwner ? <SelectItem value="owner">Owner</SelectItem> : null}
+                        {protectedOwner ? <SelectItem value={selectedTenantRole}>{label(TECHNICAL_ROLE_LABELS, selectedTenantRole)}</SelectItem> : null}
                         {technicalRoles.map((role) => <SelectItem key={role} value={role}>{label(TECHNICAL_ROLE_LABELS, role)}</SelectItem>)}
                       </SelectContent>
                     </Select>

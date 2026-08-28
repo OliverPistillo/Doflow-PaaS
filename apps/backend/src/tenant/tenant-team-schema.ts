@@ -273,7 +273,10 @@ export async function syncTenantUsersToTeamMembers(ds: DataSource, schema: strin
     FROM "${s}".users u
     WHERE tm.deleted_at IS NULL
       AND lower(tm.email) = lower(u.email)
-      AND (tm.user_id IS NULL OR tm.user_id <> u.id)
+      AND (
+        tm.user_id IS DISTINCT FROM u.id
+        OR tm.tenant_role IS DISTINCT FROM u.role
+      )
   `);
 
   await ds.query(`
