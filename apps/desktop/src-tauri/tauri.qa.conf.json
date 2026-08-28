@@ -1,0 +1,8 @@
+{
+  "build": {
+    "beforeDevCommand": "pnpm local:qa"
+  },
+  "bundle": {
+    "active": false
+  }
+}

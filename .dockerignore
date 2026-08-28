@@ -33,3 +33,6 @@ coverage
 .visual-auth
 .visual-runtime
 doflow-gestionale-reference
+
+# Desktop is built only by the dedicated GitHub pipeline
+/apps/desktop

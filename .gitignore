@@ -70,3 +70,17 @@ node_modules/.pnpm/@next+swc-linux-x64-gnu@14.2.33/node_modules/@next/swc-linux-
 # AI Agent memory — contiene credenziali di test, NON committare
 memory/
 !memory/.gitkeep
+
+# Doflow Desktop local/runtime artifacts and signing material
+/apps/desktop/dist/
+/apps/desktop/src-tauri/target/
+/apps/desktop/src-tauri/gen/
+/apps/desktop/src-tauri/tauri.ci.conf.json
+/apps/desktop/.desktop-test-data/
+/apps/desktop/.desktop-qa/
+/apps/desktop/.profile-data/
+/apps/desktop/.webview-data/
+/apps/desktop/release-artifacts/
+/apps/desktop/**/*.sig
+/apps/desktop/**/*private*.key
+/apps/desktop/**/*signing*.key

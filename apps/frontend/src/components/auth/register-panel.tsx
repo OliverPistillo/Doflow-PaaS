@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { startDesktopGoogleOAuth } from "@/lib/desktop-bridge";
 
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -251,9 +252,12 @@ export function RegisterPanel({ onMascotShyChange, onSwitchToLogin }: RegisterPa
         className="auth-social"
         aria-label="Registrati con Google"
         onClick={() => {
-          const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api";
-          const origin = apiBase.replace(/\/api\/?$/, "");
-          window.open(`${origin}/api/auth/google`, "_self", "noopener");
+          void startDesktopGoogleOAuth().then((started) => {
+            if (started) return;
+            const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api";
+            const origin = apiBase.replace(/\/api\/?$/, "");
+            window.open(`${origin}/api/auth/google`, "_self", "noopener");
+          });
         }}
       >
         <GoogleIcon />

@@ -5,6 +5,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { LoginExperience } from "@/components/auth/login-experience";
 import { LoginPanel } from "@/components/auth/login-panel";
 import { RegisterPanel } from "@/components/auth/register-panel";
+import { notifyDesktopReady } from "@/lib/desktop-bridge";
 
 type AuthMode = "login" | "register";
 
@@ -14,6 +15,10 @@ type UnifiedAuthPageProps = {
 
 export function UnifiedAuthPage({ initialMode = "login" }: UnifiedAuthPageProps) {
   const [mascotShy, setMascotShy] = React.useState(false);
+
+  React.useEffect(() => {
+    void notifyDesktopReady("needs-auth").catch(() => undefined);
+  }, []);
 
   if (initialMode === "login") {
     return (

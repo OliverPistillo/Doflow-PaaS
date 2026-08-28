@@ -1,0 +1,40 @@
+{
+  "name": "@doflow/desktop",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "shell:dev": "tauri dev",
+    "shell:qa": "tauri dev --no-watch --config src-tauri/tauri.qa.conf.json",
+    "shell:qa:compact": "tauri dev --no-watch --config src-tauri/tauri.qa.conf.json --config src-tauri/tauri.qa.compact.conf.json",
+    "shell:qa:large": "tauri dev --no-watch --config src-tauri/tauri.qa.conf.json --config src-tauri/tauri.qa.large.conf.json",
+    "local:dev": "vite",
+    "local:qa": "vite --mode qa",
+    "build": "vite build",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "release:version": "node scripts/next-desktop-version.mjs",
+    "release:validate": "node scripts/validate-release-assets.mjs",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "2.11.1",
+    "gsap": "3.15.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4",
+    "@types/node": "25.0.8",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "@types/semver": "7.8.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "jsdom": "27.0.0",
+    "semver": "7.8.5",
+    "typescript": "5.9.3",
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
+  }
+}

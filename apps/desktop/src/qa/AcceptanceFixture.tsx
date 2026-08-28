@@ -1,0 +1,78 @@
+import { useEffect, useState } from "react";
+import { ProfilePicker } from "../components/ProfilePicker";
+import {
+  ErrorScreen,
+  ExpiredProfileScreen,
+  MandatoryUpdateScreen,
+  PreparingScreen,
+} from "../components/StatusScreens";
+import type { SavedProfile } from "../types";
+
+type Scenario = "sweep" | "complete" | "slow" | "picker" | "mandatory" | "expired" | "error";
+
+const profile: SavedProfile = {
+  id: "10000000-4000-4000-8000-000000000001",
+  userId: "qa-user",
+  tenantSlug: "doflow",
+  name: "Profilo Demo",
+  email: "profilo.demo@example.test",
+  initials: "PD",
+  createdAt: "2026-01-01T00:00:00Z",
+  lastUsedAt: "2026-01-01T00:00:00Z",
+  webviewContextId: "10000000-4000-4000-8000-000000000001",
+};
+
+const scenarios: Record<string, Scenario> = {
+  "1": "sweep",
+  "2": "complete",
+  "3": "slow",
+  "4": "picker",
+  "5": "mandatory",
+  "6": "expired",
+  "7": "error",
+};
+
+function SplashFrame({ frame }: { frame: "sweep" | "complete" }) {
+  return (
+    <div className="splash qa-splash" aria-label={`QA splash ${frame}`}>
+      <div className="splash-vignette" />
+      <div className="splash-logo-wrap">
+        <div className="splash-ambient" style={{ opacity: frame === "sweep" ? 0.42 : 0.18, transform: frame === "sweep" ? "scale(1)" : "scale(.94)" }} />
+        <div className="splash-logo splash-logo-ghost" />
+        <div className="splash-logo splash-logo-reveal" style={{ clipPath: frame === "sweep" ? "inset(0 42% 0 0)" : "inset(0 0% 0 0)" }} />
+        {frame === "sweep" ? <div className="splash-logo splash-sweep" style={{ opacity: 1, transform: "translateX(18%)" }} /> : null}
+      </div>
+      <p className="splash-status">Preparazione del tuo workspace</p>
+    </div>
+  );
+}
+
+export function AcceptanceFixture() {
+  const [scenario, setScenario] = useState<Scenario>("sweep");
+
+  useEffect(() => {
+    const select = (event: KeyboardEvent) => {
+      const next = scenarios[event.key];
+      if (next) setScenario(next);
+    };
+    window.addEventListener("keydown", select);
+    return () => window.removeEventListener("keydown", select);
+  }, []);
+
+  let surface;
+  if (scenario === "sweep" || scenario === "complete") {
+    surface = <SplashFrame frame={scenario} />;
+  } else if (scenario === "slow") {
+    surface = <><PreparingScreen /><SplashFrame frame="complete" /></>;
+  } else if (scenario === "picker") {
+    surface = <ProfilePicker profiles={[profile]} onSelect={() => undefined} onRemove={() => undefined} onAdd={() => undefined} />;
+  } else if (scenario === "mandatory") {
+    surface = <MandatoryUpdateScreen progress={{ downloaded: 42, total: 100, phase: "downloading" }} busy onInstall={() => undefined} onQuit={() => undefined} />;
+  } else if (scenario === "expired") {
+    surface = <ExpiredProfileScreen profile={profile} onReauthenticate={() => undefined} onOther={() => undefined} />;
+  } else {
+    surface = <ErrorScreen message="Controlla la connessione e riprova." onRetry={() => undefined} onQuit={() => undefined} />;
+  }
+
+  return <div className="app-root" data-qa-scenario={scenario} aria-label={`Doflow Desktop QA: ${scenario}`}>{surface}</div>;
+}

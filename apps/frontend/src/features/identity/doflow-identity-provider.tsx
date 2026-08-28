@@ -1,12 +1,14 @@
 "use client"
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { ApiError, apiFetch } from "@/lib/api"
 import { clearDoFlowUser } from "@/lib/jwt"
 import { teamApi, type TeamMember } from "@/lib/tenant-team-api"
 import { backendContractsApi } from "@/lib/tenant-backend-contracts-api"
+import { DesktopUpdateBanner } from "@/components/desktop/desktop-update-banner"
+import { isDoflowDesktop, notifyDesktopReady, registerDesktopProfile } from "@/lib/desktop-bridge"
 import {
   capabilitiesForRoles,
   doflowRoles,
@@ -410,6 +412,24 @@ export function DoflowIdentityProvider({ children }: { children: React.ReactNode
     users.find((candidate) => candidate.id === currentUserId) ||
     users.find((candidate) => candidate.id === authenticatedUserId) ||
     anonymousUser
+  const desktopProfileRegistered = useRef("")
+  useEffect(() => {
+    if (!hasHydrated || !isAuthenticated || currentUser.id === "anonymous" || !isDoflowDesktop()) return
+    const registrationKey = `${currentUser.id}:${currentUser.email}`
+    if (desktopProfileRegistered.current === registrationKey) return
+    desktopProfileRegistered.current = registrationKey
+    void registerDesktopProfile({
+      userId: currentUser.id,
+      tenantId: "doflow",
+      tenantSlug: "doflow",
+      name: currentUser.name,
+      email: currentUser.email,
+      avatarUrl: currentUser.avatarUrl?.startsWith("https://") ? currentUser.avatarUrl : undefined,
+      initials: currentUser.name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
+    })
+      .then(() => notifyDesktopReady("authenticated"))
+      .catch(() => { desktopProfileRegistered.current = "" })
+  }, [currentUser, hasHydrated, isAuthenticated])
   const capabilitySet = useMemo(
     () => new Set(serverCapabilities),
     [serverCapabilities],
@@ -663,7 +683,7 @@ export function DoflowIdentityProvider({ children }: { children: React.ReactNode
     )
   }
 
-  return <IdentityContext.Provider value={value}>{children}</IdentityContext.Provider>
+  return <IdentityContext.Provider value={value}><DesktopUpdateBanner />{children}</IdentityContext.Provider>
 }
 
 export function useDoflowIdentity() {

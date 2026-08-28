@@ -6,6 +6,7 @@ import {
   LogOut,
   Radio,
   Coins,
+  Laptop,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -37,12 +38,14 @@ import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider"
 import { useDoflowPresence } from "@/features/identity/doflow-presence-provider"
 import { PresenceIndicator } from "@/features/identity/presence-indicator"
 import { presenceLabels, type ManualPresenceStatus } from "@/features/identity/presence"
+import { requestDesktopProfileSwitch, useDoflowDesktop } from "@/lib/desktop-bridge"
 
 export function NavUser() {
   const router = useRouter()
   const { isMobile } = useSidebar()
   const { currentUser: user, signOut } = useDoflowIdentity()
   const presence = useDoflowPresence()
+  const isDesktop = useDoflowDesktop()
   const [duration, setDuration] = useState<"30m" | "1h" | "today" | "forever">("forever")
   const chooseStatus = (status: ManualPresenceStatus | "automatic") => void presence.setManualStatus(status, duration).then((ok) => ok ? toast.success(status === "automatic" ? "Stato automatico ripristinato" : `Stato impostato su ${presenceLabels[status]}`) : toast.error("Stato non aggiornato"))
   return (
@@ -94,6 +97,7 @@ export function NavUser() {
             <RankingWinnerBadges userId={user.id} className="px-2 pb-2" />
             <DropdownMenuItem asChild><Link href="/dashboard/bonus"><Coins />Il tuo Bonus</Link></DropdownMenuItem>
             <DropdownMenuItem asChild><Link href="/dashboard/impostazioni"><Settings />Impostazioni</Link></DropdownMenuItem>
+            {isDesktop ? <DropdownMenuItem onSelect={() => void requestDesktopProfileSwitch().catch(() => toast.error("Impossibile cambiare profilo"))}><Laptop />Cambia profilo</DropdownMenuItem> : null}
             <DropdownMenuItem onSelect={() => void signOut().then(() => { router.replace("/login"); router.refresh() })}><LogOut />Esci</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

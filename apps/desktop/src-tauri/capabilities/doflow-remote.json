@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/remote-schema.json",
+  "identifier": "doflow-remote",
+  "description": "Minimal versioned bridge for the exact Doflow cloud origin.",
+  "windows": ["remote-*"],
+  "remote": {
+    "urls": ["https://app.doflow.it"]
+  },
+  "platforms": ["windows"],
+  "permissions": [
+    "allow-desktop-ready",
+    "allow-register-profile-metadata",
+    "allow-request-profile-switch",
+    "allow-get-update-state",
+    "allow-install-current-verified-update",
+    "allow-start-desktop-google-oauth"
+  ]
+}

@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
+import { notifyDesktopReady } from "@/lib/desktop-bridge";
 
 function normalizeCode(v: string) {
   return v.replace(/[^\d]/g, "").slice(0, 6);
@@ -48,6 +49,10 @@ export default function TenantMfaPage() {
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    void notifyDesktopReady("mfa").catch(() => undefined);
+  }, []);
 
   // ==========================================
   // 2. SETUP: Scarica QR dal Backend

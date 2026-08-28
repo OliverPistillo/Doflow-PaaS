@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-register-profile-metadata"
+description = "Enables the register_profile_metadata command without any pre-configured scope."
+commands.allow = ["register_profile_metadata"]
+
+[[permission]]
+identifier = "deny-register-profile-metadata"
+description = "Denies the register_profile_metadata command without any pre-configured scope."
+commands.deny = ["register_profile_metadata"]

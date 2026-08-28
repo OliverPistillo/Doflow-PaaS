@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-start-desktop-google-oauth"
+description = "Enables the start_desktop_google_oauth command without any pre-configured scope."
+commands.allow = ["start_desktop_google_oauth"]
+
+[[permission]]
+identifier = "deny-start-desktop-google-oauth"
+description = "Denies the start_desktop_google_oauth command without any pre-configured scope."
+commands.deny = ["start_desktop_google_oauth"]

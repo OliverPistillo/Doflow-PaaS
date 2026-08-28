@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { apiFetch, getApiBaseUrl } from "@/lib/api";
+import { getDesktopEmailPrefill, startDesktopGoogleOAuth } from "@/lib/desktop-bridge";
 import {
   getTenantLoginUrl,
   isInternalDoflowTenant,
@@ -124,6 +125,7 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
 
   const {
     register,
+    setValue,
     handleSubmit,
     control,
     formState: { errors, isSubmitting },
@@ -139,6 +141,11 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
   React.useEffect(() => {
     onMascotShyChange?.(passwordFocused && !showPassword);
   }, [passwordFocused, showPassword, onMascotShyChange]);
+
+  React.useEffect(() => {
+    const email = getDesktopEmailPrefill();
+    if (email) setValue("email", email, { shouldValidate: false });
+  }, [setValue]);
 
   React.useEffect(() => {
     const exchange = async () => {
@@ -430,7 +437,12 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
           aria-label="Continua con Google"
           data-testid="login-google-btn"
           onClick={() => {
-            window.open(`${getApiBaseUrl()}/auth/google`, "_self");
+            setGeneralError(null);
+            void startDesktopGoogleOAuth()
+              .then((started) => {
+                if (!started) window.open(`${getApiBaseUrl()}/auth/google`, "_self");
+              })
+              .catch(() => setGeneralError("Impossibile aprire l’accesso Google nel browser. Riprova."));
           }}
         >
           <GoogleIcon />

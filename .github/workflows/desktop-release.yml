@@ -1,0 +1,202 @@
+name: Desktop validation and release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/desktop/**"
+      - "apps/frontend/src/lib/desktop-bridge.ts"
+      - "apps/frontend/src/components/desktop/**"
+      - "apps/frontend/src/components/auth/login-panel.tsx"
+      - "apps/frontend/src/components/auth/register-panel.tsx"
+      - "apps/frontend/src/components/auth/unified-auth-page.tsx"
+      - "apps/frontend/src/app/[tenant]/mfa/page.tsx"
+      - "apps/frontend/src/features/identity/doflow-identity-provider.tsx"
+      - "apps/frontend/src/components/nav-user.tsx"
+      - "apps/backend/src/auth/desktop-google-oauth.service.ts"
+      - "apps/backend/src/auth/google-desktop.guard.ts"
+      - "apps/backend/src/auth/google.controller.ts"
+      - "apps/backend/src/auth/auth.module.ts"
+      - ".github/workflows/desktop-release.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-release-main
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate Windows x64 Desktop
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the triggering main commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20.19.6
+          cache: pnpm
+
+      - name: Enable the repository pnpm version
+        shell: pwsh
+        run: corepack enable
+
+      - name: Install locked dependencies
+        shell: pwsh
+        run: pnpm install --frozen-lockfile
+
+      - name: Select Windows x64 Rust target
+        shell: pwsh
+        run: rustup target add x86_64-pc-windows-msvc
+
+      - name: Validate Desktop TypeScript, UI tests, and Vite bundle
+        shell: pwsh
+        run: |
+          pnpm -C apps/desktop type-check
+          pnpm -C apps/desktop test
+          pnpm -C apps/desktop build
+
+      - name: Validate Rust formatting, lint, and tests
+        shell: pwsh
+        working-directory: apps/desktop/src-tauri
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --target x86_64-pc-windows-msvc --all-targets -- -D warnings
+          cargo test --target x86_64-pc-windows-msvc
+
+      - name: Verify touched cloud contracts still build
+        shell: pwsh
+        run: |
+          pnpm -C apps/frontend type-check
+          pnpm -C apps/backend build
+
+  release-gate:
+    name: Check explicit release enable gate
+    needs: validate
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    outputs:
+      enabled: ${{ steps.gate.outputs.enabled }}
+    steps:
+      - id: gate
+        name: Read repository release gate
+        shell: pwsh
+        env:
+          DESKTOP_RELEASE_ENABLED: ${{ vars.DESKTOP_RELEASE_ENABLED }}
+        run: |
+          $enabled = "$env:DESKTOP_RELEASE_ENABLED".Trim().ToLowerInvariant() -eq "true"
+          "enabled=$($enabled.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          if (-not $enabled) { Write-Host "Desktop validation passed; public release is disabled." }
+
+  release:
+    name: Sign and publish Desktop update
+    needs: [validate, release-gate]
+    if: needs.release-gate.outputs.enabled == 'true' && github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    environment: desktop-release
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the exact triggering commit and tags
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20.19.6
+          cache: pnpm
+
+      - name: Enable pnpm and install locked dependencies
+        shell: pwsh
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Validate signing configuration without printing it
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          DOFLOW_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_SIGNING_PUBLIC_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) { throw "TAURI_SIGNING_PRIVATE_KEY is required" }
+          if ([string]::IsNullOrWhiteSpace($env:DOFLOW_UPDATER_PUBLIC_KEY)) { throw "TAURI_SIGNING_PUBLIC_KEY is required" }
+          try { $decoded = [Convert]::FromBase64String($env:DOFLOW_UPDATER_PUBLIC_KEY.Trim()) } catch { throw "TAURI_SIGNING_PUBLIC_KEY is not valid base64" }
+          if ($decoded.Length -lt 32) { throw "TAURI_SIGNING_PUBLIC_KEY is invalid" }
+          Write-Host "Updater signing configuration is present and structurally valid."
+
+      - id: version
+        name: Compute the next Desktop SemVer patch
+        shell: pwsh
+        run: node apps/desktop/scripts/next-desktop-version.mjs
+
+      - name: Reject an existing or raced tag and prepare version override
+        shell: pwsh
+        env:
+          DESKTOP_TAG: ${{ steps.version.outputs.tag }}
+          DESKTOP_VERSION: ${{ steps.version.outputs.version }}
+          DOFLOW_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_SIGNING_PUBLIC_KEY }}
+        run: |
+          git fetch origin --tags --force
+          if (git rev-parse --verify --quiet "refs/tags/$env:DESKTOP_TAG") { throw "Desktop tag already exists; refusing to overwrite it" }
+          @{
+            version = $env:DESKTOP_VERSION
+            plugins = @{
+              updater = @{
+                pubkey = $env:DOFLOW_UPDATER_PUBLIC_KEY
+              }
+            }
+          } | ConvertTo-Json -Depth 4 -Compress | Out-File apps/desktop/src-tauri/tauri.ci.conf.json -Encoding utf8
+
+      - name: Build signed installers and create a draft release
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          DOFLOW_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_SIGNING_PUBLIC_KEY }}
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ steps.version.outputs.tag }}
+          releaseName: Doflow Desktop ${{ steps.version.outputs.version }}
+          releaseBody: Signed Doflow Desktop update for Windows x64.
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: --target x86_64-pc-windows-msvc --config src-tauri/tauri.release.conf.json --config src-tauri/tauri.ci.conf.json
+
+      - name: Download and validate every draft release artifact
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DESKTOP_TAG: ${{ steps.version.outputs.tag }}
+          DESKTOP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          New-Item -ItemType Directory -Force -Path desktop-release-assets | Out-Null
+          gh release download $env:DESKTOP_TAG --dir desktop-release-assets
+          node apps/desktop/scripts/validate-release-assets.mjs desktop-release-assets $env:DESKTOP_VERSION
+          git fetch origin "refs/tags/$env:DESKTOP_TAG:refs/tags/$env:DESKTOP_TAG"
+          $tagCommit = (git rev-list -n 1 $env:DESKTOP_TAG).Trim()
+          if ($tagCommit -ne "$env:GITHUB_SHA") { throw "Desktop release tag does not target the triggering main SHA" }
+
+      - name: Attach release policy and publish only the validated draft
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DESKTOP_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          $policy = Get-Content apps/desktop/release-policy.json -Raw | ConvertFrom-Json
+          if ($policy.schemaVersion -ne 1 -or $policy.channel -ne "stable" -or -not $policy.minimumSupportedVersion) { throw "Desktop release policy is invalid" }
+          Copy-Item apps/desktop/release-policy.json desktop-policy.json
+          gh release upload $env:DESKTOP_TAG desktop-policy.json --clobber
+          gh release edit $env:DESKTOP_TAG --draft=false --latest

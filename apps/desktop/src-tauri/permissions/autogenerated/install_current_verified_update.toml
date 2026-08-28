@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-install-current-verified-update"
+description = "Enables the install_current_verified_update command without any pre-configured scope."
+commands.allow = ["install_current_verified_update"]
+
+[[permission]]
+identifier = "deny-install-current-verified-update"
+description = "Denies the install_current_verified_update command without any pre-configured scope."
+commands.deny = ["install_current_verified_update"]
