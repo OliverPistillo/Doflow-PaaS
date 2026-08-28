@@ -9,6 +9,51 @@ import { withTenantIdempotency } from './tenant-universal-idempotency';
 import { ensureTenantBackendContractTables } from './tenant-backend-contracts-schema';
 import { safeSchema } from '../common/schema.utils';
 
+export type InboxStateFilters = {
+  search: string;
+  status: string;
+  priority: string;
+  channel: string;
+  scope: string;
+  unreadOnly: boolean;
+};
+
+export const DEFAULT_INBOX_STATE_FILTERS: Readonly<InboxStateFilters> = Object.freeze({
+  search: '',
+  status: 'all',
+  priority: 'all',
+  channel: 'all',
+  scope: 'all',
+  unreadOnly: false,
+});
+
+const inboxFilterOptions = {
+  status: ['all', 'Da gestire', 'In lavorazione', 'In attesa cliente', 'Risolta', 'Archiviata'],
+  priority: ['all', 'Bassa', 'Normale', 'Alta', 'Urgente'],
+  channel: ['all', 'whatsapp', 'email', 'site', 'portal', 'support', 'call', 'sms'],
+  scope: ['all', 'mine'],
+} as const;
+
+function inboxFilterOption(value: unknown, allowed: readonly string[], fallback: string) {
+  return typeof value === 'string' && allowed.includes(value) ? value : fallback;
+}
+
+export function normalizeInboxStateFilters(value: unknown): InboxStateFilters {
+  const input = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  return {
+    search: typeof input.search === 'string' ? input.search : DEFAULT_INBOX_STATE_FILTERS.search,
+    status: inboxFilterOption(input.status, inboxFilterOptions.status, DEFAULT_INBOX_STATE_FILTERS.status),
+    priority: inboxFilterOption(input.priority, inboxFilterOptions.priority, DEFAULT_INBOX_STATE_FILTERS.priority),
+    channel: inboxFilterOption(input.channel, inboxFilterOptions.channel, DEFAULT_INBOX_STATE_FILTERS.channel),
+    scope: inboxFilterOption(input.scope, inboxFilterOptions.scope, DEFAULT_INBOX_STATE_FILTERS.scope),
+    unreadOnly: typeof input.unreadOnly === 'boolean'
+      ? input.unreadOnly
+      : DEFAULT_INBOX_STATE_FILTERS.unreadOnly,
+  };
+}
+
 @Injectable()
 export class TenantBackendContractsService {
   constructor(
@@ -279,7 +324,21 @@ export class TenantBackendContractsService {
   async updateCustomerDocument(companyValue:string,documentValue:string,body:Record<string,unknown>){ rejectActorOverride(body); const actor=await this.actor('canEditCustomers'); const companyId=await this.company(actor,companyValue); const documentId=tenantUuid(documentValue,'documentId'); const existing=await this.dataSource.query(`SELECT * FROM "${actor.schema}".customer_document_metadata WHERE id=$1 AND company_id=$2 AND archived_at IS NULL`,[documentId,companyId]); if(!existing[0]) throw new NotFoundException('Documento non trovato'); const expected=this.version(body.optimisticVersion??body.optimistic_version); const input=this.documentInput(body,existing[0]); await this.validateDocumentRelation(actor,companyId,input); const rows=await this.dataSource.query(`UPDATE "${actor.schema}".customer_document_metadata SET title=$3,category=$4,description=$5,relation_type=$6,relation_id=$7,tags=$8::text[],visibility=$9,sort_order=$10,updated_by=$11,updated_at=now(),optimistic_version=optimistic_version+1 WHERE id=$1 AND company_id=$2 AND optimistic_version=$12 RETURNING *`,[documentId,companyId,input.title,input.category,input.description,input.relationType,input.relationId,input.tags,input.visibility,input.sortOrder,actor.id,expected]); if(!rows[0]) throw new ConflictException('Documento modificato da un altro utente'); return rows[0]; }
   async archiveCustomerDocument(companyValue:string,documentValue:string){ const actor=await this.actor('canEditCustomers'); const companyId=await this.company(actor,companyValue); const documentId=tenantUuid(documentValue,'documentId'); const rows=await this.dataSource.query(`UPDATE "${actor.schema}".customer_document_metadata SET archived_at=COALESCE(archived_at,now()),updated_by=$3,updated_at=now() WHERE id=$1 AND company_id=$2 AND archived_at IS NULL RETURNING id`,[documentId,companyId,actor.id]); if(!rows[0]) throw new NotFoundException('Documento non trovato'); return {id:documentId,archived:true}; }
 
-  async inboxState(){ const actor=await this.actor('canReadNotifications'); const [conversations,drafts,receipts,filters]=await Promise.all([this.dataSource.query(`SELECT * FROM "${actor.schema}".customer_inbox_conversations ORDER BY updated_at DESC LIMIT 500`),this.dataSource.query(`SELECT company_id,body,optimistic_version FROM "${actor.schema}".customer_inbox_drafts WHERE user_id=$1`,[actor.id]),this.dataSource.query(`SELECT company_id,read_at FROM "${actor.schema}".customer_inbox_receipts WHERE user_id=$1`,[actor.id]),this.dataSource.query(`SELECT filters FROM "${actor.schema}".customer_inbox_user_state WHERE user_id=$1`,[actor.id])]); return {conversations,drafts,receipts,filters:filters[0]?.filters||{}}; }
+  async inboxState() {
+    const actor = await this.actor('canReadNotifications');
+    const [conversations, drafts, receipts, filters] = await Promise.all([
+      this.dataSource.query(`SELECT * FROM "${actor.schema}".customer_inbox_conversations ORDER BY updated_at DESC LIMIT 500`),
+      this.dataSource.query(`SELECT company_id,body,optimistic_version FROM "${actor.schema}".customer_inbox_drafts WHERE user_id=$1`, [actor.id]),
+      this.dataSource.query(`SELECT company_id,read_at FROM "${actor.schema}".customer_inbox_receipts WHERE user_id=$1`, [actor.id]),
+      this.dataSource.query(`SELECT filters FROM "${actor.schema}".customer_inbox_user_state WHERE user_id=$1`, [actor.id]),
+    ]);
+    return {
+      conversations,
+      drafts,
+      receipts,
+      filters: normalizeInboxStateFilters(filters[0]?.filters),
+    };
+  }
   async updateInboxConversation(companyValue: string, body: Record<string, unknown>, key?: string) {
     rejectActorOverride(body);
     const actor = await this.actor('canEditCustomers', 'canAssignLeads');
