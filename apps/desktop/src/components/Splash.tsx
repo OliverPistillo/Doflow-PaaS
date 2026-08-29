@@ -25,6 +25,7 @@ export function Splash({ exiting, onAnimationFinished, onExitFinished }: SplashP
 
       if (reduced) {
         gsap.set(".splash-logo-reveal", { clipPath: "inset(0 0% 0 0)" });
+        gsap.set(".splash-sweep-band", { opacity: 0 });
         gsap.fromTo(".splash-logo-wrap", { opacity: 0 }, { opacity: 1, duration: 0.35, ease: "power1.out", onComplete: finish });
         return;
       }
@@ -32,12 +33,12 @@ export function Splash({ exiting, onAnimationFinished, onExitFinished }: SplashP
       const timeline = gsap.timeline({ onComplete: finish });
       timeline
         .set(".splash-logo-reveal", { clipPath: "inset(0 100% 0 0)" })
-        .set(".splash-sweep", { xPercent: -145, opacity: 0 })
+        .set(".splash-sweep-band", { xPercent: 0, opacity: 0 })
         .set(".splash-ambient", { opacity: 0.08, scale: 0.82 })
         .to(".splash-ambient", { opacity: 0.42, scale: 1, duration: 0.75, ease: "power2.out" }, 0.05)
         .to(".splash-logo-reveal", { clipPath: "inset(0 0% 0 0)", duration: 1.18, ease: "power2.inOut" }, 0.12)
-        .to(".splash-sweep", { xPercent: 145, opacity: 1, duration: 1.2, ease: "power2.inOut" }, 0.16)
-        .to(".splash-sweep", { opacity: 0, duration: 0.2, ease: "power1.out" }, 1.22)
+        .to(".splash-sweep-band", { xPercent: 500, opacity: 1, duration: 1.2, ease: "power2.inOut" }, 0.16)
+        .to(".splash-sweep-band", { opacity: 0, duration: 0.2, ease: "power1.out" }, 1.22)
         .to(".splash-ambient", { opacity: 0.18, scale: 0.94, duration: 0.28, ease: "power1.out" }, 1.26)
         .to({}, { duration: 0.08 });
     }, root);
@@ -59,9 +60,10 @@ export function Splash({ exiting, onAnimationFinished, onExitFinished }: SplashP
       <div className="splash-vignette" />
       <div className="splash-logo-wrap">
         <div className="splash-ambient" />
-        <div className="splash-logo splash-logo-ghost" />
         <div className="splash-logo splash-logo-reveal" />
-        <div className="splash-logo splash-sweep" />
+        <div className="splash-sweep-mask" aria-hidden="true">
+          <div className="splash-sweep-band" />
+        </div>
       </div>
       <p className="splash-status">Preparazione del tuo workspace</p>
     </div>

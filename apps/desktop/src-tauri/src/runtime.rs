@@ -1,4 +1,7 @@
-use crate::{oauth::OAuthManager, profile_registry::ProfileRegistryStore, updater::UpdateManager};
+use crate::{
+    close_manager::CloseManager, oauth::OAuthManager, preferences::PreferencesStore,
+    profile_registry::ProfileRegistryStore, updater::UpdateManager,
+};
 use std::sync::Mutex;
 
 #[derive(Clone, Debug)]
@@ -14,15 +17,24 @@ pub struct DesktopRuntime {
     pub active: Mutex<Option<ActiveProfile>>,
     pub updater: UpdateManager,
     pub oauth: OAuthManager,
+    pub preferences: PreferencesStore,
+    pub close: CloseManager,
 }
 
 impl DesktopRuntime {
-    pub fn new(profiles: ProfileRegistryStore, updater: UpdateManager) -> Self {
+    pub fn new(
+        profiles: ProfileRegistryStore,
+        updater: UpdateManager,
+        preferences: PreferencesStore,
+    ) -> Self {
+        let close = CloseManager::new(preferences.load_close_behavior());
         Self {
             profiles,
             active: Mutex::new(None),
             updater,
             oauth: OAuthManager::default(),
+            preferences,
+            close,
         }
     }
 }

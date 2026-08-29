@@ -142,7 +142,7 @@ pub fn create_remote_webview<R: Runtime>(
 pub fn close_remote_webviews<R: Runtime>(app: &AppHandle<R>, keep: Option<&str>) {
     for (label, window) in app.webview_windows() {
         if label.starts_with("remote-") && keep != Some(label.as_str()) {
-            let _ = window.close();
+            let _ = window.destroy();
         }
     }
 }

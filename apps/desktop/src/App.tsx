@@ -6,6 +6,7 @@ import {
   resolveStartupProfile,
 } from "./bootstrap/machine";
 import { ProfilePicker } from "./components/ProfilePicker";
+import { ClosePrompt } from "./components/ClosePrompt";
 import { Splash } from "./components/Splash";
 import {
   ErrorScreen,
@@ -30,6 +31,7 @@ export default function App() {
   const [busyProfileId, setBusyProfileId] = useState<string>();
   const [updateProgress, setUpdateProgress] = useState<UpdateProgressPayload>();
   const [installing, setInstalling] = useState(false);
+  const [closePromptVisible, setClosePromptVisible] = useState(false);
   const activationStarted = useRef(false);
   const bootstrapRequested = useRef(false);
   const exitTarget = useRef<"local" | "remote">("local");
@@ -97,6 +99,7 @@ export default function App() {
       }),
       nativeDesktop.onUpdateProgress(setUpdateProgress),
       nativeDesktop.onBootstrapError((message) => dispatch({ type: "FAIL", message })),
+      nativeDesktop.onClosePromptRequested(() => setClosePromptVisible(true)),
     ];
     if (!bootstrapRequested.current) {
       bootstrapRequested.current = true;
@@ -156,6 +159,16 @@ export default function App() {
   }, []);
 
   const registry: ProfileRegistry = state.registry || { version: 1, profiles: [] };
+  const resolveClose = useCallback((behavior: "tray" | "exit", remember: boolean) => {
+    setClosePromptVisible(false);
+    void nativeDesktop.resolveClose(behavior, remember).catch((error) => {
+      dispatch({ type: "FAIL", message: errorMessage(error) });
+    });
+  }, []);
+  const cancelClose = useCallback(() => {
+    setClosePromptVisible(false);
+    void nativeDesktop.cancelClose();
+  }, []);
   const background = useMemo(() => {
     if (state.phase === "picker") {
       return <ProfilePicker profiles={registry.profiles} busyProfileId={busyProfileId} onSelect={prepareProfile} onRemove={removeProfile} onAdd={() => prepareProfile()} />;
@@ -176,7 +189,7 @@ export default function App() {
     <div className="app-root">
       <div className="window-controls" data-tauri-drag-region>
         <button type="button" aria-label="Riduci a icona" onClick={() => void nativeDesktop.minimize()}>—</button>
-        <button type="button" aria-label="Chiudi Doflow" onClick={() => void nativeDesktop.quit()}>×</button>
+        <button type="button" aria-label="Chiudi Doflow" onClick={() => void nativeDesktop.requestClose()}>×</button>
       </div>
       {background}
       {splashVisible ? (
@@ -184,6 +197,13 @@ export default function App() {
           exiting={splashExiting}
           onAnimationFinished={() => dispatch({ type: "ANIMATION_FINISHED" })}
           onExitFinished={finishSplashExit}
+        />
+      ) : null}
+      {closePromptVisible ? (
+        <ClosePrompt
+          onStayActive={(remember) => resolveClose("tray", remember)}
+          onExit={(remember) => resolveClose("exit", remember)}
+          onCancel={cancelClose}
         />
       ) : null}
     </div>

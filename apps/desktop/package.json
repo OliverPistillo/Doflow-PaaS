@@ -7,6 +7,7 @@
     "shell:dev": "tauri dev",
     "shell:qa": "tauri dev --no-watch --config src-tauri/tauri.qa.conf.json",
     "shell:qa:compact": "tauri dev --no-watch --config src-tauri/tauri.qa.conf.json --config src-tauri/tauri.qa.compact.conf.json",
+    "shell:qa:minimum": "tauri dev --no-watch --config src-tauri/tauri.qa.conf.json --config src-tauri/tauri.qa.minimum.conf.json",
     "shell:qa:large": "tauri dev --no-watch --config src-tauri/tauri.qa.conf.json --config src-tauri/tauri.qa.large.conf.json",
     "local:dev": "vite",
     "local:qa": "vite --mode qa",

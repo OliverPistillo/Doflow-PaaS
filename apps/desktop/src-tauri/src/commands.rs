@@ -4,6 +4,7 @@ use crate::{
         ProfileRegistry, RemoteReadyPayload, SavedProfile, BRIDGE_VERSION,
     },
     oauth::StartDesktopGoogleOAuthInput,
+    preferences::CloseBehavior,
     profile_registry::{now_rfc3339, validate_opaque_id},
     profile_webview::{create_remote_webview, remote_label, REMOTE_ORIGIN},
     runtime::{ActiveProfile, DesktopRuntime},
@@ -154,7 +155,7 @@ pub async fn remove_saved_profile<R: Runtime>(
         let _ = remote.eval(
             r#"(() => { try { const csrf = document.cookie.split(';').map(v => v.trim()).find(v => v.startsWith('doflow_csrf='))?.slice(13); if (csrf) fetch('/api/auth/logout', { method: 'POST', credentials: 'include', headers: { 'X-Doflow-Web': '1', 'X-CSRF-Token': decodeURIComponent(csrf) } }).catch(() => undefined); } catch (_) {} })();"#,
         );
-        let _ = remote.close();
+        let _ = remote.destroy();
     }
     {
         let mut active = state
@@ -273,7 +274,7 @@ pub fn request_profile_switch<R: Runtime>(
         .hide()
         .map_err(|_| "Unable to hide the current profile")?;
     webview
-        .close()
+        .destroy()
         .map_err(|_| "Unable to close the current profile")?;
     *state
         .active
@@ -351,7 +352,26 @@ pub async fn start_desktop_google_oauth<R: Runtime>(
 
 #[tauri::command]
 pub fn quit_desktop<R: Runtime>(app: AppHandle<R>) {
-    app.exit(0);
+    crate::close_manager::exit_desktop(&app);
+}
+
+#[tauri::command]
+pub fn request_desktop_close<R: Runtime>(app: AppHandle<R>) {
+    crate::close_manager::request_user_close(&app, "bootstrap");
+}
+
+#[tauri::command]
+pub fn resolve_desktop_close<R: Runtime>(
+    app: AppHandle<R>,
+    behavior: CloseBehavior,
+    remember: bool,
+) -> Result<(), String> {
+    crate::close_manager::resolve_close_request(&app, behavior, remember)
+}
+
+#[tauri::command]
+pub fn cancel_desktop_close<R: Runtime>(app: AppHandle<R>) {
+    crate::close_manager::cancel_close_request(&app);
 }
 
 #[tauri::command]

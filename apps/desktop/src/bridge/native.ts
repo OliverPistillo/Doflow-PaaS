@@ -19,6 +19,10 @@ export const nativeDesktop = {
     invoke<ProfileRegistry>("remove_saved_profile", { profileId }),
   installUpdate: () => invoke<void>("install_current_verified_update"),
   quit: () => invoke<void>("quit_desktop"),
+  requestClose: () => invoke<void>("request_desktop_close"),
+  resolveClose: (behavior: "tray" | "exit", remember: boolean) =>
+    invoke<void>("resolve_desktop_close", { behavior, remember }),
+  cancelClose: () => invoke<void>("cancel_desktop_close"),
   minimize: () => invoke<void>("minimize_bootstrap"),
   onRemoteReady: (handler: (payload: RemoteReadyPayload) => void) =>
     listen<RemoteReadyPayload>("desktop://remote-ready", (event) => handler(event.payload)),
@@ -28,6 +32,8 @@ export const nativeDesktop = {
     listen<UpdateProgressPayload>("desktop://update-progress", (event) => handler(event.payload)),
   onBootstrapError: (handler: (message: string) => void) =>
     listen<string>("desktop://bootstrap-error", (event) => handler(event.payload)),
+  onClosePromptRequested: (handler: () => void) =>
+    listen("desktop://close-prompt-requested", handler),
 };
 
 export type DesktopNativeApi = typeof nativeDesktop;

@@ -14,6 +14,9 @@
     "allow-remove-saved-profile",
     "allow-install-current-verified-update",
     "allow-quit-desktop",
-    "allow-minimize-bootstrap"
+    "allow-minimize-bootstrap",
+    "allow-request-desktop-close",
+    "allow-resolve-desktop-close",
+    "allow-cancel-desktop-close"
   ]
 }
