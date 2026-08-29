@@ -176,14 +176,20 @@ describe("Desktop release workflow", () => {
     expect(publishGuard).toBeGreaterThan(publish);
 
     const publishedTagStep = workflowStep(releaseJob, "Verify published Desktop tag targets the triggering SHA");
-    const fetchTag = publishedTagStep.indexOf('git fetch origin "refs/tags/$env:DESKTOP_TAG');
+    const tagRef = publishedTagStep.indexOf('$tagRef = "refs/tags/$($env:DESKTOP_TAG)"');
+    const fetchTag = publishedTagStep.indexOf('git fetch origin "$($tagRef):$($tagRef)"');
     const fetchTagGuard = publishedTagStep.indexOf('throw "unable to fetch the published Desktop release tag"');
-    const revList = publishedTagStep.indexOf("git rev-list -n 1");
+    const revList = publishedTagStep.indexOf("git rev-list -n 1 $tagRef");
     const revListGuard = publishedTagStep.indexOf('throw "unable to resolve the published Desktop release tag"');
+    expect(tagRef).toBeGreaterThan(-1);
+    expect(fetchTag).toBeGreaterThan(tagRef);
     expect(fetchTagGuard).toBeGreaterThan(fetchTag);
     expect(revList).toBeGreaterThan(fetchTagGuard);
     expect(revListGuard).toBeGreaterThan(revList);
+    expect(publishedTagStep).not.toContain("$env:DESKTOP_TAG:refs");
     expect(publishedTagStep).toContain('if ($tagCommit -ne "$env:GITHUB_SHA")');
+    expect(publishedTagStep).not.toMatch(/continue-on-error\s*:/);
+    expect(publishedTagStep).not.toContain("|| true");
   });
 
   it("builds the triggering SHA and validates signed draft artifacts before publishing", () => {

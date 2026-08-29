@@ -251,9 +251,10 @@ jobs:
         env:
           DESKTOP_TAG: ${{ steps.version.outputs.tag }}
         run: |
-          git fetch origin "refs/tags/$env:DESKTOP_TAG:refs/tags/$env:DESKTOP_TAG"
+          $tagRef = "refs/tags/$($env:DESKTOP_TAG)"
+          git fetch origin "$($tagRef):$($tagRef)"
           if ($LASTEXITCODE -ne 0) { throw "unable to fetch the published Desktop release tag" }
-          $tagCommit = git rev-list -n 1 $env:DESKTOP_TAG
+          $tagCommit = git rev-list -n 1 $tagRef
           if ($LASTEXITCODE -ne 0) { throw "unable to resolve the published Desktop release tag" }
           $tagCommit = "$tagCommit".Trim()
           if ($tagCommit -ne "$env:GITHUB_SHA") { throw "published Desktop release tag does not target the triggering main SHA" }
