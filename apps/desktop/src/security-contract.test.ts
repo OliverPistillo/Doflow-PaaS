@@ -154,20 +154,18 @@ describe("Desktop release workflow", () => {
     expect(tagStep).not.toContain("|| true");
 
     const artifactStep = workflowStep(releaseJob, "Download and validate every draft release artifact");
+    const releaseMetadataGuard = artifactStep.indexOf('throw "unable to download Desktop draft release metadata"');
+    const assetMetadataGuard = artifactStep.indexOf('throw "unable to download Desktop draft asset metadata"');
     const downloadGuard = artifactStep.indexOf('throw "unable to download Desktop release artifacts"');
     const validation = artifactStep.indexOf("validate-release-assets.mjs");
     const validationGuard = artifactStep.indexOf('throw "Desktop release artifact validation failed"');
-    const fetchTag = artifactStep.indexOf('git fetch origin "refs/tags/$env:DESKTOP_TAG');
-    const fetchTagGuard = artifactStep.indexOf('throw "unable to fetch the Desktop release tag"');
-    const revList = artifactStep.indexOf("git rev-list -n 1");
-    const revListGuard = artifactStep.indexOf('throw "unable to resolve the Desktop release tag"');
+    expect(releaseMetadataGuard).toBeGreaterThan(artifactStep.indexOf("gh api"));
+    expect(assetMetadataGuard).toBeGreaterThan(releaseMetadataGuard);
     expect(downloadGuard).toBeGreaterThan(artifactStep.indexOf("gh release download"));
     expect(validation).toBeGreaterThan(downloadGuard);
     expect(validationGuard).toBeGreaterThan(validation);
-    expect(fetchTag).toBeGreaterThan(validationGuard);
-    expect(fetchTagGuard).toBeGreaterThan(fetchTag);
-    expect(revList).toBeGreaterThan(fetchTagGuard);
-    expect(revListGuard).toBeGreaterThan(revList);
+    expect(artifactStep).not.toContain("git fetch origin");
+    expect(artifactStep).not.toContain("git rev-list");
 
     const publishStep = workflowStep(releaseJob, "Attach release policy and publish only the validated draft");
     const uploadGuard = publishStep.indexOf('throw "unable to upload the Desktop release policy"');
@@ -176,6 +174,16 @@ describe("Desktop release workflow", () => {
     expect(uploadGuard).toBeGreaterThan(publishStep.indexOf("gh release upload"));
     expect(publish).toBeGreaterThan(uploadGuard);
     expect(publishGuard).toBeGreaterThan(publish);
+
+    const publishedTagStep = workflowStep(releaseJob, "Verify published Desktop tag targets the triggering SHA");
+    const fetchTag = publishedTagStep.indexOf('git fetch origin "refs/tags/$env:DESKTOP_TAG');
+    const fetchTagGuard = publishedTagStep.indexOf('throw "unable to fetch the published Desktop release tag"');
+    const revList = publishedTagStep.indexOf("git rev-list -n 1");
+    const revListGuard = publishedTagStep.indexOf('throw "unable to resolve the published Desktop release tag"');
+    expect(fetchTagGuard).toBeGreaterThan(fetchTag);
+    expect(revList).toBeGreaterThan(fetchTagGuard);
+    expect(revListGuard).toBeGreaterThan(revList);
+    expect(publishedTagStep).toContain('if ($tagCommit -ne "$env:GITHUB_SHA")');
   });
 
   it("builds the triggering SHA and validates signed draft artifacts before publishing", () => {
@@ -186,40 +194,89 @@ describe("Desktop release workflow", () => {
     expect(workflow).toContain("TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}");
     expect(workflow).toContain("DOFLOW_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_SIGNING_PUBLIC_KEY }}");
     expect(workflow).toContain("pubkey = $env:DOFLOW_UPDATER_PUBLIC_KEY");
-    expect(workflow).toContain("includeUpdaterJson: true");
+    const tauriStep = workflowStep(releaseJob, "Build signed installers and create a draft release");
+    expect(tauriStep).toContain("id: tauri_release");
+    expect(tauriStep).toContain("uploadUpdaterJson: true");
+    expect(tauriStep).not.toContain("includeUpdaterJson");
+    expect(tauriStep).toContain("updaterJsonPreferNsis: true");
+    expect(tauriStep).toContain("releaseCommitish: ${{ github.sha }}");
+    const artifactStep = workflowStep(releaseJob, "Download and validate every draft release artifact");
+    expect(artifactStep).toContain("RELEASE_ID: ${{ steps.tauri_release.outputs.releaseId }}");
+    expect(artifactStep).toContain("$releaseMetadata.target_commitish -ne \"$env:GITHUB_SHA\"");
+    expect(artifactStep).toContain("desktop-release-assets-metadata.json");
     expect(workflow).toContain("validate-release-assets.mjs");
-    expect(workflow).toContain("if ($tagCommit -ne \"$env:GITHUB_SHA\")");
     expect(workflow.indexOf("validate-release-assets.mjs")).toBeLessThan(workflow.indexOf("--draft=false --latest"));
+    expect(workflow.indexOf("--draft=false --latest")).toBeLessThan(workflow.indexOf("Verify published Desktop tag targets the triggering SHA"));
   });
 });
 
 describe("release asset validation", () => {
-  it("accepts only a complete Windows x64 updater set", async () => {
+  it("accepts only a complete Windows x64 updater set mapped through GitHub metadata", async () => {
     // @ts-expect-error The workflow executes this JavaScript module directly with Node.
     const { validateReleaseAssets } = await import("../scripts/validate-release-assets.mjs");
     const directory = mkdtempSync(resolve(tmpdir(), "doflow-desktop-release-"));
     const installer = "Doflow_1.2.3_x64-setup.exe";
+    const msi = "Doflow_1.2.3_x64_en-US.msi";
+    const installerUrl = "https://api.github.com/repos/OliverPistillo/Doflow-PaaS/releases/assets/123456";
+    const signature = "a".repeat(64);
     try {
       writeFileSync(resolve(directory, installer), "fixture");
-      writeFileSync(resolve(directory, "Doflow_1.2.3_x64_en-US.msi"), "fixture");
-      writeFileSync(resolve(directory, `${installer}.sig`), "fixture");
+      writeFileSync(resolve(directory, msi), "fixture");
+      writeFileSync(resolve(directory, `${installer}.sig`), signature);
+      writeFileSync(resolve(directory, `${msi}.sig`), signature);
       writeFileSync(
         resolve(directory, "latest.json"),
         JSON.stringify({
           version: "1.2.3",
           platforms: {
             "windows-x86_64": {
-              url: `https://github.com/OliverPistillo/Doflow-PaaS/releases/download/desktop-v1.2.3/${installer}`,
-              signature: "a".repeat(64),
+              url: installerUrl,
+              signature,
             },
           },
         }),
       );
-      expect(validateReleaseAssets(directory, "1.2.3").updaterName).toBe(installer);
+      const releaseAssets = [
+        [123456, installer, installerUrl],
+        [123457, `${installer}.sig`, "https://api.github.com/repos/OliverPistillo/Doflow-PaaS/releases/assets/123457"],
+        [123458, msi, "https://api.github.com/repos/OliverPistillo/Doflow-PaaS/releases/assets/123458"],
+        [123459, `${msi}.sig`, "https://api.github.com/repos/OliverPistillo/Doflow-PaaS/releases/assets/123459"],
+        [123460, "latest.json", "https://api.github.com/repos/OliverPistillo/Doflow-PaaS/releases/assets/123460"],
+      ].map(([id, name, url]) => ({
+        id,
+        name,
+        size: readFileSync(resolve(directory, name as string)).byteLength,
+        url,
+      }));
+      expect(validateReleaseAssets(directory, "1.2.3", releaseAssets).updaterName).toBe(installer);
+      writeFileSync(resolve(directory, `${installer}.sig`), "b".repeat(64));
+      expect(() => validateReleaseAssets(directory, "1.2.3", releaseAssets)).toThrow(
+        "latest.json updater signature does not match the downloaded signature asset",
+      );
+      writeFileSync(resolve(directory, `${installer}.sig`), signature);
       rmSync(resolve(directory, `${installer}.sig`));
-      expect(() => validateReleaseAssets(directory, "1.2.3")).toThrow("Updater signature file is missing");
+      expect(() => validateReleaseAssets(directory, "1.2.3", releaseAssets)).toThrow("Updater signature file is missing");
     } finally {
       rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts only the exact Doflow GitHub API release asset URL shape", async () => {
+    // @ts-expect-error The workflow executes this JavaScript module directly with Node.
+    const { parseReleaseAssetUrl } = await import("../scripts/validate-release-assets.mjs");
+    expect(
+      parseReleaseAssetUrl("https://api.github.com/repos/OliverPistillo/Doflow-PaaS/releases/assets/123456").assetId,
+    ).toBe(123456);
+    for (const invalid of [
+      "http://api.github.com/repos/OliverPistillo/Doflow-PaaS/releases/assets/123456",
+      "https://evil.example/repos/OliverPistillo/Doflow-PaaS/releases/assets/123456",
+      "https://api.github.com/repos/Other/Repo/releases/assets/123",
+      "https://api.github.com/repos/OliverPistillo/Doflow-PaaS/releases/assets/foo",
+      "https://api.github.com/repos/OliverPistillo/Doflow-PaaS/releases/assets/123?download=1",
+      "https://api.github.com/repos/OliverPistillo/Doflow-PaaS/releases/assets/123#asset",
+      "https://user@api.github.com/repos/OliverPistillo/Doflow-PaaS/releases/assets/123",
+    ]) {
+      expect(() => parseReleaseAssetUrl(invalid)).toThrow();
     }
   });
 });

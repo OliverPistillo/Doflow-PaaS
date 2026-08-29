@@ -187,6 +187,7 @@ jobs:
           } | ConvertTo-Json -Depth 4 -Compress | Out-File apps/desktop/src-tauri/tauri.ci.conf.json -Encoding utf8
 
       - name: Build signed installers and create a draft release
+        id: tauri_release
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -200,7 +201,8 @@ jobs:
           releaseBody: Signed Doflow Desktop update for Windows x64.
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: true
+          releaseCommitish: ${{ github.sha }}
+          uploadUpdaterJson: true
           updaterJsonPreferNsis: true
           args: --target x86_64-pc-windows-msvc --config src-tauri/tauri.release.conf.json --config src-tauri/tauri.ci.conf.json
 
@@ -210,18 +212,25 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DESKTOP_TAG: ${{ steps.version.outputs.tag }}
           DESKTOP_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_ID: ${{ steps.tauri_release.outputs.releaseId }}
         run: |
+          $releaseId = 0L
+          if (-not [long]::TryParse("$env:RELEASE_ID", [ref]$releaseId) -or $releaseId -le 0) { throw "tauri-action did not return a valid release ID" }
+          gh api "repos/$env:GITHUB_REPOSITORY/releases/$releaseId" > desktop-release-metadata.json
+          if ($LASTEXITCODE -ne 0) { throw "unable to download Desktop draft release metadata" }
+          gh api "repos/$env:GITHUB_REPOSITORY/releases/$releaseId/assets?per_page=100" > desktop-release-assets-metadata.json
+          if ($LASTEXITCODE -ne 0) { throw "unable to download Desktop draft asset metadata" }
+          $releaseMetadata = Get-Content desktop-release-metadata.json -Raw | ConvertFrom-Json
+          if ("$($releaseMetadata.id)" -ne "$releaseId") { throw "Desktop draft release ID mismatch" }
+          if ($releaseMetadata.draft -ne $true) { throw "Desktop release is not a draft" }
+          if ($releaseMetadata.prerelease -ne $false) { throw "Desktop release is unexpectedly a prerelease" }
+          if ($releaseMetadata.tag_name -ne "$env:DESKTOP_TAG") { throw "Desktop draft tag name mismatch" }
+          if ($releaseMetadata.target_commitish -ne "$env:GITHUB_SHA") { throw "Desktop draft does not target the triggering main SHA" }
           New-Item -ItemType Directory -Force -Path desktop-release-assets | Out-Null
           gh release download $env:DESKTOP_TAG --dir desktop-release-assets
           if ($LASTEXITCODE -ne 0) { throw "unable to download Desktop release artifacts" }
-          node apps/desktop/scripts/validate-release-assets.mjs desktop-release-assets $env:DESKTOP_VERSION
+          node apps/desktop/scripts/validate-release-assets.mjs desktop-release-assets $env:DESKTOP_VERSION desktop-release-assets-metadata.json
           if ($LASTEXITCODE -ne 0) { throw "Desktop release artifact validation failed" }
-          git fetch origin "refs/tags/$env:DESKTOP_TAG:refs/tags/$env:DESKTOP_TAG"
-          if ($LASTEXITCODE -ne 0) { throw "unable to fetch the Desktop release tag" }
-          $tagCommit = git rev-list -n 1 $env:DESKTOP_TAG
-          if ($LASTEXITCODE -ne 0) { throw "unable to resolve the Desktop release tag" }
-          $tagCommit = "$tagCommit".Trim()
-          if ($tagCommit -ne "$env:GITHUB_SHA") { throw "Desktop release tag does not target the triggering main SHA" }
 
       - name: Attach release policy and publish only the validated draft
         shell: pwsh
@@ -236,3 +245,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "unable to upload the Desktop release policy" }
           gh release edit $env:DESKTOP_TAG --draft=false --latest
           if ($LASTEXITCODE -ne 0) { throw "unable to publish the validated Desktop release" }
+
+      - name: Verify published Desktop tag targets the triggering SHA
+        shell: pwsh
+        env:
+          DESKTOP_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git fetch origin "refs/tags/$env:DESKTOP_TAG:refs/tags/$env:DESKTOP_TAG"
+          if ($LASTEXITCODE -ne 0) { throw "unable to fetch the published Desktop release tag" }
+          $tagCommit = git rev-list -n 1 $env:DESKTOP_TAG
+          if ($LASTEXITCODE -ne 0) { throw "unable to resolve the published Desktop release tag" }
+          $tagCommit = "$tagCommit".Trim()
+          if ($tagCommit -ne "$env:GITHUB_SHA") { throw "published Desktop release tag does not target the triggering main SHA" }
