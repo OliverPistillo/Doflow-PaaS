@@ -139,8 +139,19 @@ describe("Desktop release workflow", () => {
   it("checks every critical native command before the release workflow continues", () => {
     const tagStep = workflowStep(releaseJob, "Reject an existing or raced tag and prepare version override");
     expect(tagStep.indexOf('if ($LASTEXITCODE -ne 0) { throw "unable to fetch Desktop release tags" }')).toBeGreaterThan(tagStep.indexOf("git fetch origin --tags --force"));
-    expect(tagStep.indexOf("$tagLookupExitCode = $LASTEXITCODE")).toBeGreaterThan(tagStep.indexOf("git rev-parse --verify --quiet"));
-    expect(tagStep).toContain("if ($tagLookupExitCode -ne 1)");
+    const tagLookup = tagStep.search(/git\s+rev-parse\s+--verify\s+--quiet/);
+    const exitCapture = tagStep.search(/\$tagLookupExitCode\s*=\s*\$LASTEXITCODE/);
+    const existingTagRefusal = tagStep.search(/if\s*\(\s*\$tagLookupExitCode\s*-eq\s*0\s*\)[\s\S]*?Desktop tag already exists/);
+    const unexpectedGitFailure = tagStep.search(/if\s*\(\s*\$tagLookupExitCode\s*-ne\s*1\s*\)[\s\S]*?unable to verify whether the Desktop tag exists/);
+    const expectedExitReset = tagStep.search(/\$global:LASTEXITCODE\s*=\s*0/);
+    const configWrite = tagStep.indexOf("tauri.ci.conf.json");
+    expect(exitCapture).toBeGreaterThan(tagLookup);
+    expect(existingTagRefusal).toBeGreaterThan(exitCapture);
+    expect(unexpectedGitFailure).toBeGreaterThan(existingTagRefusal);
+    expect(expectedExitReset).toBeGreaterThan(unexpectedGitFailure);
+    expect(configWrite).toBeGreaterThan(expectedExitReset);
+    expect(tagStep).not.toMatch(/continue-on-error\s*:/);
+    expect(tagStep).not.toContain("|| true");
 
     const artifactStep = workflowStep(releaseJob, "Download and validate every draft release artifact");
     const downloadGuard = artifactStep.indexOf('throw "unable to download Desktop release artifacts"');

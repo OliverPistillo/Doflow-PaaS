@@ -175,6 +175,8 @@ jobs:
           $tagLookupExitCode = $LASTEXITCODE
           if ($tagLookupExitCode -eq 0) { throw "Desktop tag already exists; refusing to overwrite it" }
           if ($tagLookupExitCode -ne 1) { throw "unable to verify whether the Desktop tag exists" }
+          # Exit code 1 is the expected result when the release tag is absent.
+          $global:LASTEXITCODE = 0
           @{
             version = $env:DESKTOP_VERSION
             plugins = @{
