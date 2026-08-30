@@ -19,6 +19,7 @@ import { CommercialLeadsProvider, useCommercialLeads } from "@/features/commerci
 import { BonusProvider } from "@/features/bonus/bonus-provider"
 import { TeamChatProvider } from "@/features/chat/team-chat-provider"
 import { CompanyIntelligenceProvider } from "@/features/company-intelligence/company-intelligence-provider"
+import { DesktopCallsProvider } from "@/features/calls/desktop-calls-provider"
 import { FlowExperienceProvider } from "@/features/flow/flow-experience-provider"
 import { FlowboardProvider } from "@/features/flowboard/flowboard-provider"
 import { DoflowExperienceProvider } from "@/features/identity/doflow-experience-context"
@@ -256,6 +257,7 @@ export function TenantAppShell({ children, session }: { children: React.ReactNod
       <FlowExperiencePreferencesProvider>
         <PlanProvider>
           <TenantAccessProvider>
+            <DesktopCallsProvider>
             {isDoflow ? (
               <DoflowExperienceProvider>
                 <DoflowIdentityProvider>
@@ -287,6 +289,7 @@ export function TenantAppShell({ children, session }: { children: React.ReactNod
             ) : (
               <GenericTenantWorkspace session={session}>{children}</GenericTenantWorkspace>
             )}
+            </DesktopCallsProvider>
           </TenantAccessProvider>
         </PlanProvider>
       </FlowExperiencePreferencesProvider>

@@ -181,7 +181,7 @@ fn initialization_script(
   const internals = window.__TAURI_INTERNALS__;
   if (!internals || typeof internals.invoke !== 'function') return;
   const profileId = {profile};
-  const schemaVersion = 1;
+  const schemaVersion = {bridge};
   let lastReadyState;
   const signalDesktopReady = (state) => {{
     if (lastReadyState === state) return Promise.resolve();
@@ -201,7 +201,23 @@ fn initialization_script(
     requestProfileSwitch: () => internals.invoke('request_profile_switch'),
     getUpdateState: () => internals.invoke('get_update_state'),
     installCurrentVerifiedUpdate: () => internals.invoke('install_current_verified_update'),
-    startDesktopGoogleOAuth: () => internals.invoke('start_desktop_google_oauth', {{ input: {{ schemaVersion, profileId }} }})
+    startDesktopGoogleOAuth: () => internals.invoke('start_desktop_google_oauth', {{ input: {{ schemaVersion, profileId }} }}),
+    getDesktopCallCapabilities: () => internals.invoke('get_desktop_call_capabilities'),
+    showIncomingDesktopCall: (call) => internals.invoke('show_incoming_desktop_call', {{ input: {{ schemaVersion, call }} }}),
+    dismissIncomingDesktopCall: (sessionId) => internals.invoke('dismiss_incoming_desktop_call', {{ input: {{ schemaVersion, sessionId }} }}),
+    openDesktopCall: (call, credentials) => internals.invoke('open_desktop_call', {{ input: {{ schemaVersion, call, credentials }} }}),
+    updateDesktopCallCredentials: (sessionId, credentials) => internals.invoke('update_desktop_call_credentials', {{ input: {{ schemaVersion, sessionId, credentials }} }}),
+    closeDesktopCall: (sessionId) => internals.invoke('close_desktop_call', {{ input: {{ schemaVersion, sessionId }} }}),
+    onDesktopCallAction: (handler) => {{
+      if (typeof handler !== 'function') throw new TypeError('Desktop call action handler must be a function');
+      const listener = (event) => {{
+        const detail = event && event.detail;
+        if (!detail || typeof detail.sessionId !== 'string' || typeof detail.action !== 'string') return;
+        handler(Object.freeze({{ ...detail }}));
+      }};
+      window.addEventListener('doflow:desktop-call-action', listener);
+      return () => window.removeEventListener('doflow:desktop-call-action', listener);
+    }}
   }});
   Object.defineProperty(window, '__DOFLOW_DESKTOP__', {{ value: context, writable: false, configurable: false }});
   const signalLoadedLogin = () => {{
@@ -262,6 +278,9 @@ mod tests {
         assert!(!script.contains("arbitraryUrl"));
         assert!(!script.contains("shell"));
         assert!(script.contains("start_desktop_google_oauth"));
+        assert!(script.contains("get_desktop_call_capabilities"));
+        assert!(script.contains("show_incoming_desktop_call"));
+        assert!(script.contains("doflow:desktop-call-action"));
         assert!(script.contains("window.location.pathname === '/login'"));
         assert!(script.contains("signalDesktopReady('needs-auth')"));
     }

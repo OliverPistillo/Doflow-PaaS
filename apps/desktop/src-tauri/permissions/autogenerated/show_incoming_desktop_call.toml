@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-show-incoming-desktop-call"
+description = "Enables the show_incoming_desktop_call command without any pre-configured scope."
+commands.allow = ["show_incoming_desktop_call"]
+
+[[permission]]
+identifier = "deny-show-incoming-desktop-call"
+description = "Denies the show_incoming_desktop_call command without any pre-configured scope."
+commands.deny = ["show_incoming_desktop_call"]

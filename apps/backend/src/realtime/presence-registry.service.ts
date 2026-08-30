@@ -9,7 +9,7 @@ const ID_RE = /^[0-9a-f-]{16,64}$/i;
 export type PresenceState = {
   userId: string;
   status: 'online' | 'away' | 'busy' | 'offline' | 'do_not_disturb' | 'in_call' | 'in_meeting';
-  source: 'ws' | 'http' | 'manual';
+  source: 'ws' | 'http' | 'manual' | 'desktop';
   lastSeenAt: string;
   expiresAt?: string;
 };
@@ -56,13 +56,15 @@ export class PresenceRegistryService {
     }
   }
 
-  async heartbeat(tenantValue: string, userId: string, sessionId: string, statusValue: string, source: 'ws' | 'http' = 'ws') {
+  async heartbeat(tenantValue: string, userId: string, sessionId: string, statusValue: string, source: 'ws' | 'http' | 'desktop' = 'ws') {
     const { tenant, key } = this.key(tenantValue, userId, sessionId);
     const override = await this.manual(tenant, userId);
     const state: PresenceState = {
       userId,
       status: override?.status ?? this.status(statusValue),
-      source: override ? 'manual' : source,
+      // A manual availability choice may override the status, never the transport
+      // that proved this heartbeat came from an active Desktop session.
+      source: source === 'desktop' ? 'desktop' : override ? 'manual' : source,
       lastSeenAt: new Date().toISOString(),
       ...(override?.expiresAt ? { expiresAt: override.expiresAt } : {}),
     };
@@ -142,5 +144,33 @@ export class PresenceRegistryService {
       });
     }
     return { userId, online: remaining.length > 0 };
+  }
+
+  async desktopHeartbeat(tenantValue: string, userId: string, deviceId: string, status = 'online') {
+    return this.heartbeat(tenantValue, userId, `desktop-${deviceId}`, status, 'desktop');
+  }
+
+  async hasDesktopSession(tenantValue: string, userId: string, deviceId?: string) {
+    const tenant = safeSchema(tenantValue, 'PresenceRegistryService.hasDesktopSession');
+    const pattern = deviceId
+      ? this.key(tenant, userId, `desktop-${deviceId}`).key
+      : `presence:${tenant}:${userId}:desktop-*`;
+    const keys = deviceId ? [pattern] : await this.keys(pattern);
+    if (!keys.length) return false;
+    const values = await this.redis.getClient().mget(...keys);
+    return values.some((value) => {
+      if (!value) return false;
+      try {
+        const state = JSON.parse(value) as PresenceState;
+        return state.source === 'desktop'
+          && !['offline', 'do_not_disturb'].includes(state.status);
+      } catch {
+        return false;
+      }
+    });
+  }
+
+  async disconnectDesktop(tenantValue: string, userId: string, deviceId: string) {
+    return this.disconnect(tenantValue, userId, `desktop-${deviceId}`);
   }
 }

@@ -17,6 +17,34 @@ on:
       - "apps/backend/src/auth/google-desktop.guard.ts"
       - "apps/backend/src/auth/google.controller.ts"
       - "apps/backend/src/auth/auth.module.ts"
+      - "apps/backend/src/migrations/1880000000000-CreateDesktopCallsAuthority.ts"
+      - "apps/backend/src/realtime/presence-registry.service.ts"
+      - "apps/backend/src/realtime/presence-registry.service.spec.ts"
+      - "apps/backend/src/scripts/production-migration-manifest.ts"
+      - "apps/backend/src/scripts/production-migration-manifest.spec.ts"
+      - "apps/backend/src/superadmin/platform-modules.seed.ts"
+      - "apps/backend/src/tenancy/tenant-bootstrap.service.ts"
+      - "apps/backend/src/tenant/tenant-calls-*.ts"
+      - "apps/backend/src/tenant/tenant-livekit*.ts"
+      - "apps/backend/src/tenant/tenant-universal-capabilities.service.ts"
+      - "apps/backend/src/tenant/tenant-universal-features.spec.ts"
+      - "apps/backend/src/tenant/tenant.module.ts"
+      - "apps/frontend/src/app/meeting/**"
+      - "apps/frontend/src/features/calls/**"
+      - "apps/frontend/src/features/chat/team-space-call-ui.tsx"
+      - "apps/frontend/src/components/layout/tenant-app-shell.tsx"
+      - "apps/frontend/src/components/tenant-collaboration/**"
+      - "apps/frontend/src/components/tenant-commercial/opportunity-detail-sheet.tsx"
+      - "apps/frontend/src/features/commercial/components/commercial-client-detail-page.tsx"
+      - "apps/frontend/src/features/commercial/components/commercial-project-detail-page.tsx"
+      - "apps/frontend/src/hooks/useNotifications.ts"
+      - "apps/frontend/src/lib/tenant-feature-api.ts"
+      - "apps/frontend/src/proxy.ts"
+      - "apps/frontend/next.config.mjs"
+      - "tests/frontend/desktop-calls-runtime.test.mjs"
+      - "tests/frontend/universal-features-runtime.test.mjs"
+      - "package.json"
+      - "pnpm-lock.yaml"
       - ".github/workflows/desktop-release.yml"
   workflow_dispatch:
 
@@ -64,6 +92,23 @@ jobs:
       - name: Run Desktop UI tests
         shell: pwsh
         run: pnpm -C apps/desktop test
+
+      - name: Run shared frontend Desktop Calls contract tests
+        shell: pwsh
+        run: pnpm run test:desktop-calls-frontend
+
+      - name: Run backend Desktop Calls tests
+        shell: pwsh
+        run: >-
+          pnpm -C apps/backend exec jest --runInBand
+          src/realtime/presence-registry.service.spec.ts
+          src/tenant/tenant-calls-domain.spec.ts
+          src/tenant/tenant-calls-feature.service.spec.ts
+          src/tenant/tenant-calls-livekit-provider.service.spec.ts
+          src/tenant/tenant-calls-public.service.spec.ts
+          src/tenant/tenant-calls-schema.spec.ts
+          src/tenant/tenant-calls-store.service.spec.ts
+          src/tenant/tenant-livekit.service.spec.ts
 
       - name: Build Desktop Vite bundle
         shell: pwsh

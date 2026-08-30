@@ -1,6 +1,6 @@
 use crate::{
-    close_manager::CloseManager, oauth::OAuthManager, preferences::PreferencesStore,
-    profile_registry::ProfileRegistryStore, updater::UpdateManager,
+    call_manager::CallManager, close_manager::CloseManager, oauth::OAuthManager,
+    preferences::PreferencesStore, profile_registry::ProfileRegistryStore, updater::UpdateManager,
 };
 use std::sync::Mutex;
 
@@ -19,6 +19,7 @@ pub struct DesktopRuntime {
     pub oauth: OAuthManager,
     pub preferences: PreferencesStore,
     pub close: CloseManager,
+    pub calls: CallManager,
 }
 
 impl DesktopRuntime {
@@ -35,6 +36,7 @@ impl DesktopRuntime {
             oauth: OAuthManager::default(),
             preferences,
             close,
+            calls: CallManager::new(),
         }
     }
 }

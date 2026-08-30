@@ -382,7 +382,7 @@ pub fn minimize_bootstrap<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
         .map_err(|_| "Unable to minimize Doflow".into())
 }
 
-fn assert_remote_caller<R: Runtime>(
+pub(crate) fn assert_remote_caller<R: Runtime>(
     webview: &WebviewWindow<R>,
     state: &DesktopRuntime,
 ) -> Result<(), String> {
@@ -425,7 +425,7 @@ mod tests {
     #[test]
     fn bridge_inputs_reject_wrong_schema_invalid_ids_and_oversized_metadata() {
         let input = DesktopReadyInput {
-            schema_version: 2,
+            schema_version: 1,
             profile_id: "../escape".into(),
             state: crate::models::RemoteSessionState::Authenticated,
         };

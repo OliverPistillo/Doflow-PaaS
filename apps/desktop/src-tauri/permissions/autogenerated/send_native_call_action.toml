@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-send-native-call-action"
+description = "Enables the send_native_call_action command without any pre-configured scope."
+commands.allow = ["send_native_call_action"]
+
+[[permission]]
+identifier = "deny-send-native-call-action"
+description = "Denies the send_native_call_action command without any pre-configured scope."
+commands.deny = ["send_native_call_action"]

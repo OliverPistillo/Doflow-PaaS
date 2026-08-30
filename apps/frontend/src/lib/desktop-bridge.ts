@@ -12,6 +12,28 @@ export type DesktopUpdateState = {
   updateAvailable: boolean;
 };
 
+export type DesktopNativeCallType = "audio" | "video";
+export type DesktopNativeCallDirection = "incoming" | "outgoing" | "guest";
+export type DesktopNativeCall = {
+  sessionId: string;
+  callType: DesktopNativeCallType;
+  direction: DesktopNativeCallDirection;
+  displayName: string;
+  guestMode: boolean;
+  expiresAt?: string;
+};
+export type DesktopLivekitCredentials = { serverUrl: string; accessToken: string };
+export type DesktopCallActionEvent = {
+  sessionId: string;
+  action: "accept" | "reject" | "cancel" | "end" | "failed" | "refreshToken" | "ready";
+  reason?: string;
+};
+export type DesktopCallCapabilities = {
+  schemaVersion: number;
+  capabilities: string[];
+  notificationActions: boolean;
+};
+
 type DesktopProfileMetadata = {
   userId: string;
   tenantId?: string;
@@ -35,6 +57,13 @@ type DoflowDesktopContext = {
   getUpdateState: () => Promise<DesktopUpdateState>;
   installCurrentVerifiedUpdate: () => Promise<void>;
   startDesktopGoogleOAuth: () => Promise<void>;
+  getDesktopCallCapabilities?: () => Promise<DesktopCallCapabilities>;
+  showIncomingDesktopCall?: (call: DesktopNativeCall) => Promise<void>;
+  dismissIncomingDesktopCall?: (sessionId: string) => Promise<void>;
+  openDesktopCall?: (call: DesktopNativeCall, credentials: DesktopLivekitCredentials) => Promise<void>;
+  updateDesktopCallCredentials?: (sessionId: string, credentials: DesktopLivekitCredentials) => Promise<void>;
+  closeDesktopCall?: (sessionId: string) => Promise<void>;
+  onDesktopCallAction?: (handler: (event: DesktopCallActionEvent) => void) => () => void;
 };
 
 declare global {
@@ -62,9 +91,11 @@ export function isDoflowDesktop() {
 }
 
 export function useDoflowDesktop() {
-  const [isDesktop, setIsDesktop] = React.useState(false);
-  React.useEffect(() => setIsDesktop(isDoflowDesktop()), []);
-  return isDesktop;
+  return React.useSyncExternalStore(
+    () => () => undefined,
+    isDoflowDesktop,
+    () => false,
+  );
 }
 
 export function getDesktopEmailPrefill() {
@@ -109,4 +140,67 @@ export async function installDesktopUpdate() {
   if (!desktop) return false;
   await desktop.installCurrentVerifiedUpdate();
   return true;
+}
+
+function callContext(): DoflowDesktopContext | null {
+  const desktop = context();
+  if (!desktop || desktop.bridgeVersion < 2) return null;
+  if (
+    typeof desktop.getDesktopCallCapabilities !== "function"
+    || typeof desktop.showIncomingDesktopCall !== "function"
+    || typeof desktop.dismissIncomingDesktopCall !== "function"
+    || typeof desktop.openDesktopCall !== "function"
+    || typeof desktop.updateDesktopCallCredentials !== "function"
+    || typeof desktop.closeDesktopCall !== "function"
+    || typeof desktop.onDesktopCallAction !== "function"
+  ) return null;
+  return desktop;
+}
+
+export function getDesktopCallsDeviceId() {
+  const profileId = callContext()?.profileId;
+  return profileId && /^[0-9a-f-]{36}$/i.test(profileId) ? `desktop-${profileId}` : null;
+}
+
+export async function getDesktopCallCapabilities() {
+  return callContext()?.getDesktopCallCapabilities?.() ?? null;
+}
+
+export async function showIncomingDesktopCall(call: DesktopNativeCall) {
+  const desktop = callContext();
+  if (!desktop?.showIncomingDesktopCall) return false;
+  await desktop.showIncomingDesktopCall(call);
+  return true;
+}
+
+export async function dismissIncomingDesktopCall(sessionId: string) {
+  const desktop = callContext();
+  if (!desktop?.dismissIncomingDesktopCall) return false;
+  await desktop.dismissIncomingDesktopCall(sessionId);
+  return true;
+}
+
+export async function openDesktopCall(call: DesktopNativeCall, credentials: DesktopLivekitCredentials) {
+  const desktop = callContext();
+  if (!desktop?.openDesktopCall) return false;
+  await desktop.openDesktopCall(call, credentials);
+  return true;
+}
+
+export async function updateDesktopCallCredentials(sessionId: string, credentials: DesktopLivekitCredentials) {
+  const desktop = callContext();
+  if (!desktop?.updateDesktopCallCredentials) return false;
+  await desktop.updateDesktopCallCredentials(sessionId, credentials);
+  return true;
+}
+
+export async function closeDesktopCall(sessionId: string) {
+  const desktop = callContext();
+  if (!desktop?.closeDesktopCall) return false;
+  await desktop.closeDesktopCall(sessionId);
+  return true;
+}
+
+export function subscribeDesktopCallActions(handler: (event: DesktopCallActionEvent) => void) {
+  return callContext()?.onDesktopCallAction?.(handler) ?? null;
 }

@@ -78,6 +78,11 @@ export const PRODUCTION_MIGRATIONS = [
     name: 'AddCustomerInboxMailAndNotificationSeen1870000000000',
     compiledFile: '1870000000000-AddCustomerInboxMailAndNotificationSeen.js',
   },
+  {
+    timestamp: 1880000000000,
+    name: 'CreateDesktopCallsAuthority1880000000000',
+    compiledFile: '1880000000000-CreateDesktopCallsAuthority.js',
+  },
 ] as const satisfies readonly ProductionMigrationDefinition[];
 
 export const PRODUCTION_MIGRATION_MAX =

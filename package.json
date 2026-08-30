@@ -48,6 +48,7 @@
     "acceptance:document-revenue": "node scripts/commercial-core-isolated-stack.mjs run-document-revenue",
     "audit:collaboration": "node scripts/collaboration-runtime-audit.mjs",
     "test:collaboration-frontend": "node --test tests/frontend/collaboration-runtime.test.mjs",
+    "test:desktop-calls-frontend": "node --test tests/frontend/desktop-calls-runtime.test.mjs",
     "acceptance:collaboration:up": "node scripts/commercial-core-isolated-stack.mjs up",
     "acceptance:collaboration:test": "playwright test --config=playwright.collaboration.config.ts",
     "acceptance:collaboration:down": "node scripts/commercial-core-isolated-stack.mjs down",

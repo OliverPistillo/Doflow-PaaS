@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { LiveKitCallPanel } from "@/components/tenant-collaboration/livekit-call-panel";
 import { FlowAssetPicker, FlowEmptyState } from "@/components/flow-experience/flow-experience";
 import { flowChatAssets, type FlowAsset } from "@/components/flow-experience/flow-assets";
 import { Badge } from "@/components/ui/badge";
@@ -36,7 +35,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider";
 import {
   collaborationApi,
-  type CollaborationCallStatus,
   type CollaborationConversation,
   type CollaborationMessage,
 } from "@/lib/tenant-feature-api";
@@ -97,7 +95,6 @@ export function TeamSpaceCollaboration({ sidebarMode = false }: { sidebarMode?: 
   const [showCreate, setShowCreate] = React.useState(false);
   const [newTitle, setNewTitle] = React.useState("");
   const [newParticipants, setNewParticipants] = React.useState<string[]>([]);
-  const [callStatus, setCallStatus] = React.useState<CollaborationCallStatus>({ enabled: false });
 
   const selectedId = linkedChannel && conversations.some((item) => item.id === linkedChannel)
     ? linkedChannel
@@ -172,10 +169,7 @@ export function TeamSpaceCollaboration({ sidebarMode = false }: { sidebarMode?: 
 
   React.useEffect(() => {
     const timer = window.setTimeout(() => {
-      void Promise.all([
-        loadConversations(),
-        collaborationApi.callStatus().then(setCallStatus),
-      ]);
+      void loadConversations();
     }, 0);
     return () => window.clearTimeout(timer);
   }, [loadConversations]);
@@ -379,9 +373,6 @@ export function TeamSpaceCollaboration({ sidebarMode = false }: { sidebarMode?: 
                     {(selected.participants || []).length} partecipanti
                   </p>
                 </div>
-                {callStatus.enabled ? (
-                  <LiveKitCallPanel status={callStatus} conversationId={selected.id} />
-                ) : null}
               </header>
               {error ? <p role="alert" className="m-3 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</p> : null}
               <ScrollArea className="min-h-0 flex-1">

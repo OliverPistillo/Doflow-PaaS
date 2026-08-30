@@ -36,6 +36,7 @@ Il branch corrente contiene la baseline di acceptance del core operativo Doflow:
 | Auth e onboarding | Email/password, Google OAuth, MFA/TOTP, recupero password, inviti, signup tenant e onboarding |
 | Piattaforma | Control plane superadmin con gestione tenant, utenti, moduli, subscription, osservabilità e supporto |
 | Integrazioni | Storage S3-compatible, email, Stripe, Google OAuth, Apollo/Gemini e funzioni AI richiedono provider e variabili d'ambiente |
+| Doflow Calls | Chiamate LiveKit interne disponibili soltanto nel client Desktop; meeting guest browser isolati e subordinati a configurazione e subscription tenant |
 | Roadmap | Nessuna roadmap datata viene trattata come stato implementato |
 
 La disponibilità effettiva di una funzione dipende anche da tenant, ruolo, piano, moduli attivi e configurazione dell'ambiente. La sola presenza di una route frontend o di un SDK non costituisce garanzia di abilitazione in produzione.
@@ -61,6 +62,7 @@ La disponibilità effettiva di una funzione dipende anche da tenant, ruolo, pian
 - **File, documenti e materiali** — documenti tenant, collegamenti ai record, file di progetto e richieste materiali; le operazioni su oggetti richiedono uno storage S3-compatible configurato.
 - **Amministrazione** — viste finanziarie, fatture e incassi, scadenze, rinnovi, preventivi e contratti, nei limiti dei permessi del ruolo.
 - **Team e reporting** — membri, competenze, disponibilità, carichi, consuntivazione, report operativi e performance consulenti dove abilitate.
+- **Doflow Calls** — audio/video 1:1, screen sharing, finestra nativa e incoming call nel client Desktop; link guest temporanei in browser. Le chiamate interne non sono esposte nella normale webapp. Configurazione e limiti sono descritti in [`docs/doflow-desktop-calls.md`](docs/doflow-desktop-calls.md).
 - **Automazioni, calendario e knowledge** — regole e run di automazione, eventi e viste calendario, articoli, asset e template condivisi.
 - **Credentials Vault** — inventario credenziali, scadenze, rotazioni, permessi e audit, subordinato alle capability tenant.
 - **Builder e proposte web** — import, temi, generazione, preparazione, anteprima ed export di proposte; la superficie Builder è limitata al tenant Doflow e alcune elaborazioni dipendono da storage e provider AI.
@@ -161,6 +163,7 @@ Usare `.env.example` come inventario di partenza, sostituendo sempre i placehold
 - Per avviare direttamente il backend, creare `apps/backend/.env` con almeno connessione PostgreSQL locale, Redis, `JWT_SECRET` e `DB_SYNC=false`.
 - Per il frontend, `apps/frontend/.env.local` può definire `INTERNAL_BACKEND_URL`; lasciando `NEXT_PUBLIC_API_URL` vuota, il browser usa `/api` e il rewrite Next.js.
 - Aggiungere le variabili di OAuth, posta, billing, storage o AI solo se si intende usare la relativa integrazione.
+- Per Doflow Calls configurare le variabili `LIVEKIT_*` e `DESKTOP_CALLS_*`, applicare la migration tracciata e attivare la subscription `collab.calls` soltanto per i tenant autorizzati; la feature resta fail-closed quando uno dei gate manca.
 
 Non copiare nei README valori reali di `DATABASE_URL`, password, secret o chiavi provider.
 

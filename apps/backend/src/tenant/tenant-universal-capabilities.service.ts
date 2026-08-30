@@ -24,6 +24,8 @@ export type TenantUniversalCapability =
   | 'canReactMessages'
   | 'canViewAssignedLeads'
   | 'canAnalyzeCompanies'
+  | 'canUseDesktopCalls'
+  | 'canCreateGuestMeetings'
   | 'canViewOwnPoints'
   | 'canViewGlobalPoints'
   | 'canManagePointPolicies';
@@ -77,6 +79,8 @@ export class TenantUniversalCapabilitiesService {
       case 'canModerateMessages': return ['canModerateComments'];
       case 'canReactMessages': return ['canReactComments'];
       case 'canAnalyzeCompanies': return ['canCreateLeads'];
+      case 'canUseDesktopCalls': return ['canCreateComments'];
+      case 'canCreateGuestMeetings': return ['canCreateComments'];
       default: return [capability];
     }
   }
@@ -105,6 +109,8 @@ export class TenantUniversalCapabilitiesService {
       case 'canReactMessages': return Boolean(access.modules.team?.can_update);
       case 'canViewAssignedLeads': return Boolean(access.modules.crm?.can_view);
       case 'canAnalyzeCompanies': return Boolean(access.modules.crm?.can_create);
+      case 'canUseDesktopCalls': return Boolean(access.modules.team?.can_create);
+      case 'canCreateGuestMeetings': return Boolean(access.modules.team?.can_create);
       case 'canViewOwnPoints': return Boolean(access.modules.reports?.can_view);
       case 'canViewGlobalPoints': return Boolean(access.modules.reports?.can_manage);
       case 'canManagePointPolicies': return Boolean(access.modules.reports?.can_manage);

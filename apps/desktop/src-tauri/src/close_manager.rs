@@ -200,6 +200,7 @@ pub fn user_facing_window_label(active: Option<&crate::runtime::ActiveProfile>) 
 pub fn exit_desktop<R: Runtime>(app: &AppHandle<R>) {
     let runtime = app.state::<DesktopRuntime>();
     runtime.close.begin_explicit_exit();
+    crate::call_manager::destroy_all_call_windows(app);
     app.exit(0);
 }
 

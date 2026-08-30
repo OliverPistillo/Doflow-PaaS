@@ -124,22 +124,6 @@ export type CollaborationPresence = {
   expiresAt?: string | null;
 };
 
-export type CollaborationCallStatus = {
-  enabled: boolean;
-  reason?: string;
-  supportsVideo?: boolean;
-  supportsScreenShare?: boolean;
-};
-
-export type CollaborationCallAccess = {
-  callId: string;
-  roomName: string;
-  token: string;
-  serverUrl: string;
-  mode?: "voice" | "video";
-  canPublish?: boolean;
-};
-
 function normalizeReactionList(value: unknown): CollaborationReaction[] {
   if (!Array.isArray(value)) return [];
   const grouped = new Map<string, string[]>();
@@ -310,35 +294,6 @@ export const collaborationApi = {
   },
   clearPresence() {
     return apiFetch<{ ok?: boolean }>("/tenant/collaboration/presence", mutationOptions("DELETE"));
-  },
-  async callStatus(): Promise<CollaborationCallStatus> {
-    try {
-      return await apiFetch<CollaborationCallStatus>("/tenant/collaboration/calls/status");
-    } catch {
-      return { enabled: false, reason: "feature-disabled" };
-    }
-  },
-  async startCall(conversationId: string, mode: "voice" | "video") {
-    const row = await apiFetch<Record<string, unknown>>(
-      "/tenant/collaboration/calls/token",
-      mutationOptions("POST", { conversationId }, featureMutationKey("call")),
-    );
-    return {
-      callId: String(row.callId || row.call_id || ""),
-      roomName: String(row.roomName || row.room || ""),
-      token: String(row.token || ""),
-      serverUrl: String(row.serverUrl || row.server_url || ""),
-      mode,
-      canPublish: row.canPublish === undefined && row.can_publish === undefined
-        ? true
-        : row.canPublish === true || row.can_publish === true,
-    } satisfies CollaborationCallAccess;
-  },
-  endCall(callId: string) {
-    return apiFetch<{ ok?: boolean }>(
-      "/tenant/collaboration/calls/" + encodeURIComponent(callId),
-      mutationOptions("DELETE"),
-    );
   },
 };
 

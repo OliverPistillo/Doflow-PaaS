@@ -13,6 +13,12 @@
     "allow-request-profile-switch",
     "allow-get-update-state",
     "allow-install-current-verified-update",
-    "allow-start-desktop-google-oauth"
+    "allow-start-desktop-google-oauth",
+    "allow-get-desktop-call-capabilities",
+    "allow-show-incoming-desktop-call",
+    "allow-dismiss-incoming-desktop-call",
+    "allow-open-desktop-call",
+    "allow-update-desktop-call-credentials",
+    "allow-close-desktop-call"
   ]
 }

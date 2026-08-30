@@ -1,8 +1,7 @@
-import { BadRequestException, ConflictException, ForbiddenException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
 import { createHash } from 'crypto';
-import { RoomServiceClient } from 'livekit-server-sdk';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FEATURE_ACCESS_META_KEY } from '../feature-access/feature-access.decorator';
 import { FeatureAccessGuard } from '../feature-access/feature-access.guard';
@@ -17,7 +16,6 @@ import { TenantConversationsController } from './tenant-conversations.controller
 import { TenantConversationsService } from './tenant-conversations.service';
 import { TenantFlowboardsService } from './tenant-flowboards.service';
 import { TenantFlowboardsController } from './tenant-flowboards.controller';
-import { TenantLivekitService } from './tenant-livekit.service';
 import { TenantBonusController } from './tenant-bonus.controller';
 import { ensureDoflowAutomationPerformanceTables } from './tenant-automation-performance-schema';
 import { TenantTeamController } from './tenant-team.controller';
@@ -757,44 +755,6 @@ describe('Universal tenant authority security', () => {
       .rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('fails LiveKit OFF and identity spoof before any DB or SDK access', async () => {
-    const previous = { ...process.env };
-    const query = jest.fn();
-    const transaction = jest.fn();
-    const service = new TenantLivekitService({ query, transaction } as any, request(), capabilityAuthority() as any);
-    try {
-      process.env.LIVEKIT_ENABLED = 'false';
-      await expect(service.token({ conversationId: RECORD_B })).rejects.toBeInstanceOf(ForbiddenException);
-      process.env.LIVEKIT_ENABLED = 'true';
-      process.env.LIVEKIT_URL = 'wss://livekit.example.test';
-      process.env.LIVEKIT_API_KEY = 'test-key';
-      process.env.LIVEKIT_API_SECRET = 'test-secret';
-      await expect(service.token({ conversationId: RECORD_B, userId: USER_B })).rejects.toBeInstanceOf(BadRequestException);
-      expect(query).not.toHaveBeenCalled();
-      expect(transaction).not.toHaveBeenCalled();
-    } finally {
-      process.env = previous;
-    }
-  });
-
-  it('denies LiveKit capability before participant lookup when the provider is enabled', async () => {
-    const previous = { ...process.env };
-    const query = jest.fn();
-    const capability = capabilityAuthority(false);
-    const service = new TenantLivekitService({ query, transaction: jest.fn() } as any, request(), capability as any);
-    try {
-      process.env.LIVEKIT_ENABLED = 'true';
-      process.env.LIVEKIT_URL = 'wss://livekit.example.test';
-      process.env.LIVEKIT_API_KEY = 'test-key';
-      process.env.LIVEKIT_API_SECRET = 'test-secret';
-      await expect(service.token({ conversationId: RECORD_B })).rejects.toBeInstanceOf(ForbiddenException);
-      expect(capability.require).toHaveBeenCalledWith(expect.objectContaining({ schema: 'tenant_a', id: USER_A }), 'canViewProjects');
-      expect(query).not.toHaveBeenCalled();
-    } finally {
-      process.env = previous;
-    }
-  });
-
   it('projects the Doflow Bonus wallet and movements exclusively from point_ledger', async () => {
     const period = { id: RECORD_B, label: '2026-08', starts_at: '2026-08-01', ends_at: '2026-08-31', status: 'open' };
     const seed = {
@@ -1055,96 +1015,6 @@ describe('Universal tenant authority security', () => {
     expect(manager.query.mock.calls.some(([sql]) => String(sql).includes('tenant_b'))).toBe(false);
     expect(manager.query.mock.calls.some(([sql]) => String(sql).includes("'bonus_period_consolidated'"))).toBe(true);
     expect(capabilities.require).toHaveBeenCalledWith(expect.objectContaining({ schema: 'tenant_a' }), 'canManagePointPolicies');
-  });
-
-  it('denies LiveKit token/end for a non-member in tenant A without leaking tenant B', async () => {
-    const previous = { ...process.env };
-    try {
-      process.env.LIVEKIT_ENABLED = 'true';
-      process.env.LIVEKIT_URL = 'wss://livekit.example.test';
-      process.env.LIVEKIT_API_KEY = 'test-key';
-      process.env.LIVEKIT_API_SECRET = 'test-secret';
-      const query = jest.fn().mockResolvedValue([]);
-      const manager = { query: jest.fn().mockResolvedValue([]) };
-      const transaction = jest.fn(async (operation: any) => operation(manager));
-      const service = new TenantLivekitService({ query, transaction } as any, request(), capabilityAuthority() as any);
-      await expect(service.token({ conversationId: RECORD_B })).rejects.toBeInstanceOf(ForbiddenException);
-      await expect(service.end(RECORD_B)).rejects.toBeInstanceOf(ForbiddenException);
-      expect([...query.mock.calls, ...manager.query.mock.calls].every(([sql]) => !String(sql).includes('tenant_b'))).toBe(true);
-    } finally {
-      process.env = previous;
-    }
-  });
-
-  it('ends an authorized LiveKit call atomically and writes the tenant audit', async () => {
-    const previous = { ...process.env };
-    const deleteRoom = jest.spyOn(RoomServiceClient.prototype, 'deleteRoom').mockResolvedValue(undefined);
-    try {
-      process.env.LIVEKIT_ENABLED = 'true';
-      process.env.LIVEKIT_URL = 'wss://livekit.example.test';
-      process.env.LIVEKIT_API_KEY = 'test-key';
-      process.env.LIVEKIT_API_SECRET = 'test-secret';
-      const manager = {
-        query: jest.fn()
-          .mockResolvedValueOnce([{
-            id: RECORD_B, conversation_id: USER_B, created_by: USER_A,
-            participant_role: 'member', status: 'active', ended_at: null,
-            room_key: 'tenant-a-conversation-room',
-          }])
-          .mockResolvedValueOnce([])
-          .mockResolvedValueOnce([]),
-      };
-      const transaction = jest.fn(async (operation: any) => operation(manager));
-      const service = new TenantLivekitService({ query: jest.fn(), transaction } as any, request(), capabilityAuthority() as any);
-      await expect(service.end(RECORD_B)).resolves.toEqual({ callId: RECORD_B, conversationId: USER_B, ended: true });
-      expect(deleteRoom).toHaveBeenCalledWith('tenant-a-conversation-room');
-      expect(manager.query.mock.calls[1][0]).toContain("status='ended'");
-      expect(deleteRoom.mock.invocationCallOrder[0])
-        .toBeLessThan(manager.query.mock.invocationCallOrder[1]);
-      expect(manager.query.mock.calls[2][0]).toContain("'call_ended'");
-      expect(manager.query.mock.calls.every(([sql]) => String(sql).includes('"tenant_a"'))).toBe(true);
-    } finally {
-      deleteRoom.mockRestore();
-      process.env = previous;
-    }
-  });
-
-  it('fails closed when LiveKit cannot terminate the provider room', async () => {
-    const previous = { ...process.env };
-    const deleteRoom = jest.spyOn(RoomServiceClient.prototype, 'deleteRoom')
-      .mockRejectedValue(new Error('provider unavailable'));
-    try {
-      process.env.LIVEKIT_ENABLED = 'true';
-      process.env.LIVEKIT_URL = 'wss://livekit.example.test';
-      process.env.LIVEKIT_API_KEY = 'test-key';
-      process.env.LIVEKIT_API_SECRET = 'test-secret';
-      const manager = {
-        query: jest.fn().mockResolvedValueOnce([{
-          id: RECORD_B,
-          conversation_id: USER_B,
-          created_by: USER_A,
-          participant_role: 'member',
-          status: 'active',
-          ended_at: null,
-          room_key: 'tenant-a-conversation-room',
-        }]),
-      };
-      const transaction = jest.fn(async (operation: any) => operation(manager));
-      const service = new TenantLivekitService(
-        { query: jest.fn(), transaction } as any,
-        request(),
-        capabilityAuthority() as any,
-      );
-
-      await expect(service.end(RECORD_B)).rejects.toBeInstanceOf(ServiceUnavailableException);
-      expect(deleteRoom).toHaveBeenCalledWith('tenant-a-conversation-room');
-      expect(manager.query).toHaveBeenCalledTimes(1);
-      expect(manager.query.mock.calls.some(([sql]) => String(sql).includes("status='ended'"))).toBe(false);
-      expect(manager.query.mock.calls.some(([sql]) => String(sql).includes("'call_ended'"))).toBe(false);
-    } finally {
-      deleteRoom.mockRestore();
-      process.env = previous;
-    }
   });
 
   it('returns provider_unconfigured without manufacturing a Company Intelligence report', async () => {

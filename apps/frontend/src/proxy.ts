@@ -25,6 +25,7 @@ function extractTenantFromPath(pathname: string): string | null {
     "terms",
     "privacy",
     "auth",
+    "meeting",
     "api",
     "_next",
     "favicon.ico",

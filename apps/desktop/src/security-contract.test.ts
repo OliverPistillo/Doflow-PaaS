@@ -27,7 +27,7 @@ function workflowStep(job: string, name: string) {
 }
 
 describe("remote WebView security contract", () => {
-  it("grants only the six versioned Desktop bridge commands to app.doflow.it", () => {
+  it("grants only the fixed versioned Desktop bridge commands to app.doflow.it", () => {
     const capability = JSON.parse(
       readFileSync(resolve(desktopRoot, "src-tauri/capabilities/doflow-remote.json"), "utf8"),
     );
@@ -39,6 +39,12 @@ describe("remote WebView security contract", () => {
       "allow-get-update-state",
       "allow-install-current-verified-update",
       "allow-start-desktop-google-oauth",
+      "allow-get-desktop-call-capabilities",
+      "allow-show-incoming-desktop-call",
+      "allow-dismiss-incoming-desktop-call",
+      "allow-open-desktop-call",
+      "allow-update-desktop-call-credentials",
+      "allow-close-desktop-call",
     ]);
   });
 
@@ -92,6 +98,8 @@ describe("automatic Desktop versioning", () => {
     expect(nextDesktopVersion([])).toBe("1.0.0");
     expect(nextDesktopVersion(["desktop-v1.0.9", "desktop-v1.0.10", "not-a-tag"])).toBe("1.0.11");
     expect(nextDesktopVersion(["desktop-v2.4.0-beta.1", "desktop-v1.9.9"])).toBe("2.4.0");
+    expect(nextDesktopVersion(["desktop-v1.0.1"], "1.1.0")).toBe("1.1.0");
+    expect(nextDesktopVersion(["desktop-v1.1.0"], "1.1.0")).toBe("1.1.1");
   });
 });
 

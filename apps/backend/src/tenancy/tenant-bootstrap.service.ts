@@ -28,6 +28,7 @@ import { ensureDoflowAutomationPerformanceTables } from '../tenant/tenant-automa
 import { seedTenantPlanningViews } from '../tenant/tenant-calendar-schema';
 import { seedTenantKnowledgeBase } from '../tenant/tenant-knowledge-schema';
 import { ensureTenantCredentialsTables } from '../tenant/tenant-credentials-schema';
+import { ensureTenantCallTables } from '../tenant/tenant-calls-schema';
 import { ensureTenantAuthSupportTables } from '../auth/auth-schema';
 
 @Injectable()
@@ -207,6 +208,7 @@ export class TenantBootstrapService implements OnApplicationBootstrap {
     await seedTenantPlanningViews(ds, s);
     await seedTenantKnowledgeBase(ds, s);
     await ensureTenantCredentialsTables(ds, s);
+    await ensureTenantCallTables(ds, s);
     if (s === 'doflow') {
     }
 

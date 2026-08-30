@@ -1,3 +1,4 @@
+mod call_manager;
 mod close_manager;
 mod commands;
 mod models;
@@ -21,6 +22,7 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             close_manager::show_main_window(app);
         }))
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(updater::updater_plugin())
         .setup(|app| {
@@ -38,7 +40,9 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let label = window.label();
-                if close_manager::is_managed_close_window(label) {
+                if call_manager::handle_native_close_requested(window.app_handle(), label) {
+                    api.prevent_close();
+                } else if close_manager::is_managed_close_window(label) {
                     let runtime = window.app_handle().state::<DesktopRuntime>();
                     if !runtime.close.is_explicit_exit() {
                         api.prevent_close();
@@ -65,6 +69,14 @@ pub fn run() {
             commands::request_desktop_close,
             commands::resolve_desktop_close,
             commands::cancel_desktop_close,
+            call_manager::get_desktop_call_capabilities,
+            call_manager::show_incoming_desktop_call,
+            call_manager::dismiss_incoming_desktop_call,
+            call_manager::open_desktop_call,
+            call_manager::update_desktop_call_credentials,
+            call_manager::close_desktop_call,
+            call_manager::get_native_call_context,
+            call_manager::send_native_call_action,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Doflow Desktop");

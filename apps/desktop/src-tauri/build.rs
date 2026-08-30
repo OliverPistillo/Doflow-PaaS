@@ -17,6 +17,14 @@ fn main() {
         "get_update_state",
         "install_current_verified_update",
         "start_desktop_google_oauth",
+        "get_desktop_call_capabilities",
+        "show_incoming_desktop_call",
+        "dismiss_incoming_desktop_call",
+        "open_desktop_call",
+        "update_desktop_call_credentials",
+        "close_desktop_call",
+        "get_native_call_context",
+        "send_native_call_action",
     ];
 
     tauri_build::try_build(

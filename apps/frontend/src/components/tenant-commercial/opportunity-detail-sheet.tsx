@@ -22,6 +22,8 @@ import {
   parseIntakeFormData,
 } from "@/lib/public-lead-intake";
 import { commercialDate, commercialMoney, pipelineStageLabel } from "./commercial-utils";
+import { DesktopMeetingAction } from "@/features/calls/desktop-meeting-action";
+import { DesktopUserCallActions } from "@/features/calls/desktop-user-call-action";
 
 function fallbackGoals(value: unknown): string[] {
   const text = intakeText(value);
@@ -129,6 +131,8 @@ export function OpportunityDetailSheet({
             </section>
 
             <div className="grid gap-2 sm:grid-cols-2">
+              <DesktopUserCallActions userId={opportunity.assigned_to} context={{ kind: "opportunity", id: opportunity.id }} label="responsabile opportunità" />
+              <DesktopMeetingAction context={{ kind: "opportunity", id: opportunity.id }} label="Link riunione" />
               <Button asChild>
                 <Link href={`/briefings/new?opportunity=${encodeURIComponent(opportunity.id)}`}>
                   <ClipboardPlus className="mr-2 h-4 w-4" /> Avvia briefing

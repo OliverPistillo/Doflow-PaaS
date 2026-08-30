@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-desktop-call"
+description = "Enables the open_desktop_call command without any pre-configured scope."
+commands.allow = ["open_desktop_call"]
+
+[[permission]]
+identifier = "deny-open-desktop-call"
+description = "Denies the open_desktop_call command without any pre-configured scope."
+commands.deny = ["open_desktop_call"]

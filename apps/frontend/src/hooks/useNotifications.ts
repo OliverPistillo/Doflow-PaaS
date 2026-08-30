@@ -9,7 +9,12 @@ export type NotificationEvent = {
   channel: string;
   payload: Record<string, unknown>;
 };
-export type RealtimeEvent = HelloEvent | HeartbeatEvent | NotificationEvent;
+export type CallsEvent = {
+  type: `calls.${string}`;
+  eventId?: string;
+  payload: Record<string, unknown>;
+};
+export type RealtimeEvent = HelloEvent | HeartbeatEvent | NotificationEvent | CallsEvent;
 
 interface UseNotificationsOptions {
   enabled?: boolean;
@@ -24,6 +29,7 @@ function websocketUrl() {
 }
 
 function eventId(event: RealtimeEvent) {
+  if ('eventId' in event && typeof event.eventId === 'string') return event.eventId;
   if ('payload' in event && event.payload && typeof event.payload === 'object') {
     const value = (event.payload as Record<string, unknown>).eventId;
     return typeof value === 'string' ? value : null;

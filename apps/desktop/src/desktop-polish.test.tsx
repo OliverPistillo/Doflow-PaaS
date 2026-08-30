@@ -59,9 +59,9 @@ describe("desktop native polish contracts", () => {
     expect(main).toContain('#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]');
     expect(cargo).toContain('tauri-plugin-single-instance = "=2.4.3"');
     expect(cargo).toContain('features = ["tray-icon"]');
-    expect(config.version).toBe("1.0.0");
-    expect(desktopPackage.version).toBe("1.0.0");
-    expect(cargo).toMatch(/version = "1\.0\.0"/);
+    expect(config.version).toBe("1.1.0");
+    expect(desktopPackage.version).toBe("1.1.0");
+    expect(cargo).toMatch(/version = "1\.1\.0"/);
     expect(config.bundle.icon).toContain("icons/icon.ico");
     expect(config.bundle.windows.nsis.installerIcon).toBe("icons/icon.ico");
     expect(traySource).toContain("default_window_icon().cloned()");
@@ -82,6 +82,12 @@ describe("desktop native polish contracts", () => {
       "allow-get-update-state",
       "allow-install-current-verified-update",
       "allow-start-desktop-google-oauth",
+      "allow-get-desktop-call-capabilities",
+      "allow-show-incoming-desktop-call",
+      "allow-dismiss-incoming-desktop-call",
+      "allow-open-desktop-call",
+      "allow-update-desktop-call-credentials",
+      "allow-close-desktop-call",
     ]);
     expect(local.permissions).toEqual(expect.arrayContaining([
       "allow-request-desktop-close",

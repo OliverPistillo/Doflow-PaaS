@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "calls-local",
+  "description": "Bundled call and incoming-call windows with session-derived native commands only.",
+  "windows": ["call-*", "incoming-*"],
+  "platforms": ["windows"],
+  "permissions": [
+    "core:event:default",
+    "allow-get-native-call-context",
+    "allow-send-native-call-action"
+  ]
+}

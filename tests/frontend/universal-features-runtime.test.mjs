@@ -10,7 +10,10 @@ const api = read("apps/frontend/src/lib/tenant-feature-api.ts");
 const inbox = read("apps/frontend/src/components/tenant-inbox/tenant-inbox-page.tsx");
 const teamSpace = read("apps/frontend/src/components/tenant-collaboration/team-space-collaboration.tsx");
 const presence = read("apps/frontend/src/components/tenant-collaboration/team-space-presence.tsx");
-const callPanel = read("apps/frontend/src/components/tenant-collaboration/livekit-call-panel.tsx");
+const desktopCalls = read("apps/frontend/src/features/calls/desktop-calls-provider.tsx");
+const desktopCallsApi = read("apps/frontend/src/features/calls/doflow-calls-api.ts");
+const desktopBridge = read("apps/frontend/src/lib/desktop-bridge.ts");
+const guestMeeting = read("apps/frontend/src/features/calls/guest-meeting-page.tsx");
 const flowboardList = read("apps/frontend/src/components/tenant-flowboard/flowboard-list.tsx");
 const flowboardEditor = read("apps/frontend/src/components/tenant-flowboard/flowboard-editor.tsx");
 const bonus = read("apps/frontend/src/components/tenant-bonus/bonus-page.tsx");
@@ -83,21 +86,20 @@ test("collaboration client preserves tenant server authority and rich-message co
   assert.match(teamSpace, /await loadConversations\(\);\s*await loadConversation\(selectedId\);/);
 });
 
-test("LiveKit callers stay absent when the server feature flag is off", () => {
-  assert.match(api, /\/tenant\/collaboration\/calls\/status/);
-  assert.match(api, /\/tenant\/collaboration\/calls\/token/);
-  assert.match(api, /\/tenant\/collaboration\/calls\/" \+ encodeURIComponent\(callId\)/);
-  assert.match(teamSpace, /\{callStatus\.enabled \? \([\s\S]*<LiveKitCallPanel/);
-  assert.match(callPanel, /if \(!status\.enabled\) return null/);
-  assert.match(callPanel, /RoomEvent\.Reconnecting/);
-  assert.match(callPanel, /setMicrophoneEnabled/);
-  assert.match(callPanel, /setCameraEnabled/);
-  assert.match(callPanel, /setScreenShareEnabled/);
-  assert.match(api, /canPublish: row\.canPublish/);
-  assert.match(callPanel, /const canPublish = nextAccess\.canPublish !== false/);
-  assert.match(callPanel, /if \(canPublish\) \{/);
-  assert.match(callPanel, /Partecipazione in ascolto/);
-  assert.doesNotMatch(api + callPanel, /NEXT_PUBLIC_LIVEKIT|LIVEKIT_API_SECRET|LIVEKIT_API_KEY/);
+test("LiveKit internal calls are Desktop-capability gated while the public guest surface remains isolated", () => {
+  assert.doesNotMatch(api + teamSpace, /callStatus|startCall|LiveKitCallPanel/);
+  assert.match(desktopBridge, /bridgeVersion < 2/);
+  assert.match(desktopBridge, /getDesktopCallCapabilities/);
+  assert.match(desktopCalls, /capabilities\.includes\("calls\.internal"\)/);
+  assert.match(desktopCalls, /bridgeReady && Boolean\(status\?\.enabled\)/);
+  assert.match(desktopCallsApi, /\/tenant\/collaboration\/calls\/status/);
+  assert.match(desktopCallsApi, /\/public\/desktop-calls\/guest\/token/);
+  assert.match(guestMeeting, /RoomEvent\.Reconnecting/);
+  assert.match(guestMeeting, /setMicrophoneEnabled/);
+  assert.match(guestMeeting, /setCameraEnabled/);
+  assert.match(guestMeeting, /setScreenShareEnabled/);
+  assert.match(guestMeeting, /safeInviteFromFragment/);
+  assert.doesNotMatch(desktopCalls + desktopCallsApi + guestMeeting, /NEXT_PUBLIC_LIVEKIT|LIVEKIT_API_SECRET|LIVEKIT_API_KEY/);
 
   const dashboardRoot = path.join(root, "apps/frontend/src/app/(tenant)/dashboard");
   const routeNames = readdirSync(dashboardRoot, { recursive: true }).map(String);
@@ -297,7 +299,7 @@ test("new feature surfaces use universal semantic UI tokens", () => {
     inbox,
     teamSpace,
     presence,
-    callPanel,
+    desktopCalls,
     flowboardEditor,
     bonus,
     intelligence,

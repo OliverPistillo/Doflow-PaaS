@@ -76,6 +76,12 @@ import { TenantPresenceController } from './tenant-presence.controller';
 import { TenantPresenceService } from './tenant-presence.service';
 import { TenantLivekitController } from './tenant-livekit.controller';
 import { TenantLivekitService } from './tenant-livekit.service';
+import { TenantCallsPublicController } from './tenant-calls-public.controller';
+import { TenantCallsPublicService } from './tenant-calls-public.service';
+import { TenantCallsFeatureService } from './tenant-calls-feature.service';
+import { TenantCallsLivekitProviderService } from './tenant-calls-livekit-provider.service';
+import { TenantCallsStoreService } from './tenant-calls-store.service';
+import { TenantCallsSweeperService } from './tenant-calls-sweeper.service';
 import { TenantBonusController } from './tenant-bonus.controller';
 import { TenantBonusService } from './tenant-bonus.service';
 import { TenantPreferencesController } from './tenant-preferences.controller';
@@ -147,6 +153,7 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
     TenantFlowboardsController,
     TenantPresenceController,
     TenantLivekitController,
+    TenantCallsPublicController,
     TenantBonusController,
     TenantPreferencesController,
     TenantReleasesController,
@@ -194,6 +201,11 @@ import { SupportTicket } from '../superadmin/entities/support-ticket.entity';
       TenantFlowboardsService,
       TenantPresenceService,
       TenantLivekitService,
+      TenantCallsPublicService,
+      TenantCallsFeatureService,
+      TenantCallsLivekitProviderService,
+      TenantCallsStoreService,
+      TenantCallsSweeperService,
       TenantBonusService,
       TenantPreferencesService,
       TenantReleasesService,

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub const PROFILE_REGISTRY_VERSION: u8 = 1;
-pub const BRIDGE_VERSION: u8 = 1;
+pub const BRIDGE_VERSION: u8 = 2;
 
 fn is_false(value: &bool) -> bool {
     !*value

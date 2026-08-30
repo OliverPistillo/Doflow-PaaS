@@ -1,10 +1,40 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
-import { createHash } from 'crypto';
 import { DataSource } from 'typeorm';
-import { isTenantAdministrator, tenantActor, tenantUuid } from './tenant-universal-context';
-import { ensureTenantUniversalFeatureTables } from './tenant-universal-features-schema';
+import { PresenceRegistryService } from '../realtime/presence-registry.service';
+import {
+  parseCallContext,
+  parseCallIdempotencyKey,
+  parseCallType,
+  parseDesktopDeviceId,
+  type TenantCallContextKind,
+} from './tenant-calls-domain';
+import { tenantCallsConfig } from './tenant-calls-config';
+import { TenantCallsFeatureService } from './tenant-calls-feature.service';
+import { TenantCallsLivekitProviderService } from './tenant-calls-livekit-provider.service';
+import { TenantCallsStoreService, type CallCrmContext } from './tenant-calls-store.service';
+import { TenantCrmService } from './tenant-crm.service';
+import { TenantProjectsService } from './tenant-projects.service';
+import {
+  rejectActorOverride,
+  tenantActor,
+  tenantUuid,
+  type TenantActor,
+} from './tenant-universal-context';
 import { TenantUniversalCapabilitiesService } from './tenant-universal-capabilities.service';
+
+function field(row: Record<string, unknown>, snake: string, camel: string): string | null {
+  const value = row[snake] ?? row[camel];
+  const text = String(value || '').trim();
+  return /^[0-9a-f-]{36}$/i.test(text) ? text : null;
+}
 
 @Injectable()
 export class TenantLivekitService {
@@ -12,169 +42,343 @@ export class TenantLivekitService {
     private readonly dataSource: DataSource,
     @Inject(REQUEST) private readonly request: any,
     private readonly capabilities: TenantUniversalCapabilitiesService,
+    private readonly features: TenantCallsFeatureService,
+    private readonly presence: PresenceRegistryService,
+    private readonly store: TenantCallsStoreService,
+    private readonly livekit: TenantCallsLivekitProviderService,
+    private readonly crm: TenantCrmService,
+    private readonly projects: TenantProjectsService,
   ) {}
-  private actor() { return tenantActor(this.request, 'TenantLivekitService'); }
-  private enabled() { return String(process.env.LIVEKIT_ENABLED || 'false').trim().toLowerCase() === 'true'; }
-  private config() {
-    return {
-      url: String(process.env.LIVEKIT_URL || '').trim(),
-      key: String(process.env.LIVEKIT_API_KEY || '').trim(),
-      secret: String(process.env.LIVEKIT_API_SECRET || '').trim(),
-    };
-  }
 
-  private sdk() {
-    try {
-      return require('livekit-server-sdk') as {
-        AccessToken: new (...args: any[]) => any;
-        RoomServiceClient: new (url: string, key: string, secret: string) => {
-          deleteRoom(room: string): Promise<void>;
-        };
-      };
-    } catch {
-      throw new ServiceUnavailableException({ error: 'LIVEKIT_SDK_UNAVAILABLE', message: 'Provider chiamate non disponibile.' });
+  private actor() { return tenantActor(this.request, 'TenantLivekitService'); }
+
+  private rejectOverrides(body: Record<string, unknown>) {
+    rejectActorOverride(body);
+    for (const key of ['room', 'roomName', 'room_key', 'token', 'callerUserId', 'caller_user_id']) {
+      if (body[key] !== undefined) throw new BadRequestException('Identità, tenant, room e token sono determinati dal server');
     }
   }
 
-  private async authorize(actor = this.actor()) {
-    await this.capabilities.require(actor, 'canViewProjects');
+  private async authorize(actor: TenantActor, guest = false) {
+    await this.capabilities.require(actor, guest ? 'canCreateGuestMeetings' : 'canUseDesktopCalls');
+    if (guest) await this.features.requireGuest(actor.schema);
+    else await this.features.requireInternal(actor.schema);
     return actor;
   }
 
-  async status() {
-    await this.authorize();
-    const config = this.config();
+  private async requireDesktop(actor: TenantActor, deviceValue: unknown) {
+    const deviceId = parseDesktopDeviceId(deviceValue);
+    if (!(await this.presence.hasDesktopSession(actor.schema, actor.id, deviceId))) {
+      throw new ForbiddenException({
+        error: 'DESKTOP_SESSION_REQUIRED',
+        message: 'Apri Doflow Desktop e attendi la connessione prima di usare le chiamate.',
+      });
+    }
+    return deviceId;
+  }
+
+  private async actorName(actor: TenantActor) {
+    const rows = await this.dataSource.query(
+      `SELECT COALESCE(NULLIF(tm.display_name,''),NULLIF(u.full_name,''),u.email,$2) AS display_name
+       FROM "${actor.schema}".users u
+       LEFT JOIN "${actor.schema}".team_members tm ON tm.user_id=u.id AND tm.deleted_at IS NULL
+       WHERE u.id=$1 AND COALESCE(u.is_active,true)=true LIMIT 1`,
+      [actor.id, actor.email || 'Utente Doflow'],
+    );
+    return String(rows[0]?.display_name || actor.email || 'Utente Doflow').slice(0, 120);
+  }
+
+  private async callee(actor: TenantActor, value: unknown) {
+    const calleeUserId = tenantUuid(value, 'calleeUserId');
+    if (calleeUserId === actor.id) throw new BadRequestException('Non puoi chiamare il tuo stesso account');
+    const rows = await this.dataSource.query(
+      `SELECT u.id,COALESCE(NULLIF(tm.display_name,''),NULLIF(u.full_name,''),u.email,'Utente Doflow') AS display_name
+       FROM "${actor.schema}".users u
+       LEFT JOIN "${actor.schema}".team_members tm ON tm.user_id=u.id AND tm.deleted_at IS NULL
+       WHERE u.id=$1 AND COALESCE(u.is_active,true)=true LIMIT 1`,
+      [calleeUserId],
+    );
+    if (!rows[0]) throw new NotFoundException('Destinatario non disponibile nel tenant corrente');
+    return { id: calleeUserId, name: String(rows[0].display_name || 'Utente Doflow').slice(0, 120) };
+  }
+
+  private async conversation(actor: TenantActor, value: unknown, calleeUserId: string) {
+    if (value === undefined || value === null || value === '') return null;
+    const conversationId = tenantUuid(value, 'conversationId');
+    const rows = await this.dataSource.query(
+      `SELECT count(DISTINCT cp.user_id)::int AS participant_count,
+              count(DISTINCT cp.user_id) FILTER (WHERE cp.user_id=ANY($2::uuid[]))::int AS authorized_count
+       FROM "${actor.schema}".conversations c
+       JOIN "${actor.schema}".conversation_participants cp ON cp.conversation_id=c.id AND cp.left_at IS NULL
+       WHERE c.id=$1 AND c.deleted_at IS NULL`,
+      [conversationId, [actor.id, calleeUserId]],
+    );
+    if (Number(rows[0]?.participant_count || 0) !== 2 || Number(rows[0]?.authorized_count || 0) !== 2) {
+      throw new ForbiddenException('La chiamata interna richiede una conversazione diretta autorizzata');
+    }
+    return conversationId;
+  }
+
+  private async context(value: unknown): Promise<CallCrmContext | null> {
+    const parsed = parseCallContext(value, tenantUuid);
+    if (!parsed) return null;
+    if (parsed.kind === 'project') {
+      const row = await this.projects.getProject(parsed.id) as Record<string, unknown>;
+      return {
+        ...parsed,
+        companyId: field(row, 'company_id', 'companyId'),
+        contactId: field(row, 'contact_id', 'contactId'),
+        opportunityId: field(row, 'opportunity_id', 'opportunityId'),
+        projectId: parsed.id,
+      };
+    }
+    const resource = ({
+      company: 'companies',
+      contact: 'contacts',
+      opportunity: 'opportunities',
+    } satisfies Record<Exclude<TenantCallContextKind, 'project'>, 'companies' | 'contacts' | 'opportunities'>)[parsed.kind];
+    const row = await this.crm.findOne(resource, parsed.id) as Record<string, unknown>;
     return {
-      enabled: this.enabled(),
-      configured: Boolean(config.url && config.key && config.secret),
-      status: this.enabled() ? (config.url && config.key && config.secret ? 'ready' : 'provider_unconfigured') : 'disabled',
+      ...parsed,
+      companyId: parsed.kind === 'company' ? parsed.id : field(row, 'company_id', 'companyId'),
+      contactId: parsed.kind === 'contact' ? parsed.id : field(row, 'contact_id', 'contactId'),
+      opportunityId: parsed.kind === 'opportunity' ? parsed.id : null,
+      projectId: null,
     };
   }
 
-  async token(body: Record<string, unknown>) {
+  async status() {
     const actor = this.actor();
-    if (!this.enabled()) throw new ForbiddenException({ error: 'LIVEKIT_DISABLED', message: 'Chiamate non abilitate.' });
-    if (body.userId !== undefined || body.user_id !== undefined || body.tenantId !== undefined || body.tenant_id !== undefined || body.room !== undefined || body.roomName !== undefined) {
-      throw new BadRequestException('Identita, tenant e room sono determinati dal server');
-    }
-    await this.authorize(actor);
-    const config = this.config();
-    if (!config.url || !config.key || !config.secret) {
-      throw new ServiceUnavailableException({ error: 'LIVEKIT_PROVIDER_UNCONFIGURED', message: 'Provider chiamate non configurato.' });
-    }
-    const conversationId = tenantUuid(body.conversationId ?? body.conversation_id, 'conversationId');
-    await ensureTenantUniversalFeatureTables(this.dataSource, actor.schema);
-    const participants = await this.dataSource.query(
-      `SELECT cp.role FROM "${actor.schema}".conversation_participants cp
-       JOIN "${actor.schema}".conversations c ON c.id=cp.conversation_id
-       WHERE cp.conversation_id=$1 AND cp.user_id=$2 AND cp.left_at IS NULL AND c.deleted_at IS NULL LIMIT 1`,
-      [conversationId, actor.id],
-    );
-    if (!participants[0]) throw new ForbiddenException('Conversazione non autorizzata');
-
-    const { AccessToken } = this.sdk();
-    const roomKey = `t-${createHash('sha256').update(actor.schema).digest('hex').slice(0, 12)}-c-${conversationId}`;
-    const call = await this.dataSource.transaction(async (manager) => {
-      await manager.query(
-        `SELECT pg_advisory_xact_lock(hashtext('tenant-call'),hashtext($1))`,
-        [`${actor.schema}:${conversationId}`],
-      );
-      const existing = await manager.query(
-        `SELECT * FROM "${actor.schema}".tenant_call_sessions
-         WHERE conversation_id=$1
-         ORDER BY created_at DESC LIMIT 1 FOR UPDATE`, [conversationId],
-      );
-      if (existing[0]?.status === 'active' && !existing[0].ended_at) return existing[0];
-      if (existing[0]) {
-        const restarted = await manager.query(
-          `UPDATE "${actor.schema}".tenant_call_sessions
-           SET status='active',ended_at=NULL,created_by=$2,created_at=now() WHERE id=$1 RETURNING *`,
-          [existing[0].id, actor.id],
-        );
-        await manager.query(
-          `INSERT INTO "${actor.schema}".tenant_call_audit (call_id,actor_user_id,action,metadata)
-           VALUES ($1,$2,'call_restarted',$3::jsonb)`,
-          [existing[0].id, actor.id, JSON.stringify({ conversationId })],
-        );
-        return restarted[0];
-      }
-      const rows = await manager.query(
-        `INSERT INTO "${actor.schema}".tenant_call_sessions
-         (conversation_id,room_key,status,created_by) VALUES ($1,$2,'active',$3) RETURNING *`,
-        [conversationId, roomKey, actor.id],
-      );
-      await manager.query(
-        `INSERT INTO "${actor.schema}".tenant_call_audit (call_id,actor_user_id,action,metadata)
-         VALUES ($1,$2,'call_started',$3::jsonb)`,
-        [rows[0].id, actor.id, JSON.stringify({ conversationId })],
-      );
-      return rows[0];
-    });
-    const canPublish = String(participants[0].role) !== 'viewer';
-    const accessToken = new AccessToken(config.key, config.secret, {
-      identity: `${actor.schema}:${actor.id}`,
-      name: actor.email || actor.id,
-      ttl: '5m',
-      metadata: JSON.stringify({ tenant: actor.schema, userId: actor.id, conversationId, callId: call.id }),
-    });
-    accessToken.addGrant({ roomJoin: true, room: call.room_key, canSubscribe: true, canPublish, canPublishData: canPublish });
-    const jwt = await accessToken.toJwt();
-    await this.dataSource.query(
-      `INSERT INTO "${actor.schema}".tenant_call_audit (call_id,actor_user_id,action,metadata)
-       VALUES ($1,$2,'token_issued',$3::jsonb)`,
-      [call.id, actor.id, JSON.stringify({ conversationId, ttlSeconds: 300, canPublish })],
-    );
-    return { token: jwt, serverUrl: config.url, room: call.room_key, callId: call.id, conversationId, canPublish, expiresInSeconds: 300 };
+    await this.capabilities.require(actor, 'canUseDesktopCalls');
+    const availability = await this.features.availability(actor.schema);
+    const guestPermitted = await this.capabilities.has(actor, 'canCreateGuestMeetings');
+    return {
+      ...availability,
+      guestEnabled: availability.guestEnabled && guestPermitted,
+      userId: actor.id,
+      supportsAudio: true,
+      supportsVideo: true,
+      supportsScreenShare: true,
+      supportsGuest: availability.guestEnabled && guestPermitted,
+      bridgeMinimumVersion: 2,
+      stateMachineVersion: 1,
+    };
   }
 
-  async end(callValue: string) {
+  async heartbeat(body: Record<string, unknown>) {
+    this.rejectOverrides(body);
     const actor = this.actor();
-    if (!this.enabled()) throw new ForbiddenException({ error: 'LIVEKIT_DISABLED', message: 'Chiamate non abilitate.' });
     await this.authorize(actor);
-    const config = this.config();
-    if (!config.url || !config.key || !config.secret) {
-      throw new ServiceUnavailableException({ error: 'LIVEKIT_PROVIDER_UNCONFIGURED', message: 'Provider chiamate non configurato.' });
+    const deviceId = parseDesktopDeviceId(body.deviceId ?? body.device_id);
+    const presence = await this.store.userHasActiveCall(actor.schema, actor.id) ? 'in_call' : 'online';
+    const state = await this.presence.desktopHeartbeat(actor.schema, actor.id, deviceId, presence);
+    return { connected: true, deviceId, expiresInSeconds: 45, state };
+  }
+
+  async disconnect(body: Record<string, unknown>) {
+    this.rejectOverrides(body);
+    const actor = this.actor();
+    await this.capabilities.require(actor, 'canUseDesktopCalls');
+    const deviceId = parseDesktopDeviceId(body.deviceId ?? body.device_id);
+    await this.presence.disconnectDesktop(actor.schema, actor.id, deviceId);
+    return { connected: false, deviceId };
+  }
+
+  async create(body: Record<string, unknown>, idempotencyValue: unknown) {
+    this.rejectOverrides(body);
+    const actor = this.actor();
+    await this.authorize(actor);
+    const deviceId = await this.requireDesktop(actor, body.deviceId ?? body.device_id);
+    const recipient = await this.callee(actor, body.calleeUserId ?? body.callee_user_id);
+    if (!(await this.presence.hasDesktopSession(actor.schema, recipient.id))) {
+      throw new ConflictException({
+        error: 'CALLEE_DESKTOP_OFFLINE',
+        message: 'Il destinatario non è disponibile su Doflow Desktop.',
+      });
     }
-    const { RoomServiceClient } = this.sdk();
-    const rooms = new RoomServiceClient(config.url, config.key, config.secret);
-    const callId = tenantUuid(callValue, 'callId');
-    await ensureTenantUniversalFeatureTables(this.dataSource, actor.schema);
-    return this.dataSource.transaction(async (manager) => {
-      const rows = await manager.query(
-        `SELECT cs.*,cp.role AS participant_role
-         FROM "${actor.schema}".tenant_call_sessions cs
-         JOIN "${actor.schema}".conversations c ON c.id=cs.conversation_id AND c.deleted_at IS NULL
-         JOIN "${actor.schema}".conversation_participants cp
-           ON cp.conversation_id=cs.conversation_id AND cp.user_id=$2 AND cp.left_at IS NULL
-         WHERE cs.id=$1 FOR UPDATE OF cs`,
-        [callId, actor.id],
-      );
-      const call = rows[0];
-      if (!call) throw new ForbiddenException('Chiamata non autorizzata');
-      const mayEnd = String(call.created_by) === actor.id
-        || String(call.participant_role) === 'owner'
-        || isTenantAdministrator(actor);
-      if (!mayEnd) throw new ForbiddenException('Chiusura chiamata non autorizzata');
-      if (!call.ended_at || call.status !== 'ended') {
-        try {
-          await rooms.deleteRoom(String(call.room_key));
-        } catch {
-          throw new ServiceUnavailableException({
-            error: 'LIVEKIT_TERMINATION_FAILED',
-            message: 'Il provider chiamate non ha confermato la chiusura.',
-          });
-        }
-        await manager.query(
-          `UPDATE "${actor.schema}".tenant_call_sessions SET status='ended',ended_at=now() WHERE id=$1`,
-          [callId],
-        );
-        await manager.query(
-          `INSERT INTO "${actor.schema}".tenant_call_audit (call_id,actor_user_id,action,metadata)
-           VALUES ($1,$2,'call_ended',$3::jsonb)`,
-          [callId, actor.id, JSON.stringify({ conversationId: call.conversation_id })],
-        );
-      }
-      return { callId, conversationId: call.conversation_id, ended: true };
+    const callType = parseCallType(body.type ?? body.callType ?? body.call_type);
+    const crmContext = await this.context(body.context);
+    const conversationId = await this.conversation(actor, body.conversationId ?? body.conversation_id, recipient.id);
+    const config = tenantCallsConfig();
+    const summary = await this.store.create(actor.schema, {
+      actorId: actor.id,
+      calleeUserId: recipient.id,
+      conversationId,
+      callType,
+      context: crmContext,
+      callerName: await this.actorName(actor),
+      calleeName: recipient.name,
+      idempotencyKey: parseCallIdempotencyKey(idempotencyValue),
+      ringingTimeoutSeconds: config.ringingTimeoutSeconds,
+      connectTimeoutSeconds: config.connectTimeoutSeconds,
+      maximumSeconds: config.callMaximumSeconds,
     });
+    if (summary.status === 'ringing') {
+      await this.presence.desktopHeartbeat(actor.schema, actor.id, deviceId, 'in_call');
+      await this.store.publishState(actor.schema, summary, 'calls.incoming');
+    } else {
+      await this.store.publishState(actor.schema, summary, 'calls.busy');
+    }
+    return summary;
+  }
+
+  async incoming(body: Record<string, unknown>) {
+    this.rejectOverrides(body);
+    const actor = this.actor();
+    await this.authorize(actor);
+    await this.requireDesktop(actor, body.deviceId ?? body.device_id);
+    return { items: await this.store.incoming(actor.schema, actor.id) };
+  }
+
+  async detail(callValue: string, body: Record<string, unknown> = {}) {
+    this.rejectOverrides(body);
+    const actor = this.actor();
+    await this.authorize(actor);
+    if (body.deviceId || body.device_id) await this.requireDesktop(actor, body.deviceId ?? body.device_id);
+    return this.store.detail(actor.schema, tenantUuid(callValue, 'callId'), actor.id);
+  }
+
+  private async respond(callValue: string, body: Record<string, unknown>, target: 'accepted' | 'rejected') {
+    this.rejectOverrides(body);
+    const actor = this.actor();
+    await this.authorize(actor);
+    const deviceId = await this.requireDesktop(actor, body.deviceId ?? body.device_id);
+    const summary = await this.store.transition(actor.schema, tenantUuid(callValue, 'callId'), target, {
+      actorId: actor.id,
+      deviceId,
+      reason: target === 'rejected' ? 'callee_rejected' : undefined,
+    });
+    await this.presence.desktopHeartbeat(actor.schema, actor.id, deviceId, target === 'accepted' ? 'in_call' : 'online');
+    await this.store.publishState(actor.schema, summary, `calls.${target}`);
+    return summary;
+  }
+
+  accept(callId: string, body: Record<string, unknown>) { return this.respond(callId, body, 'accepted'); }
+  reject(callId: string, body: Record<string, unknown>) { return this.respond(callId, body, 'rejected'); }
+
+  async cancel(callValue: string, body: Record<string, unknown>) {
+    this.rejectOverrides(body);
+    const actor = this.actor();
+    await this.authorize(actor);
+    const deviceId = await this.requireDesktop(actor, body.deviceId ?? body.device_id);
+    const summary = await this.store.transition(actor.schema, tenantUuid(callValue, 'callId'), 'cancelled', {
+      actorId: actor.id,
+      reason: 'caller_cancelled',
+    });
+    await this.presence.desktopHeartbeat(actor.schema, actor.id, deviceId, 'online');
+    await this.store.publishState(actor.schema, summary, 'calls.cancelled');
+    return summary;
+  }
+
+  async end(callValue: string, body: Record<string, unknown>) {
+    this.rejectOverrides(body);
+    const actor = this.actor();
+    await this.authorize(actor);
+    const deviceId = await this.requireDesktop(actor, body.deviceId ?? body.device_id);
+    const callId = tenantUuid(callValue, 'callId');
+    const before = await this.store.getParticipantCall(actor.schema, callId, actor.id);
+    const target = ['created', 'ringing'].includes(before.status) && before.caller_user_id === actor.id ? 'cancelled' : 'ended';
+    const summary = await this.store.transition(actor.schema, callId, target, {
+      actorId: actor.id,
+      reason: String(body.reason || 'participant_ended').slice(0, 120),
+    });
+    let providerCleanup = 'not-required';
+    if (!['created', 'ringing'].includes(before.status)) {
+      try {
+        await this.livekit.deleteRoom(before.room_key);
+        providerCleanup = 'completed';
+      } catch {
+        providerCleanup = 'pending-webhook';
+      }
+    }
+    await this.presence.desktopHeartbeat(actor.schema, actor.id, deviceId, 'online');
+    await this.store.publishState(actor.schema, summary, `calls.${target}`);
+    return { ...summary, providerCleanup };
+  }
+
+  async fail(callValue: string, body: Record<string, unknown>) {
+    this.rejectOverrides(body);
+    const actor = this.actor();
+    await this.authorize(actor);
+    const deviceId = await this.requireDesktop(actor, body.deviceId ?? body.device_id);
+    const callId = tenantUuid(callValue, 'callId');
+    await this.store.getParticipantCall(actor.schema, callId, actor.id);
+    const summary = await this.store.transition(actor.schema, callId, 'failed', {
+      actorId: actor.id,
+      reason: String(body.reason || 'participant_media_failed').slice(0, 120),
+    });
+    await this.presence.desktopHeartbeat(actor.schema, actor.id, deviceId, 'online');
+    await this.store.publishState(actor.schema, summary, 'calls.failed');
+    return summary;
+  }
+
+  async token(callValue: string, body: Record<string, unknown>) {
+    this.rejectOverrides(body);
+    const actor = this.actor();
+    await this.authorize(actor);
+    await this.requireDesktop(actor, body.deviceId ?? body.device_id);
+    const callId = tenantUuid(callValue, 'callId');
+    const participant = await this.store.tokenParticipant(actor.schema, callId, actor.id);
+    const access = await this.livekit.issueToken({
+      identity: participant.identity,
+      name: participant.name,
+      callId,
+      roomKey: participant.row.room_key,
+      kind: 'internal',
+      callType: participant.row.call_type,
+    });
+    const summary = await this.store.detail(actor.schema, callId, actor.id);
+    await this.store.publishState(actor.schema, summary, 'calls.connecting');
+    return { ...access, call: summary };
+  }
+
+  async createGuestMeeting(body: Record<string, unknown>, idempotencyValue: unknown) {
+    this.rejectOverrides(body);
+    const actor = this.actor();
+    await this.authorize(actor, true);
+    const deviceId = await this.requireDesktop(actor, body.deviceId ?? body.device_id);
+    const callType = parseCallType(body.type ?? body.callType ?? body.call_type);
+    const config = tenantCallsConfig();
+    const summary = await this.store.create(actor.schema, {
+      actorId: actor.id,
+      callType,
+      context: await this.context(body.context),
+      callerName: await this.actorName(actor),
+      idempotencyKey: parseCallIdempotencyKey(idempotencyValue),
+      ringingTimeoutSeconds: config.ringingTimeoutSeconds,
+      connectTimeoutSeconds: config.connectTimeoutSeconds,
+      maximumSeconds: config.callMaximumSeconds,
+      guestMode: true,
+    });
+    if (summary.status === 'busy') {
+      await this.store.publishState(actor.schema, summary, 'calls.busy');
+      return { call: summary, invite: null };
+    }
+    try {
+      const invite = await this.store.createGuestInvite(actor.schema, summary.callId, actor.id, config.guestInviteTtlSeconds);
+      await this.presence.desktopHeartbeat(actor.schema, actor.id, deviceId, 'in_call');
+      return {
+        call: summary,
+        invite: {
+          id: invite.id,
+          expiresAt: invite.expiresAt,
+          url: `${config.publicMeetingUrl}#invite=${encodeURIComponent(invite.token)}`,
+        },
+      };
+    } catch (error) {
+      await this.store.transition(actor.schema, summary.callId, 'failed', {
+        actorId: actor.id,
+        reason: 'guest_invite_creation_failed',
+      });
+      throw error;
+    }
+  }
+
+  async revokeGuestInvite(inviteValue: string, body: Record<string, unknown>) {
+    this.rejectOverrides(body);
+    const actor = this.actor();
+    await this.authorize(actor, true);
+    await this.requireDesktop(actor, body.deviceId ?? body.device_id);
+    return this.store.revokeGuestInvite(actor.schema, tenantUuid(inviteValue, 'inviteId'), actor.id);
   }
 }

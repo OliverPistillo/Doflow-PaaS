@@ -61,6 +61,7 @@ const MODULES: SeedModule[] = [
   { key: 'sup.tickets', name: 'Helpdesk Ticket', description: 'Sistema ticket con SLA e priorità', category: ModuleCategory.SERVICES, minTier: ModuleTier.STARTER, priceMonthly: 0 },
   { key: 'sup.knowledge-base', name: 'Knowledge Base', description: 'Articoli FAQ pubblici e interni', category: ModuleCategory.SERVICES, minTier: ModuleTier.PRO, priceMonthly: 9 },
   { key: 'sup.live-chat', name: 'Live Chat', description: 'Widget chat per il sito web', category: ModuleCategory.SERVICES, minTier: ModuleTier.PRO, priceMonthly: 15, isBeta: true },
+  { key: 'collab.calls', name: 'Doflow Calls', description: 'Chiamate audio/video Desktop e meeting guest con LiveKit', category: ModuleCategory.SERVICES, minTier: ModuleTier.PRO, priceMonthly: 0, isBeta: true },
 
   // ─── VERTICAL: HOSPITALITY (new) ────────────────────────────
   { key: 'vert.hospitality.bookings', name: 'Prenotazioni Hospitality', description: 'Camere, calendar disponibilità, channel manager', category: ModuleCategory.SERVICES, minTier: ModuleTier.PRO, priceMonthly: 29, isBeta: true },

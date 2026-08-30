@@ -80,6 +80,8 @@ import { useCommercialTeam } from "@/features/commercial/use-commercial-team";
 import { AccessDenied } from "@/features/identity/access-denied";
 import { useDoflowIdentity } from "@/features/identity/doflow-identity-provider";
 import { canManageCustomerBranding } from "@/features/identity/permissions";
+import { DesktopMeetingAction } from "@/features/calls/desktop-meeting-action";
+import { DesktopUserCallActions } from "@/features/calls/desktop-user-call-action";
 
 const money = new Intl.NumberFormat("it-IT", {
   style: "currency",
@@ -525,6 +527,8 @@ export function CommercialClientDetailPage({ clientId }: { clientId: string }) {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <DesktopUserCallActions userId={customer.profile.assigneeId} context={{ kind: "company", id: customer.id }} label={owner?.name || "responsabile cliente"} />
+          <DesktopMeetingAction context={{ kind: "company", id: customer.id }} />
           <RecordCollaborationPanel
             recordType="customer"
             recordId={customer.id}
@@ -855,6 +859,7 @@ export function CommercialClientDetailPage({ clientId }: { clientId: string }) {
                       </p>
                     </div>
                     <div className="flex gap-1">
+                      <DesktopMeetingAction context={{ kind: "contact", id: contact.id }} compact label={`Crea link riunione per ${contact.name}`} />
                       <Button
                         size="sm"
                         variant="outline"
