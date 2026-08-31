@@ -23,6 +23,7 @@ import { parseTrustProxy } from './common/client-ip.utils';
 import { verifyHealthProbeSignature } from './health/health-probe-signature';
 import { PresenceRegistryService } from './realtime/presence-registry.service';
 import { randomUUID } from 'node:crypto';
+import { createDoflowJsonBodyParser } from './common/raw-json-body.middleware';
 
 // --- AGGIUNTE v3.5 (Monitoring) ---
 import { TelemetryService } from './telemetry/telemetry.service';
@@ -69,12 +70,7 @@ export async function bootstrap() {
     process.exit(1);
   }
 
-  app.use(express.json({
-    limit: '50mb',
-    verify: (request, _response, buffer) => {
-      (request as IncomingMessage & { rawBody?: Buffer }).rawBody = buffer;
-    },
-  }));
+  app.use(createDoflowJsonBodyParser());
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
   app.setGlobalPrefix('api');
