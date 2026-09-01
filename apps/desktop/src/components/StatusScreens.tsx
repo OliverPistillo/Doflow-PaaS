@@ -1,4 +1,5 @@
 import type { DesktopUpdateState, SavedProfile, UpdateProgressPayload } from "../types";
+import { ProfilePicker } from "./ProfilePicker";
 
 function DesktopVersion({ version }: { version?: string }) {
   if (!version || version === "unknown") return null;
@@ -19,19 +20,35 @@ export function PreparingScreen({ version }: { version?: string }) {
   );
 }
 
-export function ExpiredProfileScreen({ profile, onReauthenticate, onOther }: { profile: SavedProfile; onReauthenticate: () => void; onOther: () => void }) {
+export function ExpiredProfileScreen({
+  profile,
+  profiles,
+  busyProfileId,
+  onReauthenticate,
+  onSelect,
+  onAdd,
+  onRemove,
+  onClose,
+}: {
+  profile: SavedProfile;
+  profiles: SavedProfile[];
+  busyProfileId?: string;
+  onReauthenticate: () => void;
+  onSelect: (profile: SavedProfile) => void;
+  onAdd: () => void;
+  onRemove: (profile: SavedProfile) => void;
+  onClose: () => void;
+}) {
   return (
-    <main className="local-surface">
-      <section className="local-card compact-card">
-        <div className="mini-wordmark" aria-hidden="true" />
-        <span className="avatar large-avatar">{profile.initials || profile.name.slice(0, 2).toUpperCase()}</span>
-        <p className="eyebrow">Bentornato</p>
-        <h1>{profile.name}</h1>
-        <p className="lead">{profile.email}</p>
-        <button className="primary-action" type="button" onClick={onReauthenticate}>Accedi di nuovo</button>
-        <button className="text-action" type="button" onClick={onOther}>Usa un altro account</button>
-      </section>
-    </main>
+    <ProfilePicker
+      profiles={profiles}
+      busyProfileId={busyProfileId}
+      selectedProfileId={profile.id}
+      onSelect={(selected) => selected.id === profile.id ? onReauthenticate() : onSelect(selected)}
+      onRemove={onRemove}
+      onAdd={onAdd}
+      onClose={onClose}
+    />
   );
 }
 

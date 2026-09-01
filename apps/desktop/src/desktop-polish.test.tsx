@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ClosePrompt } from "./components/ClosePrompt";
 import { ProfilePicker } from "./components/ProfilePicker";
+import { ExpiredProfileScreen } from "./components/StatusScreens";
 import type { SavedProfile } from "./types";
 
 const sourceRoot = fileURLToPath(new URL(".", import.meta.url));
@@ -26,15 +27,32 @@ function profile(index: number): SavedProfile {
 describe("desktop native polish contracts", () => {
   it("renders a multi-profile picker without a dominant remove column", () => {
     const markup = renderToStaticMarkup(
-      <ProfilePicker profiles={[profile(1), profile(2), profile(3)]} version="9.8.7" onSelect={() => undefined} onRemove={() => undefined} onAdd={() => undefined} />,
+      <ProfilePicker profiles={[profile(1), profile(2), profile(3)]} selectedProfileId={profile(1).id} onSelect={() => undefined} onRemove={() => undefined} onAdd={() => undefined} onClose={() => undefined} />,
     );
-    expect(markup).toContain("Seleziona profilo");
+    expect(markup).toContain("Profili memorizzati");
+    expect(markup).toContain("Accedi rapidamente ai tuoi profili");
     expect(markup).toContain("Accedi con un altro account");
-    expect(markup).toContain("Sessioni isolate su questo dispositivo");
-    expect(markup).toContain("Doflow Desktop 9.8.7 · Canale Stable");
-    expect(markup.match(/class="profile-row"/g)).toHaveLength(3);
-    expect(markup.match(/class="profile-more"/g)).toHaveLength(3);
-    expect(markup).not.toContain("remove-profile");
+    expect(markup).toContain("Gestione profili");
+    expect(markup).toContain("profile-picker-panel");
+    expect(markup).toContain("mini-wordmark");
+    expect(markup).toContain("panel-close-button");
+    expect(markup.match(/class="profile-row/g)).toHaveLength(3);
+    expect(markup).toContain("profile-row is-selected");
+    expect(markup).not.toContain("profile-more");
+    expect(markup).not.toContain("Doflow Desktop 9.8.7");
+    const pickerSource = readFileSync(fileURLToPath(new URL("components/ProfilePicker.tsx", import.meta.url)), "utf8");
+    expect(pickerSource).not.toMatch(/Oliver|Martina|Daniele/);
+  });
+
+  it("uses the shared stored-profile panel for an expired profile", () => {
+    const expired = profile(1);
+    const markup = renderToStaticMarkup(
+      <ExpiredProfileScreen profile={expired} profiles={[expired, profile(2)]} onReauthenticate={() => undefined} onSelect={() => undefined} onRemove={() => undefined} onAdd={() => undefined} onClose={() => undefined} />,
+    );
+    expect(markup).toContain("Profili memorizzati");
+    expect(markup).toContain("profile-row is-selected");
+    expect(markup).not.toContain("Bentornato");
+    expect(markup).not.toContain("Accedi di nuovo");
   });
 
   it("renders the approved close prompt copy and both explicit choices", () => {
@@ -44,7 +62,13 @@ describe("desktop native polish contracts", () => {
     expect(markup).toContain("Chiudere Doflow?");
     expect(markup).toContain("Rimani attivo");
     expect(markup).toContain("Esci da Doflow");
-    expect(markup).toContain("Usa questa scelta come predefinita");
+    expect(markup).toContain("Imposta questa opzione come predefinita");
+    expect(markup).toContain("Doflow continuerà a funzionare in background");
+    expect(markup).toContain("close-prompt-glyph");
+    expect(markup).toContain("close-prompt-information");
+    expect(markup).toContain("primary-action close-stay-action");
+    expect(markup).toContain("secondary-action close-exit-action");
+    expect(markup).toContain("panel-close-button");
     expect(markup).toContain('role="dialog"');
   });
 

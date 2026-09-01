@@ -157,11 +157,27 @@ export default function App() {
   }, []);
 
   const removeProfile = useCallback(async (profile: SavedProfile) => {
-    if (!window.confirm(`Rimuovere ${profile.name} da questo dispositivo? L’account Doflow non verrà eliminato.`)) return;
     setBusyProfileId(profile.id);
     try {
       const registry = await nativeDesktop.removeProfile(profile.id);
       dispatch({ type: "SWITCH_REQUESTED", registry });
+    } catch (error) {
+      dispatch({ type: "FAIL", message: errorMessage(error) });
+    } finally {
+      setBusyProfileId(undefined);
+    }
+  }, []);
+
+  const requestClose = useCallback(() => {
+    void nativeDesktop.requestClose().catch((error) => {
+      dispatch({ type: "FAIL", message: errorMessage(error) });
+    });
+  }, []);
+
+  const reauthenticateProfile = useCallback(async (profile: SavedProfile) => {
+    setBusyProfileId(profile.id);
+    try {
+      await nativeDesktop.activatePreparedProfile();
     } catch (error) {
       dispatch({ type: "FAIL", message: errorMessage(error) });
     } finally {
@@ -188,10 +204,31 @@ export default function App() {
   }, []);
   const background = useMemo(() => {
     if (state.phase === "picker") {
-      return <ProfilePicker profiles={registry.profiles} busyProfileId={busyProfileId} version={state.update?.currentVersion} onSelect={prepareProfile} onRemove={removeProfile} onAdd={() => prepareProfile()} />;
+      return (
+        <ProfilePicker
+          profiles={registry.profiles}
+          busyProfileId={busyProfileId}
+          selectedProfileId={registry.lastUsedProfileId}
+          onSelect={prepareProfile}
+          onRemove={removeProfile}
+          onAdd={() => prepareProfile()}
+          onClose={requestClose}
+        />
+      );
     }
     if (state.phase === "expired-profile" && state.selectedProfile) {
-      return <ExpiredProfileScreen profile={state.selectedProfile} onReauthenticate={() => { void nativeDesktop.activatePreparedProfile().catch((error) => dispatch({ type: "FAIL", message: errorMessage(error) })); }} onOther={() => dispatch({ type: "PICKER_REQUIRED" })} />;
+      return (
+        <ExpiredProfileScreen
+          profile={state.selectedProfile}
+          profiles={registry.profiles}
+          busyProfileId={busyProfileId}
+          onReauthenticate={() => void reauthenticateProfile(state.selectedProfile!)}
+          onSelect={prepareProfile}
+          onAdd={() => prepareProfile()}
+          onRemove={removeProfile}
+          onClose={requestClose}
+        />
+      );
     }
     if ((state.phase === "updating" || state.phase === "update-blocked") && state.update) {
       return (
@@ -209,15 +246,19 @@ export default function App() {
       return <ErrorScreen message={state.error || "Avvio non riuscito."} onRetry={() => void startBootstrap()} onQuit={() => void nativeDesktop.quit()} />;
     }
     return <PreparingScreen version={state.update?.currentVersion} />;
-  }, [busyProfileId, continueWithoutUpdate, installing, prepareProfile, registry.profiles, removeProfile, runUpdateGate, startBootstrap, state.error, state.phase, state.selectedProfile, state.update, updateProgress]);
+  }, [busyProfileId, continueWithoutUpdate, installing, prepareProfile, reauthenticateProfile, registry.lastUsedProfileId, registry.profiles, removeProfile, requestClose, runUpdateGate, startBootstrap, state.error, state.phase, state.selectedProfile, state.update, updateProgress]);
+
+  const integratedWindowControls = closePromptVisible || state.phase === "picker" || state.phase === "expired-profile";
 
   return (
     <div className="app-root">
-      <div className="window-controls" data-tauri-drag-region>
-        <button type="button" aria-label="Riduci a icona" onClick={() => void nativeDesktop.minimize()}>—</button>
-        <button type="button" aria-label="Chiudi Doflow" onClick={() => void nativeDesktop.requestClose()}>×</button>
-      </div>
-      {background}
+      {!integratedWindowControls ? (
+        <div className="window-controls" data-tauri-drag-region>
+          <button type="button" aria-label="Riduci a icona" onClick={() => void nativeDesktop.minimize()}>—</button>
+          <button type="button" aria-label="Chiudi Doflow" onClick={requestClose}>×</button>
+        </div>
+      ) : null}
+      <div className="app-background" inert={closePromptVisible ? true : undefined}>{background}</div>
       {splashVisible ? (
         <Splash
           exiting={splashExiting}
