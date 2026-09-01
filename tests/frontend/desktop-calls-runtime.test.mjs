@@ -9,6 +9,7 @@ const provider = read("apps/frontend/src/features/calls/desktop-calls-provider.t
 const bridge = read("apps/frontend/src/lib/desktop-bridge.ts");
 const api = read("apps/frontend/src/features/calls/doflow-calls-api.ts");
 const guest = read("apps/frontend/src/features/calls/guest-meeting-page.tsx");
+const layout = read("apps/frontend/src/app/layout.tsx");
 const proxy = read("apps/frontend/src/proxy.ts");
 const nextConfig = read("apps/frontend/next.config.mjs");
 const legacyTeam = read("apps/frontend/src/components/tenant-collaboration/team-space-collaboration.tsx");
@@ -85,6 +86,12 @@ test("Desktop call actions expose clear hover, pressed, focus and single-submit 
   assert.match(teamActions, /internalAvailable = Boolean\(recipientId && calls\.available\)/);
   assert.match(teamActions, /meetingAvailable = !internalAvailable && calls\.guestAvailable/);
   assert.match(teamActions, /if \(!internalAvailable && !meetingAvailable\) return null/);
+});
+
+test("Desktop call errors mount the Sonner notification viewport", () => {
+  assert.match(provider, /import \{ toast \} from "sonner"/);
+  assert.match(layout, /import \{ Toaster as SonnerToaster \} from "@\/components\/ui\/sonner"/);
+  assert.match(layout, /<Toaster\s*\/>[\s\S]*<SonnerToaster\s*\/>/);
 });
 
 test("a local renderer failure remains visible while backend state is finalized", () => {

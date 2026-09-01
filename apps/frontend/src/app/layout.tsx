@@ -6,6 +6,7 @@ import "./globals.css";
 import { Instrument_Serif, Inter, JetBrains_Mono } from "next/font/google";
 import { LegacyDesktopUpdateCoordinator } from "@/components/desktop/legacy-desktop-update-coordinator";
 import { ThemeProvider } from "@/components/theme/theme-provider";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -76,6 +77,7 @@ export default function RootLayout({
             <LegacyDesktopUpdateCoordinator />
             {children}
             <Toaster />
+            <SonnerToaster />
           </TooltipProvider>
         </ThemeProvider>
       </body>
