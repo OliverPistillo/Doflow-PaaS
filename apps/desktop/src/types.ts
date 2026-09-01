@@ -29,6 +29,7 @@ export type DesktopUpdateState = {
   message?: string;
   policySource: "network" | "cache" | "none";
   updateAvailable: boolean;
+  canContinueWithoutUpdate: boolean;
 };
 
 export type PreparedProfile = {

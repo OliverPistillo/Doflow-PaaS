@@ -4,6 +4,7 @@ import type { SavedProfile } from "../types";
 type ProfilePickerProps = {
   profiles: SavedProfile[];
   busyProfileId?: string;
+  version?: string;
   onSelect: (profile: SavedProfile) => void;
   onRemove: (profile: SavedProfile) => void;
   onAdd: () => void;
@@ -13,7 +14,7 @@ function initials(profile: SavedProfile) {
   return profile.initials || profile.name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "DF";
 }
 
-export function ProfilePicker({ profiles, busyProfileId, onSelect, onRemove, onAdd }: ProfilePickerProps) {
+export function ProfilePicker({ profiles, busyProfileId, version, onSelect, onRemove, onAdd }: ProfilePickerProps) {
   const [openMenuId, setOpenMenuId] = useState<string>();
 
   useEffect(() => {
@@ -70,6 +71,7 @@ export function ProfilePicker({ profiles, busyProfileId, onSelect, onRemove, onA
           <span aria-hidden="true">＋</span> Accedi con un altro account
         </button>
         <p className="profile-privacy"><span aria-hidden="true">▣</span> Sessioni isolate su questo dispositivo</p>
+        {version ? <p className="desktop-version">Doflow Desktop {version} · Canale Stable</p> : null}
       </section>
     </main>
   );

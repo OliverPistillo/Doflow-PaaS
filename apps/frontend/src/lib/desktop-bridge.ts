@@ -10,6 +10,7 @@ export type DesktopUpdateState = {
   message?: string;
   policySource: "network" | "cache" | "none";
   updateAvailable: boolean;
+  canContinueWithoutUpdate?: boolean;
 };
 
 export type DesktopNativeCallType = "audio" | "video";
@@ -66,6 +67,13 @@ type DoflowDesktopContext = {
   onDesktopCallAction?: (handler: (event: DesktopCallActionEvent) => void) => () => void;
 };
 
+export type LegacyDesktopUpdater = {
+  readonly identity: object;
+  readonly appVersion: string;
+  getUpdateState: () => Promise<DesktopUpdateState>;
+  installCurrentVerifiedUpdate: () => Promise<void>;
+};
+
 declare global {
   interface Window {
     __DOFLOW_DESKTOP__?: DoflowDesktopContext;
@@ -84,6 +92,68 @@ function context(): DoflowDesktopContext | null {
     return null;
   }
   return candidate;
+}
+
+export function resolveLegacyDesktopUpdater(candidate: unknown): LegacyDesktopUpdater | null {
+  if (!candidate || typeof candidate !== "object") return null;
+  const desktop = candidate as Partial<DoflowDesktopContext>;
+  if (
+    desktop.isDesktop !== true
+    || desktop.platform !== "windows"
+    || desktop.bridgeVersion !== 1
+    || typeof desktop.appVersion !== "string"
+    || desktop.appVersion.trim() === ""
+    || typeof desktop.getUpdateState !== "function"
+    || typeof desktop.installCurrentVerifiedUpdate !== "function"
+  ) {
+    return null;
+  }
+  return {
+    identity: candidate,
+    appVersion: desktop.appVersion,
+    getUpdateState: desktop.getUpdateState.bind(candidate),
+    installCurrentVerifiedUpdate: desktop.installCurrentVerifiedUpdate.bind(candidate),
+  };
+}
+
+export function getLegacyDesktopUpdater(): LegacyDesktopUpdater | null {
+  if (typeof window === "undefined") return null;
+  return resolveLegacyDesktopUpdater(window.__DOFLOW_DESKTOP__);
+}
+
+export class LegacyDesktopUpdateAttemptRegistry {
+  readonly #attempted = new WeakSet<object>();
+
+  claim(updater: LegacyDesktopUpdater) {
+    if (this.#attempted.has(updater.identity)) return false;
+    this.#attempted.add(updater.identity);
+    return true;
+  }
+}
+
+function isDesktopUpdateState(value: unknown): value is DesktopUpdateState {
+  if (!value || typeof value !== "object") return false;
+  const state = value as Partial<DesktopUpdateState>;
+  return (
+    ["none", "optional", "mandatory", "unavailable"].includes(state.kind || "")
+    && typeof state.currentVersion === "string"
+    && ["network", "cache", "none"].includes(state.policySource || "")
+    && typeof state.updateAvailable === "boolean"
+  );
+}
+
+export async function coordinateLegacyDesktopUpdate(
+  updater: LegacyDesktopUpdater,
+  onUpdateFound: (state: DesktopUpdateState) => void | Promise<void> = () => undefined,
+) {
+  const state = await updater.getUpdateState();
+  if (!isDesktopUpdateState(state)) throw new Error("Invalid Desktop update state");
+  const shouldInstall = state.updateAvailable
+    && (state.kind === "optional" || state.kind === "mandatory");
+  if (!shouldInstall) return { status: "none" as const, state };
+  await onUpdateFound(state);
+  await updater.installCurrentVerifiedUpdate();
+  return { status: "restart-pending" as const, state };
 }
 
 export function isDoflowDesktop() {

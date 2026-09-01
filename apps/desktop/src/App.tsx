@@ -5,14 +5,15 @@ import {
   initialBootstrapState,
   resolveStartupProfile,
 } from "./bootstrap/machine";
+import { createStartupUpdateRunner } from "./bootstrap/updater";
 import { ProfilePicker } from "./components/ProfilePicker";
 import { ClosePrompt } from "./components/ClosePrompt";
 import { Splash } from "./components/Splash";
 import {
   ErrorScreen,
   ExpiredProfileScreen,
-  MandatoryUpdateScreen,
   PreparingScreen,
+  UpdateScreen,
 } from "./components/StatusScreens";
 import type { ProfileRegistry, SavedProfile, UpdateProgressPayload } from "./types";
 
@@ -34,7 +35,10 @@ export default function App() {
   const [closePromptVisible, setClosePromptVisible] = useState(false);
   const activationStarted = useRef(false);
   const bootstrapRequested = useRef(false);
+  const profilesRequested = useRef(false);
   const exitTarget = useRef<"local" | "remote">("local");
+  const updateRunner = useRef<ReturnType<typeof createStartupUpdateRunner> | null>(null);
+  if (!updateRunner.current) updateRunner.current = createStartupUpdateRunner(nativeDesktop);
 
   const prepareProfile = useCallback(async (profile?: SavedProfile) => {
     setBusyProfileId(profile?.id || "new");
@@ -49,30 +53,11 @@ export default function App() {
     }
   }, []);
 
-  const startBootstrap = useCallback(async () => {
-    activationStarted.current = false;
-    setSplashExiting(false);
-    setSplashVisible(true);
-    dispatch({ type: "START" });
-
-    const profilesPromise = nativeDesktop.loadProfiles();
-    const updatePromise = nativeDesktop.checkForUpdates();
-
-    void updatePromise
-      .then((update) => dispatch({ type: "UPDATE_RESOLVED", update }))
-      .catch((error) => dispatch({
-        type: "UPDATE_RESOLVED",
-        update: {
-          kind: "unavailable",
-          currentVersion: "unknown",
-          message: errorMessage(error),
-          policySource: "none",
-          updateAvailable: false,
-        },
-      }));
-
+  const startProfileBootstrap = useCallback(async () => {
+    if (profilesRequested.current) return;
+    profilesRequested.current = true;
     try {
-      const registry = await profilesPromise;
+      const registry = await nativeDesktop.loadProfiles();
       dispatch({ type: "PROFILES_LOADED", registry });
       const startupProfile = resolveStartupProfile(registry);
       if (startupProfile) {
@@ -83,9 +68,46 @@ export default function App() {
         dispatch({ type: "PICKER_REQUIRED" });
       }
     } catch (error) {
+      profilesRequested.current = false;
       dispatch({ type: "FAIL", message: errorMessage(error) });
     }
   }, [prepareProfile]);
+
+  const runUpdateGate = useCallback(async () => {
+    setInstalling(true);
+    setUpdateProgress({ downloaded: 0, phase: "starting" });
+    const result = await updateRunner.current!.run({
+      formatError: errorMessage,
+      onUpdateResolved: (update) => dispatch({ type: "UPDATE_RESOLVED", update }),
+      onInstallStarted: () => {
+        setInstalling(true);
+        setUpdateProgress({ downloaded: 0, phase: "starting" });
+      },
+      onInstallFailed: (message) => {
+        setInstalling(false);
+        setUpdateProgress({ downloaded: 0, phase: "failed", message });
+      },
+    });
+    if (result.status === "continue") {
+      setInstalling(false);
+      setUpdateProgress(undefined);
+      await startProfileBootstrap();
+    } else if (result.status === "blocked" && !result.error) {
+      setInstalling(false);
+      setUpdateProgress(undefined);
+    }
+  }, [startProfileBootstrap]);
+
+  const startBootstrap = useCallback(async () => {
+    activationStarted.current = false;
+    profilesRequested.current = false;
+    setSplashExiting(false);
+    setSplashVisible(true);
+    setInstalling(false);
+    setUpdateProgress(undefined);
+    dispatch({ type: "START" });
+    await runUpdateGate();
+  }, [runUpdateGate]);
 
   useEffect(() => {
     const listeners: Promise<DesktopUnlisten>[] = [
@@ -119,7 +141,7 @@ export default function App() {
       setSplashExiting(true);
       return;
     }
-    if (["picker", "expired-profile", "mandatory-update", "error"].includes(state.phase)) {
+    if (["picker", "expired-profile", "updating", "update-blocked", "error"].includes(state.phase)) {
       exitTarget.current = "local";
       setSplashExiting(true);
     }
@@ -147,18 +169,13 @@ export default function App() {
     }
   }, []);
 
-  const installUpdate = useCallback(async () => {
-    setInstalling(true);
-    setUpdateProgress({ downloaded: 0, phase: "starting" });
-    try {
-      await nativeDesktop.installUpdate();
-    } catch (error) {
-      setInstalling(false);
-      setUpdateProgress({ downloaded: 0, phase: "failed", message: errorMessage(error) });
-    }
-  }, []);
-
   const registry: ProfileRegistry = state.registry || { version: 1, profiles: [] };
+  const continueWithoutUpdate = useCallback(() => {
+    dispatch({ type: "CONTINUE_WITHOUT_UPDATE" });
+    setInstalling(false);
+    setUpdateProgress(undefined);
+    void startProfileBootstrap();
+  }, [startProfileBootstrap]);
   const resolveClose = useCallback((behavior: "tray" | "exit", remember: boolean) => {
     setClosePromptVisible(false);
     void nativeDesktop.resolveClose(behavior, remember).catch((error) => {
@@ -171,19 +188,28 @@ export default function App() {
   }, []);
   const background = useMemo(() => {
     if (state.phase === "picker") {
-      return <ProfilePicker profiles={registry.profiles} busyProfileId={busyProfileId} onSelect={prepareProfile} onRemove={removeProfile} onAdd={() => prepareProfile()} />;
+      return <ProfilePicker profiles={registry.profiles} busyProfileId={busyProfileId} version={state.update?.currentVersion} onSelect={prepareProfile} onRemove={removeProfile} onAdd={() => prepareProfile()} />;
     }
     if (state.phase === "expired-profile" && state.selectedProfile) {
       return <ExpiredProfileScreen profile={state.selectedProfile} onReauthenticate={() => { void nativeDesktop.activatePreparedProfile().catch((error) => dispatch({ type: "FAIL", message: errorMessage(error) })); }} onOther={() => dispatch({ type: "PICKER_REQUIRED" })} />;
     }
-    if (state.phase === "mandatory-update") {
-      return <MandatoryUpdateScreen progress={updateProgress} busy={installing} onInstall={installUpdate} onQuit={() => void nativeDesktop.quit()} />;
+    if ((state.phase === "updating" || state.phase === "update-blocked") && state.update) {
+      return (
+        <UpdateScreen
+          update={state.update}
+          progress={updateProgress}
+          busy={installing}
+          onRetry={() => void runUpdateGate()}
+          onContinue={state.update.canContinueWithoutUpdate ? continueWithoutUpdate : undefined}
+          onQuit={() => void nativeDesktop.quit()}
+        />
+      );
     }
     if (state.phase === "error") {
       return <ErrorScreen message={state.error || "Avvio non riuscito."} onRetry={() => void startBootstrap()} onQuit={() => void nativeDesktop.quit()} />;
     }
-    return <PreparingScreen />;
-  }, [busyProfileId, installUpdate, installing, prepareProfile, registry.profiles, removeProfile, startBootstrap, state.error, state.phase, state.selectedProfile, updateProgress]);
+    return <PreparingScreen version={state.update?.currentVersion} />;
+  }, [busyProfileId, continueWithoutUpdate, installing, prepareProfile, registry.profiles, removeProfile, runUpdateGate, startBootstrap, state.error, state.phase, state.selectedProfile, state.update, updateProgress]);
 
   return (
     <div className="app-root">

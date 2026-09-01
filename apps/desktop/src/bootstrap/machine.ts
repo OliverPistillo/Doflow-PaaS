@@ -11,7 +11,8 @@ export type BootstrapPhase =
   | "picker"
   | "preparing-profile"
   | "expired-profile"
-  | "mandatory-update"
+  | "updating"
+  | "update-blocked"
   | "ready"
   | "error";
 
@@ -23,6 +24,7 @@ export type BootstrapState = {
   selectedProfile?: SavedProfile;
   preparedProfileId?: string;
   remote?: RemoteReadyPayload;
+  updateBypassed?: boolean;
   error?: string;
 };
 
@@ -31,6 +33,7 @@ export type BootstrapEvent =
   | { type: "ANIMATION_FINISHED" }
   | { type: "PROFILES_LOADED"; registry: ProfileRegistry }
   | { type: "UPDATE_RESOLVED"; update: DesktopUpdateState }
+  | { type: "CONTINUE_WITHOUT_UPDATE" }
   | { type: "PICKER_REQUIRED" }
   | { type: "PROFILE_PREPARING"; profile?: SavedProfile; profileId?: string }
   | { type: "PROFILE_PREPARED"; profileId: string }
@@ -45,8 +48,19 @@ export const initialBootstrapState: BootstrapState = {
 
 function reconcile(state: BootstrapState): BootstrapState {
   if (state.error) return { ...state, phase: "error" };
-  if (!state.animationFinished || !state.registry || !state.update) return state;
-  if (state.update.kind === "mandatory") return { ...state, phase: "mandatory-update" };
+  if (!state.animationFinished) return state;
+  if (state.update && !state.updateBypassed) {
+    if (
+      state.update.updateAvailable
+      && (state.update.kind === "optional" || state.update.kind === "mandatory")
+    ) {
+      return { ...state, phase: "updating" };
+    }
+    if (state.update.kind === "mandatory" || state.update.kind === "unavailable") {
+      return { ...state, phase: "update-blocked" };
+    }
+  }
+  if (!state.registry || !state.update) return state;
   if (!state.preparedProfileId) {
     return state.phase === "picker" ? state : { ...state, phase: "picker" };
   }
@@ -71,7 +85,10 @@ export function bootstrapReducer(
     case "PROFILES_LOADED":
       return reconcile({ ...state, registry: event.registry });
     case "UPDATE_RESOLVED":
-      return reconcile({ ...state, update: event.update });
+      return reconcile({ ...state, update: event.update, updateBypassed: false });
+    case "CONTINUE_WITHOUT_UPDATE":
+      if (state.update?.canContinueWithoutUpdate !== true) return state;
+      return reconcile({ ...state, phase: "bootstrapping", updateBypassed: true });
     case "PICKER_REQUIRED":
       return reconcile({ ...state, phase: "picker", selectedProfile: undefined, preparedProfileId: undefined, remote: undefined });
     case "PROFILE_PREPARING":

@@ -103,6 +103,21 @@ describe("automatic Desktop versioning", () => {
   });
 });
 
+describe("signed Stable updater trust boundary", () => {
+  const updater = readFileSync(resolve(desktopRoot, "src-tauri/src/updater.rs"), "utf8");
+  const tauriConfig = readFileSync(resolve(desktopRoot, "src-tauri/tauri.conf.json"), "utf8");
+
+  it("uses fixed HTTPS release endpoints and never enables an unsigned fallback", () => {
+    expect(updater).toContain("https://github.com/OliverPistillo/Doflow-PaaS/releases/latest/download/latest.json");
+    expect(updater).toContain("https://github.com/OliverPistillo/Doflow-PaaS/releases/latest/download/desktop-policy.json");
+    expect(updater).toContain('option_env!("DOFLOW_UPDATER_PUBLIC_KEY")');
+    expect(updater).toContain("UpdateError::NotConfigured");
+    expect(updater).toContain("download_and_install");
+    expect(updater).not.toMatch(/ALLOW_UNSIGNED|skip_signature|disable_signature/i);
+    expect(tauriConfig).not.toMatch(/TAURI_SIGNING_PRIVATE_KEY|PRIVATE_KEY_PASSWORD/);
+  });
+});
+
 describe("Desktop release workflow", () => {
   const workflow = readFileSync(resolve(desktopRoot, "../../.github/workflows/desktop-release.yml"), "utf8");
   const validateJob = workflow.slice(workflow.indexOf("  validate:"), workflow.indexOf("  release-gate:"));

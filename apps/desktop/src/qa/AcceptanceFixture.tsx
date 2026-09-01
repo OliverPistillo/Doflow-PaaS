@@ -4,8 +4,8 @@ import { ClosePrompt } from "../components/ClosePrompt";
 import {
   ErrorScreen,
   ExpiredProfileScreen,
-  MandatoryUpdateScreen,
   PreparingScreen,
+  UpdateScreen,
 } from "../components/StatusScreens";
 import type { SavedProfile } from "../types";
 
@@ -93,15 +93,31 @@ export function AcceptanceFixture() {
   } else if (scenario === "slow") {
     surface = <><PreparingScreen /><SplashFrame frame="complete" /></>;
   } else if (scenario === "picker") {
-    surface = <ProfilePicker profiles={profiles} onSelect={() => undefined} onRemove={() => undefined} onAdd={() => undefined} />;
+    surface = <ProfilePicker profiles={profiles} version="1.1.0" onSelect={() => undefined} onRemove={() => undefined} onAdd={() => undefined} />;
   } else if (scenario === "mandatory") {
-    surface = <MandatoryUpdateScreen progress={{ downloaded: 42, total: 100, phase: "downloading" }} busy onInstall={() => undefined} onQuit={() => undefined} />;
+    surface = (
+      <UpdateScreen
+        update={{
+          kind: "mandatory",
+          currentVersion: "1.0.1",
+          latestVersion: "1.1.0",
+          minimumSupportedVersion: "1.1.0",
+          policySource: "network",
+          updateAvailable: true,
+          canContinueWithoutUpdate: false,
+        }}
+        progress={{ downloaded: 42, total: 100, phase: "downloading" }}
+        busy
+        onRetry={() => undefined}
+        onQuit={() => undefined}
+      />
+    );
   } else if (scenario === "expired") {
     surface = <ExpiredProfileScreen profile={profile} onReauthenticate={() => undefined} onOther={() => undefined} />;
   } else if (scenario === "error") {
     surface = <ErrorScreen message="Controlla la connessione e riprova." onRetry={() => undefined} onQuit={() => undefined} />;
   } else {
-    surface = <><ProfilePicker profiles={profiles} onSelect={() => undefined} onRemove={() => undefined} onAdd={() => undefined} /><ClosePrompt onStayActive={() => undefined} onExit={() => undefined} onCancel={() => undefined} /></>;
+    surface = <><ProfilePicker profiles={profiles} version="1.1.0" onSelect={() => undefined} onRemove={() => undefined} onAdd={() => undefined} /><ClosePrompt onStayActive={() => undefined} onExit={() => undefined} onCancel={() => undefined} /></>;
   }
 
   return <div className="app-root" data-qa-scenario={scenario} aria-label={`Doflow Desktop QA: ${scenario}`}>{surface}</div>;

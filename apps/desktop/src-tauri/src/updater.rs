@@ -3,7 +3,15 @@ use crate::models::{
 };
 use atomic_write_file::AtomicWriteFile;
 use semver::Version;
-use std::{io::Write, path::PathBuf, sync::Mutex, time::Duration};
+use std::{
+    io::Write,
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
+    time::Duration,
+};
 use tauri::{AppHandle, Emitter, Runtime};
 use tauri_plugin_updater::{Update, UpdaterExt};
 use thiserror::Error;
@@ -24,6 +32,8 @@ pub enum UpdateError {
     InvalidMetadata,
     #[error("no verified update is ready to install")]
     NoPendingUpdate,
+    #[error("an update is already being installed")]
+    AlreadyInstalling,
     #[error("update operation failed")]
     Operation,
 }
@@ -32,6 +42,7 @@ pub struct UpdateManager {
     app_data_dir: PathBuf,
     pending: Mutex<Option<Update>>,
     state: Mutex<DesktopUpdateState>,
+    installing: AtomicBool,
 }
 
 impl UpdateManager {
@@ -47,7 +58,9 @@ impl UpdateManager {
                 message: Some("Update check not started".into()),
                 policy_source: PolicySource::None,
                 update_available: false,
+                can_continue_without_update: true,
             }),
+            installing: AtomicBool::new(false),
         }
     }
 
@@ -86,18 +99,25 @@ impl UpdateManager {
 
         let (policy_result, update_result) = tokio::join!(policy_future, update_future);
         let (policy, source) = policy_result.unwrap_or((None, PolicySource::None));
+        let policy_unavailable = policy.is_none();
         let update_failed = update_result.is_err();
         let update = update_result.ok().flatten();
-        let latest = update
-            .as_ref()
-            .map(|value| Version::parse(&value.version))
-            .transpose()
-            .map_err(|_| UpdateError::InvalidMetadata)?;
+        let latest_result =
+            parse_stable_version(update.as_ref().map(|value| value.version.as_str()));
+        let metadata_invalid = latest_result.is_err();
+        let latest = latest_result.unwrap_or(None);
 
         let mut state = classify_update(&current, latest.as_ref(), policy.as_ref(), source)?;
-        if update_failed {
+        if metadata_invalid {
+            state.message = Some("Update metadata is invalid".into());
+            if state.kind == UpdateKind::None {
+                state.kind = UpdateKind::Unavailable;
+            }
+        } else if update_failed || (policy_unavailable && update.is_none()) {
             state.message = Some(if option_env!("DOFLOW_UPDATER_PUBLIC_KEY").is_none() {
                 "Updater signing public key is not configured in this local build".into()
+            } else if policy_unavailable {
+                "Update policy is temporarily unavailable".into()
             } else {
                 "Update service is temporarily unavailable".into()
             });
@@ -106,7 +126,12 @@ impl UpdateManager {
             }
         }
 
-        *self.pending.lock().map_err(|_| UpdateError::Lock)? = update;
+        let pending = if state.update_available && !metadata_invalid {
+            update
+        } else {
+            None
+        };
+        *self.pending.lock().map_err(|_| UpdateError::Lock)? = pending;
         *self.state.lock().map_err(|_| UpdateError::Lock)? = state.clone();
         Ok(state)
     }
@@ -118,6 +143,7 @@ impl UpdateManager {
             .map_err(|_| UpdateError::Lock)?
             .clone()
             .ok_or(UpdateError::NoPendingUpdate)?;
+        self.begin_install()?;
         let downloaded = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
         let progress = downloaded.clone();
         let app_progress = app.clone();
@@ -172,6 +198,7 @@ impl UpdateManager {
             .await;
 
         if result.is_err() {
+            self.finish_install();
             let _ = app.emit(
                 "desktop://update-progress",
                 UpdateProgressPayload {
@@ -186,6 +213,17 @@ impl UpdateManager {
             return Err(UpdateError::Operation);
         }
         app.restart();
+    }
+
+    fn begin_install(&self) -> Result<(), UpdateError> {
+        self.installing
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map(|_| ())
+            .map_err(|_| UpdateError::AlreadyInstalling)
+    }
+
+    fn finish_install(&self) {
+        self.installing.store(false, Ordering::Release);
     }
 
     async fn resolve_policy(&self) -> Result<(Option<ReleasePolicy>, PolicySource), UpdateError> {
@@ -268,6 +306,20 @@ fn parse_policy(raw: &str) -> Result<ReleasePolicy, UpdateError> {
     Ok(policy)
 }
 
+fn parse_stable_version(raw: Option<&str>) -> Result<Option<Version>, UpdateError> {
+    let version = raw
+        .map(Version::parse)
+        .transpose()
+        .map_err(|_| UpdateError::InvalidMetadata)?;
+    if version
+        .as_ref()
+        .is_some_and(|value| !value.pre.is_empty() || !value.build.is_empty())
+    {
+        return Err(UpdateError::InvalidMetadata);
+    }
+    Ok(version)
+}
+
 fn classify_update(
     current: &Version,
     latest: Option<&Version>,
@@ -288,6 +340,7 @@ fn classify_update(
     } else {
         UpdateKind::None
     };
+    let can_continue_without_update = minimum.as_ref().is_none_or(|version| current >= version);
     Ok(DesktopUpdateState {
         kind,
         current_version: current.to_string(),
@@ -296,6 +349,7 @@ fn classify_update(
         message: None,
         policy_source,
         update_available: latest.is_some_and(|version| current < version),
+        can_continue_without_update,
     })
 }
 
@@ -325,28 +379,29 @@ mod tests {
             .kind,
             UpdateKind::None
         );
-        assert_eq!(
-            classify_update(
-                &current,
-                Some(&Version::parse("1.0.1").unwrap()),
-                Some(&policy("1.0.0")),
-                PolicySource::Network
-            )
-            .unwrap()
-            .kind,
-            UpdateKind::Optional
-        );
-        assert_eq!(
-            classify_update(
-                &current,
-                Some(&Version::parse("1.2.0").unwrap()),
-                Some(&policy("1.1.0")),
-                PolicySource::Network
-            )
-            .unwrap()
-            .kind,
-            UpdateKind::Mandatory
-        );
+        let optional = classify_update(
+            &current,
+            Some(&Version::parse("1.0.1").unwrap()),
+            Some(&policy("1.0.0")),
+            PolicySource::Network,
+        )
+        .unwrap();
+        assert_eq!(optional.kind, UpdateKind::Optional);
+        assert_eq!(optional.current_version, "1.0.0");
+        assert_eq!(optional.latest_version.as_deref(), Some("1.0.1"));
+        assert_eq!(optional.minimum_supported_version.as_deref(), Some("1.0.0"));
+        assert!(optional.update_available);
+        assert!(optional.can_continue_without_update);
+
+        let mandatory = classify_update(
+            &current,
+            Some(&Version::parse("1.2.0").unwrap()),
+            Some(&policy("1.1.0")),
+            PolicySource::Network,
+        )
+        .unwrap();
+        assert_eq!(mandatory.kind, UpdateKind::Mandatory);
+        assert!(!mandatory.can_continue_without_update);
     }
 
     #[test]
@@ -371,6 +426,13 @@ mod tests {
             r#"{"schemaVersion":1,"channel":"stable","minimumSupportedVersion":"1.1.0-rc.1"}"#
         )
         .is_err());
+        assert!(parse_stable_version(Some("not-semver")).is_err());
+        assert!(parse_stable_version(Some("1.1.0-rc.1")).is_err());
+        assert!(parse_stable_version(Some("1.1.0+local")).is_err());
+        assert_eq!(
+            parse_stable_version(Some("1.1.0")).unwrap(),
+            Some(Version::parse("1.1.0").unwrap())
+        );
     }
 
     #[test]
@@ -385,5 +447,46 @@ mod tests {
         .unwrap();
         assert_eq!(state.kind, UpdateKind::Optional);
         assert_eq!(state.policy_source, PolicySource::None);
+        assert!(state.can_continue_without_update);
+    }
+
+    #[test]
+    fn newer_installs_are_never_downgraded() {
+        let current = Version::parse("1.1.0").unwrap();
+        let state = classify_update(
+            &current,
+            Some(&Version::parse("1.0.1").unwrap()),
+            Some(&policy("1.0.0")),
+            PolicySource::Network,
+        )
+        .unwrap();
+        assert_eq!(state.kind, UpdateKind::None);
+        assert!(!state.update_available);
+        assert!(state.can_continue_without_update);
+    }
+
+    #[test]
+    fn policy_cache_round_trips_only_valid_stable_metadata() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let manager = UpdateManager::new(temp.path().to_path_buf(), "1.1.0".into());
+        let raw = r#"{"schemaVersion":1,"channel":"stable","minimumSupportedVersion":"1.0.0"}"#;
+        manager.cache_policy(raw).unwrap();
+        assert_eq!(manager.read_cached_policy().unwrap(), Some(policy("1.0.0")));
+
+        std::fs::write(manager.policy_cache_path(), "not-json").unwrap();
+        assert!(manager.read_cached_policy().is_err());
+    }
+
+    #[test]
+    fn install_guard_allows_one_attempt_and_reopens_after_failure() {
+        let manager = UpdateManager::new(PathBuf::new(), "1.1.0".into());
+        assert!(manager.begin_install().is_ok());
+        assert!(matches!(
+            manager.begin_install(),
+            Err(UpdateError::AlreadyInstalling)
+        ));
+        manager.finish_install();
+        assert!(manager.begin_install().is_ok());
+        manager.finish_install();
     }
 }

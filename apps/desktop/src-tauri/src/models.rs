@@ -114,6 +114,7 @@ pub struct DesktopUpdateState {
     pub message: Option<String>,
     pub policy_source: PolicySource,
     pub update_available: bool,
+    pub can_continue_without_update: bool,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]

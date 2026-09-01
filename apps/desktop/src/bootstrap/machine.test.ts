@@ -8,6 +8,7 @@ const noUpdate: DesktopUpdateState = {
   currentVersion: "1.0.0",
   policySource: "network",
   updateAvailable: false,
+  canContinueWithoutUpdate: true,
 };
 const registry: ProfileRegistry = { version: 1, profiles: [] };
 
@@ -34,16 +35,29 @@ describe("desktop bootstrap state machine", () => {
     expect(state.phase).toBe("ready");
   });
 
-  it.each(["optional", "none", "unavailable"] as const)("non blocca l'avvio per update %s", (kind) => {
+  it("non blocca l'avvio quando non esiste un update", () => {
     let state: BootstrapState = { ...initialBootstrapState, phase: "bootstrapping", animationFinished: true, registry, preparedProfileId: "p1", remote: { profileId: "p1", state: "authenticated" } };
-    state = bootstrapReducer(state, { type: "UPDATE_RESOLVED", update: { ...noUpdate, kind } });
+    state = bootstrapReducer(state, { type: "UPDATE_RESOLVED", update: noUpdate });
     expect(state.phase).toBe("ready");
   });
 
-  it("blocca una versione sotto la minimum supported", () => {
+  it.each(["optional", "mandatory"] as const)("blocca e installa prima del profilo un update %s", (kind) => {
     let state: BootstrapState = { ...initialBootstrapState, phase: "bootstrapping", animationFinished: true, registry };
-    state = bootstrapReducer(state, { type: "UPDATE_RESOLVED", update: { ...noUpdate, kind: "mandatory", updateAvailable: true } });
-    expect(state.phase).toBe("mandatory-update");
+    state = bootstrapReducer(state, { type: "UPDATE_RESOLVED", update: { ...noUpdate, kind, updateAvailable: true } });
+    expect(state.phase).toBe("updating");
+  });
+
+  it("consente il fallback solo quando la policy conferma che la versione è supportata", () => {
+    let state: BootstrapState = { ...initialBootstrapState, phase: "bootstrapping", animationFinished: true };
+    state = bootstrapReducer(state, { type: "UPDATE_RESOLVED", update: { ...noUpdate, kind: "unavailable" } });
+    expect(state.phase).toBe("update-blocked");
+    state = bootstrapReducer(state, { type: "CONTINUE_WITHOUT_UPDATE" });
+    expect(state.phase).toBe("bootstrapping");
+
+    state = bootstrapReducer(initialBootstrapState, { type: "ANIMATION_FINISHED" });
+    state = bootstrapReducer(state, { type: "UPDATE_RESOLVED", update: { ...noUpdate, kind: "mandatory", updateAvailable: false, canContinueWithoutUpdate: false } });
+    expect(state.phase).toBe("update-blocked");
+    expect(bootstrapReducer(state, { type: "CONTINUE_WITHOUT_UPDATE" })).toEqual(state);
   });
 
   it("gestisce nessuno, uno e più profili con last used valido o mancante", () => {

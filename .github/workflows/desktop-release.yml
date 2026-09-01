@@ -7,6 +7,7 @@ on:
       - "apps/desktop/**"
       - "apps/frontend/src/lib/desktop-bridge.ts"
       - "apps/frontend/src/components/desktop/**"
+      - "apps/frontend/src/app/layout.tsx"
       - "apps/frontend/src/components/auth/login-panel.tsx"
       - "apps/frontend/src/components/auth/register-panel.tsx"
       - "apps/frontend/src/components/auth/unified-auth-page.tsx"
@@ -42,6 +43,7 @@ on:
       - "apps/frontend/src/proxy.ts"
       - "apps/frontend/next.config.mjs"
       - "tests/frontend/desktop-calls-runtime.test.mjs"
+      - "tests/frontend/desktop-auto-update-runtime.test.mjs"
       - "tests/frontend/universal-features-runtime.test.mjs"
       - "package.json"
       - "pnpm-lock.yaml"
@@ -96,6 +98,10 @@ jobs:
       - name: Run shared frontend Desktop Calls contract tests
         shell: pwsh
         run: pnpm run test:desktop-calls-frontend
+
+      - name: Run shared frontend Desktop updater compatibility tests
+        shell: pwsh
+        run: pnpm run test:desktop-update-frontend
 
       - name: Run backend Desktop Calls tests
         shell: pwsh

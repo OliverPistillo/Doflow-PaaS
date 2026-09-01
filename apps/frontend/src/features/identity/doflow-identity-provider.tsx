@@ -7,7 +7,6 @@ import { ApiError, apiFetch } from "@/lib/api"
 import { clearDoFlowUser } from "@/lib/jwt"
 import { teamApi, type TeamMember } from "@/lib/tenant-team-api"
 import { backendContractsApi } from "@/lib/tenant-backend-contracts-api"
-import { DesktopUpdateBanner } from "@/components/desktop/desktop-update-banner"
 import { isDoflowDesktop, notifyDesktopReady, registerDesktopProfile } from "@/lib/desktop-bridge"
 import {
   capabilitiesForRoles,
@@ -683,7 +682,7 @@ export function DoflowIdentityProvider({ children }: { children: React.ReactNode
     )
   }
 
-  return <IdentityContext.Provider value={value}><DesktopUpdateBanner />{children}</IdentityContext.Provider>
+  return <IdentityContext.Provider value={value}>{children}</IdentityContext.Provider>
 }
 
 export function useDoflowIdentity() {

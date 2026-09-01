@@ -26,11 +26,12 @@ function profile(index: number): SavedProfile {
 describe("desktop native polish contracts", () => {
   it("renders a multi-profile picker without a dominant remove column", () => {
     const markup = renderToStaticMarkup(
-      <ProfilePicker profiles={[profile(1), profile(2), profile(3)]} onSelect={() => undefined} onRemove={() => undefined} onAdd={() => undefined} />,
+      <ProfilePicker profiles={[profile(1), profile(2), profile(3)]} version="9.8.7" onSelect={() => undefined} onRemove={() => undefined} onAdd={() => undefined} />,
     );
     expect(markup).toContain("Seleziona profilo");
     expect(markup).toContain("Accedi con un altro account");
     expect(markup).toContain("Sessioni isolate su questo dispositivo");
+    expect(markup).toContain("Doflow Desktop 9.8.7 · Canale Stable");
     expect(markup.match(/class="profile-row"/g)).toHaveLength(3);
     expect(markup.match(/class="profile-more"/g)).toHaveLength(3);
     expect(markup).not.toContain("remove-profile");
@@ -66,6 +67,8 @@ describe("desktop native polish contracts", () => {
     expect(config.bundle.windows.nsis.installerIcon).toBe("icons/icon.ico");
     expect(traySource).toContain("default_window_icon().cloned()");
     expect(traySource).toContain("builder = builder.icon(icon)");
+    expect(traySource).toContain("app.package_info().version.to_string()");
+    expect(traySource).toContain("Canale Stable");
     for (const icon of [
       "icons/doflow_favicon_source.png",
       "icons/icon.ico",

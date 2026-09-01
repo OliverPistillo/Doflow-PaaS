@@ -6,6 +6,7 @@ use tauri::{
 };
 
 const OPEN_ID: &str = "tray-open";
+const VERSION_ID: &str = "tray-version";
 const ASK_ID: &str = "tray-close-ask";
 const TRAY_ID: &str = "tray-close-tray";
 const EXIT_POLICY_ID: &str = "tray-close-exit";
@@ -13,6 +14,14 @@ const QUIT_ID: &str = "tray-quit";
 
 pub fn setup<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let behavior = app.state::<DesktopRuntime>().close.behavior();
+    let version = MenuItem::with_id(
+        app,
+        VERSION_ID,
+        desktop_version_label(&app.package_info().version.to_string()),
+        false,
+        None::<&str>,
+    )?;
+    let version_separator = PredefinedMenuItem::separator(app)?;
     let open = MenuItem::with_id(app, OPEN_ID, "Apri Doflow", true, None::<&str>)?;
     let ask = CheckMenuItemBuilder::with_id(ASK_ID, "Chiedi ogni volta")
         .checked(behavior == CloseBehavior::Ask)
@@ -32,7 +41,17 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     )?;
     let separator = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, QUIT_ID, "Esci da Doflow", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &policy, &separator, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &version,
+            &version_separator,
+            &open,
+            &policy,
+            &separator,
+            &quit,
+        ],
+    )?;
 
     let ask_for_event = ask.clone();
     let tray_for_event = tray.clone();
@@ -83,4 +102,22 @@ pub fn setup<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     }
     builder.build(app)?;
     Ok(())
+}
+
+fn desktop_version_label(version: &str) -> String {
+    format!("Doflow Desktop {version} · Canale Stable")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tray_version_comes_from_runtime_package_metadata() {
+        assert_eq!(
+            desktop_version_label("9.8.7"),
+            "Doflow Desktop 9.8.7 · Canale Stable"
+        );
+        assert!(!desktop_version_label("2.0.0").contains("1.1.0"));
+    }
 }
