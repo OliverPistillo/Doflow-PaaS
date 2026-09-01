@@ -43,6 +43,7 @@ html[data-tenant-ui="doflow-reference"] {
   --doflow-sidebar-background: radial-gradient(circle at 15% 5%, rgb(57 116 255 / 5.5%), transparent 30%), linear-gradient(180deg, #fff 0%, #f9faff 58%, #f8f6ff 100%);
   --doflow-sidebar-hover: rgb(57 116 255 / 4.5%);
   --doflow-sidebar-active-gradient: linear-gradient(135deg, #3974ff 0%, #7569ff 100%);
+  --doflow-sidebar-active-foreground: #fff;
   --doflow-sidebar-muted: hsl(229 10% 45%);
   --doflow-sidebar-icon: hsl(229 12% 48%);
   --doflow-card-shadow: 0 12px 35px rgb(39 63 130 / 6%);
@@ -89,6 +90,7 @@ html.dark[data-tenant-ui="doflow-reference"] {
   --doflow-sidebar-background: radial-gradient(circle at 20% 10%, rgb(57 116 255 / 8%), transparent 34%), linear-gradient(180deg, #060916 0%, #080b1c 55%, #0b0920 100%);
   --doflow-sidebar-hover: rgb(126 171 255 / 5.5%);
   --doflow-sidebar-active-gradient: linear-gradient(135deg, #315fce 0%, #6d3fbd 100%);
+  --doflow-sidebar-active-foreground: #fff;
   --doflow-sidebar-muted: hsl(229 17% 68%);
   --doflow-sidebar-icon: hsl(229 17% 72%);
   --doflow-card-shadow: 0 16px 45px rgb(0 0 0 / 18%);
@@ -102,6 +104,10 @@ html[data-tenant-ui="doflow-reference"] .doflow-page-frame {
   margin-inline: auto;
 }
 
+html[data-tenant-ui="doflow-reference"] {
+  scrollbar-gutter: stable;
+}
+
 html[data-tenant-ui="doflow-reference"] .doflow-page-frame > :is(main, div) {
   width: 100%;
   max-width: 120rem !important;
@@ -109,15 +115,41 @@ html[data-tenant-ui="doflow-reference"] .doflow-page-frame > :is(main, div) {
   margin-inline: auto !important;
 }
 
+html[data-tenant-ui="doflow-reference"] [data-team-space-surface] {
+  color-scheme: light;
+  --background: 0 0% 100%;
+  --foreground: 232 24% 13%;
+  --card: 0 0% 100%;
+  --card-foreground: 232 24% 13%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 232 24% 13%;
+  --muted: 228 36% 96%;
+  --muted-foreground: 229 10% 45%;
+  --border: 226 27% 90%;
+  --input: 226 27% 90%;
+  background: #fff;
+  color: hsl(var(--foreground));
+}
+
+html.dark[data-tenant-ui="doflow-reference"] [data-team-space-surface] {
+  color-scheme: dark;
+  --background: 232 58% 5%;
+  --foreground: 230 40% 98%;
+  --card: 232 40% 10%;
+  --card-foreground: 230 40% 98%;
+  --popover: 232 35% 13%;
+  --popover-foreground: 230 40% 98%;
+  --muted: 231 30% 10%;
+  --muted-foreground: 229 17% 68%;
+  --border: 225 30% 22% / 42%;
+  --input: 225 30% 22% / 42%;
+  background: #070a19;
+  color: hsl(var(--foreground));
+}
+
 @media (min-width: 1800px) {
   html[data-tenant-ui="doflow-reference"] .doflow-page-frame {
     width: 94%;
-  }
-}
-
-@media (min-width: 768px) {
-  html[data-tenant-ui="doflow-reference"] {
-    scrollbar-gutter: stable;
   }
 }
 
@@ -194,13 +226,13 @@ html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-sub-button"][data-ac
   position: relative;
   background-color: #3974ff;
   background-image: var(--doflow-sidebar-active-gradient);
-  box-shadow: var(--doflow-active-shadow);
-  color: white;
+  box-shadow: none;
+  color: var(--doflow-sidebar-active-foreground);
 }
 
 html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-button"][data-active="true"] > svg,
 html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-sub-button"][data-active="true"] > svg {
-  color: white;
+  color: var(--doflow-sidebar-active-foreground);
 }
 
 html[data-tenant-ui="doflow-reference"] [data-sidebar="menu-button"][data-active="true"]::before,

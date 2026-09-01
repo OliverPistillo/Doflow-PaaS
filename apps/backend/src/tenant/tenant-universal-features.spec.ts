@@ -359,6 +359,80 @@ describe('Universal tenant authority security', () => {
     expect((service as any).messageSelect('tenant_a')).toContain("'readAt'");
   });
 
+  it('accepts only approved internal GIF and sticker metadata for tenant chat messages', () => {
+    const service = new TenantConversationsService(
+      { query: jest.fn() } as any,
+      request(),
+      realtimeAuthority() as any,
+      capabilityAuthority() as any,
+    );
+
+    expect((service as any).attachments([{
+      type: 'sticker',
+      provider: 'doflow-internal',
+      assetId: 'flow-project-delivered',
+      pack: 'Progetti',
+      alt: 'Sticker Flow Progetto consegnato',
+      caption: 'Ottimo lavoro',
+      moderation: 'approved',
+      url: 'https://example.invalid/not-persisted',
+    }])).toEqual([{
+      type: 'sticker',
+      provider: 'doflow-internal',
+      assetId: 'flow-project-delivered',
+      pack: 'Progetti',
+      alt: 'Sticker Flow Progetto consegnato',
+      caption: 'Ottimo lavoro',
+      moderation: 'approved',
+    }]);
+
+    expect((service as any).attachments([{
+      type: 'gif',
+      provider: 'doflow-internal',
+      assetId: 'gif-ottimo-lavoro',
+      alt: 'Animazione Ottimo lavoro',
+      moderation: 'approved',
+    }])).toEqual([{
+      type: 'gif',
+      provider: 'doflow-internal',
+      assetId: 'gif-ottimo-lavoro',
+      alt: 'Animazione Ottimo lavoro',
+      moderation: 'approved',
+    }]);
+
+    expect(() => (service as any).attachments([{
+      type: 'gif',
+      provider: 'external-provider',
+      assetId: 'remote-gif',
+      alt: 'GIF remota',
+      moderation: 'approved',
+    }])).toThrow(BadRequestException);
+
+    expect(() => (service as any).attachments([{
+      type: 'sticker',
+      provider: 'doflow-internal',
+      assetId: 'flow-not-approved',
+      alt: 'Sticker sconosciuto',
+      moderation: 'approved',
+    }])).toThrow('Media chat non presente nel catalogo approvato');
+
+    expect(() => (service as any).attachments([{
+      type: 'gif',
+      provider: 'doflow-internal',
+      assetId: 'flow-project-delivered',
+      alt: 'Tipo media non coerente',
+      moderation: 'approved',
+    }])).toThrow('Media chat non presente nel catalogo approvato');
+
+    expect(() => (service as any).attachments([{
+      type: 'sticker',
+      provider: 'doflow-internal',
+      assetId: 'flow-bug-fix',
+      alt: 'Sticker non disponibile',
+      moderation: 'approved',
+    }])).toThrow('Media chat non presente nel catalogo approvato');
+  });
+
   it('returns conversation summaries with active participants and the latest message', async () => {
     const query = jest.fn().mockResolvedValue([]);
     const service = new TenantConversationsService(

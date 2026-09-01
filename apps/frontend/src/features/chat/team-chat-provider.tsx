@@ -131,6 +131,11 @@ function operationError(cause: unknown, fallback: string) {
   return cause instanceof Error && cause.message ? cause.message : fallback
 }
 
+function timestamp(value?: string) {
+  const parsed = Date.parse(value ?? "")
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
 export function TeamChatProvider({ children }: { children: React.ReactNode }) {
   const identity = useDoflowIdentity()
   const presence = useDoflowPresence()
@@ -150,9 +155,13 @@ export function TeamChatProvider({ children }: { children: React.ReactNode }) {
           }
         }),
       )
-      const conversations = page.items.map((item) => mapConversation(item, identity.currentUserId))
+      const conversations = page.items
+        .map((item) => mapConversation(item, identity.currentUserId))
+        .sort((left, right) => timestamp(right.updatedAt) - timestamp(left.updatedAt))
       const serverMessages = messagePages.flatMap((page) => page.items)
-      const messages = serverMessages.map(mapMessage)
+      const messages = serverMessages
+        .map(mapMessage)
+        .sort((left, right) => timestamp(left.createdAt) - timestamp(right.createdAt) || left.id.localeCompare(right.id))
       const reactions = serverMessages.flatMap((message) =>
         (message.reactions ?? []).map((reaction) => ({
           messageId: message.id,

@@ -1230,7 +1230,7 @@ test("matrice visuale Doflow finale con API localhost deterministiche", async ({
   )
 })
 
-test("tema persistente, sidebar canonica e Team Space senza chiamate", async ({ browser }) => {
+test("tema persistente, sidebar canonica e Team Space con azioni chiamata e video", async ({ browser }) => {
   test.setTimeout(300_000)
   const variant: MatrixVariant = { slug: "behavior", width: 1440, height: 900, theme: "light", sidebar: "expanded" }
   const { context, page, observation } = await newFixturePage(browser, variant)
@@ -1260,7 +1260,10 @@ test("tema persistente, sidebar canonica e Team Space senza chiamate", async ({ 
     await expect(visibleSidebar(page).getByText("Conversazioni", { exact: true })).toBeVisible()
     await expect(visibleSidebar(page).getByRole("link", { name: "Generale", exact: true })).toBeVisible()
     await expect(page.getByText("Allineamento operativo completato.", { exact: true })).toBeVisible()
-    await expect(page.getByRole("button", { name: /chiamata|video|microfono/i })).toHaveCount(0)
+    await expect(page.getByRole("button", { name: "Avvia chiamata", exact: true })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Avvia chiamata", exact: true })).toHaveCount(1)
+    await expect(page.getByRole("button", { name: "Avvia video", exact: true })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Avvia video", exact: true })).toHaveCount(1)
   } finally {
     await closeFixtureContext(context, observation)
   }
