@@ -112,6 +112,7 @@ function ChannelButton({
   return (
     <button
       type="button"
+      data-active={selected}
       onClick={onSelect}
       className={`flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
     >
@@ -146,13 +147,10 @@ function Channels({
   const channels = chat.conversations.filter(
     (item) =>
       !item.archivedAt &&
-      item.participantIds.includes(identity.currentUserId) &&
-      (item.kind === "team" ||
-        item.kind === "group" ||
-        item.kind === "project"),
+      item.participantIds.includes(identity.currentUserId),
   );
   return (
-    <div className="flex h-full min-h-0 flex-col bg-muted/25">
+    <div data-team-space-channels className="flex h-full min-h-0 flex-col bg-muted/25">
       <div className="shrink-0 border-b p-4">
         <div className="flex items-center gap-2">
           <span className="grid size-9 place-items-center rounded-lg bg-primary text-primary-foreground">
@@ -301,8 +299,9 @@ function Messages({ conversation }: { conversation: ChatConversation }) {
         ? "Gestisci ticket e interventi con il team"
         : "Parla con tutto il team";
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div data-team-space-messages className="flex min-h-0 flex-1 flex-col">
       <div
+        data-team-space-message-list
         className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-5"
         aria-live="polite"
       >
@@ -422,7 +421,7 @@ function Messages({ conversation }: { conversation: ChatConversation }) {
           </div>
         )}
       </div>
-      <div className="shrink-0 border-t bg-background p-3 sm:p-4">
+      <div data-team-space-composer className="shrink-0 border-t bg-background p-3 sm:p-4">
         {reply ? (
           <div className="mb-2 flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-xs">
             <span className="min-w-0 flex-1 truncate">
@@ -529,6 +528,7 @@ function Participants({
   return (
     <section
       id="team-space-participants"
+      data-team-space-participants
       className="flex h-full min-h-0 flex-col"
       aria-label="Partecipanti"
     >
@@ -1042,10 +1042,11 @@ export function TeamSpacePage() {
   return (
     <main className="min-w-0 p-2 sm:p-4" data-flow-tour="flow-team-space-call">
       <div
+        data-team-space-surface
         className={`mx-auto grid h-[calc(100dvh-5rem)] min-h-[560px] max-w-[1600px] grid-cols-1 overflow-hidden rounded-xl border bg-background shadow-sm lg:grid-cols-[240px_minmax(0,1fr)] ${rightOpen ? "xl:grid-cols-[240px_minmax(0,1fr)_280px]" : "xl:grid-cols-[240px_minmax(0,1fr)]"}`}
       >
         <aside className="hidden min-h-0 border-r lg:block">{side}</aside>
-        <section className="flex min-h-0 min-w-0 flex-col">
+        <section data-team-space-conversation className="flex min-h-0 min-w-0 flex-col">
           <header className="flex min-w-0 shrink-0 items-center gap-2 border-b bg-gradient-to-r from-primary/5 to-transparent px-3 py-2">
             <Button
               size="icon-sm"
@@ -1058,7 +1059,7 @@ export function TeamSpacePage() {
             </Button>
             <Hash className="size-4 shrink-0 text-primary" />
             <div className="min-w-0 flex-1">
-              <b className="block truncate text-sm">
+                <b className="block truncate text-sm">
                 {chatConversationTitle(selected)}
               </b>
               <span className="block truncate text-xs text-muted-foreground">
@@ -1108,7 +1109,7 @@ export function TeamSpacePage() {
           )}
         </section>
         {rightOpen && (
-          <aside className="hidden min-h-0 w-[280px] border-l xl:block">
+              <aside className="hidden min-h-0 w-[280px] border-l xl:block">
             {right}
           </aside>
         )}

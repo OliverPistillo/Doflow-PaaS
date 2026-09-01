@@ -43,15 +43,34 @@ function readRange(searchParams: URLSearchParams) {
 }
 
 const badgeTone: Record<PipelineStage, string> = {
-  new: "bg-chart-2/10 text-chart-2",
-  qualified: "bg-chart-1/10 text-chart-1",
-  proposal: "bg-chart-4/10 text-chart-4",
-  negotiation: "bg-chart-5/10 text-chart-5",
-  won: "bg-chart-3/10 text-chart-3",
-  unqualified: "bg-muted text-muted-foreground",
-  "not-interested": "bg-muted text-muted-foreground",
-  "follow-up": "bg-chart-2/10 text-chart-2",
-  lost: "bg-destructive/10 text-destructive",
+  new: "bg-blue-500/10 text-blue-700 dark:text-blue-300",
+  qualified: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  proposal: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  negotiation: "bg-orange-500/10 text-orange-700 dark:text-orange-300",
+  won: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  unqualified: "bg-slate-500/10 text-slate-700 dark:text-slate-300",
+  "not-interested": "bg-stone-500/10 text-stone-700 dark:text-stone-300",
+  "follow-up": "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
+  lost: "bg-red-500/10 text-red-700 dark:text-red-300",
+}
+
+const generalActiveFilterStyle = {
+  backgroundColor: "rgb(91 91 214 / 0.14)",
+  borderColor: "rgb(91 91 214 / 0.48)",
+  color: "#4f46b8",
+  boxShadow: "0 0 0 3px rgb(91 91 214 / 0.08)",
+}
+
+const stageActiveFilterStyle: Record<PipelineStage, { backgroundColor: string; borderColor: string; color: string; boxShadow: string }> = {
+  new: { backgroundColor: "rgb(37 99 235 / 0.14)", borderColor: "rgb(37 99 235 / 0.48)", color: "#1d4ed8", boxShadow: "0 0 0 3px rgb(37 99 235 / 0.08)" },
+  qualified: { backgroundColor: "rgb(124 58 237 / 0.14)", borderColor: "rgb(124 58 237 / 0.48)", color: "#6d28d9", boxShadow: "0 0 0 3px rgb(124 58 237 / 0.08)" },
+  proposal: { backgroundColor: "rgb(180 83 9 / 0.14)", borderColor: "rgb(180 83 9 / 0.48)", color: "#92400e", boxShadow: "0 0 0 3px rgb(180 83 9 / 0.08)" },
+  negotiation: { backgroundColor: "rgb(194 65 12 / 0.14)", borderColor: "rgb(194 65 12 / 0.48)", color: "#9a3412", boxShadow: "0 0 0 3px rgb(194 65 12 / 0.08)" },
+  won: { backgroundColor: "rgb(4 120 87 / 0.14)", borderColor: "rgb(4 120 87 / 0.48)", color: "#047857", boxShadow: "0 0 0 3px rgb(4 120 87 / 0.08)" },
+  unqualified: { backgroundColor: "rgb(71 85 105 / 0.14)", borderColor: "rgb(71 85 105 / 0.48)", color: "#334155", boxShadow: "0 0 0 3px rgb(71 85 105 / 0.08)" },
+  "not-interested": { backgroundColor: "rgb(120 113 108 / 0.14)", borderColor: "rgb(120 113 108 / 0.48)", color: "#57534e", boxShadow: "0 0 0 3px rgb(120 113 108 / 0.08)" },
+  "follow-up": { backgroundColor: "rgb(14 116 144 / 0.14)", borderColor: "rgb(14 116 144 / 0.48)", color: "#0e7490", boxShadow: "0 0 0 3px rgb(14 116 144 / 0.08)" },
+  lost: { backgroundColor: "rgb(185 28 28 / 0.14)", borderColor: "rgb(185 28 28 / 0.48)", color: "#b91c1c", boxShadow: "0 0 0 3px rgb(185 28 28 / 0.08)" },
 }
 
 function stageLabel(stage: PipelineStage) {
@@ -206,7 +225,12 @@ export function CommercialLeadsPageLayout() {
         {mineOnly && <Badge variant="secondary">Solo i miei</Badge>}
       </CardContent></Card>
 
-      <div className="flex flex-wrap gap-2"><Button size="sm" variant={statusFilter === "all" && groupFilter === "all" ? "secondary" : "outline"} onClick={() => updateFilters("all")}>Tutti gli stati</Button><Button size="sm" variant={groupFilter === "open" ? "secondary" : "outline"} onClick={() => updateFilters("all", "open")}>Trattative aperte</Button><Button size="sm" variant={groupFilter === "other" ? "secondary" : "outline"} onClick={() => updateFilters("all", "other")}>Altri stati</Button>{pipelineStages.map((filter) => <Button key={filter.id} size="sm" variant={statusFilter === filter.id ? "secondary" : "outline"} onClick={() => changeFilter(filter.id)}>{filter.label}</Button>)}</div>
+      <div className="flex max-w-full gap-2 overflow-x-auto pb-1" aria-label="Filtri rapidi per stato">
+        <Button className="h-7 shrink-0 rounded-full px-3 text-xs" size="sm" variant="outline" aria-pressed={statusFilter === "all" && groupFilter === "all"} style={statusFilter === "all" && groupFilter === "all" ? generalActiveFilterStyle : undefined} onClick={() => updateFilters("all")}>Tutti gli stati</Button>
+        <Button className="h-7 shrink-0 rounded-full px-3 text-xs" size="sm" variant="outline" aria-pressed={groupFilter === "open"} style={groupFilter === "open" ? generalActiveFilterStyle : undefined} onClick={() => updateFilters("all", "open")}>Trattative aperte</Button>
+        <Button className="h-7 shrink-0 rounded-full px-3 text-xs" size="sm" variant="outline" aria-pressed={groupFilter === "other"} style={groupFilter === "other" ? generalActiveFilterStyle : undefined} onClick={() => updateFilters("all", "other")}>Altri stati</Button>
+        {pipelineStages.map((filter) => <Button key={filter.id} className="h-7 shrink-0 rounded-full px-3 text-xs" size="sm" variant="outline" aria-pressed={statusFilter === filter.id} style={statusFilter === filter.id ? stageActiveFilterStyle[filter.id] : undefined} onClick={() => changeFilter(filter.id)}>{filter.label}</Button>)}
+      </div>
 
       <Card className="min-w-0 overflow-hidden" aria-label={grouping === "none" ? "Tabella lead" : "Lead raggruppati"}>
         {grouping !== "none" && <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/20 px-3 py-2"><p className="text-xs text-muted-foreground">{visibleGroups.length} gruppi · {displayedLeads.length} lead visibili</p><div className="flex gap-1"><Button size="sm" variant="ghost" onClick={() => setAllGroupsCollapsed(false)}>Espandi tutti</Button><Button size="sm" variant="ghost" onClick={() => setAllGroupsCollapsed(true)}>Comprimi tutti</Button></div></div>}

@@ -34,6 +34,20 @@ export const metadata: Metadata = {
   title: "Doflow",
   description: "La piattaforma all-in-one per gestire il tuo business.",
   manifest: "/site.webmanifest",
+  icons: {
+    icon: [
+      {
+        url: "/brand/marchio_logo_nero.svg",
+        type: "image/svg+xml",
+        media: "(prefers-color-scheme: light)",
+      },
+      {
+        url: "/brand/marchio_logo_bianco.svg",
+        type: "image/svg+xml",
+        media: "(prefers-color-scheme: dark)",
+      },
+    ],
+  },
 };
 
 export default function RootLayout({

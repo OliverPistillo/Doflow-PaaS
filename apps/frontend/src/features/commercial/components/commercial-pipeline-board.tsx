@@ -28,7 +28,17 @@ import type { CommercialLead, PipelineStage } from "@/features/commercial/types"
 const money = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", useGrouping: "always", maximumFractionDigits: 0 })
 const dateFormatter = new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "short" })
 const negativeStages: PipelineStage[] = ["lost", "unqualified", "not-interested"]
-const accents: Record<PipelineStage, string> = { new: "var(--chart-2)", qualified: "var(--chart-1)", proposal: "var(--chart-4)", negotiation: "var(--destructive)", won: "var(--chart-3)", unqualified: "var(--muted-foreground)", "not-interested": "var(--muted-foreground)", "follow-up": "var(--chart-2)", lost: "var(--destructive)" }
+const stageVisuals: Record<PipelineStage, { accent: string; soft: string }> = {
+  new: { accent: "#2563eb", soft: "rgb(37 99 235 / 0.08)" },
+  qualified: { accent: "#7c3aed", soft: "rgb(124 58 237 / 0.08)" },
+  proposal: { accent: "#b45309", soft: "rgb(180 83 9 / 0.08)" },
+  negotiation: { accent: "#c2410c", soft: "rgb(194 65 12 / 0.08)" },
+  won: { accent: "#047857", soft: "rgb(4 120 87 / 0.08)" },
+  unqualified: { accent: "#475569", soft: "rgb(71 85 105 / 0.08)" },
+  "not-interested": { accent: "#78716c", soft: "rgb(120 113 108 / 0.08)" },
+  "follow-up": { accent: "#0e7490", soft: "rgb(14 116 144 / 0.08)" },
+  lost: { accent: "#b91c1c", soft: "rgb(185 28 28 / 0.08)" },
+}
 
 function activityPresentation(lead: CommercialLead) {
   const text = lead.nextAction || "Nessuna attività pianificata"
@@ -65,7 +75,8 @@ function DraggableLeadCard({ lead, enhanced, dragOverlay = false, disabled = fal
 
 function PipelineColumn({ stage, leads, active, movingLeadId, enhanced, onMove, onCreateActivity }: { stage: { id: PipelineStage; label: string }; leads: CommercialLead[]; active: boolean; movingLeadId: string | null; enhanced: boolean; onMove: (lead: CommercialLead, stage: PipelineStage) => void; onCreateActivity: (lead: CommercialLead) => void }) {
   const { setNodeRef } = useDroppable({ id: stage.id })
-  return <section data-commercial-stage={stage.id} ref={setNodeRef} style={{ "--accent": accents[stage.id] } as CSSProperties} className={`w-60 shrink-0 space-y-2 rounded-lg border border-t-2 [border-top-color:var(--accent)] p-3 transition-colors ${active ? "border-primary/40 bg-primary/5" : ""}`}><div className="flex items-start justify-between gap-2"><div><h3 className="text-sm font-semibold">{stage.label}</h3><p className="text-xs tabular-nums text-muted-foreground">{money.format(leads.reduce((total, lead) => total + lead.value, 0))}</p></div><Badge className="border-0 bg-muted text-muted-foreground">{leads.length} lead</Badge></div><SortableContext items={leads.map((lead) => lead.id)} strategy={verticalListSortingStrategy}><div className="min-h-16 space-y-2">{leads.map((lead) => <DraggableLeadCard key={lead.id} lead={lead} enhanced={enhanced} disabled={movingLeadId === lead.id} onMove={(nextStage) => onMove(lead, nextStage)} onCreateActivity={() => onCreateActivity(lead)} tourTarget={lead.id === leads[0]?.id} />)}</div></SortableContext></section>
+  const visual = stageVisuals[stage.id]
+  return <section data-commercial-stage={stage.id} ref={setNodeRef} style={{ "--stage-accent": visual.accent, "--stage-soft": visual.soft } as CSSProperties} className={`w-60 shrink-0 space-y-2 rounded-lg border border-t-[3px] [border-top-color:var(--stage-accent)] [background-color:var(--stage-soft)] p-3 transition-colors ${active ? "border-primary/40 ring-2 ring-primary/15" : ""}`}><div className="flex items-start justify-between gap-2"><div><h3 className="text-sm font-semibold [color:var(--stage-accent)]">{stage.label}</h3><p className="text-xs tabular-nums text-muted-foreground">{money.format(leads.reduce((total, lead) => total + lead.value, 0))}</p></div><Badge className="border-0 [background-color:var(--stage-soft)] [color:var(--stage-accent)]">{leads.length} lead</Badge></div><SortableContext items={leads.map((lead) => lead.id)} strategy={verticalListSortingStrategy}><div className="min-h-16 space-y-2">{leads.map((lead) => <DraggableLeadCard key={lead.id} lead={lead} enhanced={enhanced} disabled={movingLeadId === lead.id} onMove={(nextStage) => onMove(lead, nextStage)} onCreateActivity={() => onCreateActivity(lead)} tourTarget={lead.id === leads[0]?.id} />)}</div></SortableContext></section>
 }
 
 export function CommercialPipelineBoard({ visibleLeads, dndContextId = "commercial-pipeline-dnd", enhancedCards = false }: { visibleLeads: CommercialLead[]; dndContextId?: string; enhancedCards?: boolean }) {

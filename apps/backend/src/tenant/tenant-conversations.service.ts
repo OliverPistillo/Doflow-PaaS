@@ -16,6 +16,74 @@ import { withTenantIdempotency } from './tenant-universal-idempotency';
 
 type Participant = { role: string };
 
+const APPROVED_CHAT_MEDIA_IDS: Readonly<Record<'gif' | 'sticker', ReadonlySet<string>>> = {
+  gif: new Set([
+    'gif-daje',
+    'gif-festeggia',
+    'gif-obiettivo-raggiunto',
+    'gif-ottimo-lavoro',
+  ]),
+  sticker: new Set([
+    'flow-angry',
+    'flow-announcement',
+    'flow-applause',
+    'flow-approved',
+    'flow-bored',
+    'flow-celebrate',
+    'flow-client-onboarding',
+    'flow-coding',
+    'flow-coffee-break',
+    'flow-contract-signed',
+    'flow-cry',
+    'flow-daje',
+    'flow-deadline',
+    'flow-deal-lost',
+    'flow-deal-won',
+    'flow-embarrassed',
+    'flow-exhausted',
+    'flow-follow-up',
+    'flow-goodbye',
+    'flow-happy',
+    'flow-hello',
+    'flow-high-five',
+    'flow-idea',
+    'flow-kiss',
+    'flow-laugh',
+    'flow-listening',
+    'flow-love',
+    'flow-materials-received',
+    'flow-meditate',
+    'flow-negotiation',
+    'flow-new-lead',
+    'flow-payment-received',
+    'flow-phone-call',
+    'flow-playful',
+    'flow-project-delivered',
+    'flow-project-in-progress',
+    'flow-project-planning',
+    'flow-proposal-sent',
+    'flow-proud',
+    'flow-qualified',
+    'flow-sales-presentation',
+    'flow-scared',
+    'flow-shocked',
+    'flow-shy',
+    'flow-sick',
+    'flow-skeptical',
+    'flow-sleepy',
+    'flow-sorry',
+    'flow-studying',
+    'flow-thanks',
+    'flow-thinking',
+    'flow-ticket-solved',
+    'flow-urgent',
+    'flow-video-call',
+    'flow-waiting-materials',
+    'flow-wink',
+    'flow-working',
+  ]),
+};
+
 @Injectable()
 export class TenantConversationsService {
   constructor(
@@ -373,6 +441,26 @@ export class TenantConversationsService {
     return value.map((item) => {
       if (!item || typeof item !== 'object') throw new BadRequestException('attachmentMetadata non valido');
       const source = item as Record<string, unknown>;
+      const mediaType = String(source.type || '').trim();
+      if (mediaType === 'gif' || mediaType === 'sticker') {
+        if (source.provider !== 'doflow-internal' || source.moderation !== 'approved') {
+          throw new BadRequestException('Media chat non autorizzato');
+        }
+        const assetId = boundedText(source.assetId ?? source.asset_id, 'assetId', 100, true);
+        if (!/^[a-z0-9][a-z0-9-]*$/.test(assetId)) throw new BadRequestException('assetId non valido');
+        if (!APPROVED_CHAT_MEDIA_IDS[mediaType].has(assetId)) {
+          throw new BadRequestException('Media chat non presente nel catalogo approvato');
+        }
+        return {
+          type: mediaType,
+          provider: 'doflow-internal',
+          assetId,
+          pack: boundedText(source.pack, 'pack', 100) || undefined,
+          alt: boundedText(source.alt, 'alt', 255, true),
+          caption: boundedText(source.caption, 'caption', 500) || undefined,
+          moderation: 'approved',
+        };
+      }
       return {
         documentId: source.documentId ? tenantUuid(source.documentId, 'documentId') : undefined,
         name: boundedText(source.name, 'attachment name', 255, true),

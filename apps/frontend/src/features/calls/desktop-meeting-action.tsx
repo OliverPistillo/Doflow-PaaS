@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Link2 } from "lucide-react";
+import { Copy, Link2, Phone, Video } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -15,15 +15,18 @@ export function DesktopMeetingAction({
   type = "video",
   label = "Link riunione",
   compact = false,
+  callIcon = false,
 }: {
   context?: DoflowCallContext;
   type?: DoflowCallType;
   label?: string;
   compact?: boolean;
+  callIcon?: boolean;
 }) {
   const calls = useDesktopCalls();
   const [busy, setBusy] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
+  const ActionIcon = callIcon ? (type === "audio" ? Phone : Video) : Link2;
   if (!calls.guestAvailable) return null;
 
   const create = async () => {
@@ -49,7 +52,7 @@ export function DesktopMeetingAction({
   return (
     <>
       <Button size={compact ? "icon-sm" : "sm"} variant="outline" aria-label={label} disabled={busy} onClick={() => void create()}>
-        <Link2 />{compact ? null : (busy ? "Creazione…" : label)}
+        <ActionIcon />{compact ? null : (busy ? "Creazione…" : label)}
       </Button>
       <Dialog open={Boolean(url)} onOpenChange={(open) => { if (!open) setUrl(null); }}>
         <DialogContent className="sm:max-w-lg">
