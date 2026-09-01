@@ -10,6 +10,10 @@ rust-version = "1.88"
 name = "doflow_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+default = []
+calls-qa-fixture = []
+
 [build-dependencies]
 tauri-build = { version = "=2.6.3", features = [] }
 

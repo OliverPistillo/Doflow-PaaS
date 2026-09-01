@@ -1,6 +1,6 @@
 use crate::{commands::assert_remote_caller, models::BRIDGE_VERSION, runtime::DesktopRuntime};
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use std::{collections::HashSet, sync::Mutex};
 use tauri::{
     utils::config::WebviewUrl, webview::WebviewWindowBuilder, AppHandle, Emitter, Manager, Runtime,
     State, WebviewWindow,
@@ -99,6 +99,15 @@ pub struct NativeCallActionInput {
     pub reason: Option<String>,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CloseNativeCallWindowInput {
+    #[serde(default)]
+    pub action: Option<NativeCallAction>,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeCallActionEvent {
@@ -129,12 +138,27 @@ struct RoutedCall {
     call: NativeCallDescriptor,
     profile_window_label: String,
     credentials: Option<LivekitCredentials>,
+    action_claimed: bool,
 }
 
 #[derive(Debug, Default)]
 struct NativeCallState {
     incoming: Option<RoutedCall>,
     active: Option<RoutedCall>,
+    closing_sessions: HashSet<String>,
+}
+
+#[derive(Debug)]
+struct NativeClosePlan {
+    close_key: String,
+    profile_window_label: Option<String>,
+    event: Option<NativeCallActionEvent>,
+}
+
+#[derive(Debug)]
+enum NativeClosePreparation {
+    AlreadyClosing,
+    Started(NativeClosePlan),
 }
 
 #[derive(Debug, Default)]
@@ -165,23 +189,106 @@ impl CallManager {
         })
     }
 
-    fn profile_for(&self, session_id: &str) -> Result<String, String> {
-        let state = self
+    fn prepare_action(
+        &self,
+        session_id: &str,
+        action: NativeCallAction,
+        reason: Option<String>,
+    ) -> Result<Option<(String, NativeCallActionEvent)>, String> {
+        let mut state = self
             .state
             .lock()
             .map_err(|_| "Lo stato della chiamata Desktop non è disponibile")?;
-        state
+        let routed = if state
             .active
             .as_ref()
-            .filter(|entry| entry.call.session_id == session_id)
-            .or_else(|| {
-                state
-                    .incoming
-                    .as_ref()
-                    .filter(|entry| entry.call.session_id == session_id)
+            .is_some_and(|entry| entry.call.session_id == session_id)
+        {
+            state.active.as_mut().expect("active entry checked above")
+        } else if state
+            .incoming
+            .as_ref()
+            .is_some_and(|entry| entry.call.session_id == session_id)
+        {
+            state
+                .incoming
+                .as_mut()
+                .expect("incoming entry checked above")
+        } else {
+            return Err("La chiamata non è più attiva".into());
+        };
+        if action_is_claimed_once(action) {
+            if routed.action_claimed {
+                return Ok(None);
+            }
+            routed.action_claimed = true;
+        }
+        Ok(Some((
+            routed.profile_window_label.clone(),
+            NativeCallActionEvent {
+                session_id: session_id.to_owned(),
+                action,
+                reason,
+            },
+        )))
+    }
+
+    fn begin_close(
+        &self,
+        kind: NativeWindowKind,
+        session_id: &str,
+        action: Option<NativeCallAction>,
+        reason: Option<String>,
+    ) -> Result<NativeClosePreparation, String> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| "Lo stato della chiamata Desktop non è disponibile")?;
+        let close_key = match kind {
+            NativeWindowKind::Call => call_label(session_id),
+            NativeWindowKind::Incoming => incoming_label(session_id),
+        };
+        if state.closing_sessions.contains(&close_key) {
+            return Ok(NativeClosePreparation::AlreadyClosing);
+        }
+
+        let mut routed = match kind {
+            NativeWindowKind::Call => state
+                .active
+                .take_if(|entry| entry.call.session_id == session_id),
+            NativeWindowKind::Incoming => state
+                .incoming
+                .take_if(|entry| entry.call.session_id == session_id),
+        };
+        let profile_window_label = routed
+            .as_ref()
+            .map(|entry| entry.profile_window_label.clone());
+        let event = action.and_then(|action| {
+            let routed = routed.as_mut()?;
+            if action_is_claimed_once(action) && routed.action_claimed {
+                return None;
+            }
+            if action_is_claimed_once(action) {
+                routed.action_claimed = true;
+            }
+            Some(NativeCallActionEvent {
+                session_id: session_id.to_owned(),
+                action,
+                reason,
             })
-            .map(|entry| entry.profile_window_label.clone())
-            .ok_or_else(|| "La chiamata non è più attiva".to_owned())
+        });
+        state.closing_sessions.insert(close_key.clone());
+        Ok(NativeClosePreparation::Started(NativeClosePlan {
+            close_key,
+            profile_window_label,
+            event,
+        }))
+    }
+
+    fn finish_close(&self, close_key: &str) {
+        if let Ok(mut state) = self.state.lock() {
+            state.closing_sessions.remove(close_key);
+        }
     }
 
     pub fn clear_session(&self, session_id: &str) {
@@ -207,6 +314,7 @@ impl CallManager {
         if let Ok(mut state) = self.state.lock() {
             state.incoming = None;
             state.active = None;
+            state.closing_sessions.clear();
         }
     }
 
@@ -225,6 +333,7 @@ impl CallManager {
             call,
             profile_window_label: "remote-test".into(),
             credentials: None,
+            action_claimed: false,
         });
         Ok(())
     }
@@ -337,6 +446,28 @@ fn action_allowed(kind: NativeWindowKind, action: NativeCallAction) -> bool {
     }
 }
 
+fn action_is_claimed_once(action: NativeCallAction) -> bool {
+    matches!(
+        action,
+        NativeCallAction::Accept
+            | NativeCallAction::Reject
+            | NativeCallAction::Cancel
+            | NativeCallAction::End
+            | NativeCallAction::Failed
+    )
+}
+
+fn validate_action_reason(reason: Option<String>) -> Result<Option<String>, String> {
+    let reason = reason.map(|value| value.trim().to_owned());
+    if reason
+        .as_ref()
+        .is_some_and(|value| value.len() > 120 || value.chars().any(char::is_control))
+    {
+        return Err("Motivo chiamata non valido".into());
+    }
+    Ok(reason)
+}
+
 fn active_profile_label<R: Runtime>(
     state: &DesktopRuntime,
     caller: &WebviewWindow<R>,
@@ -406,18 +537,19 @@ fn build_call_window<R: Runtime>(
 
 fn destroy_window<R: Runtime>(app: &AppHandle<R>, label: &str) {
     if let Some(window) = app.get_webview_window(label) {
-        let _ = window.destroy();
+        if window.destroy().is_err() {
+            let _ = window.close();
+        }
     }
 }
 
-fn dispatch_remote_action<R: Runtime>(
+fn dispatch_remote_action_to_profile<R: Runtime>(
     app: &AppHandle<R>,
-    state: &DesktopRuntime,
+    profile_label: &str,
     event: NativeCallActionEvent,
 ) -> Result<(), String> {
-    let profile_label = state.calls.profile_for(&event.session_id)?;
     let profile = app
-        .get_webview_window(&profile_label)
+        .get_webview_window(profile_label)
         .ok_or("La finestra del profilo Doflow non è disponibile")?;
     let payload =
         serde_json::to_string(&event).map_err(|_| "Azione chiamata non serializzabile")?;
@@ -426,6 +558,54 @@ fn dispatch_remote_action<R: Runtime>(
             "window.dispatchEvent(new CustomEvent({REMOTE_ACTION_EVENT:?},{{detail:{payload}}}));"
         ))
         .map_err(|_| "Impossibile inoltrare l'azione alla sessione Doflow".into())
+}
+
+fn schedule_native_window_close<R: Runtime>(
+    app: &AppHandle<R>,
+    label: &str,
+    action: Option<NativeCallAction>,
+    reason: Option<String>,
+) -> Result<bool, String> {
+    let (kind, session_id) = parse_native_window_label(label)?;
+    if action.is_some_and(|action| !action_allowed(kind, action)) {
+        return Err("Azione non consentita per questa finestra".into());
+    }
+    let runtime = app.state::<DesktopRuntime>();
+    let preparation = runtime
+        .calls
+        .begin_close(kind, &session_id, action, reason)?;
+    let NativeClosePreparation::Started(plan) = preparation else {
+        return Ok(false);
+    };
+    let NativeClosePlan {
+        close_key,
+        profile_window_label,
+        event,
+        ..
+    } = plan;
+    let close_app = app.clone();
+    let close_label = label.to_owned();
+    tauri::async_runtime::spawn(async move {
+        // Yield until the originating CloseRequested handler has returned. Destroying a
+        // WebView from inside that handler is re-entrant on Windows and can hang WebView2.
+        tokio::task::yield_now().await;
+        destroy_window(&close_app, &close_label);
+        if let (Some(profile_label), Some(event)) = (profile_window_label.as_deref(), event) {
+            // The local privacy boundary has already completed. Remote state notification
+            // is best-effort and never blocks the call window from disappearing.
+            let notify_app = close_app.clone();
+            let notify_profile = profile_label.to_owned();
+            tauri::async_runtime::spawn_blocking(move || {
+                let _ = dispatch_remote_action_to_profile(&notify_app, &notify_profile, event);
+            });
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        close_app
+            .state::<DesktopRuntime>()
+            .calls
+            .finish_close(&close_key);
+    });
+    Ok(true)
 }
 
 #[tauri::command]
@@ -486,6 +666,7 @@ pub fn show_incoming_desktop_call<R: Runtime>(
             call: call.clone(),
             profile_window_label,
             credentials: None,
+            action_claimed: false,
         });
     }
     build_incoming_window(&app, &call)?;
@@ -508,16 +689,7 @@ pub fn dismiss_incoming_desktop_call<R: Runtime>(
     validate_schema_version(input.schema_version)?;
     assert_remote_caller(&webview, &state)?;
     let session_id = validate_session_id(&input.session_id)?;
-    destroy_window(&app, &incoming_label(&session_id));
-    if let Ok(mut native) = state.calls.state.lock() {
-        if native
-            .incoming
-            .as_ref()
-            .is_some_and(|entry| entry.call.session_id == session_id)
-        {
-            native.incoming = None;
-        }
-    }
+    let _ = schedule_native_window_close(&app, &incoming_label(&session_id), None, None)?;
     Ok(())
 }
 
@@ -549,6 +721,7 @@ pub fn open_desktop_call<R: Runtime>(
             call: call.clone(),
             profile_window_label,
             credentials: Some(credentials),
+            action_claimed: false,
         });
         if native
             .incoming
@@ -558,7 +731,7 @@ pub fn open_desktop_call<R: Runtime>(
             native.incoming = None;
         }
     }
-    destroy_window(&app, &incoming_label(&call.session_id));
+    let _ = schedule_native_window_close(&app, &incoming_label(&call.session_id), None, None)?;
     build_call_window(&app, &call)
 }
 
@@ -606,9 +779,8 @@ pub fn close_desktop_call<R: Runtime>(
     validate_schema_version(input.schema_version)?;
     assert_remote_caller(&webview, &state)?;
     let session_id = validate_session_id(&input.session_id)?;
-    destroy_window(&app, &call_label(&session_id));
-    destroy_window(&app, &incoming_label(&session_id));
-    state.calls.clear_session(&session_id);
+    let _ = schedule_native_window_close(&app, &call_label(&session_id), None, None)?;
+    let _ = schedule_native_window_close(&app, &incoming_label(&session_id), None, None)?;
     Ok(())
 }
 
@@ -631,22 +803,33 @@ pub fn send_native_call_action<R: Runtime>(
     if !action_allowed(kind, input.action) {
         return Err("Azione non consentita per questa finestra".into());
     }
-    let reason = input.reason.map(|value| value.trim().to_owned());
-    if reason
-        .as_ref()
-        .is_some_and(|value| value.len() > 120 || value.chars().any(char::is_control))
+    let reason = validate_action_reason(input.reason)?;
+    let Some((profile_label, event)) =
+        state
+            .calls
+            .prepare_action(&session_id, input.action, reason)?
+    else {
+        return Ok(());
+    };
+    dispatch_remote_action_to_profile(&app, &profile_label, event)
+}
+
+#[tauri::command]
+pub fn close_native_call_window<R: Runtime>(
+    app: AppHandle<R>,
+    webview: WebviewWindow<R>,
+    input: CloseNativeCallWindowInput,
+) -> Result<(), String> {
+    let (kind, _) = parse_native_window_label(webview.label())?;
+    if input
+        .action
+        .is_some_and(|action| !action_allowed(kind, action))
     {
-        return Err("Motivo chiamata non valido".into());
+        return Err("Azione non consentita per questa finestra".into());
     }
-    dispatch_remote_action(
-        &app,
-        &state,
-        NativeCallActionEvent {
-            session_id,
-            action: input.action,
-            reason,
-        },
-    )
+    let reason = validate_action_reason(input.reason)?;
+    let _ = schedule_native_window_close(&app, webview.label(), input.action, reason)?;
+    Ok(())
 }
 
 pub fn handle_native_close_requested<R: Runtime>(app: &AppHandle<R>, label: &str) -> bool {
@@ -662,21 +845,19 @@ pub fn handle_native_close_requested<R: Runtime>(app: &AppHandle<R>, label: &str
         NativeWindowKind::Incoming => NativeCallAction::Reject,
         NativeWindowKind::Call => NativeCallAction::End,
     };
-    let _ = dispatch_remote_action(
+    match schedule_native_window_close(
         app,
-        &runtime,
-        NativeCallActionEvent {
-            session_id: session_id.clone(),
-            action,
-            reason: Some("native_window_closed".into()),
-        },
-    );
-    // Closing a media window is a local privacy boundary: stop its WebView and tracks
-    // immediately even when the network is unavailable. The backend request above is
-    // best-effort and persisted authority deterministically expires any failed delivery.
-    runtime.calls.clear_session(&session_id);
-    destroy_window(app, label);
-    true
+        label,
+        Some(action),
+        Some("native_window_closed".into()),
+    ) {
+        Ok(started) => started,
+        Err(_) => {
+            // If native state is unavailable, never trap the user in a media window.
+            runtime.calls.clear_session(&session_id);
+            false
+        }
+    }
 }
 
 pub fn destroy_all_call_windows<R: Runtime>(app: &AppHandle<R>) {
@@ -692,6 +873,69 @@ pub fn destroy_all_call_windows<R: Runtime>(app: &AppHandle<R>) {
         destroy_window(app, &label);
     }
     app.state::<DesktopRuntime>().calls.clear_all();
+}
+
+#[cfg(feature = "calls-qa-fixture")]
+pub fn install_qa_fixture<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    let call = NativeCallDescriptor {
+        session_id: "11111111-1111-4111-8111-111111111111".into(),
+        call_type: NativeCallType::Video,
+        direction: NativeCallDirection::Outgoing,
+        display_name: "Partecipante QA".into(),
+        guest_mode: false,
+        expires_at: None,
+    };
+    let runtime = app.state::<DesktopRuntime>();
+    runtime
+        .calls
+        .state
+        .lock()
+        .map_err(|_| "Lo stato della chiamata Desktop non è disponibile")?
+        .active = Some(RoutedCall {
+        call: call.clone(),
+        profile_window_label: "bootstrap".into(),
+        credentials: Some(LivekitCredentials {
+            server_url: "ws://127.0.0.1:9".into(),
+            access_token: "q".repeat(80),
+        }),
+        action_claimed: false,
+    });
+    build_call_window(app, &call)?;
+    if let Some(window) = app.get_webview_window(&call_label(&call.session_id)) {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+    Ok(())
+}
+
+#[cfg(feature = "calls-qa-fixture")]
+pub fn install_qa_incoming_fixture<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    let call = NativeCallDescriptor {
+        session_id: "22222222-2222-4222-8222-222222222222".into(),
+        call_type: NativeCallType::Audio,
+        direction: NativeCallDirection::Incoming,
+        display_name: "Partecipante QA".into(),
+        guest_mode: false,
+        expires_at: None,
+    };
+    let runtime = app.state::<DesktopRuntime>();
+    let mut native = runtime
+        .calls
+        .state
+        .lock()
+        .map_err(|_| "Lo stato della chiamata Desktop non è disponibile")?;
+    if native.active.is_some() || native.incoming.is_some() {
+        return Err("È già attiva una chiamata Desktop".into());
+    }
+    native.incoming = Some(RoutedCall {
+        call: call.clone(),
+        profile_window_label: "bootstrap".into(),
+        credentials: None,
+        action_claimed: false,
+    });
+    drop(native);
+    build_incoming_window(app, &call)
 }
 
 #[cfg(test)]
@@ -791,5 +1035,97 @@ mod tests {
             }
         });
         assert!(serde_json::from_value::<ShowIncomingCallInput>(malformed).is_err());
+    }
+
+    #[test]
+    fn terminal_native_actions_are_claimed_exactly_once() {
+        let manager = CallManager::new();
+        let call = descriptor(Uuid::new_v4().to_string());
+        let session_id = call.session_id.clone();
+        manager.install_incoming_for_test(call).unwrap();
+        let first = manager
+            .prepare_action(&session_id, NativeCallAction::Reject, None)
+            .unwrap();
+        let duplicate = manager
+            .prepare_action(&session_id, NativeCallAction::Reject, None)
+            .unwrap();
+        assert!(first.is_some());
+        assert!(duplicate.is_none());
+    }
+
+    #[test]
+    fn close_preparation_is_reentrant_safe_and_clears_native_state() {
+        let manager = CallManager::new();
+        let call = descriptor(Uuid::new_v4().to_string());
+        let session_id = call.session_id.clone();
+        manager.install_incoming_for_test(call).unwrap();
+        {
+            let mut state = manager.state.lock().unwrap();
+            state.active = state.incoming.take();
+        }
+
+        let first = manager
+            .begin_close(
+                NativeWindowKind::Call,
+                &session_id,
+                Some(NativeCallAction::End),
+                Some("native_window_closed".into()),
+            )
+            .unwrap();
+        let NativeClosePreparation::Started(plan) = first else {
+            panic!("first close must start");
+        };
+        assert_eq!(plan.profile_window_label.as_deref(), Some("remote-test"));
+        assert_eq!(
+            plan.event.as_ref().map(|event| event.action),
+            Some(NativeCallAction::End)
+        );
+        assert!(manager.state.lock().unwrap().active.is_none());
+
+        assert!(matches!(
+            manager
+                .begin_close(NativeWindowKind::Call, &session_id, None, None)
+                .unwrap(),
+            NativeClosePreparation::AlreadyClosing
+        ));
+        manager.finish_close(&plan.close_key);
+        let stale = manager
+            .begin_close(
+                NativeWindowKind::Call,
+                &session_id,
+                Some(NativeCallAction::End),
+                None,
+            )
+            .unwrap();
+        let NativeClosePreparation::Started(stale_plan) = stale else {
+            panic!("a stale native window must still be closable");
+        };
+        assert!(stale_plan.profile_window_label.is_none());
+        assert!(stale_plan.event.is_none());
+    }
+
+    #[test]
+    fn call_and_incoming_close_guards_are_window_specific() {
+        let manager = CallManager::new();
+        let call = descriptor(Uuid::new_v4().to_string());
+        let session_id = call.session_id.clone();
+        manager.install_incoming_for_test(call.clone()).unwrap();
+        {
+            let mut state = manager.state.lock().unwrap();
+            let incoming = state.incoming.as_ref().unwrap().clone();
+            state.active = Some(incoming);
+        }
+        assert!(matches!(
+            manager
+                .begin_close(NativeWindowKind::Call, &session_id, None, None)
+                .unwrap(),
+            NativeClosePreparation::Started(_)
+        ));
+        assert!(matches!(
+            manager
+                .begin_close(NativeWindowKind::Incoming, &session_id, None, None)
+                .unwrap(),
+            NativeClosePreparation::Started(_)
+        ));
     }
 }

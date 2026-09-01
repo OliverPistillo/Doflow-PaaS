@@ -6,7 +6,9 @@
   "platforms": ["windows"],
   "permissions": [
     "core:event:default",
+    "core:window:allow-close",
     "allow-get-native-call-context",
-    "allow-send-native-call-action"
+    "allow-send-native-call-action",
+    "allow-close-native-call-window"
   ]
 }

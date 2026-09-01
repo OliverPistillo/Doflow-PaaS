@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Copy, Link2, Phone, Video } from "lucide-react";
+import { useRef, useState } from "react";
+import { Copy, Link2, LoaderCircle, Phone, Video } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { useDesktopCalls } from "./desktop-calls-provider";
 import type { DoflowCallContext, DoflowCallType } from "./doflow-calls-api";
+
+const DESKTOP_CALL_ACTION_CLASS = "cursor-pointer border-primary/25 transition-[color,background-color,border-color,box-shadow,transform] hover:-translate-y-px hover:border-primary/60 hover:bg-primary/10 hover:text-primary hover:shadow-sm active:translate-y-px active:scale-[0.98] focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-45 motion-reduce:transform-none";
 
 export function DesktopMeetingAction({
   context,
@@ -25,16 +27,22 @@ export function DesktopMeetingAction({
 }) {
   const calls = useDesktopCalls();
   const [busy, setBusy] = useState(false);
+  const pending = useRef(false);
   const [url, setUrl] = useState<string | null>(null);
   const ActionIcon = callIcon ? (type === "audio" ? Phone : Video) : Link2;
   if (!calls.guestAvailable) return null;
 
   const create = async () => {
-    if (busy) return;
+    if (pending.current) return;
+    pending.current = true;
     setBusy(true);
-    const invite = await calls.createGuestMeeting({ type, ...(context ? { context } : {}) });
-    setBusy(false);
-    if (invite) setUrl(invite.url);
+    try {
+      const invite = await calls.createGuestMeeting({ type, ...(context ? { context } : {}) });
+      if (invite) setUrl(invite.url);
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
   };
   const copy = async () => {
     if (!url) return;
@@ -51,8 +59,8 @@ export function DesktopMeetingAction({
 
   return (
     <>
-      <Button size={compact ? "icon-sm" : "sm"} variant="outline" aria-label={label} disabled={busy} onClick={() => void create()}>
-        <ActionIcon />{compact ? null : (busy ? "Creazione…" : label)}
+      <Button className={DESKTOP_CALL_ACTION_CLASS} size={compact ? "icon-sm" : "sm"} variant="outline" aria-label={busy ? "Creazione link riunione" : label} aria-busy={busy} title={label} disabled={busy} onClick={() => void create()}>
+        {busy ? <LoaderCircle className="animate-spin motion-reduce:animate-none" /> : <ActionIcon />}{compact ? null : label}
       </Button>
       <Dialog open={Boolean(url)} onOpenChange={(open) => { if (!open) setUrl(null); }}>
         <DialogContent className="sm:max-w-lg">

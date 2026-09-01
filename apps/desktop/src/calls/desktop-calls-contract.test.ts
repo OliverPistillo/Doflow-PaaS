@@ -33,13 +33,15 @@ describe("native Desktop Calls contract", () => {
     expect(local.windows).toEqual(["call-*", "incoming-*"]);
     expect(local.permissions).toEqual([
       "core:event:default",
+      "core:window:allow-close",
       "allow-get-native-call-context",
       "allow-send-native-call-action",
+      "allow-close-native-call-window",
     ]);
   });
 
   it("supports media cleanup, reconnect feedback, device changes and screen-share restoration", () => {
-    const window = read("src/calls/CallWindow.tsx");
+    const window = read("src/calls/LiveKitCallRuntime.tsx");
     for (const contract of [
       /RoomEvent\.Reconnecting/,
       /RoomEvent\.Reconnected/,
@@ -50,8 +52,40 @@ describe("native Desktop Calls contract", () => {
       /switchActiveDevice/,
       /publication\.track\?\.stop\(\)/,
       /restoreCameraPreview/,
-      /nativeCallWindow\.sendAction\(\{ action: failed \? "failed" : "end"/,
+      /api\.close\(\{ action: failed \? "failed" : "end"/,
     ]) expect(window).toMatch(contract);
+  });
+
+  it("renders the call shell synchronously and isolates the LiveKit runtime behind an error boundary", () => {
+    const entry = read("src/main.tsx");
+    const shell = read("src/calls/CallWindow.tsx");
+    expect(entry).toContain('import { CallWindow } from "./calls/CallWindow"');
+    expect(entry).not.toMatch(/lazy\(\(\) => import\("\.\/calls\/CallWindow"/);
+    expect(shell).toContain('import("./LiveKitCallRuntime")');
+    expect(shell).toContain("class CallRuntimeBoundary");
+    expect(shell).toContain("Impossibile avviare la chiamata");
+    expect(shell).toContain("desktop_renderer_failed");
+    expect(shell).toContain("api.close");
+  });
+
+  it("closes native media windows outside CloseRequested with a re-entrancy guard", () => {
+    const manager = read("src-tauri/src/call_manager.rs");
+    expect(manager).toContain("closing_sessions: HashSet<String>");
+    expect(manager).toContain("schedule_native_window_close");
+    expect(manager).toContain("tokio::task::yield_now().await");
+    expect(manager).toContain("destroy_window(&close_app, &close_label)");
+    expect(manager.indexOf("destroy_window(&close_app, &close_label)")).toBeLessThan(manager.indexOf("dispatch_remote_action_to_profile(&notify_app"));
+    expect(manager).toContain("spawn_blocking");
+  });
+
+  it("keeps packaged regression fixtures compile-time gated and disabled by default", () => {
+    const manifest = read("src-tauri/Cargo.toml");
+    const manager = read("src-tauri/src/call_manager.rs");
+    const runtime = read("src-tauri/src/lib.rs");
+    expect(manifest).toMatch(/\[features\][\s\S]*default = \[\][\s\S]*calls-qa-fixture = \[\]/);
+    expect(manager).toMatch(/#\[cfg\(feature = "calls-qa-fixture"\)\][\s\S]*install_qa_fixture/);
+    expect(manager).toMatch(/#\[cfg\(feature = "calls-qa-fixture"\)\][\s\S]*install_qa_incoming_fixture/);
+    expect(runtime).toContain('#[cfg(feature = "calls-qa-fixture")]');
   });
 
   it("allows secure LiveKit transports from bundled windows without broad native APIs", () => {

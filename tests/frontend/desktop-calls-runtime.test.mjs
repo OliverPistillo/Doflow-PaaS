@@ -66,3 +66,29 @@ test("CRM actions map only real supported record kinds", () => {
   assert.match(opportunity, /kind: "opportunity"/);
   assert.match(opportunity, /DesktopUserCallActions[\s\S]*userId=\{opportunity\.assigned_to\}/);
 });
+
+test("Desktop call actions expose clear hover, pressed, focus and single-submit feedback", () => {
+  const teamActions = read("apps/frontend/src/features/chat/team-space-call-ui.tsx");
+  const userActions = read("apps/frontend/src/features/calls/desktop-user-call-action.tsx");
+  const meetingAction = read("apps/frontend/src/features/calls/desktop-meeting-action.tsx");
+  for (const source of [teamActions, userActions, meetingAction]) {
+    assert.match(source, /cursor-pointer/);
+    assert.match(source, /hover:-translate-y-px/);
+    assert.match(source, /active:scale-\[0\.98\]/);
+    assert.match(source, /focus-visible:ring-primary\/50/);
+    assert.match(source, /aria-busy=/);
+    assert.match(source, /LoaderCircle/);
+    assert.match(source, /pending\.current/);
+    assert.match(source, /disabled:opacity-45/);
+  }
+  assert.match(teamActions, /conversation\.kind !== "direct"/);
+  assert.match(teamActions, /internalAvailable = Boolean\(recipientId && calls\.available\)/);
+  assert.match(teamActions, /meetingAvailable = !internalAvailable && calls\.guestAvailable/);
+  assert.match(teamActions, /if \(!internalAvailable && !meetingAvailable\) return null/);
+});
+
+test("a local renderer failure remains visible while backend state is finalized", () => {
+  assert.match(provider, /locallyFailedWindowsRef/);
+  assert.match(provider, /event\.action === "failed"[\s\S]*locallyFailedWindowsRef\.current\.add\(event\.sessionId\)[\s\S]*doflowCallsApi\.fail/);
+  assert.match(provider, /preserveFailureSurface[\s\S]*!preserveFailureSurface[\s\S]*closeDesktopCall/);
+});

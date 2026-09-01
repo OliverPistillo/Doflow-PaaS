@@ -35,6 +35,50 @@ pub fn run() {
             let updater = UpdateManager::new(app_data_dir, app.package_info().version.to_string());
             app.manage(DesktopRuntime::new(profiles, updater, preferences));
             tray::setup(app.handle())?;
+            #[cfg(feature = "calls-qa-fixture")]
+            {
+                let qa_app = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(350)).await;
+                    let create_app = qa_app.clone();
+                    let _ = qa_app.run_on_main_thread(move || {
+                        let status = match call_manager::install_qa_fixture(&create_app) {
+                            Ok(()) => "started",
+                            Err(_) => "failed",
+                        };
+                        if let Some(bootstrap) = create_app.get_webview_window("bootstrap") {
+                            let _ = bootstrap.eval(format!(
+                                "document.body.dataset.callsQaFixture = {status:?};"
+                            ));
+                            let _ = bootstrap.set_title(&format!("Doflow Calls QA — {status}"));
+                            if status == "started" {
+                                let _ = bootstrap.hide();
+                                let incoming_app = create_app.clone();
+                                tauri::async_runtime::spawn(async move {
+                                    for _ in 0..120 {
+                                        tokio::time::sleep(std::time::Duration::from_millis(250))
+                                            .await;
+                                        if incoming_app
+                                            .webview_windows()
+                                            .keys()
+                                            .any(|label| label.starts_with("call-"))
+                                        {
+                                            continue;
+                                        }
+                                        let create_incoming = incoming_app.clone();
+                                        let _ = incoming_app.run_on_main_thread(move || {
+                                            let _ = call_manager::install_qa_incoming_fixture(
+                                                &create_incoming,
+                                            );
+                                        });
+                                        break;
+                                    }
+                                });
+                            }
+                        }
+                    });
+                });
+            }
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -77,6 +121,7 @@ pub fn run() {
             call_manager::close_desktop_call,
             call_manager::get_native_call_context,
             call_manager::send_native_call_action,
+            call_manager::close_native_call_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Doflow Desktop");

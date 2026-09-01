@@ -113,6 +113,14 @@ Gli eventi webhook hanno una chiave unica; la timeline ha una riga di dedupe per
 
 La versione ufficiale del plugin Tauri in uso espone notifiche Windows come richiamo, ma non garantisce callback portabili per azioni native Rispondi/Rifiuta. Le azioni autorevoli restano quindi nella finestra incoming compatta, sempre focalizzata durante il ringing; non viene simulato un supporto notification-action inesistente.
 
+## Fail-safe della finestra Desktop
+
+La shell `Doflow Calls` fa parte del bundle iniziale e viene renderizzata prima del runtime LiveKit. Solo il runtime media è caricato separatamente: un errore di import, contesto nativo, permessi o inizializzazione resta quindi una superficie leggibile e chiudibile, con un codice locale redatto. Il fallimento viene proiettato una sola volta sull'autorità backend; la finestra di errore resta visibile finché l'utente la chiude.
+
+La chiusura nativa rimuove prima credenziali e stato in memoria, poi distrugge la WebView fuori dall'handler `CloseRequested`; la notifica al profilo remoto è best-effort e non può trattenere il confine di privacy locale. Un guard per label rende idempotenti X, doppi eventi e distruzioni ripetute. Le track vengono fermate e scollegate prima di un `disconnect` LiveKit limitato nel tempo.
+
+Il feature flag Cargo `calls-qa-fixture` è disabilitato per default e serve esclusivamente a test packaged locali: usa una sessione fissa non production, un bearer sintetico e un endpoint loopback irraggiungibile per verificare il fallback senza aprire room o usare credenziali reali. Non espone comandi aggiuntivi nella release normale.
+
 ## Sviluppo locale
 
 1. Installare le dipendenze con il lockfile (`pnpm install --frozen-lockfile`).

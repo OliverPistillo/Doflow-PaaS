@@ -111,6 +111,7 @@ export function DesktopCallsProvider({ children }: { children: React.ReactNode }
   const outgoingRef = useRef<DoflowCall | null>(null);
   const openingRef = useRef(new Set<string>());
   const openedRef = useRef(new Set<string>());
+  const locallyFailedWindowsRef = useRef(new Set<string>());
   const refreshTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const refreshCredentialRef = useRef<(callId: string) => void>(() => undefined);
 
@@ -178,10 +179,13 @@ export function DesktopCallsProvider({ children }: { children: React.ReactNode }
     clearRefresh(call.callId);
     openedRef.current.delete(call.callId);
     openingRef.current.delete(call.callId);
-    await Promise.allSettled([
-      closeDesktopCall(call.callId),
-      dismissIncomingDesktopCall(call.callId),
-    ]);
+    const preserveFailureSurface = call.status === "failed" && locallyFailedWindowsRef.current.has(call.callId);
+    const closeOperations: Promise<unknown>[] = [dismissIncomingDesktopCall(call.callId)];
+    if (!preserveFailureSurface) {
+      locallyFailedWindowsRef.current.delete(call.callId);
+      closeOperations.push(closeDesktopCall(call.callId));
+    }
+    await Promise.allSettled(closeOperations);
     setCurrentCall((current) => current?.callId === call.callId ? null : current);
     setOutgoingCall((current) => current?.callId === call.callId ? null : current);
     if (call.status === "missed") toast.info("Chiamata persa");
@@ -314,6 +318,7 @@ export function DesktopCallsProvider({ children }: { children: React.ReactNode }
             const call = await doflowCallsApi.cancel(event.sessionId, deviceId);
             await closeCallState(call);
           } else if (event.action === "failed") {
+            locallyFailedWindowsRef.current.add(event.sessionId);
             const call = await doflowCallsApi.fail(event.sessionId, deviceId, event.reason);
             await closeCallState(call);
           } else if (event.action === "end") {
@@ -332,6 +337,7 @@ export function DesktopCallsProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => () => {
     for (const timer of refreshTimersRef.current.values()) clearTimeout(timer);
+    locallyFailedWindowsRef.current.clear();
     const deviceId = deviceRef.current;
     if (deviceId) void doflowCallsApi.disconnect(deviceId).catch(() => undefined);
   }, []);

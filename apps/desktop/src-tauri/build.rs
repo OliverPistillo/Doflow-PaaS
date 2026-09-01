@@ -25,6 +25,7 @@ fn main() {
         "close_desktop_call",
         "get_native_call_context",
         "send_native_call_action",
+        "close_native_call_window",
     ];
 
     tauri_build::try_build(

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-close-native-call-window"
+description = "Enables the close_native_call_window command without any pre-configured scope."
+commands.allow = ["close_native_call_window"]
+
+[[permission]]
+identifier = "deny-close-native-call-window"
+description = "Denies the close_native_call_window command without any pre-configured scope."
+commands.deny = ["close_native_call_window"]

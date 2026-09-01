@@ -34,6 +34,11 @@ export interface NativeCallActionPayload {
   reason?: string;
 }
 
+export interface NativeCallClosePayload {
+  action?: NativeCallAction;
+  reason?: string;
+}
+
 export interface DesktopCallCapabilities {
   schemaVersion: number;
   capabilities: string[];
