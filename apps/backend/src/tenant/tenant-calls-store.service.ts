@@ -102,6 +102,31 @@ function metadata(row: TenantCallRow): Record<string, unknown> {
   try { return JSON.parse(row.metadata) as Record<string, unknown>; } catch { return {}; }
 }
 
+export function returnedRows<T extends object>(result: unknown, operation: string): T[] {
+  if (!Array.isArray(result)) {
+    throw new Error(`${operation}: risultato DML non valido`);
+  }
+  let rows: unknown[] = result;
+  if (result.length === 2 && Array.isArray(result[0])) {
+    if (typeof result[1] !== 'number') {
+      throw new Error(`${operation}: risultato DML non valido`);
+    }
+    rows = result[0];
+  }
+  if (rows.some((row) => !row || typeof row !== 'object' || Array.isArray(row))) {
+    throw new Error(`${operation}: risultato DML non valido`);
+  }
+  return rows as T[];
+}
+
+export function requireReturnedRow<T extends object>(result: unknown, operation: string): T {
+  const row = returnedRows<T>(result, operation)[0];
+  if (!row) {
+    throw new Error(`${operation}: nessuna riga restituita`);
+  }
+  return row;
+}
+
 @Injectable()
 export class TenantCallsStoreService {
   constructor(
@@ -190,11 +215,11 @@ export class TenantCallsStoreService {
         await this.audit(manager, schema, row.id, 'call_activity_projection_unavailable', null, `activity-unavailable:${row.id}`);
         return;
       }
-      const claimed = await manager.query(
+      const claimed = returnedRows<{ call_id: string }>(await manager.query(
         `INSERT INTO "${schema}".tenant_call_activities(call_id,recorded_at)
          VALUES ($1,now()) ON CONFLICT (call_id) DO NOTHING RETURNING call_id`,
         [row.id],
-      );
+      ), 'claim call activity');
       if (!claimed[0]) {
         await manager.query('RELEASE SAVEPOINT doflow_call_activity_projection');
         return;
@@ -205,7 +230,7 @@ export class TenantCallsStoreService {
         : {}) as Record<string, unknown>;
       const otherName = String(details.guestDisplayName || details.calleeName || 'partecipante Doflow');
       const title = `${row.call_type === 'video' ? 'Videochiamata' : 'Audiochiamata'} con ${otherName}`;
-      const activities = await manager.query(
+      const activity = requireReturnedRow<{ id: string }>(await manager.query(
         `INSERT INTO "${schema}".commercial_activities (
            company_id,contact_id,opportunity_id,project_id,type,title,description,
            completed_at,created_by,updated_by,channel,direction,status,outcome,metadata,
@@ -232,10 +257,10 @@ export class TenantCallsStoreService {
             guest: Boolean(row.guest_mode),
           }),
         ],
-      );
+      ), 'create commercial call activity');
       await manager.query(
         `UPDATE "${schema}".tenant_call_activities SET activity_id=$2 WHERE call_id=$1`,
-        [row.id, activities[0]?.id || null],
+        [row.id, activity.id],
       );
       await manager.query('RELEASE SAVEPOINT doflow_call_activity_projection');
     } catch {
@@ -284,7 +309,7 @@ export class TenantCallsStoreService {
       const busy = locks.length > 0;
       const initialState: TenantCallState = busy ? 'busy' : input.guestMode ? 'accepted' : 'created';
       const expiresAt = input.guestMode ? guestExpires : ringExpires;
-      const rows = await manager.query(
+      const createdResult = await manager.query(
         `INSERT INTO "${schema}".tenant_call_sessions (
            conversation_id,room_key,status,created_by,caller_user_id,callee_user_id,
            call_type,created_at,ringing_at,accepted_at,expires_at,outcome,
@@ -318,7 +343,7 @@ export class TenantCallsStoreService {
           busy ? now : null,
         ],
       );
-      let created = rows[0] as TenantCallRow;
+      let created = requireReturnedRow<TenantCallRow>(createdResult, 'create call session');
       await this.audit(manager, schema, created.id, 'call_created', input.actorId, undefined, {
         callType: input.callType,
         guest: Boolean(input.guestMode),
@@ -342,13 +367,13 @@ export class TenantCallsStoreService {
       );
       if (!input.guestMode) {
         assertCallTransition('created', 'ringing');
-        const ringing = await manager.query(
+        const ringingResult = await manager.query(
           `UPDATE "${schema}".tenant_call_sessions
            SET status='ringing',ringing_at=now(),optimistic_version=optimistic_version+1,last_state_event_at=now()
            WHERE id=$1 RETURNING *`,
           [created.id],
         );
-        created = ringing[0] as TenantCallRow;
+        created = requireReturnedRow<TenantCallRow>(ringingResult, 'transition call to ringing');
         await this.audit(manager, schema, created.id, 'call_ringing', input.actorId);
       } else {
         await this.audit(manager, schema, created.id, 'call_accepted', input.actorId);
@@ -460,7 +485,7 @@ export class TenantCallsStoreService {
       const duration = terminal && startedAt
         ? Math.max(0, Math.floor((occurredAt.getTime() - startedAt.getTime()) / 1000))
         : null;
-      const updated = await manager.query(
+      const updatedResult = await manager.query(
         `UPDATE "${schema}".tenant_call_sessions SET
            status=$2,
            accepted_at=CASE WHEN $2='accepted' THEN COALESCE(accepted_at,$3) ELSE accepted_at END,
@@ -494,7 +519,7 @@ export class TenantCallsStoreService {
           options.reason || null,
         ],
       );
-      row = updated[0] as TenantCallRow;
+      row = requireReturnedRow<TenantCallRow>(updatedResult, `transition call to ${target}`);
       await this.audit(manager, schema, callId, `call_${target}`, actorId, options.eventKey, {
         reason: options.reason || null,
       });
@@ -539,13 +564,16 @@ export class TenantCallsStoreService {
       }
       if (row.status === 'accepted') {
         assertCallTransition('accepted', 'connecting');
-        const updated = await manager.query(
+        const updatedResult = await manager.query(
           `UPDATE "${schema}".tenant_call_sessions
            SET status='connecting',connecting_at=COALESCE(connecting_at,now()),optimistic_version=optimistic_version+1,last_state_event_at=now()
            WHERE id=$1 RETURNING *`,
           [callId],
         );
-        row = { ...updated[0], participant_name: row.participant_name };
+        row = {
+          ...requireReturnedRow<TenantCallRow>(updatedResult, 'transition participant call to connecting'),
+          participant_name: row.participant_name,
+        };
         await this.audit(manager, schema, callId, 'call_connecting', userId);
       }
       return row!;
@@ -576,23 +604,23 @@ export class TenantCallsStoreService {
         [callId, actorId],
       );
       if (!calls[0]) throw new ForbiddenException('Invito guest non autorizzato');
-      const rows = await manager.query(
+      const invite = requireReturnedRow<{ id: string; call_id: string; expires_at: Date | string }>(await manager.query(
         `INSERT INTO "${schema}".tenant_call_guest_invites
            (call_id,token_digest,created_by,created_at,expires_at)
          VALUES ($1,$2,$3,now(),$4) RETURNING id,call_id,expires_at`,
         [callId, digest, actorId, expiresAt],
-      );
+      ), 'create guest call invite');
       await manager.query(
         `INSERT INTO public.desktop_call_guest_invite_index
            (token_digest,tenant_schema,invite_id,created_at,expires_at)
          VALUES ($1,$2,$3,now(),$4)`,
-        [digest, schema, rows[0].id, expiresAt],
+        [digest, schema, invite.id, expiresAt],
       );
       await this.audit(manager, schema, callId, 'guest_invite_created', actorId, undefined, {
-        inviteId: rows[0].id,
+        inviteId: invite.id,
         expiresAt: expiresAt.toISOString(),
       });
-      return rows[0];
+      return invite;
     });
     return { ...invite, token, expiresAt: expiresAt.toISOString() };
   }
@@ -600,20 +628,21 @@ export class TenantCallsStoreService {
   async revokeGuestInvite(schemaValue: string, inviteId: string, actorId: string) {
     const schema = await this.ensure(schemaValue);
     return this.dataSource.transaction(async (manager) => {
-      const rows = await manager.query(
+      const revokedRows = returnedRows<{ id: string; call_id: string; revoked_at: Date | string }>(await manager.query(
         `UPDATE "${schema}".tenant_call_guest_invites i
          SET revoked_at=COALESCE(revoked_at,now())
          FROM "${schema}".tenant_call_sessions c
          WHERE i.id=$1 AND i.call_id=c.id AND c.caller_user_id=$2
          RETURNING i.id,i.call_id,i.revoked_at`,
         [inviteId, actorId],
-      );
-      if (!rows[0]) throw new ForbiddenException('Revoca invito non autorizzata');
+      ), 'revoke guest call invite');
+      const revoked = revokedRows[0];
+      if (!revoked) throw new ForbiddenException('Revoca invito non autorizzata');
       await manager.query(
         `UPDATE public.desktop_call_guest_invite_index SET revoked_at=COALESCE(revoked_at,now()) WHERE invite_id=$1`,
         [inviteId],
       );
-      await this.audit(manager, schema, rows[0].call_id, 'guest_invite_revoked', actorId, undefined, {
+      await this.audit(manager, schema, revoked.call_id, 'guest_invite_revoked', actorId, undefined, {
         inviteId,
       });
       return { inviteId, revoked: true };
@@ -738,13 +767,13 @@ export class TenantCallsStoreService {
     const identityHash = participantIdentity
       ? createHash('sha256').update(participantIdentity).digest('hex')
       : null;
-    const rows = await this.dataSource.query(
+    const inserted = returnedRows<{ event_id: string }>(await this.dataSource.query(
       `INSERT INTO "${schema}".tenant_call_webhook_events
          (event_id,call_id,event_type,participant_identity_hash,occurred_at,processed_at)
        VALUES ($1,$2,$3,$4,$5,now()) ON CONFLICT (event_id) DO NOTHING RETURNING event_id`,
       [eventId, callId, eventType, identityHash, occurredAt],
-    );
-    return rows.length > 0;
+    ), 'record LiveKit webhook event');
+    return inserted.length > 0;
   }
 
   async joinedParticipantCount(schemaValue: string, callId: string) {
