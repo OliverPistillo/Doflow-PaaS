@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#05070E" />
+    <title>Doflow Calls</title>
+    <style>
+      html, body, #root { width: 100%; height: 100%; margin: 0; background: #05070e; }
+      body { color: #f7f8ff; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+      .calls-static-shell { box-sizing: border-box; width: 100%; height: 100%; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at 50% 0%, #141a36 0, #080b17 46%, #05070e 100%); }
+      .calls-static-card { display: grid; justify-items: center; gap: 12px; max-width: 360px; text-align: center; }
+      .calls-static-card img { width: 116px; height: auto; }
+      .calls-static-card strong { font-size: 18px; letter-spacing: -0.02em; }
+      .calls-static-card span { color: #aeb5ce; font-size: 13px; line-height: 1.5; }
+      .calls-static-pulse { width: 28px; height: 28px; border: 2px solid #555f82; border-top-color: #8f7cff; border-radius: 50%; animation: calls-spin 900ms linear infinite; }
+      @keyframes calls-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .calls-static-pulse { animation: none; border-color: #8f7cff; } }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <main class="calls-static-shell" data-calls-static-shell role="status" aria-live="polite">
+        <section class="calls-static-card">
+          <img src="/src/assets/doflow-logo.svg" alt="Doflow" />
+          <div class="calls-static-pulse" aria-hidden="true"></div>
+          <strong>Doflow Calls</strong>
+          <span>Preparazione della finestra chiamata… Puoi chiuderla in ogni momento con la X.</span>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

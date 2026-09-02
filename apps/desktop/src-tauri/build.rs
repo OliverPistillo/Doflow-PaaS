@@ -24,6 +24,7 @@ fn main() {
         "update_desktop_call_credentials",
         "close_desktop_call",
         "get_native_call_context",
+        "native_call_window_ready",
         "send_native_call_action",
         "close_native_call_window",
     ];

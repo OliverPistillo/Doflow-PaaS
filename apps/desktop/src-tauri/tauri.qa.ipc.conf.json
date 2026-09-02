@@ -1,0 +1,20 @@
+{
+  "productName": "Doflow Calls QA",
+  "identifier": "it.doflow.desktop.calls-qa",
+  "build": {
+    "beforeBuildCommand": "pnpm build --mode calls-qa"
+  },
+  "app": {
+    "security": {
+      "capabilities": [
+        "bootstrap-local",
+        "doflow-remote",
+        "calls-local",
+        "calls-qa-driver"
+      ]
+    }
+  },
+  "bundle": {
+    "active": false
+  }
+}

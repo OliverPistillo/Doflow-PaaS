@@ -35,6 +35,7 @@ describe("native Desktop Calls contract", () => {
       "core:event:default",
       "core:window:allow-close",
       "allow-get-native-call-context",
+      "allow-native-call-window-ready",
       "allow-send-native-call-action",
       "allow-close-native-call-window",
     ]);
@@ -73,19 +74,46 @@ describe("native Desktop Calls contract", () => {
     expect(manager).toContain("closing_sessions: HashSet<String>");
     expect(manager).toContain("schedule_native_window_close");
     expect(manager).toContain("tokio::task::yield_now().await");
-    expect(manager).toContain("destroy_window(&close_app, &close_label)");
-    expect(manager.indexOf("destroy_window(&close_app, &close_label)")).toBeLessThan(manager.indexOf("dispatch_remote_action_to_profile(&notify_app"));
+    expect(manager).toContain("hide_window(app, label)");
+    expect(manager).toContain("schedule_destroy_window(&close_app, close_label.clone())");
+    const closePath = manager.slice(manager.indexOf("fn schedule_native_window_close"), manager.indexOf("#[tauri::command]"));
+    expect(closePath.indexOf("schedule_destroy_window(&close_app, close_label.clone())")).toBeLessThan(closePath.indexOf("dispatch_remote_action_to_profile(&notify_app"));
     expect(manager).toContain("spawn_blocking");
+  });
+
+  it("defers secondary WebView creation and gates visibility on a local ready handshake", () => {
+    const manager = read("src-tauri/src/call_manager.rs");
+    const local = JSON.parse(read("src-tauri/capabilities/calls-local.json"));
+    expect(manager).toMatch(/pub async fn show_incoming_desktop_call/);
+    expect(manager).toMatch(/pub async fn open_desktop_call/);
+    expect(manager).toContain("build_window_after_ipc");
+    expect(manager).toContain("run_on_main_thread");
+    expect(manager).toContain("WINDOW_BUILD_TIMEOUT");
+    expect(manager).toContain("RENDERER_READY_TIMEOUT");
+    expect(manager).toContain("WebviewUrl::App(\"calls.html\".into())");
+    expect(manager).toContain(".visible(false)");
+    expect(manager).toContain("native_call_window_ready");
+    expect(local.permissions).toContain("allow-native-call-window-ready");
+    expect(read("calls.html")).toContain("data-calls-static-shell");
   });
 
   it("keeps packaged regression fixtures compile-time gated and disabled by default", () => {
     const manifest = read("src-tauri/Cargo.toml");
     const manager = read("src-tauri/src/call_manager.rs");
     const runtime = read("src-tauri/src/lib.rs");
+    const releaseConfig = JSON.parse(read("src-tauri/tauri.release.conf.json"));
+    const productionConfig = JSON.parse(read("src-tauri/tauri.conf.json"));
+    const qaDriver = JSON.parse(read("src-tauri/capabilities/calls-qa-driver.json"));
     expect(manifest).toMatch(/\[features\][\s\S]*default = \[\][\s\S]*calls-qa-fixture = \[\]/);
-    expect(manager).toMatch(/#\[cfg\(feature = "calls-qa-fixture"\)\][\s\S]*install_qa_fixture/);
-    expect(manager).toMatch(/#\[cfg\(feature = "calls-qa-fixture"\)\][\s\S]*install_qa_incoming_fixture/);
+    expect(manager).toMatch(/#\[cfg\(feature = "calls-qa-fixture"\)\][\s\S]*install_qa_ipc_fixture/);
     expect(runtime).toContain('#[cfg(feature = "calls-qa-fixture")]');
+    expect(productionConfig.app.security.capabilities).not.toContain("calls-qa-driver");
+    expect(JSON.stringify(releaseConfig)).not.toContain("calls-qa-driver");
+    expect(qaDriver.windows).toEqual(["bootstrap"]);
+    expect(qaDriver.permissions).toEqual([
+      "allow-show-incoming-desktop-call",
+      "allow-open-desktop-call",
+    ]);
   });
 
   it("allows secure LiveKit transports from bundled windows without broad native APIs", () => {

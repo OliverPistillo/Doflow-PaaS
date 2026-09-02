@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CallWindow } from "./CallWindow";
@@ -26,6 +26,7 @@ const context: NativeCallContext = {
 function nativeApi(overrides: Partial<NativeCallWindowApi> = {}): NativeCallWindowApi {
   return {
     getContext: vi.fn().mockResolvedValue(context),
+    ready: vi.fn().mockResolvedValue(undefined),
     sendAction: vi.fn().mockResolvedValue(undefined),
     close: vi.fn().mockResolvedValue(undefined),
     onContextUpdated: vi.fn().mockResolvedValue(() => undefined),
@@ -66,13 +67,16 @@ describe("fail-safe Desktop call window", () => {
     expect(container.textContent).toContain("Preparazione chiamata");
     expect(container.querySelector("[data-call-shell=preparing]")).not.toBeNull();
     expect(container.querySelector<HTMLButtonElement>("button")?.disabled).toBe(false);
+    expect(api.ready).not.toHaveBeenCalled();
   });
 
   it("loads the dedicated runtime after the safe shell", async () => {
     const Runtime = () => <div data-test-runtime="ready">Runtime pronto</div>;
-    act(() => root.render(<CallWindow api={nativeApi()} runtimeLoader={async () => ({ LiveKitCallRuntime: Runtime })} />));
+    const api = nativeApi();
+    act(() => root.render(<CallWindow api={api} runtimeLoader={async () => ({ LiveKitCallRuntime: Runtime })} />));
     await flush();
     expect(container.querySelector("[data-test-runtime=ready]")?.textContent).toBe("Runtime pronto");
+    expect(api.ready).toHaveBeenCalledTimes(1);
   });
 
   it("turns a rejected runtime chunk into a visible, closable error exactly once", async () => {
@@ -87,6 +91,7 @@ describe("fail-safe Desktop call window", () => {
     act(() => { close.click(); close.click(); });
     expect(api.close).toHaveBeenCalledTimes(1);
     expect(api.sendAction).toHaveBeenCalledTimes(1);
+    expect(api.ready).toHaveBeenCalledTimes(1);
   });
 
   it("catches a React runtime exception without exposing its stack", async () => {
@@ -116,6 +121,18 @@ describe("fail-safe Desktop call window", () => {
     ));
     await flush();
     expect(container.textContent).toContain("media_credentials_missing");
+  });
+
+  it("reports renderer readiness once under StrictMode", async () => {
+    const Runtime = () => <div>Runtime pronto</div>;
+    const api = nativeApi();
+    act(() => root.render(
+      <StrictMode>
+        <CallWindow api={api} runtimeLoader={async () => ({ LiveKitCallRuntime: Runtime })} />
+      </StrictMode>,
+    ));
+    await flush();
+    expect(api.ready).toHaveBeenCalledTimes(1);
   });
 
   it("stops every local track and bounds a stuck LiveKit disconnect", async () => {

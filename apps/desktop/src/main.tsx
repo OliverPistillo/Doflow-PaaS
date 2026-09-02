@@ -5,9 +5,13 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import App from "./App";
 import { CallWindow } from "./calls/CallWindow";
 import { IncomingCallWindow } from "./calls/IncomingCallWindow";
+import { resolveDesktopSurface } from "./calls/window-routing";
 import "./styles.css";
 
 const root = createRoot(document.getElementById("root")!);
+const native = isTauri();
+const surface = resolveDesktopSurface(native, native ? getCurrentWindow().label : "bootstrap");
+document.documentElement.dataset.doflowRenderer = surface;
 
 if (import.meta.env.DEV && import.meta.env.VITE_DESKTOP_QA === "1") {
   void import("./qa/AcceptanceFixture").then(({ AcceptanceFixture }) => {
@@ -17,13 +21,13 @@ if (import.meta.env.DEV && import.meta.env.VITE_DESKTOP_QA === "1") {
       </StrictMode>,
     );
   });
-} else if (isTauri() && getCurrentWindow().label.startsWith("incoming-")) {
+} else if (surface === "incoming") {
   root.render(
     <StrictMode>
       <IncomingCallWindow />
     </StrictMode>,
   );
-} else if (isTauri() && getCurrentWindow().label.startsWith("call-")) {
+} else if (surface === "call") {
   root.render(
     <StrictMode>
       <CallWindow />

@@ -9,6 +9,7 @@ async function closeCurrentWindowFallback() {
 
 export const nativeCallWindow = {
   getContext: () => invoke<NativeCallContext>("get_native_call_context"),
+  ready: () => invoke<void>("native_call_window_ready"),
   sendAction: (input: NativeCallActionPayload) => invoke<void>("send_native_call_action", { input }),
   close: async (input: NativeCallClosePayload = {}) => {
     try {

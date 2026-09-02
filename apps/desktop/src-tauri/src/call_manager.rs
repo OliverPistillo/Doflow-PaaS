@@ -1,11 +1,20 @@
 use crate::{commands::assert_remote_caller, models::BRIDGE_VERSION, runtime::DesktopRuntime};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, sync::Mutex};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{
+        atomic::{AtomicBool, AtomicU8, Ordering},
+        Arc, Mutex,
+    },
+    time::Duration,
+};
 use tauri::{
-    utils::config::WebviewUrl, webview::WebviewWindowBuilder, AppHandle, Emitter, Manager, Runtime,
-    State, WebviewWindow,
+    utils::config::WebviewUrl,
+    webview::{PageLoadEvent, WebviewWindowBuilder},
+    AppHandle, Emitter, Manager, Runtime, State, WebviewWindow,
 };
 use tauri_plugin_notification::NotificationExt;
+use tokio::sync::{oneshot, watch};
 use url::Url;
 use uuid::Uuid;
 
@@ -13,6 +22,12 @@ const CALL_LABEL_PREFIX: &str = "call-";
 const INCOMING_LABEL_PREFIX: &str = "incoming-";
 const CALL_CONTEXT_UPDATED_EVENT: &str = "desktop://call-context-updated";
 const REMOTE_ACTION_EVENT: &str = "doflow:desktop-call-action";
+const WINDOW_BUILD_TIMEOUT: Duration = Duration::from_secs(5);
+const RENDERER_READY_TIMEOUT: Duration = Duration::from_secs(5);
+
+const DEFERRED_QUEUED: u8 = 0;
+const DEFERRED_STARTED: u8 = 1;
+const DEFERRED_CANCELLED: u8 = 2;
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -141,11 +156,28 @@ struct RoutedCall {
     action_claimed: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RendererLifecycle {
+    Pending,
+    Ready,
+    Cancelled,
+}
+
+#[derive(Debug)]
+struct WindowLaunch {
+    kind: NativeWindowKind,
+    session_id: String,
+    lifecycle: watch::Sender<RendererLifecycle>,
+    local_page_started: bool,
+    local_page_finished: bool,
+}
+
 #[derive(Debug, Default)]
 struct NativeCallState {
     incoming: Option<RoutedCall>,
     active: Option<RoutedCall>,
     closing_sessions: HashSet<String>,
+    window_launches: HashMap<String, WindowLaunch>,
 }
 
 #[derive(Debug)]
@@ -169,6 +201,158 @@ pub struct CallManager {
 impl CallManager {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    fn begin_window_launch(
+        &self,
+        kind: NativeWindowKind,
+        session_id: &str,
+    ) -> Result<watch::Receiver<RendererLifecycle>, String> {
+        let label = kind.label(session_id);
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| "Lo stato della chiamata Desktop non è disponibile")?;
+        let routed = match kind {
+            NativeWindowKind::Call => state.active.as_ref(),
+            NativeWindowKind::Incoming => state.incoming.as_ref(),
+        }
+        .filter(|entry| entry.call.session_id == session_id)
+        .ok_or("Il contesto della chiamata non è più disponibile")?;
+        if routed.call.session_id != session_id {
+            return Err("Il contesto della chiamata non è più disponibile".into());
+        }
+        if let Some(existing) = state.window_launches.get(&label) {
+            if existing.kind != kind || existing.session_id != session_id {
+                return Err("La finestra chiamata è associata a una sessione diversa".into());
+            }
+            return Ok(existing.lifecycle.subscribe());
+        }
+        let (lifecycle, receiver) = watch::channel(RendererLifecycle::Pending);
+        state.window_launches.insert(
+            label,
+            WindowLaunch {
+                kind,
+                session_id: session_id.to_owned(),
+                lifecycle,
+                local_page_started: false,
+                local_page_finished: false,
+            },
+        );
+        Ok(receiver)
+    }
+
+    fn record_local_page_load(
+        &self,
+        label: &str,
+        event: PageLoadEvent,
+        is_calls_page: bool,
+    ) -> bool {
+        if !is_calls_page {
+            return false;
+        }
+        if let Ok(mut state) = self.state.lock() {
+            let Some(launch) = state.window_launches.get_mut(label) else {
+                return false;
+            };
+            match event {
+                PageLoadEvent::Started => launch.local_page_started = true,
+                PageLoadEvent::Finished => {
+                    launch.local_page_started = true;
+                    launch.local_page_finished = true;
+                }
+            }
+            return true;
+        }
+        false
+    }
+
+    fn mark_renderer_ready(&self, label: &str) -> Result<bool, String> {
+        let (kind, session_id) = parse_native_window_label(label)?;
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| "Lo stato della chiamata Desktop non è disponibile")?;
+        let routed = match kind {
+            NativeWindowKind::Call => state.active.as_ref(),
+            NativeWindowKind::Incoming => state.incoming.as_ref(),
+        }
+        .filter(|entry| entry.call.session_id == session_id)
+        .ok_or("Il contesto della chiamata non è più disponibile")?;
+        if routed.call.session_id != session_id {
+            return Err("Il contesto della chiamata non è più disponibile".into());
+        }
+        let launch = state
+            .window_launches
+            .get(label)
+            .filter(|entry| entry.kind == kind && entry.session_id == session_id)
+            .ok_or("La finestra chiamata non è in fase di avvio")?;
+        if !launch.local_page_started && !launch.local_page_finished {
+            return Err("La pagina locale della chiamata non è stata caricata".into());
+        }
+        let was_ready = *launch.lifecycle.borrow() == RendererLifecycle::Ready;
+        if !was_ready {
+            launch.lifecycle.send_replace(RendererLifecycle::Ready);
+        }
+        Ok(!was_ready)
+    }
+
+    fn launch_is(&self, label: &str, expected: RendererLifecycle) -> bool {
+        self.state
+            .lock()
+            .ok()
+            .and_then(|state| {
+                state
+                    .window_launches
+                    .get(label)
+                    .map(|launch| *launch.lifecycle.borrow())
+            })
+            .is_some_and(|lifecycle| lifecycle == expected)
+    }
+
+    fn has_window_launch(&self, label: &str) -> bool {
+        self.state
+            .lock()
+            .is_ok_and(|state| state.window_launches.contains_key(label))
+    }
+
+    fn rollback_window_launch(
+        &self,
+        kind: NativeWindowKind,
+        session_id: &str,
+    ) -> Result<Option<(String, NativeCallActionEvent)>, String> {
+        let label = kind.label(session_id);
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| "Lo stato della chiamata Desktop non è disponibile")?;
+        if let Some(launch) = state.window_launches.remove(&label) {
+            launch.lifecycle.send_replace(RendererLifecycle::Cancelled);
+        }
+        state.closing_sessions.remove(&label);
+        let routed = match kind {
+            NativeWindowKind::Incoming => state
+                .incoming
+                .take_if(|entry| entry.call.session_id == session_id),
+            NativeWindowKind::Call => state
+                .active
+                .take_if(|entry| entry.call.session_id == session_id),
+        };
+        if kind == NativeWindowKind::Incoming {
+            return Ok(None);
+        }
+        Ok(routed.and_then(|entry| {
+            (!entry.action_claimed).then(|| {
+                (
+                    entry.profile_window_label,
+                    NativeCallActionEvent {
+                        session_id: session_id.to_owned(),
+                        action: NativeCallAction::Failed,
+                        reason: Some("desktop_window_unavailable".into()),
+                    },
+                )
+            })
+        }))
     }
 
     fn context_for_label(&self, label: &str) -> Result<NativeCallContext, String> {
@@ -260,6 +444,9 @@ impl CallManager {
                 .incoming
                 .take_if(|entry| entry.call.session_id == session_id),
         };
+        if let Some(launch) = state.window_launches.remove(&close_key) {
+            launch.lifecycle.send_replace(RendererLifecycle::Cancelled);
+        }
         let profile_window_label = routed
             .as_ref()
             .map(|entry| entry.profile_window_label.clone());
@@ -307,6 +494,13 @@ impl CallManager {
             {
                 state.active = None;
             }
+            let labels = [call_label(session_id), incoming_label(session_id)];
+            for label in labels {
+                if let Some(launch) = state.window_launches.remove(&label) {
+                    launch.lifecycle.send_replace(RendererLifecycle::Cancelled);
+                }
+                state.closing_sessions.remove(&label);
+            }
         }
     }
 
@@ -315,6 +509,9 @@ impl CallManager {
             state.incoming = None;
             state.active = None;
             state.closing_sessions.clear();
+            for (_, launch) in state.window_launches.drain() {
+                launch.lifecycle.send_replace(RendererLifecycle::Cancelled);
+            }
         }
     }
 
@@ -343,6 +540,56 @@ impl CallManager {
 enum NativeWindowKind {
     Call,
     Incoming,
+}
+
+impl NativeWindowKind {
+    fn label(self, session_id: &str) -> String {
+        match self {
+            Self::Call => call_label(session_id),
+            Self::Incoming => incoming_label(session_id),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NativeWindowBuild {
+    Created,
+    Existing,
+}
+
+#[derive(Debug, Default)]
+struct DeferredWindowGuard {
+    phase: AtomicU8,
+    expired: AtomicBool,
+}
+
+impl DeferredWindowGuard {
+    fn begin(&self) -> bool {
+        self.phase
+            .compare_exchange(
+                DEFERRED_QUEUED,
+                DEFERRED_STARTED,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_ok()
+    }
+
+    fn expire(&self) -> bool {
+        self.expired.store(true, Ordering::Release);
+        self.phase
+            .compare_exchange(
+                DEFERRED_QUEUED,
+                DEFERRED_CANCELLED,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_ok()
+    }
+
+    fn is_expired(&self) -> bool {
+        self.expired.load(Ordering::Acquire)
+    }
 }
 
 fn validate_schema_version(value: u8) -> Result<(), String> {
@@ -482,57 +729,263 @@ fn active_profile_label<R: Runtime>(
         .ok_or_else(|| "Nessun profilo Desktop attivo".to_owned())
 }
 
+#[cfg(feature = "calls-qa-fixture")]
+fn qa_window_dimensions(default: (f64, f64), minimum: (f64, f64)) -> (f64, f64) {
+    let base = if std::env::var("DOFLOW_CALLS_QA_MINIMUM_WINDOW").as_deref() == Ok("1") {
+        minimum
+    } else {
+        default
+    };
+    let scale = match std::env::var("DOFLOW_CALLS_QA_SCALE").as_deref() {
+        Ok("1.25") => 1.25,
+        Ok("1.5") => 1.5,
+        _ => 1.0,
+    };
+    (base.0 * scale, base.1 * scale)
+}
+
+#[cfg(not(feature = "calls-qa-fixture"))]
+fn qa_window_dimensions(default: (f64, f64), _minimum: (f64, f64)) -> (f64, f64) {
+    default
+}
+
 fn build_incoming_window<R: Runtime>(
     app: &AppHandle<R>,
     call: &NativeCallDescriptor,
-) -> Result<(), String> {
+) -> Result<NativeWindowBuild, String> {
     let label = incoming_label(&call.session_id);
-    if let Some(window) = app.get_webview_window(&label) {
-        let _ = window.show();
-        let _ = window.unminimize();
-        return window
-            .set_focus()
-            .map_err(|_| "Impossibile focalizzare la chiamata in arrivo".into());
+    if app.get_webview_window(&label).is_some() {
+        return Ok(NativeWindowBuild::Existing);
     }
-    WebviewWindowBuilder::new(app, &label, WebviewUrl::App("index.html".into()))
+    let (width, height) = qa_window_dimensions((420.0, 280.0), (380.0, 250.0));
+    WebviewWindowBuilder::new(app, &label, WebviewUrl::App("calls.html".into()))
         .title("Chiamata Doflow in arrivo")
-        .inner_size(420.0, 280.0)
+        .inner_size(width, height)
         .min_inner_size(380.0, 250.0)
         .resizable(false)
         .decorations(true)
         .always_on_top(true)
         .skip_taskbar(false)
+        .background_color(tauri::window::Color(5, 7, 14, 255))
         .center()
-        .focused(true)
+        .visible(false)
+        .focused(false)
+        .on_page_load(show_local_call_shell)
         .build()
-        .map(|_| ())
+        .map(|_| NativeWindowBuild::Created)
         .map_err(|_| "Impossibile aprire la chiamata in arrivo".into())
 }
 
 fn build_call_window<R: Runtime>(
     app: &AppHandle<R>,
     call: &NativeCallDescriptor,
-) -> Result<(), String> {
+) -> Result<NativeWindowBuild, String> {
     let label = call_label(&call.session_id);
-    if let Some(window) = app.get_webview_window(&label) {
-        let _ = window.show();
-        let _ = window.unminimize();
-        return window
-            .set_focus()
-            .map_err(|_| "Impossibile focalizzare la chiamata".into());
+    if app.get_webview_window(&label).is_some() {
+        return Ok(NativeWindowBuild::Existing);
     }
-    WebviewWindowBuilder::new(app, &label, WebviewUrl::App("index.html".into()))
+    let (width, height) = qa_window_dimensions((1080.0, 700.0), (640.0, 520.0));
+    WebviewWindowBuilder::new(app, &label, WebviewUrl::App("calls.html".into()))
         .title("Doflow Calls")
-        .inner_size(1080.0, 700.0)
+        .inner_size(width, height)
         .min_inner_size(640.0, 520.0)
         .resizable(true)
         .decorations(true)
         .background_color(tauri::window::Color(5, 7, 14, 255))
         .center()
-        .focused(true)
+        .visible(false)
+        .focused(false)
+        .on_page_load(show_local_call_shell)
         .build()
-        .map(|_| ())
+        .map(|_| NativeWindowBuild::Created)
         .map_err(|_| "Impossibile aprire la finestra chiamata".into())
+}
+
+fn show_local_call_shell<R: Runtime>(
+    window: WebviewWindow<R>,
+    payload: tauri::webview::PageLoadPayload<'_>,
+) {
+    if parse_native_window_label(window.label()).is_err() {
+        return;
+    }
+    let event = payload.event();
+    let is_calls_page = payload.url().path().ends_with("/calls.html");
+    let registered = window
+        .state::<DesktopRuntime>()
+        .calls
+        .record_local_page_load(window.label(), event, is_calls_page);
+    if matches!(event, PageLoadEvent::Finished) && is_calls_page && registered {
+        // The bundled calls.html contains a dark, non-sensitive pre-React fallback. Showing it
+        // only after navigation prevents the WebView2 default white surface from flashing.
+        let _ = window.show();
+        if !window
+            .state::<DesktopRuntime>()
+            .calls
+            .has_window_launch(window.label())
+        {
+            let _ = window.hide();
+        }
+    }
+}
+
+fn show_ready_window<R: Runtime>(app: &AppHandle<R>, label: &str) -> Result<(), String> {
+    let runtime = app.state::<DesktopRuntime>();
+    let calls = &runtime.calls;
+    if !calls.launch_is(label, RendererLifecycle::Ready) {
+        return Err("La finestra chiamata non è più attiva".into());
+    }
+    let window = app
+        .get_webview_window(label)
+        .ok_or("La finestra chiamata non è disponibile")?;
+    let result = window
+        .show()
+        .and_then(|_| window.unminimize())
+        .and_then(|_| window.set_focus())
+        .map_err(|_| "Impossibile mostrare la finestra chiamata".into());
+    if !calls.launch_is(label, RendererLifecycle::Ready) {
+        let _ = window.hide();
+        return Err("La finestra chiamata è stata chiusa durante l'avvio".into());
+    }
+    result
+}
+
+fn hide_window<R: Runtime>(app: &AppHandle<R>, label: &str) {
+    if let Some(window) = app.get_webview_window(label) {
+        let _ = window.hide();
+    }
+}
+
+fn schedule_destroy_window<R: Runtime>(app: &AppHandle<R>, label: String) -> Result<(), String> {
+    let close_app = app.clone();
+    app.run_on_main_thread(move || destroy_window(&close_app, &label))
+        .map_err(|_| "Impossibile pianificare la chiusura della finestra chiamata".into())
+}
+
+async fn build_window_after_ipc<R, F>(
+    app: AppHandle<R>,
+    label: String,
+    build: F,
+) -> Result<NativeWindowBuild, String>
+where
+    R: Runtime,
+    F: FnOnce(&AppHandle<R>) -> Result<NativeWindowBuild, String> + Send + 'static,
+{
+    // Tauri dispatches an async command away from WebMessageReceived. This explicit yield plus
+    // run_on_main_thread ensures WebView construction cannot be nested in the caller's IPC hook.
+    tokio::task::yield_now().await;
+    let guard = Arc::new(DeferredWindowGuard::default());
+    let (sender, receiver) = oneshot::channel();
+    let scheduled_app = app.clone();
+    let scheduled_guard = guard.clone();
+    let scheduled_label = label.clone();
+    app.run_on_main_thread(move || {
+        if !scheduled_guard.begin() {
+            let _ = sender.send(Err("Creazione finestra chiamata annullata".into()));
+            return;
+        }
+        let result = build(&scheduled_app);
+        if scheduled_guard.is_expired() && result.is_ok() {
+            hide_window(&scheduled_app, &scheduled_label);
+            let _ = schedule_destroy_window(&scheduled_app, scheduled_label);
+        }
+        let _ = sender.send(result);
+    })
+    .map_err(|_| "Impossibile pianificare la finestra chiamata".to_owned())?;
+
+    match tokio::time::timeout(WINDOW_BUILD_TIMEOUT, receiver).await {
+        Ok(Ok(result)) => result,
+        Ok(Err(_)) => Err("Creazione finestra chiamata interrotta".into()),
+        Err(_) => {
+            let cancelled_before_start = guard.expire();
+            if cancelled_before_start {
+                Err("Creazione finestra chiamata scaduta prima dell'avvio".into())
+            } else {
+                Err("Creazione finestra chiamata non responsiva".into())
+            }
+        }
+    }
+}
+
+async fn wait_for_renderer_ready(
+    receiver: watch::Receiver<RendererLifecycle>,
+) -> Result<(), String> {
+    wait_for_renderer_ready_with_timeout(receiver, RENDERER_READY_TIMEOUT).await
+}
+
+async fn wait_for_renderer_ready_with_timeout(
+    mut receiver: watch::Receiver<RendererLifecycle>,
+    timeout: Duration,
+) -> Result<(), String> {
+    let wait = async {
+        loop {
+            match *receiver.borrow_and_update() {
+                RendererLifecycle::Ready => return Ok(()),
+                RendererLifecycle::Cancelled => {
+                    return Err("Avvio finestra chiamata annullato".into())
+                }
+                RendererLifecycle::Pending => {}
+            }
+            receiver
+                .changed()
+                .await
+                .map_err(|_| "Avvio finestra chiamata interrotto".to_owned())?;
+        }
+    };
+    tokio::time::timeout(timeout, wait)
+        .await
+        .map_err(|_| "Il renderer della chiamata non ha risposto".to_owned())?
+}
+
+fn rollback_failed_window<R: Runtime>(
+    app: &AppHandle<R>,
+    kind: NativeWindowKind,
+    session_id: &str,
+) {
+    let label = kind.label(session_id);
+    let failure = app
+        .state::<DesktopRuntime>()
+        .calls
+        .rollback_window_launch(kind, session_id)
+        .ok()
+        .flatten();
+    hide_window(app, &label);
+    let _ = schedule_destroy_window(app, label);
+    if let Some((profile_label, event)) = failure {
+        let notify_app = app.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let _ = dispatch_remote_action_to_profile(&notify_app, &profile_label, event);
+        });
+    }
+}
+
+async fn launch_native_window<R: Runtime>(
+    app: AppHandle<R>,
+    kind: NativeWindowKind,
+    call: NativeCallDescriptor,
+    renderer: watch::Receiver<RendererLifecycle>,
+) -> Result<(), String> {
+    let session_id = call.session_id.clone();
+    let label = kind.label(&session_id);
+    let build_call = call.clone();
+    let build_result =
+        build_window_after_ipc(app.clone(), label.clone(), move |build_app| match kind {
+            NativeWindowKind::Incoming => build_incoming_window(build_app, &build_call),
+            NativeWindowKind::Call => build_call_window(build_app, &build_call),
+        })
+        .await;
+    if let Err(error) = build_result {
+        rollback_failed_window(&app, kind, &session_id);
+        return Err(error);
+    }
+    if let Err(error) = wait_for_renderer_ready(renderer).await {
+        rollback_failed_window(&app, kind, &session_id);
+        return Err(error);
+    }
+    if let Err(error) = show_ready_window(&app, &label) {
+        rollback_failed_window(&app, kind, &session_id);
+        return Err(error);
+    }
+    Ok(())
 }
 
 fn destroy_window<R: Runtime>(app: &AppHandle<R>, label: &str) {
@@ -570,6 +1023,9 @@ fn schedule_native_window_close<R: Runtime>(
     if action.is_some_and(|action| !action_allowed(kind, action)) {
         return Err("Azione non consentita per questa finestra".into());
     }
+    // Hiding is the fail-open local privacy boundary. It must not wait for React, the
+    // profile WebView, the backend, or the deferred destruction path.
+    hide_window(app, label);
     let runtime = app.state::<DesktopRuntime>();
     let preparation = runtime
         .calls
@@ -589,7 +1045,11 @@ fn schedule_native_window_close<R: Runtime>(
         // Yield until the originating CloseRequested handler has returned. Destroying a
         // WebView from inside that handler is re-entrant on Windows and can hang WebView2.
         tokio::task::yield_now().await;
-        destroy_window(&close_app, &close_label);
+        if schedule_destroy_window(&close_app, close_label.clone()).is_err() {
+            // Scheduling can fail only while the runtime is shutting down. A best-effort
+            // direct destroy keeps explicit exit fail-open without trapping the user.
+            destroy_window(&close_app, &close_label);
+        }
         if let (Some(profile_label), Some(event)) = (profile_window_label.as_deref(), event) {
             // The local privacy boundary has already completed. Remote state notification
             // is best-effort and never blocks the call window from disappearing.
@@ -630,7 +1090,7 @@ pub fn get_desktop_call_capabilities(
 }
 
 #[tauri::command]
-pub fn show_incoming_desktop_call<R: Runtime>(
+pub async fn show_incoming_desktop_call<R: Runtime>(
     app: AppHandle<R>,
     webview: WebviewWindow<R>,
     state: State<'_, DesktopRuntime>,
@@ -669,7 +1129,19 @@ pub fn show_incoming_desktop_call<R: Runtime>(
             action_claimed: false,
         });
     }
-    build_incoming_window(&app, &call)?;
+    let renderer = match state
+        .calls
+        .begin_window_launch(NativeWindowKind::Incoming, &call.session_id)
+    {
+        Ok(renderer) => renderer,
+        Err(error) => {
+            let _ = state
+                .calls
+                .rollback_window_launch(NativeWindowKind::Incoming, &call.session_id);
+            return Err(error);
+        }
+    };
+    launch_native_window(app.clone(), NativeWindowKind::Incoming, call, renderer).await?;
     let _ = app
         .notification()
         .builder()
@@ -694,7 +1166,7 @@ pub fn dismiss_incoming_desktop_call<R: Runtime>(
 }
 
 #[tauri::command]
-pub fn open_desktop_call<R: Runtime>(
+pub async fn open_desktop_call<R: Runtime>(
     app: AppHandle<R>,
     webview: WebviewWindow<R>,
     state: State<'_, DesktopRuntime>,
@@ -732,7 +1204,17 @@ pub fn open_desktop_call<R: Runtime>(
         }
     }
     let _ = schedule_native_window_close(&app, &incoming_label(&call.session_id), None, None)?;
-    build_call_window(&app, &call)
+    let renderer = match state
+        .calls
+        .begin_window_launch(NativeWindowKind::Call, &call.session_id)
+    {
+        Ok(renderer) => renderer,
+        Err(error) => {
+            rollback_failed_window(&app, NativeWindowKind::Call, &call.session_id);
+            return Err(error);
+        }
+    };
+    launch_native_window(app, NativeWindowKind::Call, call, renderer).await
 }
 
 #[tauri::command]
@@ -790,6 +1272,29 @@ pub fn get_native_call_context(
     state: State<'_, DesktopRuntime>,
 ) -> Result<NativeCallContext, String> {
     state.calls.context_for_label(webview.label())
+}
+
+#[tauri::command]
+pub fn native_call_window_ready<R: Runtime>(
+    _app: AppHandle<R>,
+    webview: WebviewWindow<R>,
+    state: State<'_, DesktopRuntime>,
+) -> Result<(), String> {
+    let label = webview.label().to_owned();
+    state.calls.mark_renderer_ready(&label)?;
+
+    #[cfg(feature = "calls-qa-fixture")]
+    if std::env::var("DOFLOW_CALLS_QA_MODE").as_deref() == Ok("ipc") {
+        let close_app = _app.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+            if let Some(window) = close_app.get_webview_window(&label) {
+                let _ = window.close();
+            }
+        });
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -876,66 +1381,105 @@ pub fn destroy_all_call_windows<R: Runtime>(app: &AppHandle<R>) {
 }
 
 #[cfg(feature = "calls-qa-fixture")]
-pub fn install_qa_fixture<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
-    let call = NativeCallDescriptor {
-        session_id: "11111111-1111-4111-8111-111111111111".into(),
-        call_type: NativeCallType::Video,
-        direction: NativeCallDirection::Outgoing,
-        display_name: "Partecipante QA".into(),
-        guest_mode: false,
-        expires_at: None,
-    };
-    let runtime = app.state::<DesktopRuntime>();
-    runtime
-        .calls
-        .state
-        .lock()
-        .map_err(|_| "Lo stato della chiamata Desktop non è disponibile")?
-        .active = Some(RoutedCall {
-        call: call.clone(),
-        profile_window_label: "bootstrap".into(),
-        credentials: Some(LivekitCredentials {
-            server_url: "ws://127.0.0.1:9".into(),
-            access_token: "q".repeat(80),
-        }),
-        action_claimed: false,
-    });
-    build_call_window(app, &call)?;
-    if let Some(window) = app.get_webview_window(&call_label(&call.session_id)) {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
+pub fn install_qa_ipc_fixture<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    let mode = std::env::var("DOFLOW_CALLS_QA_MODE").unwrap_or_else(|_| "ipc".into());
+    if !matches!(mode.as_str(), "ipc" | "incoming" | "active") {
+        return Err("Modalità QA Calls non valida".into());
     }
-    Ok(())
-}
+    let runtime = app.state::<DesktopRuntime>();
+    *runtime
+        .active
+        .lock()
+        .map_err(|_| "Lo stato del profilo Desktop non è disponibile")? =
+        Some(crate::runtime::ActiveProfile {
+            profile_id: "33333333-3333-4333-8333-333333333333".into(),
+            webview_label: "bootstrap".into(),
+            existing: false,
+            ready: true,
+        });
 
-#[cfg(feature = "calls-qa-fixture")]
-pub fn install_qa_incoming_fixture<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
-    let call = NativeCallDescriptor {
-        session_id: "22222222-2222-4222-8222-222222222222".into(),
-        call_type: NativeCallType::Audio,
-        direction: NativeCallDirection::Incoming,
-        display_name: "Partecipante QA".into(),
-        guest_mode: false,
-        expires_at: None,
-    };
-    let runtime = app.state::<DesktopRuntime>();
-    let mut native = runtime
-        .calls
-        .state
-        .lock()
-        .map_err(|_| "Lo stato della chiamata Desktop non è disponibile")?;
-    if native.active.is_some() || native.incoming.is_some() {
-        return Err("È già attiva una chiamata Desktop".into());
-    }
-    native.incoming = Some(RoutedCall {
-        call: call.clone(),
-        profile_window_label: "bootstrap".into(),
-        credentials: None,
-        action_claimed: false,
-    });
-    drop(native);
-    build_incoming_window(app, &call)
+    let mode_json = serde_json::to_string(&mode).map_err(|_| "Modalità QA non serializzabile")?;
+    let bridge_version = BRIDGE_VERSION;
+    let script = format!(
+        r#"
+(() => {{
+  const mode = {mode_json};
+  const invoke = window.__TAURI_INTERNALS__?.invoke;
+  if (typeof invoke !== 'function') return;
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const bounded = (promise, name) => Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(name + '_timeout')), 4500)),
+  ]);
+  const incoming = {{
+    schemaVersion: {bridge_version},
+    call: {{
+      sessionId: '22222222-2222-4222-8222-222222222222',
+      callType: 'audio',
+      direction: 'incoming',
+      displayName: 'Partecipante QA',
+      guestMode: false,
+    }},
+  }};
+  const active = {{
+    schemaVersion: {bridge_version},
+    call: {{
+      sessionId: '11111111-1111-4111-8111-111111111111',
+      callType: 'video',
+      direction: 'outgoing',
+      displayName: 'Partecipante QA',
+      guestMode: false,
+    }},
+    credentials: {{
+      serverUrl: 'ws://127.0.0.1:9',
+      accessToken: 'qa-only-synthetic-credential-not-valid-for-any-provider-000000000000',
+    }},
+  }};
+  const verify = {{
+    schemaVersion: {bridge_version},
+    call: {{
+      sessionId: '44444444-4444-4444-8444-444444444444',
+      callType: 'audio',
+      direction: 'incoming',
+      displayName: 'Verifica cleanup QA',
+      guestMode: false,
+    }},
+  }};
+
+  void (async () => {{
+    document.documentElement.dataset.callsQa = 'running';
+    if (mode !== 'active') {{
+      await bounded(invoke('show_incoming_desktop_call', {{ input: incoming }}), 'incoming_ipc');
+      document.documentElement.dataset.callsQaIncoming = 'ready';
+      if (mode === 'incoming') return;
+      await bounded(invoke('show_incoming_desktop_call', {{ input: incoming }}), 'incoming_idempotency');
+      document.documentElement.dataset.callsQaIncomingIdempotent = 'pass';
+      await sleep(700);
+    }}
+    await bounded(invoke('open_desktop_call', {{ input: active }}), 'active_ipc');
+    document.documentElement.dataset.callsQaActive = 'ready';
+    if (mode === 'active') return;
+    await bounded(invoke('open_desktop_call', {{ input: active }}), 'active_idempotency');
+    document.documentElement.dataset.callsQaActiveIdempotent = 'pass';
+    await sleep(700);
+    await bounded(invoke('show_incoming_desktop_call', {{ input: verify }}), 'cleanup_ipc');
+    document.documentElement.dataset.callsQaCleanup = 'ready';
+    await sleep(700);
+    document.documentElement.dataset.callsQa = 'pass';
+    document.title = 'Doflow Calls QA — PASS';
+    await invoke('quit_desktop');
+  }})().catch((error) => {{
+    document.documentElement.dataset.callsQa = 'failed';
+    document.documentElement.dataset.callsQaFailure = String(error?.message || 'unknown').slice(0, 80);
+    document.title = 'Doflow Calls QA — FAIL';
+  }});
+}})();
+"#,
+    );
+    app.get_webview_window("bootstrap")
+        .ok_or("Finestra QA bootstrap non disponibile")?
+        .eval(script)
+        .map_err(|_| "Impossibile avviare il test IPC Calls".into())
 }
 
 #[cfg(test)]
@@ -1127,5 +1671,139 @@ mod tests {
                 .unwrap(),
             NativeClosePreparation::Started(_)
         ));
+    }
+
+    #[test]
+    fn deferred_guard_cancels_before_start_and_marks_started_timeouts() {
+        let cancelled = DeferredWindowGuard::default();
+        assert!(cancelled.expire());
+        assert!(!cancelled.begin());
+        assert!(cancelled.is_expired());
+
+        let started = DeferredWindowGuard::default();
+        assert!(started.begin());
+        assert!(!started.expire());
+        assert!(started.is_expired());
+    }
+
+    #[tokio::test]
+    async fn incoming_renderer_ready_is_validated_and_idempotent() {
+        let manager = CallManager::new();
+        let call = descriptor(Uuid::new_v4().to_string());
+        let label = incoming_label(&call.session_id);
+        manager.install_incoming_for_test(call.clone()).unwrap();
+        let receiver = manager
+            .begin_window_launch(NativeWindowKind::Incoming, &call.session_id)
+            .unwrap();
+
+        assert!(manager.mark_renderer_ready(&label).is_err());
+        manager.record_local_page_load(&label, PageLoadEvent::Started, true);
+        assert!(manager.mark_renderer_ready(&label).unwrap());
+        assert!(!manager.mark_renderer_ready(&label).unwrap());
+        wait_for_renderer_ready_with_timeout(receiver, Duration::from_millis(20))
+            .await
+            .unwrap();
+        assert!(manager.mark_renderer_ready("remote-profile").is_err());
+    }
+
+    #[tokio::test]
+    async fn active_renderer_ready_requires_matching_active_state() {
+        let manager = CallManager::new();
+        let call = descriptor(Uuid::new_v4().to_string());
+        manager.install_incoming_for_test(call.clone()).unwrap();
+        {
+            let mut state = manager.state.lock().unwrap();
+            state.active = state.incoming.take();
+        }
+        let receiver = manager
+            .begin_window_launch(NativeWindowKind::Call, &call.session_id)
+            .unwrap();
+        manager.record_local_page_load(
+            &call_label(&call.session_id),
+            PageLoadEvent::Finished,
+            true,
+        );
+        assert!(manager
+            .mark_renderer_ready(&call_label(&call.session_id))
+            .unwrap());
+        wait_for_renderer_ready_with_timeout(receiver, Duration::from_millis(20))
+            .await
+            .unwrap();
+        assert!(manager
+            .mark_renderer_ready(&incoming_label(&call.session_id))
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn renderer_watchdog_times_out_and_close_cancels_pending_waiters() {
+        let (_sender, pending) = watch::channel(RendererLifecycle::Pending);
+        assert!(
+            wait_for_renderer_ready_with_timeout(pending, Duration::from_millis(5))
+                .await
+                .is_err()
+        );
+
+        let manager = CallManager::new();
+        let call = descriptor(Uuid::new_v4().to_string());
+        manager.install_incoming_for_test(call.clone()).unwrap();
+        let receiver = manager
+            .begin_window_launch(NativeWindowKind::Incoming, &call.session_id)
+            .unwrap();
+        assert!(matches!(
+            manager
+                .begin_close(NativeWindowKind::Incoming, &call.session_id, None, None)
+                .unwrap(),
+            NativeClosePreparation::Started(_)
+        ));
+        assert!(
+            wait_for_renderer_ready_with_timeout(receiver, Duration::from_millis(20))
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn failed_window_rollbacks_are_session_scoped_and_active_failure_is_once() {
+        let incoming_manager = CallManager::new();
+        let incoming = descriptor(Uuid::new_v4().to_string());
+        incoming_manager
+            .install_incoming_for_test(incoming.clone())
+            .unwrap();
+        let receiver = incoming_manager
+            .begin_window_launch(NativeWindowKind::Incoming, &incoming.session_id)
+            .unwrap();
+        assert!(incoming_manager
+            .rollback_window_launch(NativeWindowKind::Incoming, &incoming.session_id)
+            .unwrap()
+            .is_none());
+        assert!(incoming_manager.state.lock().unwrap().incoming.is_none());
+        assert!(
+            wait_for_renderer_ready_with_timeout(receiver, Duration::from_millis(20))
+                .await
+                .is_err()
+        );
+
+        let active_manager = CallManager::new();
+        let active = descriptor(Uuid::new_v4().to_string());
+        active_manager
+            .install_incoming_for_test(active.clone())
+            .unwrap();
+        {
+            let mut state = active_manager.state.lock().unwrap();
+            state.active = state.incoming.take();
+        }
+        active_manager
+            .begin_window_launch(NativeWindowKind::Call, &active.session_id)
+            .unwrap();
+        let failure = active_manager
+            .rollback_window_launch(NativeWindowKind::Call, &active.session_id)
+            .unwrap()
+            .expect("active launch must produce one failure event");
+        assert_eq!(failure.1.action, NativeCallAction::Failed);
+        assert!(active_manager
+            .rollback_window_launch(NativeWindowKind::Call, &active.session_id)
+            .unwrap()
+            .is_none());
+        assert!(active_manager.state.lock().unwrap().active.is_none());
     }
 }

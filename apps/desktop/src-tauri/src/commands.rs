@@ -386,6 +386,17 @@ pub(crate) fn assert_remote_caller<R: Runtime>(
     webview: &WebviewWindow<R>,
     state: &DesktopRuntime,
 ) -> Result<(), String> {
+    #[cfg(feature = "calls-qa-fixture")]
+    if webview.label() == "bootstrap"
+        && state
+            .active
+            .lock()
+            .map_err(|_| "Desktop profile state is unavailable")?
+            .as_ref()
+            .is_some_and(|value| value.webview_label == "bootstrap" && value.ready)
+    {
+        return Ok(());
+    }
     if !webview.label().starts_with("remote-") {
         return Err("Remote Desktop command rejected".into());
     }

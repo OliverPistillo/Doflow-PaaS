@@ -17,7 +17,7 @@ function IncomingFailure({ api }: { api: NativeCallWindowApi }) {
           disabled={closing}
           onClick={() => {
             setClosing(true);
-            void api.close({ action: "reject", reason: "desktop_renderer_failed" }).catch(() => setClosing(false));
+            void api.close().catch(() => setClosing(false));
           }}
         >{closing ? "Chiusura…" : "Chiudi"}</button>
       </section>
@@ -30,13 +30,16 @@ class IncomingBoundary extends Component<{
   children: ReactNode;
 }, { failed: boolean }> {
   state = { failed: false };
+  private readyReported = false;
 
   static getDerivedStateFromError() {
     return { failed: true };
   }
 
   componentDidCatch(_error: Error, _info: ErrorInfo) {
-    void this.props.api.sendAction({ action: "reject", reason: "desktop_renderer_failed" }).catch(() => undefined);
+    if (this.readyReported) return;
+    this.readyReported = true;
+    void this.props.api.ready().catch(() => undefined);
   }
 
   render() {
@@ -51,6 +54,7 @@ function IncomingCallWindowRuntime({ api }: { api: NativeCallWindowApi }) {
   const [remaining, setRemaining] = useState<number | null>(null);
   const timeoutClosed = useRef(false);
   const actionPending = useRef(false);
+  const readyReported = useRef(false);
 
   const closeUnavailable = useCallback(() => {
     if (actionPending.current) return;
@@ -71,6 +75,12 @@ function IncomingCallWindowRuntime({ api }: { api: NativeCallWindowApi }) {
     });
     return () => { active = false; };
   }, [api]);
+
+  useEffect(() => {
+    if ((!context && !error) || readyReported.current) return;
+    readyReported.current = true;
+    void api.ready().catch(() => undefined);
+  }, [api, context, error]);
 
   useEffect(() => {
     if (!context?.call.expiresAt) return;

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IncomingCallWindow } from "./IncomingCallWindow";
@@ -21,6 +21,7 @@ const incomingContext: NativeCallContext = {
 function nativeApi(overrides: Partial<NativeCallWindowApi> = {}): NativeCallWindowApi {
   return {
     getContext: vi.fn().mockResolvedValue(incomingContext),
+    ready: vi.fn().mockResolvedValue(undefined),
     sendAction: vi.fn().mockResolvedValue(undefined),
     close: vi.fn().mockResolvedValue(undefined),
     onContextUpdated: vi.fn().mockResolvedValue(() => undefined),
@@ -52,6 +53,7 @@ describe("incoming Desktop call window", () => {
     const api = nativeApi();
     act(() => root.render(<IncomingCallWindow api={api} />));
     await flush();
+    expect(api.ready).toHaveBeenCalledTimes(1);
     const accept = container.querySelector<HTMLButtonElement>("button[aria-label='Rispondi alla chiamata']")!;
     act(() => { accept.click(); accept.click(); });
     expect(api.close).toHaveBeenCalledTimes(1);
@@ -62,6 +64,7 @@ describe("incoming Desktop call window", () => {
     const api = nativeApi({ getContext: vi.fn().mockRejectedValue(new Error("native detail")) });
     act(() => root.render(<IncomingCallWindow api={api} />));
     await flush();
+    expect(api.ready).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("Questa chiamata non è più disponibile.");
     const close = container.querySelector<HTMLButtonElement>("button[aria-label='Chiudi chiamata']")!;
     act(() => close.click());
@@ -81,5 +84,12 @@ describe("incoming Desktop call window", () => {
     await vi.advanceTimersByTimeAsync(1_100);
     expect(api.close).toHaveBeenCalledWith();
     expect(api.sendAction).not.toHaveBeenCalled();
+  });
+
+  it("reports renderer readiness once under StrictMode", async () => {
+    const api = nativeApi();
+    act(() => root.render(<StrictMode><IncomingCallWindow api={api} /></StrictMode>));
+    await flush();
+    expect(api.ready).toHaveBeenCalledTimes(1);
   });
 });

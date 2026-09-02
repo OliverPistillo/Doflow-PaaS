@@ -1,5 +1,8 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath } from "node:url";
+
+const desktopRoot = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
@@ -17,5 +20,11 @@ export default defineConfig(({ mode }) => ({
     target: "es2022",
     sourcemap: false,
     minify: "esbuild",
+    rollupOptions: {
+      input: {
+        main: `${desktopRoot}index.html`,
+        calls: `${desktopRoot}calls.html`,
+      },
+    },
   },
 }));

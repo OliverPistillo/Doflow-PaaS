@@ -135,6 +135,10 @@ jobs:
         working-directory: apps/desktop/src-tauri
         run: cargo test --target x86_64-pc-windows-msvc
 
+      - name: Run packaged Desktop Calls true-IPC regression
+        shell: pwsh
+        run: pnpm -C apps/desktop test:packaged-calls-ipc
+
       - name: Verify frontend Desktop contract still type-checks
         shell: pwsh
         run: pnpm -C apps/frontend type-check

@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "calls-qa-driver",
+  "description": "QA-only bootstrap driver for packaged Calls IPC regression tests.",
+  "windows": ["bootstrap"],
+  "platforms": ["windows"],
+  "permissions": [
+    "allow-show-incoming-desktop-call",
+    "allow-open-desktop-call"
+  ]
+}

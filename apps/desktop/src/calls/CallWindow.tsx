@@ -118,6 +118,7 @@ export function CallWindow({
   const [closing, setClosing] = useState(false);
   const failureReported = useRef(false);
   const closeRequested = useRef(false);
+  const readyReported = useRef(false);
   const Runtime = useMemo(() => lazy(async () => {
     const loaded = await runtimeLoader();
     return { default: loaded.LiveKitCallRuntime };
@@ -145,6 +146,12 @@ export function CallWindow({
       unlisten?.();
     };
   }, [api, fail]);
+
+  useEffect(() => {
+    if ((!context && !failure) || readyReported.current) return;
+    readyReported.current = true;
+    void api.ready().catch(() => undefined);
+  }, [api, context, failure]);
 
   useEffect(() => {
     if (!failure || failureReported.current) return;
