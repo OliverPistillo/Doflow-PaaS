@@ -12,6 +12,8 @@
     "allow-prepare-profile-webview",
     "allow-activate-prepared-profile",
     "allow-remove-saved-profile",
+    "allow-has-saved-desktop-password",
+    "allow-forget-saved-desktop-password",
     "allow-install-current-verified-update",
     "allow-quit-desktop",
     "allow-minimize-bootstrap",

@@ -118,6 +118,45 @@ describe('Auth flow security contract', () => {
     expect(guard.registerFailure).toHaveBeenCalledTimes(1);
   });
 
+  it('marca soltanto il rifiuto credenziali tipizzato come invalidabile dal Desktop', async () => {
+    const invalid = controller({
+      loginAuto: jest.fn().mockRejectedValue(new UnauthorizedException('Credenziali non valide')),
+    });
+    let invalidError: UnauthorizedException | undefined;
+    try {
+      await invalid.value.login(
+        { email: 'person@example.test', password: 'wrong' },
+        req(),
+        {} as any,
+      );
+    } catch (error) {
+      invalidError = error as UnauthorizedException;
+    }
+    expect(invalidError?.getStatus()).toBe(HttpStatus.UNAUTHORIZED);
+    expect(invalidError?.getResponse()).toMatchObject({
+      message: 'Credenziali non valide',
+      code: 'AUTH_INVALID_CREDENTIALS',
+    });
+
+    const infrastructure = controller({
+      loginAuto: jest.fn().mockRejectedValue(new Error('synthetic infrastructure failure')),
+    });
+    let infrastructureError: UnauthorizedException | undefined;
+    try {
+      await infrastructure.value.login(
+        { email: 'person@example.test', password: 'wrong' },
+        req(),
+        {} as any,
+      );
+    } catch (error) {
+      infrastructureError = error as UnauthorizedException;
+    }
+    expect(infrastructureError?.getStatus()).toBe(HttpStatus.UNAUTHORIZED);
+    expect(infrastructureError?.getResponse()).not.toMatchObject({
+      code: 'AUTH_INVALID_CREDENTIALS',
+    });
+  });
+
   it('preserva HTTP 429 senza registrare un nuovo fallimento', async () => {
     const { value, guard } = controller();
     guard.checkBeforeLogin.mockRejectedValue(new HttpException('Troppi tentativi', HttpStatus.TOO_MANY_REQUESTS));

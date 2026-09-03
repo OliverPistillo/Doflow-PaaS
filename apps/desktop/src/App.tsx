@@ -33,6 +33,7 @@ export default function App() {
   const [updateProgress, setUpdateProgress] = useState<UpdateProgressPayload>();
   const [installing, setInstalling] = useState(false);
   const [closePromptVisible, setClosePromptVisible] = useState(false);
+  const [credentialProfileIds, setCredentialProfileIds] = useState<ReadonlySet<string>>(new Set());
   const activationStarted = useRef(false);
   const bootstrapRequested = useRef(false);
   const profilesRequested = useRef(false);
@@ -160,7 +161,28 @@ export default function App() {
     setBusyProfileId(profile.id);
     try {
       const registry = await nativeDesktop.removeProfile(profile.id);
+      setCredentialProfileIds((current) => {
+        const next = new Set(current);
+        next.delete(profile.id);
+        return next;
+      });
       dispatch({ type: "SWITCH_REQUESTED", registry });
+    } catch (error) {
+      dispatch({ type: "FAIL", message: errorMessage(error) });
+    } finally {
+      setBusyProfileId(undefined);
+    }
+  }, []);
+
+  const forgetPassword = useCallback(async (profile: SavedProfile) => {
+    setBusyProfileId(profile.id);
+    try {
+      await nativeDesktop.forgetSavedPassword(profile.id);
+      setCredentialProfileIds((current) => {
+        const next = new Set(current);
+        next.delete(profile.id);
+        return next;
+      });
     } catch (error) {
       dispatch({ type: "FAIL", message: errorMessage(error) });
     } finally {
@@ -185,7 +207,23 @@ export default function App() {
     }
   }, []);
 
-  const registry: ProfileRegistry = state.registry || { version: 1, profiles: [] };
+  const registry: ProfileRegistry = useMemo(
+    () => state.registry || { version: 1, profiles: [] },
+    [state.registry],
+  );
+  useEffect(() => {
+    let active = true;
+    void Promise.all(registry.profiles.map(async (profile) => ({
+      id: profile.id,
+      saved: await nativeDesktop.hasSavedPassword(profile.id).catch(() => false),
+    }))).then((results) => {
+      if (!active) return;
+      setCredentialProfileIds(new Set(results.filter((result) => result.saved).map((result) => result.id)));
+    });
+    return () => {
+      active = false;
+    };
+  }, [registry.profiles]);
   const continueWithoutUpdate = useCallback(() => {
     dispatch({ type: "CONTINUE_WITHOUT_UPDATE" });
     setInstalling(false);
@@ -211,6 +249,8 @@ export default function App() {
           selectedProfileId={registry.lastUsedProfileId}
           onSelect={prepareProfile}
           onRemove={removeProfile}
+          credentialProfileIds={credentialProfileIds}
+          onForgetPassword={forgetPassword}
           onAdd={() => prepareProfile()}
           onClose={requestClose}
         />
@@ -226,6 +266,8 @@ export default function App() {
           onSelect={prepareProfile}
           onAdd={() => prepareProfile()}
           onRemove={removeProfile}
+          credentialProfileIds={credentialProfileIds}
+          onForgetPassword={forgetPassword}
           onClose={requestClose}
         />
       );
@@ -246,7 +288,7 @@ export default function App() {
       return <ErrorScreen message={state.error || "Avvio non riuscito."} onRetry={() => void startBootstrap()} onQuit={() => void nativeDesktop.quit()} />;
     }
     return <PreparingScreen version={state.update?.currentVersion} />;
-  }, [busyProfileId, continueWithoutUpdate, installing, prepareProfile, reauthenticateProfile, registry.lastUsedProfileId, registry.profiles, removeProfile, requestClose, runUpdateGate, startBootstrap, state.error, state.phase, state.selectedProfile, state.update, updateProgress]);
+  }, [busyProfileId, continueWithoutUpdate, credentialProfileIds, forgetPassword, installing, prepareProfile, reauthenticateProfile, registry.lastUsedProfileId, registry.profiles, removeProfile, requestClose, runUpdateGate, startBootstrap, state.error, state.phase, state.selectedProfile, state.update, updateProgress]);
 
   const integratedWindowControls = closePromptVisible || state.phase === "picker" || state.phase === "expired-profile";
 

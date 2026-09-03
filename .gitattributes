@@ -1,0 +1,5 @@
+apps/frontend/public/brand/marchio_logo_bianco.svg -text
+apps/frontend/public/brand/marchio_logo_nero.svg -text
+apps/desktop/src/assets/doflow-mark-white.svg -text
+apps/desktop/src/assets/doflow-mark-black.svg -text
+apps/desktop/src-tauri/icons/doflow_mark_windows_source.svg -text

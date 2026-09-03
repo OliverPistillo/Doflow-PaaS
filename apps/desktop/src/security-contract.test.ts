@@ -35,6 +35,10 @@ describe("remote WebView security contract", () => {
     expect(capability.permissions).toEqual([
       "allow-desktop-ready",
       "allow-register-profile-metadata",
+      "allow-stage-desktop-password",
+      "allow-discard-staged-desktop-password",
+      "allow-take-saved-desktop-password",
+      "allow-invalidate-saved-desktop-password",
       "allow-request-profile-switch",
       "allow-get-update-state",
       "allow-install-current-verified-update",
@@ -56,6 +60,36 @@ describe("remote WebView security contract", () => {
     for (const forbidden of ["fs:", "shell:", "process:", "http:", "updater:", "core:window:"]) {
       expect(source).not.toContain(forbidden);
     }
+  });
+
+  it("keeps credential commands profile-bound and limited to the exact login route", () => {
+    const source = readFileSync(
+      resolve(desktopRoot, "src-tauri/src/commands.rs"),
+      "utf8",
+    );
+    expect(source).toContain('if url.path() != "/login"');
+    expect(source).toContain("Desktop credential command rejected outside authentication");
+    expect(source).toContain("assert_active_profile");
+    expect(source).toContain("Desktop profile mismatch");
+    expect(source).not.toMatch(/println!|dbg!|tracing::.*password/i);
+  });
+});
+
+describe("Windows secure credential dependency contract", () => {
+  const cargo = readFileSync(resolve(desktopRoot, "src-tauri/Cargo.toml"), "utf8");
+  const credentials = readFileSync(resolve(desktopRoot, "src-tauri/src/credentials.rs"), "utf8");
+
+  it("pins the Windows-only backend without its unused search feature and selects Local persistence", () => {
+    expect(cargo).toContain('windows-native-keyring-store = { version = "=1.1.0", default-features = false }');
+    expect(credentials).toContain('("persistence", "Local")');
+    expect(credentials).toContain('attributes.get("persistence")');
+    expect(credentials).toContain('Some("Local")');
+  });
+
+  it("uses keyed operation locks instead of one global credential-store lock", () => {
+    expect(credentials).toContain('operations: Mutex<HashMap<String, Weak<Mutex<()>>>>');
+    expect(credentials).toContain("fn operation_lock(&self, profile_id: &str)");
+    expect(credentials).not.toContain("operations: Mutex<()>");
   });
 });
 
@@ -146,17 +180,31 @@ describe("Desktop release workflow", () => {
     const gates = [
       ["Validate Desktop TypeScript", "pnpm -C apps/desktop type-check"],
       ["Run Desktop UI tests", "pnpm -C apps/desktop test"],
+      ["Validate canonical Doflow brand assets", "pnpm validate:brand-assets"],
+      ["Run Desktop secure credential policy tests", "pnpm -C apps/desktop test:secure-credentials"],
+      ["Verify Desktop 1.1.3 bridge v2 compatibility", "pnpm run test:desktop-bridge-v2"],
       ["Build Desktop Vite bundle", "pnpm -C apps/desktop build"],
       ["Validate Rust formatting", "cargo fmt --all -- --check"],
       ["Run Rust Clippy", "cargo clippy --target x86_64-pc-windows-msvc --all-targets -- -D warnings"],
       ["Run Rust tests", "cargo test --target x86_64-pc-windows-msvc"],
+      ["Verify Windows Credential Manager lifecycle and Local persistence", "cargo test --target x86_64-pc-windows-msvc credentials::tests"],
+      ["Audit the Desktop Rust dependency lock", "cargo audit --file Cargo.lock"],
       ["Verify frontend Desktop contract still type-checks", "pnpm -C apps/frontend type-check"],
+      ["Lint the shared frontend", "pnpm -C apps/frontend lint"],
+      ["Build the shared frontend for production", "pnpm -C apps/frontend build"],
       ["Verify backend Desktop contract still builds", "pnpm -C apps/backend build"],
     ];
 
     for (const [name, command] of gates) {
       expect(workflowStep(validateJob, name)).toContain(`run: ${command}`);
     }
+  });
+
+  it("installs a pinned RustSec audit tool before scanning Cargo.lock", () => {
+    const install = workflowStep(validateJob, "Install pinned cargo-audit");
+    const audit = workflowStep(validateJob, "Audit the Desktop Rust dependency lock");
+    expect(install).toContain("cargo install cargo-audit --version 0.22.2 --locked");
+    expect(validateJob.indexOf(install)).toBeLessThan(validateJob.indexOf(audit));
   });
 
   it("checks every critical native command before the release workflow continues", () => {

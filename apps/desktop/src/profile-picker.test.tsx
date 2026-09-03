@@ -100,6 +100,33 @@ describe("ProfilePicker interactions", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it("forgets a saved password without removing the profile", async () => {
+    const onForgetPassword = vi.fn();
+    const onRemove = vi.fn();
+    act(() => root.render(
+      <ProfilePicker
+        profiles={profiles}
+        credentialProfileIds={new Set([profiles[0].id])}
+        onSelect={() => undefined}
+        onRemove={onRemove}
+        onForgetPassword={onForgetPassword}
+        onAdd={() => undefined}
+        onClose={() => undefined}
+      />,
+    ));
+
+    act(() => container.querySelector<HTMLButtonElement>(".profile-management-toggle")?.click());
+    expect(container.textContent).toContain("Dimentica password");
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>(".profile-forget-action")?.click();
+      await Promise.resolve();
+    });
+    expect(onForgetPassword).toHaveBeenCalledOnce();
+    expect(onForgetPassword).toHaveBeenCalledWith(profiles[0]);
+    expect(onRemove).not.toHaveBeenCalled();
+    expect(container.querySelectorAll(".profile-row")).toHaveLength(3);
+  });
+
   it("closes from the integrated X and safely removes the last supplied profile", async () => {
     const onClose = vi.fn();
     act(() => root.render(<ProfilePicker profiles={[]} onSelect={() => undefined} onRemove={() => undefined} onAdd={() => undefined} onClose={onClose} />));

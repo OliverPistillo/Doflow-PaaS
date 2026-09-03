@@ -20,7 +20,7 @@
         "minWidth": 760,
         "minHeight": 560,
         "center": true,
-        "visible": true,
+        "visible": false,
         "decorations": false,
         "resizable": true,
         "backgroundColor": "#05070E"
@@ -34,6 +34,9 @@
   "bundle": {
     "active": true,
     "targets": ["nsis", "msi"],
+    "resources": {
+      "icons/notification-app-logo.png": "notification-app-logo.png"
+    },
     "createUpdaterArtifacts": false,
     "publisher": "Doflow",
     "copyright": "Copyright Doflow",

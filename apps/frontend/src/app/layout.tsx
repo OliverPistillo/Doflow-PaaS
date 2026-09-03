@@ -5,10 +5,16 @@ import "./globals.css";
 
 import { Instrument_Serif, Inter, JetBrains_Mono } from "next/font/google";
 import { LegacyDesktopUpdateCoordinator } from "@/components/desktop/legacy-desktop-update-coordinator";
+import { FaviconThemeManager } from "@/components/theme/favicon-theme-manager";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  DOFLOW_FAVICON_BLACK,
+  DOFLOW_FAVICON_LINK_ID,
+  DOFLOW_FAVICON_WHITE,
+} from "@/lib/doflow-favicon";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -35,21 +41,9 @@ export const metadata: Metadata = {
   title: "Doflow",
   description: "La piattaforma all-in-one per gestire il tuo business.",
   manifest: "/site.webmanifest",
-  icons: {
-    icon: [
-      {
-        url: "/brand/marchio_logo_nero.svg",
-        type: "image/svg+xml",
-        media: "(prefers-color-scheme: light)",
-      },
-      {
-        url: "/brand/marchio_logo_bianco.svg",
-        type: "image/svg+xml",
-        media: "(prefers-color-scheme: dark)",
-      },
-    ],
-  },
 };
+
+const faviconBootstrap = `(function(){try{var k='doflow_theme',v=localStorage.getItem(k),d=v==='dark'||((v!=='light'&&v!=='dark')&&matchMedia('(prefers-color-scheme: dark)').matches),i=document.getElementById('${DOFLOW_FAVICON_LINK_ID}'),u=d?'${DOFLOW_FAVICON_WHITE}':'${DOFLOW_FAVICON_BLACK}';if(i)i.setAttribute('href',u)}catch(e){}})();`;
 
 export default function RootLayout({
   children,
@@ -59,11 +53,19 @@ export default function RootLayout({
   return (
     <html lang="it" suppressHydrationWarning>
       <head>
+        <link
+          id={DOFLOW_FAVICON_LINK_ID}
+          rel="icon"
+          type="image/svg+xml"
+          href={DOFLOW_FAVICON_BLACK}
+        />
+        <link rel="apple-touch-icon" href="/apple-icon.png?v=official-20260902" />
         <script
           dangerouslySetInnerHTML={{
             __html: "try{var h=location.hostname.toLowerCase();if(h==='localhost'||h==='127.0.0.1'||h==='app.doflow.it'||h==='doflow.it'||h==='doflow.doflow.it'){document.documentElement.dataset.doflowAuthHost='true'}}catch(e){}",
           }}
         />
+        <script dangerouslySetInnerHTML={{ __html: faviconBootstrap }} />
       </head>
       <body className={`${inter.variable} ${mono.variable} ${serif.variable} antialiased`}>
         <ThemeProvider
@@ -73,6 +75,7 @@ export default function RootLayout({
           disableTransitionOnChange={false}
           storageKey="doflow_theme" // ← persiste in localStorage con chiave specifica
         >
+          <FaviconThemeManager />
           <TooltipProvider delayDuration={400}>
             <LegacyDesktopUpdateCoordinator />
             {children}

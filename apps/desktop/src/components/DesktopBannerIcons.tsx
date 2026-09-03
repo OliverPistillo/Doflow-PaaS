@@ -51,6 +51,16 @@ export function TrashIcon(props: IconProps) {
   );
 }
 
+export function KeyOffIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m3 3 18 18" />
+      <path d="M10.6 10.6A4 4 0 1 0 5.4 5.4" />
+      <path d="M13 7h8v4h-3v3h-3v3h-2" />
+    </Icon>
+  );
+}
+
 export function BellIcon(props: IconProps) {
   return (
     <svg

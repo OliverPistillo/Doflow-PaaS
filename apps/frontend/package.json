@@ -2,6 +2,7 @@
   "name": "frontend",
   "private": true,
   "scripts": {
+    "prebuild": "node ../../scripts/validate-doflow-brand-assets.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

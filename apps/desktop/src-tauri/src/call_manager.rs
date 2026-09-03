@@ -13,7 +13,6 @@ use tauri::{
     webview::{PageLoadEvent, WebviewWindowBuilder},
     AppHandle, Emitter, Manager, Runtime, State, WebviewWindow,
 };
-use tauri_plugin_notification::NotificationExt;
 use tokio::sync::{oneshot, watch};
 use url::Url;
 use uuid::Uuid;
@@ -1142,12 +1141,11 @@ pub async fn show_incoming_desktop_call<R: Runtime>(
         }
     };
     launch_native_window(app.clone(), NativeWindowKind::Incoming, call, renderer).await?;
-    let _ = app
-        .notification()
-        .builder()
-        .title("Doflow Calls")
-        .body("Chiamata Doflow in arrivo")
-        .show();
+    if crate::notification::show_incoming_call(&app).is_err() {
+        // Keep notification failures isolated from the incoming-call window. The error is
+        // intentionally redacted: runtime paths and platform details do not belong in logs.
+        eprintln!("Doflow: native incoming-call notification unavailable");
+    }
     Ok(())
 }
 
@@ -1382,7 +1380,10 @@ pub fn destroy_all_call_windows<R: Runtime>(app: &AppHandle<R>) {
 
 #[cfg(feature = "calls-qa-fixture")]
 pub fn install_qa_ipc_fixture<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
-    let mode = std::env::var("DOFLOW_CALLS_QA_MODE").unwrap_or_else(|_| "ipc".into());
+    // An installed QA build must remain open on the deterministic incoming-call
+    // fixture so Windows notification branding can be inspected. The automated
+    // true-IPC regression sets DOFLOW_CALLS_QA_MODE=ipc explicitly.
+    let mode = std::env::var("DOFLOW_CALLS_QA_MODE").unwrap_or_else(|_| "incoming".into());
     if !matches!(mode.as_str(), "ipc" | "incoming" | "active") {
         return Err("Modalità QA Calls non valida".into());
     }

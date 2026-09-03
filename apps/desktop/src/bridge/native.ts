@@ -17,6 +17,10 @@ export const nativeDesktop = {
   activatePreparedProfile: () => invoke<void>("activate_prepared_profile"),
   removeProfile: (profileId: string) =>
     invoke<ProfileRegistry>("remove_saved_profile", { profileId }),
+  hasSavedPassword: (profileId: string) =>
+    invoke<boolean>("has_saved_desktop_password", { profileId }),
+  forgetSavedPassword: (profileId: string) =>
+    invoke<boolean>("forget_saved_desktop_password", { profileId }),
   installUpdate: () => invoke<void>("install_current_verified_update"),
   quit: () => invoke<void>("quit_desktop"),
   requestClose: () => invoke<void>("request_desktop_close"),

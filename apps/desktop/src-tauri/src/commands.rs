@@ -1,4 +1,5 @@
 use crate::{
+    credentials::{CredentialEnrollmentStatus, SavedDesktopCredential, StageDesktopPasswordInput},
     models::{
         DesktopReadyInput, DesktopUpdateState, PreparedProfile, ProfileMetadataInput,
         ProfileRegistry, RemoteReadyPayload, SavedProfile, BRIDGE_VERSION,
@@ -9,9 +10,17 @@ use crate::{
     profile_webview::{create_remote_webview, remote_label, REMOTE_ORIGIN},
     runtime::{ActiveProfile, DesktopRuntime},
 };
+use serde::Serialize;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State, WebviewWindow};
 use uuid::Uuid;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileRegistrationResult {
+    registry: ProfileRegistry,
+    credential_status: CredentialEnrollmentStatus,
+}
 
 #[tauri::command]
 pub fn load_profile_registry(state: State<'_, DesktopRuntime>) -> Result<ProfileRegistry, String> {
@@ -62,6 +71,11 @@ pub async fn prepare_profile_webview<R: Runtime>(
         None => (Uuid::new_v4().to_string(), false),
     };
     let label = remote_label(&profile_id);
+    state
+        .credentials
+        .begin_profile_cycle(&profile_id)
+        .map_err(|error| error.to_string())?;
+    crate::window_state::flush_main_window(&app, "bootstrap");
     let create_app = app.clone();
     let create_store = state.profiles.clone();
     let create_profile_id = profile_id.clone();
@@ -133,6 +147,8 @@ pub fn activate_prepared_profile<R: Runtime>(
     remote
         .set_skip_taskbar(false)
         .map_err(|_| "Unable to restore Doflow in the taskbar")?;
+    crate::window_state::flush_main_window(&app, "bootstrap");
+    state.main_window.restore_or_seed(&remote);
     remote.show().map_err(|_| "Unable to show Doflow")?;
     remote.set_focus().map_err(|_| "Unable to focus Doflow")?;
     if let Some(bootstrap) = app.get_webview_window("bootstrap") {
@@ -150,6 +166,18 @@ pub async fn remove_saved_profile<R: Runtime>(
     profile_id: String,
 ) -> Result<ProfileRegistry, String> {
     validate_opaque_id(&profile_id).map_err(|error| error.to_string())?;
+    let saved_profile = state
+        .profiles
+        .load()
+        .map_err(|error| error.to_string())?
+        .profiles
+        .into_iter()
+        .find(|profile| profile.id == profile_id)
+        .ok_or("The selected profile does not exist")?;
+    state
+        .credentials
+        .delete(&saved_profile)
+        .map_err(|error| error.to_string())?;
     let label = remote_label(&profile_id);
     if let Some(remote) = app.get_webview_window(&label) {
         let _ = remote.eval(
@@ -228,7 +256,7 @@ pub fn register_profile_metadata<R: Runtime>(
     webview: WebviewWindow<R>,
     state: State<'_, DesktopRuntime>,
     input: ProfileMetadataInput,
-) -> Result<ProfileRegistry, String> {
+) -> Result<ProfileRegistrationResult, String> {
     assert_remote_caller(&webview, &state)?;
     if input.schema_version != BRIDGE_VERSION {
         return Err("Unsupported Desktop bridge version".into());
@@ -257,9 +285,109 @@ pub fn register_profile_metadata<R: Runtime>(
         last_used_at: timestamp,
         webview_context_id: input.profile_id,
     };
-    state
+    let registry = state
         .profiles
-        .upsert_profile(profile)
+        .upsert_profile(profile.clone())
+        .map_err(|error| error.to_string())?;
+    let credential_status = state
+        .credentials
+        .commit_pending(&profile)
+        .unwrap_or(CredentialEnrollmentStatus::Unavailable);
+    Ok(ProfileRegistrationResult {
+        registry,
+        credential_status,
+    })
+}
+
+#[tauri::command]
+pub fn stage_desktop_password<R: Runtime>(
+    webview: WebviewWindow<R>,
+    state: State<'_, DesktopRuntime>,
+    mut input: StageDesktopPasswordInput,
+) -> Result<(), String> {
+    assert_remote_auth_caller(&webview, &state)?;
+    if input.schema_version != BRIDGE_VERSION {
+        return Err("Unsupported Desktop bridge version".into());
+    }
+    validate_opaque_id(&input.profile_id).map_err(|error| error.to_string())?;
+    assert_active_profile(&webview, &state, &input.profile_id, false)?;
+    let password = zeroize::Zeroizing::new(std::mem::take(&mut input.password));
+    state
+        .credentials
+        .stage(&input.profile_id, password)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn discard_staged_desktop_password<R: Runtime>(
+    webview: WebviewWindow<R>,
+    state: State<'_, DesktopRuntime>,
+) -> Result<(), String> {
+    assert_remote_auth_caller(&webview, &state)?;
+    let active = active_profile_for(&webview, &state)?;
+    state
+        .credentials
+        .discard_pending(&active.profile_id)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn take_saved_desktop_password<R: Runtime>(
+    webview: WebviewWindow<R>,
+    state: State<'_, DesktopRuntime>,
+) -> Result<Option<SavedDesktopCredential>, String> {
+    assert_remote_auth_caller(&webview, &state)?;
+    let active = active_profile_for(&webview, &state)?;
+    if !active.existing {
+        return Ok(None);
+    }
+    let profile = saved_profile(&state, &active.profile_id)?;
+    state
+        .credentials
+        .take_once(&profile)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn invalidate_saved_desktop_password<R: Runtime>(
+    webview: WebviewWindow<R>,
+    state: State<'_, DesktopRuntime>,
+) -> Result<bool, String> {
+    assert_remote_auth_caller(&webview, &state)?;
+    let active = active_profile_for(&webview, &state)?;
+    if !active.existing {
+        return Ok(false);
+    }
+    let profile = saved_profile(&state, &active.profile_id)?;
+    state
+        .credentials
+        .delete(&profile)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn has_saved_desktop_password(
+    state: State<'_, DesktopRuntime>,
+    profile_id: String,
+) -> Result<bool, String> {
+    validate_opaque_id(&profile_id).map_err(|error| error.to_string())?;
+    let profile = saved_profile(&state, &profile_id)?;
+    state
+        .credentials
+        .has(&profile)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn forget_saved_desktop_password(
+    state: State<'_, DesktopRuntime>,
+    profile_id: String,
+) -> Result<bool, String> {
+    validate_opaque_id(&profile_id).map_err(|error| error.to_string())?;
+    let profile = saved_profile(&state, &profile_id)?;
+    state
+        .credentials
+        .delete(&profile)
         .map_err(|error| error.to_string())
 }
 
@@ -270,6 +398,12 @@ pub fn request_profile_switch<R: Runtime>(
     state: State<'_, DesktopRuntime>,
 ) -> Result<(), String> {
     assert_remote_caller(&webview, &state)?;
+    let active = active_profile_for(&webview, &state)?;
+    state
+        .credentials
+        .discard_pending(&active.profile_id)
+        .map_err(|error| error.to_string())?;
+    state.main_window.flush(&webview);
     webview
         .hide()
         .map_err(|_| "Unable to hide the current profile")?;
@@ -283,6 +417,7 @@ pub fn request_profile_switch<R: Runtime>(
     let bootstrap = app
         .get_webview_window("bootstrap")
         .ok_or("Bootstrap window is unavailable")?;
+    state.main_window.restore_or_seed(&bootstrap);
     bootstrap
         .show()
         .map_err(|_| "Unable to show profile picker")?;
@@ -313,8 +448,10 @@ pub async fn install_current_verified_update<R: Runtime>(
 ) -> Result<(), String> {
     assert_update_caller(&webview, &state)?;
     if webview.label() != "bootstrap" {
+        state.main_window.flush(&webview);
         let _ = webview.hide();
         if let Some(bootstrap) = app.get_webview_window("bootstrap") {
+            state.main_window.restore_or_seed(&bootstrap);
             let _ = bootstrap.show();
             let _ = bootstrap.set_focus();
         }
@@ -347,6 +484,10 @@ pub async fn start_desktop_google_oauth<R: Runtime>(
     if active.profile_id != input.profile_id || active.webview_label != webview.label() {
         return Err("Desktop profile mismatch".into());
     }
+    state
+        .credentials
+        .discard_pending(&active.profile_id)
+        .map_err(|error| error.to_string())?;
     state.oauth.start(app, active.webview_label).await
 }
 
@@ -417,6 +558,58 @@ pub(crate) fn assert_remote_caller<R: Runtime>(
         return Err("Inactive Desktop profile rejected".into());
     }
     Ok(())
+}
+
+fn assert_remote_auth_caller<R: Runtime>(
+    webview: &WebviewWindow<R>,
+    state: &DesktopRuntime,
+) -> Result<(), String> {
+    assert_remote_caller(webview, state)?;
+    let url = webview
+        .url()
+        .map_err(|_| "Unable to validate WebView authentication path")?;
+    if url.path() != "/login" {
+        return Err("Desktop credential command rejected outside authentication".into());
+    }
+    Ok(())
+}
+
+fn active_profile_for<R: Runtime>(
+    webview: &WebviewWindow<R>,
+    state: &DesktopRuntime,
+) -> Result<ActiveProfile, String> {
+    state
+        .active
+        .lock()
+        .map_err(|_| "Desktop profile state is unavailable")?
+        .as_ref()
+        .filter(|active| active.webview_label == webview.label())
+        .cloned()
+        .ok_or_else(|| "Desktop profile mismatch".into())
+}
+
+fn assert_active_profile<R: Runtime>(
+    webview: &WebviewWindow<R>,
+    state: &DesktopRuntime,
+    profile_id: &str,
+    require_existing: bool,
+) -> Result<ActiveProfile, String> {
+    let active = active_profile_for(webview, state)?;
+    if active.profile_id != profile_id || (require_existing && !active.existing) {
+        return Err("Desktop profile mismatch".into());
+    }
+    Ok(active)
+}
+
+fn saved_profile(state: &DesktopRuntime, profile_id: &str) -> Result<SavedProfile, String> {
+    state
+        .profiles
+        .load()
+        .map_err(|error| error.to_string())?
+        .profiles
+        .into_iter()
+        .find(|profile| profile.id == profile_id)
+        .ok_or_else(|| "The selected profile does not exist".into())
 }
 
 fn assert_update_caller<R: Runtime>(

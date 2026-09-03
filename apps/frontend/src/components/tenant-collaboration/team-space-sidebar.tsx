@@ -36,7 +36,10 @@ export function TeamSpaceSidebarHeader() {
         <SidebarMenuButton size="lg" asChild tooltip="Doflow Team Space" className="transition-none">
           <Link href="/dashboard/team-space" className="min-w-0">
             <span className="flex size-9 shrink-0 items-center justify-center">
-              <Image src="/icon-192.png" alt="Doflow" width={28} height={28} className="size-7 object-contain" />
+              <>
+                <Image src="/brand/marchio_logo_nero.svg" alt="Doflow" width={28} height={28} className="size-7 object-contain dark:hidden" />
+                <Image src="/brand/marchio_logo_bianco.svg" alt="" aria-hidden="true" width={28} height={28} className="hidden size-7 object-contain dark:block" />
+              </>
             </span>
             <span className="min-w-0 flex-1 leading-tight group-data-[collapsible=icon]:hidden">
               <Image src="/logo_doflow_nero.png" alt="Doflow" width={92} height={18} className="h-auto w-[92px] dark:hidden" />

@@ -44,6 +44,7 @@ type MfaVerifyBody = {
 };
 
 type AuthStage = 'FULL' | 'MFA_PENDING' | 'MFA_SETUP_NEEDED';
+const INVALID_CREDENTIALS_CODE = 'AUTH_INVALID_CREDENTIALS';
 
 function isValidEmail(value: unknown) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
@@ -311,6 +312,7 @@ export class AuthController {
       }
       return result;
     } catch (e) {
+      const invalidCredentials = e instanceof UnauthorizedException;
       // audit fallimento
       await this.auditService.log(req, {
         action: 'auth_login_failed',
@@ -331,6 +333,12 @@ export class AuthController {
 
       if (e instanceof HttpException && e.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
         throw e;
+      }
+      if (invalidCredentials) {
+        throw new UnauthorizedException({
+          message: 'Credenziali non valide',
+          code: INVALID_CREDENTIALS_CODE,
+        });
       }
       throw new UnauthorizedException('Credenziali non valide');
     }

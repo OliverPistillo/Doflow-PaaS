@@ -94,7 +94,7 @@ describe("desktop native polish contracts", () => {
     expect(traySource).toContain("app.package_info().version.to_string()");
     expect(traySource).toContain("Canale Stable");
     for (const icon of [
-      "icons/doflow_favicon_source.png",
+      "icons/doflow_mark_windows_source.svg",
       "icons/icon.ico",
       "icons/32x32.png",
       "icons/128x128.png",
@@ -105,6 +105,10 @@ describe("desktop native polish contracts", () => {
     expect(remote.permissions).toEqual([
       "allow-desktop-ready",
       "allow-register-profile-metadata",
+      "allow-stage-desktop-password",
+      "allow-discard-staged-desktop-password",
+      "allow-take-saved-desktop-password",
+      "allow-invalidate-saved-desktop-password",
       "allow-request-profile-switch",
       "allow-get-update-state",
       "allow-install-current-verified-update",

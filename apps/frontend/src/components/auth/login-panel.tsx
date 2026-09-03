@@ -6,12 +6,23 @@ import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { toast } from "sonner";
 
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { apiFetch, getApiBaseUrl } from "@/lib/api";
-import { getDesktopEmailPrefill, startDesktopGoogleOAuth } from "@/lib/desktop-bridge";
+import { ApiError, apiFetch, getApiBaseUrl } from "@/lib/api";
+import { shouldInvalidateSavedDesktopCredential } from "@/lib/desktop-saved-credential-policy";
+import {
+  discardStagedDesktopPassword,
+  getDesktopEmailPrefill,
+  invalidateSavedDesktopPassword,
+  stageDesktopPassword,
+  startDesktopGoogleOAuth,
+  supportsDesktopSecureCredentials,
+  takeSavedDesktopPassword,
+  useDoflowDesktop,
+} from "@/lib/desktop-bridge";
 import {
   getTenantLoginUrl,
   isInternalDoflowTenant,
@@ -60,6 +71,7 @@ const loginSchema = z.object({
     .email("Inserisci un'email valida"),
   password: z.string().min(1, "La password è obbligatoria"),
   rememberMe: z.boolean().optional(),
+  saveDesktopPassword: z.boolean().optional(),
 });
 type LoginFormValues = z.infer<typeof loginSchema>;
 
@@ -122,6 +134,10 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
   const [showTenantRedirect, setShowTenantRedirect] = React.useState(false);
   const [tenantRedirectUrl, setTenantRedirectUrl] = React.useState<string | null>(null);
   const [tenantDialogMode, setTenantDialogMode] = React.useState<"redirect" | "info">("redirect");
+  const [autoLoginBusy, setAutoLoginBusy] = React.useState(false);
+  const autoLoginAttempted = React.useRef(false);
+  const isDesktop = useDoflowDesktop();
+  const secureCredentialsAvailable = isDesktop && supportsDesktopSecureCredentials();
 
   const {
     register,
@@ -131,7 +147,7 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
     formState: { errors, isSubmitting },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "", rememberMe: false },
+    defaultValues: { email: "", password: "", rememberMe: false, saveDesktopPassword: false },
   });
 
   React.useEffect(() => {
@@ -197,78 +213,133 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
     return () => clearTimeout(t);
   }, [showTenantRedirect, tenantRedirectUrl]);
 
-  const onSubmit = async (values: LoginFormValues) => {
-    setGeneralError(null);
+  const completeLogin = React.useCallback(async (
+    values: LoginFormValues,
+    source: "manual" | "saved",
+  ) => {
     const { isAppHost, tenantSub } = getHostContext();
     const realm = isAppHost ? "platform" : "tenant";
-    try {
-      const headers: Record<string, string> = {};
-      if (isAppHost) headers["x-doflow-tenant-id"] = MAIN_DB_NAME;
-      const data = await apiFetch<LoginResponse>("/auth/login", {
+    const headers: Record<string, string> = {};
+    if (isAppHost) headers["x-doflow-tenant-id"] = MAIN_DB_NAME;
+    const data = await apiFetch<LoginResponse>("/auth/login", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        email: values.email,
+        password: values.password,
+        rememberMe: values.rememberMe === true,
+        realm,
+        tenantSlug: tenantSub ?? undefined,
+      }),
+    });
+    if (data?.error) throw new Error(data.error || data.message);
+    if (!data.user) throw new Error("Sessione di accesso mancante");
+
+    if (source === "manual" && values.saveDesktopPassword === true) {
+      const staged = await stageDesktopPassword(values.password).catch(() => false);
+      if (!staged) {
+        toast.warning("Accesso completato, ma la password non è stata salvata sul dispositivo.");
+      }
+    }
+
+    const role = normalizeRole(data.user.role);
+    let targetTenant = "public";
+    if (data.user?.schema || data.user?.tenantSlug || data.user?.tenant_id) {
+      targetTenant = (
+        data.user.tenantSlug ||
+        data.user.schema ||
+        data.user.tenant_id ||
+        "public"
+      ).toLowerCase();
+    }
+    const authStage = data.mfa?.stage || data.user.authStage;
+    const mfaRequired = data?.mfa?.required === true || isMfaPending(authStage);
+    const next = mfaRequired ? "mfa" : role === "SUPER_ADMIN" ? "superadmin" : "dashboard";
+
+    if (isAppHost && targetTenant !== "public" && !isInternalDoflowTenant(targetTenant)) {
+      const handoff = await apiFetch<{ handoff: string }>("/auth/handoff", {
         method: "POST",
-        headers,
         body: JSON.stringify({
-          email: values.email,
-          password: values.password,
+          tenantTarget: targetTenant,
           rememberMe: values.rememberMe === true,
-          realm,
-          tenantSlug: tenantSub ?? undefined,
+          next,
         }),
       });
-      if (data?.error) throw new Error(data.error || data.message);
-      if (!data.user) throw new Error("Sessione di accesso mancante");
-      const role = normalizeRole(data.user.role);
-      let targetTenant = "public";
-      if (data.user?.schema || data.user?.tenantSlug || data.user?.tenant_id) {
-        targetTenant = (
-          data.user.tenantSlug ||
-          data.user.schema ||
-          data.user.tenant_id ||
-          "public"
-        ).toLowerCase();
-      }
-      const authStage = data.mfa?.stage || data.user.authStage;
-      const mfaRequired = data?.mfa?.required === true || isMfaPending(authStage);
-      const next = mfaRequired ? "mfa" : role === "SUPER_ADMIN" ? "superadmin" : "dashboard";
+      setTenantRedirectUrl(getTenantLoginUrl(targetTenant, handoff.handoff));
+      setTenantDialogMode("redirect");
+      setShowTenantRedirect(true);
+      return;
+    }
 
-      if (isAppHost && targetTenant !== "public" && !isInternalDoflowTenant(targetTenant)) {
-        const handoff = await apiFetch<{ handoff: string }>("/auth/handoff", {
-          method: "POST",
-          body: JSON.stringify({
-            tenantTarget: targetTenant,
-            rememberMe: values.rememberMe === true,
-            next,
-          }),
-        });
-        setTenantRedirectUrl(getTenantLoginUrl(targetTenant, handoff.handoff));
-        setTenantDialogMode("redirect");
-        setShowTenantRedirect(true);
+    if (mfaRequired) {
+      if (isAppHost) {
+        router.push(`/${targetTenant === "public" ? "public" : targetTenant}/mfa`);
         return;
       }
-
-      if (mfaRequired) {
-        if (isAppHost) {
-          router.push(`/${targetTenant === "public" ? "public" : targetTenant}/mfa`);
+      router.push(tenantSub ? `/${tenantSub}/mfa` : `/mfa`);
+      return;
+    }
+    if (role === "SUPER_ADMIN") {
+      router.push("/superadmin");
+      return;
+    }
+    if (isAppHost) {
+      if (targetTenant !== "public" && /^[a-z0-9_]+$/i.test(targetTenant)) {
+        if (isInternalDoflowTenant(targetTenant)) {
+          router.push("/dashboard");
           return;
         }
-        router.push(tenantSub ? `/${tenantSub}/mfa` : `/mfa`);
-        return;
-      }
-      if (role === "SUPER_ADMIN") {
-        router.push("/superadmin");
-        return;
-      }
-      if (isAppHost) {
-        if (targetTenant !== "public" && /^[a-z0-9_]+$/i.test(targetTenant)) {
-          if (isInternalDoflowTenant(targetTenant)) {
-            router.push("/dashboard");
-            return;
-          }
-        }
-        router.push("/dashboard");
-        return;
       }
       router.push("/dashboard");
+      return;
+    }
+    router.push("/dashboard");
+  }, [router]);
+
+  React.useEffect(() => {
+    if (!secureCredentialsAvailable || autoLoginAttempted.current) return;
+    autoLoginAttempted.current = true;
+    let active = true;
+    setAutoLoginBusy(true);
+    void takeSavedDesktopPassword()
+      .then(async (credential) => {
+        if (!active || !credential) return;
+        setValue("email", credential.email, { shouldValidate: false });
+        await completeLogin({
+          email: credential.email,
+          password: credential.password,
+          rememberMe: false,
+          saveDesktopPassword: false,
+        }, "saved");
+      })
+      .catch(async (error: unknown) => {
+        if (!active) return;
+        if (shouldInvalidateSavedDesktopCredential(error)) {
+          await invalidateSavedDesktopPassword().catch(() => false);
+          setGeneralError("La password salvata non è più valida. Inserisci la password aggiornata.");
+          return;
+        }
+        if (error instanceof ApiError && error.status === 429) {
+          setGeneralError(error.message);
+          return;
+        }
+        setGeneralError("Accesso automatico non riuscito. Puoi accedere manualmente.");
+      })
+      .finally(() => {
+        if (active) setAutoLoginBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [completeLogin, secureCredentialsAvailable, setValue]);
+
+  const onSubmit = async (values: LoginFormValues) => {
+    setGeneralError(null);
+    if (secureCredentialsAvailable) {
+      await discardStagedDesktopPassword().catch(() => false);
+    }
+    try {
+      await completeLogin(values, "manual");
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "";
       setGeneralError(
@@ -278,6 +349,8 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
       );
     }
   };
+
+  const loginBusy = isSubmitting || autoLoginBusy;
 
   return (
     <>
@@ -328,7 +401,7 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
                 type="email"
                 placeholder="Inserisci la tua email"
                 autoComplete="email"
-                disabled={isSubmitting}
+                disabled={loginBusy}
                 aria-invalid={!!errors.email}
                 className={cn("auth-input no-right", errors.email && "err")}
                 {...register("email")}
@@ -353,7 +426,7 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
                 type={showPassword ? "text" : "password"}
                 placeholder="Inserisci la tua password"
                 autoComplete="current-password"
-                disabled={isSubmitting}
+                disabled={loginBusy}
                 aria-invalid={!!errors.password}
                 className={cn("auth-input", errors.password && "err")}
                 {...register("password")}
@@ -366,7 +439,7 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
-                    disabled={isSubmitting}
+                    disabled={loginBusy}
                     aria-label={showPassword ? "Nascondi password" : "Mostra password"}
                     className="auth-password-toggle"
                   >
@@ -395,7 +468,7 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
                     id="rememberMe"
                     checked={field.value}
                     onCheckedChange={(checked) => field.onChange(checked === true)}
-                    disabled={isSubmitting}
+                    disabled={loginBusy}
                   />
                 )}
               />
@@ -408,6 +481,36 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
             </Link>
           </div>
 
+          {secureCredentialsAvailable ? (
+            <div className="auth-desktop-credential-option">
+              <div className="auth-check-row">
+                <Controller
+                  name="saveDesktopPassword"
+                  control={control}
+                  render={({ field }) => (
+                    <Checkbox
+                      id="saveDesktopPassword"
+                      checked={field.value}
+                      onCheckedChange={(checked) => field.onChange(checked === true)}
+                      disabled={loginBusy}
+                    />
+                  )}
+                />
+                <Label htmlFor="saveDesktopPassword" className="cursor-pointer text-[13px]">
+                  Salva la password in modo sicuro su questo dispositivo
+                </Label>
+              </div>
+              <p>Solo Doflow Desktop · protetta da Windows Credential Manager</p>
+            </div>
+          ) : null}
+
+          {autoLoginBusy ? (
+            <div className="auth-desktop-auto-login" role="status" aria-live="polite">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Accesso sicuro al profilo in corso…
+            </div>
+          ) : null}
+
           {generalError && (
             <div role="alert" className="auth-error">
               <AlertCircle size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
@@ -415,9 +518,9 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
             </div>
           )}
 
-          <button type="submit" disabled={isSubmitting} className="auth-submit">
+          <button type="submit" disabled={loginBusy} className="auth-submit">
             <span className="auth-button-content">
-              {isSubmitting ? (
+              {loginBusy ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                   Accesso in corso...
@@ -433,6 +536,7 @@ export function LoginPanel({ onMascotShyChange, onSwitchToRegister }: LoginPanel
 
         <button
           type="button"
+          disabled={loginBusy}
           className="auth-social"
           aria-label="Continua con Google"
           data-testid="login-google-btn"

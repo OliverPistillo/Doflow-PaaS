@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prebuild": "node ../../scripts/validate-doflow-brand-assets.mjs",
     "shell:dev": "tauri dev",
     "shell:qa": "tauri dev --no-watch --config src-tauri/tauri.qa.conf.json",
     "shell:qa:compact": "tauri dev --no-watch --config src-tauri/tauri.qa.conf.json --config src-tauri/tauri.qa.compact.conf.json",
@@ -14,6 +15,8 @@
     "build": "vite build",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
+    "test:bridge-v2-compat": "vitest run src/bridge-v2-compat.test.ts",
+    "test:secure-credentials": "vitest run src/saved-credential-invalidation.test.ts src/security-contract.test.ts",
     "test:packaged-calls-ipc": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-packaged-calls-ipc.ps1",
     "test:watch": "vitest",
     "release:version": "node scripts/next-desktop-version.mjs",

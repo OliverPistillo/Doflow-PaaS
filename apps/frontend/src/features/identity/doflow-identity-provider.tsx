@@ -426,7 +426,12 @@ export function DoflowIdentityProvider({ children }: { children: React.ReactNode
       avatarUrl: currentUser.avatarUrl?.startsWith("https://") ? currentUser.avatarUrl : undefined,
       initials: currentUser.name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
     })
-      .then(() => notifyDesktopReady("authenticated"))
+      .then((result) => {
+        if (result && result.credentialStatus === "unavailable") {
+          toast.error("Accesso completato, ma Windows non ha potuto salvare la password in modo sicuro.")
+        }
+        return notifyDesktopReady("authenticated")
+      })
       .catch(() => { desktopProfileRegistered.current = "" })
   }, [currentUser, hasHydrated, isAuthenticated])
   const capabilitySet = useMemo(

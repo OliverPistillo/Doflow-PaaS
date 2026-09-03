@@ -10,6 +10,10 @@
   "permissions": [
     "allow-desktop-ready",
     "allow-register-profile-metadata",
+    "allow-stage-desktop-password",
+    "allow-discard-staged-desktop-password",
+    "allow-take-saved-desktop-password",
+    "allow-invalidate-saved-desktop-password",
     "allow-request-profile-switch",
     "allow-get-update-state",
     "allow-install-current-verified-update",

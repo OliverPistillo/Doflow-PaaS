@@ -45,6 +45,15 @@ type DesktopProfileMetadata = {
   initials?: string;
 };
 
+export type DesktopCredentialEnrollmentStatus = "none" | "saved" | "unavailable";
+export type DesktopProfileRegistrationResult = {
+  credentialStatus: DesktopCredentialEnrollmentStatus;
+};
+export type DesktopSavedCredential = {
+  email: string;
+  password: string;
+};
+
 type DoflowDesktopContext = {
   readonly isDesktop: true;
   readonly platform: "windows";
@@ -54,6 +63,10 @@ type DoflowDesktopContext = {
   readonly profileEmail?: string;
   desktopReady: (state: "authenticated" | "needs-auth" | "mfa") => Promise<void>;
   registerProfileMetadata: (metadata: DesktopProfileMetadata) => Promise<unknown>;
+  stageDesktopPassword?: (password: string) => Promise<void>;
+  discardStagedDesktopPassword?: () => Promise<void>;
+  takeSavedDesktopPassword?: () => Promise<DesktopSavedCredential | null>;
+  invalidateSavedDesktopPassword?: () => Promise<boolean>;
   requestProfileSwitch: () => Promise<void>;
   getUpdateState: () => Promise<DesktopUpdateState>;
   installCurrentVerifiedUpdate: () => Promise<void>;
@@ -190,8 +203,63 @@ export async function notifyDesktopReady(state: "authenticated" | "needs-auth" |
 export async function registerDesktopProfile(metadata: DesktopProfileMetadata) {
   const desktop = context();
   if (!desktop) return false;
-  await desktop.registerProfileMetadata(metadata);
+  const result = await desktop.registerProfileMetadata(metadata);
+  if (result && typeof result === "object") {
+    const status = (result as { credentialStatus?: unknown }).credentialStatus;
+    if (status === "none" || status === "saved" || status === "unavailable") {
+      return { credentialStatus: status } satisfies DesktopProfileRegistrationResult;
+    }
+  }
+  return { credentialStatus: "none" } satisfies DesktopProfileRegistrationResult;
+}
+
+function credentialContext(): DoflowDesktopContext | null {
+  const desktop = context();
+  if (
+    !desktop
+    || desktop.bridgeVersion < 3
+    || typeof desktop.stageDesktopPassword !== "function"
+    || typeof desktop.discardStagedDesktopPassword !== "function"
+    || typeof desktop.takeSavedDesktopPassword !== "function"
+    || typeof desktop.invalidateSavedDesktopPassword !== "function"
+  ) return null;
+  return desktop;
+}
+
+export function supportsDesktopSecureCredentials() {
+  return credentialContext() !== null;
+}
+
+export async function stageDesktopPassword(password: string) {
+  const desktop = credentialContext();
+  if (!desktop?.stageDesktopPassword) return false;
+  await desktop.stageDesktopPassword(password);
   return true;
+}
+
+export async function discardStagedDesktopPassword() {
+  const desktop = credentialContext();
+  if (!desktop?.discardStagedDesktopPassword) return false;
+  await desktop.discardStagedDesktopPassword();
+  return true;
+}
+
+export async function takeSavedDesktopPassword(): Promise<DesktopSavedCredential | null> {
+  const desktop = credentialContext();
+  if (!desktop?.takeSavedDesktopPassword) return null;
+  const credential = await desktop.takeSavedDesktopPassword();
+  if (!credential) return null;
+  const email = credential.email?.trim().toLowerCase();
+  if (!email || !/^\S+@\S+\.\S+$/.test(email) || typeof credential.password !== "string" || credential.password.length === 0) {
+    throw new Error("Invalid Desktop credential response");
+  }
+  return { email, password: credential.password };
+}
+
+export async function invalidateSavedDesktopPassword() {
+  const desktop = credentialContext();
+  if (!desktop?.invalidateSavedDesktopPassword) return false;
+  return desktop.invalidateSavedDesktopPassword();
 }
 
 export async function requestDesktopProfileSwitch() {

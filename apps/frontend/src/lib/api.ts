@@ -4,7 +4,12 @@ import { getTenantHeader } from "./tenant-fetch";
 type ApiFetchOptions = RequestInit;
 
 export class ApiError extends Error {
-  constructor(message: string, public readonly status: number) {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly code?: string,
+    public readonly requestPath?: string,
+  ) {
     super(message);
     this.name = "ApiError";
   }
@@ -117,7 +122,12 @@ export async function apiFetch<T = unknown>(
   // Gestione Specifica 429 (Too Many Requests)
   if (res.status === 429) {
     const retryAfter = res.headers.get('Retry-After') || '60';
-    throw new ApiError(`Traffic Control: Troppe richieste. Riprova tra ${retryAfter} secondi.`, 429);
+    throw new ApiError(
+      `Traffic Control: Troppe richieste. Riprova tra ${retryAfter} secondi.`,
+      429,
+      undefined,
+      pathNoApi,
+    );
   }
   // -------------------------------------
 
@@ -132,7 +142,8 @@ export async function apiFetch<T = unknown>(
 
   if (!res.ok) {
     const msg = json?.error ?? json?.message ?? text ?? `HTTP ${res.status}`;
-    throw new ApiError(String(msg), res.status);
+    const code = typeof json?.code === "string" ? json.code : undefined;
+    throw new ApiError(String(msg), res.status, code, pathNoApi);
   }
 
   if (json && typeof json === "object" && json.error) {

@@ -127,6 +127,9 @@ pub fn create_remote_webview<R: Runtime>(
     let window = builder
         .build()
         .map_err(|_| "unable to create the Doflow WebView")?;
+    app.state::<crate::runtime::DesktopRuntime>()
+        .main_window
+        .restore_or_seed(&window);
     #[cfg(target_os = "windows")]
     {
         window
@@ -198,6 +201,10 @@ fn initialization_script(
     profileEmail: {email},
     desktopReady: signalDesktopReady,
     registerProfileMetadata: (metadata) => internals.invoke('register_profile_metadata', {{ input: {{ ...metadata, schemaVersion, profileId }} }}),
+    stageDesktopPassword: (password) => internals.invoke('stage_desktop_password', {{ input: {{ schemaVersion, profileId, password }} }}),
+    discardStagedDesktopPassword: () => internals.invoke('discard_staged_desktop_password'),
+    takeSavedDesktopPassword: () => internals.invoke('take_saved_desktop_password'),
+    invalidateSavedDesktopPassword: () => internals.invoke('invalidate_saved_desktop_password'),
     requestProfileSwitch: () => internals.invoke('request_profile_switch'),
     getUpdateState: () => internals.invoke('get_update_state'),
     installCurrentVerifiedUpdate: () => internals.invoke('install_current_verified_update'),
@@ -280,6 +287,9 @@ mod tests {
         assert!(script.contains("start_desktop_google_oauth"));
         assert!(script.contains("get_desktop_call_capabilities"));
         assert!(script.contains("show_incoming_desktop_call"));
+        assert!(script.contains("stage_desktop_password"));
+        assert!(script.contains("take_saved_desktop_password"));
+        assert!(!script.contains("invoke: internals.invoke"));
         assert!(script.contains("doflow:desktop-call-action"));
         assert!(script.contains("window.location.pathname === '/login'"));
         assert!(script.contains("signalDesktopReady('needs-auth')"));

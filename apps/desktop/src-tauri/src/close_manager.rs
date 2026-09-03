@@ -104,17 +104,14 @@ pub fn request_user_close<R: Runtime>(app: &AppHandle<R>, source_label: &str) {
     if runtime.close.is_explicit_exit() || !is_managed_close_window(source_label) {
         return;
     }
+    crate::window_state::flush_main_window(app, source_label);
     match action_for(runtime.close.behavior()) {
         CloseAction::Prompt => {
             runtime.close.set_pending(source_label.to_owned());
             if source_label.starts_with("remote-") {
                 hide_window(app, source_label);
             }
-            if let Some(bootstrap) = app.get_webview_window("bootstrap") {
-                let _ = bootstrap.show();
-                let _ = bootstrap.unminimize();
-                let _ = bootstrap.set_focus();
-            }
+            show_window(app, "bootstrap");
             let _ = app.emit_to("bootstrap", CLOSE_PROMPT_EVENT, ());
         }
         CloseAction::Hide => hide_window(app, source_label),
@@ -199,6 +196,8 @@ pub fn user_facing_window_label(active: Option<&crate::runtime::ActiveProfile>) 
 
 pub fn exit_desktop<R: Runtime>(app: &AppHandle<R>) {
     let runtime = app.state::<DesktopRuntime>();
+    let active = runtime.active.lock().ok().and_then(|active| active.clone());
+    crate::window_state::flush_main_window(app, user_facing_window_label(active.as_ref()));
     runtime.close.begin_explicit_exit();
     crate::call_manager::destroy_all_call_windows(app);
     app.exit(0);
@@ -206,12 +205,20 @@ pub fn exit_desktop<R: Runtime>(app: &AppHandle<R>) {
 
 fn hide_window<R: Runtime>(app: &AppHandle<R>, label: &str) {
     if let Some(window) = app.get_webview_window(label) {
+        if is_managed_close_window(label) {
+            app.state::<DesktopRuntime>().main_window.flush(&window);
+        }
         let _ = window.hide();
     }
 }
 
 fn show_window<R: Runtime>(app: &AppHandle<R>, label: &str) {
     if let Some(window) = app.get_webview_window(label) {
+        if is_managed_close_window(label) {
+            app.state::<DesktopRuntime>()
+                .main_window
+                .restore_or_seed(&window);
+        }
         #[cfg(target_os = "windows")]
         let _ = window.set_skip_taskbar(false);
         let _ = window.show();

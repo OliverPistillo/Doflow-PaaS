@@ -1523,6 +1523,28 @@ html.dark[data-tenant-ui="universal"] {
   gap: 9px;
 }
 .auth-login-card .auth-check-row label { line-height: 1.2; }
+.auth-login-card .auth-desktop-credential-option {
+  display: grid;
+  gap: 7px;
+  padding: 12px 13px;
+  border: 1px solid #dce4f5;
+  border-radius: 9px;
+  background: #f7f9ff;
+}
+.auth-login-card .auth-desktop-credential-option p {
+  margin: 0 0 0 25px;
+  color: #66718a;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.auth-login-card .auth-desktop-auto-login {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #485573;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
 .auth-login-card [role="checkbox"] {
   border-color: #6684fa;
   border-radius: 4px;

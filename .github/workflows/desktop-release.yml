@@ -6,6 +6,8 @@ on:
     paths:
       - "apps/desktop/**"
       - "apps/frontend/src/lib/desktop-bridge.ts"
+      - "apps/frontend/src/lib/desktop-saved-credential-policy.ts"
+      - "apps/frontend/src/lib/api.ts"
       - "apps/frontend/src/components/desktop/**"
       - "apps/frontend/src/app/layout.tsx"
       - "apps/frontend/src/components/auth/login-panel.tsx"
@@ -18,6 +20,8 @@ on:
       - "apps/backend/src/auth/google-desktop.guard.ts"
       - "apps/backend/src/auth/google.controller.ts"
       - "apps/backend/src/auth/auth.module.ts"
+      - "apps/backend/src/auth/auth-flow-security.spec.ts"
+      - "apps/backend/src/auth.controller.ts"
       - "apps/backend/src/migrations/1880000000000-CreateDesktopCallsAuthority.ts"
       - "apps/backend/src/realtime/presence-registry.service.ts"
       - "apps/backend/src/realtime/presence-registry.service.spec.ts"
@@ -45,6 +49,8 @@ on:
       - "tests/frontend/desktop-calls-runtime.test.mjs"
       - "tests/frontend/desktop-auto-update-runtime.test.mjs"
       - "tests/frontend/universal-features-runtime.test.mjs"
+      - "scripts/doflow-brand-assets.manifest.json"
+      - "scripts/validate-doflow-brand-assets.mjs"
       - "package.json"
       - "pnpm-lock.yaml"
       - ".github/workflows/desktop-release.yml"
@@ -87,6 +93,10 @@ jobs:
         shell: pwsh
         run: rustup target add x86_64-pc-windows-msvc
 
+      - name: Validate canonical Doflow brand assets
+        shell: pwsh
+        run: pnpm validate:brand-assets
+
       - name: Validate Desktop TypeScript
         shell: pwsh
         run: pnpm -C apps/desktop type-check
@@ -94,6 +104,14 @@ jobs:
       - name: Run Desktop UI tests
         shell: pwsh
         run: pnpm -C apps/desktop test
+
+      - name: Run Desktop secure credential policy tests
+        shell: pwsh
+        run: pnpm -C apps/desktop test:secure-credentials
+
+      - name: Verify Desktop 1.1.3 bridge v2 compatibility
+        shell: pwsh
+        run: pnpm run test:desktop-bridge-v2
 
       - name: Run shared frontend Desktop Calls contract tests
         shell: pwsh
@@ -125,6 +143,11 @@ jobs:
         working-directory: apps/desktop/src-tauri
         run: cargo fmt --all -- --check
 
+      - name: Check every Rust target
+        shell: pwsh
+        working-directory: apps/desktop/src-tauri
+        run: cargo check --target x86_64-pc-windows-msvc --all-targets
+
       - name: Run Rust Clippy
         shell: pwsh
         working-directory: apps/desktop/src-tauri
@@ -135,6 +158,20 @@ jobs:
         working-directory: apps/desktop/src-tauri
         run: cargo test --target x86_64-pc-windows-msvc
 
+      - name: Verify Windows Credential Manager lifecycle and Local persistence
+        shell: pwsh
+        working-directory: apps/desktop/src-tauri
+        run: cargo test --target x86_64-pc-windows-msvc credentials::tests
+
+      - name: Install pinned cargo-audit
+        shell: pwsh
+        run: cargo install cargo-audit --version 0.22.2 --locked
+
+      - name: Audit the Desktop Rust dependency lock
+        shell: pwsh
+        working-directory: apps/desktop/src-tauri
+        run: cargo audit --file Cargo.lock
+
       - name: Run packaged Desktop Calls true-IPC regression
         shell: pwsh
         run: pnpm -C apps/desktop test:packaged-calls-ipc
@@ -142,6 +179,14 @@ jobs:
       - name: Verify frontend Desktop contract still type-checks
         shell: pwsh
         run: pnpm -C apps/frontend type-check
+
+      - name: Lint the shared frontend
+        shell: pwsh
+        run: pnpm -C apps/frontend lint
+
+      - name: Build the shared frontend for production
+        shell: pwsh
+        run: pnpm -C apps/frontend build
 
       - name: Verify backend Desktop contract still builds
         shell: pwsh

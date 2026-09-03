@@ -27,7 +27,7 @@ Bridge v2 adds only the fixed Desktop Calls commands listed by `capabilities/dof
 
 There is no remote filesystem, shell, process, generic HTTP, secret, generic updater, or generic window access. Native commands additionally validate the calling origin, bridge version, active profile, and WebView label. Navigation outside the fixed application origin is denied; safe external links are opened by the operating system.
 
-Cloud and Desktop deploy independently. The current native bridge is version 2. The published Desktop 1.0.1 bridge v1 remains a deliberate compatibility boundary: a small coordinator at the root cloud layout detects exactly bridge v1, reads its native update state, and invokes its already-published `installCurrentVerifiedUpdate` capability once. It is inert in normal browsers and on bridge v2 or newer, and does not expose generic Tauri invocation. This lets an authenticated or pre-auth 1.0.1 client discover the first 1.1 Stable release without changing the login UI.
+Cloud and Desktop deploy independently. The current local Phase 1 native bridge is version 3. The published Desktop 1.1.3 bridge v2 remains fully supported by the shared frontend for login, profiles, updater and Calls; the v3 secure-credential option is simply absent and all credential methods are inert. The published Desktop 1.0.1 bridge v1 remains a deliberate compatibility boundary: a small coordinator at the root cloud layout detects exactly bridge v1, reads its native update state, and invokes its already-published `installCurrentVerifiedUpdate` capability once. It is inert in normal browsers and on bridge v2 or newer, and does not expose generic Tauri invocation.
 
 Any future cloud feature that uses native behavior must feature-detect `window.__DOFLOW_DESKTOP__`, check `bridgeVersion`, preserve a browser fallback, and tolerate older Desktop versions. Bump the bridge only for incompatible contracts and retain the previous contract for already-installed clients.
 
@@ -48,7 +48,7 @@ Local development and unsigned local bundles do not require production updater s
 
 ## Signed automatic releases
 
-`.github/workflows/desktop-release.yml` validates Desktop changes on Windows x64. Publication is a distinct job in the protected `desktop-release` environment with only `contents: write`. It serializes releases, parses existing `desktop-v*` tags with SemVer, increments the patch without committing a version change, builds NSIS and MSI artifacts at the triggering `main` SHA, creates a draft, validates `latest.json`, artifact presence, updater signatures and tag target, attaches `desktop-policy.json`, and only then publishes.
+`.github/workflows/desktop-release.yml` validates Desktop changes on Windows x64. The closed-gate validation includes deterministic brand assets, Desktop/UI/secure-store/bridge-v2 tests, Rust formatting/clippy/tests, a RustSec audit of `Cargo.lock`, packaged Calls IPC, frontend type-check/lint/production build, and backend build. Publication is a distinct job in the protected `desktop-release` environment with only `contents: write`. It serializes releases, parses existing `desktop-v*` tags with SemVer, increments the patch without committing a version change, builds NSIS and MSI artifacts at the triggering `main` SHA, creates a draft, validates `latest.json`, artifact presence, updater signatures and tag target, attaches `desktop-policy.json`, and only then publishes.
 
 The explicit repository/environment variable `DESKTOP_RELEASE_ENABLED` must equal `true`; otherwise validation runs and no release is created. A publish also fails before build if the updater private or public signing material is missing or structurally invalid. The updater prefers the NSIS artifact and uses passive Windows installation.
 
@@ -78,8 +78,8 @@ The version shown in the local profile/update surfaces and tray menu comes from 
 3. Configure `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` there if the key is password protected.
 4. Configure the real public key as the environment/repository variable `TAURI_SIGNING_PUBLIC_KEY`.
 5. Set `DESKTOP_RELEASE_ENABLED=true` only after the protected environment and signing values are ready.
-6. Add a trusted Windows Authenticode certificate when available.
+6. Treat Windows Authenticode as a separate future operation; it is not configured by this repository state.
 
-Updater signing and Windows Authenticode are separate. The former protects Doflow update integrity and is mandatory for publication. Until Authenticode is configured, Windows may show Unknown Publisher or SmartScreen warnings even for updater-signed artifacts.
+Updater signing and Windows Authenticode are separate. The former protects Doflow update integrity and is mandatory for publication. Authenticode is not currently configured, so Windows may show Unknown Publisher or SmartScreen warnings even for updater-signed artifacts.
 
-The official SVG wordmark is reused from the existing Doflow frontend assets. No replacement brand asset is required for V1.
+Small-mark branding is derived only from the approved black and white SVG authorities documented in `docs/desktop-secure-credentials-window-branding.md`; complete wordmarks remain only on the explicit allowlist.

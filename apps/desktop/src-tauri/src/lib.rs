@@ -1,7 +1,9 @@
 mod call_manager;
 mod close_manager;
 mod commands;
+mod credentials;
 mod models;
+mod notification;
 mod oauth;
 mod preferences;
 mod profile_registry;
@@ -9,6 +11,7 @@ mod profile_webview;
 mod runtime;
 mod tray;
 mod updater;
+mod window_state;
 
 use preferences::PreferencesStore;
 use profile_registry::ProfileRegistryStore;
@@ -26,14 +29,27 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(updater::updater_plugin())
         .setup(|app| {
+            notification::initialize_windows_identity(&app.config().identifier)?;
             let app_data_dir = app
                 .path()
                 .app_data_dir()
                 .map_err(|error| format!("unable to resolve Doflow app data: {error}"))?;
             let profiles = ProfileRegistryStore::new(app_data_dir.clone());
             let preferences = PreferencesStore::new(app_data_dir.clone());
+            let main_window = window_state::MainWindowStateManager::new(app_data_dir.clone());
             let updater = UpdateManager::new(app_data_dir, app.package_info().version.to_string());
-            app.manage(DesktopRuntime::new(profiles, updater, preferences));
+            app.manage(DesktopRuntime::new(
+                profiles,
+                updater,
+                preferences,
+                main_window,
+            ));
+            if let Some(bootstrap) = app.get_webview_window("bootstrap") {
+                app.state::<DesktopRuntime>()
+                    .main_window
+                    .restore_or_seed(&bootstrap);
+                bootstrap.show()?;
+            }
             tray::setup(app.handle())?;
             #[cfg(feature = "calls-qa-fixture")]
             {
@@ -53,6 +69,23 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if close_manager::is_managed_close_window(window.label()) {
+                match event {
+                    WindowEvent::Moved(_)
+                    | WindowEvent::Resized(_)
+                    | WindowEvent::ScaleFactorChanged { .. }
+                    | WindowEvent::Focused(false) => {
+                        window_state::schedule_main_window_save(
+                            window.app_handle(),
+                            window.label(),
+                        );
+                    }
+                    WindowEvent::CloseRequested { .. } => {
+                        window_state::flush_main_window(window.app_handle(), window.label());
+                    }
+                    _ => {}
+                }
+            }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let label = window.label();
                 if call_manager::handle_native_close_requested(window.app_handle(), label) {
@@ -73,8 +106,14 @@ pub fn run() {
             commands::prepare_profile_webview,
             commands::activate_prepared_profile,
             commands::remove_saved_profile,
+            commands::has_saved_desktop_password,
+            commands::forget_saved_desktop_password,
             commands::desktop_ready,
             commands::register_profile_metadata,
+            commands::stage_desktop_password,
+            commands::discard_staged_desktop_password,
+            commands::take_saved_desktop_password,
+            commands::invalidate_saved_desktop_password,
             commands::request_profile_switch,
             commands::get_update_state,
             commands::install_current_verified_update,

@@ -4,6 +4,7 @@ import {
   ChevronIcon,
   CloseIcon,
   GearIcon,
+  KeyOffIcon,
   PlusIcon,
   TrashIcon,
 } from "./DesktopBannerIcons";
@@ -14,6 +15,8 @@ type ProfilePickerProps = {
   selectedProfileId?: string;
   onSelect: (profile: SavedProfile) => void | Promise<void>;
   onRemove: (profile: SavedProfile) => void | Promise<void>;
+  credentialProfileIds?: ReadonlySet<string>;
+  onForgetPassword?: (profile: SavedProfile) => void | Promise<void>;
   onAdd: () => void | Promise<void>;
   onClose: () => void;
 };
@@ -37,6 +40,8 @@ export function ProfilePicker({
   selectedProfileId,
   onSelect,
   onRemove,
+  credentialProfileIds = new Set<string>(),
+  onForgetPassword,
   onAdd,
   onClose,
 }: ProfilePickerProps) {
@@ -182,18 +187,34 @@ export function ProfilePicker({
                 )}
               </button>
               {managing ? (
-                <button
-                  className="profile-remove-action"
-                  type="button"
-                  onClick={(event) => {
-                    removalTriggerRef.current = event.currentTarget;
-                    setPendingRemoval(profile);
-                  }}
-                  disabled={Boolean(effectiveBusyProfileId)}
-                  aria-label={`Rimuovi ${profile.name} da questo dispositivo`}
-                >
-                  <TrashIcon />
-                </button>
+                <div className="profile-management-actions">
+                  {credentialProfileIds.has(profile.id) && onForgetPassword ? (
+                    <button
+                      className="profile-forget-action"
+                      type="button"
+                      onClick={() => runProfileAction(profile.id, () => onForgetPassword(profile))}
+                      disabled={Boolean(effectiveBusyProfileId)}
+                      aria-label={`Dimentica la password salvata per ${profile.name}`}
+                      title="Dimentica password"
+                    >
+                      <KeyOffIcon />
+                      <span>Dimentica password</span>
+                    </button>
+                  ) : null}
+                  <button
+                    className="profile-remove-action"
+                    type="button"
+                    onClick={(event) => {
+                      removalTriggerRef.current = event.currentTarget;
+                      setPendingRemoval(profile);
+                    }}
+                    disabled={Boolean(effectiveBusyProfileId)}
+                    aria-label={`Rimuovi ${profile.name} da questo dispositivo`}
+                    title="Rimuovi profilo"
+                  >
+                    <TrashIcon />
+                  </button>
+                </div>
               ) : null}
             </div>
           );})}

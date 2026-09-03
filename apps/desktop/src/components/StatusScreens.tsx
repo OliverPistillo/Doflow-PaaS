@@ -28,6 +28,8 @@ export function ExpiredProfileScreen({
   onSelect,
   onAdd,
   onRemove,
+  credentialProfileIds,
+  onForgetPassword,
   onClose,
 }: {
   profile: SavedProfile;
@@ -37,6 +39,8 @@ export function ExpiredProfileScreen({
   onSelect: (profile: SavedProfile) => void;
   onAdd: () => void;
   onRemove: (profile: SavedProfile) => void;
+  credentialProfileIds?: ReadonlySet<string>;
+  onForgetPassword?: (profile: SavedProfile) => void | Promise<void>;
   onClose: () => void;
 }) {
   return (
@@ -46,6 +50,8 @@ export function ExpiredProfileScreen({
       selectedProfileId={profile.id}
       onSelect={(selected) => selected.id === profile.id ? onReauthenticate() : onSelect(selected)}
       onRemove={onRemove}
+      credentialProfileIds={credentialProfileIds}
+      onForgetPassword={onForgetPassword}
       onAdd={onAdd}
       onClose={onClose}
     />
