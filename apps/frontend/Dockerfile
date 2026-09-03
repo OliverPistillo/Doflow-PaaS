@@ -22,7 +22,11 @@ ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 # --- FIX END ---
 
-RUN pnpm --filter frontend run build
+# The workspace prebuild validates Desktop + GitHub branding inputs that are
+# intentionally excluded from this frontend-only Docker context. CI runs that
+# repository-wide gate before deployment; the image builds the verified Next
+# source directly so it does not depend on files unavailable by design here.
+RUN pnpm --filter frontend exec next build
 
 # ====== RUNNER ======
 FROM node:20-alpine AS runner
