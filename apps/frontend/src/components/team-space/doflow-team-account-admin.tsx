@@ -5,6 +5,7 @@ import {
   Activity,
   BriefcaseBusiness,
   Clock3,
+  Copy,
   LoaderCircle,
   RefreshCw,
   Search,
@@ -73,6 +74,7 @@ import {
   teamApi,
   type TeamActivity,
   type TeamMember,
+  type TeamInviteResult,
   type TeamOptions,
   type TeamSkill,
   type TeamWorkloadItem,
@@ -217,6 +219,8 @@ export function DoflowTeamAccountAdmin() {
   const [skillId, setSkillId] = React.useState("")
   const [loading, setLoading] = React.useState(true)
   const [busy, setBusy] = React.useState(false)
+  const invitePending = React.useRef(false)
+  const [lastInvite, setLastInvite] = React.useState<{ name: string; invite: TeamInviteResult } | null>(null)
   const [error, setError] = React.useState<string | null>(null)
   const [inviteOpen, setInviteOpen] = React.useState(false)
   const [inviteDraft, setInviteDraft] = React.useState<InviteDraft>(DEFAULT_INVITE)
@@ -411,27 +415,36 @@ export function DoflowTeamAccountAdmin() {
   }
 
   const resendInvite = async () => {
-    if (!selected || selected.user_id || protectedOwner || !canAdminister) return
+    if (!selected || selected.user_id || protectedOwner || !canAdminister || busy || invitePending.current) return
+    invitePending.current = true
+    setLastInvite(null)
     setBusy(true)
     setError(null)
     try {
       const result = await teamApi.inviteMember(selected.id)
-      if (!(await reloadTeamAndIdentity(selected.id))) throw new Error("Invito generato, ma Team e identity non sono stati riallineati.")
-      toast.success(result.email_sent ? "Invito inviato" : "Invito rigenerato; invio email non confermato")
+      setLastInvite({ name: selected.display_name, invite: result })
+      toast.success(result.email_sent ? "Invito rigenerato; email accettata dal servizio di posta" : "Invito rigenerato; invio email non confermato")
+      // An invitation has no active identity yet. Reloading the identity would
+      // remount the workspace providers and discard this one-time invite link.
+      if (!(await load(selected.id))) setError("Invito generato e link disponibile. Non è stato possibile aggiornare l’elenco; usa Aggiorna senza reinviare l’invito.")
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Invito non generato.")
+      setError(reason instanceof TypeError ? "Esito della richiesta non confermato. Aggiorna l’elenco prima di riprovare." : reason instanceof Error ? reason.message : "Esito invito non confermato.")
     } finally {
+      invitePending.current = false
       setBusy(false)
     }
   }
 
   const createMember = async () => {
+    if (!canAdminister || busy || invitePending.current) return
     const capacity = Number(inviteDraft.capacityHours)
     if (!inviteDraft.email.trim() || !inviteDraft.displayName.trim()) return
     if (!Number.isFinite(capacity) || capacity < 1 || capacity > 168) {
       setError("La capacità settimanale deve essere compresa tra 1 e 168 ore.")
       return
     }
+    invitePending.current = true
+    setLastInvite(null)
     setBusy(true)
     setError(null)
     try {
@@ -451,22 +464,24 @@ export function DoflowTeamAccountAdmin() {
         send_invite: inviteDraft.sendInvite,
         ...inviteConfiguration,
       })
-      if (!(await reloadTeamAndIdentity(result.member.id))) {
-        throw new Error("Profilo creato, ma Team e identity non sono stati riallineati.")
-      }
+      setLastInvite(result.invite ? { name: result.member.display_name, invite: result.invite } : null)
       setInviteOpen(false)
       setInviteDraft(DEFAULT_INVITE)
       setInviteModulePermissionState(createModulePermissionDraftState())
       toast.success(
         result.invite
           ? result.invite.email_sent
-            ? "Membro creato e invito inviato"
+            ? "Membro creato; email accettata dal servizio di posta"
             : "Membro creato; invio email non confermato"
           : "Profilo operativo creato",
       )
+      if (!(await load(result.member.id))) {
+        setError("Profilo creato. Non è stato possibile aggiornare l’elenco; usa Aggiorna senza creare nuovamente il membro.")
+      }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Creazione membro non riuscita.")
+      setError(reason instanceof TypeError ? "Esito della richiesta non confermato. Aggiorna l’elenco prima di riprovare." : reason instanceof Error ? reason.message : "Esito creazione membro non confermato.")
     } finally {
+      invitePending.current = false
       setBusy(false)
     }
   }
@@ -573,13 +588,15 @@ export function DoflowTeamAccountAdmin() {
           <Button type="button" variant="outline" onClick={() => void reloadTeamAndIdentity()} disabled={loading || busy}>
             <RefreshCw className="size-4" />Aggiorna
           </Button>
-          <Button type="button" onClick={() => setInviteOpen(true)}>
+          <Button type="button" onClick={() => { setError(null); setInviteOpen(true) }} disabled={busy}>
             <UserPlus className="size-4" />Invita membro
           </Button>
         </div>
       </div>
 
       {error ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div> : null}
+
+      {lastInvite ? <InviteResultPanel name={lastInvite.name} invite={lastInvite.invite} onClose={() => setLastInvite(null)} /> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric icon={UsersRound} label="Membri tenant" value={members.length} />
@@ -922,6 +939,7 @@ export function DoflowTeamAccountAdmin() {
             <DialogTitle>Invita membro</DialogTitle>
             <DialogDescription>Prepara account, accessi e competenze prima dell’invito. Owner, Superadmin e label CEO non sono assegnabili.</DialogDescription>
           </DialogHeader>
+          {error ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div> : null}
           <div className="grid min-w-0 gap-4 sm:grid-cols-2">
             <Field labelText="Email"><Input type="email" value={inviteDraft.email} onChange={(event) => setInviteDraft((current) => ({ ...current, email: event.target.value }))} className="h-9 rounded-lg bg-background text-sm font-normal shadow-none" /></Field>
             <Field labelText="Nome visualizzato"><Input value={inviteDraft.displayName} onChange={(event) => setInviteDraft((current) => ({ ...current, displayName: event.target.value }))} className="h-9 rounded-lg bg-background text-sm font-normal shadow-none" /></Field>
@@ -1099,6 +1117,36 @@ export function DoflowTeamAccountAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </section>
+  )
+}
+
+function InviteResultPanel({ name, invite, onClose }: { name: string; invite: TeamInviteResult; onClose: () => void }) {
+  const [copyError, setCopyError] = React.useState(false)
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(invite.invite_link)
+      setCopyError(false)
+      toast.success("Link copiato")
+    } catch {
+      setCopyError(true)
+    }
+  }
+  return (
+    <section aria-label="Invito disponibile" className="min-w-0 space-y-3 rounded-lg border bg-card p-4 text-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <p className="break-words font-semibold">Invito disponibile per {name}</p>
+          <p>{invite.email_sent ? "Email accettata dal servizio di posta. La consegna in casella non è confermata." : "Invio email non confermato. L’invito è valido: puoi condividere manualmente il link."}</p>
+          <p className="text-muted-foreground">Scadenza: {formatDate(invite.expires_at)}</p>
+        </div>
+        <Button type="button" variant="ghost" size="sm" onClick={onClose}>Chiudi</Button>
+      </div>
+      <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
+        <Input aria-label="Link invito" readOnly value={invite.invite_link} onFocus={(event) => event.target.select()} className="min-w-0 flex-1" />
+        <Button type="button" variant="outline" onClick={() => void copy()}><Copy className="size-4" />Copia link</Button>
+      </div>
+      {copyError ? <p role="alert">Copia automatica non disponibile. Seleziona e copia il link dal campo qui sopra.</p> : null}
     </section>
   )
 }

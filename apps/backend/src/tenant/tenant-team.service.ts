@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { DataSource, EntityManager } from 'typeorm';
 import * as crypto from 'crypto';
@@ -94,6 +94,7 @@ export type CreateTeamMemberResult = { member: Record<string, any>; invite: Team
 
 @Injectable()
 export class TenantTeamService {
+  private readonly logger = new Logger(TenantTeamService.name);
   constructor(
     private readonly dataSource: DataSource,
     private readonly notifications: TenantNotificationsService,
@@ -490,18 +491,33 @@ export class TenantTeamService {
 
   private async sendInviteEmail(email: string, tenantSlug: string, inviteLink: string): Promise<boolean> {
     const timeoutMs = this.inviteEmailTimeoutMs();
+    const started = Date.now();
+    const operationId = crypto.randomUUID();
+    const tenant = /^[a-z0-9_\-]+$/i.test(tenantSlug) ? tenantSlug : '[redacted]';
+    const metadata = `tenant=${tenant} operation_id=${operationId}`;
+    this.logger.log(`Team invite phase=post_commit outcome=email_started ${metadata}`);
     let timeout: NodeJS.Timeout | undefined;
-    const sendPromise = this.mailService.sendInviteEmail({
+    let timedOut = false;
+    const sendPromise = Promise.resolve().then(() => this.mailService.sendInviteEmail({
         to: email,
         tenantName: tenantSlug,
         inviteLink,
-      }).then(Boolean).catch(() => false);
+        operationId,
+      })).then(Boolean).catch(() => false).then((sent) => {
+        this.logger.log(`Team invite phase=${timedOut ? 'smtp_late' : 'smtp_result'} outcome=${sent ? 'accepted' : 'not_confirmed'} ${metadata} duration_ms=${Date.now() - started}`);
+        return sent;
+      });
     const timeoutPromise = new Promise<boolean>((resolve) => {
-      timeout = setTimeout(() => resolve(false), timeoutMs);
+      timeout = setTimeout(() => {
+        timedOut = true;
+        this.logger.warn(`Team invite phase=application_timeout outcome=unknown ${metadata} duration_ms=${Date.now() - started}`);
+        resolve(false);
+      }, timeoutMs);
     });
     const result = await Promise.race([sendPromise, timeoutPromise]);
     if (timeout) clearTimeout(timeout);
-    void sendPromise.catch(() => false);
+    // Promise.race cannot cancel SMTP. Observe its eventual result without
+    // retrying, changing the response, or rotating the committed token.
     return result;
   }
 
@@ -883,7 +899,11 @@ export class TenantTeamService {
 
     const emailSent = await this.sendInviteEmail(email, tenantSlug, inviteLink);
     if (emailSent) {
-      await this.activity(schema, 'member_invite_email_sent', user, memberId, 'team_member', memberId);
+      try {
+        await this.activity(schema, 'member_invite_email_sent', user, memberId, 'team_member', memberId);
+      } catch {
+        this.logger.warn(`Team invite phase=activity outcome=failed tenant=${schema} member_id=${memberId}`);
+      }
     }
     return { email_sent: emailSent, invite_link: inviteLink, expires_at: expiresAt };
   }

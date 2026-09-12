@@ -1,6 +1,8 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AuthService } from '../auth.service';
 import { TenantTeamService } from './tenant-team.service';
+import { MailService } from '../mail/mail.service';
+import { resolveMailConfig } from '../mail/mail.config';
 
 jest.mock('./tenant-team-schema', () => ({
   ensureTenantTeamTables: jest.fn().mockResolvedValue(undefined),
@@ -171,6 +173,21 @@ describe('TenantTeamService invite flow', () => {
     expect(runner.rollbackTransaction).not.toHaveBeenCalled();
   });
 
+  it('unconfigured SMTP preserves the committed invitation through the real MailService', async () => {
+    const { service, runner, calls } = makeTeamService();
+    const smtp = { sendMail: jest.fn() };
+    (service as any).mailService = new MailService(smtp as any, resolveMailConfig({ get: () => undefined }));
+    const result = await service.createMember({ email: 'nuovo@example.com', display_name: 'Synthetic', send_invite: true });
+    expect(result.invite?.email_sent).toBe(false);
+    expect(result.invite?.invite_link).toBeTruthy();
+    expect(result.invite?.expires_at).toBeTruthy();
+    expect(runner.commitTransaction).toHaveBeenCalledTimes(1);
+    expect(runner.rollbackTransaction).not.toHaveBeenCalled();
+    expect(smtp.sendMail).not.toHaveBeenCalled();
+    const expires = calls.find((call) => call.sql.includes('INSERT INTO "doflow".invites'))?.params?.[3];
+    expect(Math.abs(Date.parse(String(expires)) - Date.now() - 7 * 24 * 60 * 60 * 1000)).toBeLessThan(1000);
+  });
+
   it('SMTP appeso torna rapidamente con email_sent=false senza rollback', async () => {
     process.env.TEAM_INVITE_EMAIL_TIMEOUT_MS = '20';
     const { service, runner } = makeTeamService('owner', { mailHangs: true });
@@ -186,6 +203,49 @@ describe('TenantTeamService invite flow', () => {
     expect(result.invite?.email_sent).toBe(false);
     expect(result.invite?.invite_link).toBeTruthy();
     expect(runner.commitTransaction).toHaveBeenCalledTimes(1);
+    expect(runner.rollbackTransaction).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false, 'reject'] as const)('records a late SMTP outcome (%s) without retrying or rotating the committed invite', async (lateResult) => {
+    jest.useFakeTimers();
+    try {
+      process.env.TEAM_INVITE_EMAIL_TIMEOUT_MS = '1000';
+      const { service, mailService, runner, calls } = makeTeamService();
+      let finish!: (value: boolean | 'reject') => void;
+      mailService.sendInviteEmail.mockImplementationOnce(() => new Promise<boolean>((resolve, reject) => {
+        finish = (value) => value === 'reject' ? reject(new Error('synthetic late SMTP rejection')) : resolve(value);
+      }));
+      const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn() };
+      (service as any).logger = logger;
+      let settled = false;
+      const pendingResult = service.inviteMember(memberId).then((value) => { settled = true; return value; });
+      await jest.advanceTimersByTimeAsync(999);
+      expect(settled).toBe(false);
+      expect(runner.commitTransaction).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(1);
+      const result = await pendingResult;
+      expect(result).toEqual({ email_sent: false, invite_link: expect.stringContaining('/accept-invite?'), expires_at: expect.any(String) });
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('outcome=unknown'));
+      finish(lateResult);
+      await jest.advanceTimersByTimeAsync(0);
+      expect(logger.log).toHaveBeenCalledWith(expect.stringContaining(`phase=smtp_late outcome=${lateResult === true ? 'accepted' : 'not_confirmed'}`));
+      expect(mailService.sendInviteEmail).toHaveBeenCalledTimes(1);
+      expect(calls.filter((call) => call.sql.includes('INSERT INTO "doflow".invites'))).toHaveLength(1);
+      expect(runner.rollbackTransaction).not.toHaveBeenCalled();
+      const logs = JSON.stringify([logger.log.mock.calls, logger.warn.mock.calls]);
+      expect(logs).not.toContain(result.invite_link);
+      expect(logs).not.toContain('nuovo@example.com');
+    } finally { jest.useRealTimers(); }
+  });
+
+  it('a failed post-send activity write does not hide the committed resend link', async () => {
+    const { service, dataSource, runner } = makeTeamService();
+    const query = dataSource.query.getMockImplementation();
+    dataSource.query.mockImplementation((sql: string, params?: unknown[]) => {
+      if (sql.includes('INSERT INTO') && sql.includes('team_activity')) throw new Error('synthetic activity unavailable');
+      return query(sql, params);
+    });
+    await expect(service.inviteMember(memberId)).resolves.toEqual({ email_sent: true, invite_link: expect.stringContaining('/accept-invite?'), expires_at: expect.any(String) });
     expect(runner.rollbackTransaction).not.toHaveBeenCalled();
   });
 

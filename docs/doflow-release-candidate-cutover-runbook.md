@@ -55,11 +55,12 @@ Confrontare solo i nomi, mai i valori, con il secret manager:
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_S3_BUCKET`
-- `SMTP_HOST`
-- `SMTP_PORT`
-- `SMTP_USER`
-- `SMTP_PASS`
-- `SMTP_FROM`
+- `MAIL_HOST`
+- `MAIL_PORT`
+- `MAIL_SECURE` (`false` è valido; modalità TLS da verificare con il provider)
+- `MAIL_USER`
+- `MAIL_PASSWORD`
+- `MAIL_FROM_NAME` (opzionale)
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_CALLBACK_URL`
